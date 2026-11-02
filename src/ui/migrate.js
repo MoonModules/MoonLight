@@ -556,8 +556,9 @@ export function cloneIdentity(files, targetFiles) {
             continue;
         }
         let doc, target = null;
-        try { doc = JSON.parse(out[file]); } catch (_) { continue; }
-        if (!isObject(doc)) continue;   // a file that is no object holds no identity to replace, and is left as it is
+        // A clone promises the target keeps its identity; a file this cannot be done on stops the clone rather than overwriting it.
+        try { doc = JSON.parse(out[file]); } catch (_) { throw new Error(`the backup's ${file} is not valid JSON; nothing was written`); }
+        if (!isObject(doc)) throw new Error(`the backup's ${file} is not a settings file; nothing was written`);
         try { target = JSON.parse(targetFiles[file]); } catch (_) {}
         for (const path of paths) {
             const key = path[path.length - 1];

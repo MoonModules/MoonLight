@@ -46,8 +46,12 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to (re)release, e.g. v1.0.0'
-        required: true
+        description: 'Existing tag to (re)release, e.g. v1.0.0; unused with pages_only'
+        required: false
+      pages_only:
+        description: 'Redeploy the site and installer from the published releases, building nothing'
+        type: boolean
+        default: false
 
 # Run one release at a time per tag — prevents two concurrent runs from
 # racing on the same release page or Pages deployment. Branch pushes get
@@ -65,9 +69,11 @@ permissions:
 
 jobs:
   verify-version:
-    # Runs on every trigger so downstream `needs:` are always satisfied.
+    # Runs on every trigger so downstream `needs:` are always satisfied, except a pages-only
+    # dispatch, where skipping it skips every build and the release with it.
     # Version check only applies to real version tags — skip for main push
     # (latest) and workflow_dispatch with a non-version tag.
+    if: ${{ !inputs.pages_only }}
     runs-on: ubuntu-latest
     steps:
       # persist-credentials: false on every checkout that doesn't push — keeps the
@@ -716,7 +722,8 @@ jobs:
   # run, so a release reaches the installer with its binaries. The cumulative-
   # content step restages the last 5 stable + 5 prerelease releases on every run.
   deploy-pages:
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    # After a release, or alone on a pages-only dispatch: the site is staged from the published releases, never from this run's builds.
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && (needs.release.result == 'success' || inputs.pages_only) }}
     needs: [release]
     runs-on: ubuntu-latest
     permissions:
@@ -732,13 +739,6 @@ jobs:
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@v3
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Flatten artifacts into dist/
-        run: uv run moondeck/ci/release_stage.py gather
 
       - name: Stage cumulative release content
         env:
@@ -821,10 +821,10 @@ jobs:
   # to main and a tag push skips it — leaving the installer's same-origin
   # manifests for that version un-staged (a 404 at /install/releases/<tag>/).
   # Rather than relax the environment's branch policy (needs repo-admin), this
-  # job re-invokes the workflow on `main` with `tag=<the tag>`, which runs
-  # deploy-pages under the allowed `main` ref AND sets CUR_TAG=<the tag> (via the
-  # `tag` input) so the manifests land in releases/<tag>/. Tag-push only, so it
-  # never recurses (the dispatched run is a workflow_dispatch, not a tag push).
+  # job dispatches a pages-only run on `main`, which deploys under the allowed ref
+  # and stages every kept release, the new tag among them, from its published
+  # assets; nothing is built twice. Tag-push only, so it never recurses (the
+  # dispatched run is a workflow_dispatch, not a tag push).
   restage-pages-for-tag:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [release]
@@ -841,5 +841,5 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          echo "Dispatching release.yml on main to stage Pages for $TAG"
-          gh workflow run release.yml --ref main -f tag="$TAG"
+          echo "Dispatching a pages-only release.yml run on main, which stages $TAG with the other kept releases"
+          gh workflow run release.yml --ref main -f pages_only=true

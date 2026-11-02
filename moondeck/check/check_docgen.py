@@ -564,7 +564,7 @@ def _file_lead_rule(rel: str, lines: list[str], out: list) -> None:
 
 
 def _appendix_marker(line: str) -> bool:
-    """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@technical`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section; only `@technical` counts toward the ratcheted total, since a guide section is help moved out of a card rather than depth moved out of the code."""
+    """Whether a line opens an appendix: `@guide`, the sections written for users that the app shows as a module's help, or `@technical`, the ones written for developers. Both end the lead, sit only on a lead and cap each `## ` section."""
     # `@guide` alone on its line opens the module's guide; on a member it starts the control's longer help, which is no appendix.
     return "@technical" in line or re.fullmatch(r"\s*(///)?\s*@guide\s*", line) is not None
 
@@ -967,7 +967,7 @@ def _appendix_sections(lines: list[str]) -> list[str]:
 def _unreferenced_sections():
     """Appendix sections no `@xref` in their file reaches.
 
-    A section only a reader scrolling past finds is the first to cut: the appendix total falls by removing what no reader is sent to. The header is read in place, on GitHub or in an editor, so only its own `@xref`s send a reader to a section.
+    A section only a reader scrolling past finds is the first to cut, since no reader is sent to it. The header is read in place, on GitHub or in an editor, so only its own `@xref`s send a reader to a section.
     """
     out = []
     for rel in _headers():

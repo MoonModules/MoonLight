@@ -307,6 +307,18 @@ TEST_CASE("editing the type or the number re-composes the target, so they cannot
     CHECK(std::strstr(buf, "\"target\":\"Control.switch5\"") != nullptr);
 }
 
+TEST_CASE("a set row a restore left unassigned keeps the restore's warning on the status, since its retries have nothing to say") {
+    Rig rig;
+    const char* saved = "{\"rows\":[{\"pin\":4,\"target\":\"Drivers.on\",\"kind\":\"set\",\"value\":1}]}";
+    REQUIRE(rig.buttons->restoreList(saved, "rows"));
+    REQUIRE(rig.buttons->status() != nullptr);
+    CHECK(std::strstr(rig.buttons->status(), "unassigned") != nullptr);
+    rig.hold(false, 100);                       // the first write, which an unassigned row answers with nothing
+    rig.buttons->tick1s();                      // and the retry
+    REQUIRE(rig.buttons->status() != nullptr);
+    CHECK(std::strstr(rig.buttons->status(), "unassigned") != nullptr);
+}
+
 TEST_CASE("a saved row naming a control off the surface is left unassigned, and the status says so") {
     Rig rig;
     const char* saved = "{\"rows\":[{\"pin\":4,\"target\":\"Drivers.on\",\"kind\":\"toggle\"},"

@@ -262,22 +262,15 @@ private:
 
         const uint8_t* src   = sourceBuffer_->data();
         const uint8_t  srcCh = sourceBuffer_->channelsPerLight();
-        const uint8_t  outCh = correction_.outChannels;
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
         uint8_t* dst = rgb_.data();
-        const bool wide = outCh > 3 && lightScratch_.count() >= outCh;
         const size_t rowBytes = static_cast<size_t>(width_) * 3;
+        const bool ordered = rgbOrdered();
         for (nrOfLightsType i = 0; i < n; i++) {
             const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
             uint8_t rgb[3];
-            if (outCh == 3) {
-                correction_.apply(s, rgb, srcCh);
-            } else if (wide) {
-                correctToRgb(s, srcCh, &lightScratch_[0], rgb);
-            } else {
-                rgb[0] = s[0]; rgb[1] = s[1]; rgb[2] = s[2];
-            }
+            correctToRgb(s, srcCh, rgb, ordered);
             // One light becomes a scale x scale block, which replication keeps pixel-exact.
             const size_t lx = (i % srcWidth_) * scale_, ly = (i / srcWidth_) * scale_;
             for (uint8_t by = 0; by < scale_; by++) {

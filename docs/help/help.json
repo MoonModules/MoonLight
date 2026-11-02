@@ -679,25 +679,35 @@
   },
   "AudioSpectrumEffect": {
    "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom row becomes a horizontal level bar and the spectrum bars sit above it. On a single row the bars collapse to per-column brightness.",
-   "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline)",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom rows can be a horizontal level bar under the spectrum, as tall as a bar is wide, with a square at its right end that flashes red on each detected hit. On a single row the bars collapse to per-column brightness.",
+   "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
+   "guide": [
+    {
+     "title": "Comparing audio engines",
+     "text": "The sweep colors with the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
+    }
+   ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
    "controls": {
     "colorMode": {
-     "line": "Bars colored by height, the VU look, or per band, a rainbow.",
+     "line": "By height (a VU), per band, or sweep: GEQ PPA's drifting rainbow.",
      "tests": [
       {
        "title": "Effects teardown under a running pipeline",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:scenario:scenario_Effects_teardown_under_a_running_pipeline"
       }
      ]
+    },
+    "levelBar": {
+     "line": "A level bar under the bars, and a square that flashes red on a hit."
     }
    },
    "role": "effect",
    "tags": "💫🎶",
    "dim": 2,
    "doc": "light/effects.md#audiospectrum",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AudioSpectrumEffect.h"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/AudioSpectrumEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#audiospectrumeffect"
   },
   "RadialSpectrumEffect": {
    "line": "The spectrum as ripples: each band owns a sector around the center, mirrored left and right with the bass at top and bottom.",
@@ -3447,16 +3457,16 @@
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
-   "summary": "The grid becomes the picture, one light per pixel, output correction applied, so the screen shows what the wall shows. A monitor, a projector, or the HDMI input of an LED wall's sending card (Novastar, ColorLight) takes it.\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; the bridge sits on the board's I2C bus, which the device model sets. The bridge, its clocks and hot-plug are the platform's (platform_esp32_hdmi.cpp).",
+   "summary": "One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight). ESP32-P4 boards with an LT8912B HDMI bridge, such as the Olimex ESP32-P4-PC.",
    "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
    "guide": [
     {
      "title": "Connect the monitor",
-     "text": "A monitor connected or woken later is picked up within a second. Set its input to HDMI rather than automatic: on automatic some monitors leave the signal for another input. A picture of noise after a cold start is the bridge missing the stream on its first configuration: reset the board."
+     "text": "A monitor plugged in or woken later is picked up within a second. Set its input to HDMI, not automatic, which some monitors leave for another input. Noise after a cold start: reset the board."
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `no I2C bus for the bridge` | Set System's I2C bus pins, as the board's device model does |\n| `no monitor connected` | Plug it in, or wake it |\n| `<w>x<h> on <mode>` | Live |"
+     "text": "| It says | It means |\n|---|---|\n| `no I2C bus for the bridge` | Set System's I2C pins, as the device model does |\n| `bridge did not come up, retrying` | No LT8912B answers on that bus |\n| `no monitor connected` | Plug it in, or wake it |\n| `<w>x<h> on <mode>` | Live; orange when the monitor does not list the mode |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
@@ -3478,13 +3488,32 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "mode": {
-     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5."
+     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.",
+     "tests": [
+      {
+       "title": "HdmiDriver shows the layer on the monitor",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver:live:scenario_HdmiDriver_shows_the_layer_on_the_monitor"
+      }
+     ]
     },
     "scaling": {
      "line": "0 fit, 1 stretch: fit keeps the grid's shape with black bars, stretch fills the screen."
     },
     "fps": {
      "line": "Frame-rate ceiling; the screen refreshes on its own."
+    },
+    "monitor": {
+     "line": "What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.",
+     "tests": [
+      {
+       "title": "HdmiDriver shows the layer on the monitor",
+       "url": "https://moonmodules.org/MoonLight/reference/tests.html#hdmidriver:live:scenario_HdmiDriver_shows_the_layer_on_the_monitor"
+      }
+     ]
+    },
+    "bridge": {
+     "line": "The bridge's synthesizer word against the one programmed, and the sync it measures.",
+     "more": "**DDS**, the bridge's clock read back, sits near the programmed value on a clean picture (5455 against 5555 at 1280x720) and further off in noise (571e). **Sync**'s second number is lines per frame: 741 at 1280x720."
     }
    },
    "role": "driver",
@@ -3916,7 +3945,7 @@
      "line": "The flash chip size."
     },
     "flashMode": {
-     "line": "How the chip reads its flash and at what clock, such as QIO, 80 MHz."
+     "line": "How the chip reads its flash, and its clock where known, such as QIO, 80 MHz."
     },
     "mac": {
      "line": "The hardware address, which tooling identifies the device by."

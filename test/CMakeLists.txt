@@ -20,6 +20,8 @@ add_executable(mm_tests
     unit/core/unit_math16.cpp
     unit/core/unit_AreaSample.cpp
     unit/core/unit_usbvideo_frames.cpp
+    unit/core/unit_edid.cpp
+    unit/core/unit_stop_signal.cpp
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
@@ -158,6 +160,7 @@ add_executable(mm_tests
     unit/light/unit_FseqPlayerEffect.cpp
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
+    unit/light/unit_AudioSpectrumEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
     unit/light/unit_LayoutComposition.cpp
     unit/light/unit_LissajousEffect.cpp

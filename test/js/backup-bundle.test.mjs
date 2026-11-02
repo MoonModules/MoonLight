@@ -206,10 +206,9 @@ test("a clone never carries the backup's stored hardware address, which the devi
     assert.ok(!("/.config/identity" in files));
 });
 
-test("a clone leaves a backup file that is no object as it is, rather than failing on it", () => {
-    for (const bad of ["null", "\"abc\"", "7", "[]"]) {
-        const { files } = cloneIdentity({ "/.config/NetworkModule.json": bad }, pole2);
-        assert.equal(files["/.config/NetworkModule.json"], bad);
+test("a clone stops on a backup identity file that is not a settings object, so the target keeps its own", () => {
+    for (const bad of ["null", "\"abc\"", "7", "[]", "{not json"]) {
+        assert.throws(() => cloneIdentity({ "/.config/NetworkModule.json": bad }, pole2), /nothing was written/);
     }
 });
 

@@ -215,13 +215,18 @@ def fetch_attachment(url: str) -> str:
             raise too_large
         path = Path(tempfile.mkdtemp(prefix="discord-")) / Path(url.split("?")[0]).name
         got = 0
-        with path.open("wb") as f:
-            while chunk := r.read(64 * 1024):
-                got += len(chunk)
-                if got > MAX_ATTACHMENT:
-                    f.close(); path.unlink(); path.parent.rmdir()
-                    raise too_large
-                f.write(chunk)
+        try:
+            with path.open("wb") as f:
+                while chunk := r.read(64 * 1024):
+                    got += len(chunk)
+                    if got > MAX_ATTACHMENT:
+                        raise too_large
+                    f.write(chunk)
+        except BaseException:
+            # A failed download leaves nothing behind, whatever failed it.
+            path.unlink(missing_ok=True)
+            path.parent.rmdir()
+            raise
     return str(path)
 
 

@@ -4,7 +4,7 @@
 
 /// The platform half of the HDMI seam: the MIPI-DSI bus, the LT8912B bridge on the board's I2C bus, and the frame scaled into the DPI framebuffer.
 ///
-/// @attribution Espressif, Olimex, Troy Hacks (WLED-MM)
+/// @attribution Espressif, Olimex, troyhacks
 ///
 /// @technical
 ///
@@ -30,17 +30,23 @@
 ///
 /// A monitor connected or woken after boot is set up when the hot-plug detect rises. The vendor's init also starts the DPI panel, so it cannot run twice on one panel: the panel is deleted and created again. Nothing else restarts the link: a monitor takes seconds to lock onto a restarted signal, and some give up.
 ///
-/// ## A software restart releases the output
+/// ## The EDID is the feedback
 ///
-/// A chip reset drops the PHY's power and the stream with it; a software restart keeps both, leaving the bridge locked onto a stream that stops mid-frame. IDF's shutdown handler tears the output down and releases the PHY's LDO before `esp_restart`, so both restarts start alike.
+/// HDMI carries the picture one way; the monitor answers only on its hot-plug line and with its EDID, which the bridge passes through at the DDC address 0x50, at DDC's 100 kHz.
+///
+/// The task reads both blocks once per hot-plug, after the stream is up since the channel is live only then, and edid.h reduces them to the name, the preferred size and which of the output's modes the monitor lists. The link reports Down while the bridge is not set up, so a board without one says so rather than "no monitor".
+///
+/// ## Closing releases everything
+///
+/// A closed output holds nothing: the task, the panel and its framebuffer, the handed-over frame, the PPA client and the PHY's LDO all go, so a deleted driver costs no memory and no tick, and a reopened one starts as a cold boot does.
+///
+/// A chip reset drops the PHY's power and the stream with it, where a software restart would keep both and leave the bridge locked onto a stream that stops mid-frame: IDF's shutdown handler closes the output before `esp_restart`, so both restarts start alike.
 ///
 /// ## Open
 ///
 /// About one boot in four still shows noise, a software restart more often than a chip reset, a running picture can turn to noise, and the output reopened on a running board (the driver disabled and enabled, or removed and added) comes up without a signal; a reset of the board clears it.
 ///
-/// The suspect is the bridge's clock synthesizer, whose read-back word (CEC page 0x0c to 0x0f) sits on the programmed value, pixel clock times 0x16C16, in a clean picture and off it in noise. A watch on that word is open work, since resetting the receiver on a live link drops the signal.
-///
-/// A bridge that is absent or does not answer reads as "no monitor connected" on the driver's card; a state of its own for that is open work as well.
+/// The suspect is the bridge's clock synthesizer, whose read-back word (CEC page 0x0c to 0x0f) sits on the programmed value, pixel clock times 0x16C16, in a clean picture and off it in noise. The driver's `bridge` readout shows both; acting on them is open work, since resetting the receiver on a live link drops the signal.
 
 #include <algorithm>
 #include <atomic>
@@ -60,6 +66,7 @@
 #include "esp_ldo_regulator.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "platform/edid.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -86,6 +93,13 @@ constexpr int kPhyLdoMillivolts = 2500;
 constexpr uint8_t kLanes = 2;
 constexpr uint8_t kBridgeAddr[3] = {LT8912B_IO_I2C_MAIN_ADDRESS, LT8912B_IO_I2C_CEC_ADDRESS, LT8912B_IO_I2C_AVI_ADDRESS};
 constexpr uint32_t kBridgeI2cHz = 400000;
+constexpr uint8_t kDdcAddr = 0x50;         // the monitor's EDID through the bridge: @xref{the-edid-is-the-feedback|the EDID}
+constexpr uint32_t kDdcHz = 100000;        // DDC's rate; a monitor's EEPROM is slower than the bridge
+constexpr uint8_t kEdidTries = 3;          // reads per hot-plug before giving up on a monitor without one
+constexpr uint8_t kDownAfterPolls = 4;     // hot-plug reads that fail in a row before the bridge counts as gone
+constexpr uint8_t kRegDds = 0x0d;          // the synthesizer read-back's middle bytes, which settle; 0x0c and 0x0f wander: @xref{open|open}
+constexpr uint8_t kRegSync = 0x9c;         // the main page's measured input sync: h low, h high, v low, v high
+constexpr uint32_t kDdsPerMhz = 0x16C16;   // the synthesizer word per MHz of pixel clock, the vendor's constant
 constexpr uint32_t kHotPlugPollMs = 500;
 constexpr int kBridgeI2cTimeoutMs = 50;   // a transfer stalled on the shared bus fails rather than hanging the task: @xref{a-task-owns-the-bridge|the task}
 constexpr uint8_t kRegHpd = 0xc1;         // the main page's status register: bit 7 is hot-plug detect
@@ -98,6 +112,7 @@ struct Hdmi {
     esp_ldo_channel_handle_t ldo = nullptr;
     esp_lcd_dsi_bus_handle_t bus = nullptr;
     esp_lcd_panel_io_handle_t io[3] = {};
+    esp_lcd_panel_io_handle_t ddc = nullptr;
     esp_lcd_panel_handle_t panel = nullptr;
     ppa_client_handle_t ppa = nullptr;
     uint8_t* fb = nullptr;
@@ -106,7 +121,13 @@ struct Hdmi {
     TaskHandle_t task = nullptr;
     std::atomic<bool> run{false};
     std::atomic<bool> exited{true};
-    std::atomic<bool> connected{false};
+    std::atomic<uint8_t> link{static_cast<uint8_t>(HdmiLink::NoMonitor)};
+    // The monitor as read, published under a sequence count: odd while the task writes it, so a torn copy is seen and dropped.
+    std::atomic<uint32_t> monitorSeq{0};
+    edid::Monitor monitor;
+    bool monitorRead = false;
+    std::atomic<uint16_t> dds{0};    // the synthesizer read-back as last read, 0 before the first
+    std::atomic<uint32_t> sync{0};   // the measured sync, v in the high half and h in the low
     // The frame the tick hands over.
     std::atomic<uint8_t> slot{kFree};
     uint8_t* frame = nullptr;
@@ -124,6 +145,7 @@ void tearDownPanel() {
     g.fb = nullptr;
     g.fbBytes = 0;
     for (auto& io : g.io) if (io) { esp_lcd_panel_io_del(io); io = nullptr; }
+    if (g.ddc) { esp_lcd_panel_io_del(g.ddc); g.ddc = nullptr; }
     if (g.bus) { esp_lcd_del_dsi_bus(g.bus); g.bus = nullptr; }
 }
 
@@ -145,7 +167,7 @@ bool resetReceiver() {
     return true;
 }
 
-// The on-chip LDO that powers the DSI PHY, acquired once and kept across rebuilds.
+// The on-chip LDO that powers the DSI PHY, acquired on the first bring-up and kept across the task's rebuilds.
 bool powerPhy() {
     if (g.ldo) return true;
     esp_ldo_channel_config_t ldo = {};
@@ -155,19 +177,46 @@ bool powerPhy() {
     return true;
 }
 
-// The bridge's three register pages on the board's I2C bus.
+// One register-style device on the board's I2C bus: a one-byte address, then the data.
+bool openIo(uint8_t addr, uint32_t hz, esp_lcd_panel_io_handle_t& out) {
+    esp_lcd_panel_io_i2c_config_t io = {};
+    io.dev_addr = addr;
+    io.scl_speed_hz = hz;
+    io.transaction_timeout_ms = kBridgeI2cTimeoutMs;
+    io.control_phase_bytes = 1;
+    io.lcd_cmd_bits = 8;
+    io.lcd_param_bits = 8;
+    io.flags.disable_control_phase = 1;
+    return esp_lcd_new_panel_io_i2c(i2cBusHandle(), &io, &out) == ESP_OK;
+}
+
+// The bridge's three register pages, and the monitor's EDID behind it.
 bool openBridgeIo() {
-    for (int i = 0; i < 3; i++) {
-        esp_lcd_panel_io_i2c_config_t io = {};
-        io.dev_addr = kBridgeAddr[i];
-        io.scl_speed_hz = kBridgeI2cHz;
-        io.transaction_timeout_ms = kBridgeI2cTimeoutMs;
-        io.control_phase_bytes = 1;
-        io.lcd_cmd_bits = 8;
-        io.lcd_param_bits = 8;
-        io.flags.disable_control_phase = 1;
-        if (esp_lcd_new_panel_io_i2c(i2cBusHandle(), &io, &g.io[i]) != ESP_OK) { ESP_LOGE(TAG, "bridge I2C failed"); return false; }
-    }
+    for (int i = 0; i < 3; i++)
+        if (!openIo(kBridgeAddr[i], kBridgeI2cHz, g.io[i])) { ESP_LOGE(TAG, "bridge I2C failed"); return false; }
+    if (!openIo(kDdcAddr, kDdcHz, g.ddc)) { ESP_LOGE(TAG, "DDC I2C failed"); return false; }
+    return true;
+}
+
+// Publish what the task knows of the monitor, or that it knows nothing.
+void publishMonitor(const edid::Monitor* m) {
+    g.monitorSeq.fetch_add(1, std::memory_order_acq_rel);
+    g.monitorRead = m != nullptr;
+    g.monitor = m ? *m : edid::Monitor{};
+    g.monitorSeq.fetch_add(1, std::memory_order_acq_rel);
+}
+
+// The monitor's EDID, both blocks, reduced to the modes the output runs: @xref{the-edid-is-the-feedback|the EDID}.
+bool readEdid() {
+    uint8_t base[edid::kBlockBytes], ext[edid::kBlockBytes];
+    if (esp_lcd_panel_io_rx_param(g.ddc, 0x00, base, sizeof(base)) != ESP_OK) return false;
+    const bool hasExt = base[126] > 0 && esp_lcd_panel_io_rx_param(g.ddc, 0x80, ext, sizeof(ext)) == ESP_OK;
+    edid::Size sizes[kModeCount];
+    for (size_t i = 0; i < kModeCount; i++) sizes[i] = {kModes[i].width, kModes[i].height};
+    edid::Monitor m;
+    if (!edid::parse(base, hasExt ? ext : nullptr, sizes, kModeCount, m)) return false;
+    publishMonitor(&m);
+    ESP_LOGI(TAG, "monitor %s prefers %ux%u, lists 0x%02x", m.name, m.preferredW, m.preferredH, static_cast<unsigned>(m.lists));
     return true;
 }
 
@@ -253,49 +302,87 @@ int readHpd() {
     return (v & 0x80) ? 1 : 0;
 }
 
-// One hot-plug poll: a failed bring-up is tried again every few seconds, and a monitor that comes back gets a fresh panel (@xref{hot-plug-rebuilds-the-panel|hot-plug}). Returns whether the panel is up.
-bool pollHotPlug(bool up, bool& sawNoMonitor, uint8_t& retryIn) {
-    if (!up) {
-        if (++retryIn < 10) return false;
-        retryIn = 0;
+// What the hot-plug polls carry between them.
+struct Poll {
+    bool up = false;             ///< the panel is set up
+    bool sawNoMonitor = false;   ///< a monitor that appears after this gets the bridge set up for it
+    uint8_t retryIn = 0;         ///< polls until a failed bring-up is tried again
+    uint8_t unread = 0;          ///< hot-plug reads that failed in a row
+    uint8_t edidTries = 0;       ///< EDID reads made for the monitor connected now
+};
+
+// Bytes `n` of one bridge page from `reg` up, each read on its own as the vendor reads them; false on a failed read.
+bool readRegs(esp_lcd_panel_io_handle_t io, uint8_t reg, uint8_t* out, uint8_t n) {
+    for (uint8_t i = 0; i < n; i++)
+        if (esp_lcd_panel_io_rx_param(io, reg + i, &out[i], 1) != ESP_OK) return false;
+    return true;
+}
+
+// The bridge's synthesizer word and measured sync, for the readout: @xref{open|open}.
+void readBridgeState() {
+    uint8_t d[2], s[4];
+    if (!readRegs(g.io[1], kRegDds, d, 2) || !readRegs(g.io[0], kRegSync, s, 4)) return;
+    if (d[0] && d[1]) g.dds.store(static_cast<uint16_t>(d[0] << 8 | d[1]));   // a live counter: a read caught mid-update gives zeros, and keeps the last one
+    g.sync.store(static_cast<uint32_t>(s[3] << 8 | s[2]) << 16 | (s[1] << 8 | s[0]));
+}
+
+// One hot-plug poll: a failed bring-up is tried again every few seconds, a monitor that comes back gets a fresh panel (@xref{hot-plug-rebuilds-the-panel|hot-plug}) and its EDID read, and a bridge that stops answering reports the link down.
+void pollHotPlug(Poll& p) {
+    if (!p.up) {
+        g.link.store(static_cast<uint8_t>(HdmiLink::Down));
+        if (++p.retryIn < 10) return;
+        p.retryIn = 0;
         tearDownPanel();
-        return bringUpPanel();
+        p.up = bringUpPanel();
+        return;
     }
     const int hpd = readHpd();
-    if (hpd == 0) sawNoMonitor = true;
-    else if (hpd == 1 && sawNoMonitor) { sawNoMonitor = false; tearDownPanel(); up = bringUpPanel(); }
-    if (hpd >= 0) g.connected.store(up && hpd == 1);
-    return up;
+    if (hpd < 0) {
+        if (++p.unread >= kDownAfterPolls) {
+            g.link.store(static_cast<uint8_t>(HdmiLink::Down));
+            publishMonitor(nullptr);
+            p.edidTries = 0;   // the bridge coming back reads the EDID afresh
+        }
+        return;
+    }
+    p.unread = 0;
+    if (hpd == 0) {
+        if (!p.sawNoMonitor) publishMonitor(nullptr);
+        p.sawNoMonitor = true;
+        p.edidTries = 0;
+    } else if (p.sawNoMonitor) {
+        p.sawNoMonitor = false;
+        tearDownPanel();
+        p.up = bringUpPanel();
+    }
+    if (p.up && hpd == 1 && !g.monitorRead && p.edidTries < kEdidTries) { p.edidTries++; readEdid(); }
+    if (p.up) readBridgeState();
+    g.link.store(static_cast<uint8_t>(p.up && hpd == 1 ? HdmiLink::Monitor : HdmiLink::NoMonitor));
 }
 
 void hdmiTask(void*) {
-    bool up = bringUpPanel();
-    bool sawNoMonitor = false;   // a monitor that appears after this gets the bridge set up for it
-    uint8_t retryIn = 0;
+    Poll p;
+    p.up = bringUpPanel();
     TickType_t lastPoll = xTaskGetTickCount();
     while (g.run.load()) {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kHotPlugPollMs));
         if (!g.run.load()) break;
         const TickType_t now = xTaskGetTickCount();
-        if (now - lastPoll >= pdMS_TO_TICKS(kHotPlugPollMs)) { lastPoll = now; up = pollHotPlug(up, sawNoMonitor, retryIn); }
+        if (now - lastPoll >= pdMS_TO_TICKS(kHotPlugPollMs)) { lastPoll = now; pollHotPlug(p); }
         uint8_t ready = kReady;
-        if (up && g.slot.compare_exchange_strong(ready, kShowing)) { show(); g.slot.store(kFree); }
+        if (p.up && g.slot.compare_exchange_strong(ready, kShowing)) { show(); g.slot.store(kFree); }
     }
     tearDownPanel();
-    g.connected.store(false);
+    publishMonitor(nullptr);
+    g.dds.store(0);
+    g.link.store(static_cast<uint8_t>(HdmiLink::NoMonitor));
     g.exited.store(true);
     vTaskDelete(nullptr);
 }
 
-// Before a software restart: the output torn down and the PHY unpowered, as a chip reset leaves them: @xref{a-software-restart-releases-the-output|a software restart}.
-void hdmiShutdown() {
-    hdmiClose();
-    if (g.ldo) { esp_ldo_release_channel(g.ldo); g.ldo = nullptr; }
-}
-
 }  // namespace
 
-size_t hdmiModes(const HdmiMode** out) {
+size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING {
     if (out) *out = kModes;
     return mm_hdmi_mode_count == kModeCount ? kModeCount : 0;   // the two tables disagreeing is a build mistake: offer nothing
 }
@@ -310,10 +397,11 @@ bool hdmiOpen(uint8_t index) {
         ppa.max_pending_trans_num = 1;
         if (ppa_register_client(&ppa, &g.ppa) != ESP_OK) return false;
     }
-    static bool shutdownRegistered = false;
-    if (!shutdownRegistered) shutdownRegistered = esp_register_shutdown_handler(hdmiShutdown) == ESP_OK;
+    static bool shutdownRegistered = false;   // before a software restart, as a chip reset leaves it: @xref{closing-releases-everything|closing}
+    if (!shutdownRegistered) shutdownRegistered = esp_register_shutdown_handler(hdmiClose) == ESP_OK;
     g.mode = index;
     g.slot.store(kFree);
+    g.link.store(static_cast<uint8_t>(HdmiLink::NoMonitor));
     g.run.store(true);
     g.exited.store(false);
     // On core 1 with the output stage, away from the render loop, HTTP and the network on core 0.
@@ -325,13 +413,21 @@ bool hdmiOpen(uint8_t index) {
     return true;
 }
 
+// Everything the output holds goes with it: @xref{closing-releases-everything|closing}.
 void hdmiClose() {
-    if (g.exited.load()) return;
-    g.run.store(false);
-    if (g.task) xTaskNotifyGive(g.task);
-    // A bring-up in progress runs to its end first: seconds, with the vendor's delays and the I2C timeouts.
-    for (int i = 0; i < 500 && !g.exited.load(); i++) vTaskDelay(pdMS_TO_TICKS(10));
-    g.task = nullptr;
+    if (!g.exited.load()) {
+        g.run.store(false);
+        if (g.task) xTaskNotifyGive(g.task);
+        // A bring-up in progress runs to its end first: seconds, with the vendor's delays and the I2C timeouts.
+        for (int i = 0; i < 500 && !g.exited.load(); i++) vTaskDelay(pdMS_TO_TICKS(10));
+        if (!g.exited.load()) return;   // still running: it keeps what it uses, and the next close frees it
+        g.task = nullptr;
+    }
+    heap_caps_free(g.frame);
+    g.frame = nullptr;
+    g.frameCap = 0;
+    if (g.ppa) { ppa_unregister_client(g.ppa); g.ppa = nullptr; }
+    if (g.ldo) { esp_ldo_release_channel(g.ldo); g.ldo = nullptr; }
 }
 
 bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING {
@@ -358,7 +454,26 @@ bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCK
     return true;
 }
 
-bool hdmiConnected() MM_NONBLOCKING { return g.connected.load(); }
+HdmiLink hdmiLink() MM_NONBLOCKING { return static_cast<HdmiLink>(g.link.load()); }
+
+bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
+    const uint32_t dds = g.dds.load(), sync = g.sync.load();
+    if (!dds || hdmiLink() == HdmiLink::Down) return false;
+    const uint32_t want = mm_hdmi_dpi[g.mode].dpi_clock_freq_mhz * kDdsPerMhz;
+    out = {static_cast<uint16_t>(dds), static_cast<uint16_t>(want >> 8),
+           static_cast<uint16_t>(sync & 0xffff), static_cast<uint16_t>(sync >> 16)};
+    return true;
+}
+
+bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
+    // A copy taken while the count is even and unchanged is whole; otherwise the next second's read gets it.
+    const uint32_t before = g.monitorSeq.load(std::memory_order_acquire);
+    if (before & 1) return false;
+    const bool read = g.monitorRead;
+    out = g.monitor;
+    std::atomic_thread_fence(std::memory_order_acquire);   // the copy's loads complete before the count is read again
+    return read && g.monitorSeq.load(std::memory_order_relaxed) == before;
+}
 
 }  // namespace mm::platform
 

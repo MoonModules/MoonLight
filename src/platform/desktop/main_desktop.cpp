@@ -9,6 +9,8 @@
 #include <ctime>
 #include <cstring>
 
+#include "stop_signal.h"   // stopOnSigterm
+
 #ifdef _WIN32
 #include <io.h>      // _write
 #else
@@ -162,11 +164,8 @@ int main(int argc, char** argv) {
     saInt.sa_flags = SA_RESETHAND;
     sigaction(SIGINT, &saInt, nullptr);
 
-    // SIGTERM is how systemd, Docker and kill stop a service: the same clean stop, so a HUB75 panel goes dark rather than freezing lit. Not one-shot: a second one would cut the stop short, and a service manager escalates to SIGKILL itself.
-    struct sigaction saTerm{};
-    saTerm.sa_handler = [](int) { running = 0; };
-    sigemptyset(&saTerm.sa_mask);
-    sigaction(SIGTERM, &saTerm, nullptr);
+    // The same clean stop for a service manager, so a HUB75 panel goes dark rather than freezing lit.
+    mm::platform::stopOnSigterm(running);
 
     // Ignore SIGPIPE, write() on a closed TCP connection delivers it by default, which kills the process silently (no crash report) when a browser tab closes mid-response. We handle broken writes via return-value checks instead.
     signal(SIGPIPE, SIG_IGN);

@@ -6,6 +6,7 @@
 #include <new>      // std::nothrow_t, for InternalRamObject's allocation
 #include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
+#include "edid.h"             // edid::Monitor, what the HDMI seam reports about the monitor
 
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
 ///
@@ -534,7 +535,7 @@ struct HdmiMode {
 };
 
 /// The modes this platform offers, in the order the driver's `mode` control lists them; 0 where it has none.
-size_t hdmiModes(const HdmiMode** out);
+size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING;
 
 /// Start the output in mode `index`, replacing a running one; false where the platform or board has none, such as no I2C bus open for the bridge.
 bool hdmiOpen(uint8_t index);
@@ -545,12 +546,33 @@ void hdmiClose();
 /// Hand one tight-RGB frame to the output, which scales it to the screen, keeping its aspect when `fit`. Never blocks: a frame arriving before the previous one is shown replaces it.
 bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING;
 
-/// Whether a monitor is connected now, the HDMI hot-plug detect.
-bool hdmiConnected() MM_NONBLOCKING;
+/// What the link reports back: Down while the bridge is not set up (absent on the bus, or its setup failed and is retried), then the monitor on its hot-plug detect.
+enum class HdmiLink : uint8_t { Down, NoMonitor, Monitor };
+
+/// The link's state now; NoMonitor until the first poll after opening.
+HdmiLink hdmiLink() MM_NONBLOCKING;
+
+/// The connected monitor's EDID, reduced to this platform's modes in `hdmiModes` order; false until one is read after the monitor connected, or where the monitor gives none.
+bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING;
+
+/// The bridge's own view of the stream it sends.
+struct HdmiBridgeState {
+    uint16_t dds;       ///< its clock synthesizer's read-back, the word's two middle bytes that settle
+    uint16_t ddsWant;   ///< the same bytes of the word the mode's pixel clock programs
+    uint16_t hsync;     ///< the horizontal sync it measures on its input
+    uint16_t vsync;     ///< the vertical sync it measures on its input
+};
+
+/// The bridge's state as last read; false while the link is down or before the first read.
+bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING;
 
 #ifndef ESP_PLATFORM
-/// Report a monitor connected or not: the desktop's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
-void setTestHdmiConnected(bool connected);
+/// Report a link state: the desktop's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
+void setTestHdmiLink(HdmiLink link);
+/// Report a monitor's EDID as read.
+void setTestHdmiMonitor(const edid::Monitor& monitor);
+/// Report the bridge's state as read.
+void setTestHdmiBridge(const HdmiBridgeState& state);
 /// The mode the output was opened in, -1 while closed.
 int hdmiTestOpenMode();
 /// How many frames were handed over since the last clear.

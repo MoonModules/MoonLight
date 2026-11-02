@@ -226,9 +226,9 @@ private:
 
     /// Run the row's action on its settled state and report it, since doing nothing looks identical to a broken switch.
     bool act(const Row& r) MM_NONBLOCKING {
-        statusBuf_[0] = 0;   // cleared first, so the report is about this press
-        const bool done = runInputAction(r.action, r.pressed, statusBuf_, sizeof(statusBuf_));
-        if (done || statusBuf_[0]) setStatus(statusBuf_);
+        char msg[sizeof(statusBuf_)] = {};   // built aside, so a run with nothing to say leaves the status, such as the restore's warning, as it is
+        const bool done = runInputAction(r.action, r.pressed, msg, sizeof(msg));
+        if (done || msg[0]) { std::memcpy(statusBuf_, msg, sizeof(msg)); setStatus(statusBuf_); }
         return done;
     }
 

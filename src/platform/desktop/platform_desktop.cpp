@@ -3169,7 +3169,11 @@ namespace {
 // The ESP32's modes, so the driver's mode control reads the same under test.
 constexpr HdmiMode kHdmiModes[] = {{800, 600, 60}, {1024, 768, 60}, {1280, 720, 60}, {1280, 800, 60}, {1920, 1080, 30}};
 int hdmiOpenMode_ = -1;
-bool hdmiConnected_ = false;
+HdmiLink hdmiLink_ = HdmiLink::NoMonitor;
+edid::Monitor hdmiMonitor_;
+bool hdmiMonitorRead_ = false;
+HdmiBridgeState hdmiBridge_{};
+bool hdmiBridgeRead_ = false;
 size_t hdmiFrames_ = 0;
 uint16_t hdmiW_ = 0, hdmiH_ = 0;
 bool hdmiFit_ = false;
@@ -3178,7 +3182,7 @@ uint8_t hdmiFrame_[16 * 1024];
 size_t hdmiFrameBytes_ = 0;
 }  // namespace
 
-size_t hdmiModes(const HdmiMode** out) {
+size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING {
     if (out) *out = kHdmiModes;
     return sizeof(kHdmiModes) / sizeof(kHdmiModes[0]);
 }
@@ -3197,15 +3201,27 @@ bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCK
     hdmiFrames_++;
     return true;
 }
-bool hdmiConnected() MM_NONBLOCKING { return hdmiOpenMode_ >= 0 && hdmiConnected_; }
-void setTestHdmiConnected(bool connected) { hdmiConnected_ = connected; }
+HdmiLink hdmiLink() MM_NONBLOCKING { return hdmiOpenMode_ >= 0 ? hdmiLink_ : HdmiLink::NoMonitor; }
+bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
+    if (hdmiOpenMode_ < 0 || hdmiLink_ != HdmiLink::Monitor || !hdmiMonitorRead_) return false;
+    out = hdmiMonitor_;
+    return true;
+}
+bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
+    if (hdmiOpenMode_ < 0 || hdmiLink_ == HdmiLink::Down || !hdmiBridgeRead_) return false;
+    out = hdmiBridge_;
+    return true;
+}
+void setTestHdmiLink(HdmiLink link) { hdmiLink_ = link; }
+void setTestHdmiBridge(const HdmiBridgeState& state) { hdmiBridge_ = state; hdmiBridgeRead_ = true; }
+void setTestHdmiMonitor(const edid::Monitor& monitor) { hdmiMonitor_ = monitor; hdmiMonitorRead_ = true; }
 int hdmiTestOpenMode() { return hdmiOpenMode_; }
 size_t hdmiTestFrameCount() { return hdmiFrames_; }
 uint16_t hdmiTestFrameWidth() { return hdmiW_; }
 uint16_t hdmiTestFrameHeight() { return hdmiH_; }
 bool hdmiTestFrameFit() { return hdmiFit_; }
 const uint8_t* hdmiTestFrameData() { return hdmiFrameBytes_ ? hdmiFrame_ : nullptr; }
-void hdmiTestClear() { hdmiFrames_ = 0; hdmiFrameBytes_ = 0; hdmiW_ = hdmiH_ = 0; hdmiOpenMode_ = -1; hdmiConnected_ = false; }
+void hdmiTestClear() { hdmiFrames_ = 0; hdmiFrameBytes_ = 0; hdmiW_ = hdmiH_ = 0; hdmiOpenMode_ = -1; hdmiLink_ = HdmiLink::NoMonitor; hdmiMonitorRead_ = false; hdmiBridgeRead_ = false; }
 
 bool ndiAvailable() {
     if (ndiTestMode_ == NdiTestMode::ForceAvailable) return true;

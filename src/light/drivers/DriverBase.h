@@ -126,18 +126,6 @@ public:
     /// Rebake only the brightness table for a level that moves every tick, the soft start, leaving the resolved profile as it is.
     void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
-    /// Correct `n` lights of `src` into tight RGB at `dst`, for an output that carries RGB only: a wider wiring is corrected into `scratch` and its first three channels kept, and without a scratch the colors pass through.
-    void correctToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* dst, nrOfLightsType n, uint8_t* scratch) const MM_NONBLOCKING {
-        const uint8_t outCh = correction_.outChannels;
-        for (nrOfLightsType i = 0; i < n; i++) {
-            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
-            uint8_t* d = dst + static_cast<size_t>(i) * 3;
-            if (outCh == 3) correction_.apply(s, d, srcCh);
-            else if (scratch) { correction_.apply(s, scratch, srcCh); d[0] = scratch[0]; d[1] = scratch[1]; d[2] = scratch[2]; }
-            else { d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; }
-        }
-    }
-
     /// Clear every shared status string, so a stopped driver leaves nothing behind; the owner calls it before destroying the driver, since a base destructor cannot prevent the vptr race.
     void release() override {
         freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
@@ -171,12 +159,30 @@ protected:
         return false;
     }
 
-    /// Correct one light for a wire that carries RGB alone, reading red, green and blue where the profile puts them, 0 for a role it lacks; `scratch` holds one light of the wiring.
-    void correctToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* scratch, uint8_t* rgb) const MM_NONBLOCKING {
-        correction_.apply(src, scratch, srcCh);
-        rgb[0] = correction_.offRed != Correction::kAbsent ? scratch[correction_.offRed] : 0;
-        rgb[1] = correction_.offGreen != Correction::kAbsent ? scratch[correction_.offGreen] : 0;
-        rgb[2] = correction_.offBlue != Correction::kAbsent ? scratch[correction_.offBlue] : 0;
+    /// Whether the wiring is plain RGB in the frame's own order, so a light corrects straight into an RGB frame; asked once per frame.
+    bool rgbOrdered() const MM_NONBLOCKING {
+        const Correction& c = correction_;
+        return c.outChannels == 3 && c.offRed == 0 && c.offGreen == 1 && c.offBlue == 2;
+    }
+
+    /// Correct one light for an RGB-only wire: straight into `rgb` when `ordered`, else red, green and blue read where the profile puts them, 0 for a missing role; a wider wiring goes through lightScratch_, and without it the colors pass through.
+    void correctToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* rgb, bool ordered) MM_NONBLOCKING {
+        if (ordered) { correction_.apply(src, rgb, srcCh); return; }
+        const uint8_t outCh = correction_.outChannels;
+        uint8_t three[3];
+        uint8_t* light = outCh == 3 ? three : lightScratch_.count() >= outCh ? &lightScratch_[0] : nullptr;
+        if (outCh < 3 || !light) { rgb[0] = src[0]; rgb[1] = src[1]; rgb[2] = src[2]; return; }
+        correction_.apply(src, light, srcCh);
+        rgb[0] = correction_.offRed != Correction::kAbsent ? light[correction_.offRed] : 0;
+        rgb[1] = correction_.offGreen != Correction::kAbsent ? light[correction_.offGreen] : 0;
+        rgb[2] = correction_.offBlue != Correction::kAbsent ? light[correction_.offBlue] : 0;
+    }
+
+    /// The same for `n` lights into a tight RGB frame at `dst`.
+    void correctFrameToRgb(const uint8_t* src, uint8_t srcCh, uint8_t* dst, nrOfLightsType n) MM_NONBLOCKING {
+        const bool ordered = rgbOrdered();
+        for (nrOfLightsType i = 0; i < n; i++)
+            correctToRgb(src + static_cast<size_t>(i) * srcCh, srcCh, dst + static_cast<size_t>(i) * 3, ordered);
     }
 
     /// The correction scratch; the size differs per driver, so the caller passes the byte count and the lifecycle lives here.
