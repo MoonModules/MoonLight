@@ -91,6 +91,7 @@ public:
         correction_.lut16 = lut16_.data();
         const bool firstGain = resolveGainTables();
         if (firstTable || firstGain) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
+        showGainShortage();
         onCorrectionChanged();      // let a driver resize its correction-applied buffer
     }
 
@@ -236,6 +237,14 @@ protected:
         return freshGain || freshWide;
     }
 
+    /// Warn while a gain the profile asks for has no table to live in, so the strip shows ungained light visibly rather than silently; the next rebuild retries the allocation.
+    void showGainShortage() {
+        const bool dropped = correction_.wantsGains() && (!gainLut_ || (correction_.wantsTable() && !gainLut16_));
+        if (dropped) setStatus(kNoGainMemory, Severity::Warning);
+        else if (gainsDropped_ && status() == kNoGainMemory) clearStatus();
+        gainsDropped_ = dropped;
+    }
+
     /// Size one gained table to whether it is wanted, true when this call allocated it.
     template <typename T>
     static bool fitGainTable(ScratchBuffer<T>& table, bool wanted) {
@@ -335,6 +344,9 @@ protected:
     /// The status verdicts this driver set; each is cleared only when the status still shows the one this driver set.
     const char* configErr_ = nullptr;
     const char* configWarn_ = nullptr;
+    /// The warning while a profile's gains have no table, which the driving line yields to.
+    static constexpr const char* kNoGainMemory = "out of memory for the color balance, gains off";
+    bool gainsDropped_ = false;
     char* failBuf_ = nullptr;
     /// The status buffer size: the widest verdict is the loopback's worst case, which a narrower buffer clips.
     static constexpr size_t kFailBufLen = 64;
@@ -378,6 +390,7 @@ protected:
     /// Show how many lights are driven, set last so an error or warning from earlier in the same parse still wins.
     void setDrivingInfo(unsigned driven, unsigned total, unsigned channels = 1,
                         const char* mode = nullptr) {
+        if (gainsDropped_) { setStatus(kNoGainMemory, Severity::Warning); return; }
         if (char* buf = failBufEnsure()) {
             int n;
             if (channels > 1)

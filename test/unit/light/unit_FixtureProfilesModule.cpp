@@ -30,6 +30,13 @@ std::string profilesJson(FixtureProfilesModule& m) {
     }
     return "";
 }
+// Point a driver's fixture select at a profile by id, as a pick on the card does before its change event.
+template <class Driver>
+void pointAtProfile(const FixtureProfilesModule& lib, Driver& drv, uint32_t id) {
+    for (uint8_t i = 0; i < drv.controls().count(); i++)
+        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
+            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(id);
+}
 }  // namespace
 
 TEST_CASE("FixtureProfiles seeds the curated built-ins as locked rows") {
@@ -328,9 +335,7 @@ TEST_CASE("A newly-added profile becomes selectable on a driver") {
     CHECK(profileOptCount() == before + 1);         // the new profile is now an option (was out-of-range before)
 
     // And it's actually selectable + resolves: pick the last index, rebuild, no out-of-range.
-    for (uint8_t i = 0; i < drv.controls().count(); i++)
-        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
-            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(id);
+    pointAtProfile(lib, drv, id);
     drv.rebuildControls();
     drv.onControlChanged("fixture");
     mm::Correction c;
@@ -380,9 +385,7 @@ uint32_t builtinId(FixtureProfilesModule& m, const char* name) {
 }
 // Point a driver's fixture select at a built-in by name, as a pick on the card does, and resolve it.
 void pickProfile(FixtureProfilesModule& lib, mm::DriverBase& drv, const char* name) {
-    for (uint8_t i = 0; i < drv.controls().count(); i++)
-        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
-            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(builtinId(lib, name));
+    pointAtProfile(lib, drv, builtinId(lib, name));
     drv.onControlChanged("fixture");
     drv.rebuildCorrection(255);
 }
@@ -451,9 +454,7 @@ TEST_CASE("A driver referencing a missing profile falls back to the default buil
 
     mm::NetworkSendDriver drv;
     drv.defineControls();
-    for (uint8_t i = 0; i < drv.controls().count(); i++)
-        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
-            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(custom);
+    pointAtProfile(lib, drv, custom);
     drv.rebuildControls();
     drv.onControlChanged("fixture");
     drv.rebuildCorrection(255);
@@ -646,21 +647,23 @@ TEST_CASE("FixtureProfiles gain: an edited gain is kept, serialized and restored
     CHECK(rows.find("\"gains\":[255,180,255,150]") != std::string::npos);
 }
 
+// An RGB profile with green at half, set as the driver's fixture while the driver still runs its ungained default at full brightness; the caller's onControlChanged is the one rebuild a pick on the card makes.
+static void selectHalfGreenProfile(FixtureProfilesModule& lib, mm::NetworkSendDriver& drv) {
+    uint32_t id = 0;
+    REQUIRE(lib.addListRow(id));   // R, G, B
+    REQUIRE(lib.setListRowField(id, "gainGreen", "{\"value\":128}"));
+    drv.defineControls();
+    drv.rebuildCorrection(255);
+    pointAtProfile(lib, drv, id);
+    drv.rebuildControls();
+}
+
 // The gained tables are allocated after the rebuild that fills them, so a first gain on an 8-bit wiring must be filled then too, not wait for the next brightness change.
 TEST_CASE("A driver applies its profile's first gain at once on an 8-bit wiring") {
     FixtureProfilesModule lib;
     lib.defineControls();
-    uint32_t id = 0;
-    REQUIRE(lib.addListRow(id));   // R, G, B
-    REQUIRE(lib.setListRowField(id, "gainGreen", "{\"value\":128}"));
-
     mm::NetworkSendDriver drv;
-    drv.defineControls();
-    drv.rebuildCorrection(255);   // running at full brightness on its default profile, which has no gain
-    for (uint8_t i = 0; i < drv.controls().count(); i++)
-        if (std::strcmp(drv.controls()[i].name, "fixture") == 0)
-            *static_cast<uint8_t*>(drv.controls()[i].ptr) = lib.indexOfId(id);
-    drv.rebuildControls();
+    selectHalfGreenProfile(lib, drv);
     drv.onControlChanged("fixture");   // one rebuild, as a pick on the card makes
 
     const uint8_t white[3] = {255, 255, 255};
@@ -669,4 +672,30 @@ TEST_CASE("A driver applies its profile's first gain at once on an 8-bit wiring"
     CHECK(out[0] == 255);
     CHECK(out[1] == 128);   // half the green, from this rebuild on
     CHECK(out[2] == 255);
+}
+
+// A board without PSRAM can run out of heap; the gains then go off with a warning, and come back on the next rebuild that finds the memory.
+TEST_CASE("A driver warns when its profile's gains find no memory, and applies them once they do") {
+    FixtureProfilesModule lib;
+    lib.defineControls();
+    mm::NetworkSendDriver drv;
+    selectHalfGreenProfile(lib, drv);
+
+    struct Refuse { ~Refuse() { mm::platform::setTestAllocRefusedFrom(0); } } refuse;   // restored however the test ends
+    mm::platform::setTestAllocRefusedFrom(1024);   // the gained table, 4 rows of 256
+    drv.onControlChanged("fixture");
+
+    const uint8_t white[3] = {255, 255, 255};
+    uint8_t out[3] = {};
+    drv.correction().apply(white, out, 3);
+    CHECK(out[1] == 255);   // ungained, not garbage
+    REQUIRE(drv.status() != nullptr);
+    CHECK(std::strstr(drv.status(), "color balance") != nullptr);
+    CHECK(drv.severity() == mm::MoonModule::Severity::Warning);
+
+    mm::platform::setTestAllocRefusedFrom(0);
+    drv.onControlChanged("fixture");
+    drv.correction().apply(white, out, 3);
+    CHECK(out[1] == 128);
+    CHECK((drv.status() == nullptr || std::strstr(drv.status(), "color balance") == nullptr));
 }
