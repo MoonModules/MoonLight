@@ -1436,10 +1436,10 @@
       "LEDs",
       "Ethernet",
       "Audio",
-      "SD card"
+      "SD card",
+      "HDMI"
     ],
     "planned": [
-      "HDMI",
       "Speaker",
       "Camera",
       "USB host"

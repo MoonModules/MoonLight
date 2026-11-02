@@ -3,6 +3,7 @@
 import io
 import urllib.error
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -113,6 +114,42 @@ def test_an_attachment_announced_as_too_large_is_refused_before_a_byte_is_read(m
     monkeypatch.setattr(dr.urllib.request, "urlopen", lambda req, timeout: Big())
     with pytest.raises(ValueError):
         dr.fetch_attachment("https://cdn.discordapp.com/attachments/1/2/big.mov")
+
+
+def test_an_attachment_without_a_size_is_refused_once_it_streams_past_the_limit_and_leaves_nothing(monkeypatch, tmp_path):
+    class Endless(io.BytesIO):
+        headers = {}
+
+        def read(self, n=-1):
+            return b"x" * 8
+    monkeypatch.setattr(dr, "MAX_ATTACHMENT", 20)
+    monkeypatch.setattr(dr, "ATTACH_ROOT", tmp_path)
+    monkeypatch.setattr(dr.urllib.request, "urlopen", lambda req, timeout: Endless())
+    with pytest.raises(ValueError):
+        dr.fetch_attachment("https://cdn.discordapp.com/attachments/1/2/log.txt")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_downloads_keep_only_the_newest_few_so_repeated_reads_never_fill_the_disk(monkeypatch, tmp_path):
+    monkeypatch.setattr(dr, "ATTACH_ROOT", tmp_path)
+    monkeypatch.setattr(dr, "KEEP_ATTACHMENTS", 3)
+    monkeypatch.setattr(dr.urllib.request, "urlopen", lambda req, timeout: type("R", (io.BytesIO,), {"headers": {}})(b"png"))
+    paths = [dr.fetch_attachment(f"https://cdn.discordapp.com/attachments/1/2/shot{i}.png") for i in range(5)]
+    assert len(list(tmp_path.iterdir())) == 3
+    assert Path(paths[-1]).read_bytes() == b"png"   # the newest stays readable
+
+
+def test_a_limited_read_stops_paging_once_it_holds_enough(monkeypatch):
+    pages = []
+
+    def fake_get(path, **params):
+        pages.append(params.get("before"))
+        start = len(pages) * 100
+        return [msg(str(10_000 - start - i), "2026-10-29T13:00:00+00:00", "hi") for i in range(100)]
+    monkeypatch.setattr(dr, "_get", fake_get)
+    got = dr._messages("c1", datetime(2026, 10, 28, tzinfo=timezone.utc), datetime(2026, 10, 30, tzinfo=timezone.utc), limit=150)
+    assert len(got) == 150
+    assert len(pages) == 2   # a third page would hold only messages older than the 150 asked for
 
 
 def test_a_rate_limited_answer_waits_as_told_then_asks_again(monkeypatch):

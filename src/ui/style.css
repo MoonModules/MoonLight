@@ -2266,6 +2266,8 @@ button.fileedit-pick:disabled { opacity: 0.6; cursor: default; }
     justify-content: center;
     background: rgba(10, 10, 20, 0.85);
 }
+dialog.fw-overlay-box { color: var(--fg); }
+dialog.fw-overlay-box::backdrop { background: rgba(10, 10, 20, 0.85); }
 .fw-overlay-box {
     background: var(--card-bg-1);
     border: 1px solid var(--border);

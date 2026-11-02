@@ -7865,31 +7865,32 @@ async function fmRestoreConfig(file, refresh) {
 }
 
 // Restore puts a device back as it was; Clone makes this device another one like it, keeping its own name and network.
-// Resolves false for Restore, true for Clone, undefined for cancel.
+// Resolves false for Restore, true for Clone, undefined for cancel. A native modal <dialog>, as the file editor is: it holds the keyboard focus, starting on the first choice, and Escape cancels.
 function fmAskRestoreOrClone(bundle) {
     return new Promise(resolve => {
-        const ov = document.createElement("div");
-        ov.className = "fw-overlay";
-        const box = document.createElement("div");
+        const box = document.createElement("dialog");
         box.className = "fw-overlay-box";
+        let choice;   // undefined until a button picks one: Escape closes with none, which is cancel
+        box.addEventListener("close", () => { box.remove(); resolve(choice); }, { once: true });
         const h = document.createElement("h2");
         h.textContent = `Restore ${bundle.device || "backup"}`;
         const msg = document.createElement("p");
         msg.className = "fw-overlay-msg";
         msg.textContent = "Restore puts this device back as the backup was, its name and network included. "
-            + "Clone makes it another device like the backup, keeping its own name, WiFi and IP address.";
+            + "Clone makes it another device like the backup, keeping its own name, WiFi, IP address and Ethernet wiring.";
         box.append(h, msg);
         const mk = (text, value) => {
             const b = document.createElement("button");
             b.textContent = text;
-            b.addEventListener("click", () => { ov.remove(); resolve(value); });
+            b.addEventListener("click", () => { choice = value; box.close(); });
             box.appendChild(b);
         };
         mk("restore", false);
         mk("clone", true);
         mk("cancel", undefined);
-        ov.appendChild(box);
-        document.body.appendChild(ov);
+        document.body.appendChild(box);
+        box.showModal();
+        box.querySelector("button").focus();
     });
 }
 

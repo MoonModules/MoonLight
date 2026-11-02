@@ -184,10 +184,10 @@ const pole2 = {
     "/.config/SystemModule.json": JSON.stringify({ System: { deviceName: "Pole-2" } }),
     "/.config/NetworkModule.json": JSON.stringify({ Network: {
         WiFi: { type: "WiFiModule", known: [{ ssid: "venue", password: "secret2" }] },
-        Ethernet: { type: "EthernetModule", ipSettings: 1, ip: "10.0.0.2", gateway: "10.0.0.254", subnet: "255.255.255.0", dns: "10.0.0.254" } } }),
+        Ethernet: { type: "EthernetModule", ethType: 3, ipSettings: 1, ip: "10.0.0.2", gateway: "10.0.0.254", subnet: "255.255.255.0", dns: "10.0.0.254" } } }),
 };
 
-test("a clone keeps the target's name, WiFi networks and static IP, and takes everything else from the backup", () => {
+test("a clone keeps the target's name, WiFi networks, static IP and Ethernet wiring, and takes everything else from the backup", () => {
     const { files, report } = cloneIdentity(pole1, pole2);
     const sys = JSON.parse(files["/.config/SystemModule.json"]).System;
     assert.equal(sys.deviceName, "Pole-2");
@@ -196,7 +196,7 @@ test("a clone keeps the target's name, WiFi networks and static IP, and takes ev
     assert.deepEqual(net.WiFi.known, [{ ssid: "venue", password: "secret2" }]);
     assert.equal(net.WiFi.txPowerSetting, 2);
     assert.equal(net.Ethernet.ip, "10.0.0.2");
-    assert.equal(net.Ethernet.ethType, 1);
+    assert.equal(net.Ethernet.ethType, 3);   // the target board's PHY, not the backup's
     assert.equal(files["/moonlive/show.mle"], "class S {}");
     assert.ok(report.every(e => e.kind === "kept"));
 });
@@ -209,6 +209,12 @@ test("a clone never carries the backup's stored hardware address, which the devi
 test("a clone stops on a backup identity file that is not a settings object, so the target keeps its own", () => {
     for (const bad of ["null", "\"abc\"", "7", "[]", "{not json"]) {
         assert.throws(() => cloneIdentity({ "/.config/NetworkModule.json": bad }, pole2), /nothing was written/);
+    }
+});
+
+test("a clone stops on a target identity file that read but does not parse, so a short read never drops what the device holds", () => {
+    for (const bad of ["{\"Network\": {", "null", "[]"]) {
+        assert.throws(() => cloneIdentity(pole1, { ...pole2, "/.config/NetworkModule.json": bad }), /nothing was written/);
     }
 });
 
@@ -240,11 +246,11 @@ test("restoreBundle reads the target's identity before writing, and writes the c
 });
 
 test("a clone keeps the target's value where the backup has none, since the file is written whole", () => {
-    const backup = { ...pole1, "/.config/NetworkModule.json": JSON.stringify({ Network: { Ethernet: { type: "EthernetModule", ethType: 1 } } }) };
+    const backup = { ...pole1, "/.config/NetworkModule.json": JSON.stringify({ Network: { mDNS: false, Ethernet: { type: "EthernetModule" } } }) };
     const net = JSON.parse(cloneIdentity(backup, pole2).files["/.config/NetworkModule.json"]).Network;
     assert.equal(net.Ethernet.ip, "10.0.0.2");
     assert.deepEqual(net.WiFi.known, [{ ssid: "venue", password: "secret2" }]);
-    assert.equal(net.Ethernet.ethType, 1);
+    assert.equal(net.mDNS, false);   // the backup's own setting, carried over
 });
 
 test("a clone whose read of the target's identity fails stops before writing anything", async () => {

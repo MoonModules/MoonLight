@@ -399,8 +399,27 @@ const char* psramType() {
 #endif
 }
 
+// The P4's Kconfig names the clock as a number; the classic ESP32 and the S3 name only the choice, so it is read from that.
 #if defined(CONFIG_ESPTOOLPY_FLASHFREQ_VAL)
     #define MM_FLASH_CLOCK ", " MM_STR(CONFIG_ESPTOOLPY_FLASHFREQ_VAL) " MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_120M)
+    #define MM_FLASH_CLOCK ", 120 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_80M)
+    #define MM_FLASH_CLOCK ", 80 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_64M)
+    #define MM_FLASH_CLOCK ", 64 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_60M)
+    #define MM_FLASH_CLOCK ", 60 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_48M)
+    #define MM_FLASH_CLOCK ", 48 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_40M)
+    #define MM_FLASH_CLOCK ", 40 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_32M)
+    #define MM_FLASH_CLOCK ", 32 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_26M)
+    #define MM_FLASH_CLOCK ", 26 MHz"
+#elif defined(CONFIG_ESPTOOLPY_FLASHFREQ_20M)
+    #define MM_FLASH_CLOCK ", 20 MHz"
 #else
     #define MM_FLASH_CLOCK ""
 #endif

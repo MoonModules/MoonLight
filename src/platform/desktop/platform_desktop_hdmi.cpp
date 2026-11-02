@@ -685,7 +685,6 @@ void setMode(const HdmiMode& want) {
 }  // namespace
 
 bool open() {
-    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);   // the window in the display's own pixels, not scaled ones
     if (!w.classRegistered) {
         WNDCLASSA wc{};
         wc.lpfnWndProc = windowProc;
@@ -756,6 +755,7 @@ bool readEdid(uint32_t, const edid::Size* sizes, size_t n, edid::Monitor& out) {
 }
 
 bool up(uint32_t /*display*/, const HdmiMode& want, HdmiMode& running) {
+    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);   // on the output thread, which sizes and creates the window: the display's own pixels, not scaled ones
     setMode(want);
     Bounds b{w.device};
     EnumDisplayMonitors(nullptr, nullptr, boundsOf, reinterpret_cast<LPARAM>(&b));

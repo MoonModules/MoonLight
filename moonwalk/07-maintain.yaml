@@ -116,7 +116,7 @@ processes:
         say: Restore the bundle in the File Manager.
         when: { open: { module: FileManagerModule } }
         detail: |
-          Press **Restore**, choose the bundle and confirm twice. The second press is deliberate: restoring overwrites the device's files. Then pick **restore** for this device or an erased one, and **clone** for another device, which keeps its own name, WiFi and IP address: [Restore or clone](reference/backup-and-restore.md#restore-or-clone).
+          Press **Restore**, choose the bundle and confirm twice. The second press is deliberate: restoring overwrites the device's files. Then pick **restore** for this device or an erased one, and **clone** for another device, which keeps its own name, WiFi, IP address and Ethernet wiring: [Restore or clone](reference/backup-and-restore.md#restore-or-clone).
       - id: report
         say: Read the report.
         when: { manual: "It lists what was renamed and mapped, the values to review, and what this firmware lacks." }

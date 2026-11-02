@@ -13,6 +13,7 @@ Registered once per machine, after which an agent session has the tools:
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tempfile
 import time
@@ -33,6 +34,9 @@ TEXT_TYPES = (0, 5, 15)
 SKIP_CATEGORIES = ("GitHub Activity",)
 # A picture or a log, not a video: the size an agent reads, streamed to disk and refused beyond it.
 MAX_ATTACHMENT = 25 * 2**20
+# Downloads live under one folder that keeps the newest few, so repeated reads never fill the disk while a returned path stays readable.
+ATTACH_ROOT = Path(tempfile.gettempdir()) / "moonlight-discord"
+KEEP_ATTACHMENTS = 20
 # The daily summary, read on its own to find where the last one stopped, never summarized again.
 SUMMARY_CHANNEL = "1565668213759676426"
 
@@ -130,8 +134,8 @@ def _resolve(channel: str) -> str:
     raise ValueError(f"no channel or active thread named {channel!r}")
 
 
-def _messages(cid: str, start: datetime, end: datetime) -> list[dict]:
-    """A channel's messages from start up to end, oldest first; none where the bot may not read."""
+def _messages(cid: str, start: datetime, end: datetime, limit: int | None = None) -> list[dict]:
+    """A channel's messages from start up to end, oldest first, the newest `limit` where one is given; none where the bot may not read."""
     got: list[dict] = []
     before = None
     while True:
@@ -147,6 +151,8 @@ def _messages(cid: str, start: datetime, end: datetime) -> list[dict]:
                 return list(reversed(got))
             if t < end:
                 got.append(m)
+                if limit is not None and len(got) >= limit:
+                    return list(reversed(got))   # pages come newest first, so the rest of the window is older than what is asked
         if len(page) < 100:
             return list(reversed(got))
         before = page[-1]["id"]
@@ -184,7 +190,7 @@ def read_messages(channel: str, hours: float = 24, limit: int = 300) -> str:
         return "no messages in that window"
     cid = _resolve(channel)
     end = datetime.now(timezone.utc)
-    got = _messages(cid, end - timedelta(hours=hours), end)[-limit:]
+    got = _messages(cid, end - timedelta(hours=hours), end, limit)
     return "\n".join(_line(m, cid) for m in got) or "no messages in that window"
 
 
@@ -203,6 +209,14 @@ def read_server(start: str, end: str) -> str:
     return "\n".join(out) or "no messages in that window"
 
 
+def _prune_attachments() -> None:
+    """Make room for one more download: the oldest go once the folder holds its share."""
+    ATTACH_ROOT.mkdir(parents=True, exist_ok=True)
+    held = sorted(ATTACH_ROOT.iterdir(), key=lambda p: p.stat().st_mtime)
+    for old in held[:max(0, len(held) - (KEEP_ATTACHMENTS - 1))]:
+        shutil.rmtree(old, ignore_errors=True)
+
+
 def fetch_attachment(url: str) -> str:
     """Download a message's attachment (a screenshot, a log) to a temp file and return its path, for reading."""
     if not url.startswith(("https://cdn.discordapp.com/", "https://media.discordapp.net/")):
@@ -213,7 +227,8 @@ def fetch_attachment(url: str) -> str:
         # Refused on the announced size before a byte is read or a directory made; the count below covers a missing header.
         if int(r.headers.get("Content-Length") or 0) > MAX_ATTACHMENT:
             raise too_large
-        path = Path(tempfile.mkdtemp(prefix="discord-")) / Path(url.split("?")[0]).name
+        _prune_attachments()
+        path = Path(tempfile.mkdtemp(prefix="discord-", dir=ATTACH_ROOT)) / Path(url.split("?")[0]).name
         got = 0
         try:
             with path.open("wb") as f:

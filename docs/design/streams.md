@@ -68,7 +68,7 @@ A live browser source costs lights × 3 bytes × fps: about 60 KB/s for a 600-li
 - **A light list carries no positions:** the layout places it, on 1D, 2D and 3D layouts alike, numbering its lights as the xLights model does.
 - **A picture reaches a 3D layout by projection:** each light samples the picture at its position seen along one axis, the planar projection media servers use.
 - **A volume would be the native 3D stream:** a frame per depth slice, copied straight into a 3D layer. No source delivers one yet.
-- **The P4's hardware video codec encodes H.264 but does not decode it**; its JPEG codec works both ways. So video arrives as MJPEG from a grabber, raw from a camera, or baked in the browser, and leaves through the H.264 encoder HLS drives. The Olimex ESP32-P4-PC carries every piece on one board: HDMI and MIPI-DSI out, a MIPI-CSI connector, four USB host ports, a microSD slot, Ethernet with PoE and 32 MB of PSRAM.
+- **The P4's hardware video codec encodes H.264 but does not decode it**; its JPEG codec works both ways. So video arrives as MJPEG from a grabber, raw from a camera, or baked in the browser, and leaves as H.264 from the hardware encoder, which HLS streams. The Olimex ESP32-P4-PC carries every piece on one board: HDMI and MIPI-DSI out, a MIPI-CSI connector, four USB host ports, a microSD slot, Ethernet with PoE and 32 MB of PSRAM.
 
 ## Where MoonLight stands among the tools
 
@@ -84,8 +84,6 @@ A live browser source costs lights × 3 bytes × fps: about 60 KB/s for a 600-li
 MoonLight is closest to MADRIX: generative effects, layers, 2D and 3D layouts and many outputs, running on the controller itself. MADRIX's media, capture and record-for-standalone-playback are what this model adds: MADRIX-class pixel control, embedded.
 
 ## What WLED did, and where it stopped
-
-Checked 2026-10-13 against WLED main and WLED-MM.
 
 - **One picture format, decoded on the device.** The Image effect (PR #3835, WLED 16.0) plays a GIF from the internal file system, up to 320 × 320, with about 24 KB of decoder RAM, scales by nearest neighbor, and redraws only changed pixels, which upsets brightness limiting.
 - **Every conversion in the browser.** PixelForge (PR #4982) crops, scales and encodes a GIF in the page; Video Lab turns video into GIFs.

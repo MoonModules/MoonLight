@@ -19,6 +19,7 @@ Choosing a bundle asks what it is for. **Restore** puts a device back as the bac
 | `deviceName` | its network name: the mDNS hostname, the access point and the DHCP hostname all derive from it |
 | WiFi's known networks | each with its password, which stays on the device it was typed into |
 | Ethernet's static IP settings | two devices claiming one address both drop off the network |
+| Ethernet's board, PHY type and pins | the board's own wiring: another board's would leave an Ethernet-only device unreachable |
 | the desktop's stored hardware address | the default device name derives from it |
 
 What differs per device beyond its identity, such as each pole's Art-Net universe start, is set after the clone, by hand or through [the HTTP API](integrating.md).

@@ -538,8 +538,11 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 // Each entry is a config file and the key paths in its document; a file listed with no paths is kept whole.
 export const IDENTITY = {
     "/.config/SystemModule.json": [["System", "deviceName"]],
+    // The Ethernet wiring is the board's own: a backup from other hardware would leave an Ethernet-only target unreachable.
     "/.config/NetworkModule.json": [["Network", "WiFi", "known"],
-        ...["ipSettings", "ip", "gateway", "subnet", "dns"].map(k => ["Network", "Ethernet", k])],
+        ...["ipSettings", "ip", "gateway", "subnet", "dns",
+            "ethBoard", "ethType", "ethPhyAddr", "ethRstGpio", "ethMdcGpio", "ethMdioGpio", "ethClockGpio", "ethClockExtIn",
+            "ethSpiMiso", "ethSpiMosi", "ethSpiSck", "ethSpiCs", "ethSpiIrq"].map(k => ["Network", "Ethernet", k])],
     "/.config/identity": [],   // the desktop's stored hardware address, which its name derives from
 };
 /// Turn a backup's files into a clone of it for another device: the target's identity, from `targetFiles` (its own current files), replaces the bundle's.
@@ -559,7 +562,10 @@ export function cloneIdentity(files, targetFiles) {
         // A clone promises the target keeps its identity; a file this cannot be done on stops the clone rather than overwriting it.
         try { doc = JSON.parse(out[file]); } catch (_) { throw new Error(`the backup's ${file} is not valid JSON; nothing was written`); }
         if (!isObject(doc)) throw new Error(`the backup's ${file} is not a settings file; nothing was written`);
-        try { target = JSON.parse(targetFiles[file]); } catch (_) {}
+        if (file in targetFiles) {   // read: it must parse, since a short or broken read would otherwise drop what the device holds
+            try { target = JSON.parse(targetFiles[file]); } catch (_) { target = undefined; }
+            if (!isObject(target)) throw new Error(`this device's ${file} did not read as a settings file; nothing was written`);
+        }
         for (const path of paths) {
             const key = path[path.length - 1];
             const mine = at(target, path);
