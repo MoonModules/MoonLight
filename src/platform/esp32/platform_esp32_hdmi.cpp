@@ -67,6 +67,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "platform/edid.h"
+#include "platform/hdmi_handover.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -105,9 +106,6 @@ constexpr int kBridgeI2cTimeoutMs = 50;   // a transfer stalled on the shared bu
 constexpr uint8_t kRegHpd = 0xc1;         // the main page's status register: bit 7 is hot-plug detect
 constexpr uint32_t kStreamSettleMs = 100;  // the stream running before the receiver is reset onto it
 
-// The frame slot between the render tick and the task: free, being written, ready, being shown.
-enum Slot : uint8_t { kFree, kWriting, kReady, kShowing };
-
 struct Hdmi {
     esp_ldo_channel_handle_t ldo = nullptr;
     esp_lcd_dsi_bus_handle_t bus = nullptr;
@@ -122,14 +120,11 @@ struct Hdmi {
     std::atomic<bool> run{false};
     std::atomic<bool> exited{true};
     std::atomic<uint8_t> link{static_cast<uint8_t>(HdmiLink::NoMonitor)};
-    // The monitor as read, published under a sequence count: odd while the task writes it, so a torn copy is seen and dropped.
-    std::atomic<uint32_t> monitorSeq{0};
-    edid::Monitor monitor;
-    bool monitorRead = false;
+    Seqlock<MonitorReport> monitor;
     std::atomic<uint16_t> dds{0};    // the synthesizer read-back as last read, 0 before the first
     std::atomic<uint32_t> sync{0};   // the measured sync, v in the high half and h in the low
     // The frame the tick hands over.
-    std::atomic<uint8_t> slot{kFree};
+    FrameSlot slot;
     uint8_t* frame = nullptr;
     size_t frameCap = 0;
     uint16_t frameW = 0, frameH = 0;
@@ -199,12 +194,7 @@ bool openBridgeIo() {
 }
 
 // Publish what the task knows of the monitor, or that it knows nothing.
-void publishMonitor(const edid::Monitor* m) {
-    g.monitorSeq.fetch_add(1, std::memory_order_acq_rel);
-    g.monitorRead = m != nullptr;
-    g.monitor = m ? *m : edid::Monitor{};
-    g.monitorSeq.fetch_add(1, std::memory_order_acq_rel);
-}
+void publishMonitor(const edid::Monitor* m) { g.monitor.write({m ? *m : edid::Monitor{}, m != nullptr}); }
 
 // The monitor's EDID, both blocks, reduced to the modes the output runs: @xref{the-edid-is-the-feedback|the EDID}.
 bool readEdid() {
@@ -355,7 +345,7 @@ void pollHotPlug(Poll& p) {
         tearDownPanel();
         p.up = bringUpPanel();
     }
-    if (p.up && hpd == 1 && !g.monitorRead && p.edidTries < kEdidTries) { p.edidTries++; readEdid(); }
+    if (p.up && hpd == 1 && !g.monitor.written().read && p.edidTries < kEdidTries) { p.edidTries++; readEdid(); }
     if (p.up) readBridgeState();
     g.link.store(static_cast<uint8_t>(p.up && hpd == 1 ? HdmiLink::Monitor : HdmiLink::NoMonitor));
 }
@@ -369,8 +359,7 @@ void hdmiTask(void*) {
         if (!g.run.load()) break;
         const TickType_t now = xTaskGetTickCount();
         if (now - lastPoll >= pdMS_TO_TICKS(kHotPlugPollMs)) { lastPoll = now; pollHotPlug(p); }
-        uint8_t ready = kReady;
-        if (p.up && g.slot.compare_exchange_strong(ready, kShowing)) { show(); g.slot.store(kFree); }
+        if (p.up && g.slot.claimShow()) { show(); g.slot.release(); }
     }
     tearDownPanel();
     publishMonitor(nullptr);
@@ -400,7 +389,7 @@ bool hdmiOpen(uint8_t index) {
     static bool shutdownRegistered = false;   // before a software restart, as a chip reset leaves it: @xref{closing-releases-everything|closing}
     if (!shutdownRegistered) shutdownRegistered = esp_register_shutdown_handler(hdmiClose) == ESP_OK;
     g.mode = index;
-    g.slot.store(kFree);
+    g.slot.release();
     g.link.store(static_cast<uint8_t>(HdmiLink::NoMonitor));
     g.run.store(true);
     g.exited.store(false);
@@ -431,30 +420,32 @@ void hdmiClose() {
 }
 
 bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING {
-    if (!rgb || w == 0 || h == 0 || !g.run.load()) return false;
-    uint8_t expect = kFree;
-    if (!g.slot.compare_exchange_strong(expect, kWriting)) {
-        expect = kReady;   // a frame not shown yet is replaced by the newer one
-        if (!g.slot.compare_exchange_strong(expect, kWriting)) return false;   // the task is showing: drop this one
-    }
+    if (!rgb || w == 0 || h == 0 || !g.run.load() || !g.slot.claimWrite()) return false;
     const size_t bytes = static_cast<size_t>(w) * h * 3;
     if (bytes > g.frameCap) {
         // Grown only, on the first frame of a larger layer: the PPA reads it by DMA, so cache-line aligned.
         heap_caps_free(g.frame);
         g.frameCap = (bytes + 127) & ~size_t(127);
         g.frame = static_cast<uint8_t*>(heap_caps_aligned_alloc(128, g.frameCap, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA));
-        if (!g.frame) { g.frameCap = 0; g.slot.store(kFree); return false; }
+        if (!g.frame) { g.frameCap = 0; g.slot.release(); return false; }
     }
     std::memcpy(g.frame, rgb, bytes);
     g.frameW = w;
     g.frameH = h;
     g.frameFit = fit;
-    g.slot.store(kReady);
+    g.slot.publish();
     if (g.task) xTaskNotifyGive(g.task);
     return true;
 }
 
 HdmiLink hdmiLink() MM_NONBLOCKING { return static_cast<HdmiLink>(g.link.load()); }
+
+// The bridge runs the mode it was opened in, its timings being fixed per mode.
+bool hdmiActiveMode(HdmiMode& out) MM_NONBLOCKING {
+    if (hdmiLink() != HdmiLink::Monitor) return false;
+    out = kModes[g.mode];
+    return true;
+}
 
 bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
     const uint32_t dds = g.dds.load(), sync = g.sync.load();
@@ -466,13 +457,10 @@ bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
 }
 
 bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
-    // A copy taken while the count is even and unchanged is whole; otherwise the next second's read gets it.
-    const uint32_t before = g.monitorSeq.load(std::memory_order_acquire);
-    if (before & 1) return false;
-    const bool read = g.monitorRead;
-    out = g.monitor;
-    std::atomic_thread_fence(std::memory_order_acquire);   // the copy's loads complete before the count is read again
-    return read && g.monitorSeq.load(std::memory_order_relaxed) == before;
+    MonitorReport r;
+    if (!g.monitor.read(r) || !r.read) return false;   // a torn copy waits for the next second's read
+    out = r.monitor;
+    return true;
 }
 
 }  // namespace mm::platform

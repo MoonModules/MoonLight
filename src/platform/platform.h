@@ -546,11 +546,14 @@ void hdmiClose();
 /// Hand one tight-RGB frame to the output, which scales it to the screen, keeping its aspect when `fit`. Never blocks: a frame arriving before the previous one is shown replaces it.
 bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING;
 
-/// What the link reports back: Down while the bridge is not set up (absent on the bus, or its setup failed and is retried), then the monitor on its hot-plug detect.
+/// What the link reports back: Down while the output is not set up and is retried (an ESP32's bridge absent or failing, a Linux screen held by a desktop), then the monitor on its hot-plug detect.
 enum class HdmiLink : uint8_t { Down, NoMonitor, Monitor };
 
 /// The link's state now; NoMonitor until the first poll after opening.
 HdmiLink hdmiLink() MM_NONBLOCKING;
+
+/// The mode the display runs now: the one opened, or the display's own where it has no such size; false while no display is up.
+bool hdmiActiveMode(HdmiMode& out) MM_NONBLOCKING;
 
 /// The connected monitor's EDID, reduced to this platform's modes in `hdmiModes` order; false until one is read after the monitor connected, or where the monitor gives none.
 bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING;
@@ -573,6 +576,8 @@ void setTestHdmiLink(HdmiLink link);
 void setTestHdmiMonitor(const edid::Monitor& monitor);
 /// Report the bridge's state as read.
 void setTestHdmiBridge(const HdmiBridgeState& state);
+/// Report the mode the display runs, as one without the opened size keeps its own.
+void setTestHdmiActiveMode(const HdmiMode& mode);
 /// The mode the output was opened in, -1 while closed.
 int hdmiTestOpenMode();
 /// How many frames were handed over since the last clear.
@@ -1609,6 +1614,7 @@ struct VideoCaptureStats {
     uint32_t decoded = 0;   ///< frames decoded into a picture
     uint32_t dropped = 0;   ///< frames that arrived while the one before was still being decoded
     uint32_t failed = 0;    ///< frames the decoder refused, a mis-read payload stride among them
+    VideoCaptureFormat stream;   ///< the mode the device streams, 0 wide until it streams
 };
 /// The counters above, read atomically enough for a once-a-second status line.
 VideoCaptureStats videoCaptureStats() MM_NONBLOCKING;

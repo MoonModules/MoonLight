@@ -104,6 +104,7 @@ add_executable(mm_tests
     unit/core/unit_Sort.cpp
     unit/core/unit_sanitizeHostname.cpp
     unit/core/unit_platform_clock.cpp
+    unit/core/unit_platform_hdmi.cpp
     unit/core/unit_platform_worker.cpp
     unit/core/unit_platform_httpfetch.cpp
     unit/core/unit_HostList.cpp

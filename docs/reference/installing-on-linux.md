@@ -10,6 +10,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 - **The package needs glibc 2.35**: Raspberry Pi OS Bookworm, Debian 12 and 13, Ubuntu 22.04 and later. apt refuses a package for the wrong architecture by name rather than installing something that cannot run. On an older system, build from source or run the container.
 - **A Pi 4 or 5 has ample headroom.** A NanoPi R28S has two Gigabit ports, so it can sit between the house network and the lighting network, and 1 GB of RAM, which runs MoonLight comfortably.
 - **The card is a fine home for it.** MoonLight writes to disk only when settings change; the risk is the operating system's own writes.
+- **HDMI out** works on any machine whose kernel drives its HDMI port, a Pi, a Rockchip board or an Intel or AMD mini PC, through the kernel's display interface (DRM/KMS). Two conditions: no desktop holds the screen, so a Lite or server install, or a desktop install set to boot to the console (`sudo systemctl set-default multi-user.target`), and the user running MoonLight is in the `video` group, which Raspberry Pi OS's first user already is. The first connected HDMI port is the one shown.
 
 ## Docker
 
@@ -25,6 +26,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 | **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
 | **Capabilities** | none: it binds its port as an ordinary process |
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
+| **HDMI out** | `--device /dev/dri`, on a host with no desktop holding the screen |
 
 **Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
 

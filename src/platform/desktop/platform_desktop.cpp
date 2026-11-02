@@ -3037,6 +3037,7 @@ VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
     VideoCaptureStats s;
     s.decoded = g_grabber.decoded.load();
     s.failed = g_grabber.failed.load();
+    if (g_grabber.open.load()) s.stream = {g_grabber.openW, g_grabber.openH, g_grabber.openFps};   // set before open, which publishes it
     return s;
 }
 
@@ -3163,65 +3164,6 @@ bool ndiLoad() {
 }
 
 }  // namespace
-
-// --- HDMI: a stand-in recording what the driver hands over, since a desktop has no bridge to drive ---
-namespace {
-// The ESP32's modes, so the driver's mode control reads the same under test.
-constexpr HdmiMode kHdmiModes[] = {{800, 600, 60}, {1024, 768, 60}, {1280, 720, 60}, {1280, 800, 60}, {1920, 1080, 30}};
-int hdmiOpenMode_ = -1;
-HdmiLink hdmiLink_ = HdmiLink::NoMonitor;
-edid::Monitor hdmiMonitor_;
-bool hdmiMonitorRead_ = false;
-HdmiBridgeState hdmiBridge_{};
-bool hdmiBridgeRead_ = false;
-size_t hdmiFrames_ = 0;
-uint16_t hdmiW_ = 0, hdmiH_ = 0;
-bool hdmiFit_ = false;
-// Fixed, since the write is on the render path and records without allocating; a test's wall is small.
-uint8_t hdmiFrame_[16 * 1024];
-size_t hdmiFrameBytes_ = 0;
-}  // namespace
-
-size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING {
-    if (out) *out = kHdmiModes;
-    return sizeof(kHdmiModes) / sizeof(kHdmiModes[0]);
-}
-bool hdmiOpen(uint8_t index) {
-    if (index >= hdmiModes(nullptr)) return false;
-    hdmiOpenMode_ = index;
-    return true;
-}
-void hdmiClose() { hdmiOpenMode_ = -1; hdmiFrames_ = 0; hdmiFrameBytes_ = 0; }   // a closed output keeps no frames, so a test sees a restart
-bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING {
-    const size_t bytes = static_cast<size_t>(w) * h * 3;
-    if (!rgb || w == 0 || h == 0 || hdmiOpenMode_ < 0 || bytes > sizeof(hdmiFrame_)) return false;
-    std::memcpy(hdmiFrame_, rgb, bytes);
-    hdmiFrameBytes_ = bytes;
-    hdmiW_ = w; hdmiH_ = h; hdmiFit_ = fit;
-    hdmiFrames_++;
-    return true;
-}
-HdmiLink hdmiLink() MM_NONBLOCKING { return hdmiOpenMode_ >= 0 ? hdmiLink_ : HdmiLink::NoMonitor; }
-bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
-    if (hdmiOpenMode_ < 0 || hdmiLink_ != HdmiLink::Monitor || !hdmiMonitorRead_) return false;
-    out = hdmiMonitor_;
-    return true;
-}
-bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
-    if (hdmiOpenMode_ < 0 || hdmiLink_ == HdmiLink::Down || !hdmiBridgeRead_) return false;
-    out = hdmiBridge_;
-    return true;
-}
-void setTestHdmiLink(HdmiLink link) { hdmiLink_ = link; }
-void setTestHdmiBridge(const HdmiBridgeState& state) { hdmiBridge_ = state; hdmiBridgeRead_ = true; }
-void setTestHdmiMonitor(const edid::Monitor& monitor) { hdmiMonitor_ = monitor; hdmiMonitorRead_ = true; }
-int hdmiTestOpenMode() { return hdmiOpenMode_; }
-size_t hdmiTestFrameCount() { return hdmiFrames_; }
-uint16_t hdmiTestFrameWidth() { return hdmiW_; }
-uint16_t hdmiTestFrameHeight() { return hdmiH_; }
-bool hdmiTestFrameFit() { return hdmiFit_; }
-const uint8_t* hdmiTestFrameData() { return hdmiFrameBytes_ ? hdmiFrame_ : nullptr; }
-void hdmiTestClear() { hdmiFrames_ = 0; hdmiFrameBytes_ = 0; hdmiW_ = hdmiH_ = 0; hdmiOpenMode_ = -1; hdmiLink_ = HdmiLink::NoMonitor; hdmiMonitorRead_ = false; hdmiBridgeRead_ = false; }
 
 bool ndiAvailable() {
     if (ndiTestMode_ == NdiTestMode::ForceAvailable) return true;

@@ -10,6 +10,11 @@
 #include <cstring>
 
 #include "stop_signal.h"   // stopOnSigterm
+#ifdef MM_MAC_SCREEN
+#include <atomic>
+#include <thread>
+#include "main_thread.h"   // runMainThread
+#endif
 
 #ifdef _WIN32
 #include <io.h>      // _write
@@ -182,7 +187,15 @@ int main(int argc, char** argv) {
 
     if (openBrowser) openLocalUi(httpPort);
 
+#ifdef MM_MAC_SCREEN
+    // AppKit serves windows only on the main thread, which the HDMI output's window needs, so MoonLight's loop runs on a thread of its own here.
+    std::atomic<bool> appDone{false};   // the loop's own flag, so no thread but a signal handler writes `running`
+    std::thread app([httpPort, &appDone] { mm_main(running, httpPort); appDone.store(true); });
+    mm::platform::runMainThread(appDone);
+    app.join();
+#else
     mm_main(running, httpPort);
+#endif
 
     cleanExit = true;
     isoTimestamp(tbuf, sizeof(tbuf));

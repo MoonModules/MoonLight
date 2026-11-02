@@ -12,7 +12,9 @@ namespace mm {
 
 /// Shows the layer on a monitor through the board's HDMI port, scaled to the screen.
 ///
-/// One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight). ESP32-P4 boards with an LT8912B HDMI bridge, such as the Olimex ESP32-P4-PC.
+/// One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).
+///
+/// ESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.
 ///
 /// @attribution Espressif, Olimex
 /// @card HdmiDriver.png
@@ -27,10 +29,10 @@ namespace mm {
 ///
 /// | It says | It means |
 /// |---|---|
-/// | `no I2C bus for the bridge` | Set System's I2C pins, as the device model does |
-/// | `bridge did not come up, retrying` | No LT8912B answers on that bus |
-/// | `no monitor connected` | Plug it in, or wake it |
-/// | `<w>x<h> on <mode>` | Live; orange when the monitor does not list the mode |
+/// | `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |
+/// | `output did not come up, retrying` | No bridge answers, or a desktop holds it |
+/// | `no monitor connected` | Plug one in: a second, on a computer |
+/// | `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |
 class HdmiDriver : public DriverBase {
 public:
     /// The catalog tag this driver carries.
@@ -65,6 +67,7 @@ public:
         /// The bridge's synthesizer word against the one programmed, and the sync it measures.
         /// @guide **DDS**, the bridge's clock read back, sits near the programmed value on a clean picture (5455 against 5555 at 1280x720) and further off in noise (571e). **Sync**'s second number is lines per frame: 741 at 1280x720.
         controls_.addReadOnly("bridge", bridgeStr_, sizeof(bridgeStr_));
+        controls_.setHidden(controls_.count() - 1, !platform::hasHdmiBridge);   // a platform without a bridge has nothing to read back
     }
 
     /// A mode change rebuilds the output; a geometry change resizes the frame.
@@ -80,11 +83,12 @@ public:
         if (open_ && openMode_ != mode) { platform::hdmiClose(); open_ = false; }   // the output alone; the staging is resized below
         if (!open_) {
             if (!platform::hdmiOpen(mode)) {
-                setStatus("no I2C bus for the bridge, or no HDMI on this board", Severity::Error);
+                setStatus("no HDMI output on this board", Severity::Error);
                 return;
             }
             open_ = true;   // set BEFORE the staging, so release owns the output from the moment it exists
             openMode_ = mode;
+            activeKnown_ = false;   // a new output reports its display's mode afresh
         }
         if (!rgb_.resize(static_cast<size_t>(width_) * height_ * 3)) {
             release();
@@ -99,14 +103,21 @@ public:
         writeStatus();
     }
 
-    /// The live status line, formatted once here so the tick that shows it only points at it.
-    void formatLiveLine() {
+    /// The live status line, formatted when the layer or the display's mode changes, so the tick that shows it only points at it: the mode the display runs, and the size chosen where the display lacks it.
+    void formatLiveLine() MM_NONBLOCKING {
         const platform::HdmiMode* modes = nullptr;
         const size_t count = platform::hdmiModes(&modes);
-        if (mode >= count) { std::snprintf(statusBuf_, sizeof(statusBuf_), "unknown mode"); return; }
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "%ux%u on %ux%u %u Hz", static_cast<unsigned>(width_),
-                      static_cast<unsigned>(height_), static_cast<unsigned>(modes[mode].width),
-                      static_cast<unsigned>(modes[mode].height), static_cast<unsigned>(modes[mode].hz));
+        if (mode >= count) { mm::formatTo(statusBuf_, sizeof(statusBuf_), "unknown mode"); return; }
+        const platform::HdmiMode& shown = activeKnown_ ? active_ : modes[mode];
+        char rate[12] = "";
+        if (shown.hz) mm::formatTo(rate, sizeof(rate), " %u Hz", static_cast<unsigned>(shown.hz));   // a panel may name no rate
+        if (sizeMatches())
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%ux%u on %ux%u%s", static_cast<unsigned>(width_), static_cast<unsigned>(height_),
+                         static_cast<unsigned>(shown.width), static_cast<unsigned>(shown.height), rate);
+        else
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%ux%u on %ux%u%s (no %ux%u)", static_cast<unsigned>(width_),
+                         static_cast<unsigned>(height_), static_cast<unsigned>(shown.width), static_cast<unsigned>(shown.height), rate,
+                         static_cast<unsigned>(modes[mode].width), static_cast<unsigned>(modes[mode].height));
     }
 
     /// Stop the output, so the screen goes dark and its memory is freed.
@@ -121,7 +132,11 @@ public:
         if (!open_) return;
         edid::Monitor m;
         const bool read = platform::hdmiMonitor(m);
-        if (platform::hdmiLink() != lastLink_ || read != monitorRead_ || (read && m.lists != monitor_.lists)) writeStatus();
+        platform::HdmiMode a{};
+        const bool known = platform::hdmiActiveMode(a);
+        const bool modeChanged = known != activeKnown_ || (known && (a.width != active_.width || a.height != active_.height || a.hz != active_.hz));
+        if (modeChanged) { active_ = a; activeKnown_ = known; formatLiveLine(); }
+        if (modeChanged || platform::hdmiLink() != lastLink_ || read != monitorRead_ || (read && m.lists != monitor_.lists)) writeStatus();
         formatBridgeLine();
     }
 
@@ -162,11 +177,18 @@ private:
         monitorRead_ = platform::hdmiMonitor(monitor_);
         formatMonitorLine();
         switch (lastLink_) {
-            case platform::HdmiLink::Down:      setStatus("bridge did not come up, retrying", Severity::Error); return;
+            case platform::HdmiLink::Down:      setStatus("output did not come up, retrying", Severity::Error); return;
             case platform::HdmiLink::NoMonitor: setStatus("no monitor connected", Severity::Warning); return;
             case platform::HdmiLink::Monitor:   break;
         }
-        setStatus(statusBuf_, modeListed() ? Severity::Status : Severity::Warning);
+        setStatus(statusBuf_, modeListed() && sizeMatches() ? Severity::Status : Severity::Warning);
+    }
+
+    /// Whether the display runs the size chosen; true while its mode is not known yet.
+    bool sizeMatches() const MM_NONBLOCKING {
+        const platform::HdmiMode* modes = nullptr;
+        const size_t count = platform::hdmiModes(&modes);
+        return !activeKnown_ || mode >= count || (active_.width == modes[mode].width && active_.height == modes[mode].height);
     }
 
     /// Whether the monitor lists the mode; true while nothing is known, so an unread EDID raises no warning.
@@ -202,6 +224,8 @@ private:
     bool           open_   = false;
     uint8_t        openMode_ = 0;         ///< the mode the output runs in, so a re-prepare in that mode keeps it
     platform::HdmiLink lastLink_ = platform::HdmiLink::NoMonitor;   ///< the link the status line describes
+    platform::HdmiMode active_{};         ///< the mode the display runs, as the status line describes it
+    bool           activeKnown_ = false;  ///< whether active_ holds one
     edid::Monitor monitor_;     ///< the monitor the readout describes
     bool           monitorRead_ = false;  ///< whether monitor_ holds a read EDID
     uint32_t       lastSendMs_ = 0;
@@ -209,7 +233,7 @@ private:
     char           modeNames_[kMaxModes][20]{};
     const char*    modeOptions_[kMaxModes]{};
     ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
-    char           statusBuf_[48]{};
+    char           statusBuf_[64]{};
     char           monitorStr_[64]{};
     char           bridgeStr_[48]{};
 };

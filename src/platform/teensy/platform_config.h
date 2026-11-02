@@ -70,6 +70,8 @@ constexpr bool hasNdi = false;
 constexpr bool hasHls = false;
 /// False: the Teensy has no display controller.
 constexpr bool hasHdmi = false;
+/// False: no HDMI, so no bridge.
+constexpr bool hasHdmiBridge = false;
 /// No RTSP server.
 constexpr bool hasRtsp = false;
 /// No USB MIDI host.

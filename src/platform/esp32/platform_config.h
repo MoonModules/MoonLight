@@ -205,8 +205,12 @@ constexpr bool hasRtsp = hasHls;
 // HDMI out needs a MIPI-DSI controller, which the P4 alone has; the build symbol mirrors the dependency.
 #if defined(CONFIG_MM_HDMI) && defined(CONFIG_IDF_TARGET_ESP32P4)
 constexpr bool hasHdmi = true;
+/// True: the LT8912B's clock synthesizer and measured sync read back, which the driver shows.
+constexpr bool hasHdmiBridge = true;
 #else
 constexpr bool hasHdmi = false;
+/// False: no HDMI, so no bridge.
+constexpr bool hasHdmiBridge = false;
 #endif
 
 // True on the images that set the build symbol, mirroring it so flag and dependency cannot disagree.

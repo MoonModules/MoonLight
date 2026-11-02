@@ -83,6 +83,8 @@ bool claimed = false;   // one owner at a time, as a device is claimed once
 
 // Counted on the UVC task, read from the render tick: relaxed is enough for a diagnostic.
 std::atomic<uint32_t> statDecoded{0}, statDropped{0}, statFailed{0};
+std::atomic<uint32_t> statStreamSize{0};   // the negotiated mode, width in the high half, 0 until it streams
+std::atomic<uint8_t> statStreamFps{0};
 
 // usb_host_lib_handle_events() is where enumeration and the port state machine run, and it blocks. The UVC driver is the only client, so its uninstall ends the pump, which uninstalls the library, as the MIDI host does.
 void pumpTask(void*) {
@@ -395,6 +397,8 @@ bool sizeBuffer(Capture& cap) {
     ESP_LOGI(kTag, "streaming MJPEG %ux%u @ %.1f fps", got.h_res, got.v_res, got.fps);
     cap.negW = static_cast<uint16_t>(got.h_res);
     cap.negH = static_cast<uint16_t>(got.v_res);
+    statStreamSize.store(static_cast<uint32_t>(cap.negW) << 16 | cap.negH, std::memory_order_relaxed);
+    statStreamFps.store(static_cast<uint8_t>(got.fps + 0.5f), std::memory_order_relaxed);
     jpeg_decode_memory_alloc_cfg_t memCfg = {};
     memCfg.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
     cap.rgb = static_cast<uint8_t*>(
@@ -409,6 +413,8 @@ bool sizeBuffer(Capture& cap) {
 void resetStats() {
     statDecoded.store(0, std::memory_order_relaxed);
     statDropped.store(0, std::memory_order_relaxed);
+    statStreamSize.store(0, std::memory_order_relaxed);
+    statStreamFps.store(0, std::memory_order_relaxed);
     statFailed.store(0, std::memory_order_relaxed);
 }
 
@@ -526,6 +532,8 @@ VideoCaptureStats videoCaptureStats() MM_NONBLOCKING {
     s.decoded = statDecoded.load(std::memory_order_relaxed);
     s.dropped = statDropped.load(std::memory_order_relaxed);
     s.failed = statFailed.load(std::memory_order_relaxed);
+    const uint32_t size = statStreamSize.load(std::memory_order_relaxed);
+    s.stream = {static_cast<uint16_t>(size >> 16), static_cast<uint16_t>(size), statStreamFps.load(std::memory_order_relaxed)};
     return s;
 }
 

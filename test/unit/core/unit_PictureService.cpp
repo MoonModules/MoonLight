@@ -264,7 +264,7 @@ TEST_CASE("the capture status reports a live rate, not a total") {
     uint32_t was = 0;
     REQUIRE(startCapture(p, was));
     const std::string line = captureStatus(p.svc);
-    CHECK(line.rfind("live, 64 x 48 at ", 0) == 0);   // the picture's size, whatever the grabber streams
+    CHECK(line.rfind("live, 64 x 48 from 320x240 at ", 0) == 0);   // the picture's size, then the mode the grabber streams
     CHECK(line.find(" at ") != std::string::npos);
     CHECK(line.find("fps") != std::string::npos);
     CHECK(line.find("skipped") == std::string::npos);   // nothing skipped, so the line says nothing of it

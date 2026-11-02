@@ -1020,6 +1020,7 @@ static int checkControlNames() {
 }
 
 int main(int argc, char* argv[]) {
+    mm::platform::hdmiTestClear();   // the HDMI stand-in, so no scenario drives a real screen
     if (argc < 2) {
         // Every scenario under scenarios/, after the control-name check only this binary can run, holding every type: @xref{why-a-filesystem-error-escapes-main}.
         const int badNames = checkControlNames();

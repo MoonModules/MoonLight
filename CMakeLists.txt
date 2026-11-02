@@ -178,6 +178,7 @@ endif()
 add_library(mm_platform
     src/platform/desktop/platform_desktop.cpp
     src/platform/desktop/platform_desktop_audio.cpp
+    src/platform/desktop/platform_desktop_hdmi.cpp
     src/platform/desktop/moonlive_emit_noarch.cpp
     src/platform/desktop/moonlive_asm_noarch.cpp
     src/platform/desktop/moonlive_emit_arm64.cpp
@@ -197,7 +198,23 @@ target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/deskt
 # platforms use libcurl for the same reason, each taking the stack its OS ships.
 target_link_libraries(mm_platform PUBLIC $<$<PLATFORM_ID:Windows>:ws2_32> $<$<PLATFORM_ID:Windows>:iphlpapi>
                                           $<$<PLATFORM_ID:Windows>:winhttp>
-                                          $<$<PLATFORM_ID:Linux>:dl> $<$<PLATFORM_ID:Linux>:pthread>)
+                                          $<$<PLATFORM_ID:Linux>:dl> $<$<PLATFORM_ID:Linux>:pthread>
+                                          $<$<PLATFORM_ID:Windows>:user32> $<$<PLATFORM_ID:Windows>:gdi32>
+                                          $<$<PLATFORM_ID:Windows>:setupapi>)
+# The HDMI output's window on macOS: AppKit for the window, Core Graphics for the displays and their modes, Core Animation
+# for the layer showing the frame, IOKit for the monitor's EDID, all frameworks the OS ships, so the no-SDK rule holds.
+# Objective-C++ with ARC for that one file, on Apple's clang only: GCC's Objective-C++ reads neither blocks nor ARC, so the
+# GCC compile-proof build (build_desktop.py --gcc) has no macOS screen and the driver says so. On Windows the same window
+# takes user32, gdi32 and setupapi (the EDID), all in the SDK.
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    enable_language(OBJCXX)
+    target_sources(mm_platform PRIVATE src/platform/desktop/platform_desktop_hdmi_mac.mm)
+    target_compile_definitions(mm_platform PUBLIC MM_MAC_SCREEN=1)
+    target_link_libraries(mm_platform PUBLIC "-framework AppKit" "-framework CoreGraphics" "-framework QuartzCore" "-framework IOKit")
+    set_source_files_properties(src/platform/desktop/platform_desktop_hdmi_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    # The C++ files' launcher, so the code check reads this file's saved findings with the rest.
+    set_target_properties(mm_platform PROPERTIES OBJCXX_COMPILER_LAUNCHER "${CMAKE_CXX_COMPILER_LAUNCHER}")
+endif()
 
 # The two libraries genuinely need each other: mm_core calls into the platform surface, and the
 # platform's MoonLive backend calls back into core's target-independent IR passes (lowerWith ->

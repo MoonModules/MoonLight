@@ -2,12 +2,12 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock
+#include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in
 
-// Every test case, and every rerun for its next subcase, starts on the real clock, so a test that froze or stepped it leaves nothing to the next.
+// Every test case, and every rerun for its next subcase, starts on the real clock, so a test that froze or stepped it leaves nothing to the next, and on the HDMI stand-in, so no case drives a real screen.
 struct RealClockPerTest : doctest::IReporter {
     explicit RealClockPerTest(const doctest::ContextOptions&) {}
-    static void reset() { mm::platform::setTestNowMs(0); mm::platform::setTestClockStep(0); }
+    static void reset() { mm::platform::setTestNowMs(0); mm::platform::setTestClockStep(0); mm::platform::hdmiTestClear(); }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }
     void report_query(const doctest::QueryData&) override {}

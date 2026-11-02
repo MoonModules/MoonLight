@@ -3457,7 +3457,7 @@
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
-   "summary": "One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight). ESP32-P4 boards with an LT8912B HDMI bridge, such as the Olimex ESP32-P4-PC.",
+   "summary": "One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
    "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
    "guide": [
     {
@@ -3466,7 +3466,7 @@
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `no I2C bus for the bridge` | Set System's I2C pins, as the device model does |\n| `bridge did not come up, retrying` | No LT8912B answers on that bus |\n| `no monitor connected` | Plug it in, or wake it |\n| `<w>x<h> on <mode>` | Live; orange when the monitor does not list the mode |"
+     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in: a second, on a computer |\n| `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
@@ -4168,7 +4168,7 @@
    "controls": {
     "source": {
      "line": "Where the picture comes from.",
-     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture at its set size."
+     "more": "The test pattern is a test card in the layout of Philips' PM5544, drawn at any size. With **usb capture**, MJPEG from an HDMI grabber fills the picture; the status names the grabber's mode."
     },
     "fps": {
      "line": "Frames a second asked of a capture device, which streams the nearest rate it offers."

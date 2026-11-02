@@ -55,7 +55,8 @@
       "document": {
         "Drivers": {
           "Hdmi": {
-            "type": "HdmiDriver"
+            "type": "HdmiDriver",
+            "mode": 2
           }
         }
       }

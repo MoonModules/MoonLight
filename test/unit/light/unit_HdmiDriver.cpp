@@ -123,12 +123,12 @@ TEST_CASE("HdmiDriver says when no monitor is connected, and shows the picture o
     CHECK(b.driver.severity() == mm::MoonModule::Severity::Status);
 }
 
-TEST_CASE("HdmiDriver says when the bridge did not come up, as an error, since no monitor can help that") {
+TEST_CASE("HdmiDriver says when the output did not come up, as an error, since no monitor can help that") {
     Bench b;
     b.driver.prepare();
     mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Down);
     b.driver.tick1s();
-    CHECK(std::string(b.driver.status()).find("bridge did not come up") != std::string::npos);
+    CHECK(std::string(b.driver.status()).find("output did not come up") != std::string::npos);
     CHECK(b.driver.severity() == mm::MoonModule::Severity::Error);
 }
 
@@ -191,6 +191,15 @@ TEST_CASE("HdmiDriver shows the bridge's synthesizer word against the programmed
     CHECK(std::string(readout).empty());   // nothing read from a bridge that is not set up
 }
 
+TEST_CASE("HdmiDriver hides the bridge readout on a platform without a bridge to read back") {
+    Bench b;
+    b.driver.defineControls();
+    bool found = false;
+    for (uint8_t i = 0; i < b.driver.controls().count(); i++)
+        if (std::strcmp(b.driver.controls()[i].name, "bridge") == 0) { found = true; CHECK(b.driver.controls()[i].hidden == !mm::platform::hasHdmiBridge); }
+    CHECK(found);
+}
+
 TEST_CASE("HdmiDriver closes the output on release, so the screen goes dark") {
     Bench b;
     b.driver.prepare();
@@ -198,4 +207,19 @@ TEST_CASE("HdmiDriver closes the output on release, so the screen goes dark") {
     b.driver.release();
     CHECK(mm::platform::hdmiTestOpenMode() == -1);
     CHECK(b.driver.status() == nullptr);   // the base release clears it along with the staging
+}
+
+TEST_CASE("HdmiDriver names the mode a display without the chosen size runs instead, as a warning") {
+    Bench b;
+    b.driver.prepare();
+    mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Monitor);
+    mm::platform::setTestHdmiActiveMode({1470, 956, 60});   // a MacBook panel, which has no 1280x720
+    b.driver.tick1s();
+    CHECK(std::string(b.driver.status()) == "4x2 on 1470x956 60 Hz (no 1280x720)");
+    CHECK(b.driver.severity() == mm::MoonModule::Severity::Warning);
+
+    mm::platform::setTestHdmiActiveMode({1280, 720, 0});   // the size after all, from a panel that names no rate
+    b.driver.tick1s();
+    CHECK(std::string(b.driver.status()) == "4x2 on 1280x720");
+    CHECK(b.driver.severity() == mm::MoonModule::Severity::Status);
 }

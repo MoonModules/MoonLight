@@ -93,3 +93,17 @@ TEST_CASE("EDID: an extension with a wrong checksum adds nothing, the base block
     REQUIRE(parse(base.data(), ext.data(), kSizes, kCount, m));
     CHECK(m.lists == 0b01011u);
 }
+
+TEST_CASE("EDID: the CEA video code for 4K at 60 Hz marks 3840x2160") {
+    const Size sizes[] = {{1920, 1080}, {3840, 2160}};
+    const Block base = baseBlock();
+    Block ext{};
+    ext[0] = 0x02; ext[1] = 0x03;
+    ext[2] = 4 + 2;                                   // one data block of 2 bytes
+    ext[4] = static_cast<uint8_t>((2 << 5) | 1);      // video data block, one code
+    ext[5] = 97;                                      // 3840x2160 at 60 Hz
+    seal(ext);
+    Monitor m;
+    REQUIRE(parse(base.data(), ext.data(), sizes, 2, m));
+    CHECK(m.lists == 0b10u);
+}
