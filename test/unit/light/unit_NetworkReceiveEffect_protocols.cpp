@@ -415,6 +415,19 @@ TEST_CASE("UdpSocket joins a silent set of groups again one group per read") {
     s.close();
 }
 
+// A second joinMulticast leaves the group the first joined, not the one it is about to join, so a reused socket keeps one membership.
+TEST_CASE("UdpSocket's joinMulticast leaves the earlier group before it joins the next") {
+    mm::platform::UdpSocket s;
+    REQUIRE(s.open());
+    REQUIRE(s.bind(0));
+    const uint8_t first[4] = {239, 255, 0, 1}, second[4] = {239, 255, 0, 2};
+    s.joinMulticast(first);
+    s.joinMulticast(second);
+    const uint8_t* left = mm::platform::testLastLeftGroup();
+    CHECK((left[0] == 239 && left[1] == 255 && left[2] == 0 && left[3] == 1));
+    s.close();
+}
+
 // E1.31 has no universe 0, so with universe_start 0 its universe 1 lands where Art-Net's universe 0 does, as xLights and FPP number them; a set start maps as is.
 TEST_CASE("NetworkReceiveEffect maps E1.31 from universe 1 when universe_start is 0, and from the start otherwise") {
     Rig r;

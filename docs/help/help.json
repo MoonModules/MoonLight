@@ -694,13 +694,13 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wheellayout"
   },
   "AudioSpectrumEffect": {
-   "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
+   "line": "The mic's frequency bands spread across X, the 31 third octaves or the sixteen, each column lit bottom-up by its magnitude.",
    "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom rows can be a horizontal level bar under the spectrum, as tall as a bar is wide, with a square at its right end that flashes red on each detected hit. On a single row the bars collapse to per-column brightness.",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
      "title": "Comparing audio engines",
-     "text": "The sweep colors with the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
+     "text": "The sweep colors with sixteen bands and the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
@@ -716,6 +716,9 @@
     },
     "levelBar": {
      "line": "A level bar under the bars, and a square that flashes red on a hit."
+    },
+    "bands": {
+     "line": "The 31 third octaves, or the sixteen WLED-MM draws."
     }
    },
    "role": "effect",
@@ -1933,6 +1936,22 @@
    "dim": 2,
    "doc": "light/effects.md#waterripple",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaterRippleEffect.h"
+  },
+  "WaterfallEffect": {
+   "line": "A spectrogram scrolling down the grid: each band a column, the newest moment on top, its color and brightness from the band's magnitude.",
+   "summary": "A held note draws a line down the grid, a sweep a diagonal, a drum hit a sharp edge across it, so the music's shape over the last seconds stays in view. The 31 third octaves when the mic measures them, the sixteen otherwise.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/WaterfallEffect.gif",
+   "controls": {
+    "speed": {
+     "line": "How fast the history flows down, a step every 256 - speed milliseconds."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#waterfall",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaterfallEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#waterfalleffect"
   },
   "FluidEffect": {
    "line": "Light poured into a simulated medium and carried by it.",
@@ -4067,7 +4086,7 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#services"
   },
   "AudioService": {
-   "line": "The audio source the audio-reactive effects read: a level, sixteen bands and the peak.",
+   "line": "The audio source the audio-reactive effects read: a level, sixteen bands, the 31 third octaves and the peak.",
    "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
    "attribution": "[softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks), [NetMindz](https://moonmodules.org/MoonLight/reference/attributions.html#netmindz), [wladi](https://moonmodules.org/MoonLight/reference/attributions.html#wladi)",
    "guide": [
@@ -4114,11 +4133,16 @@
      "line": "The codec's 7-bit address on the board's I2C bus.",
      "more": "0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping. The bus is [I2cBus](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus)."
     },
+    "codecGain": {
+     "line": "The codec's analog input gain in dB, applied before its converter.",
+     "more": "30 for a microphone, 0 for line-in."
+    },
     "device": {
      "line": "The capture input, `default` following the system setting."
     },
     "sampleRate": {
      "line": "The mic or ADC sample rate.",
+     "more": "48000 reaches all 31 bands; a lower rate drops the top ones.",
      "tests": [
       {
        "title": "Services audio drives the effects",
@@ -4169,6 +4193,9 @@
     },
     "peakHz": {
      "line": "The dominant frequency of the audio driving the effects."
+    },
+    "cpu": {
+     "line": "The share of one core the bands and the read took last second, and the input's real rate."
     }
    },
    "role": "service",

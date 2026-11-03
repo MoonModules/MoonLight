@@ -131,9 +131,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <bit>       // std::countr_zero, the radix-2 audioFft's bit-reversal
-#include <cmath>     // cos/sin/sqrt for audioFft's twiddles and magnitudes
-#include <numbers>   // std::numbers::pi_v, same kernel
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -2259,10 +2256,13 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
 // Test override for multicast membership: a test can neither take the host's network away nor keep its traffic out otherwise.
 static std::atomic<TestJoin> testJoin{TestJoin::Network};
 void setTestJoin(TestJoin mode) { testJoin.store(mode, std::memory_order_relaxed); }
+static uint8_t testLastLeft[4] = {};
+const uint8_t* testLastLeftGroup() { return testLastLeft; }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
 bool UdpSocket::membership(const uint8_t group[4], bool join) {
     if (fd_ < 0) return false;
+    if (!join) std::memcpy(testLastLeft, group, 4);
     const TestJoin mode = testJoin.load(std::memory_order_relaxed);
     if (mode == TestJoin::Fail) return false;
     if (mode == TestJoin::Succeed) return true;
@@ -2780,44 +2780,6 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*l
 }
 
 // The codec and capture live in their own file: the codec succeeds with nothing to bring up, and the microphone reads the system capture device.
-
-// The textbook in-place radix-2 transform, the production kernel now that live capture runs blocks dozens of times a second on the render tick. The contract is unchanged and it is numerically equivalent to the direct form, pinned against one by a test.
-void audioFft(const float* windowed, size_t n, float* outMag) {
-    if (!windowed || !outMag || n == 0 || (n & (n - 1)) != 0) return;
-    constexpr size_t kMaxN = 4096;
-    if (n > kMaxN) return;
-    static float re[kMaxN], im[kMaxN];   // scratch; render-thread only, like the ESP32 kernel's
-
-    // Bit-reversal permutation while loading the input.
-    const int bits = static_cast<int>(std::countr_zero(n));
-    for (size_t i = 0; i < n; i++) {
-        size_t r = 0;
-        for (int b = 0; b < bits; b++) r |= ((i >> b) & 1u) << (bits - 1 - b);
-        re[r] = windowed[i];
-        im[r] = 0.0f;
-    }
-
-    // Butterflies: stages of doubling span, twiddles advanced per group.
-    for (size_t len = 2; len <= n; len <<= 1) {
-        const float ang = -2.0f * std::numbers::pi_v<float> / static_cast<float>(len);
-        const float wRe = std::cos(ang), wIm = std::sin(ang);
-        for (size_t i = 0; i < n; i += len) {
-            float curRe = 1.0f, curIm = 0.0f;
-            for (size_t j = 0; j < len / 2; j++) {
-                const size_t a = i + j, b = a + len / 2;
-                const float tRe = re[b] * curRe - im[b] * curIm;
-                const float tIm = re[b] * curIm + im[b] * curRe;
-                re[b] = re[a] - tRe; im[b] = im[a] - tIm;
-                re[a] += tRe;        im[a] += tIm;
-                const float nRe = curRe * wRe - curIm * wIm;
-                curIm = curRe * wIm + curIm * wRe;
-                curRe = nRe;
-            }
-        }
-    }
-
-    for (size_t k = 0; k < n / 2; k++) outMag[k] = std::sqrt(re[k] * re[k] + im[k] * im[k]);
-}
 
 // No wires here, so the bus is state alone: open, closed and its generation behave as on a board, and a scan finds what a test injected.
 namespace {

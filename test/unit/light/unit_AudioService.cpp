@@ -5,7 +5,7 @@
 
 #include <cstring>
 
-// The MoonModule lifecycle for the audio peripheral: setup/release is repeatable and leaves no residue, the static latestFrame() accessor stays coherent through any add/remove order (the robustness rule), and a module that is never configured stays idle. The signal math (level, bands, FFT) is covered by unit_AudioLevel.cpp / unit_AudioBands.cpp; this file owns the module's own state machine, which is what the classic-ESP32 boot-loop showed was the risky part. Host-side: hasI2sMic is false on desktop, so reinit() settles on the platform-inert path (no I2S init), exactly the state a mic-less board boots into, and these pin that that state is clean, not a crash or a hang (the bug class behind the boot-loop).
+// The MoonModule lifecycle for the audio peripheral: setup/release is repeatable and leaves no residue, the static latestFrame() accessor stays coherent through any add/remove order (the robustness rule), and a module that is never configured stays idle. The signal math (level, bands, filter bank) is covered by unit_AudioLevel.cpp / unit_AudioBands.cpp / unit_FractionalOctaveBank.cpp; this file owns the module's own state machine, which is what the classic-ESP32 boot-loop showed was the risky part. Host-side: hasI2sMic is false on desktop, so reinit() settles on the platform-inert path (no I2S init), exactly the state a mic-less board boots into, and these pin that that state is clean, not a crash or a hang (the bug class behind the boot-loop).
 
 // active_ is process-wide static and shared with the cases in unit_AudioLevel.cpp; each case here brackets its own setup() with a release() so it never leaks a live mic pointer into another test (the residue the robustness rule forbids).
 

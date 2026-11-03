@@ -88,7 +88,7 @@ inline uint8_t magToByte(float m, uint16_t noiseFloor, uint16_t gain) {
     return dbToByte(20.0f * std::log10(m), noiseFloor, gain);
 }
 
-/// The standard one-pole high-pass that removes the DC offset and sub-bass rumble before analysis.
+/// The standard one-pole high-pass that removes the DC offset before analysis.
 struct DcBlocker {
     float xPrev = 0.0f;   ///< the previous input sample
     float yPrev = 0.0f;   ///< the previous output sample

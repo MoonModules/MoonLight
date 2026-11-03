@@ -620,18 +620,17 @@ static bool ethSpiActive_ = false;
 static constexpr uint8_t kEmacFreeGroupSlots = 3;   // measured on a P4: the discovery group and two universes arrived, a third did not
 static esp_eth_handle_t ethEmacHandle_ = nullptr;   // the internal MAC's driver, the one with the slot limit
 static std::atomic<uint8_t> ethHeldGroups_{0};      // groups MoonLight's sockets hold
-static std::atomic<bool> ethAllMulticast_{false};   // the mode the MAC reached
-// Put the MAC in the mode the held groups need; a socket's join or leave calls it, and a switch that failed is tried again on the next.
+static bool ethAllMulticast_ = false;               // the mode the MAC reached, under the lock below
+static std::mutex ethMulticastMutex_;               // one switch at a time, so a join and a leave on two tasks cannot cross and leave the MAC in the stale mode
+// Put the MAC in the mode the held groups need; a socket's join or leave calls it after counting, and a switch that failed is tried again on the next.
 static void ethFitMulticastFilter() {
     if (!ethEmacHandle_) return;
-    const bool want = ethHeldGroups_.load(std::memory_order_relaxed) > kEmacFreeGroupSlots;
-    bool was = !want;
-    if (!ethAllMulticast_.compare_exchange_strong(was, want)) return;   // already in that mode
+    std::lock_guard<std::mutex> lock(ethMulticastMutex_);
+    const bool want = ethHeldGroups_.load(std::memory_order_relaxed) > kEmacFreeGroupSlots;   // read under the lock, so the last caller fits the last count
+    if (ethAllMulticast_ == want) return;   // already in that mode
     bool allMulticast = want;
-    if (esp_eth_ioctl(ethEmacHandle_, ETH_CMD_S_ALL_MULTICAST, &allMulticast) != ESP_OK) {
-        ethAllMulticast_.store(!want, std::memory_order_relaxed);   // not reached, so the next join or leave tries again
-        ESP_LOGW(NET_TAG, "Ethernet all-multicast not switched: multicast groups past the MAC's filter slots stay unheard");
-    }
+    if (esp_eth_ioctl(ethEmacHandle_, ETH_CMD_S_ALL_MULTICAST, &allMulticast) == ESP_OK) ethAllMulticast_ = want;
+    else ESP_LOGW(NET_TAG, "Ethernet all-multicast not switched: multicast groups past the MAC's filter slots stay unheard");
 }
 #endif
 #endif
@@ -870,8 +869,11 @@ static bool ethInitEmac() {
     }
     // From here the driver owns mac+phy (driver_uninstall frees them); the remaining failure paths uninstall the driver instead of del-ing mac/phy.
     ethEmacHandle_ = eth_handle;
-    ethAllMulticast_.store(false, std::memory_order_relaxed);
-    ethFitMulticastFilter();   // a new driver starts filtered: fit it to the groups already held
+    {
+        std::lock_guard<std::mutex> lock(ethMulticastMutex_);
+        ethAllMulticast_ = false;   // a new driver starts filtered
+    }
+    ethFitMulticastFilter();   // fit it to the groups already held
 #ifdef CONFIG_IDF_TARGET_ESP32S31
     // The YT8531 needs a vendor-specific auto-nego re-enable plus RGMII delays the generic driver cannot do, or the link never negotiates. Run right after install, as IDF's example does. Non-fatal: a failed write logs a warning and continues.
     {

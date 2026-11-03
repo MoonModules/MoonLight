@@ -274,7 +274,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `collide(radius)` | particles notice each other and pile up, at a cost above linear |
 | `render(maxLife)` | draw the pool from the active palette |
 | `audioLevel()`, `audioSmooth()` | how loud the room is: the raw level, and the one that swells |
-| `audioBand(i)` | one of sixteen log-spaced magnitudes, bass at 0 and treble at 15 |
+| `audioBand(i)` | one of sixteen third-octave band magnitudes, bass at 0 and treble at 15 |
 | `audioPeakHz()`, `audioBeat()` | the dominant frequency, and true on a transient |
 | `setPan(i, v)`, `setTilt(i, v)` | aim one moving head, which a strip ignores |
 | `setZoom(i, v)`, `setRotate(i, v)`, `setGobo(i, v)` | shape that head's beam, wheel and pattern |

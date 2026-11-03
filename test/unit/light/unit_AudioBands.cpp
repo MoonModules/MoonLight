@@ -3,40 +3,34 @@
 
 #include "doctest.h"
 #include "core/services/AudioBands.h"
-#include "platform/platform.h"   // platform::audioFft (desktop naive DFT)
 
 #include <cmath>
 #include <cstring>   // std::memcpy: clang finds it transitively, GCC does not (CI's sanitizer builds)
 #include <numbers>
 #include <vector>
 
-// The success spec for the frequency path, written RED before AudioService's FFT call exists. The whole pipeline runs host-side: synthesize a sine -> applyWindow -> platform::audioFft (the desktop reference DFT) -> magnitudesToBands, then assert the energy lands in the right band and the reported peak frequency tracks the tone. This is the coverage that lets the band-map tuning happen in CI instead of on the bench over months.
+// The success spec for the frequency path. The whole pipeline runs host-side: synthesize a sine, feed the third-octave bank, read the sixteen bands and the peak through bankToBands, then assert the energy lands in the right band and the reported peak frequency tracks the tone. This is the coverage that lets the band-map tuning happen in CI instead of on the bench over months.
 
 namespace {
 
-constexpr size_t kN = 256;            // FFT size (power of two)
-constexpr uint32_t kRate = 22050;     // default sample rate
+uint8_t thirdsScratch[31];   // the 31 a case does not read
 
-// Build kN samples of a sine at `freqHz`, 24-bit amplitude, in the int32 slot.
-std::vector<int32_t> tone(double freqHz, double amp24 = (1 << 21)) {
-    constexpr double kPi = std::numbers::pi_v<double>;
-    std::vector<int32_t> v(kN);
-    const double cycles = freqHz * kN / kRate;
-    for (size_t i = 0; i < kN; i++) {
-        const double s = amp24 * std::sin(2.0 * kPi * cycles * static_cast<double>(i) / kN);
-        const int64_t sample = static_cast<int64_t>(s) << 8;   // avoid signed <<8 UB
-        v[i] = static_cast<int32_t>(sample);
-    }
-    return v;
+constexpr uint32_t kRate = 48000;     // the default sample rate
+constexpr float kAmp = 16384.0f;      // a tone at 126 dB on the bands' scale, inside the window that noiseFloor 80 and gain 80 set (100 to 148 dB)
+
+// One bank for every case: its filter state belongs off a test's stack.
+mm::ThirdOctaveBank& freshBank() {
+    static mm::ThirdOctaveBank bank;
+    bank.init(kRate);
+    return bank;
 }
 
-// Run the full window -> FFT -> bands pipeline; return the frame fields of interest. noiseFloor=80 / gain=80 set a dB window (~100 dB floor, ~40 dB span) that brackets the test tones' ~125 dB level, so a dominant band stands clearly above the others instead of every band saturating at the top of the window.
-void analyse(const std::vector<int32_t>& samples, uint8_t (&bands)[16],
-             uint16_t& peakHz, uint16_t& peakMag) {
-    std::vector<float> windowed(kN), mag(kN / 2);
-    mm::applyWindow(samples.data(), kN, windowed.data());
-    mm::platform::audioFft(windowed.data(), kN, mag.data());
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate, /*noiseFloor*/80, /*gain*/80, bands, peakHz, peakMag);
+// Half a second of a sine at `freqHz` through the bank, then the frame fields of interest.
+void analyse(float freqHz, uint8_t (&bands)[16], uint16_t& peakHz, uint16_t& peakMag, float amp = kAmp) {
+    auto& bank = freshBank();
+    const double step = 2.0 * std::numbers::pi * static_cast<double>(freqHz) / kRate;
+    for (uint32_t i = 0; i < kRate / 2; i++) bank.push(amp * static_cast<float>(std::sin(step * i)));
+    mm::bankToBands(bank, /*noiseFloor*/80, /*gain*/80, thirdsScratch, bands, peakHz, peakMag);
 }
 
 // Index of the loudest band.
@@ -49,10 +43,9 @@ int dominantBand(const uint8_t (&bands)[16]) {
 } // namespace
 
 TEST_CASE("AudioBands: silence yields all-zero bands and no peak") {
-    std::vector<int32_t> s(kN, 0);
     uint8_t bands[16];
     uint16_t peakHz = 9999, peakMag = 9999;
-    analyse(s, bands, peakHz, peakMag);
+    analyse(1000.0f, bands, peakHz, peakMag, 0.0f);
     for (int b = 0; b < 16; b++) CHECK(bands[b] == 0);
     CHECK(peakHz == 0);
     CHECK(peakMag == 0);
@@ -61,120 +54,67 @@ TEST_CASE("AudioBands: silence yields all-zero bands and no peak") {
 TEST_CASE("AudioBands: a low tone lands in a low band, a high tone in a high band") {
     uint8_t lo[16], hi[16];
     uint16_t hz, mag;
-    analyse(tone(500.0), lo, hz, mag);     // bass
-    analyse(tone(8000.0), hi, hz, mag);    // treble (under the ~11 kHz Nyquist)
-    const int loBand = dominantBand(lo);
-    const int hiBand = dominantBand(hi);
-    CHECK(hiBand > loBand);                // higher frequency → higher band index
+    analyse(125.0f, lo, hz, mag);
+    analyse(6300.0f, hi, hz, mag);
+    CHECK(dominantBand(lo) == 3);    // the 125 Hz band
+    CHECK(dominantBand(hi) == 14);   // the 6.3 kHz band
 }
 
-TEST_CASE("AudioBands: the reported peak frequency tracks the played tone") {
-    for (double f : {1000.0, 3000.0, 6000.0}) {
-        uint8_t bands[16];
-        uint16_t peakHz, peakMag;
-        analyse(tone(f), bands, peakHz, peakMag);
-        REQUIRE(peakMag > 0);
-        // Within one FFT bin (rate/N ≈ 86 Hz) of the true tone.
-        const double binHz = static_cast<double>(kRate) / kN;
-        CHECK(std::abs(static_cast<double>(peakHz) - f) <= binHz * 1.5);
-    }
+void checkPeak(float f) {
+    CAPTURE(f);
+    uint8_t bands[16];
+    uint16_t peakHz, peakMag;
+    analyse(f, bands, peakHz, peakMag);
+    REQUIRE(peakMag > 0);
+    CHECK(std::abs(static_cast<float>(peakHz) / f - 1.0f) < 0.04f);   // within 4%, a sixth of a band
+}
+
+// The peak is the loudest band refined between its neighbors, so a tone between two centers still reads close to where it sits.
+TEST_CASE("AudioBands: the reported peak frequency tracks the played tone, between band centers too") {
+    for (float f : {150.0f, 440.0f, 1000.0f, 1100.0f, 3000.0f, 6000.0f}) checkPeak(f);
 }
 
 TEST_CASE("AudioBands: a single tone concentrates energy, not smears it everywhere") {
     uint8_t bands[16];
     uint16_t peakHz, peakMag;
-    analyse(tone(2000.0), bands, peakHz, peakMag);
+    analyse(2000.0f, bands, peakHz, peakMag);
     const int dom = dominantBand(bands);
-    // The dominant band is clearly above the average — the window/FFT isolated it.
     int sum = 0;
     for (int b = 0; b < 16; b++) sum += bands[b];
-    const int avg = sum / 16;
-    CHECK(bands[dom] > avg * 2);
+    CHECK(bands[dom] > (sum / 16) * 2);
 }
 
-TEST_CASE("AudioBands: noiseFloor gates a low idle spectrum to zero, gain scales it back") {
-    // A weak tone that lands a small but nonzero band magnitude at unity gain.
-    auto quiet = tone(2000.0, 1 << 12);   // small amplitude
-    std::vector<float> windowed(kN), mag(kN / 2);
-    mm::applyWindow(quiet.data(), kN, windowed.data());
-    mm::platform::audioFft(windowed.data(), kN, mag.data());
-
+TEST_CASE("AudioBands: noiseFloor gates a low idle spectrum to zero") {
+    auto& bank = freshBank();
+    const double step = 2.0 * std::numbers::pi * 2000.0 / kRate;
+    for (uint32_t i = 0; i < kRate / 2; i++) bank.push(64.0f * static_cast<float>(std::sin(step * i)));
     uint8_t open[16], gated[16];
     uint16_t hz, pm;
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate, /*noiseFloor*/0, 16, open, hz, pm);
+    mm::bankToBands(bank, /*noiseFloor*/0, 16, thirdsScratch, open, hz, pm);
     int openMax = 0;
     for (int b = 0; b < 16; b++) if (open[b] > openMax) openMax = open[b];
     REQUIRE(openMax > 0);   // something lights with the gate open
-
-    // A noiseFloor above that level zeroes every band — the fix for idle flicker.
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate,
-                          static_cast<uint16_t>(openMax + 50), 16, gated, hz, pm);
+    // A noiseFloor above that level zeroes every band, the fix for idle flicker.
+    mm::bankToBands(bank, /*noiseFloor*/200, 16, thirdsScratch, gated, hz, pm);
     for (int b = 0; b < 16; b++) CHECK(gated[b] == 0);
 }
 
-TEST_CASE("AudioBands: zero / degenerate input never crashes") {
+TEST_CASE("AudioBands: a bank with no bands yields silence, not a crash") {
+    static mm::ThirdOctaveBank bank;
+    bank.init(0);
     uint8_t bands[16];
-    uint16_t peakHz, peakMag;
-    mm::magnitudesToBands(nullptr, 8, kRate, 0, 16, bands, peakHz, peakMag);
+    uint16_t peakHz = 1, peakMag = 1;
+    mm::bankToBands(bank, 0, 16, thirdsScratch, bands, peakHz, peakMag);
+    CHECK(peakHz == 0);
     CHECK(peakMag == 0);
-    float mag1 = 1.0f;
-    mm::magnitudesToBands(&mag1, 0, kRate, 0, 16, bands, peakHz, peakMag);   // nMag 0
-    CHECK(peakMag == 0);
-    mm::magnitudesToBands(&mag1, 1, 0, 0, 16, bands, peakHz, peakMag);       // rate 0
-    CHECK(peakMag == 0);
-
-    // applyWindow on degenerate sizes is a no-op, not a crash.
-    float out1 = 123.0f;
-    int32_t s = 7 << 8;
-    mm::applyWindow(&s, 0, &out1);
-    mm::applyWindow(nullptr, 4, &out1);
-    CHECK(true);
 }
 
-// The band SPLIT itself, rather than what lands in a band. A 16-band display is only 16 bands if every band owns bins of its own: a band whose edges collapse onto the same bin index can never light, whatever the signal, and a band with one bin reads a sixteenth of what a band with 75 does under the same energy. Both were true of the geometric split (edge[e] = nMag^(e/16)) at the shipped shape, which is what these pin.
-
-TEST_CASE("every band owns at least one FFT bin, so no band is dark whatever the music") {
-    // The shipped shape: 512-sample FFT at 22050 Hz, so 256 bins of 43.1 Hz. The geometric split gave bands 0 and 2 no bins at all (edges 1-1 and 2-2) and bands 1 and 4 a single bin, which is a quarter of the display that cannot respond.
-    const size_t nMag = 256;
-    const uint32_t sampleRate = 22050;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, sampleRate, edges);
-    for (uint8_t b = 0; b < 16; b++) {
-        INFO("band ", b, " spans bins ", edges[b], "..", edges[b + 1]);
-        CHECK(edges[b + 1] > edges[b]);
-    }
-    CHECK(edges[0] >= 1);            // bin 0 is DC, never part of a band
-    CHECK(edges[16] == nMag);        // and the top band reaches the Nyquist end
-}
-
-TEST_CASE("band edges rise with frequency, so a band is a range rather than a reshuffle") {
-    const size_t nMag = 256;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, 22050, edges);
-    for (uint8_t e = 1; e <= 16; e++) CHECK(edges[e] > edges[e - 1]);
-}
-
-TEST_CASE("a small FFT still yields sixteen usable bands, because a fixture may run one") {
-    // 128 bins is the smallest shape worth supporting; a geometric split there is degenerate over half its range. Sixteen bands must still each own a bin.
-    const size_t nMag = 128;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, 22050, edges);
-    for (uint8_t b = 0; b < 16; b++) {
-        INFO("band ", b, " spans bins ", edges[b], "..", edges[b + 1]);
-        CHECK(edges[b + 1] > edges[b]);
-    }
-}
-
-TEST_CASE("the low bands keep the resolution the FFT can actually deliver") {
-    // Above the bin width the split is free to place edges anywhere; below it there is nothing to place. The lowest band starts at the first non-DC bin and the early bands stay narrow, so the bass keeps what resolution exists rather than being folded into one wide band.
-    const size_t nMag = 256;
-    const uint32_t sampleRate = 22050;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, sampleRate, edges);
-    const float binHz = static_cast<float>(sampleRate) / (2.0f * static_cast<float>(nMag));
-    CHECK(edges[0] == 1);                                  // starts just above DC
-    CHECK(edges[4] * binHz < 400.0f);                      // four bands inside the bass
-    CHECK(edges[8] * binHz < 2000.0f);                     // half the display below 2 kHz
+// The sixteen display bands are WLED-MM's default GEQ bars, so two boards side by side draw the same picture and a WLED receiver reads the same sixteen from either.
+TEST_CASE("the sixteen bands sit on WLED-MM's default GEQ centers") {
+    const float wledMm[16] = {39.81f, 63.10f, 79.43f, 125.89f, 158.49f, 251.19f, 398.11f, 501.19f,
+                              794.33f, 1000.0f, 1584.89f, 1995.26f, 3162.28f, 5011.87f, 6309.57f, 10000.0f};
+    const auto& bank = freshBank();
+    for (uint8_t b = 0; b < 16; b++) CHECK(std::abs(bank.centerHz(mm::kSixteenOfThirds[b]) / wledMm[b] - 1.0f) < 0.025f);
 }
 
 // The BALLISTIC of a band. A meter that rises and falls at the same speed is the wrong instrument: it makes the attack as sluggish as the decay and rounds off exactly the drum hit an audio effect exists to show. Broadcast meters (PPM, IEC 60268-10) rise fast and fall slowly, and WLED, FastLED and LedFx each arrived at the same asymmetric form independently.
@@ -412,19 +352,21 @@ TEST_CASE("a restarted source reports no onset from the block that preceded it")
     CHECK(againstCleared > againstStale);   // which is why the frame is published silent too
 }
 
-// The gate that ships, exercised through magnitudesToBands rather than process() directly: every conditioner test above hands `process` a hand-picked gateDb, so none covers the value the caller actually passes. It sits AT the display window's floor, deliberately: a band reports its bins' PEAK while the level path reports an RMS, so the level's 20 dB silence margin is a far larger concession here. Measured on a Dig-Next-2, a 20 dB margin took a quiet room from flux 1-2 to 49-102 with onsets firing.
+// The gate that ships, exercised through bankToBands rather than process() directly: every conditioner test above hands `process` a hand-picked gateDb, so none covers the value the caller actually passes. It sits AT the display window's floor, deliberately: a band reports a power on a transform's peak-bin scale while the level path reports an RMS, so the level's 20 dB silence margin is a far larger concession here. Measured on a Dig-Next-2, a 20 dB margin took a quiet room from flux 1-2 to 49-102 with onsets firing.
 TEST_CASE("a room below the display window shows nothing on the spectrum") {
-    const size_t nMag = 256;
-    const uint32_t rate = 22050;
-    float room[nMag];
-    // 100 dB: below the window floor (110 dB at `floor` 100), above where a 20 dB margin would sit.
-    for (size_t i = 0; i < nMag; i++) room[i] = 100000.0f;
-
+    // 100 dB in each of the sixteen bands: below the window floor (110 dB at `floor` 100), above where a 20 dB margin would sit.
+    auto& bank = freshBank();
+    const float amp = std::pow(10.0f, 100.0f / 20.0f) / 128.0f;
+    std::vector<float> x(kRate / 2, 0.0f);
+    for (uint8_t b = 0; b < 16; b++) {
+        const double step = 2.0 * std::numbers::pi * static_cast<double>(bank.centerHz(mm::kSixteenOfThirds[b])) / kRate;
+        for (size_t i = 0; i < x.size(); i++) x[i] += amp * static_cast<float>(std::sin(step * static_cast<double>(i)));
+    }
     mm::BandConditioner cond;
     uint8_t bands[16]; uint16_t peakHz = 0, peakMag = 0;
-    for (int i = 0; i < 20; i++)
-        mm::magnitudesToBands(room, nMag, rate, /*noiseFloor*/ 100, /*gain*/ 128,
-                              bands, peakHz, peakMag, &cond, 23, 4, 24.0f, true);
-
+    for (int i = 0; i < 20; i++) {
+        bank.process(x.data() + (i % 40) * 600, 600);
+        mm::bankToBands(bank, /*noiseFloor*/ 100, /*gain*/ 128, thirdsScratch, bands, peakHz, peakMag, &cond, 10, 4, 24.0f, true);
+    }
     for (uint8_t b = 0; b < 16; b++) CHECK(bands[b] == 0);
 }

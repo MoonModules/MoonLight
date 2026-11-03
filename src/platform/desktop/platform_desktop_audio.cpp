@@ -95,7 +95,7 @@ void captureCallback(ma_device* /*dev*/, void* /*out*/, const void* in, ma_uint3
 
 }  // namespace
 
-bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/) {
+bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/, uint8_t /*gainDb*/) {
     return true;   // no codec hardware on a desktop host; nothing to bring up
 }
 void audioCodecDeinit() {}

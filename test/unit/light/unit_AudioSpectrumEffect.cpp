@@ -27,7 +27,7 @@ struct Spectrum {
     mm::AudioSpectrumEffect effect;
     int w;
 
-    Spectrum(int width, int height, uint8_t colorMode, bool levelBar) : w(width) {
+    Spectrum(int width, int height, uint8_t colorMode, bool levelBar, uint8_t bands = mm::AudioSpectrumEffect::kBands16) : w(width) {
         mm::platform::setTestNowMs(1000);
         audio.defineControls();
         audio.simulate = mm::AudioService::kSimMusic;
@@ -40,6 +40,7 @@ struct Spectrum {
         layer.setChannelsPerLight(3);
         effect.colorMode = colorMode;
         effect.levelBar = levelBar;
+        effect.bands = bands;
         layer.addChild(&effect);
         layer.applyState();
     }
@@ -104,4 +105,29 @@ TEST_CASE("AudioSpectrumEffect's square at the meter's right end flashes red on 
     CHECK(red(GW - 1, GH - 1));
     CHECK(red(GW - 2, GH - 2));
     CHECK_FALSE(red(GW - 3, GH - 1));   // the meter itself stops short of the square
+}
+
+// The 31 third octaves take the width when the frame carries them: of 31 bars on 62 columns each takes two, and the simulated music lights most.
+TEST_CASE("AudioSpectrumEffect draws the 31 third octaves, two columns a bar on a 62-wide grid") {
+    constexpr int GW = 62, GH = 6;
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, false, mm::AudioSpectrumEffect::kBands31);
+    s.run(8);
+    int risen = 0;
+    for (int band = 0; band < 31; band++) {
+        const int x0 = band * GW / 31;
+        CHECK(same(s.px(x0, GH - 1), s.px(x0 + 1, GH - 1)));   // one bar over its two columns
+        if (lit(s.px(x0, GH - 1))) risen++;
+    }
+    CHECK(risen >= 16);
+}
+
+// The level bar is as tall as a bar is wide at 31 bars too: on 62 columns a bar is two wide, so the meter takes two rows.
+TEST_CASE("AudioSpectrumEffect's level bar follows the bar width at 31 bands") {
+    constexpr int GW = 62, GH = 8;
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBands31);
+    s.run(8);
+    auto meter = [&](int y) { const uint8_t* p = s.px(0, y); return p[0] == 0 && p[1] == 255 && p[2] == 0; };   // the meter's pure-green start
+    CHECK(meter(GH - 1));
+    CHECK(meter(GH - 2));
+    CHECK_FALSE(meter(GH - 3));   // three rows would be a sixteen-band bar's width on 62 columns
 }

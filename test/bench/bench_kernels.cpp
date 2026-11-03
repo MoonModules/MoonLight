@@ -20,6 +20,7 @@
 
 #include "core/util/math16.h"
 #include "core/util/noise.h"
+#include "core/services/FractionalOctaveBank.h"
 
 #include <chrono>
 #include <cstdint>
@@ -85,6 +86,16 @@ int main() {
         const int32_t dx = int32_t(x) - 128, dy = int32_t(y) - 128;
         const uint32_t r = dist16(dx, dy);
         return uint32_t(kaleido(angle16(atan16(dy, dx) + r * 4), 5)) + r;
+    });
+    // A sample per call, handed to the bank in 512-sample blocks as AudioService does, so the row reads as its cost per input sample.
+    static FractionalOctaveBank<3> bank;
+    static float block[512];
+    static size_t filled = 0;
+    bank.init(48000);
+    row("FractionalOctaveBank<3>, 31 bands at 48 kHz, per input sample", [](uint32_t x, uint32_t y, uint32_t) {
+        block[filled++] = static_cast<float>(int32_t((x * 7 + y * 13) & 255) - 128);
+        if (filled == 512) { bank.process(block, 512); filled = 0; }
+        return uint32_t(bank.power(17));
     });
     return 0;
 }

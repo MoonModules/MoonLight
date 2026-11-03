@@ -21,7 +21,7 @@
 
 namespace mm {
 
-/// The audio source the audio-reactive effects read: a level, sixteen bands and the peak.
+/// The audio source the audio-reactive effects read: a level, sixteen bands, the 31 third octaves and the peak.
 /// @card AudioService.png
 ///
 /// Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.
@@ -46,11 +46,15 @@ namespace mm {
 ///
 /// They are ordered by what each one needs: simulate nothing, receive a network, local a part wired to pins. So the default is the first entry, and a device demonstrates sound before anything is attached.
 ///
-/// **The pipeline.** Each block: read, block the offset, measure the level, window, transform, map to bands. The high-pass conditions the block once so both halves see the same signal, and a tick completing no block re-publishes the last frame.
+/// **The pipeline.** Each block: read, block the offset, measure the level, feed the third-octave filter bank, read the bands. The high-pass conditions the block once so both halves see the same signal, and a tick completing no block re-publishes the last frame.
 ///
-/// Only the read and the transform are platform code; the rest is host-tested maths on a fixed resident scratch, so a block allocates nothing.
-class AudioService : public MoonModule {
+/// Only the read is platform code; the rest is host-tested maths on a fixed resident scratch, so a block allocates nothing.
+class AudioService : public MoonModule, public platform::InternalRamObject {   // the filter bank touches its state every sample, so internal RAM
 public:
+    /// Internal RAM, where MoonModule places other modules in PSRAM.
+    using platform::InternalRamObject::operator new;
+    /// Return the allocation above.
+    using platform::InternalRamObject::operator delete;
     /// Finish a block of raw bands:
     void finishBands() {
         smoothBands(frame_.bands, frame_.bandsSmoothed);
@@ -65,10 +69,8 @@ public:
     LevelConditioner levelCond_;         ///< the same, for the overall level (VU) in automatic mode
     OnsetDetector onset_;                ///< the hit decision, with its running mean and refractory
 
-    /// The block and transform size, a power of two, around twenty milliseconds of audio.
+    /// The block size, a power of two: about 11 ms of audio at 48 kHz, a frame of bands each.
     static constexpr size_t kBlock = 512;
-    /// How many magnitude bins that produces.
-    static constexpr size_t kMag = kBlock / 2;
 
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
@@ -95,6 +97,9 @@ public:
     /// The codec's 7-bit address on the board's I2C bus.
     /// @guide 0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping. The bus is @ref I2cBusModule.
     uint8_t codecAddr = 0x18;
+    /// The codec's analog input gain in dB, applied before its converter.
+    /// @guide 30 for a microphone, 0 for line-in.
+    uint8_t codecGain = 30;
 
     /// The codec the settings ask for.
     platform::CodecType codecType() const MM_NONBLOCKING {
@@ -111,7 +116,8 @@ public:
         return 1;
     }
     /// The mic or ADC sample rate.
-    uint8_t  sampleRateSel = 2;
+    /// @guide 48000 reaches all 31 bands; a lower rate drops the top ones.
+    uint8_t  sampleRateSel = 4;
     /// The silence threshold: below it a band reads as nothing.
     /// @guide Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display.
     uint8_t  floor = 100;
@@ -158,12 +164,12 @@ public:
     char     hosts[64] = {};
 
     /// The rates the selector offers.
-    static constexpr uint16_t kSampleRates[] = {8000, 16000, 22050, 44100};
+    static constexpr uint16_t kSampleRates[] = {8000, 16000, 22050, 44100, 48000};
     /// How many there are.
-    static constexpr uint8_t kSampleRateCount = 4;
+    static constexpr uint8_t kSampleRateCount = 5;
     /// The selected rate in hertz.
     uint32_t sampleRate() const { return kSampleRates[sampleRateSel < kSampleRateCount
-                                                       ? sampleRateSel : 2]; }
+                                                       ? sampleRateSel : kSampleRateCount - 1]; }
 
     /// The wired microphone's controls: its kind, its bus, and the codec in front of it, each shown only where it applies.
     void defineMicControls(bool localMode) {
@@ -182,6 +188,8 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode || pdm);
         controls_.addControl("codecAddr", codecAddr, 0, 127);
         controls_.setHexField(controls_.count() - 1);   // an address, written in hex as the datasheet and the bus scan give it
+        controls_.setHidden(controls_.count() - 1, !localMode || pdm || codec == kCodecNone);
+        controls_.addControl("codecGain", codecGain, 0, 30);
         controls_.setHidden(controls_.count() - 1, !localMode || pdm || codec == kCodecNone);
     }
 
@@ -208,7 +216,7 @@ public:
             controls_.setPersistLabel(controls_.count() - 1);
             controls_.setHidden(controls_.count() - 1, !localMode);
         }
-        static constexpr const char* kRateOptions[] = {"8000", "16000", "22050", "44100"};
+        static constexpr const char* kRateOptions[] = {"8000", "16000", "22050", "44100", "48000"};
         controls_.addSelect("sampleRate", sampleRateSel, kRateOptions, kSampleRateCount);
         controls_.setHidden(controls_.count() - 1, !localMode);
         // One decision, then the controls it needs:
@@ -248,6 +256,8 @@ public:
         controls_.addReadOnly("onsets", onsetStr_, sizeof(onsetStr_));
         /// The dominant frequency of the audio driving the effects.
         controls_.addReadOnly("peakHz", peakStr_, sizeof(peakStr_));
+        /// The share of one core the bands and the read took last second, and the input's real rate.
+        controls_.addReadOnly("cpu", cpuStr_, sizeof(cpuStr_));
         MoonModule::defineControls();
     }
 
@@ -350,20 +360,34 @@ public:
             if (!inited_) return;
         }
 
-        // Each tick contributes a partial block, and the analysis runs once one is full.
-        const size_t n = platform::audioMicRead(mic_, samples_ + filled_, kBlock - filled_);
-        // Read before the filter rewrites the samples.
-        micSamples1s_ += n;
-        for (size_t i = 0; i < n; i++) if (samples_[filled_ + i] != 0) { micNonzero1s_++; break; }
-        if (n == 0) return;                            // nothing ready this tick
-        filled_ += n;
-        if (filled_ < kBlock) return;                  // wait for a whole block
-        filled_ = 0;                                   // consumed below; refill next
+        // Drain what the input holds every tick, a block analyzed each time one fills, so no sample overflows the driver between ticks: a slow frame rate reads two blocks rather than losing one.
+        for (uint8_t blocks = 0; blocks < kMaxBlocksPerTick;) {
+            const size_t want = kBlock - filled_;
+            const uint32_t readStart = platform::micros();
+            const size_t n = platform::audioMicRead(mic_, samples_ + filled_, want);
+            readUs1s_ += platform::micros() - readStart;
+            // Read before the filter rewrites the samples.
+            micSamples1s_ += n;
+            for (size_t i = 0; i < n; i++) if (samples_[filled_ + i] != 0) { micNonzero1s_++; break; }
+            filled_ += n;
+            if (filled_ == kBlock) {
+                filled_ = 0;
+                analyzeBlock();
+                blocks++;
+            }
+            if (n < want) return;   // the input holds no more this tick
+        }
+    }
 
-        // Removes the offset and the rumble before any analysis, continuous across blocks.
-        dc_.process(samples_, kBlock);
+    /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
+    static constexpr uint8_t kMaxBlocksPerTick = 4;
 
-        // Measured independently of the transform, on a gentler floor so it keeps moving.
+    /// One full block through the high-pass, the level and the bank into the frame.
+    void analyzeBlock() {
+        // Removes the offset before any analysis, continuous across blocks.
+        dc_.process(samples_, kBlock, dcPole_);
+
+        // Measured independently of the bands, on a gentler floor so it keeps moving.
         computeLevel(samples_, kBlock, static_cast<uint8_t>(floor / 2), gain, frame_,
                      levels == kLevelsAutomatic ? &levelCond_ : nullptr,
                      static_cast<uint32_t>(kBlock * 1000u / sampleRate()));
@@ -371,15 +395,19 @@ public:
         // The textbook light smoothing:
         frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
 
-        // The spectrum, through the same mapping the level uses.
+        // The bands, through the same mapping the level uses.
+        const uint32_t bankStart = platform::micros();
+        for (size_t at = 0; at < kBlock; at += ThirdOctaveBank::kChunk) {   // the bank's own chunk at a time, so the floats stay off the stack's budget
+            float part[ThirdOctaveBank::kChunk];
+            for (size_t i = 0; i < ThirdOctaveBank::kChunk; i++) part[i] = static_cast<float>(samples_[at + i] >> 8);
+            bank_.process(part, ThirdOctaveBank::kChunk);
+        }
+        bankUs1s_ += platform::micros() - bankStart;
         uint16_t peakHz = 0, peakMag = 0;
-        applyWindow(samples_, kBlock, windowed_);
-        platform::audioFft(windowed_, kBlock, mag_);
-        magnitudesToBands(mag_, kMag, sampleRate(), floor, gain,
-                          frame_.bands, peakHz, peakMag,
-                          levels == kLevelsAutomatic ? &cond_ : nullptr,
-                          static_cast<uint32_t>(kBlock * 1000u / sampleRate()),
-                          kRatio, static_cast<float>(kMaxGainDb), true);
+        frame_.thirdsCount = bankToBands(bank_, floor, gain, frame_.thirds, frame_.bands, peakHz, peakMag,
+                                         levels == kLevelsAutomatic ? &cond_ : nullptr,
+                                         static_cast<uint32_t>(kBlock * 1000u / sampleRate()),
+                                         kRatio, static_cast<float>(kMaxGainDb), true);
         finishBands();
 
         // Held when there is no real signal, so it does not wander in silence.
@@ -405,6 +433,7 @@ public:
             const uint8_t pos = static_cast<uint8_t>((t / 250u) % 16u);
             const uint8_t env = triwave8(static_cast<uint8_t>((t % 250u) * 255u / 250u));  // 0..255 within a step
             for (uint8_t b = 0; b < 16; b++) frame_.bands[b] = (b == pos) ? env : 0;
+            frame_.thirdsCount = 0;   // a sweep of the sixteen, so a 31-band display falls back to them
             finishBands();
             frame_.level = env;
             frame_.peakHz = static_cast<uint16_t>(80 + pos * 700);   // bass→~10.6 kHz across the 16 steps
@@ -425,6 +454,17 @@ public:
             const uint8_t swell = sin8(static_cast<uint8_t>(t / 24u));             // slow volume breath
             uint16_t lvl = static_cast<uint16_t>(swell / 2u + sum / 32u + beat / 2u);
             frame_.level = lvl > 255 ? 255 : lvl;
+            // The 31 hold the sixteen where they sit, and each third between two of them reads their mean.
+            for (uint8_t b = 0; b < 16; b++) frame_.thirds[kSixteenOfThirds[b]] = frame_.bands[b];
+            for (uint8_t c = 0; c < 31; c++) {
+                bool picked = false;
+                for (uint8_t b = 0; b < 16; b++) picked = picked || kSixteenOfThirds[b] == c;
+                if (picked) continue;
+                const uint8_t lo = c > 0 ? frame_.thirds[c - 1] : 0;
+                const uint8_t hi = c + 1 < 31 ? frame_.thirds[c + 1] : 0;
+                frame_.thirds[c] = static_cast<uint8_t>((lo + hi) / 2);
+            }
+            frame_.thirdsCount = 31;
             finishBands();
             // Peak drifts across the spectrum so freq-mapped effects move.
             frame_.peakHz = static_cast<uint16_t>(80 + sin8(static_cast<uint8_t>(t / 40u)) * 40u);
@@ -447,6 +487,12 @@ public:
                       static_cast<unsigned>(onsetCount_), static_cast<unsigned>(fluxPeak_));
         onsetCount_ = 0; fluxPeak_ = 0;
         mm::formatTo(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
+        // Microseconds in a second, so a hundred of them are a percent of one core.
+        mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, read %u.%u%%, %u Hz",
+                     static_cast<unsigned>(bankUs1s_ / 10000), static_cast<unsigned>(bankUs1s_ / 1000 % 10),
+                     static_cast<unsigned>(readUs1s_ / 10000), static_cast<unsigned>(readUs1s_ / 1000 % 10),
+                     static_cast<unsigned>(micSamples1s_));   // the samples the input delivered this second, its real rate
+        bankUs1s_ = 0; readUs1s_ = 0;
         levelPeak_ = 0;   // reset for the next window
         refreshSyncHosts();
 
@@ -497,11 +543,11 @@ private:
     bool inited_ = false;
     /// What the microphone is opened with, so a prepare that changed none of it keeps it open.
     struct MicConfig {
-        uint8_t device, micMode, sampleRateSel, codec, codecAddr;
+        uint8_t device, micMode, sampleRateSel, codec, codecAddr, codecGain;
         int8_t sck, ws, sd, mclk;
         bool operator==(const MicConfig&) const = default;
     };
-    MicConfig micConfig() const { return {device, micMode, sampleRateSel, codec, codecAddr, sckPin, wsPin, sdPin, mclkPin}; }
+    MicConfig micConfig() const { return {device, micMode, sampleRateSel, codec, codecAddr, codecGain, sckPin, wsPin, sdPin, mclkPin}; }
     MicConfig openedWith_{};
     /// What the sync socket is set up for, so a prepare that changed none of it keeps it bound.
     struct SyncConfig {
@@ -516,16 +562,19 @@ private:
     bool syncSet_ = false;
     uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it
     size_t filled_ = 0;         // samples accumulated toward the next full block
-    DcBlocker dc_;              // ~40 Hz high-pass, continuous across blocks
+    DcBlocker dc_;              // 5 Hz high-pass, continuous across blocks
+    float dcPole_ = 0.9993f;    // its pole at the opened rate, so the corner stays at 5 Hz below the 20 Hz band
+    ThirdOctaveBank bank_;      // the 31 bands, designed for the opened rate
 
     /// Fixed hot-path scratch, sized once, never reallocated.
     int32_t samples_[kBlock] = {};
-    float windowed_[kBlock] = {};
-    float mag_[kMag] = {};
 
     AudioFrame frame_;
 
     char levelStr_[12] = {};
+    char cpuStr_[40] = {};
+    uint32_t bankUs1s_ = 0;   ///< microseconds the bands took in the current second (UI only)
+    uint32_t readUs1s_ = 0;   ///< microseconds the read took in it
     char onsetStr_[20] = {};
     uint8_t onsetCount_ = 0;  ///< onsets in the current 1 s display window (UI only)
     uint8_t fluxPeak_ = 0;    ///< peak flux in that window (UI only)
@@ -573,7 +622,7 @@ private:
                 setStatus("capture init failed, pick another device", Severity::Error);
                 return;
             }
-            dc_.reset();
+            resetAnalysis();
             clearStatus();
             return;
         }
@@ -604,15 +653,26 @@ private:
             return;
         }
         // Now configure the codec over I2C (MCLK is running).
-        if (!platform::audioCodecInit(codecType(), codecAddr, sampleRate())) {
+        if (!platform::audioCodecInit(codecType(), codecAddr, sampleRate(), codecGain)) {
             deinit();   // tear the I2S channel back down, we couldn't bring the codec up
             setStatus("mic: codec init failed, check I2C wiring", Severity::Error);
             return;
         }
-        dc_.reset();   // start the high-pass clean for the new stream
+        resetAnalysis();   // start the high-pass and the bank clean for the new stream
         // The INMP441 emits ~250 ms of power-on settling garbage after the clock starts.
         clearStatus();
     }
+
+    /// The analysis for the opened rate, from silence.
+    void resetAnalysis() {
+        dc_.reset();
+        cond_ = BandConditioner{};        // a new rate brings bands the learned tables never saw
+        levelCond_ = LevelConditioner{};
+        filled_ = 0;                      // no block mixes samples of two rates
+        dcPole_ = 1.0f - 6.2831853f * kDcCornerHz / static_cast<float>(sampleRate());
+        bank_.init(sampleRate());
+    }
+    static constexpr float kDcCornerHz = 5.0f;
 
     void deinit() {
         if constexpr (!platform::hasAudioInput) return;

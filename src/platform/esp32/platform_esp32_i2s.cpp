@@ -1,6 +1,6 @@
-/// The peripheral half of the audio feature: two seams and nothing else.
+/// The peripheral half of the audio feature: the read and nothing else.
 ///
-/// The module above does the level maths, the windowing and the band mapping; this file reads samples off the channel and runs the transform.
+/// The module above does the level maths and the bands; this file reads samples off the channel.
 ///
 /// @technical
 ///
@@ -10,14 +10,6 @@
 /// It is self-clocked from the bit clock and needs no master clock pin.
 /// The slot is configured wide and the raw samples are handed to the domain code, which shifts the value down itself.
 /// Everything is under the capability guard with inert stubs elsewhere, and the module never calls in on a chip without it.
-///
-/// ## The transform scratch is allocated, not reserved
-///
-/// As a plain array it was eight kilobytes of internal memory reserved from boot on every board.
-/// That included the many boards with no microphone fitted, where nothing ever reads it, and a module that is not used should cost nothing.
-/// Now a board without audio pays only for the pointer, and one with audio allocates on its first analyzed frame and frees it with the microphone's channel.
-/// So nothing allocates per frame on the audio path, and a board that stops listening gets the memory back.
-/// The library's twiddle table is initialized at the block size: built in on the ESP32-S3, 4 KB elsewhere, where the library's maximum (4,096) allocated 16 KB.
 ///
 /// ## The gain from the alternate microphone is a conversion, not a boost
 ///
@@ -46,11 +38,8 @@
 #include "driver/i2s_pdm.h"          // the two-wire onboard mics (QuinLED Dig-Next-2 and friends)
 #include "esp_private/i2s_platform.h" // the shared-instance probe (see audioMicSharedBusFree)
 #endif
-#include "esp_heap_caps.h"   // heap_caps_malloc — the FFT scratch, internal RAM only
 #include "esp_log.h"
-#include "dsps_fft2r.h"
 
-#include <cmath>
 #include <cstring>
 #include <new>      // std::nothrow
 
@@ -67,33 +56,7 @@ struct MicState {
     int16_t stage[256] = {};
 };
 
-// The library's transform works in place on an interleaved complex array, so one scratch is sized to the largest block, and its tables initialize lazily on first use. Allocated on the first transform rather than reserved from boot: @xref{the-transform-scratch-is-allocated-not-reserved|what it cost as a static array}.
-constexpr size_t kMaxFftN = 1024;
-float* g_fftBuf = nullptr;
-bool   g_fftReady = false;
 
-bool ensureFftInit() {
-    if (g_fftReady) return true;
-    // On the ESP32-S3 the library takes its built-in twiddle table at this block size; elsewhere it allocates a 4 KB one. The microphone's release frees either.
-    if (dsps_fft2r_init_fc32(nullptr, kMaxFftN) != ESP_OK) {
-        ESP_LOGE(I2S_TAG, "esp-dsp FFT init failed");
-        return false;
-    }
-    // Internal RAM, not PSRAM: esp-dsp's assembly kernels run per audio block and a PSRAM scratch would put a cache miss in the middle of every butterfly.
-    g_fftBuf = static_cast<float*>(
-        heap_caps_malloc(kMaxFftN * 2 * sizeof(float), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-    if (!g_fftBuf) {
-        ESP_LOGE(I2S_TAG, "FFT scratch alloc failed (%u B internal)",
-                 static_cast<unsigned>(kMaxFftN * 2 * sizeof(float)));
-        return false;   // audioFft zero-fills its output, so the caller degrades to silence
-    }
-    g_fftReady = true;
-    return true;
-}
-
-}  // namespace
-
-namespace {
 // Set when audioMicInit failed because another module held the I2S instance, cleared on every attempt. Only contention can clear on its own, so only it earns the once-a-second retry: keyed on "the mic is down" instead, a board with no microphone wired would re-init forever.
 bool s_micRefusedForContention = false;
 }
@@ -184,14 +147,19 @@ size_t audioMicRead(AudioMicHandle& h, int32_t* out, size_t maxSamples) {
         // A FIXED staging buffer rather than a split of the caller's, whose remaining room shrinks as its block fills.
         // Halving that reached zero and reported no samples forever, one short of a complete block.
         // The scaling is a conversion rather than a boost: @xref{the-gain-from-the-alternate-microphone-is-a-conversion-not-a-boost|why a larger one clips continuously}.
+        // Staged a buffer at a time until the driver holds no more or the caller's room is full, so a slow tick drains what accumulated rather than leaving it to overflow.
         constexpr size_t kStage = sizeof(st->stage) / sizeof(st->stage[0]);
-        const size_t want = maxSamples < kStage ? maxSamples : kStage;
-        if (want == 0) return 0;
-        i2s_channel_read(st->rx, st->stage, want * sizeof(int16_t), &bytesRead, 0 /* non-blocking */);
-        const size_t got = bytesRead / sizeof(int16_t);
         constexpr int32_t kPdmGain = 65536;   // int16 full scale -> int32 full scale, see above
-        for (size_t i = 0; i < got; i++) out[i] = static_cast<int32_t>(st->stage[i]) * kPdmGain;
-        return got;
+        size_t total = 0;
+        while (total < maxSamples) {
+            const size_t want = maxSamples - total < kStage ? maxSamples - total : kStage;
+            i2s_channel_read(st->rx, st->stage, want * sizeof(int16_t), &bytesRead, 0 /* non-blocking */);
+            const size_t got = bytesRead / sizeof(int16_t);
+            for (size_t i = 0; i < got; i++) out[total + i] = static_cast<int32_t>(st->stage[i]) * kPdmGain;
+            total += got;
+            if (got < want) break;   // drained
+        }
+        return total;
     }
     i2s_channel_read(st->rx, out, maxSamples * sizeof(int32_t), &bytesRead,
                      0 /* ms — non-blocking */);
@@ -221,34 +189,6 @@ void audioMicDeinit(AudioMicHandle& h) {
     }
     delete st;
     h.impl = nullptr;
-    // The transform serves the microphone alone, so it goes with the channel: @xref{the-transform-scratch-is-allocated-not-reserved|why}.
-    if (g_fftReady) {
-        heap_caps_free(g_fftBuf);
-        g_fftBuf = nullptr;
-        dsps_fft2r_deinit_fc32();
-        g_fftReady = false;
-    }
-}
-
-void audioFft(const float* windowed, size_t n, float* outMag) {
-    if (!windowed || !outMag || n == 0 || n > kMaxFftN) return;
-    if (!ensureFftInit()) {
-        for (size_t k = 0; k < n / 2; k++) outMag[k] = 0.0f;
-        return;
-    }
-    // Pack the real input into the interleaved complex scratch (imag = 0).
-    for (size_t i = 0; i < n; i++) {
-        g_fftBuf[2 * i] = windowed[i];
-        g_fftBuf[2 * i + 1] = 0.0f;
-    }
-    dsps_fft2r_fc32(g_fftBuf, static_cast<int>(n));
-    dsps_bit_rev_fc32(g_fftBuf, static_cast<int>(n));
-    // Magnitudes of the first n/2 bins: sqrt(re^2 + im^2).
-    for (size_t k = 0; k < n / 2; k++) {
-        const float re = g_fftBuf[2 * k];
-        const float im = g_fftBuf[2 * k + 1];
-        outMag[k] = std::sqrt(re * re + im * im);
-    }
 }
 
 }  // namespace mm::platform
@@ -263,7 +203,6 @@ bool audioMicInit(AudioMicHandle&, uint16_t, uint16_t, uint16_t, int16_t, uint32
 size_t audioMicRead(AudioMicHandle&, int32_t*, size_t) { return 0; }
 void audioMicDeinit(AudioMicHandle&) {}
 bool audioMicSharedBusFree(MicMode) { return false; }   // no I2S: nothing to contend for
-void audioFft(const float*, size_t, float*) {}
 
 
 }  // namespace mm::platform

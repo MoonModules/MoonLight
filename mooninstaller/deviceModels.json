@@ -1478,7 +1478,8 @@
           "sdPin": 11,
           "mclkPin": 13,
           "codec": "ES8311",
-          "codecAddr": "0x18"
+          "codecAddr": "0x18",
+          "codecGain": 0
         },
         "SdCard": {
           "type": "SdCardService",

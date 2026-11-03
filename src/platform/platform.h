@@ -69,6 +69,8 @@ void setTestBindFails(bool fail);
 enum class TestJoin : uint8_t { Network, Succeed, Fail };
 /// Set how multicast joins behave; the test binary starts every case on Succeed.
 void setTestJoin(TestJoin mode);
+/// The group a socket left last, as a host test reads it.
+const uint8_t* testLastLeftGroup();
 /// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the desktop's unreported figure.
 void setTestFreeInternalHeap(size_t bytes);
 /// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the desktop's none.
@@ -996,6 +998,7 @@ public:
     }
     /// Join one group, the set of one, its address kept in the socket.
     bool joinMulticast(const uint8_t group[4]) {
+        setMulticastGroups(nullptr, 0);   // leave the earlier set while own_ still holds the group it joined
         for (int i = 0; i < 4; i++) own_.ip[i] = group[i];
         return setMulticastGroups(&own_, 1) == 1;
     }
@@ -1456,13 +1459,13 @@ const char* hub75Backend(const Hub75Handle& h);
 /// Release the port and its buffer.
 void hub75Deinit(Hub75Handle& h);
 
-// I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
+// I2S audio input: one seam, the read, with everything after it domain code.
 
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
 enum class CodecType : uint8_t { None = 0, Es8311 = 1, Es7210 = 2 };
 
-/// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do. It is a device on the I2C bus (i2cBusOpen), and its master clock is the microphone's `mclkPin`.
-bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate);
+/// Configure the audio codec at this 7-bit address with this analog input gain, where the board has one; true when there is nothing to do. It is a device on the I2C bus (i2cBusOpen), and its master clock is the microphone's `mclkPin`.
+bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate, uint8_t gainDb);
 
 /// Release the codec.
 void audioCodecDeinit();
@@ -1494,9 +1497,6 @@ bool audioMicSharedBusFree(MicMode mode);
 
 /// Release the input.
 void audioMicDeinit(AudioMicHandle& h);
-
-/// Fill `outMag` with the magnitude bins of `n` windowed samples, `n` being a power of two.
-void audioFft(const float* windowed, size_t n, float* outMag);
 
 // The board's I2C bus: one master bus, opened by its owner (I2cBusModule) and shared by every device on it, such as an audio codec.
 

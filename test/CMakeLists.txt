@@ -9,7 +9,6 @@ add_executable(mm_tests
     unit/core/unit_SpscRing.cpp
     unit/core/unit_AnalogService.cpp
     unit/core/unit_AudioCapture.cpp
-    unit/core/unit_platform_audiofft.cpp
     unit/core/unit_Buffer.cpp
     unit/core/unit_ScratchBuffer.cpp
     unit/core/unit_Oscillators.cpp
@@ -26,6 +25,7 @@ add_executable(mm_tests
     unit/core/unit_fields.cpp
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_codec.cpp
+    unit/core/unit_FractionalOctaveBank.cpp
     unit/core/unit_PictureService.cpp
     unit/core/unit_I2cBusModule.cpp
     unit/core/unit_SdCardService.cpp
@@ -162,6 +162,7 @@ add_executable(mm_tests
     unit/light/unit_GEQ3DEffect.cpp
     unit/light/unit_GEQEffect.cpp
     unit/light/unit_AudioSpectrumEffect.cpp
+    unit/light/unit_WaterfallEffect.cpp
     unit/light/unit_GridBlacksLayout.cpp
     unit/light/unit_LayoutComposition.cpp
     unit/light/unit_LissajousEffect.cpp

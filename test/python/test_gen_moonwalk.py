@@ -533,3 +533,27 @@ def test_open_work_reads_each_mirrored_cards_process_field(tmp_path):
         {"title": "No process", "area": "Core", "module": "", "kind": "Feature", "status": "Backlog", "process": "", "card": "https://x/5?pane=issue&itemId=2", "number": None}]), encoding="utf-8")
     assert gen_moonwalk.open_work(tmp_path) == {"wifi": [{"title": "Fix the join", "card": "https://x/5?pane=issue&itemId=1"}]}
 
+
+
+STAGES = [{"file": "02-install.yaml", "summary": "MoonLight on a board."}, {"file": "04-first-light.yaml", "summary": "An effect on its lights."}]
+
+
+def table_text(rows: str) -> str:
+    """A CLAUDE.md with the stage table's markers around `rows`."""
+    return f"intro\n{gen_moonwalk.STAGE_TABLE_BEGIN}\n{rows}{gen_moonwalk.STAGE_TABLE_END}\noutro\n"
+
+
+def test_the_stage_table_is_rebuilt_from_each_stage_files_summary():
+    fresh = gen_moonwalk.with_stage_table(table_text("| stale |\n"), STAGES)
+    assert "| `02-install.yaml` | MoonLight on a board. |" in fresh
+    assert "| stale |" not in fresh
+    assert fresh.startswith("intro\n") and fresh.endswith("outro\n")   # only the text between the markers changes
+
+
+def test_a_fresh_stage_table_comes_back_unchanged():
+    fresh = gen_moonwalk.with_stage_table(table_text("x\n"), STAGES)
+    assert gen_moonwalk.with_stage_table(fresh, STAGES) == fresh
+
+
+def test_a_text_without_the_markers_has_no_stage_table():
+    assert gen_moonwalk.with_stage_table("no markers here\n", STAGES) is None
