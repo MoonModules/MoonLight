@@ -673,10 +673,9 @@ private:
             }
         } else {                           // receive → bind the port, then JOIN the group
             // The join is what makes a multicast datagram reach this socket; a network without multicast still delivers unicast, so a failed join degrades rather than refuses.
-            char grp[16]; formatDottedQuad(grp, kSyncMulticastAddr_);
             if (syncSock_.open() && syncSock_.bind(syncPort)) {
                 syncOpen_ = true;
-                syncSock_.joinMulticast(grp);
+                syncSock_.joinMulticast(kSyncMulticastAddr_);
                 reportListening();
             } else {
                 syncSock_.close();

@@ -2256,16 +2256,18 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
     return detail::selectReadable(fds, n, timeoutMs, [](int fd) { return sock(fd); });
 }
 
-// Test override forcing a multicast join to fail, since a test cannot take the host's network away.
-static std::atomic<bool> testJoinFails{false};
-void setTestJoinFails(bool fail) { testJoinFails.store(fail, std::memory_order_relaxed); }
+// Test override for multicast membership: a test can neither take the host's network away nor keep its traffic out otherwise.
+static std::atomic<TestJoin> testJoin{TestJoin::Network};
+void setTestJoin(TestJoin mode) { testJoin.store(mode, std::memory_order_relaxed); }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
-bool UdpSocket::membership(const char* group, bool join) {
-    if (fd_ < 0 || !group) return false;
-    if (join && testJoinFails.load(std::memory_order_relaxed)) return false;
+bool UdpSocket::membership(const uint8_t group[4], bool join) {
+    if (fd_ < 0) return false;
+    const TestJoin mode = testJoin.load(std::memory_order_relaxed);
+    if (mode == TestJoin::Fail) return false;
+    if (mode == TestJoin::Succeed) return true;
     ip_mreq mreq{};
-    if (::inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
+    std::memcpy(&mreq.imr_multiaddr.s_addr, group, 4);   // network order = octets
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const unsigned char loop = 0;
@@ -2290,8 +2292,7 @@ void UdpSocket::close() {
         close_sock(fd_);
         fd_ = -1;
     }
-    group_[0] = 0;   // the membership went with the socket
-    joined_ = false;
+    forgetGroups();   // the membership went with the socket
     joinCount_ = 0;
 }
 

@@ -29,13 +29,21 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ---
 
-## v7.0.0
+## v7.1.0
+
+### E1.31 numbers its universes from 1 when `universe_start` is 0
+
+**Action: *nothing* for most setups. Where a MoonLight Network Send feeds a MoonLight Network Receive over E1.31 and only one end runs this version, update the other too. Where an E1.31 sender or receiver was set one universe off to make up for MoonLight's numbering, set it back.**
+
+E1.31 has no universe 0, and standard senders and receivers such as xLights and FPP start at 1. With `universe_start` 0, Network Send sent E1.31 universe 0, which those receivers drop, and Network Receive placed an E1.31 sender's universe 1 one universe in, shifting the image. Both now start E1.31 at universe 1 when `universe_start` is 0; a start of 1 or more maps as it is, and Art-Net keeps its universe 0.
 
 ### The Adafruit MatrixPortal S3 has its own firmware, `esp32s3-n8r2`
 
 **Action: *nothing*; to use the board's whole 8 MB, *install over USB* once with *Erase chip first* ticked.**
 
 A MatrixPortal ran the `esp32s3-zero` image, which keeps working on it but uses 4 MB of its 8. The `esp32s3-n8r2` image has a 3 MB app slot and 4 MB of filesystem. Its partition table differs from the Zero's, which an update over the air never rewrites, so moving takes one install over USB, and the device comes back unprovisioned: take a backup first and restore it after.
+
+## v7.0.0
 
 ### Network Send fills each universe with `channels_per_universe` channels exactly
 

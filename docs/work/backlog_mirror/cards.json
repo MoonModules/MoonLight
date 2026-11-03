@@ -940,7 +940,7 @@
   "number": null
  },
  {
-  "title": "E1.31 multicast never arrives (2026-10-30)",
+  "title": "E1.31 multicast never arrives: Network Receive joins no group",
   "area": "Effects",
   "module": "",
   "kind": "Bug",
@@ -2027,6 +2027,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087406",
+  "number": null
+ },
+ {
+  "title": "A Pi as the room's audio source: stream in, analyze, sync out (2026-11-03)",
+  "area": "Services",
+  "module": "AudioService",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=291637725",
   "number": null
  },
  {

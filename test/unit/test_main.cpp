@@ -2,12 +2,17 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in
+#include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case, and every rerun for its next subcase, starts on the real clock, so a test that froze or stepped it leaves nothing to the next, and on the HDMI stand-in, so no case drives a real screen.
-struct RealClockPerTest : doctest::IReporter {
-    explicit RealClockPerTest(const doctest::ContextOptions&) {}
-    static void reset() { mm::platform::setTestNowMs(0); mm::platform::setTestClockStep(0); mm::platform::hdmiTestClear(); }
+// Every test case and subcase rerun starts on the real clock, on the HDMI stand-in so no case drives a screen, and with multicast joins that skip the host's network so no LAN sender reaches a case.
+struct FreshFixturesPerTest : doctest::IReporter {
+    explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
+    static void reset() {
+        mm::platform::setTestNowMs(0);
+        mm::platform::setTestClockStep(0);
+        mm::platform::hdmiTestClear();
+        mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
+    }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }
     void report_query(const doctest::QueryData&) override {}
@@ -21,4 +26,4 @@ struct RealClockPerTest : doctest::IReporter {
     void log_message(const doctest::MessageData&) override {}
     void test_case_skipped(const doctest::TestCaseData&) override {}
 };
-REGISTER_LISTENER("real clock per test", 1, RealClockPerTest);
+REGISTER_LISTENER("fresh fixtures per test", 1, FreshFixturesPerTest);

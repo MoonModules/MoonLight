@@ -38,7 +38,7 @@ processes:
     dependsOn: [desktop-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason, and stop. An applicable check skipped carries a one-line reason in the commit or pull request. A failure is reported, not fixed and rerun: a second run needs the words again.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. An applicable check skipped carries a one-line reason in the commit or pull request. A failure with a clear fix is fixed, and only its check reruns, with any check whose paths the fix touches; a failure that needs a decision is reported and waits.
 
       The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_host --ui` is never a gate.
     steps:

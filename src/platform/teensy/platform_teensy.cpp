@@ -737,9 +737,9 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     return n;
 }
 
-bool UdpSocket::membership(const char* group, bool join) {
-    IPAddress ip;
-    if (fd_ < 0 || !group || !ip.fromString(group)) return false;
+bool UdpSocket::membership(const uint8_t group[4], bool join) {
+    if (fd_ < 0) return false;
+    const IPAddress ip(group[0], group[1], group[2], group[3]);
     return join ? Ethernet.joinGroup(ip) : Ethernet.leaveGroup(ip);
 }
 
@@ -749,13 +749,12 @@ bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* da
 
 void UdpSocket::close() {
     if (fd_ >= 0) {
-        if (joined_) membership(group_, false);
+        for (uint8_t i = 0; i < count_; i++) membership(groups_[i].ip, false);   // the interface holds the groups, not the socket
         g_udp[fd_].stop();
         g_udpUsed[fd_] = false;
         fd_ = -1;
     }
-    group_[0] = 0;
-    joined_ = false;
+    forgetGroups();
     joinCount_ = 0;
 }
 
