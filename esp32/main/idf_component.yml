@@ -1,6 +1,7 @@
 dependencies:
+  # mdns at 1.14.x: 1.15.0's mdns_receive.c fails GCC 15 under -Werror (stringop-truncation), and with no lock in git a fresh build takes the newest.
   espressif/mdns:
-    version: "*"
+    version: "~1.14.0"
   joltwallet/littlefs:
     version: "^1.16.0"
   improv/improv:
