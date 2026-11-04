@@ -694,19 +694,19 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wheellayout"
   },
   "AudioSpectrumEffect": {
-   "line": "The mic's frequency bands spread across X, the 31 third octaves or the sixteen, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom rows can be a horizontal level bar under the spectrum, as tall as a bar is wide, with a square at its right end that flashes red on each detected hit. On a single row the bars collapse to per-column brightness.",
+   "line": "The mic's frequency bands spread across X, every third octave it measures or the sixteen, each column lit bottom-up by its magnitude.",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars, each mark a bar wide: along the top, white over the dominant frequency; at the right edge, the height where the gate opens, white while open and red while the room is gated. On a grid at least three rows tall it adds a level meter under the bars, as tall as a bar is wide, with a square that flashes red on each hit.",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
      "title": "Comparing audio engines",
-     "text": "The sweep colors with sixteen bands and the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
+     "text": "The sweep colors with sixteen bands and the readouts off draw what WLED-MM's GEQ PPA draws: the same bars and heights, and its sweep's timing through the palette, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
    "controls": {
     "colorMode": {
-     "line": "By height (a VU), per band, or sweep: GEQ PPA's drifting rainbow.",
+     "line": "The palette by height (a VU), per band, or as GEQ PPA's sweep.",
      "tests": [
       {
        "title": "Effects teardown under a running pipeline",
@@ -714,11 +714,14 @@
       }
      ]
     },
-    "levelBar": {
-     "line": "A level bar under the bars, and a square that flashes red on a hit."
+    "speed": {
+     "line": "The sweep's swings through the palette a minute."
+    },
+    "readouts": {
+     "line": "The level meter, hits, gate and peak, drawn with the bars."
     },
     "bands": {
-     "line": "The 31 third octaves, or the sixteen WLED-MM draws."
+     "line": "Every third octave the rate carries, or WLED-MM's sixteen."
     }
    },
    "role": "effect",
@@ -4142,7 +4145,7 @@
     },
     "sampleRate": {
      "line": "The mic or ADC sample rate.",
-     "more": "48000 reaches all 31 bands; a lower rate drops the top ones.",
+     "more": "24000 carries the 28 bands to 10 kHz, the 16 WLED bars among them; 48000 adds the three to 20 kHz.",
      "tests": [
       {
        "title": "Services audio drives the effects",
@@ -4150,17 +4153,9 @@
       }
      ]
     },
-    "levels": {
-     "line": "Who sets the display window: the two sliders, or the learner.",
-     "more": "Automatic maps each band's own range onto the window, so treble reads level with bass."
-    },
-    "floor": {
-     "line": "The silence threshold: below it a band reads as nothing.",
-     "more": "Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display."
-    },
-    "gain": {
-     "line": "The window's width, a higher value running the display hotter.",
-     "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.",
+    "squelch": {
+     "line": "How far over the room's learned noise sound must rise before the lights answer, in dB.",
+     "more": "Raise it until a quiet room reads dark.",
      "tests": [
       {
        "title": "Services audio drives the effects",
@@ -4195,7 +4190,10 @@
      "line": "The dominant frequency of the audio driving the effects."
     },
     "cpu": {
-     "line": "The share of one core the bands and the read took last second, and the input's real rate."
+     "line": "The share of one core the bands took last second, and the input's real rate."
+    },
+    "dynamics": {
+     "line": "The level, the room's floor, the window's top in dBFS, and the gate."
     }
    },
    "role": "service",

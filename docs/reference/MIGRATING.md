@@ -31,6 +31,24 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### ESP32-P4 boards read their flash over four lines
+
+**Action: *install over USB* once, on every ESP32-P4 device (`esp32p4rev1-eth`, `esp32p4rev1-eth-wifi`, `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi`).**
+
+The P4 firmwares read code from flash over four data lines at 80 MHz (QIO) where they used two at 40 MHz (DIO), as the S3 firmwares did in v7.0.0. The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses the new app and the Firmware card reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`. Install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too; the partition table is unchanged, so with *Erase chip first* left unticked the config stays. Take a backup first anyway.
+
+### Audio levels set themselves: `floor`, `gain` and `levels` give way to `squelch`
+
+**Action: *check `squelch`* on the Audio card if a quiet room lights up or a quiet source stays dark; the default of 10 dB suits a MEMS microphone.**
+
+The service learns the room's noise floor, gates silence and holds the loudest band at the top of the display, so `levels`, `gain` and the per-band learner are gone. `floor`, the threshold, is now `squelch`: how many dB above the learned floor sound must rise, in place of a fixed level; a stored `floor` is not carried over.
+
+### The audio sample rate is 24 kHz by default, and stored by name
+
+**Action: *check the Audio card's `sampleRate`* on a board that analyzes its own microphone, and pick 24000 unless the board needs the bands above 10 kHz.**
+
+The audio measures third-octave bands, and 24 kHz carries the 28 of them up to 10 kHz, the 16 WLED bars among them, at half the cost of 48 kHz. The list gained 24000 between 22050 and 44100, and the setting is now stored by its name; one stored as a position in the old list comes back one rate lower, 44100 as 24000 and 48000 as 44100, and a board that never stored one moves from 48000 to 24000.
+
 ### E1.31 numbers its universes from 1 when `universe_start` is 0
 
 **Action: *nothing* for most setups. Where a MoonLight Network Send feeds a MoonLight Network Receive over E1.31 and only one end runs this version, update the other too. Where an E1.31 sender or receiver was set one universe off to make up for MoonLight's numbering, set it back.**

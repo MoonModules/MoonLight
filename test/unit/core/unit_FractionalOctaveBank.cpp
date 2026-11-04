@@ -32,7 +32,7 @@ std::vector<float> measure(Thirds& bank, const std::vector<float>& x, float sett
     const size_t settle = static_cast<size_t>(settleSeconds * static_cast<float>(kRate));
     size_t reads = 0;
     for (size_t at = 0; at + kBlock <= x.size(); at += kBlock) {
-        bank.process(x.data() + at, kBlock);
+        bank.process({x.data() + at, kBlock});
         if (at < settle) continue;
         for (uint8_t b = 0; b < Thirds::kBands; b++) sum[b] += bank.power(b);
         reads++;
@@ -46,6 +46,84 @@ std::vector<float> sine(float hz, float seconds, float amplitude = 1.0f) {
     const double step = 2.0 * std::numbers::pi * static_cast<double>(hz) / kRate;
     for (size_t i = 0; i < x.size(); i++) x[i] = amplitude * static_cast<float>(std::sin(step * static_cast<double>(i)));
     return x;
+}
+
+// The unit contract: a tone at a band's center reads its own power there, A * A / 2, and its neighbors well below; in the top octave, squeezed toward Nyquist, the 20 kHz band hears a 16 kHz tone 12 dB down.
+void checkTone(Thirds& bank, uint8_t b) {
+    CAPTURE(b);
+    bank.reset();
+    const auto p = measure(bank, sine(bank.centerHz(b), 1.5f), 1.0f);
+    CHECK(std::abs(db(p[b]) - db(0.5f)) < 0.5f);
+    const float margin = b + 1 >= 28 ? 11.5f : 16.0f;   // a pair reaching into the top octave, 12.7 kHz up
+    if (b > 0) CHECK(db(p[b]) - db(p[b - 1]) > margin);
+    if (b + 1 < Thirds::kBands) CHECK(db(p[b]) - db(p[b + 1]) > margin);
+}
+
+// Pink noise is the spectrum real music resembles, and band power reads it flat: equal-amplitude tones at log spacing are pink, 24 to the octave so each band holds eight.
+std::vector<float> pinkMultisine() {
+    std::vector<float> x(static_cast<size_t>(2.0f * kRate), 0.0f);
+    uint32_t seed = 12345;
+    for (int m = -18 * 8 - 4; m <= 13 * 8 + 4; m++) {
+        const double hz = 1000.0 * std::exp2((m + 0.5) / 24.0);
+        if (hz > 0.47 * kRate) break;
+        seed = seed * 1664525u + 1013904223u;   // a fixed phase per tone, so the crest stays bounded
+        const double phase = 2.0 * std::numbers::pi * (seed >> 8) / 16777216.0;
+        const double step = 2.0 * std::numbers::pi * hz / kRate;
+        for (size_t i = 0; i < x.size(); i++) x[i] += 0.02f * static_cast<float>(std::sin(step * static_cast<double>(i) + phase));
+    }
+    return x;
+}
+
+void checkFlat(const std::vector<float>& p, uint8_t b) {
+    CAPTURE(b);
+    CHECK(std::abs(db(p[b]) - db(p[17])) < 1.0f);   // against 1 kHz
+}
+
+// How long a band takes to fall 20 dB once its tone stops, in milliseconds.
+float decayMs(Thirds& bank, uint8_t b) {
+    bank.reset();
+    const auto tone = sine(bank.centerHz(b), 1.0f);
+    bank.process({tone.data(), tone.size()});
+    const float steady = bank.power(b);
+    for (uint32_t ms = 1; ms <= 1000; ms++) {
+        for (int i = 0; i < 48; i++) bank.push(0.0f);
+        if (bank.power(b) < steady * 0.01f) return static_cast<float>(ms);
+    }
+    return 1000.0f;
+}
+
+void checkDecay(Thirds& bank, uint8_t b, float reference) {
+    CAPTURE(b);
+    CHECK(std::abs(decayMs(bank, b) / reference - 1.0f) < 0.25f);
+}
+
+// Each band's delay, a click to the moment its power peaks, in milliseconds: what onsets compared across bands subtract.
+std::vector<int> clickDelaysMs(Thirds& bank) {
+    bank.reset();
+    std::vector<float> x(48 * 600, 0.0f);
+    x[0] = 10000.0f;   // a click, then 600 ms of silence
+    std::vector<float> peak(Thirds::kBands, 0.0f);
+    std::vector<int> at(Thirds::kBands, 0);
+    for (size_t ms = 0; ms < 600; ms++) {
+        bank.process({x.data() + ms * 48, 48});
+        for (uint8_t b = 0; b < Thirds::kBands; b++)
+            if (bank.power(b) > peak[b]) { peak[b] = bank.power(b); at[b] = static_cast<int>(ms) + 1; }
+    }
+    return at;
+}
+
+// The decimation phase and every filter's state carry across calls, so how the samples are split between calls changes nothing.
+std::vector<float> readInChunks(const std::vector<float>& x, size_t chunk) {
+    auto& bank = freshBank();
+    for (size_t at = 0; at < x.size(); at += chunk) bank.process({x.data() + at, std::min(chunk, x.size() - at)});
+    std::vector<float> reads;
+    for (uint8_t b = 0; b < Thirds::kBands; b++) reads.push_back(bank.power(b));
+    return reads;
+}
+
+void checkSameRead(const std::vector<float>& a, const std::vector<float>& b, uint8_t band) {
+    CAPTURE(band);
+    CHECK(b[band] == doctest::Approx(a[band]).epsilon(1e-4));
 }
 
 }  // namespace
@@ -70,17 +148,6 @@ TEST_CASE("48 kHz carries all 31 bands and a lower rate drops those above its re
     CHECK(bank.power(30) == 0.0f);
 }
 
-// The unit contract: a tone at a band's center reads its own power there, A * A / 2, and its neighbors well below; in the top octave, squeezed toward Nyquist, the 20 kHz band hears a 16 kHz tone 12 dB down.
-void checkTone(Thirds& bank, uint8_t b) {
-    CAPTURE(b);
-    bank.reset();
-    const auto p = measure(bank, sine(bank.centerHz(b), 1.5f), 1.0f);
-    CHECK(std::abs(db(p[b]) - db(0.5f)) < 0.5f);
-    const float margin = b + 1 >= 28 ? 11.5f : 16.0f;   // a pair reaching into the top octave, 12.7 kHz up
-    if (b > 0) CHECK(db(p[b]) - db(p[b - 1]) > margin);
-    if (b + 1 < Thirds::kBands) CHECK(db(p[b]) - db(p[b + 1]) > margin);
-}
-
 TEST_CASE("a tone at each band's center reads its own power, its neighbors 16 dB down and 11.5 in the top octave") {
     auto& bank = freshBank();
     for (uint8_t b = 0; b < Thirds::kBands; b++) checkTone(bank, b);
@@ -97,47 +164,9 @@ TEST_CASE("50 Hz and 60 Hz light different bands") {
     CHECK(db(p60[band60]) - db(p60[band50]) > 10.0f);
 }
 
-// Pink noise is the spectrum real music resembles, and band power reads it flat: equal-amplitude tones at log spacing are pink, 24 to the octave so each band holds eight.
-std::vector<float> pinkMultisine() {
-    std::vector<float> x(static_cast<size_t>(2.0f * kRate), 0.0f);
-    uint32_t seed = 12345;
-    for (int m = -18 * 8 - 4; m <= 13 * 8 + 4; m++) {
-        const double hz = 1000.0 * std::exp2((m + 0.5) / 24.0);
-        if (hz > 0.47 * kRate) break;
-        seed = seed * 1664525u + 1013904223u;   // a fixed phase per tone, so the crest stays bounded
-        const double phase = 2.0 * std::numbers::pi * (seed >> 8) / 16777216.0;
-        const double step = 2.0 * std::numbers::pi * hz / kRate;
-        for (size_t i = 0; i < x.size(); i++) x[i] += 0.02f * static_cast<float>(std::sin(step * static_cast<double>(i) + phase));
-    }
-    return x;
-}
-
-void checkFlat(const std::vector<float>& p, uint8_t b) {
-    CAPTURE(b);
-    CHECK(std::abs(db(p[b]) - db(p[17])) < 1.0f);   // against 1 kHz
-}
-
 TEST_CASE("pink noise reads every band within 1 dB of flat") {
     const auto p = measure(freshBank(), pinkMultisine(), 1.0f);
     for (uint8_t b = 0; b < Thirds::kBands; b++) checkFlat(p, b);
-}
-
-// How long a band takes to fall 20 dB once its tone stops, in milliseconds.
-float decayMs(Thirds& bank, uint8_t b) {
-    bank.reset();
-    const auto tone = sine(bank.centerHz(b), 1.0f);
-    bank.process(tone.data(), tone.size());
-    const float steady = bank.power(b);
-    for (uint32_t ms = 1; ms <= 1000; ms++) {
-        for (int i = 0; i < 48; i++) bank.push(0.0f);
-        if (bank.power(b) < steady * 0.01f) return static_cast<float>(ms);
-    }
-    return 1000.0f;
-}
-
-void checkDecay(Thirds& bank, uint8_t b, float reference) {
-    CAPTURE(b);
-    CHECK(std::abs(decayMs(bank, b) / reference - 1.0f) < 0.25f);
 }
 
 // One detector time constant for every band, so the bars fall alike, about 50 ms for 20 dB; below 250 Hz a narrow filter's own ringing adds to it (measured 2026-11-03: 84 ms at 100 Hz, 184 at 31.5).
@@ -148,21 +177,6 @@ TEST_CASE("every band from 250 Hz up falls 20 dB in the same time once its tone 
     for (uint8_t b = 11; b < Thirds::kBands; b++) checkDecay(bank, b, reference);
 }
 
-// Each band's delay, a click to the moment its power peaks, in milliseconds: what onsets compared across bands subtract.
-std::vector<int> clickDelaysMs(Thirds& bank) {
-    bank.reset();
-    std::vector<float> x(48 * 600, 0.0f);
-    x[0] = 10000.0f;   // a click, then 600 ms of silence
-    std::vector<float> peak(Thirds::kBands, 0.0f);
-    std::vector<int> at(Thirds::kBands, 0);
-    for (size_t ms = 0; ms < 600; ms++) {
-        bank.process(x.data() + ms * 48, 48);
-        for (uint8_t b = 0; b < Thirds::kBands; b++)
-            if (bank.power(b) > peak[b]) { peak[b] = bank.power(b); at[b] = static_cast<int>(ms) + 1; }
-    }
-    return at;
-}
-
 // Delay grows toward the bass, a narrow filter and the halving low-passes both taking their time (measured 2026-11-03: 118 ms at 31.5 Hz, 42 at 100 Hz, 6 at 1 kHz, 1 from 6.3 kHz up).
 TEST_CASE("a click reaches the high bands first and the bass last, within the measured delays") {
     const auto at = clickDelaysMs(freshBank());
@@ -171,20 +185,6 @@ TEST_CASE("a click reaches the high bands first and the bass last, within the me
     CHECK(at[7] <= 50);     // 100 Hz
     CHECK(at[17] <= 8);     // 1 kHz
     CHECK(at[30] <= 2);     // 20 kHz
-}
-
-// The decimation phase and every filter's state carry across calls, so how the samples are split between calls changes nothing.
-std::vector<float> readInChunks(const std::vector<float>& x, size_t chunk) {
-    auto& bank = freshBank();
-    for (size_t at = 0; at < x.size(); at += chunk) bank.process(x.data() + at, std::min(chunk, x.size() - at));
-    std::vector<float> reads;
-    for (uint8_t b = 0; b < Thirds::kBands; b++) reads.push_back(bank.power(b));
-    return reads;
-}
-
-void checkSameRead(const std::vector<float>& a, const std::vector<float>& b, uint8_t band) {
-    CAPTURE(band);
-    CHECK(b[band] == doctest::Approx(a[band]).epsilon(1e-4));
 }
 
 TEST_CASE("the same signal in chunks of 1, 7 and 512 reads the same in every band") {
@@ -199,7 +199,7 @@ TEST_CASE("at 8 kHz the bank carries 23 bands and a 1 kHz tone reads its own") {
     CHECK(bank.bandCount() == 23);
     std::vector<float> x(8000);
     for (size_t i = 0; i < x.size(); i++) x[i] = static_cast<float>(std::sin(2.0 * std::numbers::pi * 1000.0 * static_cast<double>(i) / 8000.0));
-    bank.process(x.data(), x.size());
+    bank.process({x.data(), x.size()});
     CHECK(std::abs(db(bank.power(17)) - db(0.5f)) < 0.5f);
     CHECK(db(bank.power(17)) - db(bank.power(16)) > 15.0f);
 }
@@ -219,7 +219,7 @@ TEST_CASE("twelve bands to the octave from A440 put a band on every note, 20 Hz 
 TEST_CASE("reset returns every band to silence") {
     auto& bank = freshBank();
     const auto x = sine(1000.0f, 0.1f);
-    bank.process(x.data(), x.size());
+    bank.process({x.data(), x.size()});
     CHECK(bank.power(17) > 0.0f);
     bank.reset();
     for (uint8_t b = 0; b < Thirds::kBands; b++) CHECK(bank.power(b) == 0.0f);

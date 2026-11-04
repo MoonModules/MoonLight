@@ -256,11 +256,9 @@ private:
         platform::UdpSocket* sockets[3] = {&artnetSocket_, &e131Socket_, &ddpSocket_};
         while (!receiveStop_.load(std::memory_order_acquire)) {
             const int ready = platform::UdpSocket::waitReadable(sockets, 3, kWaitMs);
-            if (ready > 0) {
-                drainSockets<true>(ready);
-                platform::sleepUs(receiveTask_, kCoalesceUs);   // the next packets gather meanwhile, so one wake drains several
-            } else if (ready == 0) {
-                drainSockets<true>(kE131Socket);   // a silent wait reads too, so the socket keeps its groups
+            if (ready >= 0) {
+                drainSockets<true>(ready | kE131Socket);   // E1.31 reads on every wake, so its socket keeps its groups while the other protocols stream
+                if (ready > 0) platform::sleepUs(receiveTask_, kCoalesceUs);   // the next packets gather meanwhile, so one wake drains several
             }
         }
     }

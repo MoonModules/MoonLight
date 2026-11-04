@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <numbers>   // pi, for the design
+#include <span>
 
 namespace mm {
 
@@ -102,19 +103,18 @@ public:
     }
 
     /// Feed samples at the rate the bank was designed for, a chunk at a time: @xref{a-chunk-at-a-time}.
-    void process(const float* x, size_t n) {
-        if (!x || bandCount_ == 0) return;
-        while (n > 0) {
-            const size_t m = n < kChunk ? n : kChunk;
+    void process(std::span<const float> x) {
+        if (bandCount_ == 0) return;
+        while (!x.empty()) {
+            const size_t m = x.size() < kChunk ? x.size() : kChunk;
             for (size_t i = 0; i < m; i++) chunk_[0][i] = x[i];
             runStages(m);
-            x += m;
-            n -= m;
+            x = x.subspan(m);
         }
     }
 
     /// Feed one sample.
-    void push(float x) { process(&x, 1); }
+    void push(float x) { process({&x, 1}); }
 
     /// A band's power, in the input's units squared: a sine of amplitude A at its center reads A * A / 2.
     float power(uint8_t band) const { return band < bandCount_ ? power_[band] : 0.0f; }

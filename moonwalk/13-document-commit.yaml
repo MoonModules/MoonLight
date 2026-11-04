@@ -103,7 +103,7 @@ processes:
         when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
       - id: docgen
         say: Check the headers' documentation.
-        given: [{ changed: ["**/*.md", src/**, test/**, moonwalk/**] }]
+        given: [{ changed: ["**/*.md", src/**, test/**, moonwalk/**, moondeck/docs/gen_moonwalk.py] }]
         when: { run: { script: moondeck/check/check_docgen.py } }
         detail: |
           A ratchet against the counts committed in `docs/reference/metrics/docgen.json`, per rule and in total: [check_docgen](../moondeck/MoonDeck.md#check_docgen).

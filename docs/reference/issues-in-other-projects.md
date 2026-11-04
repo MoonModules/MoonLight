@@ -16,11 +16,11 @@ The Status column holds what each tracker shows on 2026-10-26.
 
 ## esp-dsp
 
-MoonLight's audio builds without esp-dsp: since 2026-11-03 the bands come from its own third-octave filter bank. This issue and the `CONFIG_DSP_ANSI` fallback stay on record for the day esp-dsp returns, for its assembly biquad kernels.
+MoonLight's audio takes its bands, since 2026-11-03, from its own third-octave filter bank. This issue and the `CONFIG_DSP_ANSI` fallback stay on record for the day esp-dsp returns, for its assembly biquad kernels.
 
 | Issue | Filed by | Submitted | What | Our side | Status | Once it ships |
 |---|---|---|---|---|---|---|
-| [#119](https://github.com/espressif/esp-dsp/issues/119), [#102](https://github.com/espressif/esp-dsp/issues/102) | other users | 2026-06-18 and 2025-03-24 | Some assembly kernels break the P4's hardware-loop constraints (loop boundaries 4-byte aligned, no coprocessor instruction last), so an interrupt on a loop boundary corrupts the loop counter: the FFT crash behind #19025 | Not used: the audio path runs no esp-dsp kernel. When it ran the FFT, the optimized kernels shipped and `CONFIG_DSP_ANSI=y` in the P4 fragment was the fallback, off | Open. Espressif commits in #19025 to the alignment fix in an esp-dsp release | Nothing for MoonLight while it runs no esp-dsp kernel; if esp-dsp returns, run the HLS soak on a rev 1 P4 with its kernels |
+| [#119](https://github.com/espressif/esp-dsp/issues/119), [#102](https://github.com/espressif/esp-dsp/issues/102) | other users | 2026-06-18 and 2025-03-24 | Some assembly kernels break the P4's hardware-loop constraints (loop boundaries 4-byte aligned, no coprocessor instruction last), so an interrupt on a loop boundary corrupts the loop counter: the FFT crash reported in ESP-IDF [#19025](https://github.com/espressif/esp-idf/issues/19025) | Not used: the audio path calls its own filter bank. The earlier FFT shipped the optimized kernels, with `CONFIG_DSP_ANSI=y` in the P4 fragment as the fallback, left off | Open. Espressif commits, in ESP-IDF #19025, to the alignment fix in an esp-dsp release | Nothing for MoonLight while its filter bank serves the audio; if esp-dsp returns, run the HLS soak on a rev 1 P4 with its kernels |
 
 ## teensy_loader_cli (PJRC)
 

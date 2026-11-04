@@ -26,6 +26,7 @@ add_executable(mm_tests
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_FractionalOctaveBank.cpp
+    unit/core/unit_AudioDynamics.cpp
     unit/core/unit_PictureService.cpp
     unit/core/unit_I2cBusModule.cpp
     unit/core/unit_SdCardService.cpp

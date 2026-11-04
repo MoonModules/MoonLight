@@ -10,7 +10,12 @@ This is a **fork of this project** building a commercial product on it: **HELIO*
 
 One fork commit, on a new branch cut from our `main` late in the month.
 
-- **An optional BLE control transport** (`codex/moonlight-ble-transport`, 2026-10-25, 399 added lines across ten files): an encrypted control channel for a controller outside WiFi range. A native NimBLE peripheral with GATT attributes for identity, state and commands, pairing with persistent bonds, a bounded 512-byte line reassembler with backpressure and recovery after rejected input, and a non-blocking exchange with the scheduler. The caller owns startup, identity and request dispatch; desktop, Teensy and BLE-disabled ESP32 builds share one stub, and shipping firmware defaults are unchanged. The commit message says the hardware test ran on the HELIO prototype before the transport was extracted, and that Codex wrote the contribution at the author's request. It was offered to this project the same evening as [MoonModules/MoonLight#158](https://github.com/MoonModules/MoonLight/pull/158), open at month end.
+- **An optional BLE control transport** (`codex/moonlight-ble-transport`, 2026-10-25, 399 added lines across ten files): an encrypted control channel for a controller outside WiFi range.
+- The peripheral is a native NimBLE one with GATT attributes for identity, state and commands, and pairing with persistent bonds.
+- A bounded 512-byte line reassembler applies backpressure and recovers after rejected input, and the exchange with the scheduler is non-blocking.
+- The caller owns startup, identity and request dispatch. Desktop, Teensy and BLE-disabled ESP32 builds share one stub, and shipping firmware defaults are unchanged.
+- Provenance: the commit message says the hardware test ran on the HELIO prototype before the transport was extracted, and that Codex wrote the contribution at the author's request.
+- Status: offered to this project the same evening as [MoonModules/MoonLight#158](https://github.com/MoonModules/MoonLight/pull/158), open at month end.
 - **Branches:** `codex/moonlight-ble-transport` is new (2026-10-25), based on our `main` at `abcdaec9` with one commit on top. Nothing else moved: `codex/helio-private-wip` stays at 2026-08-21 and `main` at 2026-07-09.
 
 _Checked: after `git fetch --all --tags`, commits on `origin/main` for 2026-10-01..2026-11-01 (0); commits on all 10 remote branches for the same window (182, all on `codex/moonlight-ble-transport`: 181 upstream `MoonModules/MoonLight` carry-forward, 1 fork-authored, `f5a244a9`); releases published (none); issue search `repo:Funkelfetisch/projectMM is:issue created:2026-10-01..2026-10-31` and the same with `closed:` (0 results each; the repository has issues disabled)._

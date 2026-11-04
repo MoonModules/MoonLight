@@ -456,8 +456,10 @@ TEST_CASE("NetworkReceiveEffect maps E1.31 from universe 1 when universe_start i
     r.fx.release();
 }
 
-// The receive task reads on a timeout too, so a silent E1.31 socket joins its groups again rather than letting a router forget them.
-TEST_CASE("NetworkReceiveEffect joins its groups again while no packet arrives") {
+namespace {
+// The rig one rejoin period on, `each` run every millisecond while the task gets its pass: true once the E1.31 socket joined its groups again.
+template <class Each>
+bool rejoinsAfterOnePeriod(Each each) {
     struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } clock;
     mm::platform::setTestNowMs(1000);
     Rig r;
@@ -467,7 +469,29 @@ TEST_CASE("NetworkReceiveEffect joins its groups again while no packet arrives")
     REQUIRE(joins == r.fx.groupCountForTest());
     mm::platform::setTestNowMs(1000 + mm::platform::UdpSocket::kRejoinMs);
     // The task waits 20 ms per read: poll a bounded while for its pass.
-    for (int i = 0; i < 300 && r.fx.e131JoinCountForTest() == joins; i++) mm::platform::delayMs(1);
-    CHECK(r.fx.e131JoinCountForTest() > joins);
+    for (int i = 0; i < 300 && r.fx.e131JoinCountForTest() == joins; i++) {
+        each();
+        mm::platform::delayMs(1);
+    }
+    const bool rejoined = r.fx.e131JoinCountForTest() > joins;
     r.fx.release();
+    return rejoined;
+}
+}  // namespace
+
+// The receive task reads on a timeout too, so a silent E1.31 socket joins its groups again rather than letting a router forget them.
+TEST_CASE("NetworkReceiveEffect joins its groups again while no packet arrives") {
+    CHECK(rejoinsAfterOnePeriod([] {}));
+}
+
+// Art-Net streaming keeps the receive task's wait ready on every wake, so the E1.31 socket's rejoin check runs on the clock rather than only when its own socket is silent.
+TEST_CASE("NetworkReceiveEffect joins its E1.31 groups again while Art-Net keeps streaming") {
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    const uint8_t payload[3] = {1, 2, 3};
+    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 4];
+    const size_t len = mm::buildArtDmxPacket(pkt, 0, 0, payload, 3);
+    CHECK(rejoinsAfterOnePeriod([&] { tx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, len); }));
+    tx.close();
 }

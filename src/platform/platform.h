@@ -1490,8 +1490,8 @@ bool audioMicInit(AudioMicHandle& h, uint16_t wsPin, uint16_t sdPin,
                   uint16_t sckPin, int16_t mclkPin, uint32_t sampleRate,
                   MicMode mode = MicMode::I2sStd);
 
-/// Read up to `maxSamples` samples, answering the count; cheap enough for the render tick.
-size_t audioMicRead(AudioMicHandle& h, int32_t* out, size_t maxSamples);
+/// Read up to `maxSamples` samples, answering the count: at once with `waitMs` 0, as the render tick reads, or waiting up to `waitMs` for them, as an audio task reads.
+size_t audioMicRead(AudioMicHandle& h, int32_t* out, size_t maxSamples, uint32_t waitMs = 0);
 /// Whether the I2S instance a PDM microphone needs is free right now.
 bool audioMicSharedBusFree(MicMode mode);
 

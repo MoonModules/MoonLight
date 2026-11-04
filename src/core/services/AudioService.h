@@ -4,17 +4,19 @@
 #include "core/util/fnv.h"      // fnv1a: the sync hosts, compared as one number
 #include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
 #include "core/util/HostList.h"     // the boards a unicast send goes to
-#include "core/util/HostResolver.h" // a named board's address, looked up off the render thread
-#include "core/util/HostResolver.h"   // formatPeer: the sender by its board's name
+#include "core/util/HostResolver.h" // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
+#include "core/util/SpscRing.h"     // the audio task's frames to the render tick
 #include "core/services/AudioLevel.h"
 #include "core/services/AudioBands.h"
+#include "core/services/AudioDynamics.h"   // the level, floor, gate and window
 #include "core/util/math8.h"      // beatsin8 / sin8, the simulated-audio oscillators
 #include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
 #include "platform/platform.h"
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>   // snprintf for the read-out strings
 #include <cstring>
@@ -49,24 +51,29 @@ namespace mm {
 /// **The pipeline.** Each block: read, block the offset, measure the level, feed the third-octave filter bank, read the bands. The high-pass conditions the block once so both halves see the same signal, and a tick completing no block re-publishes the last frame.
 ///
 /// Only the read is platform code; the rest is host-tested maths on a fixed resident scratch, so a block allocates nothing.
+///
+/// ## The audio task
+///
+/// The read and the analysis run on a task of their own, which blocks on the input until a block arrives, as Troy's AudioReactive does: the analysis keeps the input's pace whatever the frame rate, a slow frame loses no samples, and on a dual-core chip the bank leaves the render core its time.
+///
+/// Each finished frame goes through a single-producer single-consumer ring to the render tick, which keeps the newest, so effects read `latestFrame()` on the render thread as before. The settings reach the task as atomics the tick refreshes, and the second's tallies come back as atomics the readout takes and clears. A board without tasks reads and analyzes in the tick.
 class AudioService : public MoonModule, public platform::InternalRamObject {   // the filter bank touches its state every sample, so internal RAM
 public:
     /// Internal RAM, where MoonModule places other modules in PSRAM.
     using platform::InternalRamObject::operator new;
     /// Return the allocation above.
     using platform::InternalRamObject::operator delete;
-    /// Finish a block of raw bands:
-    void finishBands() {
-        smoothBands(frame_.bands, frame_.bandsSmoothed);
-        frame_.flux = spectralFlux(prevBands_, frame_.bands);
-        std::memcpy(prevBands_, frame_.bands, sizeof(prevBands_));
-        frame_.onset = onset_.feed(frame_.flux, platform::millis()) ? frame_.flux : 0;
-        if (frame_.onset) onsetCount_++;
-        if (frame_.flux > fluxPeak_) fluxPeak_ = frame_.flux;
+    /// Finish a block of raw bands in `f`: the meter ballistic, the flux and the onset.
+    void finishBands(AudioFrame& f) {
+        smoothBands(f.bands, f.bandsSmoothed);
+        f.flux = spectralFlux(prevBands_, f.bands);
+        std::memcpy(prevBands_, f.bands, sizeof(prevBands_));
+        f.onset = onset_.feed(f.flux, platform::millis()) ? f.flux : 0;
+        if (f.onset) onsetCount_.fetch_add(1, std::memory_order_relaxed);
+        if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
     uint8_t       prevBands_[16] = {};   ///< the previous block's bands, the flux's reference
-    BandConditioner cond_;               ///< the per-band floor and peak tables, learned live
-    LevelConditioner levelCond_;         ///< the same, for the overall level (VU) in automatic mode
+    AudioDynamics dyn_;                  ///< the level, the floor, the gate and the window's top, learned live
     OnsetDetector onset_;                ///< the hit decision, with its running mean and refractory
 
     /// The block size, a power of two: about 11 ms of audio at 48 kHz, a frame of bands each.
@@ -115,24 +122,14 @@ public:
         out[0] = {codecAddr, kCodecOptions[codec]};
         return 1;
     }
+    /// The rates the selector offers, in its option order.
+    enum SampleRate : uint8_t { kRate8000, kRate16000, kRate22050, kRate24000, kRate44100, kRate48000, kSampleRateCount };
     /// The mic or ADC sample rate.
-    /// @guide 48000 reaches all 31 bands; a lower rate drops the top ones.
-    uint8_t  sampleRateSel = 4;
-    /// The silence threshold: below it a band reads as nothing.
-    /// @guide Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display.
-    uint8_t  floor = 100;
-    /// The window's width, a higher value running the display hotter.
-    /// @guide The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.
-    uint8_t  gain = 128;
-    /// The display window owners `levels` picks from, in its option order.
-    enum Levels : uint8_t { kLevelsManual, kLevelsAutomatic, kLevelsCount };
-    /// Who sets the display window: the two sliders, or the learner.
-    /// @guide Automatic maps each band's own range onto the window, so treble reads level with bass.
-    uint8_t  levels = kLevelsAutomatic;
-    /// How much of a band's deviation to correct, short of the ratios that pump; it and the lift cap act on the learned per-band range, already normalized per rig.
-    static constexpr uint8_t kRatio = 4;
-    /// How far a band may be lifted, so a silent one is never amplified into its own noise.
-    static constexpr uint8_t kMaxGainDb = 24;
+    /// @guide 24000 carries the 28 bands to 10 kHz, the 16 WLED bars among them; 48000 adds the three to 20 kHz.
+    uint8_t  sampleRateSel = kRate24000;
+    /// How far over the room's learned noise sound must rise before the lights answer, in dB.
+    /// @guide Raise it until a quiet room reads dark.
+    uint8_t  squelch = 10;
     /// The synthesized patterns `simulate` picks from, in its option order.
     enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
     /// The pattern: a plausible song, or a test march.
@@ -163,10 +160,8 @@ public:
     /// The boards a unicast send reaches, addresses or names.
     char     hosts[64] = {};
 
-    /// The rates the selector offers.
-    static constexpr uint16_t kSampleRates[] = {8000, 16000, 22050, 44100, 48000};
-    /// How many there are.
-    static constexpr uint8_t kSampleRateCount = 5;
+    /// Each option's rate in hertz.
+    static constexpr uint16_t kSampleRates[kSampleRateCount] = {8000, 16000, 22050, 24000, 44100, 48000};
     /// The selected rate in hertz.
     uint32_t sampleRate() const { return kSampleRates[sampleRateSel < kSampleRateCount
                                                        ? sampleRateSel : kSampleRateCount - 1]; }
@@ -216,18 +211,12 @@ public:
             controls_.setPersistLabel(controls_.count() - 1);
             controls_.setHidden(controls_.count() - 1, !localMode);
         }
-        static constexpr const char* kRateOptions[] = {"8000", "16000", "22050", "44100", "48000"};
+        static constexpr const char* kRateOptions[] = {"8000", "16000", "22050", "24000", "44100", "48000"};
         controls_.addSelect("sampleRate", sampleRateSel, kRateOptions, kSampleRateCount);
+        controls_.setPersistLabel(controls_.count() - 1);   // by name, so a rate added to the list keeps a stored one
         controls_.setHidden(controls_.count() - 1, !localMode);
-        // One decision, then the controls it needs:
-        static constexpr const char* kLevelsOptions[] = {"manual", "automatic"};
-        controls_.addSelect("levels", levels, kLevelsOptions, kLevelsCount);
+        controls_.addControl("squelch", squelch, 0, 40);
         controls_.setHidden(controls_.count() - 1, !localMode);
-        const bool manual = levels == kLevelsManual;
-        // The threshold means one thing in both modes, so it shows in both:
-        controls_.addControl("floor", floor, 0, 255); controls_.setHidden(controls_.count() - 1, !localMode);
-        controls_.addControl("gain", gain, 1, 255);   controls_.setHidden(controls_.count() - 1, !localMode || !manual);
-        // Automatic exposes no knobs: they changed the numbers and nothing a viewer could see.
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
@@ -256,8 +245,10 @@ public:
         controls_.addReadOnly("onsets", onsetStr_, sizeof(onsetStr_));
         /// The dominant frequency of the audio driving the effects.
         controls_.addReadOnly("peakHz", peakStr_, sizeof(peakStr_));
-        /// The share of one core the bands and the read took last second, and the input's real rate.
+        /// The share of one core the bands took last second, and the input's real rate.
         controls_.addReadOnly("cpu", cpuStr_, sizeof(cpuStr_));
+        /// The level, the room's floor, the window's top in dBFS, and the gate.
+        controls_.addReadOnly("dynamics", dynStr_, sizeof(dynStr_));
         MoonModule::defineControls();
     }
 
@@ -271,9 +262,7 @@ public:
             || std::strcmp(name, "device") == 0
             || std::strcmp(name, "sampleRate") == 0 || std::strcmp(name, "mode") == 0
             || std::strcmp(name, "send audio") == 0 || std::strcmp(name, "syncPort") == 0
-            || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0
-            // This swaps which sliders are shown, so it toggles rows as the mode does.
-            || std::strcmp(name, "levels") == 0;
+            || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0;
     }
 
     /// Claim the frame seat, then acquire only the hardware the current mode needs.
@@ -283,8 +272,7 @@ public:
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
             if (!inited_ || micConfig() != openedWith_) reinit();
         } else {
-            deinit();           // the others free the channel and its pins
-            clearStatus();      // a mic diagnosis would otherwise linger in a mode with no mic
+            if (deinit()) clearStatus();   // the others free the channel and its pins; a mic diagnosis would otherwise linger
         }
         // The socket likewise, rebound only when what it binds to changed.
         if (!syncSet_ || syncConfig() != syncedWith_) {
@@ -306,6 +294,8 @@ public:
 
     /// The latest analyzed frame, always valid, so a consumer without a mic reads silence.
     const AudioFrame* audioFrame() const { return &frame_; }
+    /// The frame effects read, writable so a test draws a state no source produces on the host.
+    AudioFrame& frameForTest() { return frame_; }
 
     /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
     bool syncOpenForTest() const { return syncOpen_; }
@@ -360,69 +350,87 @@ public:
             if (!inited_) return;
         }
 
-        // Drain what the input holds every tick, a block analyzed each time one fills, so no sample overflows the driver between ticks: a slow frame rate reads two blocks rather than losing one.
+        // The audio task reads and analyzes; a board without tasks does it here. Either way the tick takes the frames through the ring.
+        squelchNow_.store(squelch, std::memory_order_relaxed);   // the setting, handed to whichever thread analyzes
+        if (!audioTask_.impl) readAndAnalyze(0);
+        takeNewest(frames_, frame_);
+    }
+
+    /// Drain `ring` into `out`, keeping the newest frame with the strongest onset among them, so a hit in an earlier block of the same tick still reaches the effects.
+    static bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
+        AudioFrame f;
+        uint8_t onset = 0;
+        bool fresh = false;
+        while (ring.pop(&f, 1) == 1) { fresh = true; if (f.onset > onset) onset = f.onset; }
+        if (!fresh) return false;
+        out = f;
+        out.onset = onset;
+        return true;
+    }
+
+    /// Drain what the input holds, a block analyzed each time one fills, so no sample overflows the driver between reads: `waitMs` 0 in the tick, a wait in the audio task.
+    void readAndAnalyze(uint32_t waitMs) {
         for (uint8_t blocks = 0; blocks < kMaxBlocksPerTick;) {
             const size_t want = kBlock - filled_;
-            const uint32_t readStart = platform::micros();
-            const size_t n = platform::audioMicRead(mic_, samples_ + filled_, want);
-            readUs1s_ += platform::micros() - readStart;
+            const size_t n = platform::audioMicRead(mic_, samples_ + filled_, want, waitMs);
             // Read before the filter rewrites the samples.
-            micSamples1s_ += n;
-            for (size_t i = 0; i < n; i++) if (samples_[filled_ + i] != 0) { micNonzero1s_++; break; }
+            micSamples1s_.fetch_add(static_cast<uint32_t>(n), std::memory_order_relaxed);
+            for (size_t i = 0; i < n; i++) if (samples_[filled_ + i] != 0) { micNonzero1s_.fetch_add(1, std::memory_order_relaxed); break; }
             filled_ += n;
             if (filled_ == kBlock) {
                 filled_ = 0;
                 analyzeBlock();
+                frames_.push(&work_, 1);   // a full ring drops the newest, the tick reading the ones before
                 blocks++;
             }
-            if (n < want) return;   // the input holds no more this tick
+            if (n < want) return;   // the input holds no more
+            waitMs = 0;             // only the first read waits
         }
     }
 
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
     static constexpr uint8_t kMaxBlocksPerTick = 4;
 
-    /// One full block through the high-pass, the level and the bank into the frame.
+    /// One full block through the high-pass, the level and the bank into the analyzed frame, on whichever thread reads.
     void analyzeBlock() {
+        dyn_.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
         // Removes the offset before any analysis, continuous across blocks.
         dc_.process(samples_, kBlock, dcPole_);
+        const float levelDb = blockLevelDbFs(samples_, kBlock);
 
-        // Measured independently of the bands, on a gentler floor so it keeps moving.
-        computeLevel(samples_, kBlock, static_cast<uint8_t>(floor / 2), gain, frame_,
-                     levels == kLevelsAutomatic ? &levelCond_ : nullptr,
-                     static_cast<uint32_t>(kBlock * 1000u / sampleRate()));
-
-        // The textbook light smoothing:
-        frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
-
-        // The bands, through the same mapping the level uses.
+        // The bands, through the window the level's dynamics set.
         const uint32_t bankStart = platform::micros();
         for (size_t at = 0; at < kBlock; at += ThirdOctaveBank::kChunk) {   // the bank's own chunk at a time, so the floats stay off the stack's budget
             float part[ThirdOctaveBank::kChunk];
             for (size_t i = 0; i < ThirdOctaveBank::kChunk; i++) part[i] = static_cast<float>(samples_[at + i] >> 8);
-            bank_.process(part, ThirdOctaveBank::kChunk);
+            bank_.process(part);
         }
-        bankUs1s_ += platform::micros() - bankStart;
+        bankUs1s_.fetch_add(platform::micros() - bankStart, std::memory_order_relaxed);
         uint16_t peakHz = 0, peakMag = 0;
-        frame_.thirdsCount = bankToBands(bank_, floor, gain, frame_.thirds, frame_.bands, peakHz, peakMag,
-                                         levels == kLevelsAutomatic ? &cond_ : nullptr,
-                                         static_cast<uint32_t>(kBlock * 1000u / sampleRate()),
-                                         kRatio, static_cast<float>(kMaxGainDb), true);
-        finishBands();
+        work_.thirdsCount = bankToBands(bank_, levelDb, blockMs_, dyn_, work_.thirds, work_.bands, peakHz, peakMag);
+        work_.level = dyn_.levelToByte(levelDb);
+        work_.gate = dyn_.gateToByte();
+        work_.gateOpen = dyn_.gateOpen;
+        work_.levelSmoothed = static_cast<uint16_t>((work_.levelSmoothed * 3 + work_.level) / 4);
+        finishBands(work_);
+        levelDbX10_.store(static_cast<int16_t>(dyn_.levelDb * 10.0f), std::memory_order_relaxed);
+        floorDbX10_.store(static_cast<int16_t>(dyn_.floorDb * 10.0f), std::memory_order_relaxed);
+        topDbX10_.store(static_cast<int16_t>(dyn_.topDb * 10.0f), std::memory_order_relaxed);
+        gateOpen_.store(dyn_.gateOpen, std::memory_order_relaxed);
 
         // Held when there is no real signal, so it does not wander in silence.
-        if (peakMag > 8) { frame_.peakHz = peakHz; frame_.peakMag = peakMag; }
+        if (peakMag > 8) { work_.peakHz = peakHz; work_.peakMag = peakMag; }
 
         // Analysis runs faster than the send, so latching here reports each beat exactly once.
         const uint32_t nowMs = platform::millis();
-        if (frame_.level > frame_.levelSmoothed + kSyncPeakMargin &&
+        if (work_.level > work_.levelSmoothed + kSyncPeakMargin &&
             nowMs - lastPeakMs_ >= kSyncPeakRefractoryMs) {
-            syncPeakLatched_ = true;
+            syncPeakLatched_.store(true, std::memory_order_relaxed);
             lastPeakMs_ = nowMs;
         }
 
         // The window's peak, since sampling the instantaneous value once a second lands in the gaps.
-        if (frame_.level > levelPeak_) levelPeak_ = frame_.level;
+        if (work_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(work_.level > 255 ? 255 : work_.level), std::memory_order_relaxed);
     }
 
     /// Fill frame_ with a synthesized signal.
@@ -434,7 +442,7 @@ public:
             const uint8_t env = triwave8(static_cast<uint8_t>((t % 250u) * 255u / 250u));  // 0..255 within a step
             for (uint8_t b = 0; b < 16; b++) frame_.bands[b] = (b == pos) ? env : 0;
             frame_.thirdsCount = 0;   // a sweep of the sixteen, so a 31-band display falls back to them
-            finishBands();
+            finishBands(frame_);
             frame_.level = env;
             frame_.peakHz = static_cast<uint16_t>(80 + pos * 700);   // bass→~10.6 kHz across the 16 steps
             frame_.peakMag = env;
@@ -465,14 +473,14 @@ public:
                 frame_.thirds[c] = static_cast<uint8_t>((lo + hi) / 2);
             }
             frame_.thirdsCount = 31;
-            finishBands();
+            finishBands(frame_);
             // Peak drifts across the spectrum so freq-mapped effects move.
             frame_.peakHz = static_cast<uint16_t>(80 + sin8(static_cast<uint8_t>(t / 40u)) * 40u);
             frame_.peakMag = frame_.level;
         }
         frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
         // Feed the same 1 s peak-hold the mic path uses, so the "level RMS" display tracks the.
-        if (frame_.level > levelPeak_) levelPeak_ = static_cast<uint8_t>(frame_.level);
+        if (frame_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
     }
 
     /// Reopen the mic when its bus frees or moves, publish the second's level, onset and peak readouts, and diagnose a silent mic.
@@ -482,39 +490,41 @@ public:
                                                                                        : platform::MicMode::I2sStd);
         const bool busMoved = codec != kCodecNone && platform::i2cBusGeneration() != codecBusGen_;
         if (mode == kLocalMode && (micFreed || busMoved)) reinit();
-        mm::formatTo(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_));
+        // The second's tallies, each taken and cleared at once, since the audio task adds to them meanwhile.
+        const uint32_t micSamples = micSamples1s_.exchange(0, std::memory_order_relaxed);
+        const uint32_t micNonzero = micNonzero1s_.exchange(0, std::memory_order_relaxed);
+        const uint32_t bankUs = bankUs1s_.exchange(0, std::memory_order_relaxed);
+        mm::formatTo(levelStr_, sizeof(levelStr_), "%u", static_cast<unsigned>(levelPeak_.exchange(0, std::memory_order_relaxed)));
         mm::formatTo(onsetStr_, sizeof(onsetStr_), "%u/s, flux %u",
-                      static_cast<unsigned>(onsetCount_), static_cast<unsigned>(fluxPeak_));
-        onsetCount_ = 0; fluxPeak_ = 0;
+                      static_cast<unsigned>(onsetCount_.exchange(0, std::memory_order_relaxed)),
+                      static_cast<unsigned>(fluxPeak_.exchange(0, std::memory_order_relaxed)));
         mm::formatTo(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
-        // Microseconds in a second, so a hundred of them are a percent of one core.
-        mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, read %u.%u%%, %u Hz",
-                     static_cast<unsigned>(bankUs1s_ / 10000), static_cast<unsigned>(bankUs1s_ / 1000 % 10),
-                     static_cast<unsigned>(readUs1s_ / 10000), static_cast<unsigned>(readUs1s_ / 1000 % 10),
-                     static_cast<unsigned>(micSamples1s_));   // the samples the input delivered this second, its real rate
-        bankUs1s_ = 0; readUs1s_ = 0;
-        levelPeak_ = 0;   // reset for the next window
+        mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
+                     levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
+                     topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
+        // The bands' microseconds this second, ten thousand of them a percent of one core.
+        mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
+                     static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
+                     static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
         refreshSyncHosts();
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
                                    && codecType() == platform::CodecType::None;
         if (directMicLive) {
-            if (micSamples1s_ == 0)
+            if (micSamples == 0)
                 setStatus(micMode == kMicPdm ? "mic: no samples, check wsPin (PDM clock)"
                                        : "mic: no samples, check sckPin / wsPin (I2S clocks)",
                           Severity::Warning);
-            else if (micNonzero1s_ == 0)
+            else if (micNonzero == 0)
                 setStatus("mic: data line silent, check sdPin (SD/DOUT) + mic power", Severity::Warning);
             else if (micStatusStale_)
                 setStatus("", Severity::Status);   // data flowing again, clear a prior diagnosis
-            micStatusStale_ = (micSamples1s_ == 0 || micNonzero1s_ == 0);
+            micStatusStale_ = (micSamples == 0 || micNonzero == 0);
         } else if (mode != kLocalMode) {
             // No mic to diagnose on this path (Receive or Simulate), so no diagnosis may be OUTSTANDING.
             micStatusStale_ = false;
         }
-        micSamples1s_ = 0;
-        micNonzero1s_ = 0;
         // Live sync state on the module's OWN status line:
         if constexpr (platform::hasNetwork) {
             const Sync s = sync();
@@ -564,7 +574,16 @@ private:
     size_t filled_ = 0;         // samples accumulated toward the next full block
     DcBlocker dc_;              // 5 Hz high-pass, continuous across blocks
     float dcPole_ = 0.9993f;    // its pole at the opened rate, so the corner stays at 5 Hz below the 20 Hz band
+    float blockMs_ = 21.3f;     // one block's duration at the opened rate
     ThirdOctaveBank bank_;      // the 31 bands, designed for the opened rate
+    AudioFrame work_;           // the frame the analysis writes, on the audio task where there is one
+    platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
+    std::atomic<bool> audioStop_{false};
+    std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
+    SpscRing<AudioFrame, 8> frames_;     // the task's finished frames, which the tick drains to the newest
+    std::atomic<uint8_t> squelchNow_{10};   // the setting as the tick last saw it, for the task
+    std::atomic<int16_t> levelDbX10_{-1200}, floorDbX10_{-1200}, topDbX10_{-1200};   // the dynamics in tenths of a dB, for the readout
+    std::atomic<bool> gateOpen_{false};
 
     /// Fixed hot-path scratch, sized once, never reallocated.
     int32_t samples_[kBlock] = {};
@@ -573,28 +592,35 @@ private:
 
     char levelStr_[12] = {};
     char cpuStr_[40] = {};
-    uint32_t bankUs1s_ = 0;   ///< microseconds the bands took in the current second (UI only)
-    uint32_t readUs1s_ = 0;   ///< microseconds the read took in it
+    char dynStr_[48] = {};
+    std::atomic<uint32_t> bankUs1s_{0};   ///< microseconds the bands took in the current second, added by the audio task (UI only)
     char onsetStr_[20] = {};
-    uint8_t onsetCount_ = 0;  ///< onsets in the current 1 s display window (UI only)
-    uint8_t fluxPeak_ = 0;    ///< peak flux in that window (UI only)
+    std::atomic<uint8_t> onsetCount_{0};  ///< onsets in the current 1 s display window (UI only)
+    std::atomic<uint8_t> fluxPeak_{0};    ///< peak flux in that window (UI only)
     char peakStr_[12] = {};
-    uint8_t levelPeak_ = 0;   // peak frame_.level across the current 1 s display window (UI only)
+    std::atomic<uint8_t> levelPeak_{0};   // peak level across the current 1 s display window (UI only)
 
     /// Mic-health tallies over the 1 s window (see the read path and the tick1s diagnosis).
-    uint32_t micSamples1s_ = 0;
-    uint32_t micNonzero1s_ = 0;
+    std::atomic<uint32_t> micSamples1s_{0};
+    std::atomic<uint32_t> micNonzero1s_{0};
     bool     micStatusStale_ = false;
 
     /// The WLED audio sync socket (core/util/WLEDAudioSyncPacket.h): one, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
     uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed, NOT a wire field (byte 17 is WLED's reserved2)
-    bool     syncPeakLatched_ = false;   // a beat seen since the last transmit (WLED's udpSamplePeak)
+    std::atomic<bool> syncPeakLatched_{false};   // a beat seen since the last transmit (WLED's udpSamplePeak)
     uint32_t lastPeakMs_ = 0;            // when that beat was, for the refractory window
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
+
+    /// Where a send goes, or why a unicast send reaches nobody.
+    void reportSending() {
+        if (addressing == kAddressUnicast && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
+        else if (addressing == kAddressUnicast && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
+        else setStatus("sending");
+    }
 
     /// Report an open receive socket, saying so when only unicast can reach it.
     void reportListening() {
@@ -616,13 +642,14 @@ private:
         openedWith_ = micConfig();                     // the settings this attempt opens with
         if constexpr (platform::hasAudioCapture) {
             // Desktop:
-            deinit();
+            if (!deinit()) return;
             inited_ = platform::audioCaptureInit(mic_, device, sampleRate());
             if (!inited_) {
                 setStatus("capture init failed, pick another device", Severity::Error);
                 return;
             }
             resetAnalysis();
+            startAudioTask();
             clearStatus();
             return;
         }
@@ -630,19 +657,8 @@ private:
             setStatus("mic: no audio input on this platform", Severity::Warning);
             return;
         }
-        deinit();
-        // Any pin unset (-1, the default until the user wires a mic):
-        const bool pdm = micMode == kMicPdm;
-        if (wsPin < 0 || sdPin < 0 || (!pdm && sckPin < 0)) {
-            setStatus(pdm ? "mic: set wsPin (clock) / sdPin (data)"
-                          : "mic: set sckPin / wsPin / sdPin", Severity::Status);
-            return;
-        }
-        // A codec without the board's bus would probe nothing and fail the whole microphone, so it says so first.
-        if (codec != kCodecNone && !platform::i2cBusReady()) {
-            setStatus("mic: the codec needs the I2C bus: set its pins under System, I2cBus", Severity::Status);
-            return;
-        }
+        if (!deinit()) return;
+        if (const char* missing = micNotReady()) { setStatus(missing, Severity::Status); return; }
         // Bring up the I2S channel FIRST.
         inited_ = platform::audioMicInit(mic_, static_cast<uint16_t>(wsPin),
                                          static_cast<uint16_t>(sdPin),
@@ -659,23 +675,74 @@ private:
             return;
         }
         resetAnalysis();   // start the high-pass and the bank clean for the new stream
+        startAudioTask();
         // The INMP441 emits ~250 ms of power-on settling garbage after the clock starts.
         clearStatus();
     }
 
+    /// What the wiring still lacks before the mic can open, or nullptr when nothing does.
+    const char* micNotReady() const {
+        // Any pin unset (-1, the default until the user wires a mic):
+        const bool pdm = micMode == kMicPdm;
+        if (wsPin < 0 || sdPin < 0 || (!pdm && sckPin < 0))
+            return pdm ? "mic: set wsPin (clock) / sdPin (data)" : "mic: set sckPin / wsPin / sdPin";
+        // A codec without the board's bus would probe nothing and fail the whole microphone, so it says so first.
+        if (codec != kCodecNone && !platform::i2cBusReady()) return "mic: the codec needs the I2C bus: set its pins under System, I2cBus";
+        return nullptr;
+    }
+
+    /// Read and analyze on a task of its own, a blocking read of the input, so the analysis keeps the input's pace whatever the frame rate and leaves the render core its time: @xref{the-audio-task}.
+    void startAudioTask() {
+        squelchNow_.store(squelch, std::memory_order_relaxed);
+        audioStop_.store(false, std::memory_order_release);
+        audioLoopExited_.store(false, std::memory_order_release);
+        // Priority 6, over the frame encoder's 5 and under the network's 7: a lost sample is lost for good, a late frame only late. Under the encoder a busy core starved it to a third of its samples.
+        if (!platform::spawnPinnedTask(audioTask_, "mmAudio", &audioTrampoline, this, 4096, 6, 1)) {
+            audioTask_.impl = nullptr;
+            audioLoopExited_.store(true, std::memory_order_release);
+        }
+    }
+
+    /// Stop the task, true once its loop is gone: a platform that detaches a task after a timeout leaves it owning the input and the analysis.
+    bool stopAudioTask() {
+        if (audioTask_.impl) {
+            audioStop_.store(true, std::memory_order_release);
+            platform::stopPinnedTask(audioTask_);
+            audioTask_.impl = nullptr;
+        }
+        if (!audioLoopExited_.load(std::memory_order_acquire)) return false;
+        AudioFrame drop;
+        while (frames_.pop(&drop, 1) == 1) {}   // a frame the tick never took belongs to the stopped stream
+        return true;
+    }
+
+    static void audioTrampoline(void* self) { static_cast<AudioService*>(self)->runAudioLoop(); }
+
+    /// Block on the input and analyze each block as it fills, until stopAudioTask signals.
+    void runAudioLoop() {
+        while (!audioStop_.load(std::memory_order_acquire)) readAndAnalyze(kReadWaitMs);
+        audioLoopExited_.store(true, std::memory_order_release);
+    }
+    static constexpr uint32_t kReadWaitMs = 20;   // a stop is seen within this, and a block at 22,050 Hz arrives within it
+
     /// The analysis for the opened rate, from silence.
     void resetAnalysis() {
         dc_.reset();
-        cond_ = BandConditioner{};        // a new rate brings bands the learned tables never saw
-        levelCond_ = LevelConditioner{};
+        dyn_.reset();                     // a new rate is a new stream: the floor and the top learn it afresh
         filled_ = 0;                      // no block mixes samples of two rates
         dcPole_ = 1.0f - 6.2831853f * kDcCornerHz / static_cast<float>(sampleRate());
+        blockMs_ = static_cast<float>(kBlock) * 1000.0f / static_cast<float>(sampleRate());   // the opened rate's, which the task reads rather than the control
         bank_.init(sampleRate());
     }
     static constexpr float kDcCornerHz = 5.0f;
 
-    void deinit() {
-        if constexpr (!platform::hasAudioInput) return;
+    /// Free the input and clear the analysis, false while a task that would not stop still reads them.
+    bool deinit() {
+        if constexpr (!platform::hasAudioInput) return true;
+        if (!stopAudioTask()) {   // before the input it reads goes
+            setStatus("audio task did not stop: the input stays open until it does", Severity::Error);
+            return false;
+        }
         // The codec attaches only once this instance's channel is up, so an instance that never started one, such as a type probe, leaves the live codec alone.
         if (inited_) {
             platform::audioMicDeinit(mic_);
@@ -685,9 +752,11 @@ private:
         filled_ = 0;
         // Publish silence:
         frame_ = AudioFrame{};
+        work_ = AudioFrame{};
         // The ANALYSIS history goes with it, so a restarted source begins from a DEFINED state rather.
         std::memset(prevBands_, 0, sizeof(prevBands_));
         onset_ = OnsetDetector{};
+        return true;
     }
 
     // --- WLED audio sync (guarded: only compiled where platform::hasNetwork) ---
@@ -724,9 +793,7 @@ private:
         if (s == kSyncSend) {             // send → the WLED multicast group, or the hosts (configurable port)
             if (syncSock_.open()) {
                 syncOpen_ = true;
-                if (addressing == kAddressUnicast && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
-                else if (addressing == kAddressUnicast && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
-                else setStatus("sending");
+                reportSending();
             } else {
                 syncSock_.close();
                 setStatus("send: socket failed", Severity::Error);
@@ -754,8 +821,7 @@ private:
         if (now - lastSyncSend_ < kSyncSendIntervalMs) return;
         lastSyncSend_ = now;
         // samplePeak is a LATCHED beat flag, the way WLED sends it:
-        const bool peak = syncPeakLatched_;
-        syncPeakLatched_ = false;
+        const bool peak = syncPeakLatched_.exchange(false, std::memory_order_relaxed);
         uint8_t pkt[WLED_SYNC_PACKET_SIZE];
         buildWledAudioSync(pkt, frame_, peak);
         // A steady 40 frames a second is a stream, so no broadcast copy on any network.
@@ -780,13 +846,13 @@ private:
                 std::memcpy(keep, frame_.bandsSmoothed, sizeof(keep));
                 frame_ = rf;                       // received audio drives the effects
                 std::memcpy(frame_.bandsSmoothed, keep, sizeof(keep));
-                finishBands();
+                finishBands(frame_);
                 lastSyncRecv_ = platform::millis();
                 // Whose audio this is.
                 std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));
                 // Feed the peer level into the same 1 s peak window the local mic uses, so the "level RMS".
-                if (frame_.level > levelPeak_)
-                    levelPeak_ = static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level);
+                if (frame_.level > levelPeak_.load(std::memory_order_relaxed))
+                    levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
             }
             // else: a v1 / foreign packet, ignore, keep draining.
         }
