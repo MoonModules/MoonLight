@@ -6,7 +6,9 @@ Months are **not** split at release dates: upstream WLED cuts releases from sepa
 
 ## October 2026
 
-A fuller month on `main` than September: three new 2D effects and a palette, a rework of segment transitions, the audio-reactive usermod moved onto the V5 framework with a new background ADC manager, fixes for 2D effects on large HUB75 panels, a security fix, flash-size trims, and another round of contributor and agent guideline edits. No versioned release was published in October (v16.0.1, 2026-07-07, is still the latest, cut from a release branch), so the month is not split, and nightly builds stay intentionally off while `main` migrates frameworks (#5880).
+A fuller month on `main` than September: three new 2D effects, a palette, reworked segment transitions and the audio usermod on the V5 framework.
+
+No versioned release in October: v16.0.1 (2026-07-07, from a release branch) is still the latest, so the month is not split. Nightly builds stay off while `main` migrates frameworks (#5880).
 
 **New**
 

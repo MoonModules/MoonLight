@@ -8,8 +8,8 @@ Summarized via the GitHub commits API (no local clone), so counts are all commit
 
 Dormant month: no commits landed on `main`, and no issue was opened or closed. Two user-facing events happened around the repo.
 
-- **Watching: a fresh build fails with the current FastLED.** `platformio.ini` asks for FastLED `^3.10.1`, a new library resolve now picks 3.10.5, and every environment stops compiling because FastLED 3.10.4 turned `CRGB` into a `using` alias in namespace `fl`, which the project's forward declaration of `struct CRGB` and its `memset`/`swap` calls no longer accept. A contributor's PR pins FastLED to 3.10.3 as the build fix and describes the larger source change as a separate job (PR #910, opened 2026-10-05, still open with no review).
-- **Issue #666 ("Unknown command in packet received") gets a root cause**, two years after it was opened: with audio disabled, the socket server used to read only the 24-byte header of a PEAKDATA frame and leave the payload in the stream, so the next "command" was payload bytes. A commit from August 2025 (d73d18db) already reads and discards the payload, so current builds are not affected; the comment also notes a 12-band sender is rejected when the firmware expects 16 bands. The issue stays open.
+- **Watching: a fresh build fails with the current FastLED.** The `^3.10.1` range now resolves to 3.10.5, whose `CRGB` alias breaks the project's forward declaration; PR #910 pins 3.10.3 and is still unreviewed.
+- **Issue #666 gets a root cause:** with audio off, the server left a PEAKDATA payload unread. Commit d73d18db (August 2025) already fixes it; a 12-band sender is still rejected where 16 are expected. The issue stays open.
 
 No versioned release in October; the most recent is v2.0.1 from June 2026.
 

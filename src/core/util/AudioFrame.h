@@ -47,6 +47,16 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  thirdsCount = 0;          ///< how many of `thirds` this frame measured: 0 on a frame from audio sync, fewer than 31 at a rate that cannot reach 20 kHz
     uint8_t  gate = 0;                 ///< where the gate opens on the bands' 0..255 scale, at least 1; 0 on a frame no dynamics measured, from audio sync or simulated
     bool     gateOpen = false;         ///< whether the gate is open, so a band over zero is sound rather than the room
+    uint8_t  chroma[12] = {};          ///< the twelve pitch classes, C first, 0..255 against the loudest over the last 200 ms; all 0 while gated, with `harmony` off, from audio sync or simulated
+    bool     harmonyChange = false;    ///< true on the one block the harmony moved, a chord changing
+    uint8_t  notes[79] = {};           ///< the piano's keys from A0 to D#7, one band a semitone, 0..255 on the bands' scale
+    uint8_t  notesCount = 0;           ///< how many of `notes` this frame measured: 0 with `harmony` off, from audio sync or simulated
+    uint8_t  key = 0;                  ///< the key over the last 15 s: 0 none yet, 1..12 C to B major, 13..24 C to B minor
+    int8_t   tuning = 0;               ///< how far the notes are tuned from A440, in cents
+    uint8_t  bass = 0;                 ///< the bass, 20 to 125 Hz: its loudest band, 0..255 on the bands' scale
+    uint8_t  mid = 0;                  ///< the mids, 160 Hz to 2 kHz, on the same scale
+    uint8_t  treble = 0;               ///< the treble, 2.5 kHz up, on the same scale
+    uint8_t  bassNote = 0;             ///< the bass line's note as a MIDI number, A4 being 69, or 0 while none stands out
 };
 
 } // namespace mm

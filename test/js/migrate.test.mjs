@@ -367,3 +367,22 @@ test("a config that is already a state document passes through byte-exact, unrep
     assert.equal(files["/.config/Effects.json"], doc);
     assert.deepEqual(report, []);
 });
+
+test("a control retired on purpose is dropped and reported as retired, with its reason", () => {
+    const cfg = { enabled: true, "0.type": "AudioService", "0.levels": 1, "0.gain": 100, "0.floor": 100, "0.squelch": 12 };
+    const { files, report } = applyMigrations({ "/.config/Services.json": JSON.stringify(cfg) });
+    const [audio] = kids(rootOf(files, "/.config/Services.json"), "AudioService");
+    assert.equal(audio.levels, undefined);
+    assert.equal(audio.gain, undefined);
+    assert.equal(audio.floor, undefined);
+    assert.equal(audio.squelch, 12);   // what is not retired stays
+    assert.equal(report.filter(r => r.kind === "retired").length, 3);
+    assert.ok(report.some(r => r.kind === "retired" && r.where.includes("floor") && r.detail.includes("squelch")));
+});
+
+test("a retirement is scoped by module type: another module's gain stays", () => {
+    const cfg = { enabled: true, "0.type": "AudioService", "0.gain": 100, "1.type": "SomeEffect", "1.gain": 7 };
+    const { files } = applyMigrations({ "/.config/Effects.json": JSON.stringify(cfg) });
+    const [other] = kids(rootOf(files, "/.config/Effects.json"), "SomeEffect");
+    assert.equal(other.gain, 7);
+});

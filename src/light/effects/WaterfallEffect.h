@@ -41,7 +41,7 @@ public:
         const lengthType h = height();
         const AudioFrame* f = AudioService::latestFrame();
         const bool thirds = f->thirdsCount > 0;
-        const uint32_t n = thirds ? 31u : 16u;
+        const uint32_t n = thirds ? f->thirdsCount : 16u;   // the thirds the rate carries, 28 at the default 24 kHz
 
         const uint32_t height32 = h > 0 ? static_cast<uint32_t>(h) : 0u;
         const lengthType rows = static_cast<lengthType>(due < height32 ? due : height32);

@@ -611,6 +611,27 @@ extern "C" inline uint32_t mm_light_band(const uintptr_t* args, uint32_t, const 
 extern "C" inline uint32_t mm_light_peakHz(const uintptr_t*, uint32_t, const uint8_t*) {
     return AudioService::latestFrame()->peakHz;
 }
+/// One of the twelve pitch classes, C at 0 to B at 11, 0..255 against the loudest.
+extern "C" inline uint32_t mm_light_chroma(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const uint32_t i = uint32_t(args[0]);
+    return i < 12 ? AudioService::latestFrame()->chroma[i] : 0;
+}
+/// The key over the last 15 s: 0 none yet, 1..12 C to B major, 13..24 C to B minor.
+extern "C" inline uint32_t mm_light_key(const uintptr_t*, uint32_t, const uint8_t*) {
+    return AudioService::latestFrame()->key;
+}
+/// The bass, 20 to 125 Hz, 0..255 on the bands' scale.
+extern "C" inline uint32_t mm_light_bass(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->bass; }
+/// The mids, 160 Hz to 2 kHz.
+extern "C" inline uint32_t mm_light_mid(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->mid; }
+/// The treble, 2.5 kHz up.
+extern "C" inline uint32_t mm_light_treble(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->treble; }
+/// The bass line's note as a MIDI number, 0 while none stands out.
+extern "C" inline uint32_t mm_light_bassNote(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->bassNote; }
+/// True on the frame a chord change was heard.
+extern "C" inline uint32_t mm_light_chordChange(const uintptr_t*, uint32_t, const uint8_t*) {
+    return AudioService::latestFrame()->harmonyChange ? 1 : 0;
+}
 /// True on a transient, by the test the compiled effects use, so a beat means one thing across the project.
 extern "C" inline uint32_t mm_light_onBeat(const uintptr_t*, uint32_t, const uint8_t*) {
     const AudioFrame* a = AudioService::latestFrame();
@@ -873,6 +894,13 @@ inline const BuiltinTable& lightBuiltins() {
     t.add({"audioBand", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_band, {}});
     t.add({"audioPeakHz", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_peakHz, {}});
     t.add({"audioBeat", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_onBeat, {}});
+    t.add({"audioChroma", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_chroma, {}});
+    t.add({"audioChordChange", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_chordChange, {}});
+    t.add({"audioKey", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_key, {}});
+    t.add({"audioBass", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bass, {}});
+    t.add({"audioMid", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_mid, {}});
+    t.add({"audioTreble", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_treble, {}});
+    t.add({"audioBassNote", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bassNote, {}});
     t.add({"setPan", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_pan, {}});
     t.add({"setTilt", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_tilt, {}});
     // The rest of the fixture roles, same shape and same no-op where the channel is absent.

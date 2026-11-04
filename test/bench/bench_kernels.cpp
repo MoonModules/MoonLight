@@ -87,5 +87,14 @@ int main() {
         if (filled == 512) { bank.process({block, 512}); filled = 0; }
         return uint32_t(bank.power(17));
     });
+    static FractionalOctaveBank<12> notes;
+    static float noteBlock[512];
+    static size_t noteFilled = 0;
+    notes.init(48000, 440.0f, 2500.0f);
+    row("FractionalOctaveBank<12>, the notes to 2.5 kHz at 48 kHz, per input sample", [](uint32_t x, uint32_t y, uint32_t) {
+        noteBlock[noteFilled++] = static_cast<float>(int32_t((x * 7 + y * 13) & 255) - 128);
+        if (noteFilled == 512) { notes.process({noteBlock, 512}); noteFilled = 0; }
+        return uint32_t(notes.power(54));
+    });
     return 0;
 }

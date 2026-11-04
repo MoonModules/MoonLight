@@ -12,7 +12,8 @@
 #include "core/services/AudioLevel.h"
 #include "core/services/AudioBands.h"
 #include "core/services/AudioDynamics.h"   // the level, floor, gate and window
-#include "core/util/math8.h"      // beatsin8 / sin8, the simulated-audio oscillators
+#include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
+#include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
 #include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
 #include "platform/platform.h"
 
@@ -57,18 +58,23 @@ namespace mm {
 /// The read and the analysis run on a task of their own, which blocks on the input until a block arrives, as Troy's AudioReactive does: the analysis keeps the input's pace whatever the frame rate, a slow frame loses no samples, and on a dual-core chip the bank leaves the render core its time.
 ///
 /// Each finished frame goes through a single-producer single-consumer ring to the render tick, which keeps the newest, so effects read `latestFrame()` on the render thread as before. The settings reach the task as atomics the tick refreshes, and the second's tallies come back as atomics the readout takes and clears. A board without tasks reads and analyzes in the tick.
+///
+/// ## The stream's own clock
+///
+/// The analysis keeps time by the samples it has analyzed, a block at a time, not by the wall clock: the onset's refractory and the beat latch then measure the music, whether a block is analyzed late on a busy core or a file is fed faster than real time on the host. A synthesized or received frame lives on the wall clock, which is its time.
 class AudioService : public MoonModule, public platform::InternalRamObject {   // the filter bank touches its state every sample, so internal RAM
 public:
     /// Internal RAM, where MoonModule places other modules in PSRAM.
     using platform::InternalRamObject::operator new;
     /// Return the allocation above.
     using platform::InternalRamObject::operator delete;
-    /// Finish a block of raw bands in `f`: the meter ballistic, the flux and the onset.
-    void finishBands(AudioFrame& f) {
+    /// Finish a block of raw bands in `f` at `nowMs`: the meter ballistic, the flux and the onset.
+    void finishBands(AudioFrame& f, uint32_t nowMs) {
         smoothBands(f.bands, f.bandsSmoothed);
         f.flux = spectralFlux(prevBands_, f.bands);
         std::memcpy(prevBands_, f.bands, sizeof(prevBands_));
-        f.onset = onset_.feed(f.flux, platform::millis()) ? f.flux : 0;
+        f.onset = onset_.feed(f.flux, nowMs) ? f.flux : 0;
+        bandsToRanges(f);
         if (f.onset) onsetCount_.fetch_add(1, std::memory_order_relaxed);
         if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
@@ -130,6 +136,9 @@ public:
     /// How far over the room's learned noise sound must rise before the lights answer, in dB.
     /// @guide Raise it until a quiet room reads dark.
     uint8_t  squelch = 10;
+    /// Measure the notes, for the pitch classes, the harmony's changes and the notes bars.
+    /// @guide Off saves the semitone bank's share of a core where nothing reads the harmony.
+    bool     harmony = true;
     /// The synthesized patterns `simulate` picks from, in its option order.
     enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
     /// The pattern: a plausible song, or a test march.
@@ -217,6 +226,8 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode);
         controls_.addControl("squelch", squelch, 0, 40);
         controls_.setHidden(controls_.count() - 1, !localMode);
+        controls_.addControl("harmony", harmony);
+        controls_.setHidden(controls_.count() - 1, !localMode);
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
@@ -249,6 +260,12 @@ public:
         controls_.addReadOnly("cpu", cpuStr_, sizeof(cpuStr_));
         /// The level, the room's floor, the window's top in dBFS, and the gate.
         controls_.addReadOnly("dynamics", dynStr_, sizeof(dynStr_));
+        /// The three strongest pitch classes and the harmony's changes per second.
+        controls_.addReadOnly("notes", notesStr_, sizeof(notesStr_));
+        /// The key over the last 15 s, and how far the notes are tuned from A440.
+        controls_.addReadOnly("key", keyStr_, sizeof(keyStr_));
+        /// The bass, mids and treble on the bands' scale, as the effects read them.
+        controls_.addReadOnly("ranges", rangesStr_, sizeof(rangesStr_));
         MoonModule::defineControls();
     }
 
@@ -296,6 +313,18 @@ public:
     const AudioFrame* audioFrame() const { return &frame_; }
     /// The frame effects read, writable so a test draws a state no source produces on the host.
     AudioFrame& frameForTest() { return frame_; }
+    /// The analysis for the selected rate, from silence, as opening the input starts it.
+    void resetAnalysisForTest() { resetAnalysis(); }
+    /// The semitone bank's tuning from A440 in cents, which the retune sets.
+    float tuningForTest() const { return tuningCents_; }
+    /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path.
+    const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock]) {
+        std::memcpy(samples_, block, sizeof(samples_));
+        squelchNow_.store(squelch, std::memory_order_relaxed);
+        harmonyNow_.store(harmony, std::memory_order_relaxed);
+        analyzeBlock();
+        return work_;
+    }
 
     /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
     bool syncOpenForTest() const { return syncOpen_; }
@@ -351,7 +380,8 @@ public:
         }
 
         // The audio task reads and analyzes; a board without tasks does it here. Either way the tick takes the frames through the ring.
-        squelchNow_.store(squelch, std::memory_order_relaxed);   // the setting, handed to whichever thread analyzes
+        squelchNow_.store(squelch, std::memory_order_relaxed);   // the settings, handed to whichever thread analyzes
+        harmonyNow_.store(harmony, std::memory_order_relaxed);
         if (!audioTask_.impl) readAndAnalyze(0);
         takeNewest(frames_, frame_);
     }
@@ -360,11 +390,17 @@ public:
     static bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
         AudioFrame f;
         uint8_t onset = 0;
+        bool change = false;
         bool fresh = false;
-        while (ring.pop(&f, 1) == 1) { fresh = true; if (f.onset > onset) onset = f.onset; }
+        while (ring.pop(&f, 1) == 1) {
+            fresh = true;
+            if (f.onset > onset) onset = f.onset;
+            change = change || f.harmonyChange;
+        }
         if (!fresh) return false;
         out = f;
         out.onset = onset;
+        out.harmonyChange = change;   // a chord change in a dropped block is one too
         return true;
     }
 
@@ -388,12 +424,42 @@ public:
         }
     }
 
+    /// The block's harmony from the semitone bank into the frame, or every harmony field 0 with `harmony` off.
+    void analyzeHarmony(bool on) {
+        if (!on) {
+            std::memset(work_.chroma, 0, sizeof(work_.chroma));
+            work_.harmonyChange = false;
+            work_.notesCount = work_.key = work_.bassNote = 0;
+            work_.tuning = 0;
+            return;
+        }
+        work_.harmonyChange = harmony_.update(semitones_, dyn_.gateOpen, blockMs_, work_.chroma);
+        work_.notesCount = semitonesToNotes(semitones_, dyn_, work_.notes);
+        work_.key = key_.update(work_.chroma, dyn_.gateOpen, blockMs_);
+        work_.bassNote = semitonesToBassNote(semitones_, dyn_.gateOpen);
+        work_.tuning = static_cast<int8_t>(std::lround(tuningCents_));
+        if (work_.harmonyChange) harmonyChanges_.fetch_add(1, std::memory_order_relaxed);
+        retune(tuning_.update(semitones_, dyn_.gateOpen, blockMs_));
+    }
+
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
     static constexpr uint8_t kMaxBlocksPerTick = 4;
 
     /// One full block through the high-pass, the level and the bank into the analyzed frame, on whichever thread reads.
     void analyzeBlock() {
         dyn_.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
+        const bool harmonyOn = harmonyNow_.load(std::memory_order_relaxed);
+        if (harmonyOn != harmonyWas_) {   // switched on, the notes start from silence rather than from where they stopped
+            semitones_.reset();
+            harmony_.reset();
+            key_.reset();       // the key and the tuning reading start from what plays now
+            tuning_.reset();
+            tuningHeldMs_ = 0.0f;
+            harmonyWas_ = harmonyOn;
+        }
+        // The block's time is the stream's, its samples counted, so a block analyzed late or faster than real time keeps its own: @xref{the-streams-own-clock}.
+        streamSamples_ += kBlock;
+        const uint32_t nowMs = static_cast<uint32_t>(streamSamples_ * 1000u / openedRate_);
         // Removes the offset before any analysis, continuous across blocks.
         dc_.process(samples_, kBlock, dcPole_);
         const float levelDb = blockLevelDbFs(samples_, kBlock);
@@ -404,6 +470,7 @@ public:
             float part[ThirdOctaveBank::kChunk];
             for (size_t i = 0; i < ThirdOctaveBank::kChunk; i++) part[i] = static_cast<float>(samples_[at + i] >> 8);
             bank_.process(part);
+            if (harmonyOn) semitones_.process(part);
         }
         bankUs1s_.fetch_add(platform::micros() - bankStart, std::memory_order_relaxed);
         uint16_t peakHz = 0, peakMag = 0;
@@ -411,8 +478,9 @@ public:
         work_.level = dyn_.levelToByte(levelDb);
         work_.gate = dyn_.gateToByte();
         work_.gateOpen = dyn_.gateOpen;
+        analyzeHarmony(harmonyOn);
         work_.levelSmoothed = static_cast<uint16_t>((work_.levelSmoothed * 3 + work_.level) / 4);
-        finishBands(work_);
+        finishBands(work_, nowMs);
         levelDbX10_.store(static_cast<int16_t>(dyn_.levelDb * 10.0f), std::memory_order_relaxed);
         floorDbX10_.store(static_cast<int16_t>(dyn_.floorDb * 10.0f), std::memory_order_relaxed);
         topDbX10_.store(static_cast<int16_t>(dyn_.topDb * 10.0f), std::memory_order_relaxed);
@@ -422,7 +490,6 @@ public:
         if (peakMag > 8) { work_.peakHz = peakHz; work_.peakMag = peakMag; }
 
         // Analysis runs faster than the send, so latching here reports each beat exactly once.
-        const uint32_t nowMs = platform::millis();
         if (work_.level > work_.levelSmoothed + kSyncPeakMargin &&
             nowMs - lastPeakMs_ >= kSyncPeakRefractoryMs) {
             syncPeakLatched_.store(true, std::memory_order_relaxed);
@@ -433,51 +500,10 @@ public:
         if (work_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(work_.level > 255 ? 255 : work_.level), std::memory_order_relaxed);
     }
 
-    /// Fill frame_ with a synthesized signal.
+    /// Fill frame_ with a synthesized signal, on the wall clock that is its time.
     void synthesizeFrame(bool sweep) {
-        const uint32_t t = platform::millis();
-        if (sweep) {
-            // One band lit at a time, stepping bass→treble every ~250 ms and wrapping.
-            const uint8_t pos = static_cast<uint8_t>((t / 250u) % 16u);
-            const uint8_t env = triwave8(static_cast<uint8_t>((t % 250u) * 255u / 250u));  // 0..255 within a step
-            for (uint8_t b = 0; b < 16; b++) frame_.bands[b] = (b == pos) ? env : 0;
-            frame_.thirdsCount = 0;   // a sweep of the sixteen, so a 31-band display falls back to them
-            finishBands(frame_);
-            frame_.level = env;
-            frame_.peakHz = static_cast<uint16_t>(80 + pos * 700);   // bass→~10.6 kHz across the 16 steps
-            frame_.peakMag = env;
-        } else {
-            // Musical "song":
-            const uint8_t beat = (t % 600u < 90u) ? static_cast<uint8_t>(triwave8(static_cast<uint8_t>((t % 600u) * 255u / 90u))) : 0;
-            uint16_t sum = 0;
-            for (uint8_t b = 0; b < 16; b++) {
-                // Per-band oscillator: rate rises with b (treble flickers faster), phase spread by b.
-                const uint8_t rate = static_cast<uint8_t>(1 + b);                   // BPM-ish multiplier
-                const uint8_t osc = sin8(static_cast<uint8_t>(t * rate / 8u + b * 24u));
-                uint16_t v = static_cast<uint16_t>((osc * 3u) / 4u);               // 0..191 base
-                if (b < 4) v = static_cast<uint16_t>(v + beat / 2u);               // beat lifts the bass
-                frame_.bands[b] = static_cast<uint8_t>(v > 255 ? 255 : v);
-                sum = static_cast<uint16_t>(sum + frame_.bands[b]);
-            }
-            const uint8_t swell = sin8(static_cast<uint8_t>(t / 24u));             // slow volume breath
-            uint16_t lvl = static_cast<uint16_t>(swell / 2u + sum / 32u + beat / 2u);
-            frame_.level = lvl > 255 ? 255 : lvl;
-            // The 31 hold the sixteen where they sit, and each third between two of them reads their mean.
-            for (uint8_t b = 0; b < 16; b++) frame_.thirds[kSixteenOfThirds[b]] = frame_.bands[b];
-            for (uint8_t c = 0; c < 31; c++) {
-                bool picked = false;
-                for (uint8_t b = 0; b < 16; b++) picked = picked || kSixteenOfThirds[b] == c;
-                if (picked) continue;
-                const uint8_t lo = c > 0 ? frame_.thirds[c - 1] : 0;
-                const uint8_t hi = c + 1 < 31 ? frame_.thirds[c + 1] : 0;
-                frame_.thirds[c] = static_cast<uint8_t>((lo + hi) / 2);
-            }
-            frame_.thirdsCount = 31;
-            finishBands(frame_);
-            // Peak drifts across the spectrum so freq-mapped effects move.
-            frame_.peakHz = static_cast<uint16_t>(80 + sin8(static_cast<uint8_t>(t / 40u)) * 40u);
-            frame_.peakMag = frame_.level;
-        }
+        simulateAudio(frame_, platform::millis(), sweep);
+        finishBands(frame_, platform::millis());
         frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
         // Feed the same 1 s peak-hold the mic path uses, so the "level RMS" display tracks the.
         if (frame_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
@@ -499,6 +525,16 @@ public:
                       static_cast<unsigned>(onsetCount_.exchange(0, std::memory_order_relaxed)),
                       static_cast<unsigned>(fluxPeak_.exchange(0, std::memory_order_relaxed)));
         mm::formatTo(peakStr_, sizeof(peakStr_), "%u Hz", static_cast<unsigned>(frame_.peakHz));
+        char names[12];
+        formatNotes(frame_.chroma, names, sizeof(names));
+        mm::formatTo(notesStr_, sizeof(notesStr_), "%s, changes %u/s", names,
+                     static_cast<unsigned>(harmonyChanges_.exchange(0, std::memory_order_relaxed)));
+        char keyName[12];
+        formatKey(frame_.key, keyName, sizeof(keyName));
+        const int tuning = tuningX10_.load(std::memory_order_relaxed);
+        mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, tuning / 10);
+        mm::formatTo(rangesStr_, sizeof(rangesStr_), "bass %u, mid %u, treble %u", static_cast<unsigned>(frame_.bass),
+                     static_cast<unsigned>(frame_.mid), static_cast<unsigned>(frame_.treble));
         mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
                      levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
                      topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
@@ -575,13 +611,25 @@ private:
     DcBlocker dc_;              // 5 Hz high-pass, continuous across blocks
     float dcPole_ = 0.9993f;    // its pole at the opened rate, so the corner stays at 5 Hz below the 20 Hz band
     float blockMs_ = 21.3f;     // one block's duration at the opened rate
+    uint32_t openedRate_ = 24000;   // the rate the stream opened at, which the task reads rather than the control
+    uint64_t streamSamples_ = 0;    // the samples analyzed since it opened: the analysis's clock
     ThirdOctaveBank bank_;      // the 31 bands, designed for the opened rate
+    SemitoneBank semitones_;    // the notes to kSemitoneTopHz, for the harmony
+    HarmonyTracker harmony_;    // the pitch classes and the moment they move
+    KeyTracker key_;            // the key over the last 15 s
+    TuningEstimator tuning_;    // how far the music sits from the bank's tuning
+    float tuningCents_ = 0.0f;  // the bank's tuning from A440, in cents
+    float tuningHeldMs_ = 0.0f; // how long the reading has stayed past kRetuneCents
+    std::atomic<int16_t> tuningX10_{0};   // the bank's tuning in tenths of a cent, for the readout
+    bool harmonyWas_ = true;    // the switch as the analysis last saw it
     AudioFrame work_;           // the frame the analysis writes, on the audio task where there is one
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
     SpscRing<AudioFrame, 8> frames_;     // the task's finished frames, which the tick drains to the newest
     std::atomic<uint8_t> squelchNow_{10};   // the setting as the tick last saw it, for the task
+    std::atomic<bool> harmonyNow_{true};    // the harmony switch, the same way
+    std::atomic<uint8_t> harmonyChanges_{0};   // the harmony's changes in the current 1 s window, for the readout
     std::atomic<int16_t> levelDbX10_{-1200}, floorDbX10_{-1200}, topDbX10_{-1200};   // the dynamics in tenths of a dB, for the readout
     std::atomic<bool> gateOpen_{false};
 
@@ -598,6 +646,9 @@ private:
     std::atomic<uint8_t> onsetCount_{0};  ///< onsets in the current 1 s display window (UI only)
     std::atomic<uint8_t> fluxPeak_{0};    ///< peak flux in that window (UI only)
     char peakStr_[12] = {};
+    char notesStr_[32] = {};   // all twelve names fit
+    char keyStr_[32] = {};
+    char rangesStr_[32] = {};
     std::atomic<uint8_t> levelPeak_{0};   // peak level across the current 1 s display window (UI only)
 
     /// Mic-health tallies over the 1 s window (see the read path and the tick1s diagnosis).
@@ -694,6 +745,7 @@ private:
     /// Read and analyze on a task of its own, a blocking read of the input, so the analysis keeps the input's pace whatever the frame rate and leaves the render core its time: @xref{the-audio-task}.
     void startAudioTask() {
         squelchNow_.store(squelch, std::memory_order_relaxed);
+        harmonyNow_.store(harmony, std::memory_order_relaxed);
         audioStop_.store(false, std::memory_order_release);
         audioLoopExited_.store(false, std::memory_order_release);
         // Priority 6, over the frame encoder's 5 and under the network's 7: a lost sample is lost for good, a late frame only late. Under the encoder a busy core starved it to a third of its samples.
@@ -731,8 +783,31 @@ private:
         dyn_.reset();                     // a new rate is a new stream: the floor and the top learn it afresh
         filled_ = 0;                      // no block mixes samples of two rates
         dcPole_ = 1.0f - 6.2831853f * kDcCornerHz / static_cast<float>(sampleRate());
-        blockMs_ = static_cast<float>(kBlock) * 1000.0f / static_cast<float>(sampleRate());   // the opened rate's, which the task reads rather than the control
+        openedRate_ = sampleRate();
+        blockMs_ = static_cast<float>(kBlock) * 1000.0f / static_cast<float>(openedRate_);   // the opened rate's, which the task reads rather than the control
+        streamSamples_ = 0;
         bank_.init(sampleRate());
+        tuningCents_ = 0.0f;              // a new stream is tuned afresh
+        tuningHeldMs_ = 0.0f;
+        tuningX10_.store(0, std::memory_order_relaxed);
+        semitones_.init(sampleRate(), 440.0f, kSemitoneTopHz);
+        key_.reset();
+        tuning_.reset();
+    }
+
+    static constexpr float kRetuneCents = 10.0f;   // a reading past this, held kRetuneHoldMs, retunes the bank, as TuningEstimator's notes say
+    static constexpr float kRetuneHoldMs = 10000.0f;
+
+    /// Retune the semitone bank once the music has sat off its tuning long enough, so each note lands on its own band, as TuningEstimator's notes say.
+    void retune(float readingCents) {
+        tuningHeldMs_ = std::fabs(readingCents) > kRetuneCents ? tuningHeldMs_ + blockMs_ : 0.0f;
+        if (tuningHeldMs_ < kRetuneHoldMs) return;
+        tuningCents_ = std::fmax(-50.0f, std::fmin(50.0f, tuningCents_ + readingCents));
+        semitones_.init(openedRate_, 440.0f, kSemitoneTopHz, tuningCents_);
+        harmony_.reset();   // the bank starts from silence: no change for its settling
+        tuning_.reset();
+        tuningHeldMs_ = 0.0f;
+        tuningX10_.store(static_cast<int16_t>(tuningCents_ * 10.0f), std::memory_order_relaxed);
     }
     static constexpr float kDcCornerHz = 5.0f;
 
@@ -846,7 +921,7 @@ private:
                 std::memcpy(keep, frame_.bandsSmoothed, sizeof(keep));
                 frame_ = rf;                       // received audio drives the effects
                 std::memcpy(frame_.bandsSmoothed, keep, sizeof(keep));
-                finishBands(frame_);
+                finishBands(frame_, platform::millis());   // a received frame arrives on the wall clock
                 lastSyncRecv_ = platform::millis();
                 // Whose audio this is.
                 std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));

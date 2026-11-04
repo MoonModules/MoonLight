@@ -72,6 +72,11 @@ struct OnsetDetector {
 /// The third-octave bank the bands are measured with.
 using ThirdOctaveBank = FractionalOctaveBank<3>;
 
+/// The semitone bank the harmony is measured with, counted from A440.
+using SemitoneBank = FractionalOctaveBank<12>;
+/// The notes' top: harmony lives under it.
+inline constexpr float kSemitoneTopHz = 2500.0f;
+
 /// The sixteen display bands as third-octave bands, WLED-MM's default GEQ pattern: @xref{sixteen-of-the-thirty-one}.
 inline constexpr uint8_t kSixteenOfThirds[16] = {3, 5, 6, 8, 9, 11, 13, 14, 16, 17, 19, 20, 22, 24, 25, 27};
 
@@ -112,6 +117,20 @@ inline uint8_t bankToBands(const ThirdOctaveBank& bank, float levelDb, float dtM
     peakHz = static_cast<uint16_t>(bank.centerHz(loudest) * std::exp2(offset / 3.0f));
     peakMag = dyn.toByte(db[loudest]);
     return count;
+}
+
+/// The last third-octave band of the bass and of the mids: 125 Hz and 2 kHz, the treble from 2.5 kHz up.
+inline constexpr uint8_t kBassTopThird = 8, kMidTopThird = 20;
+
+/// The bass, mid and treble of a frame, each its loudest band on its bars' own scale, from the thirds or else the sixteen, so a frame from audio sync carries them too.
+inline void bandsToRanges(AudioFrame& f) {
+    uint8_t* out[3] = {&f.bass, &f.mid, &f.treble};
+    for (uint8_t* o : out) *o = 0;
+    auto range = [](uint8_t third) -> uint8_t { return third <= kBassTopThird ? 0 : third <= kMidTopThird ? 1 : 2; };
+    if (f.thirdsCount > 0)
+        for (uint8_t b = 0; b < f.thirdsCount && b < 31; b++) { uint8_t& o = *out[range(b)]; o = f.thirds[b] > o ? f.thirds[b] : o; }
+    else
+        for (uint8_t b = 0; b < 16; b++) { uint8_t& o = *out[range(kSixteenOfThirds[b])]; o = f.bands[b] > o ? f.bands[b] : o; }
 }
 
 } // namespace mm

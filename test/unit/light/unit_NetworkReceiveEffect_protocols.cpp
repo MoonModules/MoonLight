@@ -385,6 +385,12 @@ TEST_CASE("NetworkReceiveEffect receives E1.31 multicast on its universe's group
         r.fx.release();
         return;
     }
+    if (r.fx.e131JoinedForTest() == 0) {   // a host that sends to the group but refused the join delivers nothing to it
+        MESSAGE("this host refused the group's join, so only the send is checked");
+        tx.close();
+        r.fx.release();
+        return;
+    }
     bool landed = false;
     for (int i = 0; i < 100 && !landed; i++) {
         r.layer.tick();

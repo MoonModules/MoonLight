@@ -694,8 +694,8 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wheellayout"
   },
   "AudioSpectrumEffect": {
-   "line": "The mic's frequency bands spread across X, every third octave it measures or the sixteen, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars, each mark a bar wide: along the top, white over the dominant frequency; at the right edge, the height where the gate opens, white while open and red while the room is gated. On a grid at least three rows tall it adds a level meter under the bars, as tall as a bar is wide, with a square that flashes red on each hit.",
+   "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -720,8 +720,11 @@
     "readouts": {
      "line": "The level meter, hits, gate and peak, drawn with the bars."
     },
+    "noteNames": {
+     "line": "The strongest pitch classes top left, the key top right."
+    },
     "bands": {
-     "line": "Every third octave the rate carries, or WLED-MM's sixteen."
+     "line": "WLED-MM's sixteen, every third octave, or the piano's keys."
     }
    },
    "role": "effect",
@@ -782,7 +785,7 @@
   },
   "BeatRipplesEffect": {
    "line": "Every beat is a stone dropped in water.",
-   "summary": "A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
+   "summary": "`trigger` on `kick` drops a stone only on a hit in the bass, so the ripples follow the kick drum rather than every hit.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
    "attribution": "[Gomez](https://moonmodules.org/MoonLight/reference/attributions.html#gomez)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif",
    "controls": {
@@ -797,6 +800,9 @@
     },
     "shine": {
      "line": "How strongly the slope lights the surface."
+    },
+    "trigger": {
+     "line": "Every hit, or only the kick, a hit whose strongest range is the bass."
     }
    },
    "role": "effect",
@@ -4163,6 +4169,10 @@
       }
      ]
     },
+    "harmony": {
+     "line": "Measure the notes, for the pitch classes, the harmony's changes and the notes bars.",
+     "more": "Off saves the semitone bank's share of a core where nothing reads the harmony."
+    },
     "send audio": {
      "line": "Send the local analysis as audio-sync packets."
     },
@@ -4194,6 +4204,15 @@
     },
     "dynamics": {
      "line": "The level, the room's floor, the window's top in dBFS, and the gate."
+    },
+    "notes": {
+     "line": "The three strongest pitch classes and the harmony's changes per second."
+    },
+    "key": {
+     "line": "The key over the last 15 s, and how far the notes are tuned from A440."
+    },
+    "ranges": {
+     "line": "The bass, mids and treble on the bands' scale, as the effects read them."
     }
    },
    "role": "service",

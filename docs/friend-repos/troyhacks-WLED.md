@@ -11,7 +11,7 @@ This is a personal fork of [MoonModules/WLED-MM](https://github.com/MoonModules/
 No activity on `mdev`: the branch tip is still the 2026-08-24 merge of `MoonModules:mdev`, so there are 0 commits in the window. No versioned release was published, so the month is kept whole.
 
 - **Experimental branches:** `troy/hdmi-on-p4-experimental` is the only branch that moved, and it moved a lot: 69 commits between 2026-10-02 and 2026-10-30 (36 files, about 14,000 lines added).
-- Nearly all of the commits rework the audio-reactive usermod on the ESP32-P4 HDMI board. The FFT is out of the measurement: 31 ISO third-octave bands are now read from two biquad filter banks (8 low bands at 3 kHz, 23 at 48 kHz).
+- Nearly all of the commits rework the audio-reactive usermod on the ESP32-P4 HDMI board. The FFT is out of the measurement: 31 ISO third-octave bands are now read from two biquad filter banks (8 low bands at 3 kHz, 23 at 48 kHz), cutting latency by 27 to 38 ms and CPU six-fold.
 - The 16 bars the effects read are 16 of those 31, which 16 is a live setting with seven patterns (from "Sub Sub - 20Hz" to "Mid Bass - 80Hz").
 - The AGC and the "target pink" curve give way to a latched loudest-band reference and a once-measured input-chain calibration, checked bar for bar against a hardware RTA (white noise rises, pink reads flat).
 - The GEQ PPA effect gains an "RTA Mode" checkbox that draws all 31 bars, and every effect that reads the bands now snapshots them first (readers could see the frame change under them).

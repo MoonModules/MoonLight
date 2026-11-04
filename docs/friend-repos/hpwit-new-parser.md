@@ -8,7 +8,7 @@ The library: **ESPLiveScript2**, Yves Bazin's (hpwit) from-scratch C++ rewrite o
 
 ## October 2026
 
-The rewrite's heaviest month so far: 37 commits on `main` between 2026-10-11 and 2026-10-31, all by the maintainer. The language gains `switch`, a fixed-point type written like a float, working bounds checks and task control; a differential fuzzer that runs random programs under QEMU and as C finds a run of compiler bugs; and three register-allocation passes bring an ESP32 Game of Life frame from 15.2 ms to 8.1 ms against 6.0 ms native.
+The rewrite's heaviest month so far: the language grows toward C, a fuzzer hardens the compiler, and generated code closes in on native speed. The details follow below.
 
 **What script authors gain**
 

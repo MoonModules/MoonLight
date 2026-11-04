@@ -12,7 +12,7 @@
 ///
 /// That receiver delivers narrower samples, so each is scaled to the full scale the chain assumes: an exact range map that never clips.
 ///
-/// A larger gain is wrong: a quiet signal below the meter's window is a WINDOW problem, set with the floor control. At a much larger factor the clip point falls below the part's noise floor and clipping fires the onset detector in a silent room.
+/// A larger gain is wrong: the learned dynamics window follows the signal's level, so a quiet input needs no boost. At a much larger factor the clip point falls below the part's noise floor and clipping fires the onset detector in a silent room.
 
 #include "platform/platform.h"
 

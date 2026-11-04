@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>   // std::memcpy: clang finds it transitively, GCC does not (CI's sanitizer builds)
 #include <numbers>
+#include <utility>
 #include <vector>
 
 // The success spec for the frequency path, host-side: synthesize a sine, feed the third-octave bank, read the sixteen bands and the peak through bankToBands, and assert the energy lands in the right band and the peak frequency tracks the tone.
@@ -19,8 +20,13 @@ constexpr uint32_t kRate = 48000;     // the default sample rate
 constexpr float kAmp = 16384.0f;      // a tone at -54 dBFS, 24-bit samples shifted to their magnitude
 
 // One bank for every case: its filter state belongs off a test's stack.
-mm::ThirdOctaveBank& freshBank() {
+mm::ThirdOctaveBank& freshBankKeep() {
     static mm::ThirdOctaveBank bank;
+    return bank;
+}
+
+mm::ThirdOctaveBank& freshBank() {
+    auto& bank = freshBankKeep();
     bank.init(kRate);
     return bank;
 }
@@ -203,4 +209,34 @@ TEST_CASE("a restarted source reports no onset from the block that preceded it")
     const uint16_t againstCleared = mm::spectralFlux(cleared, now);
     CHECK(againstStale == 0);
     CHECK(againstCleared > againstStale);   // which is why the frame is published silent too
+}
+
+// Step 4 of the audio plan: the bass, the mids and the treble, each its range's power per band on the bands' scale, so an effect keyed on the bass finds the kick whichever third it lands in.
+TEST_CASE("a low tone lights the bass, a middle one the mids, a high one the treble") {
+    for (const auto& [hz, range] : {std::pair{63.0f, 0}, std::pair{1000.0f, 1}, std::pair{6300.0f, 2}}) {
+        CAPTURE(hz);
+        uint8_t bands[16];
+        uint16_t peakHz, peakMag;
+        analyse(hz, bands, peakHz, peakMag);
+        mm::AudioDynamics dyn = quietRoom();
+        const float levelDb = 20.0f * std::log10(kAmp / 8388608.0f);
+        mm::AudioFrame f;
+        for (int i = 0; i < 20; i++) f.thirdsCount = mm::bankToBands(freshBankKeep(), levelDb, 10.0f, dyn, f.thirds, f.bands, peakHz, peakMag);
+        mm::bandsToRanges(f);
+        const uint8_t r[3] = {f.bass, f.mid, f.treble};
+        for (int o = 0; o < 3; o++) if (o != range) CHECK(r[range] > r[o]);
+    }
+}
+
+// A frame from audio sync carries the sixteen alone, and its ranges come from them, so an effect keyed on the bass follows a sender too.
+TEST_CASE("a frame with only the sixteen still carries the bass, mids and treble") {
+    mm::AudioFrame f;
+    f.thirdsCount = 0;
+    f.bands[0] = 200;    // 40 Hz: bass
+    f.bands[9] = 120;    // 1 kHz: mids
+    f.bands[15] = 60;    // 10 kHz: treble
+    mm::bandsToRanges(f);
+    CHECK(f.bass == 200);
+    CHECK(f.mid == 120);
+    CHECK(f.treble == 60);
 }

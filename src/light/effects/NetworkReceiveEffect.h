@@ -186,6 +186,8 @@ public:
     uint8_t groupCountForTest() const { return static_cast<uint8_t>(groups_.count()); }
     /// Test seam: the E1.31 socket's joins since it opened.
     uint32_t e131JoinCountForTest() const { return e131Socket_.joinCountForTest(); }
+    /// How many of its universes' groups the E1.31 socket holds now.
+    uint8_t e131JoinedForTest() const { return e131Socket_.multicastJoined(); }
 
     /// The note for universes from `first` on, `wanted` of them, when multicast joined only the first `joined`: the warning before any packet, or a short suffix for the receiving status; empty when it joined them all.
     static void formatMulticastNote(char* out, size_t len, uint16_t first, uint32_t wanted, uint8_t joined, bool suffix) {

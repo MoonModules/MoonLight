@@ -126,6 +126,22 @@ void checkSameRead(const std::vector<float>& a, const std::vector<float>& b, uin
     CHECK(b[band] == doctest::Approx(a[band]).epsilon(1e-4));
 }
 
+// A semitone tone's power averaged over half a second after a second's settling, every band read.
+std::vector<float> settledSemitones(mm::FractionalOctaveBank<12>& bank, float hz) {
+    bank.reset();
+    const auto x = sine(hz, 1.5f);
+    std::vector<float> sum(mm::FractionalOctaveBank<12>::kBands, 0.0f);
+    int reads = 0;
+    for (size_t at = 0; at + kBlock <= x.size(); at += kBlock) {
+        bank.process({x.data() + at, kBlock});
+        if (at < kRate) continue;
+        for (uint8_t b = 0; b < bank.bandCount(); b++) sum[b] += bank.power(b);
+        reads++;
+    }
+    for (auto& v : sum) v /= static_cast<float>(reads);
+    return sum;
+}
+
 }  // namespace
 
 // The base-2 series the octave-by-octave bank needs, against the labels every analyzer prints.
@@ -213,6 +229,21 @@ TEST_CASE("twelve bands to the octave from A440 put a band on every note, 20 Hz 
     CHECK(semitones.centerHz(54 + 12) == doctest::Approx(880.0f));     // A5, an octave up
     CHECK(semitones.centerHz(54 - 48) == doctest::Approx(27.5f));      // A0, the piano's lowest key
     CHECK(semitones.centerHz(0) > 19.0f);
+}
+
+// Harmony needs the notes up to 2.5 kHz, and a limited bank pays only for those: it halves the rate until its top band fits.
+TEST_CASE("a band limit keeps the notes under it, each reading its own power with the next semitone well below") {
+    static mm::FractionalOctaveBank<12> notes;
+    notes.init(kRate, 440.0f, 2500.0f);
+    CHECK(notes.bandCount() == 85);                                    // up to D#7, 2489 Hz
+    CHECK(notes.power(85) == 0.0f);                                    // E7 lies over the limit
+    for (const uint8_t b : {uint8_t(18), uint8_t(54), uint8_t(84)}) { // A1, A4 and the top band
+        CAPTURE(b);
+        const auto p = settledSemitones(notes, notes.centerHz(b));
+        CHECK(std::abs(db(p[b]) - db(0.5f)) < 0.5f);
+        CHECK(db(p[b]) - db(p[b - 1]) > 15.0f);
+        if (b + 1 < notes.bandCount()) CHECK(db(p[b]) - db(p[b + 1]) > 15.0f);
+    }
 }
 
 // Silence in, silence out, after any input.

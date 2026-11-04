@@ -12,7 +12,9 @@ No commits. Nothing landed on `main` in October 2026, and nothing on any other b
 
 **Watching**
 
-- Two pull requests from an outside contributor (Moret84), opened 2026-10-13 and still open without a maintainer reply: #57 fixes a link error in a plain ESP-IDF 5.5 project (`i2sReset()` is `IRAM_ATTR` but its literals land outside IRAM; it is now always inlined, 96 bytes of flash on the ESP32), and #58 on top of it builds the driver on ESP-IDF 6 for the ESP32 (the GPIO and I2S headers moved to new components, and the I2S bus clock and reset go through the LL layer since `periph_module_enable()` no longer covers I2S). Tested on hardware with IDF 6.1: 8 parallel outputs of 1024 RGBW LEDs at 24 fps. The ESP32-S3 still fails to build on IDF 6.1 either way.
+- PR #57 (Moret84, 2026-10-13, no maintainer reply yet) fixes a link error in a plain ESP-IDF 5.5 project: `i2sReset()` is now always inlined, 96 bytes of flash.
+- PR #58, on top of #57, builds the driver on ESP-IDF 6 for the ESP32, tested on hardware with 8 outputs of 1024 RGBW LEDs at 24 fps.
+- The ESP32-S3 still fails to build on IDF 6.1, with or without them.
 - A user asked on the 2022 temporal-dithering request (#5) whether dithering is still on the roadmap, for color depth at low brightness.
 
 No issues were opened or closed. No release; the most recent is 1.4 from April 2026.

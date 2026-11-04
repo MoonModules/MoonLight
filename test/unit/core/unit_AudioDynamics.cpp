@@ -14,6 +14,14 @@ void feed(mm::AudioDynamics& d, float levelDb, float seconds, float bandBelowDb 
     for (float t = 0; t < seconds * 1000.0f; t += kBlockMs) d.update(levelDb, levelDb - bandBelowDb, kBlockMs);
 }
 
+// `seconds` of music swinging 12 dB, loud and soft a fifth of a second each, its loudest band 6 dB under its level.
+void song(mm::AudioDynamics& d, float seconds) {
+    for (int b = 0; b < static_cast<int>(seconds * 1000.0f / kBlockMs); b++) {
+        const float level = (b / 10) % 2 ? -26.0f : -38.0f;
+        d.update(level, level - 6.0f, kBlockMs);
+    }
+}
+
 }  // namespace
 
 TEST_CASE("silence keeps the gate shut and every band dark") {
@@ -45,7 +53,7 @@ TEST_CASE("the floor is the quietest block of the window, so music shorter than 
 TEST_CASE("the floor follows a room growing noisier by any step, within one to two windows") {
     mm::AudioDynamics d;
     feed(d, -60.0f, 25.0f);
-    feed(d, -50.0f, 21.0f);   // the fan comes on
+    feed(d, -50.0f, 25.0f);   // the fan comes on: the floor learns it within the window, the gate shuts within its quiet hold
     CHECK(d.floorDb == doctest::Approx(-50.0f));
     CHECK_FALSE(d.gateOpen);
 }
@@ -54,7 +62,7 @@ TEST_CASE("the floor follows a room growing noisier by any step, within one to t
 TEST_CASE("a dip under the room is forgotten after the window, and the gate shuts on the room again") {
     mm::AudioDynamics d;
     feed(d, -129.0f, 0.1f);   // the mic's first blocks
-    feed(d, -65.0f, 21.0f);   // the room
+    feed(d, -65.0f, 25.0f);   // the room
     CHECK(d.floorDb == doctest::Approx(-65.0f));
     CHECK_FALSE(d.gateOpen);
 }
@@ -66,9 +74,9 @@ TEST_CASE("the gate closes only a hysteresis under where it opened, after its ho
     REQUIRE(d.gateOpen);
     feed(d, -73.0f, 2.0f);   // 7 dB over the floor: under the 10 dB opening, over the 6 dB close
     CHECK(d.gateOpen);
-    feed(d, -76.0f, 0.2f);   // under the close threshold, shorter than the hold
+    feed(d, -76.0f, 2.8f);   // under the close threshold, the room still in the window: shorter than the quiet hold
     CHECK(d.gateOpen);
-    feed(d, -76.0f, 0.2f);
+    feed(d, -76.0f, 0.4f);
     CHECK_FALSE(d.gateOpen);
 }
 
@@ -85,7 +93,7 @@ TEST_CASE("music near the room's noise narrows the window: the noise stays dark 
     feed(d, -80.0f, 2.0f);
     feed(d, -68.0f, 5.0f);    // music just over the squelch, its loudest band at -74
     CHECK(d.gateOpen);
-    CHECK(d.topDb < -73.0f);                 // the top sits on the music, not 40 dB over the floor
+    CHECK(d.topDb < -73.0f);                 // the top sits on the music, not a window's span over the floor
     CHECK(d.toByte(d.bandFloorDb) == 0);     // the room's loudest band
     CHECK(d.toByte(-74.0f) >= 245);
 }
@@ -103,14 +111,14 @@ TEST_CASE("the top holds still while the gate is shut, so a pause does not reset
 TEST_CASE("the gate sits on the bands' scale where the squelch puts it, open or shut") {
     mm::AudioDynamics d;
     feed(d, -80.0f, 2.0f, 0.0f);  // the floor at -80, the gate opening at -70, the loudest band level with the RMS throughout
-    feed(d, -40.0f, 2.0f, 0.0f);  // music with its loudest band at -40: the window is -80 to -40
+    feed(d, -50.0f, 2.0f, 0.0f);  // music with its loudest band at -50: the window is -80 to -50
     REQUIRE(d.gateOpen);
     CHECK(d.gateToByte() == d.toByte(-70.0f));
-    CHECK(d.gateToByte() > 50);   // a quarter of the way up
-    CHECK(d.gateToByte() < 75);
-    feed(d, -80.0f, 1.0f, 0.0f);  // the music stops and the gate shuts
+    CHECK(d.gateToByte() > 75);   // a third of the way up
+    CHECK(d.gateToByte() < 95);
+    feed(d, -80.0f, 3.5f, 0.0f);  // the music stops, the room within the window, and the gate shuts after its quiet hold
     REQUIRE_FALSE(d.gateOpen);
-    CHECK(d.gateToByte() > 50);   // the line stays where the music must reach
+    CHECK(d.gateToByte() > 75);   // the line stays where the music must reach
 }
 
 // Regression: the bands' window stopped at the RMS floor, but a band's power sits well under the block's RMS, so quiet music got a window of a dB or two and every bar read empty or full.
@@ -123,4 +131,27 @@ TEST_CASE("the bands' window stops at the bands' own floor, so quiet music over 
     const uint8_t mid = d.toByte(-68.0f);   // halfway between the bands' floor and the loudest band
     CHECK(mid > 80);
     CHECK(mid < 175);
+}
+
+// Regression: a song with no pause lifted the floor into its quiet moments, and the gate shut on every soft passage while its bars still showed (.221, Satie, 2026-11-04).
+TEST_CASE("a soft passage near a floor that rose into the music keeps its bars, the gate open") {
+    mm::AudioDynamics d;
+    feed(d, -80.0f, 2.0f, 6.0f);
+    song(d, 25.0f);                 // a song with no pause: the floor rises into its quiet moments
+    REQUIRE(d.gateOpen);
+    REQUIRE(d.floorDb > -40.0f);
+    feed(d, -36.0f, 2.0f, 12.0f);   // a soft passage, its level under the close threshold, its loudest band still in the window
+    CHECK(d.gateOpen);
+}
+
+// When the music stops, the line's silence sits far under the window: no bar shows, so the gate shuts at once and stays shut.
+TEST_CASE("stopped music goes dark within the hold and stays dark on the line's silence") {
+    mm::AudioDynamics d;
+    feed(d, -80.0f, 2.0f, 14.0f);
+    song(d, 25.0f);
+    REQUIRE(d.gateOpen);
+    feed(d, -76.0f, 0.3f, 14.0f);   // the player stops: the line's own silence
+    CHECK_FALSE(d.gateOpen);
+    feed(d, -76.0f, 30.0f, 14.0f);
+    CHECK_FALSE(d.gateOpen);
 }

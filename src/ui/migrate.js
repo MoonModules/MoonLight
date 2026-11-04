@@ -13,6 +13,8 @@
 //  - Three honesty levels, matching what an entry actually preserves: plain renames map
 //    silently-but-reported; deterministic value moves `set` the new value; anything
 //    chip-dependent or semantics-changing gets a "review" report entry instead of a guess.
+//  - A control retired on purpose is a CONTROL_RETIREMENTS entry: dropped from the backup and
+//    reported "retired" with its reason, a known break rather than a missing control.
 //  - A control that moves to a wired child module is a CHILD_MOVES entry: a transform stage after the renames, the one non-rename break so far.
 
 import { typeDisplayName, kNameMax } from "./help.js";
@@ -67,6 +69,9 @@ export const TYPE_RENAMES = {
 // mandatory: a bare-name rename is a landmine for every other module using that name (found on
 // the bench: a blanket fps → targetFps corrupted NetworkSendDriver's own `fps`). `review` marks
 // a value-semantics change: the name maps, the value needs the user's eye.
+// The audio service, which three entries below scope to.
+const AUDIO_SERVICE = ["AudioService"];
+
 export const CONTROL_RENAMES = {
     // The MIDI desk's USB switch names both places a desk can be: a `source` select, browser or USB.
     "usb": { name: "source", date: "2026-10-08", onTypes: ["MidiService"] },
@@ -103,7 +108,7 @@ export const CONTROL_RENAMES = {
     // Jumps straight to the end state (preset → lightPreset → fixture).
     "preset": { name: "fixture", date: "2026-07-23", onTypes: ["*Driver"] },
     // AudioService's sync collapses into mode + a separate send-audio switch.
-    "sync": { name: "mode", date: "2026-07-22", onTypes: ["AudioService"],
+    "sync": { name: "mode", date: "2026-07-22", onTypes: AUDIO_SERVICE,
               review: "was off/send/receive; now mode (local/receive/simulate) plus a separate 'send audio' switch: review both" },
     // forceRing's 3-option select becomes the useRing switch.
     "forceRing": { name: "useRing", date: "2026-07-17", onTypes: ["ParallelLedDriver"],
@@ -111,6 +116,14 @@ export const CONTROL_RENAMES = {
     // Plain-language control names.
     "shiftRegister": { name: "pinExpander", date: "2026-07-16", onTypes: ["ParallelLedDriver"] },
     "asyncTransmit": { name: "doubleBuffer", date: "2026-07-16", onTypes: ["ParallelLedDriver"] },
+};
+
+// A control removed on purpose → why, scoped like the renames. Its stored value is dropped, since nothing carries it.
+export const CONTROL_RETIREMENTS = {
+    // The audio levels set themselves (MIGRATING: floor, gain and levels give way to squelch).
+    "levels": { date: "2026-11-04", onTypes: AUDIO_SERVICE, detail: "the levels set themselves" },
+    "gain": { date: "2026-11-04", onTypes: AUDIO_SERVICE, detail: "the levels set themselves" },
+    "floor": { date: "2026-11-04", onTypes: AUDIO_SERVICE, detail: "now squelch, dB over the learned floor; not carried over" },
 };
 
 // Old control VALUE → new, keyed by the control's (post-rename) name. Same honesty levels:
@@ -135,7 +148,7 @@ export const CONTROL_VALUE_RENAMES = {
     // is now simulate, 2 was simulate and is now local audio. A device without a network has
     // only two of them, where local audio is 1, which this map cannot tell apart from a
     // networked device's receive: hence the review on that one.
-    "mode": { onTypes: ["AudioService"], values: {
+    "mode": { onTypes: AUDIO_SERVICE, values: {
         0: { value: 2, date: "2026-09-23" },
         2: { value: 0, date: "2026-09-23" },
         1: { date: "2026-09-23",
@@ -339,6 +352,11 @@ function renameKeys(obj, file, report) {
             continue;
         }
         const nodeType = nodeTypes[prefix];
+        const retired = CONTROL_RETIREMENTS[name];
+        if (retired && typeInScope(retired.onTypes, nodeType)) {
+            report.push({ kind: "retired", where: `${file} ${key}`, detail: `${retired.detail} (${retired.date})` });
+            continue;
+        }
         const cr0 = CONTROL_RENAMES[name];
         const cr = cr0 && typeInScope(cr0.onTypes, nodeType) ? cr0 : null;
         const newName = cr ? cr.name : name;

@@ -31,6 +31,10 @@ namespace mm {
 ///
 /// The halving low-pass is a 6th-order Butterworth at 0.15 of its rate; what folds back starts at 0.38, about 48 dB down.
 ///
+/// ## A band limit
+///
+/// A bank limited below the rate's reach halves the rate while its top band still fits where a lower octave sits, 0.12 to 0.24 of the halved rate, since the halving low-pass passes no higher; every octave then has a stage of its own. It pays for the octaves it measures: semitones to 2.5 kHz at 24 kHz start at 12 kHz.
+///
 /// ## The filters
 ///
 /// Each band is a 6th-order Butterworth band-pass in three sections, its edges prewarped so its -3 dB points land on the band's nominal edges at any rate.
@@ -60,35 +64,35 @@ public:
     /// A band's center in hertz, once `init` has set the reference.
     float centerHz(uint8_t band) const { return referenceHz_ * std::exp2((static_cast<float>(band) - static_cast<float>(referenceBand_)) / B); }
 
-    /// Design the filters for this rate, counting the bands from `referenceHz`, and start from silence; the bands above the rate's reach read 0.
+    /// Design the filters for this rate, counting the bands from `referenceHz`, up to `topHz` if given, every center moved by `tuningCents`, and start from silence; the bands above read 0.
     /// @guide 1000 Hz is the IEC reference for third octaves; 440 Hz puts semitones on the notes.
-    void init(uint32_t sampleRate, float referenceHz = 1000.0f) {
+    void init(uint32_t sampleRate, float referenceHz = 1000.0f, float topHz = 0.0f, float tuningCents = 0.0f) {
+        // The grid, which band is which and where the limit cuts, comes from the nominal reference; the tuning moves the centers only, so band 54 stays A4 however a recording is tuned.
         referenceHz_ = referenceHz;
         referenceBand_ = static_cast<uint8_t>(std::lround(B * std::log2(referenceHz / kLowestHz)));
         top_ = 0;
         bandCount_ = 0;
         if (sampleRate == 0) return;
         const float fs = static_cast<float>(sampleRate);
-        // The highest band whose upper edge the rate still resolves: @xref{two-octaves-at-the-full-rate|why the top octave has its own design}.
-        int top = -1;
-        for (int b = kBands - 1; b >= 0; b--)
-            if (centerHz(static_cast<uint8_t>(b)) * kEdge < kTopReach * fs) { top = b; break; }
+        const int top = topBand(fs, topHz);
         if (top < 0) return;
+        halvings_ = halvingsFor(centerHz(static_cast<uint8_t>(top)), fs);
+        shared_ = halvings_ ? 1 : 2;
         top_ = static_cast<uint8_t>(top);
         bandCount_ = static_cast<uint8_t>(top + 1);
+        referenceHz_ = referenceHz * std::exp2(tuningCents / 1200.0f);   // under half a semitone, inside the reach's margin
+        const float topRate = fs / static_cast<float>(1u << stageOf(0)), stdRate = fs / static_cast<float>(1u << stageOf(1));
         for (uint8_t slot = 0; slot < B; slot++) {
             const int topBand = top - slot, stdBand = top - B - slot;
-            if (topBand >= 0) designBandPass(centerHz(static_cast<uint8_t>(topBand)), fs, topSet_[slot]);
-            if (stdBand >= 0) designBandPass(centerHz(static_cast<uint8_t>(stdBand)), fs, stdSet_[slot]);
+            if (topBand >= 0) designBandPass(centerHz(static_cast<uint8_t>(topBand)), topRate, topSet_[slot]);
+            if (stdBand >= 0) designBandPass(centerHz(static_cast<uint8_t>(stdBand)), stdRate, stdSet_[slot]);
         }
         designLowPass(kLowPassCorner * fs, fs, lowPass_);
-        // Octaves 0 and 1 share the full rate; octave k below runs at stage k - 1: @xref{octave-by-octave}.
         const int octaves = top / B + 1;
-        stages_ = static_cast<uint8_t>(octaves > 1 ? octaves - 1 : 1);
+        stages_ = static_cast<uint8_t>(stageOf(static_cast<uint8_t>(octaves - 1)) + 1);
+        if (stages_ > kMaxStages) stages_ = kMaxStages;
         for (uint8_t b = 0; b < bandCount_; b++) {
-            const int octave = (top - b) / B;
-            const int stage = octave <= 1 ? 0 : octave - 1;
-            const float rate = fs / static_cast<float>(1u << stage);
+            const float rate = fs / static_cast<float>(1u << stageOf(static_cast<uint8_t>((top - b) / B)));
             alpha_[b] = 1.0f - std::exp(-1.0f / (kDetectorSeconds * rate));   // @xref{the-detector}
         }
         reset();
@@ -199,10 +203,31 @@ private:
         power_[b] = p;
     }
 
-    /// The bands each stage measures: two octaves at the full rate, one octave at each rate below.
+    /// The highest band whose upper edge the rate still resolves, under the limit if one is given; -1 for none: @xref{two-octaves-at-the-full-rate|why the top octave has its own design}.
+    int topBand(float fs, float topHz) const {
+        for (int b = kBands - 1; b >= 0; b--) {
+            const float hz = centerHz(static_cast<uint8_t>(b));
+            if (hz * kEdge < kTopReach * fs && (topHz <= 0.0f || hz <= topHz)) return b;
+        }
+        return -1;
+    }
+
+    /// The halvings that only lower the rate, while a top band at `topHz` still fits where a lower octave sits: @xref{a-band-limit}.
+    static uint8_t halvingsFor(float topHz, float fs) {
+        uint8_t h = 0;
+        while (h + 1 < kMaxStages && topHz * kEdge < kTopReach * fs / static_cast<float>(4u << h)) h++;
+        return h;
+    }
+
+    /// The stage an octave runs at: octaves 0 and 1 share the full rate, each lower one a halving further: @xref{octave-by-octave}. Behind a band limit's halvings every octave has its own.
+    uint8_t stageOf(uint8_t octave) const { return static_cast<uint8_t>(halvings_ + (octave < shared_ ? 0 : octave - shared_ + 1)); }
+
+    /// The bands a stage measures, the octaves `stageOf` puts there.
     void runBands(uint8_t stage, const float* in, size_t m) {
-        const int firstOctave = stage == 0 ? 0 : stage + 1;
-        const int lastOctave = stage == 0 ? 1 : stage + 1;
+        if (stage < halvings_) return;
+        const int local = stage - halvings_;
+        const int firstOctave = local == 0 ? 0 : local + shared_ - 1;
+        const int lastOctave = local + shared_ - 1;
         for (int octave = firstOctave; octave <= lastOctave; octave++) {
             const Filter* set = octave == 0 ? topSet_ : stdSet_;
             for (uint8_t slot = 0; slot < B; slot = static_cast<uint8_t>(slot + 3)) {
@@ -293,6 +318,8 @@ private:
     uint8_t top_ = 0;
     uint8_t bandCount_ = 0;
     uint8_t stages_ = 0;
+    uint8_t halvings_ = 0;           // the stages ahead of the top band that only halve: @xref{a-band-limit}
+    uint8_t shared_ = 2;             // the octaves the first measuring stage carries
     Filter topSet_[B] = {};          // the top octave's bands, at the full rate
     Filter stdSet_[B] = {};          // every octave below, each at the rate that puts it here
     Filter lowPass_ = {};

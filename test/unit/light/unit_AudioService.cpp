@@ -3,7 +3,9 @@
 #include "doctest.h"
 #include "core/services/AudioService.h"
 
+#include <cmath>
 #include <cstring>
+#include <initializer_list>
 
 // The MoonModule lifecycle of the audio peripheral, host-side (hasI2sMic false: the platform-inert path of a mic-less board): setup/release repeats cleanly, latestFrame() stays coherent through any add/remove order, an unconfigured module idles.
 
@@ -117,4 +119,115 @@ TEST_CASE("AudioService: a hit in an earlier block of one tick still reaches the
     CHECK(out.level == 42);    // the newest frame's analysis
     CHECK(out.onset == 180);   // with the hit the blocks before it heard
     CHECK_FALSE(mm::AudioService::takeNewest(ring, out));   // drained: nothing fresh until the next block
+}
+
+namespace {
+
+// `seconds` of a quiet hiss, or of these tones, through the service's own analysis at 24 kHz; answers the last block's frame.
+const mm::AudioFrame& analyze(mm::AudioService& audio, std::initializer_list<float> hz, float seconds, double& t) {
+    static int32_t block[mm::AudioService::kBlock];
+    static uint32_t seed = 1;
+    const mm::AudioFrame* f = nullptr;
+    for (float done = 0; done < seconds; done += static_cast<float>(mm::AudioService::kBlock) / 24000.0f) {
+        for (size_t i = 0; i < mm::AudioService::kBlock; i++) {
+            seed = seed * 1664525u + 1013904223u;
+            double v = static_cast<double>(static_cast<int32_t>(seed) >> 26);   // a hiss of a few 24-bit counts
+            for (const float h : hz) v += 100000.0 * std::sin(2.0 * 3.14159265358979 * h * (t + static_cast<double>(i) / 24000.0));
+            block[i] = static_cast<int32_t>(v) * 256;   // left-justified, as the input delivers 24-bit samples
+        }
+        t += static_cast<double>(mm::AudioService::kBlock) / 24000.0;
+        f = &audio.analyzeForTest(block);
+    }
+    return *f;
+}
+
+}  // namespace
+
+TEST_CASE("AudioService: harmony off measures no notes, and on again they come back") {
+    static mm::AudioService audio;
+    audio.defineControls();
+    audio.resetAnalysisForTest();
+    double t = 0;
+    analyze(audio, {}, 1.0f, t);   // the room's floor learned
+    const std::initializer_list<float> cMajor = {261.63f, 329.63f, 392.0f};
+    const mm::AudioFrame& on = analyze(audio, cMajor, 1.5f, t);
+    CHECK(on.gateOpen);
+    CHECK(on.notesCount == 79);
+    CHECK(on.chroma[0] > 200);   // C
+    audio.harmony = false;
+    const mm::AudioFrame& off = analyze(audio, cMajor, 0.2f, t);
+    CHECK(off.notesCount == 0);
+    for (const uint8_t v : off.chroma) CHECK(v == 0);
+    CHECK_FALSE(off.harmonyChange);
+    audio.harmony = true;
+    const mm::AudioFrame& again = analyze(audio, cMajor, 1.5f, t);
+    CHECK(again.notesCount == 79);
+    CHECK(again.chroma[0] > 200);
+}
+
+// The analysis keeps the stream's time, so audio fed faster than real time, a file through the host or a backlog on a busy core, reads every hit the music has.
+TEST_CASE("AudioService: hits fed faster than real time each read as an onset, the stream keeping its own time") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(5000);   // the wall clock stands still for the whole run
+    static mm::AudioService audio;
+    audio.defineControls();
+    audio.resetAnalysisForTest();
+    static int32_t block[mm::AudioService::kBlock];
+    uint32_t seed = 7;
+    int onsets = 0;
+    for (int b = 0; b < 47 * 3; b++) {   // 3 s of 21 ms blocks: a second of room, then a hit every 12 blocks, a quarter second apart
+        const bool hit = b >= 47 && (b - 47) % 12 == 0;
+        for (auto& s : block) {
+            seed = seed * 1664525u + 1013904223u;
+            s = (static_cast<int32_t>(seed) >> (hit ? 9 : 26)) * 256;   // a loud broadband burst, or the room's hiss
+        }
+        if (audio.analyzeForTest(block).onset) onsets++;
+    }
+    CHECK(onsets == 8);   // every hit, though not a millisecond of wall time passed
+}
+
+TEST_CASE("AudioService: a chord change in an earlier block of one tick still reaches the effects") {
+    mm::SpscRing<mm::AudioFrame, 8> ring;
+    mm::AudioFrame changed, after;
+    changed.harmonyChange = true;
+    ring.push(&changed, 1);
+    ring.push(&after, 1);
+    mm::AudioFrame out;
+    REQUIRE(mm::AudioService::takeNewest(ring, out));
+    CHECK(out.harmonyChange);   // a palette following the chords misses none at a slow frame rate
+}
+
+// A recording tuned off A440 smears each note across two semitone bands; once the music has sat off long enough, the bank retunes to it.
+TEST_CASE("AudioService: music 40 cents sharp retunes the semitone bank toward it") {
+    static mm::AudioService audio;
+    audio.defineControls();
+    audio.resetAnalysisForTest();
+    double t = 0;
+    analyze(audio, {}, 1.0f, t);   // the room
+    const float sharp = 440.0f * std::exp2(40.0f / 1200.0f);
+    analyze(audio, {sharp, sharp * 1.25992f, sharp * 1.49831f}, 45.0f, t);   // an A major triad, 40 cents sharp
+    CHECK(audio.tuningForTest() > 30.0f);   // retuned, within the reading's three quarters per step
+    CHECK(audio.tuningForTest() < 50.0f);
+}
+
+// Regression: the grid followed the tuned reference, so a flat retune rounded A4's band to 53 and every note read a semitone up, C major as C# F G# (pre-commit review, 2026-11-04).
+TEST_CASE("AudioService: music 40 cents flat retunes the bank and every note keeps its name") {
+    static mm::AudioService audio;
+    audio.defineControls();
+    audio.resetAnalysisForTest();
+    double t = 0;
+    analyze(audio, {}, 1.0f, t);
+    const float flat = 440.0f * std::exp2(-40.0f / 1200.0f);
+    const std::initializer_list<float> chord = {flat, flat * 1.25992f, flat * 1.49831f};   // A major, 40 cents flat
+    for (int phrase = 0; phrase < 4; phrase++) {   // phrases with a breath between, so the floor stays on the room
+        analyze(audio, chord, 10.0f, t);
+        analyze(audio, {}, 0.5f, t);
+    }
+    const mm::AudioFrame& f = analyze(audio, chord, 3.0f, t);
+    REQUIRE(f.gateOpen);
+    CHECK(audio.tuningForTest() < -30.0f);
+    CHECK(f.notesCount == 79);                                // every key still measured
+    uint8_t loudest = 0;
+    for (uint8_t c = 1; c < 12; c++) if (f.chroma[c] > f.chroma[loudest]) loudest = c;
+    CHECK(((loudest == 9) || (loudest == 1) || (loudest == 4)));   // A, C# or E: the chord's own notes, not a semitone up
 }

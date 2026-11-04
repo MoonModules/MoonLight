@@ -2,7 +2,6 @@
 
 #include "light/effects/EffectBase.h"
 
-#include "light/powerfunctions/fonts.h"             // fonts::kAll: the selectable bitmap fonts
 
 namespace mm {
 

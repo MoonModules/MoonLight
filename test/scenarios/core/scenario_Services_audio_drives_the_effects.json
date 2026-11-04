@@ -126,10 +126,10 @@
       "op": "set_control",
       "id": "Audio",
       "key": "sampleRate",
-      "value": 2
+      "value": "24000"
     },
     {
-      "name": "reset-audio-gain",
+      "name": "reset-audio-squelch",
       "op": "set_control",
       "id": "Audio",
       "key": "squelch",

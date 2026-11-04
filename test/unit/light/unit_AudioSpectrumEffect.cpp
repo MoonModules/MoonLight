@@ -113,7 +113,7 @@ TEST_CASE("AudioSpectrumEffect's square at the meter's right end flashes red on 
 // The 31 third octaves take the width when the frame carries them: of 31 bars on 62 columns each takes two, and the simulated music lights most.
 TEST_CASE("AudioSpectrumEffect draws the 31 third octaves, two columns a bar on a 62-wide grid") {
     constexpr int GW = 62, GH = 6;
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, false, mm::AudioSpectrumEffect::kBandsAll);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, false, mm::AudioSpectrumEffect::kBandsThirds);
     s.run(8);
     int risen = 0;
     for (int band = 0; band < 31; band++) {
@@ -127,7 +127,7 @@ TEST_CASE("AudioSpectrumEffect draws the 31 third octaves, two columns a bar on 
 // The level meter is as tall as a bar is wide at 31 bars too: on 62 columns a bar is two wide, so the meter takes two rows.
 TEST_CASE("AudioSpectrumEffect's level meter follows the bar width at 31 bands") {
     constexpr int GW = 62, GH = 8;
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsAll);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsThirds);
     s.run(8);
     auto meter = [&](int y) { return is(s.px(0, y), palette(0)); };   // the meter starts on the palette's first color
     CHECK(meter(GH - 1));
@@ -234,4 +234,128 @@ TEST_CASE("AudioSpectrumEffect shows its speed only for the sweep") {
     s.effect.colorMode = mm::AudioSpectrumEffect::kColorHeight;
     s.effect.rebuildControls();
     CHECK(s.effect.controls()[static_cast<uint8_t>(mm::test::controlIndex(s.effect, "speed"))].hidden);
+}
+
+// The notes are the piano's keys, one bar a semitone; without them, as with `harmony` off, the third octaves draw instead.
+TEST_CASE("AudioSpectrumEffect draws the piano's keys as notes, and the third octaves without them") {
+    constexpr int GW = 79, GH = 8;   // one column a key
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, false, mm::AudioSpectrumEffect::kBandsNotes);
+    s.audio.tick();
+    auto& f = s.audio.frameForTest();
+    for (uint8_t i = 0; i < 79; i++) f.notes[i] = 0;
+    f.notes[48] = 255;   // A4 alone
+    f.notesCount = 79;
+    s.layer.tick();
+    for (int x = 0; x < GW; x++) CHECK(lit(s.px(x, GH - 1)) == (x == 48));
+    f.notesCount = 0;    // no notes in the frame
+    s.layer.tick();
+    int risen = 0;
+    for (int x = 0; x < GW; x++) risen += lit(s.px(x, GH - 1)) ? 1 : 0;
+    CHECK(risen > 8);    // the simulated thirds, across the grid
+}
+
+// The harmony as text, for a rig that reads it rather than shows it: the three strongest pitch classes at the top left.
+TEST_CASE("AudioSpectrumEffect writes the strongest pitch classes at the top left when asked") {
+    constexpr int GW = 32, GH = 16;
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true);
+    auto whiteInCorner = [&] {
+        s.audio.tick();
+        auto& f = s.audio.frameForTest();
+        for (uint8_t i = 0; i < 16; i++) f.bands[i] = 0;   // dark bars, so only the text lights the corner
+        for (uint8_t i = 0; i < 31; i++) f.thirds[i] = 0;
+        for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 0;
+        f.chroma[0] = 255; f.chroma[4] = 220; f.chroma[7] = 200;   // C E G
+        f.peakHz = 0;   // no peak mark in the corner
+        s.layer.tick();
+        int white = 0;
+        for (int y = 0; y < 6; y++) for (int x = 0; x < 20; x++) white += is(s.px(x, y), mm::RGB{255, 255, 255}) ? 1 : 0;
+        return white;
+    };
+    CHECK(whiteInCorner() == 0);
+    s.effect.noteNames = true;
+    CHECK(whiteInCorner() > 10);   // "C E G" in the 4x6 font
+}
+
+// The harmony as the frame gives it: the twelve pitch classes along the top, C at the left, each as bright as it sounds, the whole row dark for an instant as the chord changes.
+TEST_CASE("AudioSpectrumEffect draws the pitch classes along the top with the readouts, going dark on a chord change") {
+    constexpr int GW = 48, GH = 20;   // four columns a pitch class
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::AudioSpectrumEffect::kBandsThirds);
+    auto draw = [&](bool change) {
+        s.audio.tick();
+        auto& f = s.audio.frameForTest();
+        f.notesCount = 79;
+        for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 0;
+        f.chroma[0] = 255;   // C alone
+        f.harmonyChange = change;
+        s.layer.tick();
+    };
+    draw(false);
+    CHECK(is(s.px(1, 0), mm::colorFromPalette(*mm::Palettes::active(), 0, 255)));   // C at full brightness, its palette color
+    CHECK_FALSE(lit(s.px(9, 0)));                                                   // D silent
+    draw(true);
+    for (int x = 0; x < GW; x++) CHECK_FALSE(lit(s.px(x, 0)));                       // the change: the whole row dark
+}
+
+// A bar under two columns wide, the 79 keys on 128 columns, still gets a level meter and a pitch-class row two rows tall: the bar's width rounded up.
+TEST_CASE("AudioSpectrumEffect's level meter, pitch classes and marks round a bar's width up, two for the keys on 128 columns") {
+    constexpr int GW = 128, GH = 32;
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsNotes);
+    s.audio.tick();
+    auto& f = s.audio.frameForTest();
+    f.notesCount = 79;
+    for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 255;   // every class lit, so the row shows across
+    f.level = 255;                                         // the meter full
+    f.harmonyChange = false;
+    s.layer.tick();
+    CHECK(lit(s.px(1, 0)));
+    CHECK(lit(s.px(1, 1)));              // the pitch classes: two rows
+    CHECK(lit(s.px(1, GH - 1)));
+    CHECK(lit(s.px(1, GH - 2)));         // the level meter: two rows
+    f.peakHz = 440;                      // A4, the 49th key
+    s.layer.tick();
+    int peak = 0;
+    for (int x = 0; x < GW; x++) peak += is(s.px(x, 2), mm::RGB{255, 255, 255}) ? 1 : 0;
+    CHECK(peak == 2);                    // the peak mark: two columns, as the rows
+}
+
+// A small grid keeps one row for each: on 16x16 a bar is at most a column wide, whatever the band count.
+TEST_CASE("AudioSpectrumEffect keeps one row of level meter and pitch classes on a 16x16 grid") {
+    for (const uint8_t bands : {mm::AudioSpectrumEffect::kBands16, mm::AudioSpectrumEffect::kBandsThirds, mm::AudioSpectrumEffect::kBandsNotes}) {
+        CAPTURE(int(bands));
+        Spectrum s(16, 16, mm::AudioSpectrumEffect::kColorSweep, true, bands);
+        s.audio.tick();
+        auto& f = s.audio.frameForTest();
+        f.notesCount = 79;
+        for (uint8_t i = 0; i < 31; i++) f.thirds[i] = 0;
+        for (uint8_t i = 0; i < 16; i++) f.bands[i] = 0;
+        for (uint8_t i = 0; i < 79; i++) f.notes[i] = 0;   // dark bars, so only the two rows light
+        for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 255;
+        f.level = 255;
+        f.harmonyChange = false;
+        f.peakHz = 0;
+        f.gate = 0;
+        f.bass = f.mid = f.treble = 0;   // silent ranges, their lines on the bars' bottom row
+        s.layer.tick();
+        CHECK(lit(s.px(1, 0)));
+        CHECK_FALSE(lit(s.px(1, 1)));    // the pitch classes: one row
+        CHECK(lit(s.px(1, 15)));
+        CHECK(is(s.px(1, 14), mm::RGB{160, 160, 160}));   // the level meter: one row, the silent bass's line on the bars' bottom row above it
+    }
+}
+
+// The bass, mids and treble drawn where their bands are: each a grey line across its own bars at its level.
+TEST_CASE("AudioSpectrumEffect draws the bass, mids and treble as lines across their own bars") {
+    constexpr int GW = 56, GH = 20;   // two columns a third at 28 bands
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::AudioSpectrumEffect::kBandsThirds);
+    s.audio.tick();
+    auto& f = s.audio.frameForTest();
+    f.thirdsCount = 28;
+    for (uint8_t i = 0; i < 31; i++) f.thirds[i] = 0;
+    f.bass = 255; f.mid = 0; f.treble = 0;
+    f.peakHz = 0; f.gate = 0; f.notesCount = 0;
+    s.layer.tick();
+    const mm::RGB grey{160, 160, 160};
+    CHECK(is(s.px(2, 0), grey));          // the bass line at the top, over the bass bars
+    CHECK_FALSE(is(s.px(50, 0), grey));   // the silent treble not at the top...
+    CHECK(is(s.px(50, GH - 3), grey));    // ...but on the bars' bottom row, over the two-row meter, so all three lines show
 }

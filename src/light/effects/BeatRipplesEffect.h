@@ -7,6 +7,8 @@ namespace mm {
 /// Every beat is a stone dropped in water.
 /// @card BeatRipplesEffect.gif
 ///
+/// `trigger` on `kick` drops a stone only on a hit in the bass, so the ripples follow the kick drum rather than every hit.
+///
 /// A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.
 ///
 /// @attribution Gomez
@@ -31,13 +33,19 @@ public:
     uint8_t rain      = 30;
     /// How strongly the slope lights the surface.
     uint8_t shine     = 150;
+    /// What drops a stone, in option order.
+    enum Trigger : uint8_t { kAnyHit, kKick, kTriggerCount };
+    /// Every hit, or only the kick, a hit whose strongest range is the bass.
+    uint8_t trigger   = kAnyHit;
 
-    /// Publish the damping, the stone's depth, the idle rain and the slope's brightness.
+    /// Publish the damping, the stone's depth, the idle rain, the slope's brightness and what drops a stone.
     void defineControls() override {
         controls_.addControl("damping", damping, 0, 255);
         controls_.addControl("drop", drop, 0, 255);
         controls_.addControl("rain", rain, 0, 255);
         controls_.addControl("shine", shine, 0, 255);
+        static constexpr const char* kTriggerOptions[] = {"any hit", "kick"};
+        controls_.addSelect("trigger", trigger, kTriggerOptions, kTriggerCount);
     }
 
     /// Size both height buffers, clear them, and arm the rain clock.
@@ -66,7 +74,8 @@ public:
         started_ = true;
 
         const AudioFrame* f = AudioService::latestFrame();
-        const bool onsetNow = f && f->onset != 0;
+        const bool kick = f && f->bass >= f->mid && f->bass >= f->treble && f->bass > 0;   // the hit is in the bass
+        const bool onsetNow = f && f->onset != 0 && (trigger == kAnyHit || kick);
         if (onsetNow && !onsetSeen_) {
             // The loudest band picks the radius, and the angle walks so successive hits spread out.
             uint8_t loudest = 0, best = 0;

@@ -10,8 +10,13 @@
 #include "MoonLiveScriptFixture.h"
 #include "../core/moonlive_script_wrap.h"   // mmScript: the class ceremony around a bare body
 #include "core/module/MoonModule.h"
+#include "core/services/AudioService.h"
+#include "moonlive_script_files.h"   // scriptRoot, readText: the shipped scripts as files
 
 #include <cstring>
+#include <initializer_list>
+#include <string>
+#include <utility>
 #include <vector>
 
 using namespace mm;
@@ -134,4 +139,60 @@ TEST_CASE("setPalEntry does nothing outside a palette script") {
     for (int i = 0; i < 16; i++) CHECK(p->entry[i].r == 11);   // untouched
     Palettes::setActiveDirect(before);
 }
+
+// The harmony showcase: the palette takes the chord's colors on each chord change, each pitch class a fixed hue on the circle of fifths, so the same chord always returns as the same palette.
+TEST_CASE("the harmony palette takes the chord's colors on each change, the same chord giving the same palette") {
+    const Palette before = *Palettes::active();
+    static AudioService audio;   // the frame the builtins read
+    audio.defineControls();
+    audio.setup();
+    audio.tick();   // claims the seat latestFrame reads; the frames below are written straight into it
+    auto chord = [&](std::initializer_list<std::pair<uint8_t, uint8_t>> classes, bool change) {
+        AudioFrame& f = audio.frameForTest();
+        for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 0;
+        for (const auto& [c, v] : classes) f.chroma[c] = v;
+        f.harmonyChange = change;
+    };
+    ScriptHost host;
+    MoonLivePalette pal;
+    const std::string src = readText(scriptRoot() / "palettes" / "harmony.mlp");
+    pal.setScript(mmWriteScript(src.c_str()));
+    pal.prepare(host);
+    REQUIRE(pal.ok());
+    auto same = [](const Palette& a, const Palette& b) {
+        for (int i = 0; i < 16; i++) if (a.entry[i].r != b.entry[i].r || a.entry[i].g != b.entry[i].g || a.entry[i].b != b.entry[i].b) return false;
+        return true;
+    };
+
+    chord({{0, 255}, {4, 200}, {7, 180}}, true);   // C major: C, E, G
+    pal.tick(1000);
+    const Palette cMajor = *Palettes::active();
+    CHECK(cMajor.entry[0].r > 200);   // C on the circle's start: red
+    CHECK(cMajor.entry[15].g > 200);  // E, four fifths on: green
+
+    chord({{0, 120}, {4, 255}, {7, 200}}, false);  // the same chord's notes at other strengths, no change
+    pal.tick(1500);
+    CHECK(same(*Palettes::active(), cMajor));      // the palette holds between changes
+
+    chord({{0, 150}, {4, 255}, {7, 220}}, true);   // C major again, E the loudest now
+    pal.tick(2000);
+    pal.tick(2200);
+    CHECK(same(*Palettes::active(), cMajor));      // the same chord, the same palette
+
+    chord({{9, 255}, {0, 210}, {4, 190}}, true);   // A minor: A, C, E
+    pal.tick(3000);
+    pal.tick(3010);                                // a faster frame reading the same change: the crossfade goes on
+    audio.frameForTest().harmonyChange = false;
+    pal.tick(3075);
+    const Palette midway = *Palettes::active();
+    pal.tick(3200);
+    const Palette aMinor = *Palettes::active();
+    CHECK_FALSE(same(aMinor, cMajor));             // a new chord, new colors
+    CHECK_FALSE(same(midway, aMinor));             // reached through the crossfade
+    CHECK(aMinor.entry[0].r == cMajor.entry[0].r); // C, shared by both chords, keeps its color
+
+    audio.release();
+    Palettes::setActiveDirect(before);
+}
+
 #endif  // MM_MOONLIVE_HAS_HOST_JIT
