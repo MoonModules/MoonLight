@@ -31,6 +31,20 @@ Discovery is shipped ([DevicesModule](../../moonmodules/core/system.md)). It sta
 
 Full design + the reasoned transport split: `Plan-20260629 - UDP device discovery + mDNS advertise-only` (in the plans archive).
 
+## Drivers
+
+### The encode worker is parked before a control change or a prepare reallocates a driver's buffers (2026-11-05)
+
+Kind: Investigation · Stage: Develop · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=294535117)
+
+A hypothesis, traced in code and not reproduced, found while reviewing #234 (Copilot's finding on `Hub75Driver::onCorrectionChanged`).
+
+**The path.** With the render split on, driver ticks run on the `mmEncode` task on core 1, and `Drivers::tick` waits for it only at the start of its own tick. Between those two points, core 0 runs `Scheduler::preparePending()` at the frame start and applies control changes (`Scheduler::reactToControlChange` → `onControlChanged` → `DriverBase::rebuildCorrection` → `onCorrectionChanged`). Core parks the worker before structural mutations (`quiesceForMutation`: addChild, removeChild, replace, enable), and not before a control change or a pending `prepare()`.
+
+**What it can break.** Any driver buffer that a control change or a prepare frees or reallocates while core 1 writes through it. `DriverBase` already guards one case by hand: `lut16_` "is kept until release, since the encode task may be reading it while this rebuild runs". Candidates to check: `sizeLightScratch()` in the `prepare()` of HdmiDriver, NdiDriver, HlsDriver and RtspDriver; `ensureWire()` growing in a prepare; every driver's `onCorrectionChanged` that resizes.
+
+**Done when.** Either core parks the encode worker before a pending prepare and a control change reaches a driver, as it does for a structural mutation (one rule, written once), or each path is shown safe. A desktop test drives a fixture change while the encode worker runs a tick, under the thread sanitizer.
+
 ## EthernetModule
 
 ### An explicit `Custom` Ethernet preset is reseeded to a named one

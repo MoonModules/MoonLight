@@ -132,26 +132,7 @@ public:
             // The dominant frequency, while there is sound to have one.
             if (f->peakHz && (f->gate == 0 || f->gateOpen)) drawPeak(cv, f->peakHz, scale, n, barW, pitchRows);
         }
-        if (noteNames) {
-            char names[12];
-            formatNotes(f->chroma, names, sizeof(names));
-            draw::text(cv, fonts::kFont4x6, names, 0, pitchRows, RGB{255, 255, 255});
-            // The key at the right, short, with the tuning when it is off A440: "Am +12".
-            char key[12];
-            formatKey(f->key, key, sizeof(key), true);
-            lengthType keyLen = 0;
-            while (key[keyLen]) keyLen++;
-            if (f->tuning != 0 && static_cast<size_t>(keyLen) + 5 < sizeof(key)) {
-                const int cents = f->tuning < 0 ? -f->tuning : f->tuning;
-                key[keyLen++] = ' ';
-                key[keyLen++] = f->tuning < 0 ? '-' : '+';
-                if (cents >= 10) key[keyLen++] = static_cast<char>('0' + cents / 10);
-                key[keyLen++] = static_cast<char>('0' + cents % 10);
-                key[keyLen] = 0;
-            }
-            const lengthType keyW = static_cast<lengthType>(keyLen * fonts::kFont4x6.width);
-            if (f->key && w > keyW) draw::text(cv, fonts::kFont4x6, key, static_cast<lengthType>(w - keyW), pitchRows, RGB{255, 255, 255});
-        }
+        if (noteNames) draw::noteNames(cv, *f, w, pitchRows);
     }
 
     /// Where `hz` sits across `n` bars, in bars: the key from A0, the third-octave index, or that mapped between the sixteen when only those show.

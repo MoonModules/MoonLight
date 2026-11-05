@@ -81,6 +81,7 @@
 #include "light/effects/VuMetersEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
 #include "light/effects/DrumKitEffect.h"
+#include "light/effects/KeyboardEffect.h"
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/effects/SineEffect.h"
 #include "light/effects/DistortionWavesEffect.h"
@@ -89,6 +90,7 @@
 #include "light/effects/PaintBrushEffect.h"
 #include "light/effects/SolidEffect.h"
 #include "light/effects/StarSkyEffect.h"
+#include "light/effects/StringsEffect.h"
 #include "light/effects/SdfShapesEffect.h"
 #include "light/effects/AuroraEffect.h"
 #include "light/effects/PolarNoiseEffect.h"
@@ -247,6 +249,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
     mm::ModuleFactory::registerType<mm::BeatRipplesEffect>("BeatRipplesEffect", "light/effects.md#beatripples");
     mm::ModuleFactory::registerType<mm::DrumKitEffect>("DrumKitEffect", "light/effects.md#drumkit");
+    mm::ModuleFactory::registerType<mm::KeyboardEffect>("KeyboardEffect", "light/effects.md#keyboard");
     mm::ModuleFactory::registerType<mm::BlurzEffect>("BlurzEffect", "light/effects.md#blurz");
     mm::ModuleFactory::registerType<mm::BouncingBallsEffect>("BouncingBallsEffect", "light/effects.md#bouncingballs");
     mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect", "light/effects.md#demoreel");
@@ -314,6 +317,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpiralEffect>("SpiralEffect", "light/effects.md#spiral");
     mm::ModuleFactory::registerType<mm::StarFieldEffect>("StarFieldEffect", "light/effects.md#starfield");
     mm::ModuleFactory::registerType<mm::StarSkyEffect>("StarSkyEffect", "light/effects.md#starsky");
+    mm::ModuleFactory::registerType<mm::StringsEffect>("StringsEffect", "light/effects.md#strings");
     mm::ModuleFactory::registerType<mm::TetrixEffect>("TetrixEffect", "light/effects.md#tetrix");
     mm::ModuleFactory::registerType<mm::TextEffect>("TextEffect", "light/effects.md#text");
     mm::ModuleFactory::registerType<mm::WaveEffect>("WaveEffect", "light/effects.md#wave");

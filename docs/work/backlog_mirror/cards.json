@@ -400,6 +400,16 @@
   "number": null
  },
  {
+  "title": "The encode worker is parked before a control change or a prepare reallocates a driver's buffers (2026-11-05)",
+  "area": "Core",
+  "module": "Drivers",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=294535117",
+  "number": null
+ },
+ {
   "title": "The HTTP server is audited for the two PHP request-handling bug classes (2026-10-21)",
   "area": "Core",
   "module": "HttpServerModule",
