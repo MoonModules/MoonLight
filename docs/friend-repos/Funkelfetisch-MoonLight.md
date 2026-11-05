@@ -1,10 +1,24 @@
 # Funkelfetisch/MoonLight: monthly activity digest
 
-What landed on [Funkelfetisch/projectMM](https://github.com/Funkelfetisch/projectMM) (earlier named Funkelfetisch/MoonLight), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [Funkelfetisch/projectMM](https://github.com/Funkelfetisch/projectMM) (earlier named Funkelfetisch/MoonLight), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
 This is a **fork of this project** building a commercial product on it: **HELIO**, a physical "infinity sphere" lamp (a warm-white 3000 K RGBW strip inside a clear acrylic shell). The fork's own plan documents describe matching a browser preview to "the transmitted LED frame, warm-white output, clear acrylic, internal reflections, and optional wall bounce", and its firmware carries a `helio1` sdkconfig variant, a curated preset player, and a branded update channel. The README is unchanged from ours, so this is MoonLight plus a product layer rather than a rebrand.
 
 **Branch note: the work is not on the default branch.** `main` tracks our upstream and has not moved since 2026-07-09; every change lives in named branches, so each month below carries a **Branches** line for what moved on them. The repository has no issues and publishes no releases.
+
+## October 2026
+
+One fork commit, on a new branch cut from our `main` late in the month.
+
+- **An optional BLE control transport** (`codex/moonlight-ble-transport`, 2026-10-25, 399 added lines across ten files): an encrypted control channel for a controller outside WiFi range.
+- The peripheral is a native NimBLE one with GATT attributes for identity, state and commands, and pairing with persistent bonds.
+- A bounded 512-byte line reassembler applies backpressure and recovers after rejected input, and the exchange with the scheduler is non-blocking.
+- The caller owns startup, identity and request dispatch. Desktop, Teensy and BLE-disabled ESP32 builds share one stub, and shipping firmware defaults are unchanged.
+- Provenance: the commit message says the hardware test ran on the HELIO prototype before the transport was extracted, and that Codex wrote the contribution at the author's request.
+- Status: offered to this project the same evening as [MoonModules/MoonLight#158](https://github.com/MoonModules/MoonLight/pull/158), open at month end.
+- **Branches:** `codex/moonlight-ble-transport` is new (2026-10-25), based on our `main` at `abcdaec9` with one commit on top. Nothing else moved: `codex/helio-private-wip` stays at 2026-08-21 and `main` at 2026-07-09.
+
+_Checked: after `git fetch --all --tags`, commits on `origin/main` for 2026-10-01..2026-11-01 (0); commits on all 10 remote branches for the same window (182, all on `codex/moonlight-ble-transport`: 181 upstream `MoonModules/MoonLight` carry-forward, 1 fork-authored, `f5a244a9`); releases published (none); issue search `repo:Funkelfetisch/projectMM is:issue created:2026-10-01..2026-10-31` and the same with `closed:` (0 results each; the repository has issues disabled)._
 
 ## September 2026
 
@@ -34,7 +48,7 @@ Six feature branches opened, none merged to the fork's `main`, alongside a carry
 - **BLE WiFi provisioning**, credentials over Bluetooth using Espressif's `wifi_provisioning` component, gated to run only while the device is in access-point fallback, in its own firmware variant (it costs roughly 320 KB of flash).
 - **WiFi reconnect handling**, a debounce before applying typed credentials, and repeated station retries before falling back to an access point.
 - **RMT LED output over DMA**, enables the DMA backend for WS2812 transmission on chips that have it, with a completion callback instead of a blocking wait, so a delayed interrupt under network load cannot stretch a bit cell into visible flashing.
-- **RGBW colour correction**, a wider set of channel-order presets, and an explicit white channel taken from the source when the layer carries one.
+- **RGBW color correction**, a wider set of channel-order presets, and an explicit white channel taken from the source when the layer carries one.
 - **Frame pacing**, a target-frame-rate cap on the scheduler, work-time metrics, and a periodic-tick sweep spread across ticks rather than run in one burst.
 
 - **Branches:** `codex/upstream-auto-update-manifest` (07-11), `codex/upstream-network-sta-reconnect` (07-10), `codex/upstream-rmt-rgbw-performance` (07-10), `codex/performance-frame-pacing` (07-11), `codex/universal-ble-provisioning` (07-13), `codex/helio-private-wip` (07-10, initial WIP), `next-iteration` (07-10, a carry-forward of our upstream branch). `main` last moved 2026-07-09.

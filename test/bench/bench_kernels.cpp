@@ -1,25 +1,20 @@
 /// Kernel micro-bench: nanoseconds per call for the power-function kernels, on the host.
 ///
-/// The gate for a kernel swap.
-/// The generative-fields plan replaces value noise with gradient noise behind the same names and accepts the swap only within 1.3x of the value-noise cost per sample.
-/// That bound is meaningless without the number it is measured against, so this target records it, before the swap, and every later kernel adds a row.
-/// Host timings, not ESP32 cycles: the S3 is 20-40x slower per core (performance.md, the `collide` measurement) and the ratio between two rows is what transfers, not the absolute figure.
+/// The gate for a kernel swap: the generative-fields plan accepts gradient noise only within 1.3x of the value-noise cost per sample, so this records that baseline and every later kernel adds a row. Host timings: the S3 is 20-40x slower per core (performance.md), and the ratio between rows transfers.
 ///
 /// @technical
 ///
 /// ## Method
 ///
-/// Sweep a 256x256 grid of 16.0 fixed coordinates at a fixed step (the same shape a noise effect samples), accumulate every result into a checksum the compiler cannot elide, repeat, and keep the best of several runs so a scheduler hiccup does not become a slower kernel.
-/// Output is a Markdown table so the rows paste into performance.md unchanged.
+/// Sweep a 256x256 grid at a fixed step (the shape a noise effect samples), checksum every result so the compiler cannot elide it, keep the best of several runs. Output is a Markdown table that pastes into performance.md.
 ///
 /// ## Why it is not a doctest
 ///
-/// A benchmark that asserts a timing is a flaky test, and one that does not assert is a report.
-/// This is the report.
-/// Run by hand or through moondeck/check/bench_kernels.py.
+/// A benchmark that asserts a timing is a flaky test; this is the report. Run by hand or through moondeck/check/bench_kernels.py.
 
 #include "core/util/math16.h"
 #include "core/util/noise.h"
+#include "core/services/FractionalOctaveBank.h"
 
 #include <chrono>
 #include <cstdint>
@@ -31,11 +26,7 @@ constexpr uint32_t kGrid = 256;          // samples per axis per pass
 constexpr uint32_t kStep = 40;           // 16.0 fixed coordinate step: ~6.4 noise cells across
 constexpr int kRuns = 5;                 // best-of
 
-/// Time one kernel over the grid; returns the best ns per sample across kRuns.
-///
-/// The kernel arrives as a TEMPLATE parameter, not a std::function.
-/// A type-erased call cannot be inlined, so it adds an indirect call to every sample and lands in the same nanoseconds the measurement is trying to attribute to the kernel.
-/// At 5 ns a sample that is a large share of what is being reported.
+/// Best ns per sample across kRuns; the kernel is a TEMPLATE parameter, since a std::function adds an indirect call that is a large share of 5 ns.
 template <typename Fn>
 double bench(Fn fn) {
     double best = 1e18;
@@ -85,6 +76,25 @@ int main() {
         const int32_t dx = int32_t(x) - 128, dy = int32_t(y) - 128;
         const uint32_t r = dist16(dx, dy);
         return uint32_t(kaleido(angle16(atan16(dy, dx) + r * 4), 5)) + r;
+    });
+    // A sample per call, handed to the bank in 512-sample blocks as AudioService does, so the row reads as its cost per input sample.
+    static FractionalOctaveBank<3> bank;
+    static float block[512];
+    static size_t filled = 0;
+    bank.init(48000);
+    row("FractionalOctaveBank<3>, 31 bands at 48 kHz, per input sample", [](uint32_t x, uint32_t y, uint32_t) {
+        block[filled++] = static_cast<float>(int32_t((x * 7 + y * 13) & 255) - 128);
+        if (filled == 512) { bank.process({block, 512}); filled = 0; }
+        return uint32_t(bank.power(17));
+    });
+    static FractionalOctaveBank<12> notes;
+    static float noteBlock[512];
+    static size_t noteFilled = 0;
+    notes.init(48000, 440.0f, 2500.0f);
+    row("FractionalOctaveBank<12>, the notes to 2.5 kHz at 48 kHz, per input sample", [](uint32_t x, uint32_t y, uint32_t) {
+        noteBlock[noteFilled++] = static_cast<float>(int32_t((x * 7 + y * 13) & 255) - 128);
+        if (noteFilled == 512) { notes.process({noteBlock, 512}); noteFilled = 0; }
+        return uint32_t(notes.power(54));
     });
     return 0;
 }

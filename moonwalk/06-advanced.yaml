@@ -352,7 +352,7 @@ processes:
           enum: [A microphone on a board, The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux, A PulseAudio server into the container]
           description: What should the effects hear?
     intro: |
-      Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the levels.
+      Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the squelch.
     steps:
       - id: open
         say: Open the Audio service.
@@ -414,17 +414,12 @@ processes:
         when: { manual: "Pick the loopback source in device." }
         detail: |
           On the desktop it captures the picked device right away.
-      - id: floor
-        section: Set the levels
-        say: Set floor above the room's silence.
-        when: { manual: "Raise floor until a quiet room reads still." }
+      - id: squelch
+        section: Set the squelch
+        say: Raise squelch until a quiet room reads dark.
+        when: { manual: "Raise squelch until the dynamics line reads gated in a quiet room." }
         detail: |
-          Why an empty room can read at full scale: [Setting the levels](reference/audio-input.md#setting-the-levels).
-      - id: gain
-        say: Set gain when levels is manual.
-        when: { manual: "Move gain; it shows when levels is manual." }
-        detail: |
-          A loopback device needs it turned down hard: [Setting the levels](reference/audio-input.md#setting-the-levels).
+          How the floor, the gate and the window's top follow the sound: [The squelch](reference/audio-input.md#the-squelch).
     outro: |
       One machine's audio can drive every device: [send it over the network](reference/audio-input.md#driving-a-fleet-of-devices).
   - id: watch-output

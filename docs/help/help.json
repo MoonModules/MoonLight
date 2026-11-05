@@ -694,19 +694,19 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#wheellayout"
   },
   "AudioSpectrumEffect": {
-   "line": "The 16 mic frequency bands spread across X, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a grid at least three rows tall, the bottom rows can be a horizontal level bar under the spectrum, as tall as a bar is wide, with a square at its right end that flashes red on each detected hit. On a single row the bars collapse to per-column brightness.",
+   "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
      "title": "Comparing audio engines",
-     "text": "The sweep colors with the level bar off draw what WLED-MM's GEQ PPA draws: the same bars, heights and color sweep, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
+     "text": "The sweep colors with sixteen bands and the readouts off draw what WLED-MM's GEQ PPA draws: the same bars and heights, and its sweep's timing through the palette, so two boards side by side differ only in their audio. Point one at the other's WLED audio sync to see both engines through this one effect."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/AudioSpectrumEffect.gif",
    "controls": {
     "colorMode": {
-     "line": "By height (a VU), per band, or sweep: GEQ PPA's drifting rainbow.",
+     "line": "The palette by height (a VU), per band, or as GEQ PPA's sweep.",
      "tests": [
       {
        "title": "Effects teardown under a running pipeline",
@@ -714,8 +714,17 @@
       }
      ]
     },
-    "levelBar": {
-     "line": "A level bar under the bars, and a square that flashes red on a hit."
+    "speed": {
+     "line": "The sweep's swings through the palette a minute."
+    },
+    "readouts": {
+     "line": "The level meter, hits, gate and peak, drawn with the bars."
+    },
+    "noteNames": {
+     "line": "The strongest pitch classes top left, the key top right."
+    },
+    "bands": {
+     "line": "WLED-MM's sixteen, every third octave, or the piano's keys."
     }
    },
    "role": "effect",
@@ -776,7 +785,7 @@
   },
   "BeatRipplesEffect": {
    "line": "Every beat is a stone dropped in water.",
-   "summary": "A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
+   "summary": "`trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
    "attribution": "[Gomez](https://moonmodules.org/MoonLight/reference/attributions.html#gomez)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif",
    "controls": {
@@ -791,6 +800,9 @@
     },
     "shine": {
      "line": "How strongly the slope lights the surface."
+    },
+    "trigger": {
+     "line": "Every hit, or only the kick, the bass's own onset."
     }
    },
    "role": "effect",
@@ -799,6 +811,25 @@
    "doc": "light/effects.md#beatripples",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BeatRipplesEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatrippleseffect"
+  },
+  "DrumKitEffect": {
+   "line": "A drum kit seen from the audience, each drum lighting as it is played: the bass drum on the kick, the snare, the hi-hat with stars over the top, and three rack toms and a floor tom by their pitch, so a drum solo plays across the kit.",
+   "summary": "The kick, the snare and the hi-hat are the audio's bass, mid and treble onsets. The toms are the third-octave bands from 80 to 400 Hz, two bands each: the floor tom at the right, the rack toms over the bass drum, the high one at the left. Each hit glows for `decay` and fades; between hits the kit shows at `idle`.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/DrumKitEffect.gif",
+   "controls": {
+    "decay": {
+     "line": "How long a hit glows, in tens of milliseconds."
+    },
+    "idle": {
+     "line": "How bright the kit shows between hits, 0 for dark."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#drumkit",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DrumKitEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#drumkiteffect"
   },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
@@ -1339,7 +1370,7 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NetworkReceiveEffect.gif",
    "controls": {
     "universe_start": {
-     "line": "The first incoming universe to map, mirroring the sender."
+     "line": "The first universe to map; E1.31 reads 0 as 1."
     },
     "channels_per_universe": {
      "line": "Bytes each universe maps to, 510 or 512."
@@ -1933,6 +1964,22 @@
    "dim": 2,
    "doc": "light/effects.md#waterripple",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaterRippleEffect.h"
+  },
+  "WaterfallEffect": {
+   "line": "A spectrogram scrolling down the grid: each band a column, the newest moment on top, its color and brightness from the band's magnitude.",
+   "summary": "A held note draws a line down the grid, a sweep a diagonal, a drum hit a sharp edge across it, so the music's shape over the last seconds stays in view. The 31 third octaves when the mic measures them, the sixteen otherwise.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/WaterfallEffect.gif",
+   "controls": {
+    "speed": {
+     "line": "How fast the history flows down, a step every 256 - speed milliseconds."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#waterfall",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaterfallEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#waterfalleffect"
   },
   "FluidEffect": {
    "line": "Light poured into a simulated medium and carried by it.",
@@ -3252,7 +3299,7 @@
      "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
     },
     "universe_start": {
-     "line": "The first universe, sent as is; DDP ignores it."
+     "line": "The first universe, sent as is, except E1.31 sends a 0 as 1; DDP ignores it."
     },
     "channels_per_universe": {
      "line": "Channels each Art-Net or E1.31 universe carries, exactly; DDP ignores it.",
@@ -4067,7 +4114,7 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#services"
   },
   "AudioService": {
-   "line": "The audio source the audio-reactive effects read: a level, sixteen bands and the peak.",
+   "line": "The audio source the audio-reactive effects read: a level, sixteen bands, the 31 third octaves and the peak.",
    "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
    "attribution": "[softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks), [NetMindz](https://moonmodules.org/MoonLight/reference/attributions.html#netmindz), [wladi](https://moonmodules.org/MoonLight/reference/attributions.html#wladi)",
    "guide": [
@@ -4114,11 +4161,16 @@
      "line": "The codec's 7-bit address on the board's I2C bus.",
      "more": "0x18 for an ES8311, 0x40 to 0x43 for an ES7210 by its strapping. The bus is [I2cBus](https://moonmodules.org/MoonLight/moonmodules/core/system.html#i2c-bus)."
     },
+    "codecGain": {
+     "line": "The codec's analog input gain in dB, applied before its converter.",
+     "more": "30 for a microphone, 0 for line-in."
+    },
     "device": {
      "line": "The capture input, `default` following the system setting."
     },
     "sampleRate": {
      "line": "The mic or ADC sample rate.",
+     "more": "24000 carries the 28 bands to 10 kHz, the 16 WLED bars among them; 48000 adds the three to 20 kHz.",
      "tests": [
       {
        "title": "Services audio drives the effects",
@@ -4126,23 +4178,19 @@
       }
      ]
     },
-    "levels": {
-     "line": "Who sets the display window: the two sliders, or the learner.",
-     "more": "Automatic maps each band's own range onto the window, so treble reads level with bass."
-    },
-    "floor": {
-     "line": "The silence threshold: below it a band reads as nothing.",
-     "more": "Raise it until a quiet room reads still, or the learner maps the room's noise onto the whole display."
-    },
-    "gain": {
-     "line": "The window's width, a higher value running the display hotter.",
-     "more": "The default suits a quiet MEMS mic, so turn it down hard for a loopback device or everything clips.",
+    "squelch": {
+     "line": "How far over the room's learned noise sound must rise before the lights answer, in dB.",
+     "more": "Raise it until a quiet room reads dark.",
      "tests": [
       {
        "title": "Services audio drives the effects",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
       }
      ]
+    },
+    "harmony": {
+     "line": "Measure the notes, for the pitch classes, the harmony's changes and the notes bars.",
+     "more": "Off saves the semitone bank's share of a core where nothing reads the harmony."
     },
     "send audio": {
      "line": "Send the local analysis as audio-sync packets."
@@ -4169,6 +4217,21 @@
     },
     "peakHz": {
      "line": "The dominant frequency of the audio driving the effects."
+    },
+    "cpu": {
+     "line": "The share of one core the bands took last second, and the input's real rate."
+    },
+    "dynamics": {
+     "line": "The level, the room's floor, the window's top in dBFS, and the gate."
+    },
+    "notes": {
+     "line": "The three strongest pitch classes and the harmony's changes per second."
+    },
+    "key": {
+     "line": "The key over the last 15 s, and how far the notes are tuned from A440."
+    },
+    "ranges": {
+     "line": "The bass, mids and treble on the bands' scale, as the effects read them."
     }
    },
    "role": "service",

@@ -92,7 +92,7 @@ public:
     uint8_t addressing = 0;
     /// The wire protocol: Art-Net, E1.31 or DDP; the port follows.
     uint8_t protocol = 0;
-    /// The first universe, sent as is; DDP ignores it.
+    /// The first universe, sent as is, except E1.31 sends a 0 as 1; DDP ignores it.
     uint16_t universeStart = 0;
     /// Channels each Art-Net or E1.31 universe carries, exactly; DDP ignores it.
     /// @guide A light stays in one universe when its channels divide this: **510** does for RGB, RGBWW and 6 channels, **512** fills every universe. RGBW takes 508, a 13-channel head 507.
@@ -449,7 +449,7 @@ private:
             if (offset + runBytes > totalBytes) runBytes = totalBytes - offset;
             if (runBytes == 0) continue;   // a zero-count destination is configured but idle
 
-            uint16_t universe = universeStart;   // restart per destination
+            uint16_t universe = protocol == kProtoE131 ? e131FirstUniverse(universeStart) : universeStart;   // restart per destination
             size_t sent = 0;
             while (sent < runBytes) {
                 const size_t n = std::min(runBytes - sent, chunk);

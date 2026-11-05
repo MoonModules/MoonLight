@@ -7,58 +7,64 @@
 /// ## What lives in sibling files, and what does not
 ///
 /// Three subsystems are self-contained, each owning its private state and reaching this file only through declared symbols: the filesystem, updates and serial provisioning.
-/// The network stayed because its parts share file-scope state, the event handler and the interface pointers and the init flags among them.
-/// Splitting it would take either an internal header of external declarations or a singleton, which is a separate change for when it earns its keep.
+///
+/// The network stayed, its parts sharing file-scope state (the event handler, the interface pointers, the init flags); splitting it needs an internal header or a singleton, a change for when it earns its keep.
 ///
 /// ## Making written code visible to instruction fetch
 ///
-/// The bytes go in through data-bus stores, so on a cache-backed region they may still sit in the data cache, and two steps are needed in order.
-/// First write the data cache back so memory holds the code, then invalidate the instruction cache for the range so the core refetches it.
-/// A single instruction-type sync does only the second: on the P4 that refetches stale memory, the bytes never having left the data cache, and the core decodes garbage.
-/// On the other chip the region is directly executable and this is belt and braces, but it is correct on both.
+/// The bytes go in through data-bus stores and may still sit in the data cache, so two steps run in order: write the data cache back, then invalidate the instruction cache for the range.
+///
+/// An instruction-type sync alone does only the second, and on the P4 the core then refetches stale memory and decodes garbage. On the other chip the region is directly executable; the sequence is correct on both.
 ///
 /// ## The coprocessor version query is asked twice, then never again
 ///
 /// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link. It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
 ///
-/// Measured on a board with the radio live: the call times out after about a second, every second, forever. The module showed over a million microseconds per tick at zero frames, and every request queued a second or more behind the render loop.
-/// The link works while this particular call does not answer, so retrying buys nothing and costs a second of every tick.
-/// Two attempts rather than five, since each unanswered one is a second of stutter, and one retry still catches a companion that was mid-handshake. After that the display keeps what it learned, the version being unable to change while the host runs.
+/// Measured on a board with the radio live: the call times out after about a second, every second, forever, so the module showed over a million microseconds per tick at zero frames.
+///
+/// The link works while this one call does not answer, so retrying buys nothing. Two attempts, since each unanswered one is a second of stutter and one retry still catches a companion mid-handshake.
+///
+/// After that the display keeps what it learned, since the version cannot change while the host runs.
 ///
 /// ## The vendor PHY needs two steps the generic driver cannot do
 ///
 /// No dedicated driver exists for this part, so both go through the standard register interface, mirroring the vendor's own example for this board.
-/// Without the first the link never negotiates, which is why the activity indicator stays dark: the part disables auto-negotiation on reset, undocumented behavior the generic reset leaves alone.
-/// The second configures the interface's internal clock delays through the extended-register window, at the values that example uses; a board whose trace lengths need a different skew tunes them there.
+///
+/// Without the first the link never negotiates and the activity indicator stays dark: the part disables auto-negotiation on reset, undocumented behavior the generic reset leaves alone.
+///
+/// The second sets the interface's internal clock delays through the extended-register window, at the example's values; a board whose trace lengths need another skew tunes them there.
+///
 /// The coarse receive-clock enable in the first register is separate from the receive data delay, which sits in bits 13:10 of the RGMII config register.
 ///
 /// ## Why the hostname is applied at link-up
 ///
 /// The default wired interface starts its address client from its own connected handler, so a name set earlier is clobbered when that client restarts nameless and the lease lands blank.
-/// The name only takes on a stopped client, so the sequence is stop, set, start, and the fresh request then carries it. The wireless side needs none of this, its client starting on association, well after the name is set.
+///
+/// The name takes only on a stopped client, so the sequence is stop, set, start. The wireless side needs none of this: its client starts on association, well after the name is set.
 ///
 /// ## The reconnect is ours to make, and unbounded
 ///
-/// Without an explicit call a dropped association is permanent: the device keeps rendering but is unreachable until it is power-cycled.
-/// Which for a controller in a ceiling is a real failure. The vendor's own example has the same call in the same place. The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the entire point.
+/// Without an explicit call a dropped association is permanent: the device keeps rendering but stays unreachable until power-cycled, a real failure for a controller in a ceiling.
 ///
-/// It reconnects immediately and does not sleep to pace itself, running on the event task that also carries the wired and address events, where blocking would stall the whole stack.
-/// The pacing is free: a failing association takes a second or two to time out before the next event arrives, so even a wrong credential retries at a sane rate.
+/// The vendor's example makes the same call in the same place. The retry is unbounded by design, since the recoverable causes outlast any retry count and self-healing is the point.
 ///
-/// The reason code is logged because without it the line says only that it disconnected, which sends a user hunting coverage for a cause the radio already named.
-/// A board on an incompatible band reports no access point found on every attempt, and that read identically to a weak-signal drop.
+/// It reconnects at once without sleeping, on the event task that also carries the wired and address events, where blocking would stall the whole stack.
+///
+/// The pacing is free: a failing association takes a second or two to time out, so even a wrong credential retries at a sane rate.
+///
+/// The reason code is logged, since a board on an incompatible band reports no access point found on every attempt, which otherwise reads like a weak-signal drop.
 ///
 /// ## The companion chip initializes itself
 ///
-/// On the chip with no native radio, the calls are forwarded to a companion that self-initializes at boot through a constructor, setting up its transport and channels.
-/// Do not call the init or connect entry points here: init is already done, and connect is really a transport reconfigure that resets the companion and re-initializes its bus.
-/// On a live link that fails and tears down the working boot-time connection, proven on the bench.
+/// On the chip with no native radio, the calls go to a companion that initializes itself at boot through a constructor, setting up its transport and channels.
+///
+/// Do not call init or connect here: init is done, and connect is a transport reconfigure that resets the companion, which on a live link tears down the working connection, proven on the bench.
 ///
 /// ## Advertising needs the interface registered by hand
 ///
-/// The component claims to run by default on preconfigured interfaces, but on one chip that does not catch the wired one, so the record ships with no address.
-/// The device then advertises a service a home automation system can see but not resolve, leaving a blank address in its browser and no discovery.
-/// Registering the interface by pointer and enabling it forces the probe and announce onto the real one, and is harmless where the default already covers it.
+/// The component claims to run by default on preconfigured interfaces, but on one chip it misses the wired one, so the record ships with no address and a home automation system cannot resolve it.
+///
+/// Registering the interface by pointer and enabling it forces the probe and announce onto it, harmless where the default already covers it.
 ///
 /// A re-advertise removes the service record and adds it back rather than renaming it. Since renaming does not reliably re-announce on the current interface while a remove and add drives it back through the state machine.
 ///
@@ -68,8 +74,17 @@
 ///
 /// ## Why the TCP write is bounded twice
 ///
-/// A write retries on a full buffer, but it runs on the render thread, where an unbounded retry against a stalled peer ends in a watchdog reboot.
-/// The stall bound, reset by progress, lets a slow but steady transfer finish; the total bound stops a one-byte trickle from holding the thread, a remotely triggerable reboot.
+/// A write retries on a full buffer, but on the render thread an unbounded retry against a stalled peer ends in a watchdog reboot.
+///
+/// The stall bound, reset by progress, lets a slow steady transfer finish; the total bound stops a one-byte trickle from holding the thread, a remotely triggerable reboot.
+///
+/// ## The internal MAC passes all multicast once its filter overflows
+///
+/// The internal MAC filters multicast in 8 address slots, and the stack's own groups (all-hosts, mDNS, IPv6's) take most; a group past them is joined yet never delivered, which ESP-IDF only logs.
+///
+/// So while MoonLight's sockets hold more groups than the slots left, the MAC passes all multicast and lwIP keeps the joined groups, as a driver falls back to all-multicast once its filter overflows.
+///
+/// Below that the filter drops unwanted multicast in hardware, at no cost.
 
 #include "platform/platform.h"
 #include <netinet/tcp.h>   // TCP_NODELAY on an accepted connection
@@ -172,8 +187,7 @@ void* alloc(size_t bytes) {
 }
 
 void* allocInternal(size_t bytes) {
-    // Internal only, no PSRAM fallback here, the caller chose this seam because PSRAM latency breaks it (an ISR-read buffer); a silent PSRAM grant would hand back the exact problem. Caller falls back.
-    // Aligned as malloc promises, since InternalRamObject constructs objects here and the heap alone guarantees only a word.
+    // Internal only, no PSRAM fallback: the caller chose this seam because PSRAM latency breaks it. Aligned as malloc promises, since InternalRamObject constructs objects here.
     return heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
@@ -601,6 +615,24 @@ static esp_eth_handle_t ethHandle_ = nullptr;
 #ifdef MM_ETH_W5500
 static bool ethSpiActive_ = false;
 #endif
+#ifdef CONFIG_ETH_USE_ESP32_EMAC
+// The MAC's multicast mode follows the groups held: @xref{the-internal-mac-passes-all-multicast-once-its-filter-overflows|why}.
+static constexpr uint8_t kEmacFreeGroupSlots = 3;   // measured on a P4: the discovery group and two universes arrived, a third did not
+static esp_eth_handle_t ethEmacHandle_ = nullptr;   // the internal MAC's driver, the one with the slot limit
+static std::atomic<uint8_t> ethHeldGroups_{0};      // groups MoonLight's sockets hold
+static bool ethAllMulticast_ = false;               // the mode the MAC reached, under the lock below
+static std::mutex ethMulticastMutex_;               // one switch at a time, so a join and a leave on two tasks cannot cross and leave the MAC in the stale mode
+// Put the MAC in the mode the held groups need; a socket's join or leave calls it after counting, and a switch that failed is tried again on the next.
+static void ethFitMulticastFilter() {
+    if (!ethEmacHandle_) return;
+    std::lock_guard<std::mutex> lock(ethMulticastMutex_);
+    const bool want = ethHeldGroups_.load(std::memory_order_relaxed) > kEmacFreeGroupSlots;   // read under the lock, so the last caller fits the last count
+    if (ethAllMulticast_ == want) return;   // already in that mode
+    bool allMulticast = want;
+    if (esp_eth_ioctl(ethEmacHandle_, ETH_CMD_S_ALL_MULTICAST, &allMulticast) == ESP_OK) ethAllMulticast_ = want;
+    else ESP_LOGW(NET_TAG, "Ethernet all-multicast not switched: multicast groups past the MAC's filter slots stay unheard");
+}
+#endif
 #endif
 static bool netifInitDone_ = false;
 
@@ -836,6 +868,12 @@ static bool ethInitEmac() {
         return fail(esp_err_to_name(err), mac, phy);
     }
     // From here the driver owns mac+phy (driver_uninstall frees them); the remaining failure paths uninstall the driver instead of del-ing mac/phy.
+    ethEmacHandle_ = eth_handle;
+    {
+        std::lock_guard<std::mutex> lock(ethMulticastMutex_);
+        ethAllMulticast_ = false;   // a new driver starts filtered
+    }
+    ethFitMulticastFilter();   // fit it to the groups already held
 #ifdef CONFIG_IDF_TARGET_ESP32S31
     // The YT8531 needs a vendor-specific auto-nego re-enable plus RGMII delays the generic driver cannot do, or the link never negotiates. Run right after install, as IDF's example does. Non-fatal: a failed write logs a warning and continues.
     {
@@ -856,6 +894,7 @@ static bool ethInitEmac() {
         ESP_LOGE(NET_TAG, "Ethernet start failed: %s", esp_err_to_name(err));
         esp_event_handler_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, &ethEventHandler);
         esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &ethEventHandler);
+        ethEmacHandle_ = nullptr;
         esp_eth_driver_uninstall(eth_handle);  // frees mac + phy
         if (ethNetif_) { esp_netif_destroy(ethNetif_); ethNetif_ = nullptr; }
         return false;
@@ -2032,15 +2071,23 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
 }
 
 // Join an IPv4 multicast group so the bound socket receives datagrams sent to it (WLED audio sync multicasts to 239.0.0.1). INADDR_ANY as the interface lets lwip pick the default route's netif.
-bool UdpSocket::membership(const char* group, bool join) {
-    if (fd_ < 0 || !group) return false;
+bool UdpSocket::membership(const uint8_t group[4], bool join) {
+    if (fd_ < 0) return false;
     ip_mreq mreq{};
-    if (inet_pton(AF_INET, group, &mreq.imr_multiaddr) != 1) return false;
+    std::memcpy(&mreq.imr_multiaddr.s_addr, group, 4);   // network order = octets
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     // A socket that joins a group and also sends to it must not hear its own sends back.
     const uint8_t loop = 0;
     if (join) setsockopt(fd_, IPPROTO_IP, IP_MULTICAST_LOOP, &loop, sizeof(loop));
-    return setsockopt(fd_, IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
+    const bool ok = setsockopt(fd_, IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq)) == 0;
+#if !defined(MM_NO_ETH) && defined(CONFIG_ETH_USE_ESP32_EMAC)
+    if (ok) {   // a leave of a group never joined fails, so the count stays true
+        if (join) ethHeldGroups_.fetch_add(1, std::memory_order_relaxed);
+        else ethHeldGroups_.fetch_sub(1, std::memory_order_relaxed);
+        ethFitMulticastFilter();
+    }
+#endif
+    return ok;
 }
 
 bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port,
@@ -2056,11 +2103,11 @@ bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port,
 
 void UdpSocket::close() {
     if (fd_ >= 0) {
+        for (uint8_t i = 0; i < count_; i++) membership(groups_[i].ip, false);   // left by name, so the held count drops with them
         lwip_close(fd_);
         fd_ = -1;
     }
-    group_[0] = 0;   // the membership went with the socket
-    joined_ = false;
+    forgetGroups();
     joinCount_ = 0;
 }
 

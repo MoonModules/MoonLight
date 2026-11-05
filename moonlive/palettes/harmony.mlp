@@ -1,0 +1,68 @@
+// Harmony: the colors of the chord being played, changing on each chord change, so the same chord always returns as the same colors.
+
+class Harmony {
+  byte crossfade = 15;
+  int hue[3];
+  int from[3];
+  int changedAt = 0;
+  byte heard = 0;
+
+  string tags() { return "🎨🎶"; }
+
+  void defineControls() {
+    addControl("crossfade", crossfade, 0, 100); // the crossfade to a new chord, in tens of milliseconds
+  }
+
+  // A pitch class's place on the circle of fifths, C, G, D and on, so related chords take neighboring colors.
+  int fifths(int c) { return mod(c * 7, 12); }
+
+  // The three strongest pitch classes, ordered by their place on the circle so a chord gives one palette whichever note is loudest.
+  void takeChord() {
+    int a = -1;
+    int b = -1;
+    int c = -1;
+    for (int i = 0; i < 12; i = i + 1) {
+      int v = audioChroma(i);
+      if (v > 0) {
+        if (a < 0 || v > audioChroma(a)) { c = b; b = a; a = i; }
+        else if (b < 0 || v > audioChroma(b)) { c = b; b = i; }
+        else if (c < 0 || v > audioChroma(c)) { c = i; }
+      }
+    }
+    if (c < 0) { return; }
+    int p = fifths(a);
+    int q = fifths(b);
+    int r = fifths(c);
+    int s = 0;
+    if (p > q) { s = p; p = q; q = s; }
+    if (q > r) { s = q; q = r; r = s; }
+    if (p > q) { s = p; p = q; q = s; }
+    // The chord already showing changes nothing: frames faster than the audio read one change more than once.
+    if (heard == 1 && hue[0] == div(p * 256, 12) && hue[1] == div(q * 256, 12) && hue[2] == div(r * 256, 12)) { return; }
+    for (int k = 0; k < 3; k = k + 1) { from[k] = hue[k]; }
+    hue[0] = div(p * 256, 12);
+    hue[1] = div(q * 256, 12);
+    hue[2] = div(r * 256, 12);
+    if (heard == 0) { for (int k = 0; k < 3; k = k + 1) { from[k] = hue[k]; } }
+    changedAt = t;
+    heard = 1;
+  }
+
+  void tick() {
+    if (heard == 0 || audioChordChange() > 0) { takeChord(); }
+    if (heard == 0) {
+      // Before the first chord, the whole circle.
+      for (int i = 0; i < 16; i = i + 1) { setPalEntryHSV(i, i * 16, 255, 255); }
+      return;
+    }
+    int span = crossfade * 10;
+    int mix = 256;
+    if (span > 0 && t - changedAt < span) { mix = div((t - changedAt) * 256, span); }
+    for (int i = 0; i < 16; i = i + 1) {
+      int k = div(i * 3, 16);
+      // The short way round the wheel from the old chord's hue to the new one's.
+      int d = mod(hue[k] - from[k] + 384, 256) - 128;
+      setPalEntryHSV(i, mod(from[k] + div(d * mix, 256) + 256, 256), 255, 255);
+    }
+  }
+}

@@ -29,13 +29,45 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ---
 
-## v7.0.0
+## v7.1.0
+
+### ESP32-P4 boards read their flash over four lines
+
+**Action: *install over USB* once, on every ESP32-P4 device (`esp32p4rev1-eth`, `esp32p4rev1-eth-wifi`, `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi`).**
+
+The P4 firmware images read code from flash over four data lines at 80 MHz (QIO) where they used two at 40 MHz (DIO), as the S3 images did in v7.0.0. The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses the new app and the Firmware card reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`. Install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too; the partition table is unchanged, so with *Erase chip first* left unticked the config stays. Take a backup first anyway.
+
+### Audio levels set themselves: `floor`, `gain` and `levels` give way to `squelch`
+
+**Action: *check `squelch`* on the Audio card if a quiet room lights up or a quiet source stays dark; the default of 10 dB suits a MEMS microphone.**
+
+The service learns the room's noise floor, gates silence and holds the loudest band at the top of the display, so `levels`, `gain` and the per-band learner are gone. `floor`, the threshold, is now `squelch`: how many dB above the learned floor sound must rise, in place of a fixed level; a stored `floor` is not carried over.
+
+### AudioSpectrum's `levelBar` is `readouts`
+
+**Action: *nothing*; a restored backup or preset carries the setting over.**
+
+The switch that drew the level bar now draws every readout beside the bars: the dominant frequency, the gate, the bass, mids and treble, and the twelve pitch classes. A stored `levelBar` comes back as `readouts`, and the new `bands` starts on the 31 third octaves.
+
+### The audio sample rate is 24 kHz by default, and stored by name
+
+**Action: *check the Audio card's `sampleRate`* on a board that analyzes its own microphone, and pick 24000 unless the board needs the bands above 10 kHz.**
+
+The audio measures third-octave bands, and 24 kHz carries the 28 of them up to 10 kHz, the 16 WLED bars among them, at half the cost of 48 kHz. The list gained 24000 between 22050 and 44100, and the setting is now stored by its name; one stored as a position in the old list comes back one rate lower, 44100 as 24000 and 48000 as 44100, and a board that never stored one moves from 48000 to 24000.
+
+### E1.31 numbers its universes from 1 when `universe_start` is 0
+
+**Action: *nothing* for most setups. Where a MoonLight Network Send feeds a MoonLight Network Receive over E1.31 and only one end runs this version, update the other too. Where an E1.31 sender or receiver was set one universe off to make up for MoonLight's numbering, set it back.**
+
+E1.31 has no universe 0, and standard senders and receivers such as xLights and FPP start at 1. With `universe_start` 0, Network Send sent E1.31 universe 0, which those receivers drop, and Network Receive placed an E1.31 sender's universe 1 one universe in, shifting the image. Both now start E1.31 at universe 1 when `universe_start` is 0; a start of 1 or more maps as it is, and Art-Net keeps its universe 0.
 
 ### The Adafruit MatrixPortal S3 has its own firmware, `esp32s3-n8r2`
 
 **Action: *nothing*; to use the board's whole 8 MB, *install over USB* once with *Erase chip first* ticked.**
 
 A MatrixPortal ran the `esp32s3-zero` image, which keeps working on it but uses 4 MB of its 8. The `esp32s3-n8r2` image has a 3 MB app slot and 4 MB of filesystem. Its partition table differs from the Zero's, which an update over the air never rewrites, so moving takes one install over USB, and the device comes back unprovisioned: take a backup first and restore it after.
+
+## v7.0.0
 
 ### Network Send fills each universe with `channels_per_universe` channels exactly
 
@@ -72,7 +104,7 @@ The ring refuses to run when its refill would read PSRAM, since a flash save can
 
 **Action: *install over USB* once, on an `esp32s3-n16r8`, `esp32s3-n8r8` or `esp32s3-zero` device; the others need *nothing*.**
 
-These three firmwares read code from flash over four data lines (QIO) where they used two (DIO), which makes an S3's tick about 16% faster.
+These three firmware images read code from flash over four data lines (QIO) where they used two (DIO), which makes an S3's tick about 16% faster.
 The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses an app whose mode differs from the running one.
 The Firmware card then reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`.
 Install this release once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too.

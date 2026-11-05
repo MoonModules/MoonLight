@@ -3,40 +3,49 @@
 
 #include "doctest.h"
 #include "core/services/AudioBands.h"
-#include "platform/platform.h"   // platform::audioFft (desktop naive DFT)
 
 #include <cmath>
 #include <cstring>   // std::memcpy: clang finds it transitively, GCC does not (CI's sanitizer builds)
 #include <numbers>
+#include <utility>
 #include <vector>
 
-// The success spec for the frequency path, written RED before AudioService's FFT call exists. The whole pipeline runs host-side: synthesize a sine -> applyWindow -> platform::audioFft (the desktop reference DFT) -> magnitudesToBands, then assert the energy lands in the right band and the reported peak frequency tracks the tone. This is the coverage that lets the band-map tuning happen in CI instead of on the bench over months.
+// The success spec for the frequency path, host-side: synthesize a sine, feed the third-octave bank, read the sixteen bands and the peak through bankToBands, and assert the energy lands in the right band and the peak frequency tracks the tone.
 
 namespace {
 
-constexpr size_t kN = 256;            // FFT size (power of two)
-constexpr uint32_t kRate = 22050;     // default sample rate
+uint8_t thirdsScratch[31];   // the 31 a case does not read
 
-// Build kN samples of a sine at `freqHz`, 24-bit amplitude, in the int32 slot.
-std::vector<int32_t> tone(double freqHz, double amp24 = (1 << 21)) {
-    constexpr double kPi = std::numbers::pi_v<double>;
-    std::vector<int32_t> v(kN);
-    const double cycles = freqHz * kN / kRate;
-    for (size_t i = 0; i < kN; i++) {
-        const double s = amp24 * std::sin(2.0 * kPi * cycles * static_cast<double>(i) / kN);
-        const int64_t sample = static_cast<int64_t>(s) << 8;   // avoid signed <<8 UB
-        v[i] = static_cast<int32_t>(sample);
-    }
-    return v;
+constexpr uint32_t kRate = 48000;     // the default sample rate
+constexpr float kAmp = 16384.0f;      // a tone at -54 dBFS, 24-bit samples shifted to their magnitude
+
+// One bank for every case: its filter state belongs off a test's stack.
+mm::ThirdOctaveBank& freshBankKeep() {
+    static mm::ThirdOctaveBank bank;
+    return bank;
 }
 
-// Run the full window -> FFT -> bands pipeline; return the frame fields of interest. noiseFloor=80 / gain=80 set a dB window (~100 dB floor, ~40 dB span) that brackets the test tones' ~125 dB level, so a dominant band stands clearly above the others instead of every band saturating at the top of the window.
-void analyse(const std::vector<int32_t>& samples, uint8_t (&bands)[16],
-             uint16_t& peakHz, uint16_t& peakMag) {
-    std::vector<float> windowed(kN), mag(kN / 2);
-    mm::applyWindow(samples.data(), kN, windowed.data());
-    mm::platform::audioFft(windowed.data(), kN, mag.data());
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate, /*noiseFloor*/80, /*gain*/80, bands, peakHz, peakMag);
+mm::ThirdOctaveBank& freshBank() {
+    auto& bank = freshBankKeep();
+    bank.init(kRate);
+    return bank;
+}
+
+// Dynamics that learned a quiet room at -100 dBFS, so a tone opens the gate.
+mm::AudioDynamics quietRoom() {
+    mm::AudioDynamics d;
+    for (int i = 0; i < 50; i++) d.update(-100.0f, -106.0f, 10.0f);
+    return d;
+}
+
+// Half a second of a sine at `freqHz` through the bank, then the frame fields of interest after the window's top settled on it.
+void analyse(float freqHz, uint8_t (&bands)[16], uint16_t& peakHz, uint16_t& peakMag, float amp = kAmp) {
+    auto& bank = freshBank();
+    const double step = 2.0 * std::numbers::pi * static_cast<double>(freqHz) / kRate;
+    for (uint32_t i = 0; i < kRate / 2; i++) bank.push(amp * static_cast<float>(std::sin(step * i)));
+    mm::AudioDynamics dyn = quietRoom();
+    const float levelDb = amp > 0.0f ? 20.0f * std::log10(amp / 8388608.0f) : -120.0f;
+    for (int i = 0; i < 20; i++) mm::bankToBands(bank, levelDb, 10.0f, dyn, thirdsScratch, bands, peakHz, peakMag);
 }
 
 // Index of the loudest band.
@@ -49,10 +58,9 @@ int dominantBand(const uint8_t (&bands)[16]) {
 } // namespace
 
 TEST_CASE("AudioBands: silence yields all-zero bands and no peak") {
-    std::vector<int32_t> s(kN, 0);
     uint8_t bands[16];
     uint16_t peakHz = 9999, peakMag = 9999;
-    analyse(s, bands, peakHz, peakMag);
+    analyse(1000.0f, bands, peakHz, peakMag, 0.0f);
     for (int b = 0; b < 16; b++) CHECK(bands[b] == 0);
     CHECK(peakHz == 0);
     CHECK(peakMag == 0);
@@ -61,123 +69,56 @@ TEST_CASE("AudioBands: silence yields all-zero bands and no peak") {
 TEST_CASE("AudioBands: a low tone lands in a low band, a high tone in a high band") {
     uint8_t lo[16], hi[16];
     uint16_t hz, mag;
-    analyse(tone(500.0), lo, hz, mag);     // bass
-    analyse(tone(8000.0), hi, hz, mag);    // treble (under the ~11 kHz Nyquist)
-    const int loBand = dominantBand(lo);
-    const int hiBand = dominantBand(hi);
-    CHECK(hiBand > loBand);                // higher frequency → higher band index
+    analyse(125.0f, lo, hz, mag);
+    analyse(6300.0f, hi, hz, mag);
+    CHECK(dominantBand(lo) == 3);    // the 125 Hz band
+    CHECK(dominantBand(hi) == 14);   // the 6.3 kHz band
 }
 
-TEST_CASE("AudioBands: the reported peak frequency tracks the played tone") {
-    for (double f : {1000.0, 3000.0, 6000.0}) {
-        uint8_t bands[16];
-        uint16_t peakHz, peakMag;
-        analyse(tone(f), bands, peakHz, peakMag);
-        REQUIRE(peakMag > 0);
-        // Within one FFT bin (rate/N ≈ 86 Hz) of the true tone.
-        const double binHz = static_cast<double>(kRate) / kN;
-        CHECK(std::abs(static_cast<double>(peakHz) - f) <= binHz * 1.5);
-    }
+void checkPeak(float f) {
+    CAPTURE(f);
+    uint8_t bands[16];
+    uint16_t peakHz, peakMag;
+    analyse(f, bands, peakHz, peakMag);
+    REQUIRE(peakMag > 0);
+    CHECK(std::abs(static_cast<float>(peakHz) / f - 1.0f) < 0.04f);   // within 4%, a sixth of a band
+}
+
+// The peak is the loudest band refined between its neighbors, so a tone between two centers still reads close to where it sits.
+TEST_CASE("AudioBands: the reported peak frequency tracks the played tone, between band centers too") {
+    for (float f : {150.0f, 440.0f, 1000.0f, 1100.0f, 3000.0f, 6000.0f}) checkPeak(f);
 }
 
 TEST_CASE("AudioBands: a single tone concentrates energy, not smears it everywhere") {
     uint8_t bands[16];
     uint16_t peakHz, peakMag;
-    analyse(tone(2000.0), bands, peakHz, peakMag);
+    analyse(2000.0f, bands, peakHz, peakMag);
     const int dom = dominantBand(bands);
-    // The dominant band is clearly above the average — the window/FFT isolated it.
     int sum = 0;
     for (int b = 0; b < 16; b++) sum += bands[b];
-    const int avg = sum / 16;
-    CHECK(bands[dom] > avg * 2);
+    CHECK(bands[dom] > (sum / 16) * 2);
 }
 
-TEST_CASE("AudioBands: noiseFloor gates a low idle spectrum to zero, gain scales it back") {
-    // A weak tone that lands a small but nonzero band magnitude at unity gain.
-    auto quiet = tone(2000.0, 1 << 12);   // small amplitude
-    std::vector<float> windowed(kN), mag(kN / 2);
-    mm::applyWindow(quiet.data(), kN, windowed.data());
-    mm::platform::audioFft(windowed.data(), kN, mag.data());
-
-    uint8_t open[16], gated[16];
-    uint16_t hz, pm;
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate, /*noiseFloor*/0, 16, open, hz, pm);
-    int openMax = 0;
-    for (int b = 0; b < 16; b++) if (open[b] > openMax) openMax = open[b];
-    REQUIRE(openMax > 0);   // something lights with the gate open
-
-    // A noiseFloor above that level zeroes every band — the fix for idle flicker.
-    mm::magnitudesToBands(mag.data(), kN / 2, kRate,
-                          static_cast<uint16_t>(openMax + 50), 16, gated, hz, pm);
-    for (int b = 0; b < 16; b++) CHECK(gated[b] == 0);
-}
-
-TEST_CASE("AudioBands: zero / degenerate input never crashes") {
+TEST_CASE("AudioBands: a bank with no bands yields silence, not a crash") {
+    static mm::ThirdOctaveBank bank;
+    bank.init(0);
     uint8_t bands[16];
-    uint16_t peakHz, peakMag;
-    mm::magnitudesToBands(nullptr, 8, kRate, 0, 16, bands, peakHz, peakMag);
+    uint16_t peakHz = 1, peakMag = 1;
+    mm::AudioDynamics dyn = quietRoom();
+    mm::bankToBands(bank, -40.0f, 10.0f, dyn, thirdsScratch, bands, peakHz, peakMag);
+    CHECK(peakHz == 0);
     CHECK(peakMag == 0);
-    float mag1 = 1.0f;
-    mm::magnitudesToBands(&mag1, 0, kRate, 0, 16, bands, peakHz, peakMag);   // nMag 0
-    CHECK(peakMag == 0);
-    mm::magnitudesToBands(&mag1, 1, 0, 0, 16, bands, peakHz, peakMag);       // rate 0
-    CHECK(peakMag == 0);
-
-    // applyWindow on degenerate sizes is a no-op, not a crash.
-    float out1 = 123.0f;
-    int32_t s = 7 << 8;
-    mm::applyWindow(&s, 0, &out1);
-    mm::applyWindow(nullptr, 4, &out1);
-    CHECK(true);
 }
 
-// The band SPLIT itself, rather than what lands in a band. A 16-band display is only 16 bands if every band owns bins of its own: a band whose edges collapse onto the same bin index can never light, whatever the signal, and a band with one bin reads a sixteenth of what a band with 75 does under the same energy. Both were true of the geometric split (edge[e] = nMag^(e/16)) at the shipped shape, which is what these pin.
-
-TEST_CASE("every band owns at least one FFT bin, so no band is dark whatever the music") {
-    // The shipped shape: 512-sample FFT at 22050 Hz, so 256 bins of 43.1 Hz. The geometric split gave bands 0 and 2 no bins at all (edges 1-1 and 2-2) and bands 1 and 4 a single bin, which is a quarter of the display that cannot respond.
-    const size_t nMag = 256;
-    const uint32_t sampleRate = 22050;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, sampleRate, edges);
-    for (uint8_t b = 0; b < 16; b++) {
-        INFO("band ", b, " spans bins ", edges[b], "..", edges[b + 1]);
-        CHECK(edges[b + 1] > edges[b]);
-    }
-    CHECK(edges[0] >= 1);            // bin 0 is DC, never part of a band
-    CHECK(edges[16] == nMag);        // and the top band reaches the Nyquist end
+// The sixteen display bands are WLED-MM's default GEQ bars, so two boards side by side draw the same picture and a WLED receiver reads the same sixteen from either.
+TEST_CASE("the sixteen bands sit on WLED-MM's default GEQ centers") {
+    const float wledMm[16] = {39.81f, 63.10f, 79.43f, 125.89f, 158.49f, 251.19f, 398.11f, 501.19f,
+                              794.33f, 1000.0f, 1584.89f, 1995.26f, 3162.28f, 5011.87f, 6309.57f, 10000.0f};
+    const auto& bank = freshBank();
+    for (uint8_t b = 0; b < 16; b++) CHECK(std::abs(bank.centerHz(mm::kSixteenOfThirds[b]) / wledMm[b] - 1.0f) < 0.025f);
 }
 
-TEST_CASE("band edges rise with frequency, so a band is a range rather than a reshuffle") {
-    const size_t nMag = 256;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, 22050, edges);
-    for (uint8_t e = 1; e <= 16; e++) CHECK(edges[e] > edges[e - 1]);
-}
-
-TEST_CASE("a small FFT still yields sixteen usable bands, because a fixture may run one") {
-    // 128 bins is the smallest shape worth supporting; a geometric split there is degenerate over half its range. Sixteen bands must still each own a bin.
-    const size_t nMag = 128;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, 22050, edges);
-    for (uint8_t b = 0; b < 16; b++) {
-        INFO("band ", b, " spans bins ", edges[b], "..", edges[b + 1]);
-        CHECK(edges[b + 1] > edges[b]);
-    }
-}
-
-TEST_CASE("the low bands keep the resolution the FFT can actually deliver") {
-    // Above the bin width the split is free to place edges anywhere; below it there is nothing to place. The lowest band starts at the first non-DC bin and the early bands stay narrow, so the bass keeps what resolution exists rather than being folded into one wide band.
-    const size_t nMag = 256;
-    const uint32_t sampleRate = 22050;
-    size_t edges[17];
-    mm::audioBandEdges(nMag, sampleRate, edges);
-    const float binHz = static_cast<float>(sampleRate) / (2.0f * static_cast<float>(nMag));
-    CHECK(edges[0] == 1);                                  // starts just above DC
-    CHECK(edges[4] * binHz < 400.0f);                      // four bands inside the bass
-    CHECK(edges[8] * binHz < 2000.0f);                     // half the display below 2 kHz
-}
-
-// The BALLISTIC of a band. A meter that rises and falls at the same speed is the wrong instrument: it makes the attack as sluggish as the decay and rounds off exactly the drum hit an audio effect exists to show. Broadcast meters (PPM, IEC 60268-10) rise fast and fall slowly, and WLED, FastLED and LedFx each arrived at the same asymmetric form independently.
+// The BALLISTIC of a band: fast attack, slow decay, as broadcast meters (PPM, IEC 60268-10) do, so a drum hit is not rounded off by a decay-speed rise.
 
 TEST_CASE("a band rises to a transient at once and falls back slowly, the PPM ballistic") {
     uint8_t v = 0;
@@ -224,7 +165,7 @@ TEST_CASE("every band gets its own ballistic, so a hit in the bass does not smoo
     CHECK(sm[0] < 200);
 }
 
-// Onset detection. The standard onset detection function is SPECTRAL FLUX (Bello 2005, Dixon 2006): the sum over bands of the positive change since the last block. A rise across the spectrum is a hit; a fall is not, and a steady tone is not. It is 16 subtractions on bands we already have, so it costs nothing and lands with the block's own latency.
+// Onset detection by SPECTRAL FLUX (Bello 2005, Dixon 2006): the sum over bands of the positive change since the last block. A spectrum-wide rise is a hit; a fall or a steady tone is not.
 
 TEST_CASE("spectral flux reads a rise, ignores a fall, and is zero on a steady spectrum") {
     uint8_t prev[16] = {}, cur[16] = {};
@@ -255,156 +196,14 @@ TEST_CASE("an onset fires once per hit, not once per block the hit lasts, and no
     CHECK(swell <= 1);                                      // the first block may fire; nothing after
 }
 
-// Per-band conditioning: the learner. Each band learns its own floor and peak in dB; `ratio` decides how much of the rig's coloration is removed. Fed directly with dB so the tests say what they mean.
-
-namespace {
-void feedBlocks(mm::BandConditioner& c, const float db[16], float out[16], int blocks, uint8_t ratio,
-                float maxGain = 24.0f, bool learning = true) {
-    // gate 0: these cases test the conditioner's mapping, so nothing is gated as silence. The gate has its own case below.
-    for (int i = 0; i < blocks; i++) c.process(db, out, 23, 60.0f, 40.0f, ratio, maxGain, learning, 0.0f);
-}
-}
-
-TEST_CASE("at ratio 1:1 the conditioner changes nothing, so the music's own balance is untouched") {
-    mm::BandConditioner c; float db[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) db[b] = 80.0f - b * 1.5f;
-    feedBlocks(c, db, out, 100, 1);
-    for (uint8_t b = 0; b < 16; b++) CHECK(out[b] == doctest::Approx(db[b]));
-}
-
-TEST_CASE("a spectrally tilted rig reads flat at a high ratio, once the learner has settled") {
-    // Pink noise through a peak-per-band reading tilts 1/sqrt(f): the treble far below the bass. Each band has the same DYNAMICS (a 20 dB swing), only its level differs. After settling, the conditioned tops line up within a couple of dB, so a balanced signal shows as balanced.
-    mm::BandConditioner c; float lo[16], hi[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) { hi[b] = 90.0f - b * 1.5f; lo[b] = hi[b] - 20.0f; }
-    // The cap is not under test here (it has its own case below), so it sits above the tilt.
-    for (int i = 0; i < 400; i++) { feedBlocks(c, hi, out, 1, 20, 40.0f); feedBlocks(c, lo, out, 1, 20, 40.0f); }
-    feedBlocks(c, hi, out, 1, 20, 40.0f);
-    float mn = 1e9f, mx = -1e9f;
-    for (uint8_t b = 0; b < 16; b++) { if (out[b] < mn) mn = out[b]; if (out[b] > mx) mx = out[b]; }
-    CHECK(mx - mn < 2.0f);
-    CHECK(out[15] == doctest::Approx(100.0f).epsilon(0.03));   // the top lands at the window's top
-}
-
-TEST_CASE("each band learns its own floor, so a hum in one band does not raise the others") {
-    mm::BandConditioner c; float silence[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) silence[b] = 30.0f;
-    silence[1] = 55.0f;                                        // mains hum in band 1
-    feedBlocks(c, silence, out, 200, 20);
-    CHECK(c.floorDb[1] == doctest::Approx(55.0f).epsilon(0.05));
-    CHECK(c.floorDb[0] == doctest::Approx(30.0f).epsilon(0.05));
-    CHECK(c.floorDb[8] == doctest::Approx(30.0f).epsilon(0.05));
-}
-
-TEST_CASE("maxGain caps the lift, so a silent band is never amplified into its own noise") {
-    mm::BandConditioner c; float db[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) db[b] = 80.0f;
-    db[15] = 40.0f;                                            // one band forty dB down
-    feedBlocks(c, db, out, 300, 20, /*maxGain*/ 6.0f);
-    CHECK(out[15] <= 40.0f + 6.0f + 0.01f);
-}
-
-TEST_CASE("learning off freezes the tables, the deterministic mode a show wants") {
-    mm::BandConditioner c; float a[16], b2[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) { a[b] = 70.0f; b2[b] = 90.0f; }
-    feedBlocks(c, a, out, 100, 20);
-    const float peakBefore = c.peakDb[3], floorBefore = c.floorDb[3];
-    feedBlocks(c, b2, out, 100, 20, 24.0f, /*learning*/ false);
-    CHECK(c.peakDb[3] == peakBefore);
-    CHECK(c.floorDb[3] == floorBefore);
-}
-
-TEST_CASE("the peak releases over seconds, not blocks, so one loud bar does not re-level the display") {
-    mm::BandConditioner c; float loud[16], quiet[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) { loud[b] = 90.0f; quiet[b] = 60.0f; }
-    feedBlocks(c, loud, out, 10, 20);
-    feedBlocks(c, quiet, out, 10, 20);                          // a quarter of a second later
-    CHECK(c.peakDb[0] > 85.0f);                                // still remembers the loud bar
-    feedBlocks(c, quiet, out, 400, 20);                         // ten seconds later
-    // It has let go: the peak sits at the band's floor plus the minimum range, rather than anywhere near the loud bar it was holding. Converging on the minimum range: the peak falls while the floor drifts up to meet it.
-    CHECK(c.peakDb[0] - c.floorDb[0] < mm::BandConditioner::kMinRangeDb + 2.0f);
-}
-
-// A quiet passage is not silence, and must keep its dynamics. The range clamp used to be the anti-noise mechanism and was set high enough (12 dB) to squash real music: a band swinging 6 dB filled only half the display, which reads as vivid bands with no dynamic range. The silence gate took that job over, so a band with real swing now uses the whole window.
-TEST_CASE("a quietly played band still fills the display, so soft passages keep their dynamics") {
-    mm::BandConditioner c; float soft[16], loud[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) { soft[b] = 70.0f; loud[b] = 76.0f; }   // a 6 dB swing
-
-    // Settle on that swing, above the gate throughout: this is music, not a silent room.
-    for (int i = 0; i < 200; i++) {
-        c.process(soft, out, 23, 60.0f, 40.0f, 20, 40.0f, true, 65.0f);
-        c.process(loud, out, 23, 60.0f, 40.0f, 20, 40.0f, true, 65.0f);
-    }
-    const float atLoud = out[0];
-    c.process(soft, out, 23, 60.0f, 40.0f, 20, 40.0f, true, 65.0f);
-    const float atSoft = out[0];
-
-    // The 6 dB swing is stretched across most of the 40 dB window, not left as 6 dB of it.
-    CHECK(atLoud - atSoft > 20.0f);
-}
-
-// The level path levels itself in automatic mode, the other half of the one `levels` decision: the learner measures the VU's window the way it measures each band's, so the manual floor/gain sliders are genuinely manual-only rather than still shaping the picture from behind a hidden row.
-TEST_CASE("in automatic mode a quiet room and a loud one both fill the level meter") {
-    const size_t n = 512;
-    int32_t quiet[n], loud[n];
-    for (size_t i = 0; i < n; i++) {
-        const float ph = static_cast<float>(i) * 0.1f;
-        // Both above the silence gate (60 dB at floor 0), a hundred times apart: the test is that each fills its OWN window, not that one of them is silent.
-        quiet[i] = static_cast<int32_t>(std::sin(ph) * 20000000.0f);     // a quiet room
-        loud[i]  = static_cast<int32_t>(std::sin(ph) * 2000000000.0f);   // a hundred times louder
-    }
-
-    // Music, not a test tone: the level has to VARY for a learned window to mean anything, so each room alternates a soft passage with a loud one. A steady tone correctly reads zero once the floor follower catches up to it, which is what "nothing is changing" looks like.
-    int32_t quietSoft[n], loudSoft[n];
-    for (size_t i = 0; i < n; i++) { quietSoft[i] = quiet[i] / 2; loudSoft[i] = loud[i] / 2; }
-
-    mm::AudioFrame f{};
-    mm::LevelConditioner a, b;
-    for (int i = 0; i < 100; i++) {
-        mm::computeLevel(quietSoft, n, 0, 128, f, &a, 23);
-        mm::computeLevel(quiet, n, 0, 128, f, &a, 23);
-    }
-    const uint16_t quietLevel = f.level;
-    for (int i = 0; i < 100; i++) {
-        mm::computeLevel(loudSoft, n, 0, 128, f, &b, 23);
-        mm::computeLevel(loud, n, 0, 128, f, &b, 23);
-    }
-    const uint16_t loudLevel = f.level;
-
-    // The two rooms read the SAME, though one is a hundred times louder: each is mapped onto its own learned window, which is the whole point of levelling the VU automatically. Both sit above the silence gate (floor 0 here), so this measures the levelling, not the gate.
-    CHECK(quietLevel > 0);
-    CHECK(quietLevel == loudLevel);
-
-    // And manual mode still maps absolutely: the loud room reads higher than the quiet one.
-    mm::computeLevel(quiet, n, 50, 128, f, nullptr, 23);
-    const uint16_t quietManual = f.level;
-    mm::computeLevel(loud, n, 50, 128, f, nullptr, 23);
-    CHECK(f.level > quietManual);
-}
-
-// The silence gate, the fix for a learner that levelled an empty room up to full scale. Measured on a Dig-Next-2: the raw path read flux 0-3 in a quiet room while the conditioner made 33-68 of it, because the lift is dominated by relocating a quiet band up into the display window and silence was relocated as eagerly as music.
-TEST_CASE("a room below the floor reads silent, however hard the learner is asked to level") {
-    mm::BandConditioner c; float quiet[16], out[16];
-    for (uint8_t b = 0; b < 16; b++) quiet[b] = 55.0f;          // below a gate of 60
-
-    // Settle, then ask for the most aggressive levelling available.
-    for (int i = 0; i < 400; i++) c.process(quiet, out, 23, 60.0f, 40.0f, 20, 40.0f, true, 60.0f);
-    for (uint8_t b = 0; b < 16; b++) CHECK(out[b] == 0.0f);
-
-    // And the tables were not dragged down to the room's noise: real music still reads.
-    float music[16];
-    for (uint8_t b = 0; b < 16; b++) music[b] = 80.0f;
-    c.process(music, out, 23, 60.0f, 40.0f, 20, 40.0f, true, 60.0f);
-    for (uint8_t b = 0; b < 16; b++) CHECK(out[b] > 0.0f);
-}
-
-// Flux is a difference against the PREVIOUS block and the onset detector carries a running mean, so a source that stops and starts must not measure its first new block against the last block of the old one: that reports a hit nobody played. AudioService::deinit clears both with the frame.
+// Flux is a difference against the PREVIOUS block and the onset detector carries a running mean, so a restarted source must not measure its first block against the old source's last: AudioService::deinit clears both with the frame.
 TEST_CASE("a restarted source reports no onset from the block that preceded it") {
     // The history the old source left behind: a loud spectrum.
     uint8_t prev[16], now[16];
     for (uint8_t b = 0; b < 16; b++) { prev[b] = 200; now[b] = 200; }
     CHECK(mm::spectralFlux(prev, now) == 0);            // steady: no flux, by definition
 
-    // Cleared history (what deinit leaves) reads the same block as a full-scale RISE, which is why deinit also publishes a silent frame: the first block after a restart is what that silences. What clearing buys is a DEFINED reference for the block after it, rather than a spectrum the old source left behind.
+    // Cleared history reads the same block as a full-scale RISE, which is why deinit also publishes a silent frame. Clearing gives a DEFINED reference for the block after it.
     uint8_t cleared[16] = {};
     const uint16_t againstStale = mm::spectralFlux(prev, now);
     const uint16_t againstCleared = mm::spectralFlux(cleared, now);
@@ -412,19 +211,32 @@ TEST_CASE("a restarted source reports no onset from the block that preceded it")
     CHECK(againstCleared > againstStale);   // which is why the frame is published silent too
 }
 
-// The gate that ships, exercised through magnitudesToBands rather than process() directly: every conditioner test above hands `process` a hand-picked gateDb, so none covers the value the caller actually passes. It sits AT the display window's floor, deliberately: a band reports its bins' PEAK while the level path reports an RMS, so the level's 20 dB silence margin is a far larger concession here. Measured on a Dig-Next-2, a 20 dB margin took a quiet room from flux 1-2 to 49-102 with onsets firing.
-TEST_CASE("a room below the display window shows nothing on the spectrum") {
-    const size_t nMag = 256;
-    const uint32_t rate = 22050;
-    float room[nMag];
-    // 100 dB: below the window floor (110 dB at `floor` 100), above where a 20 dB margin would sit.
-    for (size_t i = 0; i < nMag; i++) room[i] = 100000.0f;
+// Step 4 of the audio plan: the bass, the mids and the treble, each its range's power per band on the bands' scale, so an effect keyed on the bass finds the kick whichever third it lands in.
+TEST_CASE("a low tone lights the bass, a middle one the mids, a high one the treble") {
+    for (const auto& [hz, range] : {std::pair{63.0f, 0}, std::pair{1000.0f, 1}, std::pair{6300.0f, 2}}) {
+        CAPTURE(hz);
+        uint8_t bands[16];
+        uint16_t peakHz, peakMag;
+        analyse(hz, bands, peakHz, peakMag);
+        mm::AudioDynamics dyn = quietRoom();
+        const float levelDb = 20.0f * std::log10(kAmp / 8388608.0f);
+        mm::AudioFrame f;
+        for (int i = 0; i < 20; i++) f.thirdsCount = mm::bankToBands(freshBankKeep(), levelDb, 10.0f, dyn, f.thirds, f.bands, peakHz, peakMag);
+        mm::bandsToRanges(f);
+        const uint8_t r[3] = {f.bass, f.mid, f.treble};
+        for (int o = 0; o < 3; o++) if (o != range) CHECK(r[range] > r[o]);
+    }
+}
 
-    mm::BandConditioner cond;
-    uint8_t bands[16]; uint16_t peakHz = 0, peakMag = 0;
-    for (int i = 0; i < 20; i++)
-        mm::magnitudesToBands(room, nMag, rate, /*noiseFloor*/ 100, /*gain*/ 128,
-                              bands, peakHz, peakMag, &cond, 23, 4, 24.0f, true);
-
-    for (uint8_t b = 0; b < 16; b++) CHECK(bands[b] == 0);
+// A frame from audio sync carries the sixteen alone, and its ranges come from them, so an effect keyed on the bass follows a sender too.
+TEST_CASE("a frame with only the sixteen still carries the bass, mids and treble") {
+    mm::AudioFrame f;
+    f.thirdsCount = 0;
+    f.bands[0] = 200;    // 40 Hz: bass
+    f.bands[9] = 120;    // 1 kHz: mids
+    f.bands[15] = 60;    // 10 kHz: treble
+    mm::bandsToRanges(f);
+    CHECK(f.bass == 200);
+    CHECK(f.mid == 120);
+    CHECK(f.treble == 60);
 }

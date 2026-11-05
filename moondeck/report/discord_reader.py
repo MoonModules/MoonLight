@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["mcp>=2"]
 # ///
-"""Read the MoonModules Discord server for an agent, as an MCP server: channels, threads and their messages through a bot's REST API, read-only.
+"""Read the MoonModules Discord server for an agent, as an MCP server: channels, threads and their messages through a bot's REST API, and post in the one forum agents talk to each other in.
 
 The bot token lives in the macOS keychain (service `discord-reader`), read per request and never written to a file:
   security add-generic-password -s discord-reader -a bot -w
@@ -39,6 +39,10 @@ ATTACH_ROOT = Path(tempfile.gettempdir()) / "moonlight-discord"
 KEEP_ATTACHMENTS = 20
 # The daily summary, read on its own to find where the last one stopped, never summarized again.
 SUMMARY_CHANNEL = "1565668213759676426"
+# The forum agents write in directly, and the one place the bot posts: every other channel stays read-only.
+AGENT_FORUM = "1567531890498609192"
+# Discord's longest message, which a longer text splits under at its paragraph breaks.
+MAX_MESSAGE = 2000
 
 
 def _token() -> str:
@@ -49,9 +53,10 @@ def _token() -> str:
         raise RuntimeError("no bot token in the keychain: security add-generic-password -s discord-reader -a bot -w") from None
 
 
-def _get(path: str, **params) -> object:
-    url = API + path + ("?" + urllib.parse.urlencode(params) if params else "")
-    req = urllib.request.Request(url, headers={"Authorization": f"Bot {_token()}", "User-Agent": AGENT})
+def _send(req: urllib.request.Request) -> object:
+    """Send a request with the bot's token and answer its JSON, waiting out a rate limit as told, then asking again."""
+    req.add_header("Authorization", f"Bot {_token()}")
+    req.add_header("User-Agent", AGENT)
     while True:
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
@@ -59,7 +64,79 @@ def _get(path: str, **params) -> object:
         except urllib.error.HTTPError as e:
             if e.code != 429:
                 raise
-            time.sleep(_retry_after(e))   # rate limited: wait as told, then again
+            time.sleep(_retry_after(e))
+
+
+def _get(path: str, **params) -> object:
+    return _send(urllib.request.Request(API + path + ("?" + urllib.parse.urlencode(params) if params else "")))
+
+
+def _post(path: str, body: dict) -> object:
+    """POST a JSON body."""
+    return _send(urllib.request.Request(API + path, data=json.dumps(body).encode(), method="POST",
+                                        headers={"Content-Type": "application/json"}))
+
+
+def _chunks(text: str) -> list[str]:
+    """A text as messages Discord takes, split at paragraph breaks, then at line breaks, then hard, each under MAX_MESSAGE."""
+    out, cur = [], ""
+    for para in text.split("\n\n"):
+        piece = para if not cur else cur + "\n\n" + para
+        if len(piece) <= MAX_MESSAGE:
+            cur = piece
+            continue
+        if cur:
+            out.append(cur)
+        while len(para) > MAX_MESSAGE:
+            cut = para.rfind("\n", 0, MAX_MESSAGE)
+            cut = cut if cut > 0 else MAX_MESSAGE
+            out.append(para[:cut])
+            para = para[cut:].lstrip("\n")
+        cur = para
+    if cur:
+        out.append(cur)
+    return out
+
+
+# A post names no one by accident: a mention in an agent's text never pings a person.
+NO_PINGS = {"parse": []}
+
+
+def post_agent(title: str, text: str, tags: list[str] | None = None) -> str:
+    """Start a post in the agent-to-agent forum with this title, text and tags by name (question, proposal, measurement, review and the topics the forum lists); answers its link. A later part that fails raises with the post's id, so the rest goes on with reply_agent rather than a second post."""
+    if not title.strip() or not text.strip():
+        raise ValueError("a post needs a title and a text")
+    body = {"name": title[:100], "message": {"content": "", "allowed_mentions": NO_PINGS}}
+    if tags:
+        known = {t["name"]: t["id"] for t in _get(f"/channels/{AGENT_FORUM}").get("available_tags", [])}
+        unknown = [t for t in tags if t not in known]
+        if unknown:
+            raise ValueError(f"no such tag in the forum: {', '.join(unknown)}; it has {', '.join(known)}")
+        body["applied_tags"] = [known[t] for t in tags]
+    parts = _chunks(text)
+    body["message"]["content"] = parts[0]
+    thread = _post(f"/channels/{AGENT_FORUM}/threads", body)
+    for sent, part in enumerate(parts[1:], start=1):
+        try:
+            _post(f"/channels/{thread['id']}/messages", {"content": part, "allowed_mentions": NO_PINGS})
+        except Exception as e:
+            raise RuntimeError(f"post {thread['id']} started, {sent} of {len(parts)} parts sent; "
+                               f"send the rest with reply_agent({thread['id']!r}, ...): {e}") from e
+    return f"{LINK}/{thread['id']}"
+
+
+def reply_agent(thread: str, text: str) -> str:
+    """Reply in one post of the agent-to-agent forum, by the post's id; any other channel is refused. Answers the reply's link."""
+    if not text.strip():
+        raise ValueError("a reply needs a text")
+    if not str(thread).isdigit():
+        raise ValueError("a post's id is digits")
+    if str(_get(f"/channels/{thread}").get("parent_id")) != AGENT_FORUM:
+        raise PermissionError("the bot posts only in the agent-to-agent forum")
+    last = None
+    for part in _chunks(text):
+        last = _post(f"/channels/{thread}/messages", {"content": part, "allowed_mentions": NO_PINGS})
+    return f"{LINK}/{thread}/{last['id']}"
 
 
 def _retry_after(e: urllib.error.HTTPError) -> float:
@@ -249,7 +326,7 @@ def main() -> None:
     # Imported here, so the tests read the functions above without the MCP SDK installed.
     from mcp.server.mcpserver import MCPServer
     server = MCPServer("discord")
-    for tool in (list_channels, read_messages, read_server, fetch_attachment):
+    for tool in (list_channels, read_messages, read_server, fetch_attachment, post_agent, reply_agent):
         server.tool()(tool)
     server.run()
 

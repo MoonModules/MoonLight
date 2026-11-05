@@ -737,9 +737,9 @@ int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t*
     return n;
 }
 
-bool UdpSocket::membership(const char* group, bool join) {
-    IPAddress ip;
-    if (fd_ < 0 || !group || !ip.fromString(group)) return false;
+bool UdpSocket::membership(const uint8_t group[4], bool join) {
+    if (fd_ < 0) return false;
+    const IPAddress ip(group[0], group[1], group[2], group[3]);
     return join ? Ethernet.joinGroup(ip) : Ethernet.leaveGroup(ip);
 }
 
@@ -749,13 +749,12 @@ bool UdpSocket::sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* da
 
 void UdpSocket::close() {
     if (fd_ >= 0) {
-        if (joined_) membership(group_, false);
+        for (uint8_t i = 0; i < count_; i++) membership(groups_[i].ip, false);   // the interface holds the groups, not the socket
         g_udp[fd_].stop();
         g_udpUsed[fd_] = false;
         fd_ = -1;
     }
-    group_[0] = 0;
-    joined_ = false;
+    forgetGroups();
     joinCount_ = 0;
 }
 
@@ -877,7 +876,12 @@ size_t i2cScan(uint8_t*, size_t) { return kI2cBusUnavailable; }
 bool irRead(uint16_t, uint32_t&) { return false; }
 void irStop() {}
 bool irChannelReady(uint16_t) { return false; }
+size_t audioCaptureDevices(const char* const** optionsOut) { if (optionsOut) *optionsOut = nullptr; return 0; }
+bool audioCaptureInit(AudioMicHandle&, uint8_t, uint32_t) { return false; }
+bool audioMicInit(AudioMicHandle&, uint16_t, uint16_t, uint16_t, int16_t, uint32_t, MicMode) { return false; }
+size_t audioMicRead(AudioMicHandle&, int32_t*, size_t, uint32_t) { return 0; }
 bool audioMicSharedBusFree(MicMode) { return true; }   // nothing shares a bus with a microphone here
+void audioMicDeinit(AudioMicHandle&) {}
 bool usbMidiBegin() { return false; }
 void usbMidiEnd() {}
 bool usbMidiConnected() { return false; }

@@ -1,10 +1,73 @@
 # hpwit/new-parser (ESPLiveScript2): monthly activity digest
 
-What landed on [hpwit/new-parser](https://github.com/hpwit/new-parser), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/new-parser](https://github.com/hpwit/new-parser), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-The library: **ESPLiveScript2**, Yves Bazin's (hpwit) from-scratch C++ rewrite of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript), the same idea (a small C-like language compiled on-device to real Xtensa machine code, no interpreter, so a script runs at near-native speed) reimplemented independently rather than refactored. The library ships inside the repo as `asmparser2/` (PlatformIO name `ESPLiveScript2`, at v1.3.0). Summarised via the GitHub commits API.
+The library: **ESPLiveScript2**, Yves Bazin's (hpwit) from-scratch C++ rewrite of [ESPLiveScript](https://github.com/hpwit/ESPLiveScript), the same idea (a small C-like language compiled on-device to real Xtensa machine code, no interpreter, so a script runs at near-native speed) reimplemented independently rather than refactored. The library ships inside the repo as `asmparser2/` (PlatformIO name `ESPLiveScript2`, at v1.3.0). Summarized from the local clone (`git log --first-parent origin/main`).
 
 **Repo note:** the repository name is `new-parser`, but the library and its README call it **ESPLiveScript2**, the name to search for. Sibling digest for v1: [hpwit-ESPLiveScript.md](hpwit-ESPLiveScript.md).
+
+## October 2026
+
+The rewrite's heaviest month so far: the language grows toward C, a fuzzer hardens the compiler, and generated code closes in on native speed. The details follow below.
+
+**What script authors gain**
+
+- `switch`/`case`/`default` works as in C: fallthrough, `break`, nested switches, and `#define`d or negative case values. A duplicate case or a second `default` is an error.
+- A bare `{ }` block is a statement, and a `SwitchCase` example shows both.
+- `ffloat` is a 32-bit fixed-point type written like a float: Q16.16, about plus or minus 32768 in steps of 1/65536, its arithmetic compiled to integer instructions.
+- `ffloat` literals and constant subexpressions fold at compile time; multiplying or dividing by an integer, and dividing by a power of two, take fast paths. The README says to watch intermediate values against the range.
+- `safe_mode` works, where the v1 port could not even assemble: an indexed store into a global or external array with declared dimensions is bounds-checked. Pointers and unsized arrays stay unchecked.
+- A failed check stops the script, records the array, size and index, and reports it on a console line or an `onScriptRuntimeError` hook. It unwinds to the host call, which returns false.
+- `pause()`, `restart()`, `kill()` and `state()` control a script run with `executeAsTask()`; a task whose function returns marks itself stopped instead of deleting itself, so no control call acts on a vanished task.
+- `char *` arguments work: a `char *` variable, parameter, array or call result can be passed to a function (only string literals matched before). A `StringFunctions` example shows strings in and out of script and host functions.
+- `_handle_` (the running executable's address) is declared in every script, so a script compiled through the raw parser path can register callbacks; the `PinInterrupt` example (a GPIO interrupt calling a script function) is ported from v1.
+- `%` is signed, as in C (`-7 % 3` gave 0 before), and uninitialized globals start at 0 instead of leftover heap contents.
+- GPIO registers can be bound as script variables, so a script sets pins up and toggles them with single stores: the `DirectGPIO` example builds for ESP32 and ESP32-S3 with no address or chip named in the script, and `DirectGPIOSpeed` measures 9.9 MHz on the pin, script and native within half a percent of each other.
+
+**Fixed**
+
+- Reload elimination dropped a load after its base register changed, so `line1[i + 1] + line1[i]` counted one neighbor twice (found writing the `GameOfLife` example).
+- `if / else if / else` chains attached the trailing `else` to the first `if`, and the dangling else in `if (a) if (b) x; else y;` attached to the outer statement.
+- Ternary expressions: `a < b ? x : y` parsed as `a < (b ? x : y)`, the result register was not reserved (`(c ? 1 : 1) * 6` gave 36), and a store's address load could land inside one branch.
+- Call arguments overwritten in many shapes: a call inside an array-element store, a call in an argument to the left of an already placed argument (`f(f(5, 1), 8)` passed 1 for the 8), the fifth and sixth arguments of a nested call, arguments held while later ones compute (now pushed on the stack), a live `a10` temporary around a nested call, `printfln` arguments overwritten by a later argument's call, and register locals loaded through a scratch register that already held an earlier argument.
+- A temporary live across a call (`fib(n-1) + fib(n-2)`, `20 + rand(200)`) was never saved while the callee ran.
+- Frames reserved 16 bytes above the locals where the register-window overflow handler needs 32, so stack locals were overwritten once a call chain got deeper than the register window.
+- Xtensa's short conditional branches have 8-bit offsets for most forms, so any `if` or loop body longer than about 128 bytes could jump into unrelated code. The assembler now relaxes an out-of-reach branch into its inverse over a jump and retries until everything fits. This was the cause of every crashing fuzz seed.
+- `==` and `!=` against a constant were inverted in a long `if` body and in a loop's bottom-tested condition: `if (a != 1)` with a long body ran exactly when `a == 1`.
+- The first global initializer in a script stored its value before loading its address.
+- `++` and `--` on an int struct member inside a method stepped by 4 (taken for a pointer); this affected every script, float and int alike.
+- Multi-dimensional indexes used fixed scratch registers, so a call or a 2D read inside an index lost the partial sum.
+- Several copy-propagation and dead-copy cases in the optimizer dropped a copy that was read again later, or kept one after its source was overwritten.
+- Function records in the binary header: a struct method's record carried a copy of whatever line came next, and per-function compile separated a function's `.global` and `.var` lines (`MultiEffectController` is 265 bytes smaller).
+
+**Faster generated code**
+
+- Hot locals live in registers: a pass promotes a function's most used frame slots to registers the function never names (ints to the call-surviving `a4..a7`, floats to `f3..f12` with saves around calls), weighting loop accesses 8x per nesting level. One 128x96 Mandelbrot frame on an ESP32 at 240 MHz: float 86.8 to 66.9 ms.
+- Values that live across a call sit in spare window registers instead of frame slots: `fib(40)` goes from 26.94 s to 21.72 s (native 16.96 s, so 1.28x native instead of 1.59x).
+- Multi-dimensional array strides fold into shifts and scaled adds instead of a `movi` plus `mull` per dimension, and leftover register copies fold into their readers.
+- A last pass hoists loop-invariant loads (array addresses, constants) out of loops, gives the remaining frame slots any register free over their lines, and tidies by liveness. Game of Life 128x128 over the month: 15.24 to 8.08 ms per generation (v1: 14.67, native 5.95); Mandelbrot float 62.3 ms, `ffloat` 50.0 ms, frames identical to native.
+- `ffloat` speedups: consecutive multiplies share one shift-amount register, small constants load as `movi` plus shift, division by an integer is an inline `quos`, division by a power of two is a shift. BouncingBalls with 60 balls: `ffloat` 10.83 to 6.51 ms per frame (float 7.80).
+- Loop heads and jump targets get a `nop.n` when their first instruction would straddle a 4-byte fetch boundary.
+
+**Compiler memory**
+
+- The compiler's peak heap is roughly halved: functions compile as soon as they are parsed and their syntax tree is freed, tree nodes come from a pool, assembler lines live in one packed array, and branch relaxation runs before assembling so the text is assembled in one pass. The 730-line `MultiEffectController` script now compiles on an ESP32 without PSRAM (about 207 KB used of 230 KB free); the host model drops from 453 KB to 238 KB and fails above a 256 KB budget.
+
+**Verification**
+
+- A differential fuzzer generates random programs in the subset of the language that is also C, runs each compiled by ESPLiveScript2 under QEMU and as C on the host, compares the traces and reduces a failure to a few lines automatically. Its first run found seven compiler bugs; every reduced program lives in `test/fuzz/regressions/` (39 by month end) and runs as a regression suite.
+- A frame-by-frame effects suite compares the procedural effect scripts and the fixed-point Mandelbrot against C versions under QEMU, and a full-system tier builds real sketches with `arduino-cli` and boots them under QEMU's esp32 machine (the `SafeModeTest` sketch covers overruns, negative indexes, recovery and the hook).
+- The host run-large test tracks every allocation the compiler makes and models the ESP32's per-block cost.
+- Still open per the commits: an intermittent "Cache disabled" panic during the first on-device compile, about one boot in eight, under the full-system test.
+
+**Examples and documentation**
+
+- New examples: `GameOfLife`, `ProceduralEffects` (plasma, fire, Voronoi, mandala and spinning squares on a 128x96 matrix, each verified byte for byte against a C reference, with frame images), `MandelbrotFixedPoint`, `MandelbrotFfloat`, `BouncingBallsFfloat`, `FloatVsFfloat`, `MandelbrotCompare` (native float and fixed against script float and `ffloat`, timed with checksums), `SafeMode`, `SwitchCase`, `StringFunctions`, `PinInterrupt`, `DirectGPIO` and `DirectGPIOSpeed`; 34 in all.
+- The README is rewritten in the style of v1's: shorter, example-first, with board measurements in place of QEMU projections.
+
+No issues were opened or closed. No release; the library stays at v1.3.0.
+
+_Checked: `git log --first-parent origin/main` (after `git fetch --all --tags`) for author-date 2026-10-01..2026-10-31 = 37 commits (`b78375f` on 2026-10-11 through `3a8e9da` on 2026-10-31, none before the 11th; every one by Yves Bazin with a Claude co-author trailer); `main` is the only remote branch; releases published (none); issue search `repo:hpwit/new-parser is:issue created:2026-10-01..2026-10-31` and the same with `closed:` (0 results each)._
 
 ## September 2026
 
@@ -87,7 +150,7 @@ _Checked: 38 commits author-dated 2026-08-01..2026-08-31 on `main` (0b6aa6b..d84
 
 ## Timeline note (added 2026-08-06)
 
-Added to the digest set on 2026-08-06, after the product owner flagged the rewrite. History to date, from the commit log: created March 2025, six commits across March–May 2025, then **dormant for over a year**, then **12 commits in the first days of August 2026**, the rewrite as it now stands is days old at the time of writing. July 2026 is therefore empty, and the August work is summarised above.
+Added to the digest set on 2026-08-06, after the product owner flagged the rewrite. History to date, from the commit log: created March 2025, six commits across March–May 2025, then **dormant for over a year**, then **12 commits in the first days of August 2026**, the rewrite as it now stands is days old at the time of writing. July 2026 is therefore empty, and the August work is summarized above.
 
 What the rewrite is, from its README (context for future months, not an endorsement):
 

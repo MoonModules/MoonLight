@@ -11,7 +11,7 @@
 #include <numbers>
 #include <vector>
 
-// The success spec for the level path, written RED before AudioService's reader exists: the two I2S-mic facts that AudioLevel.h handles must hold on synthesized blocks, DC offset is removed (a biased-but-silent block reads 0), the noise floor gates quiet hiss, gain scales what survives, and the whole thing is crash-safe on empty/degenerate input.
+// The success spec for the level path on synthesized blocks: DC offset is removed, the level reads in dBFS, and empty or degenerate input is crash-safe.
 
 namespace {
 
@@ -73,69 +73,26 @@ TEST_CASE("DcBlocker: reset clears state, null-safe") {
     CHECK(true);
 }
 
-TEST_CASE("AudioLevel: silence reads zero") {
-    std::vector<int32_t> s(512, 0);
-    mm::AudioFrame f;
-    mm::computeLevel(s.data(), s.size(), /*noiseFloor*/0, /*gain*/16, f);
-    CHECK(f.level == 0);
+TEST_CASE("AudioLevel: a full-scale sine reads 0 dBFS and each halving 6 dB less") {
+    const auto full = sine(4096, 37.0, 8388607.0);
+    const auto half = sine(4096, 37.0, 4194303.0);
+    CHECK(mm::blockLevelDbFs(full.data(), full.size()) == doctest::Approx(0.0f).epsilon(0.01));
+    CHECK(mm::blockLevelDbFs(half.data(), half.size()) == doctest::Approx(-6.02f).epsilon(0.01));
 }
 
-TEST_CASE("AudioLevel: pure DC reads zero (DC offset stripped)") {
-    // A big constant bias, no AC, the DC must be stripped: RMS ~0, not huge.
-    std::vector<int32_t> s(512, (1 << 22) << 8);
-    mm::AudioFrame f;
-    mm::computeLevel(s.data(), s.size(), 0, 16, f);
-    CHECK(f.level == 0);
+TEST_CASE("AudioLevel: silence and pure DC read -120 dBFS, and a bias does not move a sine's level") {
+    const auto silent = sine(512, 0.0, 0.0);
+    const auto dc = sine(512, 0.0, 0.0, 300000.0);
+    CHECK(mm::blockLevelDbFs(silent.data(), silent.size()) == -120.0f);
+    CHECK(mm::blockLevelDbFs(dc.data(), dc.size()) == -120.0f);
+    const auto clean = sine(4096, 37.0, 100000.0), biased = sine(4096, 37.0, 100000.0, 500000.0);
+    CHECK(mm::blockLevelDbFs(biased.data(), biased.size()) == doctest::Approx(mm::blockLevelDbFs(clean.data(), clean.size())).epsilon(0.001));
 }
 
-TEST_CASE("AudioLevel: a loud sine reads a higher level than a quiet one") {
-    // A wide dB window (gain 40) so both land inside it, not both at 255.
-    auto loud = sine(512, 8, 1 << 14);
-    auto quiet = sine(512, 8, 1 << 11);
-    mm::AudioFrame fl, fq;
-    mm::computeLevel(loud.data(), loud.size(), 0, 40, fl);
-    mm::computeLevel(quiet.data(), quiet.size(), 0, 40, fq);
-    CHECK(fl.level > fq.level);          // the log-scaled level tracks amplitude
-}
-
-TEST_CASE("AudioLevel: DC bias does not change the level of a sine") {
-    auto clean = sine(512, 8, 1 << 14, 0.0);
-    auto biased = sine(512, 8, 1 << 14, 1 << 22);   // same AC, huge DC
-    mm::AudioFrame fc, fb;
-    mm::computeLevel(clean.data(), clean.size(), 0, 40, fc);
-    mm::computeLevel(biased.data(), biased.size(), 0, 40, fb);
-    // The DC strip makes the two read the same level (within quantisation).
-    const int diff = static_cast<int>(fc.level) - static_cast<int>(fb.level);
-    CHECK(std::abs(diff) <= 2);
-}
-
-TEST_CASE("AudioLevel: a high noiseFloor (dB floor) gates a modest signal to zero") {
-    auto s = sine(512, 8, 1 << 14);   // a modest level
-    mm::AudioFrame lo, hi;
-    mm::computeLevel(s.data(), s.size(), /*noiseFloor*/0, /*gain*/40, lo);
-    REQUIRE(lo.level > 0);                                  // shows with a low floor
-    // Raising the dB floor above the signal's level zeroes the displayed level.
-    mm::computeLevel(s.data(), s.size(), /*noiseFloor*/255, /*gain*/40, hi);
-    CHECK(hi.level == 0);
-}
-
-// `gain` reads the same way on both paths (higher = narrower window = hotter), but scales the level's OWN base span rather than being used raw: a block RMS covers far more dB than a single bin's peak, and sharing the raw number left the VU in the bottom third of the meter at the settings that made the spectrum look right (measured on a Dig-Next-2: RMS 39-83 of 255).
-TEST_CASE("AudioLevel: higher gain (narrower dB window) reads a higher level") {
-    auto s = sine(512, 8, 1 << 14);
-    mm::AudioFrame lo, hi;
-    mm::computeLevel(s.data(), s.size(), 0, /*gain*/20, lo);   // wide window
-    mm::computeLevel(s.data(), s.size(), 0, /*gain*/120, hi);  // narrower = hotter
-    REQUIRE(lo.level > 0);
-    CHECK(hi.level > lo.level);
-}
-
-TEST_CASE("AudioLevel: empty / null input is silence, never a crash") {
-    mm::AudioFrame f;
-    mm::computeLevel(nullptr, 512, 0, 16, f);
-    CHECK(f.level == 0);
+TEST_CASE("AudioLevel: empty or null input reads silence, never a crash") {
     int32_t dummy = 0;
-    mm::computeLevel(&dummy, 0, 0, 16, f);
-    CHECK(f.level == 0);
+    CHECK(mm::blockLevelDbFs(nullptr, 512) == -120.0f);
+    CHECK(mm::blockLevelDbFs(&dummy, 0) == -120.0f);
 }
 
 TEST_CASE("AudioLevel: isqrt64 matches floor(sqrt) on a spread of values") {
@@ -147,7 +104,7 @@ TEST_CASE("AudioLevel: isqrt64 matches floor(sqrt) on a spread of values") {
     }
 }
 
-// Regression: the boot wiring in main.cpp does create("AudioService")->markWiredByCode() and create() returns nullptr for an UNREGISTERED type, so a missing registerType<AudioService> made the deref crash and the device boot-looped (found on the S3 bench). These pin that AudioService and the two audio effects are all registered + createable through the factory, and that latestFrame() is never null even with no mic (so a consumer added before the mic can't deref null).
+// Regression: create() returns nullptr for an UNREGISTERED type, which boot-looped the S3 via main.cpp's markWiredByCode(). These pin that AudioService and the audio effects are createable and latestFrame() is never null.
 TEST_CASE("AudioService + audio effects are registered and createable (boot-loop guard)") {
     mm::ModuleFactory::registerType<mm::AudioService>("AudioService");
     mm::ModuleFactory::registerType<mm::AudioSpectrumEffect>("AudioSpectrumEffect");

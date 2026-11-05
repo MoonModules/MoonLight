@@ -1036,8 +1036,7 @@
           "sckPin": 32,
           "wsPin": 26,
           "sdPin": 33,
-          "mclkPin": 36,
-          "gain": 100
+          "mclkPin": 36
         },
         "SdCard": {
           "type": "SdCardService",
@@ -1478,7 +1477,8 @@
           "sdPin": 11,
           "mclkPin": 13,
           "codec": "ES8311",
-          "codecAddr": "0x18"
+          "codecAddr": "0x18",
+          "codecGain": 0
         },
         "SdCard": {
           "type": "SdCardService",
@@ -1525,8 +1525,7 @@
           "sckPin": 32,
           "wsPin": 26,
           "sdPin": 33,
-          "mclkPin": 36,
-          "gain": 100
+          "mclkPin": 36
         },
         "SdCard": {
           "type": "SdCardService",

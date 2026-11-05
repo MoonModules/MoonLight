@@ -34,7 +34,7 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 - per channel, which of the 128 notes are held and how hard (velocity);
 - the note starts and ends since the last frame as ordered events, each with its channel, pitch and velocity, so two hits of the same pitch between frames stay two and a note shorter than a frame still fires;
 - pitch bend, modulation and sustain per channel;
-- the MIDI clock's beat phase when a clock runs, the field [the audio plan, step 5](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md) fills from the music when none does.
+- the MIDI clock's beat phase when a clock runs, the field [the audio plan, step 6](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(4%20of%206).md) fills from the music when none does.
 
 An effect opts in, as audio effects do, and on a board with no MIDI it sees an empty frame and draws its idle state.
 
@@ -72,7 +72,7 @@ Each step ends in something verified on the bench.
 Two routes, the first needing no code:
 
 - **Drum triggers:** clip-on triggers into a trigger module send MIDI, so steps 1 to 3 already cover an acoustic kit.
-- **Per-band onsets**, built by [the audio plan, step 4](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md): an onset per range (low for the kick, mid and high for the snare and cymbals). Best with a direct out or an aux send from the mixer giving the kit alone.
+- **Per-band onsets**, built by [the audio plan, step 5](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(4%20of%206).md): an onset per range (low for the kick, mid and high for the snare and cymbals) and one per third-octave band, so each tom lights its own place and a fill sweeps across the rig; the kick is timed by its beater's click. Best with a direct out or an aux send from the mixer giving the kit alone.
 - Verify with a kit, or a recorded kit track, through one microphone or line input.
 
 ### 6. Analog instruments, an investigation ⏳
@@ -86,7 +86,7 @@ Decided per instrument, cheapest first:
 | Voice | a pitch-to-MIDI box | pitch plus loudness envelope on one clean channel |
 | Any instrument, loudness only | a direct out or aux send | the existing level and bands on its own channel |
 
-The on-device column needs a second audio channel: the multi-channel front-ends [the audio plan's backlog](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(0%20of%205).md#backlog) lists, such as a 4-channel TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or line inputs from the mixer. The budget allows one or two analyzed channels per board.
+The on-device column needs a second audio channel: the multi-channel front-ends [the audio plan's backlog](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(4%20of%206).md#backlog) lists, such as a 4-channel TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or line inputs from the mixer. The budget allows one or two analyzed channels per board.
 
 ### 7. Follow the musicians ⏳
 

@@ -1198,3 +1198,35 @@ def test_a_stage_file_the_generator_refuses_is_an_error_rather_than_a_traceback(
     monkeypatch.setattr(gen_moonwalk, "build", lambda root=tmp_path, build=gen_moonwalk.build: build(root))
     [(key, why)] = check_docgen._process_sizes()
     assert why.startswith("MoonWalk does not build") and check_docgen._blocks(key, why)
+
+
+def _stage_table_findings(monkeypatch, tmp_path, text):
+    """The stage-table check against a CLAUDE.md holding `text`, the stage files fixed to two."""
+    import check_docgen
+    import gen_moonwalk
+    claude = tmp_path / "CLAUDE.md"
+    claude.write_text(text, encoding="utf-8")
+    monkeypatch.setattr(gen_moonwalk, "CLAUDE_MD", claude)
+    stages = [{"id": "install", "file": "02-install.yaml", "summary": "MoonLight on a board."}]
+    monkeypatch.setattr(gen_moonwalk, "build", lambda: {"stages": stages, "processes": {}})
+    return check_docgen._stage_table_freshness()
+
+
+def test_a_fresh_stage_table_is_no_finding(monkeypatch, tmp_path):
+    import gen_moonwalk
+    text = gen_moonwalk.with_stage_table(f"{gen_moonwalk.STAGE_TABLE_BEGIN}\n{gen_moonwalk.STAGE_TABLE_END}\n",
+                                         [{"file": "02-install.yaml", "summary": "MoonLight on a board."}])
+    assert _stage_table_findings(monkeypatch, tmp_path, text) == []
+
+
+def test_a_stale_stage_table_names_the_command_that_rebuilds_it(monkeypatch, tmp_path):
+    import gen_moonwalk
+    findings = _stage_table_findings(monkeypatch, tmp_path, f"{gen_moonwalk.STAGE_TABLE_BEGIN}\n| old |\n{gen_moonwalk.STAGE_TABLE_END}\n")
+    assert len(findings) == 1 and findings[0][0] == "CLAUDE.md"
+    assert "uv run moondeck/docs/gen_moonwalk.py --claude-md" in findings[0][1]
+
+
+def test_missing_stage_table_markers_are_a_finding_that_says_so(monkeypatch, tmp_path):
+    findings = _stage_table_findings(monkeypatch, tmp_path, "a CLAUDE.md without the markers\n")
+    assert len(findings) == 1 and findings[0][0] == "CLAUDE.md"
+    assert "markers are missing" in findings[0][1]

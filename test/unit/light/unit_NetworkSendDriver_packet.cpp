@@ -571,3 +571,40 @@ TEST_CASE("NetworkSendDriver: a correction that grows the buffer under a paced s
     }
     CHECK(bytes == 1600);   // 400 lights x 4 channels, all of it
 }
+
+// E1.31 has no universe 0, so with universe_start 0 the sender numbers E1.31 from 1, as standard receivers expect, and Art-Net from 0.
+TEST_CASE("NetworkSendDriver: E1.31 starts at universe 1 when universe_start is 0, Art-Net at 0") {
+    struct Case { uint8_t protocol; uint16_t port; uint16_t first; };
+    for (const Case c : {Case{mm::NetworkSendDriver::kProtoE131, mm::E131_PORT, 1}, Case{mm::NetworkSendDriver::kProtoArtNet, mm::ARTNET_PORT, 0}}) {
+        CAPTURE(c.protocol);
+        mm::Buffer source;
+        REQUIRE(source.allocate(300, 3));   // 900 bytes: two universes
+        mm::platform::UdpSocket rx;
+        REQUIRE(rx.open());
+        REQUIRE(rx.bind(c.port));
+        mm::NetworkSendDriver driver;
+        driver.protocol = c.protocol;
+        std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
+        driver.packetGap = 0;   // the burst from the tick, no task to wait for
+        driver.setSourceBuffer(&source);
+        driver.applyState();
+        mm::platform::setTestNowMs(1000);
+        driver.tick();
+        std::vector<uint16_t> universes;
+        uint8_t buf[1500];
+        for (int i = 0; i < 5000 && universes.size() < 2; i++) {
+            const int n = rx.recvFrom(buf, sizeof(buf));
+            uint16_t universe = 0, dataLen = 0;
+            const uint8_t* data = nullptr;
+            const bool parsed = n > 0 && (c.protocol == mm::NetworkSendDriver::kProtoE131
+                                              ? mm::parseE131Packet(buf, static_cast<size_t>(n), universe, data, dataLen)
+                                              : mm::parseArtDmxPacket(buf, static_cast<size_t>(n), universe, data, dataLen));
+            if (parsed) universes.push_back(universe);
+            else mm::platform::delayUs(100);
+        }
+        CHECK(universes == std::vector<uint16_t>{c.first, static_cast<uint16_t>(c.first + 1)});
+        driver.release();
+        rx.close();
+        mm::platform::setTestNowMs(0);
+    }
+}

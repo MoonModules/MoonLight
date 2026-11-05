@@ -279,7 +279,7 @@ private:
         if (sock_.open() && (!enabledOsc || sock_.bind(port))) {
             open_ = true;
             // Join the group a sender multicasts feedback to; a failed join leaves unicast working.
-            if (enabledOsc && groupValid_) sock_.joinMulticast(group_);
+            if (enabledOsc && groupValid_) sock_.joinMulticast(groupIp_);
             if (!attached_) {
                 if (auto* c = ControlModule::active()) {
                     c->addSurface(this, ControlModule::Seed::Paced);

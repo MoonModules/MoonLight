@@ -78,7 +78,7 @@ Zephyr fundamentals check out. **C++20 is a supported language standard** (`CONF
 | mDNS, hostname, `httpRequest` | Zephyr mDNS responder, sockets | With effort / easy respectively, given IP |
 | OTA (`http_fetch_to_ota`, `otaBegin`, `otaWrite`, `otaEnd`) | MCUboot + mcumgr/SMP (BLE or serial DFU), or hand-rolled HTTP-to-slot given IP | **With effort**: a different but standard mechanism; the seam's status-buffer contract is implementable |
 | Improv provisioning (UART) | USB CDC-ACM on 52840; **Improv-BLE** is the natural transport on this family | **With effort**: note Improv's BLE variant fits nRF better than the serial one, but that's a new transport in our Improv module, more than a platform stub |
-| Audio in (`audioMicInit`), FFT | nRF **PDM** peripheral (built for MEMS mics) or I2S RX; CMSIS-DSP `arm_rfft` | **Easy-to-moderate**: arguably nicer than ESP32 (PDM is purpose-built); `audioFft` maps to the textbook CMSIS kernel |
+| Audio in (`audioMicInit`, `audioMicRead`, `audioMicSharedBusFree`, `audioMicDeinit`) | nRF **PDM** peripheral (built for MEMS mics) or I2S RX | **Easy-to-moderate**: arguably nicer than ESP32 (PDM is purpose-built); the analysis is shared domain code, so the port is the microphone's setup, read, bus sharing and release |
 | `i2cScan`, filesystem (`fs*`) | Zephyr `i2c`, **LittleFS** | **Easy**: LittleFS is the same fs ESP32 uses |
 | IR (`irRead`) | No RMT-RX equivalent; GPIOTE + timer capture | **Bespoke effort**: low priority, can stub false like desktop |
 

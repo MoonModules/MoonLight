@@ -378,13 +378,15 @@ constexpr const char* kPaletteCatalog[] = {
     "beat-flash.mlp",
     "drift.mlp",
     "fire.mlp",
+    "harmony.mlp",
     "spectrum.mlp",
     "temperature.mlp",
     "stadbeest-fire.mlp",
 };
-constexpr size_t kPaletteCatalogCount = 6;
+constexpr size_t kPaletteCatalogCount = 7;
 /// What each palette above declares about itself, in the same order, 0 meaning it says nothing and the device decides.
 constexpr unsigned char kPaletteCatalogDim[] = {
+    0,
     0,
     0,
     0,
@@ -398,6 +400,7 @@ constexpr const char* kPaletteCatalogTags[] = {
     "🎨",
     "🎨",
     "🎨🎶",
+    "🎨🎶",
     "🎨",
     "🎨🎶",
 };
@@ -408,9 +411,10 @@ constexpr unsigned char kPaletteCatalogFolder[] = {
     8,
     8,
     8,
+    8,
     10,
 };
 
-constexpr size_t kCatalogCount = 78;   ///< every factory script, all roles
+constexpr size_t kCatalogCount = 79;   ///< every factory script, all roles
 
 } // namespace mm::moonlive
