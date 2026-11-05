@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// Each mark is a bar wide, rounded up as the rows are: along the bars' top, white over the dominant frequency; at the right edge, the height where the gate opens, white while open and red while the room is gated.
 ///
-/// The bass, mids and treble each draw as a grey line across their own bars at their level, a silent one on the bottom row, so all three always show.
+/// The bass, mids and treble each draw as a grey line across their own bars at their level, a silent one on the bottom row, so all three always show; a line flashes white on its range's own hit. On the third octaves and the keys each bar's top row flashes white on its own hit, so a tom fill sweeps across the bars and a key flashes as it is struck.
 ///
 /// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square that flashes red on each hit. With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
 ///
@@ -97,6 +97,11 @@ public:
         const uint32_t ms = elapsed();
         if (f->onset) onsetUntilMs_ = ms + kOnsetFlashMs;
         if (f->harmonyChange) changeUntilMs_ = ms + kChangeFlashMs;
+        const uint8_t rangeHits[3] = {f->onsetLow, f->onsetMid, f->onsetHigh};
+        for (uint8_t r = 0; r < 3; r++) if (rangeHits[r]) rangeUntilMs_[r] = ms + kOnsetFlashMs;
+        // Each bar's own hit, where the bars are the bands that carry them.
+        const uint8_t* hits = !readouts || h == 1 ? nullptr : scale == kBandsNotes ? f->notesHits : scale == kBandsThirds ? f->thirdsHits : nullptr;
+        if (hits) markBarHits(hits, n, ms);
         if (levelRows) drawLevelMeter(cv, f->level, specH, ms < onsetUntilMs_);
         if (pitchRows) drawPitchClasses(cv, f->chroma, pitchRows, ms < changeUntilMs_);
 
@@ -113,12 +118,16 @@ public:
             // This band's columns, which a narrow grid rounds to none for some bands.
             const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(band) * w / n);
             const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(band + 1) * w / n);
+            // A hit shows on the bar's top row, the bottom one for a bar too low to have rows.
+            const bool hit = hits && hitAt(barsLit_, band);
+            const lengthType rows = hit && lit == 0 ? 1 : lit;
             for (lengthType x = x0; x < x1; x++)
-                draw::bar(cv, x, specBottom, lit, draw::Grow::Up,
-                          [&](lengthType row) { return barColor(mag, row, barsH, h == 1, whole); });
+                draw::bar(cv, x, specBottom, rows, draw::Grow::Up, [&](lengthType row) {
+                    return hit && row + 1 == rows ? RGB{255, 255, 255} : barColor(mag, row, barsH, h == 1, whole);
+                });
         }
         if (readouts && h > 1) {   // a single row has no room over its bars
-            drawRanges(cv, *f, scale, n, specH, barsH);   // first, so the marks sit on top of the lines
+            drawRanges(cv, *f, scale, n, specH, barsH, ms);   // first, so the marks sit on top of the lines
             if (f->gate) drawGate(cv, f->gate, f->gateOpen, specH, barsH, barW);
             // The dominant frequency, while there is sound to have one.
             if (f->peakHz && (f->gate == 0 || f->gateOpen)) drawPeak(cv, f->peakHz, scale, n, barW, pitchRows);
@@ -164,6 +173,19 @@ private:
     /// How long the pitch classes go dark after a chord change, one block too short for the eye as an onset is.
     static constexpr uint32_t kChangeFlashMs = 100;
     uint32_t changeUntilMs_ = 0;  ///< until when the row shows the last change
+    uint32_t rangeUntilMs_[3] = {};   ///< until when each range's line shows its last hit
+    uint8_t barHitTick_[79] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
+    uint8_t barsLit_[10] = {};        ///< a bit per bar while it shows its hit
+
+    /// Light each bar of `n` whose bit is set in `hits`, and darken each whose hit is older than the flash.
+    void markBarHits(const uint8_t* hits, uint8_t n, uint32_t ms) MM_NONBLOCKING {
+        const uint8_t tick = static_cast<uint8_t>(ms >> 2);
+        for (uint8_t b = 0; b < n && b < 79; b++) {
+            const uint8_t bit = static_cast<uint8_t>(1u << (b & 7));
+            if (hitAt(hits, b)) { barHitTick_[b] = tick; barsLit_[b >> 3] |= bit; }
+            else if (static_cast<uint8_t>(tick - barHitTick_[b]) >= kOnsetFlashMs / 4) barsLit_[b >> 3] &= static_cast<uint8_t>(~bit);
+        }
+    }
 
     /// The level meter on the rows from `top` down: the raw level across the palette, since a lag is wrong for judging response, and at its right end a square, red while a hit shows.
     void drawLevelMeter(const draw::Canvas& cv, uint16_t level, lengthType top, bool hit) MM_NONBLOCKING {
@@ -185,8 +207,8 @@ private:
         draw::bar(cv, x, y, barW, draw::Grow::Right, [](lengthType) { return RGB{255, 255, 255}; });
     }
 
-    /// The bass, mids and treble, each a grey line across its own bars at its height, a silent range on the bottom row: the range's level read where its bands are.
-    void drawRanges(const draw::Canvas& cv, const AudioFrame& f, Bands scale, uint8_t n, lengthType specH, lengthType barsH) MM_NONBLOCKING {
+    /// The bass, mids and treble, each a grey line across its own bars at its height, a silent range on the bottom row and white while its hit shows: the range's level read where its bands are.
+    void drawRanges(const draw::Canvas& cv, const AudioFrame& f, Bands scale, uint8_t n, lengthType specH, lengthType barsH, uint32_t ms) MM_NONBLOCKING {
         const lengthType w = width();
         const float edgesHz[4] = {0.0f, 140.0f, 2240.0f, 0.0f};   // between 125 and 160 Hz, and 2 and 2.5 kHz
         const uint8_t levels[3] = {f.bass, f.mid, f.treble};
@@ -198,7 +220,8 @@ private:
             const lengthType x1 = static_cast<lengthType>(std::fmin(toBar * w / n - (r < 2 ? 1.0f : 0.0f), static_cast<float>(w)));
             const lengthType rise = static_cast<lengthType>(static_cast<uint32_t>(levels[r]) * barsH / 255u);
             const lengthType y = static_cast<lengthType>(specH - (rise ? rise : 1));
-            if (x1 > x0) draw::bar(cv, x0, y, static_cast<lengthType>(x1 - x0), draw::Grow::Right, [](lengthType) { return RGB{160, 160, 160}; });
+            const RGB color = ms < rangeUntilMs_[r] ? RGB{255, 255, 255} : RGB{160, 160, 160};   // white while the range's hit shows
+            if (x1 > x0) draw::bar(cv, x0, y, static_cast<lengthType>(x1 - x0), draw::Grow::Right, [color](lengthType) { return color; });
         }
     }
 

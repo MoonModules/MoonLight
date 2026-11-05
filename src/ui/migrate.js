@@ -380,6 +380,23 @@ function renameKeys(obj, file, report) {
     return out;
 }
 
+// Drop a retired control from a state document's modules, as renameKeys drops it from a flat file: a backup saved after configs became documents still holds them. The root module's type is the file's; a child names its own. True when one went.
+function retireInDocument(doc, type, file, report) {
+    let dropped = false;
+    const walk = (node, nodeType, where) => {
+        for (const [key, value] of Object.entries(node)) {
+            if (isObject(value)) { walk(value, value.type, `${where}.${key}`); continue; }
+            const retired = CONTROL_RETIREMENTS[key];
+            if (!retired || !typeInScope(retired.onTypes, nodeType)) continue;
+            delete node[key];
+            dropped = true;
+            report.push({ kind: "retired", where: `${file} ${where}.${key}`, detail: `${retired.detail} (${retired.date})` });
+        }
+    };
+    for (const [name, root] of Object.entries(doc)) if (isObject(root)) walk(root, root.type || type, name);
+    return dropped;
+}
+
 /// Apply every known rename to a backup bundle's files. Returns {files, report}: a NEW files
 /// map (the input is not mutated) and the list of what changed / what needs review. Files that
 /// are not .config JSON (scripts, anything unparsable) pass through untouched.
@@ -419,9 +436,12 @@ export function applyMigrations(files, live = []) {
         if (newPath.startsWith("/.config/") && newPath.endsWith(".json")) {
             try {
                 const parsed = JSON.parse(content);
-                if (!isFlatConfig(parsed)) { out[newPath] = content; continue; }   // already a document
-                const migrated = moveToChild(renameKeys(parsed, newPath, report), newPath, report);
                 const type = newPath.slice("/.config/".length, -".json".length);
+                if (!isFlatConfig(parsed)) {   // already a document: only a retired control leaves it
+                    out[newPath] = isObject(parsed) && retireInDocument(parsed, type, newPath, report) ? JSON.stringify(parsed) : content;
+                    continue;
+                }
+                const migrated = moveToChild(renameKeys(parsed, newPath, report), newPath, report);
                 out[newPath] = JSON.stringify(configToDocument(migrated, type, live));
                 report.push({ kind: "renamed", where: newPath, detail: "config → state document (2026-10-08)" });
                 continue;

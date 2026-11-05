@@ -785,7 +785,7 @@
   },
   "BeatRipplesEffect": {
    "line": "Every beat is a stone dropped in water.",
-   "summary": "`trigger` on `kick` drops a stone only on a hit in the bass, so the ripples follow the kick drum rather than every hit.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
+   "summary": "`trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
    "attribution": "[Gomez](https://moonmodules.org/MoonLight/reference/attributions.html#gomez)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif",
    "controls": {
@@ -802,7 +802,7 @@
      "line": "How strongly the slope lights the surface."
     },
     "trigger": {
-     "line": "Every hit, or only the kick, a hit whose strongest range is the bass."
+     "line": "Every hit, or only the kick, the bass's own onset."
     }
    },
    "role": "effect",
@@ -811,6 +811,25 @@
    "doc": "light/effects.md#beatripples",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BeatRipplesEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatrippleseffect"
+  },
+  "DrumKitEffect": {
+   "line": "A drum kit seen from the audience, each drum lighting as it is played: the bass drum on the kick, the snare, the hi-hat with stars over the top, and three rack toms and a floor tom by their pitch, so a drum solo plays across the kit.",
+   "summary": "The kick, the snare and the hi-hat are the audio's bass, mid and treble onsets. The toms are the third-octave bands from 80 to 400 Hz, two bands each: the floor tom at the right, the rack toms over the bass drum, the high one at the left. Each hit glows for `decay` and fades; between hits the kit shows at `idle`.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/DrumKitEffect.gif",
+   "controls": {
+    "decay": {
+     "line": "How long a hit glows, in tens of milliseconds."
+    },
+    "idle": {
+     "line": "How bright the kit shows between hits, 0 for dark."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#drumkit",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/DrumKitEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#drumkiteffect"
   },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",

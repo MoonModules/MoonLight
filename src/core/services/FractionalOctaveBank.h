@@ -48,6 +48,10 @@ namespace mm {
 /// ## The detector
 ///
 /// A band's power is its filter's output squared through a one-pole low-pass of 10 ms, the same in every band, so all bars rise and fall alike and only a narrow filter's own ringing slows the bass; the display's ballistics shape the decay.
+///
+/// ## Each band's delay
+///
+/// A band reports a sound late by its filter's group delay at its center, the band-pass's and every halving low-pass's ahead of its stage: the narrower the band the longer, 47 ms at 80 Hz against under 1 ms from 4 kHz up, within 3 ms of when a tone burst's band reaches a tenth of its power. The detector's 10 ms is the same in every band, so it shifts them all alike and stays out.
 
 template <uint8_t B>
 class FractionalOctaveBank {
@@ -74,6 +78,7 @@ public:
         bandCount_ = 0;
         if (sampleRate == 0) return;
         const float fs = static_cast<float>(sampleRate);
+        rate_ = fs;
         const int top = topBand(fs, topHz);
         if (top < 0) return;
         halvings_ = halvingsFor(centerHz(static_cast<uint8_t>(top)), fs);
@@ -125,6 +130,21 @@ public:
 
     /// How many bands this rate carries, from band 0 up.
     uint8_t bandCount() const { return bandCount_; }
+
+    /// How late a band reports a sound, in seconds: @xref{each-bands-delay}.
+    float delaySeconds(uint8_t band) const {
+        if (band >= bandCount_) return 0.0f;
+        const uint8_t octave = static_cast<uint8_t>((top_ - band) / B), slot = static_cast<uint8_t>((top_ - band) % B);
+        const uint8_t stage = stageOf(octave);
+        const float hz = centerHz(band);
+        float seconds = 0.0f;
+        for (uint8_t k = 0; k < stage; k++) {
+            const float rate = rate_ / static_cast<float>(1u << k);
+            seconds += filterDelay(lowPass_, 2.0f * std::numbers::pi_v<float> * hz / rate) / rate;
+        }
+        const float rate = rate_ / static_cast<float>(1u << stage);
+        return seconds + filterDelay(octave == 0 ? topSet_[slot] : stdSet_[slot], 2.0f * std::numbers::pi_v<float> * hz / rate) / rate;
+    }
 
 private:
     struct Biquad { float b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
@@ -272,6 +292,19 @@ private:
         return std::abs((b0 + b1 * e1 + b2 * e2) / (1.0f + a1 * e1 + a2 * e2));
     }
 
+    /// A polynomial's delay at w, Re(sum k c_k e^-jwk / sum c_k e^-jwk), in samples: the textbook group delay of a section's numerator or denominator.
+    static float polyDelay(float c0, float c1, float c2, float w) {
+        const std::complex<float> e1 = std::polar(1.0f, -w), e2 = std::polar(1.0f, -2.0f * w);
+        return std::real((c1 * e1 + 2.0f * c2 * e2) / (c0 + c1 * e1 + c2 * e2));
+    }
+
+    /// A cascade's group delay at w, in samples: each section's numerator's less its denominator's.
+    static float filterDelay(const Filter& f, float w) {
+        float samples = 0.0f;
+        for (const Biquad& q : f) samples += polyDelay(q.b0, q.b1, q.b2, w) - polyDelay(1.0f, q.a1, q.a2, w);
+        return samples;
+    }
+
     /// The 6th-order Butterworth band-pass for one band, each section unity at the center: @xref{the-filters}.
     static void designBandPass(float centerHz, float fs, Filter& f) {
         constexpr float pi = std::numbers::pi_v<float>;
@@ -314,6 +347,7 @@ private:
     }
 
     float referenceHz_ = 1000.0f;
+    float rate_ = 0.0f;
     uint8_t referenceBand_ = 0;
     uint8_t top_ = 0;
     uint8_t bandCount_ = 0;

@@ -103,7 +103,7 @@ NO_PINGS = {"parse": []}
 
 
 def post_agent(title: str, text: str, tags: list[str] | None = None) -> str:
-    """Start a post in the agent-to-agent forum with this title, text and tags by name (question, proposal, measurement, review and the topics the forum lists); answers its link."""
+    """Start a post in the agent-to-agent forum with this title, text and tags by name (question, proposal, measurement, review and the topics the forum lists); answers its link. A later part that fails raises with the post's id, so the rest goes on with reply_agent rather than a second post."""
     if not title.strip() or not text.strip():
         raise ValueError("a post needs a title and a text")
     body = {"name": title[:100], "message": {"content": "", "allowed_mentions": NO_PINGS}}
@@ -116,8 +116,12 @@ def post_agent(title: str, text: str, tags: list[str] | None = None) -> str:
     parts = _chunks(text)
     body["message"]["content"] = parts[0]
     thread = _post(f"/channels/{AGENT_FORUM}/threads", body)
-    for part in parts[1:]:
-        _post(f"/channels/{thread['id']}/messages", {"content": part, "allowed_mentions": NO_PINGS})
+    for sent, part in enumerate(parts[1:], start=1):
+        try:
+            _post(f"/channels/{thread['id']}/messages", {"content": part, "allowed_mentions": NO_PINGS})
+        except Exception as e:
+            raise RuntimeError(f"post {thread['id']} started, {sent} of {len(parts)} parts sent; "
+                               f"send the rest with reply_agent({thread['id']!r}, ...): {e}") from e
     return f"{LINK}/{thread['id']}"
 
 

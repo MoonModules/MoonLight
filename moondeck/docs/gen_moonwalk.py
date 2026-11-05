@@ -691,7 +691,9 @@ def with_stage_table(text: str, stages: list) -> str | None:
     begin, end = text.find(STAGE_TABLE_BEGIN), text.find(STAGE_TABLE_END)
     if begin < 0 or end < begin:
         return None
-    rows = ["| File | What it covers |", "|--|--|"] + [f"| `{s['file']}` | {s['summary']} |" for s in stages]
+    # A summary stays one cell: its line breaks become spaces and its pipes are escaped.
+    cell = lambda text: " ".join(str(text).split()).replace("|", "\\|")
+    rows = ["| File | What it covers |", "|--|--|"] + [f"| `{s['file']}` | {cell(s['summary'])} |" for s in stages]
     return text[:begin + len(STAGE_TABLE_BEGIN)] + "\n" + "\n".join(rows) + "\n" + text[end:]
 
 

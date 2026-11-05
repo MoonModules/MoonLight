@@ -555,5 +555,10 @@ def test_a_fresh_stage_table_comes_back_unchanged():
     assert gen_moonwalk.with_stage_table(fresh, STAGES) == fresh
 
 
+def test_a_summary_with_a_line_break_or_a_pipe_stays_one_table_cell():
+    fresh = gen_moonwalk.with_stage_table(table_text("x\n"), [{"file": "02-install.yaml", "summary": "Boards |\nand hosts."}])
+    assert "| `02-install.yaml` | Boards \\| and hosts. |" in fresh
+
+
 def test_a_text_without_the_markers_has_no_stage_table():
     assert gen_moonwalk.with_stage_table("no markers here\n", STAGES) is None

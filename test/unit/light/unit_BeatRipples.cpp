@@ -60,7 +60,7 @@ TEST_CASE("ripples walk the whole palette, and each stone shifts it") {
     CHECK(mm::BeatRipplesEffect::paletteIndex(0, 1) != mm::BeatRipplesEffect::paletteIndex(0, 0));
 }
 
-// The showcase for step 4 of the audio plan: on `kick` a stone drops only for a hit in the bass, so the water answers the kick drum and not a hi-hat.
+// The showcase for steps 4 and 5 of the audio plan: on `kick` a stone drops only on the bass's own onset, so the water answers the kick drum and not a hi-hat.
 TEST_CASE("on the kick trigger a hit in the treble drops no stone and a hit in the bass does") {
     golden::ScopedTestClock clock(1000);
     static AudioService audio;
@@ -74,12 +74,12 @@ TEST_CASE("on the kick trigger a hit in the treble drops no stone and a hit in t
     Layer& layer = r.layer;
     auto hit = [&](uint8_t bass, uint8_t treble, uint32_t at) {
         AudioFrame& f = audio.frameForTest();
-        f.onset = 200; f.bass = bass; f.mid = 50; f.treble = treble;
-        for (int i = 0; i < 20; i++) { platform::setTestNowMs(at + i * 20u); layer.tick(); f.onset = 0; }
+        f.onset = 200; f.onsetLow = bass; f.onsetHigh = treble;
+        for (int i = 0; i < 20; i++) { platform::setTestNowMs(at + i * 20u); layer.tick(); f.onset = f.onsetLow = f.onsetHigh = 0; }
     };
-    hit(40, 220, 1000);   // a hi-hat
+    hit(0, 220, 1000);    // a hi-hat: the treble's onset alone
     CHECK(brightestLight(layer) == 0);
-    hit(220, 40, 2000);   // a kick
+    hit(220, 0, 2000);    // a kick: the bass's own onset
     CHECK(brightestLight(layer) > 16);
     audio.release();
 }

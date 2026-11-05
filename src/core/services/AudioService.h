@@ -14,10 +14,13 @@
 #include "core/services/AudioDynamics.h"   // the level, floor, gate and window
 #include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
 #include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
+#include "core/services/AudioAnalysis.h"   // the state an open input and `harmony` hold
 #include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
 #include "platform/platform.h"
 
 #include <atomic>
+#include <memory>   // unique_ptr: the analysis, held only while an input is open
+#include <new>      // std::nothrow
 #include <cstdint>
 #include <cstdio>   // snprintf for the read-out strings
 #include <cstring>
@@ -62,6 +65,12 @@ namespace mm {
 /// ## The stream's own clock
 ///
 /// The analysis keeps time by the samples it has analyzed, a block at a time, not by the wall clock: the onset's refractory and the beat latch then measure the music, whether a block is analyzed late on a busy core or a file is fed faster than real time on the host. A synthesized or received frame lives on the wall clock, which is its time.
+///
+/// ## Memory follows the mode
+///
+/// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
+///
+/// The harmony's state, the semitone bank and its trackers, about 7 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
 class AudioService : public MoonModule, public platform::InternalRamObject {   // the filter bank touches its state every sample, so internal RAM
 public:
     /// Internal RAM, where MoonModule places other modules in PSRAM.
@@ -79,11 +88,10 @@ public:
         if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
     uint8_t       prevBands_[16] = {};   ///< the previous block's bands, the flux's reference
-    AudioDynamics dyn_;                  ///< the level, the floor, the gate and the window's top, learned live
     OnsetDetector onset_;                ///< the hit decision, with its running mean and refractory
 
-    /// The block size, a power of two: about 11 ms of audio at 48 kHz, a frame of bands each.
-    static constexpr size_t kBlock = 512;
+    /// The block an input is read in, kAudioBlock.
+    static constexpr size_t kBlock = kAudioBlock;
 
     /// A service, so the container accepts it as a child.
     ModuleRole role() const MM_NONBLOCKING override { return ModuleRole::Service; }
@@ -271,15 +279,12 @@ public:
 
     /// Which changes rebuild the channel, rebind the socket, or re-toggle the rows.
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "wsPin") == 0 || std::strcmp(name, "sdPin") == 0
-            || std::strcmp(name, "sckPin") == 0 || std::strcmp(name, "mclkPin") == 0
-            || std::strncmp(name, "codec", 5) == 0   // the codec and its bus, which re-init it
-            // Re-creates the channel, and hides the clocks the other kind does not have.
-            || std::strcmp(name, "micMode") == 0
-            || std::strcmp(name, "device") == 0
-            || std::strcmp(name, "sampleRate") == 0 || std::strcmp(name, "mode") == 0
-            || std::strcmp(name, "send audio") == 0 || std::strcmp(name, "syncPort") == 0
-            || std::strcmp(name, "addressing") == 0 || std::strcmp(name, "hosts") == 0;
+        // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind; `harmony` allocates or frees its state.
+        static constexpr const char* kPrepares[] = {"wsPin", "sdPin", "sckPin", "mclkPin", "micMode", "device", "sampleRate",
+                                                    "mode", "send audio", "syncPort", "addressing", "hosts", "harmony"};
+        if (std::strncmp(name, "codec", 5) == 0) return true;   // the codec and its bus, which re-init it
+        for (const char* p : kPrepares) if (std::strcmp(name, p) == 0) return true;
+        return false;
     }
 
     /// Claim the frame seat, then acquire only the hardware the current mode needs.
@@ -287,7 +292,8 @@ public:
         micSeat_.claim();       // the first live instance wins the seat, in any mode
         if (mode == kLocalMode) {
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
-            if (!inited_ || micConfig() != openedWith_) reinit();
+            if (!inited_ || reinitPending_ || micConfig() != openedWith_) reinit();
+            else if (harmony != (harmonyState_ != nullptr)) switchHarmony();
         } else {
             if (deinit()) clearStatus();   // the others free the channel and its pins; a mic diagnosis would otherwise linger
         }
@@ -314,16 +320,20 @@ public:
     /// The frame effects read, writable so a test draws a state no source produces on the host.
     AudioFrame& frameForTest() { return frame_; }
     /// The analysis for the selected rate, from silence, as opening the input starts it.
-    void resetAnalysisForTest() { resetAnalysis(); }
+    void resetAnalysisForTest() { if (openAnalysis()) resetAnalysis(); }
     /// The semitone bank's tuning from A440 in cents, which the retune sets.
-    float tuningForTest() const { return tuningCents_; }
-    /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path.
+    float tuningForTest() const { return harmonyState_ ? harmonyState_->tuningCents : 0.0f; }
+    /// Whether the analysis and the harmony's state are held, which only an open input and `harmony` justify.
+    bool analysisHeldForTest() const { return analysis_ != nullptr; }
+    /// Whether the harmony's state is held.
+    bool harmonyHeldForTest() const { return harmonyState_ != nullptr; }
+    /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path, after resetAnalysisForTest.
     const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock]) {
-        std::memcpy(samples_, block, sizeof(samples_));
+        if (harmony != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
+        std::memcpy(analysis_->samples, block, sizeof(block));
         squelchNow_.store(squelch, std::memory_order_relaxed);
-        harmonyNow_.store(harmony, std::memory_order_relaxed);
         analyzeBlock();
-        return work_;
+        return analysis_->work;
     }
 
     /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
@@ -380,43 +390,27 @@ public:
         }
 
         // The audio task reads and analyzes; a board without tasks does it here. Either way the tick takes the frames through the ring.
-        squelchNow_.store(squelch, std::memory_order_relaxed);   // the settings, handed to whichever thread analyzes
-        harmonyNow_.store(harmony, std::memory_order_relaxed);
-        if (!audioTask_.impl) readAndAnalyze(0);
-        takeNewest(frames_, frame_);
-    }
-
-    /// Drain `ring` into `out`, keeping the newest frame with the strongest onset among them, so a hit in an earlier block of the same tick still reaches the effects.
-    static bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
-        AudioFrame f;
-        uint8_t onset = 0;
-        bool change = false;
-        bool fresh = false;
-        while (ring.pop(&f, 1) == 1) {
-            fresh = true;
-            if (f.onset > onset) onset = f.onset;
-            change = change || f.harmonyChange;
-        }
-        if (!fresh) return false;
-        out = f;
-        out.onset = onset;
-        out.harmonyChange = change;   // a chord change in a dropped block is one too
-        return true;
+        if (!analysis_) return;
+        squelchNow_.store(squelch, std::memory_order_relaxed);   // the setting, handed to whichever thread analyzes
+        // Only once no task loop runs: a stop that timed out leaves the loop reading with the handle already gone.
+        if (!audioTask_.impl && audioLoopExited_.load(std::memory_order_acquire)) readAndAnalyze(0);
+        takeNewest(analysis_->frames, frame_);
     }
 
     /// Drain what the input holds, a block analyzed each time one fills, so no sample overflows the driver between reads: `waitMs` 0 in the tick, a wait in the audio task.
     void readAndAnalyze(uint32_t waitMs) {
+        Analysis& a = *analysis_;
         for (uint8_t blocks = 0; blocks < kMaxBlocksPerTick;) {
-            const size_t want = kBlock - filled_;
-            const size_t n = platform::audioMicRead(mic_, samples_ + filled_, want, waitMs);
+            const size_t want = kBlock - a.filled;
+            const size_t n = platform::audioMicRead(mic_, a.samples + a.filled, want, waitMs);
             // Read before the filter rewrites the samples.
             micSamples1s_.fetch_add(static_cast<uint32_t>(n), std::memory_order_relaxed);
-            for (size_t i = 0; i < n; i++) if (samples_[filled_ + i] != 0) { micNonzero1s_.fetch_add(1, std::memory_order_relaxed); break; }
-            filled_ += n;
-            if (filled_ == kBlock) {
-                filled_ = 0;
+            for (size_t i = 0; i < n; i++) if (a.samples[a.filled + i] != 0) { micNonzero1s_.fetch_add(1, std::memory_order_relaxed); break; }
+            a.filled += n;
+            if (a.filled == kBlock) {
+                a.filled = 0;
                 analyzeBlock();
-                frames_.push(&work_, 1);   // a full ring drops the newest, the tick reading the ones before
+                a.frames.push(&a.work, 1);   // a full ring drops the newest, the tick reading the ones before
                 blocks++;
             }
             if (n < want) return;   // the input holds no more
@@ -425,21 +419,28 @@ public:
     }
 
     /// The block's harmony from the semitone bank into the frame, or every harmony field 0 with `harmony` off.
-    void analyzeHarmony(bool on) {
-        if (!on) {
-            std::memset(work_.chroma, 0, sizeof(work_.chroma));
-            work_.harmonyChange = false;
-            work_.notesCount = work_.key = work_.bassNote = 0;
-            work_.tuning = 0;
+    void analyzeHarmony() {
+        AudioFrame& w = analysis_->work;
+        if (!harmonyState_) {
+            std::memset(w.chroma, 0, sizeof(w.chroma));
+            std::memset(w.notesHits, 0, sizeof(w.notesHits));
+            w.harmonyChange = false;
+            w.notesCount = w.key = w.bassNote = 0;
+            w.tuning = 0;
             return;
         }
-        work_.harmonyChange = harmony_.update(semitones_, dyn_.gateOpen, blockMs_, work_.chroma);
-        work_.notesCount = semitonesToNotes(semitones_, dyn_, work_.notes);
-        work_.key = key_.update(work_.chroma, dyn_.gateOpen, blockMs_);
-        work_.bassNote = semitonesToBassNote(semitones_, dyn_.gateOpen);
-        work_.tuning = static_cast<int8_t>(std::lround(tuningCents_));
-        if (work_.harmonyChange) harmonyChanges_.fetch_add(1, std::memory_order_relaxed);
-        retune(tuning_.update(semitones_, dyn_.gateOpen, blockMs_));
+        Harmony& h = *harmonyState_;
+        const AudioDynamics& dyn = analysis_->dyn;
+        const float dtMs = analysis_->blockMs;
+        w.harmonyChange = h.tracker.update(h.semitones, dyn.gateOpen, dtMs, w.chroma);
+        w.notesCount = semitonesToNotes(h.semitones, dyn, w.notes);
+        h.noteOnsets.take(w.notesHits, dyn.gateOpen);
+        w.key = h.key.update(w.chroma, dyn.gateOpen, dtMs);
+        w.bassNote = semitonesToBassNote(h.semitones, dyn.gateOpen);
+        w.tuning = static_cast<int8_t>(std::lround(h.tuningCents));
+        if (w.harmonyChange) harmonyChanges_.fetch_add(1, std::memory_order_relaxed);
+        if (h.retune(h.tuning.update(h.semitones, dyn.gateOpen, dtMs), analysis_->openedRate, dtMs))
+            tuningX10_.store(static_cast<int16_t>(h.tuningCents * 10.0f), std::memory_order_relaxed);
     }
 
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
@@ -447,62 +448,63 @@ public:
 
     /// One full block through the high-pass, the level and the bank into the analyzed frame, on whichever thread reads.
     void analyzeBlock() {
-        dyn_.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
-        const bool harmonyOn = harmonyNow_.load(std::memory_order_relaxed);
-        if (harmonyOn != harmonyWas_) {   // switched on, the notes start from silence rather than from where they stopped
-            semitones_.reset();
-            harmony_.reset();
-            key_.reset();       // the key and the tuning reading start from what plays now
-            tuning_.reset();
-            tuningHeldMs_ = 0.0f;
-            harmonyWas_ = harmonyOn;
-        }
+        Analysis& a = *analysis_;
+        AudioFrame& w = a.work;
+        a.dyn.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
         // The block's time is the stream's, its samples counted, so a block analyzed late or faster than real time keeps its own: @xref{the-streams-own-clock}.
-        streamSamples_ += kBlock;
-        const uint32_t nowMs = static_cast<uint32_t>(streamSamples_ * 1000u / openedRate_);
+        const uint64_t blockStart = a.streamSamples;
+        a.streamSamples += kBlock;
+        const uint32_t nowMs = static_cast<uint32_t>(a.streamSamples * 1000u / a.openedRate);
         // Removes the offset before any analysis, continuous across blocks.
-        dc_.process(samples_, kBlock, dcPole_);
-        const float levelDb = blockLevelDbFs(samples_, kBlock);
+        a.dc.process(a.samples, kBlock, a.dcPole);
+        const float levelDb = blockLevelDbFs(a.samples, kBlock);
 
         // The bands, through the window the level's dynamics set.
         const uint32_t bankStart = platform::micros();
         for (size_t at = 0; at < kBlock; at += ThirdOctaveBank::kChunk) {   // the bank's own chunk at a time, so the floats stay off the stack's budget
             float part[ThirdOctaveBank::kChunk];
-            for (size_t i = 0; i < ThirdOctaveBank::kChunk; i++) part[i] = static_cast<float>(samples_[at + i] >> 8);
-            bank_.process(part);
-            if (harmonyOn) semitones_.process(part);
+            for (size_t i = 0; i < ThirdOctaveBank::kChunk; i++) part[i] = static_cast<float>(a.samples[at + i] >> 8);
+            a.bank.process(part);
+            if (harmonyState_) harmonyState_->semitones.process(part);
+            const uint32_t chunkEndMs = static_cast<uint32_t>((blockStart + at + ThirdOctaveBank::kChunk) * 1000u / a.openedRate);
+            // The onsets read the bank between chunks, every 5 ms of the stream's time, as AudioOnsets' notes say.
+            a.onsets.update(a.bank, chunkEndMs);
+            if (harmonyState_) harmonyState_->noteOnsets.update(harmonyState_->semitones, chunkEndMs);
         }
         bankUs1s_.fetch_add(platform::micros() - bankStart, std::memory_order_relaxed);
         uint16_t peakHz = 0, peakMag = 0;
-        work_.thirdsCount = bankToBands(bank_, levelDb, blockMs_, dyn_, work_.thirds, work_.bands, peakHz, peakMag);
-        work_.level = dyn_.levelToByte(levelDb);
-        work_.gate = dyn_.gateToByte();
-        work_.gateOpen = dyn_.gateOpen;
-        analyzeHarmony(harmonyOn);
-        work_.levelSmoothed = static_cast<uint16_t>((work_.levelSmoothed * 3 + work_.level) / 4);
-        finishBands(work_, nowMs);
-        levelDbX10_.store(static_cast<int16_t>(dyn_.levelDb * 10.0f), std::memory_order_relaxed);
-        floorDbX10_.store(static_cast<int16_t>(dyn_.floorDb * 10.0f), std::memory_order_relaxed);
-        topDbX10_.store(static_cast<int16_t>(dyn_.topDb * 10.0f), std::memory_order_relaxed);
-        gateOpen_.store(dyn_.gateOpen, std::memory_order_relaxed);
+        w.thirdsCount = bankToBands(a.bank, levelDb, a.blockMs, a.dyn, w.thirds, w.bands, peakHz, peakMag);
+        w.level = a.dyn.levelToByte(levelDb);
+        w.gate = a.dyn.gateToByte();
+        w.gateOpen = a.dyn.gateOpen;
+        a.onsets.take(w, a.dyn.gateOpen);   // the block's own gate, decided by its own level
+        analyzeHarmony();
+        w.levelSmoothed = static_cast<uint16_t>((w.levelSmoothed * 3 + w.level) / 4);
+        w.seq++;
+        finishBands(w, nowMs);
+        levelDbX10_.store(static_cast<int16_t>(a.dyn.levelDb * 10.0f), std::memory_order_relaxed);
+        floorDbX10_.store(static_cast<int16_t>(a.dyn.floorDb * 10.0f), std::memory_order_relaxed);
+        topDbX10_.store(static_cast<int16_t>(a.dyn.topDb * 10.0f), std::memory_order_relaxed);
+        gateOpen_.store(a.dyn.gateOpen, std::memory_order_relaxed);
 
         // Held when there is no real signal, so it does not wander in silence.
-        if (peakMag > 8) { work_.peakHz = peakHz; work_.peakMag = peakMag; }
+        if (peakMag > 8) { w.peakHz = peakHz; w.peakMag = peakMag; }
 
         // Analysis runs faster than the send, so latching here reports each beat exactly once.
-        if (work_.level > work_.levelSmoothed + kSyncPeakMargin &&
+        if (w.level > w.levelSmoothed + kSyncPeakMargin &&
             nowMs - lastPeakMs_ >= kSyncPeakRefractoryMs) {
             syncPeakLatched_.store(true, std::memory_order_relaxed);
             lastPeakMs_ = nowMs;
         }
 
         // The window's peak, since sampling the instantaneous value once a second lands in the gaps.
-        if (work_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(work_.level > 255 ? 255 : work_.level), std::memory_order_relaxed);
+        if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
     }
 
     /// Fill frame_ with a synthesized signal, on the wall clock that is its time.
     void synthesizeFrame(bool sweep) {
         simulateAudio(frame_, platform::millis(), sweep);
+        frame_.seq++;
         finishBands(frame_, platform::millis());
         frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
         // Feed the same 1 s peak-hold the mic path uses, so the "level RMS" display tracks the.
@@ -515,7 +517,7 @@ public:
         const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == kMicPdm ? platform::MicMode::Pdm
                                                                                        : platform::MicMode::I2sStd);
         const bool busMoved = codec != kCodecNone && platform::i2cBusGeneration() != codecBusGen_;
-        if (mode == kLocalMode && (micFreed || busMoved)) reinit();
+        if (mode == kLocalMode && (micFreed || busMoved || reinitPending_)) reinit();
         // The second's tallies, each taken and cleared at once, since the audio task adds to them meanwhile.
         const uint32_t micSamples = micSamples1s_.exchange(0, std::memory_order_relaxed);
         const uint32_t micNonzero = micNonzero1s_.exchange(0, std::memory_order_relaxed);
@@ -607,34 +609,19 @@ private:
     SyncConfig syncedWith_{};
     bool syncSet_ = false;
     uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it
-    size_t filled_ = 0;         // samples accumulated toward the next full block
-    DcBlocker dc_;              // 5 Hz high-pass, continuous across blocks
-    float dcPole_ = 0.9993f;    // its pole at the opened rate, so the corner stays at 5 Hz below the 20 Hz band
-    float blockMs_ = 21.3f;     // one block's duration at the opened rate
-    uint32_t openedRate_ = 24000;   // the rate the stream opened at, which the task reads rather than the control
-    uint64_t streamSamples_ = 0;    // the samples analyzed since it opened: the analysis's clock
-    ThirdOctaveBank bank_;      // the 31 bands, designed for the opened rate
-    SemitoneBank semitones_;    // the notes to kSemitoneTopHz, for the harmony
-    HarmonyTracker harmony_;    // the pitch classes and the moment they move
-    KeyTracker key_;            // the key over the last 15 s
-    TuningEstimator tuning_;    // how far the music sits from the bank's tuning
-    float tuningCents_ = 0.0f;  // the bank's tuning from A440, in cents
-    float tuningHeldMs_ = 0.0f; // how long the reading has stayed past kRetuneCents
+    bool reinitPending_ = false;   ///< a reinit that a still-running task stopped, retried each second and on the next prepare
+    using Analysis = AudioAnalysis;
+    using Harmony = AudioHarmonyState;
+    std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
+    std::unique_ptr<Harmony> harmonyState_;     // and this only while `harmony` is on
     std::atomic<int16_t> tuningX10_{0};   // the bank's tuning in tenths of a cent, for the readout
-    bool harmonyWas_ = true;    // the switch as the analysis last saw it
-    AudioFrame work_;           // the frame the analysis writes, on the audio task where there is one
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
-    SpscRing<AudioFrame, 8> frames_;     // the task's finished frames, which the tick drains to the newest
     std::atomic<uint8_t> squelchNow_{10};   // the setting as the tick last saw it, for the task
-    std::atomic<bool> harmonyNow_{true};    // the harmony switch, the same way
     std::atomic<uint8_t> harmonyChanges_{0};   // the harmony's changes in the current 1 s window, for the readout
     std::atomic<int16_t> levelDbX10_{-1200}, floorDbX10_{-1200}, topDbX10_{-1200};   // the dynamics in tenths of a dB, for the readout
     std::atomic<bool> gateOpen_{false};
-
-    /// Fixed hot-path scratch, sized once, never reallocated.
-    int32_t samples_[kBlock] = {};
 
     AudioFrame frame_;
 
@@ -689,26 +676,25 @@ private:
 
     /// (Re)create the I2S channel for the current pins + rate.
     void reinit() {
+        reinitPending_ = false;
         codecBusGen_ = platform::i2cBusGeneration();   // every path through here has seen this bus, so tick1s waits for the next change
         openedWith_ = micConfig();                     // the settings this attempt opens with
         if constexpr (platform::hasAudioCapture) {
             // Desktop:
-            if (!deinit()) return;
+            if (!deinit()) { reinitPending_ = true; return; }
             inited_ = platform::audioCaptureInit(mic_, device, sampleRate());
             if (!inited_) {
                 setStatus("capture init failed, pick another device", Severity::Error);
                 return;
             }
-            resetAnalysis();
-            startAudioTask();
-            clearStatus();
+            openStream();
             return;
         }
         if constexpr (!platform::hasI2sMic) {
             setStatus("mic: no audio input on this platform", Severity::Warning);
             return;
         }
-        if (!deinit()) return;
+        if (!deinit()) { reinitPending_ = true; return; }
         if (const char* missing = micNotReady()) { setStatus(missing, Severity::Status); return; }
         // Bring up the I2S channel FIRST.
         inited_ = platform::audioMicInit(mic_, static_cast<uint16_t>(wsPin),
@@ -725,10 +711,16 @@ private:
             setStatus("mic: codec init failed, check I2C wiring", Severity::Error);
             return;
         }
+        openStream();   // the INMP441 emits ~250 ms of power-on settling garbage after the clock starts
+    }
+
+    /// A newly opened input: its analysis allocated and reset for the stream, and the task started.
+    void openStream() {
+        if (!openAnalysis()) return;
         resetAnalysis();   // start the high-pass and the bank clean for the new stream
         startAudioTask();
-        // The INMP441 emits ~250 ms of power-on settling garbage after the clock starts.
         clearStatus();
+        if (harmony && !harmonyState_) setStatus("audio: no internal RAM for the harmony, running without it", Severity::Warning);
     }
 
     /// What the wiring still lacks before the mic can open, or nullptr when nothing does.
@@ -745,7 +737,6 @@ private:
     /// Read and analyze on a task of its own, a blocking read of the input, so the analysis keeps the input's pace whatever the frame rate and leaves the render core its time: @xref{the-audio-task}.
     void startAudioTask() {
         squelchNow_.store(squelch, std::memory_order_relaxed);
-        harmonyNow_.store(harmony, std::memory_order_relaxed);
         audioStop_.store(false, std::memory_order_release);
         audioLoopExited_.store(false, std::memory_order_release);
         // Priority 6, over the frame encoder's 5 and under the network's 7: a lost sample is lost for good, a late frame only late. Under the encoder a busy core starved it to a third of its samples.
@@ -764,7 +755,7 @@ private:
         }
         if (!audioLoopExited_.load(std::memory_order_acquire)) return false;
         AudioFrame drop;
-        while (frames_.pop(&drop, 1) == 1) {}   // a frame the tick never took belongs to the stopped stream
+        if (analysis_) while (analysis_->frames.pop(&drop, 1) == 1) {}   // a frame the tick never took belongs to the stopped stream
         return true;
     }
 
@@ -777,39 +768,49 @@ private:
     }
     static constexpr uint32_t kReadWaitMs = 20;   // a stop is seen within this, and a block at 22,050 Hz arrives within it
 
-    /// The analysis for the opened rate, from silence.
+    /// The analysis and the harmony for the selected rate, from silence.
     void resetAnalysis() {
-        dc_.reset();
-        dyn_.reset();                     // a new rate is a new stream: the floor and the top learn it afresh
-        filled_ = 0;                      // no block mixes samples of two rates
-        dcPole_ = 1.0f - 6.2831853f * kDcCornerHz / static_cast<float>(sampleRate());
-        openedRate_ = sampleRate();
-        blockMs_ = static_cast<float>(kBlock) * 1000.0f / static_cast<float>(openedRate_);   // the opened rate's, which the task reads rather than the control
-        streamSamples_ = 0;
-        bank_.init(sampleRate());
-        tuningCents_ = 0.0f;              // a new stream is tuned afresh
-        tuningHeldMs_ = 0.0f;
+        analysis_->reset(sampleRate());
+        if (harmonyState_) resetHarmony();
+    }
+
+    /// Allocate the analysis for an opening input, and the harmony's state if `harmony` is on; false, with the card saying so, when internal RAM has no room for the analysis: @xref{memory-follows-the-mode}.
+    bool openAnalysis() {
+        if (!analysis_) analysis_.reset(new (std::nothrow) Analysis());
+        if (!analysis_) {
+            setStatus("audio: no internal RAM for the analysis", Severity::Error);
+            return false;
+        }
+        // Allocated only: resetAnalysis designs it at the opened rate. Without room it runs as harmony off, and openStream says so.
+        if (!harmony) harmonyState_.reset();
+        else if (!harmonyState_) harmonyState_.reset(new (std::nothrow) Harmony());
+        return true;
+    }
+
+    /// The `harmony` switch alone: the task pauses while the state changes hands, and a task that will not stop leaves it for the retry each second.
+    void switchHarmony() {
+        if (!stopAudioTask()) {
+            setStatus("audio task did not stop: the input stays open until it does", Severity::Error);
+            reinitPending_ = true;
+            return;
+        }
+        applyHarmony();
+        startAudioTask();
+    }
+
+    /// Hold the harmony's state exactly while `harmony` is on, with the analysis's task stopped or absent.
+    void applyHarmony() {
+        if (!harmony) { harmonyState_.reset(); return; }
+        if (harmonyState_) return;
+        harmonyState_.reset(new (std::nothrow) Harmony());
+        if (harmonyState_ && analysis_) resetHarmony();
+    }
+
+    /// The harmony from silence, at the opened rate and on A440.
+    void resetHarmony() {
+        harmonyState_->reset(analysis_->openedRate);
         tuningX10_.store(0, std::memory_order_relaxed);
-        semitones_.init(sampleRate(), 440.0f, kSemitoneTopHz);
-        key_.reset();
-        tuning_.reset();
     }
-
-    static constexpr float kRetuneCents = 10.0f;   // a reading past this, held kRetuneHoldMs, retunes the bank, as TuningEstimator's notes say
-    static constexpr float kRetuneHoldMs = 10000.0f;
-
-    /// Retune the semitone bank once the music has sat off its tuning long enough, so each note lands on its own band, as TuningEstimator's notes say.
-    void retune(float readingCents) {
-        tuningHeldMs_ = std::fabs(readingCents) > kRetuneCents ? tuningHeldMs_ + blockMs_ : 0.0f;
-        if (tuningHeldMs_ < kRetuneHoldMs) return;
-        tuningCents_ = std::fmax(-50.0f, std::fmin(50.0f, tuningCents_ + readingCents));
-        semitones_.init(openedRate_, 440.0f, kSemitoneTopHz, tuningCents_);
-        harmony_.reset();   // the bank starts from silence: no change for its settling
-        tuning_.reset();
-        tuningHeldMs_ = 0.0f;
-        tuningX10_.store(static_cast<int16_t>(tuningCents_ * 10.0f), std::memory_order_relaxed);
-    }
-    static constexpr float kDcCornerHz = 5.0f;
 
     /// Free the input and clear the analysis, false while a task that would not stop still reads them.
     bool deinit() {
@@ -824,10 +825,10 @@ private:
             platform::audioCodecDeinit();
         }
         inited_ = false;
-        filled_ = 0;
+        analysis_.reset();      // the stopped task held the last reference: @xref{memory-follows-the-mode}
+        harmonyState_.reset();
         // Publish silence:
         frame_ = AudioFrame{};
-        work_ = AudioFrame{};
         // The ANALYSIS history goes with it, so a restarted source begins from a DEFINED state rather.
         std::memset(prevBands_, 0, sizeof(prevBands_));
         onset_ = OnsetDetector{};
@@ -919,7 +920,9 @@ private:
                 // The packet carries RAW bands; the ballistic is ours and lives across packets.
                 uint8_t keep[16];
                 std::memcpy(keep, frame_.bandsSmoothed, sizeof(keep));
+                const uint16_t seq = frame_.seq;
                 frame_ = rf;                       // received audio drives the effects
+                frame_.seq = static_cast<uint16_t>(seq + 1);
                 std::memcpy(frame_.bandsSmoothed, keep, sizeof(keep));
                 finishBands(frame_, platform::millis());   // a received frame arrives on the wall clock
                 lastSyncRecv_ = platform::millis();

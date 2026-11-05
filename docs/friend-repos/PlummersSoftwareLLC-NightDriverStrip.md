@@ -2,7 +2,7 @@
 
 What landed on [NightDriverStrip](https://github.com/PlummersSoftwareLLC/NightDriverStrip)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-Summarized via the GitHub commits API (no local clone), so counts are all commits on `main`, not first-parent merges, the bullets filter out dependency bumps, whitespace, and pure refactors. Releases are noted as context rather than used as month boundaries: **v1.3.0** (published 2026-01-10) was tagged from a late-November commit, and the latest are **v2.0.0** and **v2.0.1**, both published 2026-06-14. v1.3.0 is not a clean month boundary so its month is kept whole; June IS split at v2.0.0, which was cut from `main` mid-month (see the two June sections below).
+Summarized via the GitHub commits API, with no local clone. Counts are all commits on `main`, not first-parent merges, and the bullets leave out dependency bumps, whitespace and pure refactors. Releases are noted as context rather than used as month boundaries: **v1.3.0** (published 2026-01-10) was tagged from a late-November commit, and the latest are **v2.0.0** and **v2.0.1**, both published 2026-06-14. v1.3.0 is not a clean month boundary so its month is kept whole; June IS split at v2.0.0, which was cut from `main` mid-month (see the two June sections below).
 
 ## October 2026
 

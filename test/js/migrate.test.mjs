@@ -380,6 +380,21 @@ test("a control retired on purpose is dropped and reported as retired, with its 
     assert.ok(report.some(r => r.kind === "retired" && r.where.includes("floor") && r.detail.includes("squelch")));
 });
 
+test("a state-document backup drops a retired control too, reported as retired rather than unknown", () => {
+    const doc = { Services: { "$patch": "replace", enabled: true,
+                              Audio: { type: "AudioService", "$patch": "replace", levels: 1, gain: 100, floor: 100, squelch: 12 },
+                              Other: { type: "SomeService", "$patch": "replace", gain: 7 } } };
+    const { files, report } = applyMigrations({ "/.config/Services.json": JSON.stringify(doc) });
+    const audio = JSON.parse(files["/.config/Services.json"]).Services.Audio;
+    assert.equal(audio.levels, undefined);
+    assert.equal(audio.gain, undefined);
+    assert.equal(audio.floor, undefined);
+    assert.equal(audio.squelch, 12);
+    assert.equal(JSON.parse(files["/.config/Services.json"]).Services.Other.gain, 7);   // scoped by type, as in a flat file
+    assert.deepEqual(report.filter(r => r.kind === "retired").map(r => r.where),
+                     ["/.config/Services.json Services.Audio.levels", "/.config/Services.json Services.Audio.gain", "/.config/Services.json Services.Audio.floor"]);
+});
+
 test("a retirement is scoped by module type: another module's gain stays", () => {
     const cfg = { enabled: true, "0.type": "AudioService", "0.gain": 100, "1.type": "SomeEffect", "1.gain": 7 };
     const { files } = applyMigrations({ "/.config/Effects.json": JSON.stringify(cfg) });

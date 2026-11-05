@@ -47,6 +47,13 @@ const char* shipScript(const char* name) {
     return name;
 }
 
+/// Every byte of the layer is still the black a fill wrote.
+void checkAllBlack(const Layer& layer) {
+    const auto& b = layer.buffer();
+    for (size_t i = 0; i < static_cast<size_t>(b.count()) * b.channelsPerLight(); i++)
+        CHECK(b.data()[i] == 0);
+}
+
 /// A rig of moving heads: a 1xN chain with pan and tilt channels, the shape a real head chain has. A 1D layout is width 1 by height N, because extrude duplicates the x=0 column.
 struct HeadRig {
     Layouts layouts;
@@ -115,9 +122,7 @@ TEST_CASE("setPan on a light with no motion channel writes nothing") {
               "}");
 
     // Every byte is still the black the fill wrote: nothing leaked into the color channels.
-    const auto& b = strip.layer.buffer();
-    for (size_t i = 0; i < static_cast<size_t>(b.count()) * b.channelsPerLight(); i++)
-        CHECK(b.data()[i] == 0);
+    checkAllBlack(strip.layer);
 }
 
 // Motion is not color: dimming a rig must not swing its heads toward 0/0, so the brightness scaling that applies to color must not touch these channels.
@@ -202,9 +207,7 @@ TEST_CASE("an audio script runs on a device with no audio, and paints nothing") 
             "}");
 
     // Every audio reading is 0 in silence, so every pixel is black: the script ran and decided to paint nothing, which is different from the script failing to run.
-    const auto& b = rig.layer.buffer();
-    for (size_t i = 0; i < static_cast<size_t>(b.count()) * b.channelsPerLight(); i++)
-        CHECK(b.data()[i] == 0);
+    checkAllBlack(rig.layer);
 }
 
 // A band index outside the 16 the spectrum has reads 0 rather than wrapping. A script asking for band 20 has a bug, and wrapping would answer it with a plausible number from the wrong end.
@@ -212,6 +215,29 @@ TEST_CASE("an out-of-range audio band reads zero") {
     HeadRig rig(/*withMotion=*/false);
     rig.run("class A { void tick() { fill(0,0,0); setRGB(0, audioBand(99), 0, 0); } }");
     CHECK(rig.channel(0, 0) == 0);
+}
+
+// Step 5 of the audio plan: a script reads one band's hit and one key's start, as the drum-kit and the per-key flash do.
+TEST_CASE("a script reads a third-octave band's hit and a piano key's start, out of range reading zero") {
+    static AudioService audio;   // the frame the builtins read
+    audio.defineControls();
+    audio.setup();
+    audio.tick();   // claims the seat latestFrame reads; the frame below is written straight into it
+    AudioFrame& f = audio.frameForTest();
+    f.thirdsHits[7 >> 3] = static_cast<uint8_t>(1u << (7 & 7));    // band 7, 100 Hz: a floor tom
+    f.notesHits[43 >> 3] = static_cast<uint8_t>(1u << (43 & 7));  // key 43, E4
+    HeadRig rig(/*withMotion=*/false);
+    rig.run("class A { void tick() { fill(0,0,0);"
+            "  setRGB(0, audioBandOnset(7) * 255, audioBandOnset(8) * 255, audioBandOnset(99) * 255);"
+            "  setRGB(1, audioNoteOnset(43) * 255, audioNoteOnset(42) * 255, audioNoteOnset(200) * 255); } }");
+    CHECK(rig.channel(0, 0) == 255);
+    CHECK(rig.channel(0, 1) == 0);
+    CHECK(rig.channel(0, 2) == 0);
+    CHECK(rig.channel(1, 0) == 255);
+    CHECK(rig.channel(1, 1) == 0);
+    CHECK(rig.channel(1, 2) == 0);
+    f = AudioFrame{};
+    audio.release();
 }
 
 // The names are `audio*` on purpose: a builtin RESERVES its name, so a bare `level` would stop every script that declares one from compiling. This is the regression test for that.

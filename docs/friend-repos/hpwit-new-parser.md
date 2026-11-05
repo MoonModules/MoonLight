@@ -12,9 +12,12 @@ The rewrite's heaviest month so far: the language grows toward C, a fuzzer harde
 
 **What script authors gain**
 
-- `switch`/`case`/`default` works as in C (fallthrough, `break`, nested switches, `#define`d and negative case values, errors for duplicate cases or a second `default`), and a bare `{ }` block is a statement. A `SwitchCase` example shows it.
-- `ffloat`, a 32-bit fixed-point type (Q16.16, about plus or minus 32768 in steps of 1/65536) written like a float: literals and constant subexpressions fold at compile time, and the arithmetic compiles to integer instructions. Multiplying or dividing by an integer, and dividing by a power of two, take fast paths. The README says to watch intermediate values against the range.
-- `safe_mode` works. The v1 port could not even assemble; now an indexed store into a global or external array with declared dimensions is bounds-checked, and a failed check stops the script, records the array, size and index, reports it (a console line or an `onScriptRuntimeError` hook) and unwinds back to the host call, which returns false. Pointers and unsized arrays stay unchecked.
+- `switch`/`case`/`default` works as in C: fallthrough, `break`, nested switches, and `#define`d or negative case values. A duplicate case or a second `default` is an error.
+- A bare `{ }` block is a statement, and a `SwitchCase` example shows both.
+- `ffloat` is a 32-bit fixed-point type written like a float: Q16.16, about plus or minus 32768 in steps of 1/65536, its arithmetic compiled to integer instructions.
+- `ffloat` literals and constant subexpressions fold at compile time; multiplying or dividing by an integer, and dividing by a power of two, take fast paths. The README says to watch intermediate values against the range.
+- `safe_mode` works, where the v1 port could not even assemble: an indexed store into a global or external array with declared dimensions is bounds-checked. Pointers and unsized arrays stay unchecked.
+- A failed check stops the script, records the array, size and index, and reports it on a console line or an `onScriptRuntimeError` hook. It unwinds to the host call, which returns false.
 - `pause()`, `restart()`, `kill()` and `state()` control a script run with `executeAsTask()`; a task whose function returns marks itself stopped instead of deleting itself, so no control call acts on a vanished task.
 - `char *` arguments work: a `char *` variable, parameter, array or call result can be passed to a function (only string literals matched before). A `StringFunctions` example shows strings in and out of script and host functions.
 - `_handle_` (the running executable's address) is declared in every script, so a script compiled through the raw parser path can register callbacks; the `PinInterrupt` example (a GPIO interrupt calling a script function) is ported from v1.

@@ -209,6 +209,21 @@ def test_a_post_goes_to_the_agent_forum_and_pings_no_one(monkeypatch):
     assert link.endswith("/77")
 
 
+def test_a_later_part_that_fails_names_the_started_post_so_the_rest_goes_on_there(monkeypatch):
+    calls = []
+    def post(path, body):
+        calls.append(path)
+        if len(calls) == 2:
+            raise urllib.error.HTTPError("u", 500, "Server Error", {}, io.BytesIO(b"{}"))
+        return {"id": "77"}
+    monkeypatch.setattr(dr, "_post", post)
+    with pytest.raises(RuntimeError, match="77"):
+        dr.post_agent("Long", "\n\n".join(["a" * 1500] * 3))
+    serve(monkeypatch, {"/channels/77": {"id": "77", "parent_id": dr.AGENT_FORUM}})
+    assert dr.reply_agent("77", "the rest").endswith("/77/77")
+    assert calls.count(f"/channels/{dr.AGENT_FORUM}/threads") == 1   # one post, resumed rather than started again
+
+
 def test_a_reply_outside_the_agent_forum_is_refused_before_anything_is_sent(monkeypatch):
     serve(monkeypatch, {"/channels/5": {"id": "5", "parent_id": "1203994211301728296"}})
     monkeypatch.setattr(dr, "_post", lambda path, body: pytest.fail("posted outside the agent forum"))

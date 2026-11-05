@@ -252,6 +252,34 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     a.release();
 }
 
+// The receiver numbers the frames itself, so two identical packets are two frames: the `seq` the Drum Kit reads to take each hit once.
+TEST_CASE("AudioService Receive: each packet is a new frame number, the same audio twice too") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    REQUIRE(sendLevel(a, 77));
+    const uint16_t first = a.audioFrame()->seq;
+    AudioFrame peer;
+    peer.level = 77;   // the same packet again
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    platform::UdpSocket tx;
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.open());
+    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
+    bool next = false;
+    for (int i = 0; i < 100 && !next; i++) {   // loopback delivery is asynchronous in real time
+        a.tick();
+        next = a.audioFrame()->seq != first;
+        if (!next) platform::delayMs(1);
+    }
+    CHECK(next);
+    CHECK(a.audioFrame()->seq == static_cast<uint16_t>(first + 1));
+    tx.close();
+    a.release();
+}
+
 TEST_CASE("AudioService Receive: a failed bind backs off instead of retrying every tick") {
     FrozenClock clk(1);
     // Force the bind to fail deterministically, which is harder than it looks: @xref{forcing-a-bind-to-fail}.

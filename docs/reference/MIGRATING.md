@@ -35,7 +35,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 **Action: *install over USB* once, on every ESP32-P4 device (`esp32p4rev1-eth`, `esp32p4rev1-eth-wifi`, `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi`).**
 
-The P4 firmwares read code from flash over four data lines at 80 MHz (QIO) where they used two at 40 MHz (DIO), as the S3 firmwares did in v7.0.0. The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses the new app and the Firmware card reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`. Install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too; the partition table is unchanged, so with *Erase chip first* left unticked the config stays. Take a backup first anyway.
+The P4 firmware images read code from flash over four data lines at 80 MHz (QIO) where they used two at 40 MHz (DIO), as the S3 images did in v7.0.0. The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses the new app and the Firmware card reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`. Install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too; the partition table is unchanged, so with *Erase chip first* left unticked the config stays. Take a backup first anyway.
 
 ### Audio levels set themselves: `floor`, `gain` and `levels` give way to `squelch`
 
@@ -98,7 +98,7 @@ The ring refuses to run when its refill would read PSRAM, since a flash save can
 
 **Action: *install over USB* once, on an `esp32s3-n16r8`, `esp32s3-n8r8` or `esp32s3-zero` device; the others need *nothing*.**
 
-These three firmwares read code from flash over four data lines (QIO) where they used two (DIO), which makes an S3's tick about 16% faster.
+These three firmware images read code from flash over four data lines (QIO) where they used two (DIO), which makes an S3's tick about 16% faster.
 The flash mode is the bootloader's, and an update over the air replaces only the app, so ESP-IDF refuses an app whose mode differs from the running one.
 The Firmware card then reports `ESP_ERR_OTA_SPI_MODE_MISMATCH`.
 Install this release once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), which writes the bootloader too.

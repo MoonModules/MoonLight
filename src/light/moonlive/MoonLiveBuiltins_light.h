@@ -628,6 +628,22 @@ extern "C" inline uint32_t mm_light_mid(const uintptr_t*, uint32_t, const uint8_
 extern "C" inline uint32_t mm_light_treble(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->treble; }
 /// The bass line's note as a MIDI number, 0 while none stands out.
 extern "C" inline uint32_t mm_light_bassNote(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::latestFrame()->bassNote; }
+/// A range's onset strength on the frame it hit, 0 otherwise: range 0 the bass, 1 the mids, 2 the treble.
+extern "C" inline uint32_t mm_light_rangeOnset(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const AudioFrame* f = AudioService::latestFrame();
+    const uint32_t r = uint32_t(args[0]);
+    return r == 0 ? f->onsetLow : r == 1 ? f->onsetMid : r == 2 ? f->onsetHigh : 0;
+}
+/// 1 on the frame third-octave band `i` had a hit, 0 otherwise.
+extern "C" inline uint32_t mm_light_bandOnset(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const uint32_t i = uint32_t(args[0]);
+    return i < 31 && hitAt(AudioService::latestFrame()->thirdsHits, static_cast<uint8_t>(i)) ? 1 : 0;
+}
+/// 1 on the frame piano key `i`, 0 for A0, started a note, 0 otherwise.
+extern "C" inline uint32_t mm_light_noteOnset(const uintptr_t* args, uint32_t, const uint8_t*) {
+    const uint32_t i = uint32_t(args[0]);
+    return i < 79 && hitAt(AudioService::latestFrame()->notesHits, static_cast<uint8_t>(i)) ? 1 : 0;
+}
 /// True on the frame a chord change was heard.
 extern "C" inline uint32_t mm_light_chordChange(const uintptr_t*, uint32_t, const uint8_t*) {
     return AudioService::latestFrame()->harmonyChange ? 1 : 0;
@@ -901,6 +917,9 @@ inline const BuiltinTable& lightBuiltins() {
     t.add({"audioMid", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_mid, {}});
     t.add({"audioTreble", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_treble, {}});
     t.add({"audioBassNote", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bassNote, {}});
+    t.add({"audioOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_rangeOnset, {}});
+    t.add({"audioBandOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_bandOnset, {}});
+    t.add({"audioNoteOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_noteOnset, {}});
     t.add({"setPan", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_pan, {}});
     t.add({"setTilt", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_tilt, {}});
     // The rest of the fixture roles, same shape and same no-op where the channel is absent.

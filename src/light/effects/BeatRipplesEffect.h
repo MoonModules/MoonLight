@@ -7,7 +7,7 @@ namespace mm {
 /// Every beat is a stone dropped in water.
 /// @card BeatRipplesEffect.gif
 ///
-/// `trigger` on `kick` drops a stone only on a hit in the bass, so the ripples follow the kick drum rather than every hit.
+/// `trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit.
 ///
 /// A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.
 ///
@@ -35,7 +35,7 @@ public:
     uint8_t shine     = 150;
     /// What drops a stone, in option order.
     enum Trigger : uint8_t { kAnyHit, kKick, kTriggerCount };
-    /// Every hit, or only the kick, a hit whose strongest range is the bass.
+    /// Every hit, or only the kick, the bass's own onset.
     uint8_t trigger   = kAnyHit;
 
     /// Publish the damping, the stone's depth, the idle rain, the slope's brightness and what drops a stone.
@@ -74,8 +74,7 @@ public:
         started_ = true;
 
         const AudioFrame* f = AudioService::latestFrame();
-        const bool kick = f && f->bass >= f->mid && f->bass >= f->treble && f->bass > 0;   // the hit is in the bass
-        const bool onsetNow = f && f->onset != 0 && (trigger == kAnyHit || kick);
+        const bool onsetNow = f && (trigger == kKick ? f->onsetLow != 0 : f->onset != 0);
         if (onsetNow && !onsetSeen_) {
             // The loudest band picks the radius, and the angle walks so successive hits spread out.
             uint8_t loudest = 0, best = 0;
@@ -86,7 +85,7 @@ public:
             const lengthType sx = static_cast<lengthType>(w / 2 + (static_cast<int32_t>(cos16(a)) * r) / 32768);
             const lengthType sy = static_cast<lengthType>(h / 2 + (static_cast<int32_t>(sin16(a)) * r) / 32768);
             // The onset scales the stone, with a floor that keeps a weak hit visible.
-            const int32_t hit = 96 + (static_cast<int32_t>(f->onset) * 159) / 255;
+            const int32_t hit = 96 + (static_cast<int32_t>(trigger == kKick ? f->onsetLow : f->onset) * 159) / 255;
             splash(sx, sy, static_cast<int16_t>(-(static_cast<int32_t>(drop) * kSplashScale / 255) * hit / 255));
             seq_++;
         }

@@ -26,6 +26,7 @@ add_executable(mm_tests
     unit/core/unit_crc.cpp
     unit/core/unit_AudioService_codec.cpp
     unit/core/unit_FractionalOctaveBank.cpp
+    unit/core/unit_AudioOnsets.cpp
     unit/core/unit_AudioDynamics.cpp
     unit/core/unit_AudioHarmony.cpp
     unit/core/unit_PictureService.cpp
@@ -142,6 +143,7 @@ add_executable(mm_tests
     unit/light/unit_PanelCardDriver_packet.cpp
     unit/light/unit_BlendMap.cpp
     unit/light/unit_BeatRipples.cpp
+    unit/light/unit_DrumKit.cpp
     unit/light/unit_ColorTrailsEffect.cpp
     unit/light/unit_TrailsEffect.cpp
     unit/light/unit_Fluid.cpp

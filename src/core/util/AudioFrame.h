@@ -57,7 +57,16 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  mid = 0;                  ///< the mids, 160 Hz to 2 kHz, on the same scale
     uint8_t  treble = 0;               ///< the treble, 2.5 kHz up, on the same scale
     uint8_t  bassNote = 0;             ///< the bass line's note as a MIDI number, A4 being 69, or 0 while none stands out
+    uint8_t  onsetLow = 0;             ///< 0, or the onset's strength on the block the bass had a hit: the kick
+    uint8_t  onsetMid = 0;             ///< the same for the mids: the snare, the toms, a vocal's attack
+    uint8_t  onsetHigh = 0;            ///< the same for the treble: the hi-hat, the cymbals
+    uint8_t  thirdsHits[4] = {};       ///< a bit per third, set on the block it had a hit: a tom in its own band; read with `hitAt`
+    uint8_t  notesHits[10] = {};       ///< a bit per note of `notes`, set on the block it started: a key's attack, a plucked string
+    uint16_t seq = 0;                  ///< counts the frames its source produced, so a consumer that reads one frame on two ticks takes its hits once
 };
+
+/// Whether bit `i` of a frame's hits is set, a band's or a note's.
+constexpr bool hitAt(const uint8_t* bits, uint8_t i) { return (bits[i >> 3] >> (i & 7)) & 1u; }
 
 } // namespace mm
 

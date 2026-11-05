@@ -1,9 +1,9 @@
 {
-  "commit": "24f1ba24",
+  "commit": "73bf5e60",
   "flash": {
-    "esp32s3-n16r8": 2368624,
+    "esp32s3-n16r8": 2377120,
     "esp32": 2151168,
-    "esp32p4rev1-eth": 2484192,
+    "esp32p4rev1-eth": 2493616,
     "esp32p4rev1-eth-wifi": 2670560,
     "esp32s3-n8r8": 2355984,
     "esp32s31": 2660656,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2480000,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2325312,
-    "desktop-macos": 2392872,
+    "desktop-macos": 2395480,
     "desktop-windows": 1925120,
     "esp32c3": 2252320,
     "desktop-linux": 2548000,
@@ -24,22 +24,22 @@
     "esp32s3-n8r2": 2247072
   },
   "measured": {
-    "esp32p4rev1-eth": "2026-11-04",
+    "esp32p4rev1-eth": "2026-11-05",
     "esp32s31": "2026-10-30",
     "esp32": "2026-11-03",
-    "esp32-pico": "2026-11-04",
-    "esp32s3-n16r8": "2026-11-04",
+    "esp32-pico": "2026-11-05",
+    "esp32s3-n16r8": "2026-11-05",
     "esp32s3-n8r8": "2026-10-30",
     "esp32s3-zero": "2026-10-30",
     "esp32-16mb": "2026-10-30",
     "esp32p4rev1-eth-wifi": "2026-10-30",
     "esp32-eth": "2026-10-30",
     "esp32p4rev3-eth": "2026-11-02",
-    "desktop-macos": "2026-11-04",
+    "desktop-macos": "2026-11-05",
     "desktop-windows": "2026-09-30",
     "esp32c3": "2026-10-30",
     "desktop-linux": "2026-10-12",
-    "esp32s3-n32r16": "2026-11-04",
+    "esp32s3-n32r16": "2026-11-05",
     "teensy41": "2026-11-03",
     "esp32-wrover": "2026-10-30",
     "esp32p4rev3-eth-wifi": "2026-10-30",
@@ -841,20 +841,20 @@
     }
   },
   "loc": {
-    "core": 34163,
-    "light": 32417,
+    "core": 34589,
+    "light": 32593,
     "platform": 24800,
-    "ui": 13171,
-    "test": 78857,
-    "moondeck": 33764
+    "ui": 13191,
+    "test": 79355,
+    "moondeck": 33770
   },
   "comments": {
     "core": {
-      "lines": 6797,
-      "ratio": 0.22
+      "lines": 6889,
+      "ratio": 0.221
     },
     "light": {
-      "lines": 6814,
+      "lines": 6842,
       "ratio": 0.236
     },
     "platform": {
@@ -862,32 +862,32 @@
       "ratio": 0.2
     },
     "ui": {
-      "lines": 3500,
+      "lines": 3501,
       "ratio": 0.281
     },
     "test": {
-      "lines": 7598,
+      "lines": 7627,
       "ratio": 0.111
     },
     "moondeck": {
-      "lines": 4476,
+      "lines": 4477,
       "ratio": 0.152
     }
   },
   "tests": {
-    "cases": 2939,
+    "cases": 2955,
     "scenarios": 37
   },
   "docs": {
     "md_files": 115,
-    "md_lines": 18830,
+    "md_lines": 18842,
     "plans_files": 10,
     "backlog_lines": 3001,
     "lessons_lines": 447,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 5763,
+    "functions": 5806,
     "over_threshold": 343,
     "worst_ccn": 128
   }

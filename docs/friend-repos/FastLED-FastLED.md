@@ -4,7 +4,7 @@ What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, mont
 
 ## October 2026 (up to 3.10.6)
 
-Released **3.10.6** (2026-10-04), cut from `master`: the first published release since 3.10.4 in June, so it carries the July to September work (the color pipeline at the output path, the slim bridge drivers, Pico 2 W WiFi and Bluetooth, the minimp3 decoder). The three days before it are release blockers: seven "Release blocker" issues (#4684 through #4690) opened on the 3rd and closed on the 4th, mostly toolchain pins.
+Released **3.10.6** (2026-10-04), cut from `master`, the first published release since 3.10.4 in June. It carries the July to September work: the color pipeline at the output path, the slim bridge drivers, Pico 2 W WiFi and Bluetooth, the minimp3 decoder. The three days before it are release blockers: seven "Release blocker" issues (#4684 through #4690) opened on the 3rd and closed on the 4th, mostly toolchain pins.
 
 **Fixed**
 

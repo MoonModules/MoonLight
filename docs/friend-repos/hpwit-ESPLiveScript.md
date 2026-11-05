@@ -32,9 +32,9 @@ _Checked: `repos/hpwit/ESPLiveScript/commits?sha=main` for 2026-08-01..2026-09-0
 
 ## July 2026
 
-No user-facing activity: no commits on `main` **or any of the 38 version branches** (v2.x/v3.x/v4.x, `vjson`/`vjson2`/`vdrop`, `dev`, `mem*`) in July 2026, and no notable issues. (Latest commit on `main` predates the window, June 2025; the newest commit anywhere is `vjson2`, February 2026.)
+No user-facing activity: no commits on `main` **or any of the 37 other branches** (v2.x/v3.x/v4.x, `vjson`/`vjson2`/`vdrop`, `dev`, `mem*`) in July 2026, and no notable issues. (Latest commit on `main` predates the window, June 2025; the newest commit anywhere is `vjson2`, February 2026.)
 
-_Checked: commits author-dated 2026-07-01..2026-07-31 on `main` and every one of the 38 branches, 0 on each; issues created / closed / updated 2026-07-01..2026-07-31 (0 each); PRs created in-window (0); no versioned release published in July 2026._
+_Checked: commits author-dated 2026-07-01..2026-07-31 on all 38 branches, `main` included, 0 on each; issues created / closed / updated 2026-07-01..2026-07-31 (0 each); PRs created in-window (0); no versioned release published in July 2026._
 
 ## June 2026
 

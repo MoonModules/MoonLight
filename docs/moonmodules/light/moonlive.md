@@ -280,6 +280,9 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `audioKey()` | the key over the last 15 s: 0 none yet, 1 to 12 C to B major, 13 to 24 C to B minor |
 | `audioBass()`, `audioMid()`, `audioTreble()` | the bass to 125 Hz, the mids to 2 kHz and the treble above, each 0..255 on the bands' scale |
 | `audioBassNote()` | the bass line's note as a MIDI number, A4 being 69, or 0 while none stands out |
+| `audioOnset(r)` | a hit's strength on the frame range `r` hit, 0 otherwise: 0 the bass, 1 the mids, 2 the treble |
+| `audioBandOnset(i)` | 1 on the frame third-octave band `i` had a hit, 0 otherwise: a tom in its own band |
+| `audioNoteOnset(i)` | 1 on the frame piano key `i`, 0 for A0, started a note, 0 otherwise; with `harmony` on |
 | `setPan(i, v)`, `setTilt(i, v)` | aim one moving head, which a strip ignores |
 | `setZoom(i, v)`, `setRotate(i, v)`, `setGobo(i, v)` | shape that head's beam, wheel and pattern |
 | `setPalEntry(i, r, g, b)` | write one of the sixteen active palette entries |

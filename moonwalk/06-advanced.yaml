@@ -352,7 +352,7 @@ processes:
           enum: [A microphone on a board, The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux, A PulseAudio server into the container]
           description: What should the effects hear?
     intro: |
-      Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the levels.
+      Audio-reactive effects read the [Audio](moonmodules/core/services.md#audio) service. Wire a microphone or capture what the machine plays, then set the squelch.
     steps:
       - id: open
         say: Open the Audio service.
