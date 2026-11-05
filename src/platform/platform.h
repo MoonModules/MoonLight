@@ -1459,7 +1459,7 @@ const char* hub75Backend(const Hub75Handle& h);
 /// Release the port and its buffer.
 void hub75Deinit(Hub75Handle& h);
 
-#ifndef ESP_PLATFORM
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Open the desktop's HUB75 port on LCD_CAM with a frame of the geometry's size, so a test drives the driver's tick into bit planes; off, the port refuses as on a chip without the silicon.
 void setTestHub75(bool on);
 /// The frame the driver last packed while the test port is open, `bytes` long; null while closed.

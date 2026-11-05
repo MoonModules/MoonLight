@@ -135,15 +135,15 @@ public:
         return false;
     }
 
-    /// Stop the scan and release the panel's peripheral.
+    /// Stop the scan, release the panel's peripheral, and free the correction scratch.
     void release() override {
-        platform::hub75Deinit(hub_);
-        running_ = false;
+        stopScan();
+        DriverBase::release();
     }
 
     /// Build the geometry, claim the peripheral, and arm the continuous scan.
     void prepare() override {
-        release();
+        stopScan();   // a reinit keeps the correction scratch, which release() frees
         if (!layer_) {
             setStatus("no layer", Severity::Warning);
             return;
@@ -232,17 +232,7 @@ public:
         const nrOfLightsType have = sourceBuffer_->count() < lights ? sourceBuffer_->count() : lights;
 
         // A plane reads (x, r) and the pixel half a panel below in one pass, so correct first.
-        const uint8_t* src = sourceBuffer_->data();
-        if (outCh == 3) {
-            for (nrOfLightsType i = 0; i < have; i++) {
-                correction_.apply(src + static_cast<size_t>(i) * srcCh,
-                                  wire_ + static_cast<size_t>(i) * 3, srcCh);
-            }
-        } else {
-            if (lightScratch_.count() < outCh) return;   // not ready
-            for (nrOfLightsType i = 0; i < have; i++)
-                correctToRgb(src + static_cast<size_t>(i) * srcCh, srcCh, wire_ + static_cast<size_t>(i) * 3, false);
-        }
+        correctFrameToRgb(sourceBuffer_->data(), srcCh, wire_, have);
         std::memset(wire_ + static_cast<size_t>(have) * 3, 0, static_cast<size_t>(lights - have) * 3);
 
         // Brightness is the planes' lit time, read each frame so the slider applies on the next one.
@@ -251,10 +241,13 @@ public:
         hub75Encode(wire_, out, geo_);
     }
 
-    /// Resize the correction scratch when the wiring changes, since the geometry can change under it before the next tick reads.
+    /// Resize the correction scratch when the wiring changes, once core 1 has finished the frame it writes through it.
     void onCorrectionChanged() override {
         if (!running_) return;
-        ensureWire(static_cast<size_t>(geo_.width) * geo_.height * 3);
+        const size_t frameBytes = static_cast<size_t>(geo_.width) * geo_.height * 3;
+        if (wireCap_ >= frameBytes && !outChannelsChanged()) return;   // a brightness change moves no buffer
+        if (parent()) parent()->quiesce();   // a resize frees the block the encode worker may be writing
+        ensureWire(frameBytes);
         sizeLightScratch();
     }
 
@@ -268,6 +261,12 @@ public:
     }
 
 private:
+    /// Stop the scan and release the panel's peripheral, the reinit both release() and prepare() begin with.
+    void stopScan() {
+        platform::hub75Deinit(hub_);
+        running_ = false;
+    }
+
     /// Offer the backends this silicon has and that can carry this geometry, re-pointing by label so a dropped backend cannot select another.
     void buildBackendOptions() {
         const char* current = (peripheralSel_ < backendOptionCount_)

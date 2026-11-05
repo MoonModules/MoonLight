@@ -52,6 +52,8 @@ struct Rig {
         driver.setLayer(&layer);
         driver.setSourceBuffer(&source);
     }
+    // The owner releases a driver before destroying it, which frees what open() allocated.
+    ~Rig() { driver.release(); }
 
     // Open the port with a linear, full-brightness correction, so a frame's values read straight.
     void open() {
@@ -142,6 +144,15 @@ TEST_CASE("Hub75Driver shows a wide profile's red, green and blue, wherever the 
     CHECK(paintAndShow(*r, 0, 0, 0) == -1);
 }
 
+TEST_CASE("Hub75Driver shows a green-first profile's red as red") {
+    PortGuard guard;
+    auto r = rig();
+    r->open();
+    const mm::ChannelRole grb[3] = {mm::ChannelRole::Green, mm::ChannelRole::Red, mm::ChannelRole::Blue};
+    rewire(*r, grb, 3);
+    CHECK(paintAndShow(*r, 0, 0, 0) == -1);
+}
+
 TEST_CASE("Hub75Driver shows a white-first profile's colors, not its white") {
     PortGuard guard;
     auto r = rig();
@@ -156,4 +167,28 @@ TEST_CASE("Hub75Driver lights a layout with fewer lights than its box, the rest 
     auto r = rig(20);   // a ring or any shape short of its box
     r->open();
     CHECK(paintAndShow(*r, 19, 3, 1) == -1);   // (3, 1), the last light
+}
+
+namespace {
+// A container that counts each park of its worker, as Drivers parks core 1.
+struct Parking : mm::MoonModule {
+    uint32_t parks = 0;
+    void quiesce() override { parks++; }
+};
+}  // namespace
+
+TEST_CASE("Hub75Driver parks its container's worker before a wider wiring moves its scratch, and not for a brightness change") {
+    PortGuard guard;
+    Parking owner;   // outlives the rig, whose driver points at it
+    auto r = rig();
+    owner.addChild(&r->driver);
+    r->open();
+    const mm::ChannelRole wrgb[4] = {mm::ChannelRole::White, mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::Blue};
+    const uint32_t before = owner.parks;
+    rewire(*r, wrgb, 4);
+    CHECK(owner.parks == before + 1);
+    r->driver.onCorrectionChanged();   // the same wiring again, as a brightness change reaches it
+    CHECK(owner.parks == before + 1);
+    CHECK(paintAndShow(*r, 0, 0, 0) == -1);
+    owner.removeChild(&r->driver);
 }
