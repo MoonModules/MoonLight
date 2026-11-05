@@ -1,10 +1,29 @@
 # blazoncek/WLED: monthly activity digest
 
-What landed on [blazoncek/WLED](https://github.com/blazoncek/WLED)'s `dev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [blazoncek/WLED](https://github.com/blazoncek/WLED)'s `dev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
 This is the personal fork of upstream [wled/WLED](https://github.com/wled/WLED) by Blaž Kristan (blazoncek), a long-time WLED core developer; the fork's builds call themselves "WLED-BB" and track the 0.15 line. It carries his own work ahead of or apart from upstream: segment blending modes and transitions, an alpha (transparency) color channel, bus-manager and LED-driver rewrites, HUB75 matrix support, memory tuning for large installations, and many effect rewrites. Several of these are later offered upstream as pull requests.
 
 **Branch note.** The fork's default branch is `stable`, a release line that has 6 commits in the whole window (2025-12-31 and 2026-01-03, the "WLED-BB 0.15.2" release and four follow-ups). All day-to-day work lands on `dev`, so the months below summarize `dev` (first-parent view). Two side branches also saw work: `bus-memory` (HUB75 and bus memory calculation, January 2026) and `fastled_replacement` (a FastLED replacement brought in from upstream, March to June 2026). No versioned GitHub release is published (the releases list is empty and the issue tracker is disabled), so months are kept whole.
+
+## October 2026
+
+40 commits on `dev`: custom palettes, Ethernet, the network bus and a long list of fixes.
+
+- **Custom palettes reworked**: any permanent custom palette can be removed from the UI (its file is deleted and the rest renumbered), usermods can add their own palettes through a new hook, and an uploaded palette or ledmap file takes effect at once instead of after a reboot.
+- New **Analog Clock 2D** effect, and CrazyBees, Sun Radiation, MetaBalls and Polar Lights are updated to work on large matrices.
+- **Status LED rework**: the onboard LED blinks a distinct pattern for AP mode, connecting, network up, MQTT connected, OTA in progress and no network.
+- **Ethernet**: detection is fixed (WiFi could report a mode while Ethernet was up and working), pin allocation is improved, the Ethernet state shows in JSON info, AP mode and ESP-NOW work alongside Ethernet, and the welcome page only appears when WiFi is not configured and Ethernet is not connected.
+- The **network (virtual) bus** can apply gamma correction and uses the same brightness scaling as a digital bus; brightness scaling is forced to 32-bit math.
+- LED current limiting fixes: the default mA per LED selection, a forced mA per LED field for TM1814, and TM1814 temporarily removed from the current calculation.
+- The pin manager handles an explicit -1 (unused) pin, I2C and SPI can be reconfigured through `/json/cfg`, the SPI SD card is blocked while Ethernet and a 2-pin bus are enabled, and a `WLED_DISABLE_PRESET_CACHE` build option is added.
+- Sync: an initial timebase adjustment fixes effect phase between synced devices, incomplete or oversized UDP packets are discarded, and a relay trigger on UDP receive and a nightlight bug are fixed.
+- Ledmaps with invalid segments are repaired and 2D ledmap creation reports errors instead of failing silently.
+- UI: the segment power button no longer disappears when brightness is 255 but the segment is off, and the preset Quick Load buttons are aligned (from upstream, #5886).
+- Smaller fixes: WiFi probe request events are ignored, loading a config no longer clears a linked remote, the off-to-on relay handling is fixed, ESP8266 frees memory on an effect restart, and usermod overlays are not called before setup.
+- ESP8266 is dropped from the CI builds, and the stale global auto-white-mode config processing is removed.
+
+_Checked: 40 first-parent commits on `origin/dev` dated 2026-10-01..2026-10-31 (newest 00851738, oldest 5d3031ba), via a local blobless clone and `git log --first-parent`; the one upstream cherry-pick (98a1a1d1, authored 2026-10-05) is included. The default branch `stable` has no October commits (tip b8c96235, 2026-01-03), and no side branch moved (`fastled_replacement` tip 79ea6edd, 2026-06-08). Releases published: none (`repos/blazoncek/WLED/releases` is empty). Issues: the tracker is disabled on this fork (`has_issues` false). Build bumps (VERSION 2610010 to 2610290), a missing semicolon, debug output, ESPAlexa type cleanups and unused declarations are omitted._
 
 ## September 2026
 

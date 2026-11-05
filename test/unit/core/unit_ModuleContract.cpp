@@ -72,7 +72,6 @@ const std::vector<Known> kTooBig = {
     {"ParallelLedDriver", "the pin and strand text fields and the in-flight state sit inline"},
     {"HttpServerModule", "the eight WebSocket client connections sit inline"},
     {"ControlModule", "the surface, touch and resend tables sit inline"},
-    {"AudioService", "the 512-sample block, its windowed copy and the magnitude table sit inline"},
     {"PinsModule", "the 64-claim snapshot table sits inline"},
     {"FseqPlayerEffect", "its playlist of tracks sits inline, close enough to the budget that a host's layout decides which side it lands on", true},
 };

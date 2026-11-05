@@ -1,8 +1,19 @@
 # NightDriverStrip: monthly activity digest
 
-What landed on [NightDriverStrip](https://github.com/PlummersSoftwareLLC/NightDriverStrip)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [NightDriverStrip](https://github.com/PlummersSoftwareLLC/NightDriverStrip)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-Summarised via the GitHub commits API (no local clone), so counts are all commits on `main`, not first-parent merges, the bullets filter out dependency bumps, whitespace, and pure refactors. Releases are noted as context rather than used as month boundaries: **v1.3.0** (published 2026-01-10) was tagged from a late-November commit, and the latest are **v2.0.0** and **v2.0.1**, both published 2026-06-14. v1.3.0 is not a clean month boundary so its month is kept whole; June IS split at v2.0.0, which was cut from `main` mid-month (see the two June sections below).
+Summarized via the GitHub commits API, with no local clone. Counts are all commits on `main`, not first-parent merges, and the bullets leave out dependency bumps, whitespace and pure refactors. Releases are noted as context rather than used as month boundaries: **v1.3.0** (published 2026-01-10) was tagged from a late-November commit, and the latest are **v2.0.0** and **v2.0.1**, both published 2026-06-14. v1.3.0 is not a clean month boundary so its month is kept whole; June IS split at v2.0.0, which was cut from `main` mid-month (see the two June sections below).
+
+## October 2026
+
+Dormant month: no commits landed on `main`, and no issue was opened or closed. Two user-facing events happened around the repo.
+
+- **Watching: a fresh build fails with the current FastLED.** The `^3.10.1` range now resolves to 3.10.5, whose `CRGB` alias breaks the project's forward declaration; PR #910 pins 3.10.3 and is still unreviewed.
+- **Issue #666 gets a root cause:** with audio off, the server left a PEAKDATA payload unread. Commit d73d18db (August 2025) already fixes it; a 12-band sender is still rejected where 16 are expected. The issue stays open.
+
+No versioned release in October; the most recent is v2.0.1 from June 2026.
+
+_Checked: `repos/PlummersSoftwareLLC/NightDriverStrip/commits?sha=main` for 2026-10-01..2026-11-01 (0 commits; the tip of `main` is still 4d79c290, 2026-08-14); releases published in the window (none); issue search `repo:PlummersSoftwareLLC/NightDriverStrip is:issue created:2026-10-01..2026-10-31` (0) and the same with `closed:` (0) and `updated:` (1, #666, one comment dated 2026-10-05); PR search with `merged:` (0) and `updated:` (1, #910)._
 
 ## September 2026
 
@@ -37,7 +48,7 @@ A quiet month: one feature merge, no release, no issues.
 - **Mesmerizer matrix panels switched to the HUB75-DMA backend** (replacing SmartMatrix), so the LED-matrix output path is now shared across all Mesmerizer boards.
 - Two new supported boards: **ESP32-DevKitC V4** (local effects only, no PSRAM) and **ESP32-S3-DevKitC-1 N16R8** (16 MB flash, 8 MB PSRAM, USB serial logging). On both, the BOOT button steps through effects.
 - The startup splash screen now renders immediately instead of waiting for WiFi.
-- Better behaviour on low-memory boards: the firmware degrades gracefully instead of failing when memory runs short.
+- Better behavior on low-memory boards: the firmware degrades gracefully instead of failing when memory runs short.
 - Fixed the JPEG decoder not being ready in time for the startup splash, and corrected serial status output on S3 boards.
 
 _Auditability: 3 commits on `main` author-dated 2026-07-01..2026-07-31 (1 first-parent merge, PR #901, merged July 18, plus a whitespace commit); `commits?sha=main&since=…&until=…`. Issues checked via `search/issues` for `created:2026-07-01..2026-07-31` (0), `closed:` (0) and `updated:` (0) in the same range. No versioned release published in July (latest are v2.0.0/v2.0.1, both June 14), so the month is kept whole._
@@ -85,7 +96,7 @@ Auditability: ~40 first-parent merges/commits on `main` with author-date in 2026
 
 - **RGBWW / SK6812 white-channel support**: W/WW helpers, a WarmGlow test effect, configurable SK6812 white extraction; color-temperature naming cleanup.
 - **New Setup Wizard / guided-installer WebUI**: and a push to make the UI a "non-special consumer": everything the official UI needs now comes from the firmware over the wire (spec/schema), not baked into `app.js`.
-- M5 Stick S3 support (IR + WS2812B); optimised WS2812B draw path; `ACTIVITY_PIN` support; allow zero effects in the table.
+- M5 Stick S3 support (IR + WS2812B); optimized WS2812B draw path; `ACTIVITY_PIN` support; allow zero effects in the table.
 
 **Fixed / hardened**
 
@@ -118,7 +129,7 @@ Auditability: ~40 first-parent merges/commits on `main` with author-date in 2026
 *~13 commits on `main`, 2026-02-01 … 2026-02-28.*
 
 - **Replaced the IRremoteESP8266 library with a native RMT IR decoder** (Key44 remote support, string IR-code mapping).
-- FFT implementation optimised (moved to member, weights enabled); SoundAnalyzer implementation moved to its own source file.
+- FFT implementation optimized (moved to member, weights enabled); SoundAnalyzer implementation moved to its own source file.
 
 ## January 2026
 

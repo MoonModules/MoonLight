@@ -18,11 +18,9 @@ on:
       - main
     paths:
       - 'src/**'
-      # The desktop jobs compile the whole tree, tests included (CMakeLists adds test/
-      # unconditionally), so MSVC and Apple clang see the test suite too — and both have
-      # rejected code here that the local clang build accepts. Without this line a test-only
-      # fix cannot trigger the job that flagged it, which left main red twice: the C4146 and
-      # C4701 fixes each shipped unverified because they touched only test/.
+      # The desktop jobs configure the whole tree, test/ included (CMakeLists adds it
+      # unconditionally), and build the MoonLight target alone, so a change under test/ can
+      # break their configure step.
       - 'test/**'
       - 'esp32/**'
       - 'teensy/**'
@@ -333,8 +331,9 @@ jobs:
       # until now shipped with the feature compiled out. `|| true` because a transient apt failure
       # should not abort a release on its own; CMake's own check is what decides, and it fails the
       # build loudly when the library really is absent.
-      - name: Install libcurl (MoonCloud, only used once consent is given in the app)
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev g++-12 || true
+      # cmake is declared rather than taken from the runner's preinstalls, so the job runs on any Ubuntu image, act's included.
+      - name: Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev g++-12 || true
       # GCC 12's four false-positive warnings are handled in CMakeLists.txt, which demotes them to
       # non-fatal on GCC below 16: a from-source build on Debian or Raspberry Pi OS meets the same
       # GCC and deserves the same fix.
@@ -398,8 +397,9 @@ jobs:
       # until now shipped with the feature compiled out. `|| true` because a transient apt failure
       # should not abort a release on its own; CMake's own check is what decides, and it fails the
       # build loudly when the library really is absent.
-      - name: Install libcurl (MoonCloud, only used once consent is given in the app)
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev g++-12 || true
+      # cmake is declared rather than taken from the runner's preinstalls, so the job runs on any Ubuntu image, act's included.
+      - name: Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)
+        run: sudo apt-get update && sudo apt-get install -y cmake libcurl4-openssl-dev g++-12 || true
       # Same tag + version resolution as every other build job; see build-linux-x64 for why.
       - name: Resolve release tag
         id: tag

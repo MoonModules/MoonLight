@@ -191,7 +191,7 @@ TEST_CASE("LCD encoder 16-lane: RGBW row is 96 uint16 slots, all written") {
 }
 
 // ---------------------------------------------------------------------------
-// Shift-register (74HCT595) encode. The strands are not on the GPIOs here: each data pin feeds a '595 whose 8 outputs are the strands. A '595 is serial-in, so every WS2812 slot above becomes kPinExpanderOutputs shift cycles, and a LATCH bit (a real bus lane) presents the byte on the last one. These tests pin the parts that no host can otherwise prove until the physical board exists: the shift ordering, the latch timing, and which strand lands on which output.
+// Shift-register (74HCT595) encode. The strands hang off shift registers here: each data pin feeds a '595 whose 8 outputs are the strands. A '595 is serial-in, so every WS2812 slot above becomes kPinExpanderOutputs shift cycles, and a LATCH bit (a real bus lane) presents the byte on the last one. These tests pin on the host what would otherwise show only on the bench: the shift ordering, the latch timing, and which strand lands on which output.
 // ---------------------------------------------------------------------------
 
 namespace {

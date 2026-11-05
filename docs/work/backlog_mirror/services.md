@@ -2,6 +2,19 @@
 
 Generated from [the Project](https://github.com/users/MoonModules/projects/5) by `moondeck/report/project_mirror.py`: edit the cards, not this file.
 
+## AudioService
+
+### A Pi as the room's audio source: stream in, analyze, sync out (2026-11-03)
+
+Kind: Feature · Platform: Pi · Stage: Test · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=291637725)
+
+A Pi with MoonLight can be the room's digital audio source with what already exists. A streamer (shairport-sync for AirPlay, librespot for Spotify, squeezelite for Lyrion) plays into an ALSA loopback (`snd-aloop`). The audio service captures that loopback in **Local** mode and, with `send` on, broadcasts the analysis on port 11988 to every MoonLight and WLED device in the room, while the Pi drives its own lights over Art-Net or HDMI. The audio never leaves the digital domain: no ADC, so no analog noise, and no optical cable or S/PDIF input is needed. belrik runs the same chain with PulseAudio in Kubernetes. MoonWalk's Docker step names squeezelite and sendspin.
+
+What is missing:
+- **A MoonWalk process for a plain Pi**: the loopback module loaded at boot, the streamer pointed at it, MoonLight's Local mode on the loopback's capture device, `send` on.
+- **The chain on the bench**: a Pi 5 with shairport-sync, the analysis followed by an ESP32 in Receive network mode. Measure the latency the streamer's buffer adds from phone to light, and check that `noiseFloor` can sit near zero on a digital source.
+- **An S/PDIF input as the alternative** for a source that only has optical out (a TV, an HDMI selector): a class-compliant USB interface with a TOSLINK input, or a HiFiBerry Digi+ I/O, captured the same way.
+
 ## InfraredService
 
 ### IR RX live-reconfigure recovery (unconfirmed, park until it recurs)

@@ -38,12 +38,6 @@ dependencies:
     version: "^1.0.0"
     rules:
       - if: "$CONFIG{MM_HLS} == True"
-  # esp-dsp: Espressif's signal-processing library; we use its float radix-2 FFT
-  # (dsps_fft2r_fc32) for the microphone spectrum. Float (not fixed-point) because
-  # every mic-capable target here has an FPU, where float is faster. Referenced
-  # only from platform_esp32_i2s.cpp's audioFft.
-  espressif/esp-dsp:
-    version: "^1.5.0"
   # USB host stack, which IDF v6 moved out of core into this managed component. The MIDI
   # service's USB source is its only user (platform_esp32_usb_midi.cpp), so the Kconfig gate
   # keeps it out of every image that does not set MM_USB_MIDI_HOST.

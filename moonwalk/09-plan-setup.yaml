@@ -53,7 +53,7 @@ processes:
     goal: Feature work lands on a branch the product owner created, and main stays releasable.
     dependsOn: [pick-spec-plan]
     intro: |
-      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it. Feature work branches; a branch may bundle several topics, one combined commit per cycle. How an agent works on it: [CLAUDE.md's Roles](../CLAUDE.md#roles).
+      Main is always releasable: what is on main ships as the latest pre-release, and tagged releases are cut from it. Feature work branches; a branch may bundle several topics, one combined commit per cycle.
     steps:
       - id: create
         say: Create the branch for the topic.

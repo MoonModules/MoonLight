@@ -333,11 +333,7 @@ private:
         if (listener_.bind(port)) {
             listenerBound_ = true;
             boundMs_ = platform::millis();
-            // Best-effort: a stack without multicast still hears the broadcast half.
-            char grp[16];
-            std::snprintf(grp, sizeof(grp), "%u.%u.%u.%u", kDiscoveryGroup[0], kDiscoveryGroup[1],
-                          kDiscoveryGroup[2], kDiscoveryGroup[3]);
-            listener_.joinMulticast(grp);
+            listener_.joinMulticast(kDiscoveryGroup);   // best-effort: a stack without multicast still hears the broadcast half
         } else {
             // Close it, or every retry would leak a descriptor until the process runs out.
             listener_.close();

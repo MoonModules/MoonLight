@@ -1,161 +1,36 @@
 #pragma once
 
 #include "core/util/AudioFrame.h"
-#include "core/services/AudioLevel.h"   // magToByte: the shared log/dB mapping
+#include "core/services/AudioDynamics.h"   // the window every band maps through
 #include "core/util/math16.h"       // ballistic: the per-band meter shape
+#include "core/services/FractionalOctaveBank.h"   // the bands' measurement
 
-#include <cmath>     // band maths is inherently float, as is the transform seam it feeds
+#include <cmath>     // band maths is inherently float
 #include <cstddef>
 #include <cstdint>
 
 namespace mm {
 
-/// The FFT post-processing: magnitude bins in, sixteen band bytes and a dominant peak out.
+/// The bands' post-processing: the third-octave bank's powers in, sixteen band bytes and a dominant peak out.
 ///
 /// @technical
 ///
-/// This is pure domain maths with no platform header, the FFT kernel itself being the one seam.
-/// It is host-tested by feeding a synthesised sine through the window, the desktop's own transform and the band grouping.
-/// The test then asserts the dominant band and peak frequency, all without a device.
+/// This is pure domain maths with no platform header, host-tested by feeding a synthesized sine through the bank and asserting the band it lights and the peak frequency it reports, all without a device.
 ///
-/// ## Why every band must own a bin
+/// ## Sixteen of the thirty-one
 ///
-/// A pure geometric split gives each band an equal frequency ratio, which is the textbook mapping of linear bins onto pitch and is scale-free.
-/// The transform is not: below twice the bin width there are no distinct bins to hand out, so the low edges collide.
+/// The sixteen are the third octaves WLED-MM's default GEQ picks, 40 Hz to 10 kHz, so both boards draw the same bars. A band's power is in dBFS, a full-scale sine at its center reading 0, the scale the level and the dynamics share.
 ///
-/// Measured at the shipped shape, two bands owned no bins at all and two owned one, while the top band owned seventy-five.
-/// A quarter of the display could not respond to anything, and it was the quarter where music has its energy.
+/// ## The dominant frequency
 ///
-/// So the geometric curve is kept and then made monotonic by construction: every band gets at least one bin, taken from the wide top bands that have them to spare.
-/// The result stays log-shaped where the transform can afford it and degrades to one bin a band where it cannot.
-/// That is the honest answer at the bottom of the range.
-/// No split can separate two nearby low tones when they share a bin.
-///
-/// The edges are computed once per rate change and never per frame, and the summing loop costs the same additions wherever they sit.
-///
-/// ## What a band conditioner learns
-///
-/// Every band carries two learned numbers.
-/// Its floor is the level it reads with no program material: the microphone's own noise, mains hum and the room.
-/// That is followed as a running minimum which drifts up slowly, so a room growing noisier is re-learned.
-/// Its peak is followed with an instant attack and a release of seconds, so it settles to the band's typical loudest level rather than tracking every beat.
-///
-/// Between the two is the band's own dynamic range, and the correction maps that onto the display window.
-/// Without it the treble sits at a fraction of the bass under spectrally balanced material.
-/// A peak-per-band reading of pink noise falls as the inverse root of frequency across the sixteen.
-///
-/// ## How much of that correction is applied
-///
-/// The correction takes a compressor's ratio, removing that share of a band's deviation from the window.
-/// One to one is off and the music's balance is untouched, two to one halves the rig's coloration, and a high ratio flattens it.
-///
-/// It is slow on purpose: a fast per-band gain is what causes cross-spectral pumping, and every source on multiband dynamics says not to.
-/// A maximum gain caps the lift, so a silent band is never amplified into its own noise.
-/// Turning learning off freezes both tables, which is the deterministic mode a show wants.
-///
-/// The state is thirty-two floats, and the work is sixteen logarithms and a handful of multiplies per block, on the audio path and never per light.
+/// The loudest band, refined by a parabola through its decibels and its two neighbors': the textbook peak interpolation, on bands rather than bins. Its readers map it to a hue or a place on a log scale, which this serves.
 ///
 /// ## How an onset is decided
 ///
-/// The decision is the textbook one: flux against its own recent mean rather than an absolute threshold.
-/// A loud room and a quiet one therefore fire on the same kind of event.
-/// A refractory window then makes one hit one onset, however many blocks it spans.
+/// The textbook decision: flux against its own recent mean, not an absolute threshold, so a loud room and a quiet one fire on the same event. A refractory window makes one hit one onset.
 ///
-/// The mean is an exponential average in fixed point, advanced after the decision so a hit does not raise the bar it is being judged against.
-/// A hit is flux above a configurable fraction of that mean plus a margin.
-///
-/// ## Why the gate must also stop the learning
-///
-/// A band below the silence threshold carries no program material, so it reads zero and is not learned from, and both halves of that matter.
-///
-/// Without the gate the lift is dominated by the distance from the window floor.
-/// That relocates a silent band upward as eagerly as a quiet instrument, so an empty room is displayed at full scale.
-/// Measured on the bench, the raw path read a flux of nought to three while the learner made thirty-three to sixty-eight of it.
-///
-/// Learning from silence also drags the floor table down to the noise, so the next wobble reads as music.
-///
-/// ## Why a band's silence gate carries no margin
-///
-/// The gate sits at the window floor, with no margin, unlike the level path's.
-///
-/// ## Why the margin would have to be tuned
-/// The two measure different quantities.
-/// A band reports the peak magnitude of its bins while the level reports the block's RMS, and a peak sits far above an RMS for the same sound.
-/// The same margin in decibels is therefore a much larger concession on a band.
-///
-/// Measured on the bench in a quiet room, the spectrum reads a flux of one or two at the window floor.
-/// A twenty-decibel margin takes it to fifty or more, with onsets firing.
-/// That is the room's own noise displayed as music.
-/// A margin large enough to matter would have to be tuned per part, which is exactly what the learner exists to avoid.
-///
-/// The cost is real and accepted.
-/// A band below the window is primed once and returns early, so its learned floor does not track a room that grows quieter still.
-/// That band is dark either way, and re-learning starts the moment anything audible arrives.
-///
-/// ## Textbook spectrum analysis, nothing exotic
-///
-/// The window is a Hann, the standard general-purpose choice.
-/// Tapering the block's edges to zero stops spectral leakage, where a tone smears across many bins because the block is not a whole number of cycles.
-/// It also strips the DC offset while converting the samples to floats.
-///
-/// The band grouping folds the transform's magnitude bins into sixteen log-spaced bands, because pitch is logarithmic and bass needs few bins where treble needs many.
-/// The split is a plain geometric one of equal ratio, the result normalizes onto the byte range, and the single loudest bin becomes the dominant peak.
+/// The mean is an exponential average in fixed point, advanced after the decision so a hit does not raise the bar it is judged against. A hit is flux over a configurable fraction of that mean plus a margin.
 
-/// The Hann window's coefficient at sample `i` of `n`.
-inline float hannWindow(size_t i, size_t n) {
-    if (n <= 1) return 1.0f;
-    const float x = 6.28318530718f * static_cast<float>(i) / static_cast<float>(n - 1);
-    return 0.5f - 0.5f * std::cos(x);
-}
-
-/// Window `n` samples into `out`, stripping the DC offset that would otherwise swamp the peak.
-inline void applyWindow(const int32_t* samples, size_t n, float* out) {
-    if (!samples || !out || n == 0) return;
-    int64_t sum = 0;
-    for (size_t i = 0; i < n; i++) sum += (samples[i] >> 8);
-    const float mean = static_cast<float>(sum) / static_cast<float>(n);
-    for (size_t i = 0; i < n; i++) {
-        const float s = static_cast<float>(samples[i] >> 8) - mean;
-        out[i] = s * hannWindow(i, n);
-    }
-}
-
-/// The 17 bin-index edges of the 16 bands, `edge[b]..edge[b+1]` per band.
-
-/// The lowest frequency the spectrum shows, below which is infrasound rather than music.
-inline constexpr float kLowestAudibleHz = 40.0f;
-
-inline void audioBandEdges(size_t nMag, uint32_t sampleRate, size_t edge[17]) {
-    if (nMag < 17) {                        // pathologically small: one bin each, as far as it goes
-        for (uint8_t e = 0; e <= 16; e++) edge[e] = e < nMag ? e : nMag;
-        return;
-    }
-    // The geometric ideal, in floating point so the collisions are visible before rounding.
-    for (uint8_t e = 0; e <= 16; e++) {
-        const float frac = static_cast<float>(e) / 16.0f;
-        float ix = std::pow(static_cast<float>(nMag), frac);
-        edge[e] = static_cast<size_t>(ix);
-    }
-    // The lowest audible bin, not bin 1: bin 0 is DC and those above it are infrasound.
-    size_t firstBin = 1;
-    if (sampleRate > 0) {
-        const float binHz = static_cast<float>(sampleRate) / (2.0f * static_cast<float>(nMag));
-        if (binHz > 0.0f) {
-            firstBin = static_cast<size_t>(kLowestAudibleHz / binHz);
-            if (firstBin < 1) firstBin = 1;
-            if (firstBin > nMag / 2) firstBin = nMag / 2;   // never eat half the spectrum
-        }
-    }
-    edge[0] = firstBin;
-    edge[16] = nMag;
-    // Push each edge up so every band owns a bin, which the geometric split alone could not do.
-    for (uint8_t e = 1; e <= 16; e++)
-        if (edge[e] <= edge[e - 1]) edge[e] = edge[e - 1] + 1;
-    // Pull them back when the forward pass ran past the end, so the edges strictly increase.
-    edge[16] = nMag;
-    for (uint8_t e = 16; e >= 1; e--)
-        if (edge[e] <= edge[e - 1]) edge[e - 1] = edge[e] - 1;
-}
 
 /// A peak meter's ballistic over all sixteen bands: fast on a rise, slow on a fall.
 constexpr uint8_t kBandRise = 200;
@@ -173,10 +48,10 @@ inline uint8_t spectralFlux(const uint8_t prev[16], const uint8_t cur[16]) {
     return static_cast<uint8_t>(sum > 255 ? 255 : sum);
 }
 
-/// Turns a flux stream into onsets: one per hit, and none for a swell.
+/// Turns a flux stream into onsets: one per hit, and none for a swell: @xref{how-an-onset-is-decided}.
 struct OnsetDetector {
+    uint32_t lastMs_ = 0;          ///< when the last onset fired, first so the struct packs to 8 bytes
     uint16_t mean_ = 0;            ///< EMA of the flux, 8.8 fixed point
-    uint32_t lastMs_ = 0;          ///< when the last onset fired
     bool     fired_ = false;       ///< whether one has fired yet (lastMs_ of 0 is a valid time)
 
     /// Feed one block's flux, true on the block an onset is detected.
@@ -194,103 +69,72 @@ struct OnsetDetector {
     }
 };
 
-/// Per-band conditioning in the decibel domain: the tier that learns the rig rather than the music.
-struct BandConditioner {
-    /// The narrowest dynamic range a band is credited with, shared with the level path.
-    static constexpr float kMinRangeDb = kConditionerMinRangeDb;
+/// The third-octave bank the bands are measured with.
+using ThirdOctaveBank = FractionalOctaveBank<3>;
 
-    float floorDb[16];
-    float peakDb[16];
-    bool  primed = false;   ///< whether a first block has seeded the two tables
+/// The semitone bank the harmony is measured with, counted from A440.
+using SemitoneBank = FractionalOctaveBank<12>;
+/// The notes' top: harmony lives under it.
+inline constexpr float kSemitoneTopHz = 2500.0f;
 
-    /// Starts with both tables zeroed, the first block seeding them.
-    BandConditioner() { for (uint8_t b = 0; b < 16; b++) { floorDb[b] = 0.0f; peakDb[b] = 0.0f; } }
+/// The sixteen display bands as third-octave bands, WLED-MM's default GEQ pattern: @xref{sixteen-of-the-thirty-one}.
+inline constexpr uint8_t kSixteenOfThirds[16] = {3, 5, 6, 8, 9, 11, 13, 14, 16, 17, 19, 20, 22, 24, 25, 27};
 
-    /// Condition one block of decibel values into the display window.
-    void process(const float db[16], float out[16], uint32_t dtMs, float windowFloor,
-                 float windowSpan, uint8_t ratioN, float maxGainDb, bool learning, float gateDb,
-                 float floorRiseDbPerS = 1.0f, float peakReleaseDbPerS = 3.0f) {
-        if (!primed) {
-            for (uint8_t b = 0; b < 16; b++) {
-                floorDb[b] = db[b];
-                peakDb[b] = db[b] + kMinRangeDb;
-            }
-            primed = true;
-        }
-        const float dt = static_cast<float>(dtMs) / 1000.0f;
-        const float amount = ratioN <= 1 ? 0.0f : 1.0f - 1.0f / static_cast<float>(ratioN);
-        for (uint8_t b = 0; b < 16; b++) {
-            // Held before the followers, so the tables describe the music and not the room.
-            if (db[b] < gateDb) { out[b] = 0.0f; continue; }
-            if (learning) {
-                // A minimum follower: it takes a new low at once and forgets one slowly.
-                floorDb[b] = db[b] < floorDb[b] ? db[b] : floorDb[b] + floorRiseDbPerS * dt;
-                // Peak: instant attack, slow release, so it settles on the band's typical top.
-                peakDb[b] = db[b] > peakDb[b] ? db[b] : peakDb[b] - peakReleaseDbPerS * dt;
-                // Bounded so a collapsed follower cannot divide by nearly zero.
-                if (peakDb[b] < floorDb[b] + kMinRangeDb) peakDb[b] = floorDb[b] + kMinRangeDb;
-            }
-            // Where the band's own range would place the value, and how much of that move is taken.
-            const float range = peakDb[b] - floorDb[b];
-            const float normalized = windowFloor + (db[b] - floorDb[b]) * (windowSpan / range);
-            float shift = (normalized - db[b]) * amount;
-            if (shift > maxGainDb) shift = maxGainDb;          // never lift a band into its noise
-            out[b] = db[b] + shift;
-        }
-    }
-};
+/// A power in dB, held at -120 so silence reads a number: one floor for every detector on the bands.
+inline float powerDb(float power) { return 10.0f * std::log10(power > 1e-12f ? power : 1e-12f); }
 
-inline void magnitudesToBands(const float* mag, size_t nMag, uint32_t sampleRate,
-                              uint16_t noiseFloor, uint16_t gain,
-                              uint8_t bands[16], uint16_t& peakHz, uint16_t& peakMag,
-                              BandConditioner* cond = nullptr, uint32_t dtMs = 23,
-                              uint8_t ratioN = 1, float maxGainDb = 24.0f, bool learning = true) {
+/// A band's power in dBFS, a full-scale sine at its center reading 0; nothing audible reads -120.
+inline float bandPowerDbFs(float power) {
+    return powerDb(power * (2.0f / 70368744177664.0f));   // 2 / 2^46: a 24-bit full-scale sine's power, A * A / 2 with A = 2^23
+}
+
+/// The 31 band bytes and the sixteen picked from them, and the dominant peak, from the bank's powers through the dynamics, which this block's level and loudest band update first; answers how many of the 31 the bank measures, the ones above reading 0.
+inline uint8_t bankToBands(const ThirdOctaveBank& bank, float levelDb, float dtMs, AudioDynamics& dyn,
+                           uint8_t thirds[31], uint8_t bands[16], uint16_t& peakHz, uint16_t& peakMag) {
+    for (uint8_t b = 0; b < 31; b++) thirds[b] = 0;
     for (uint8_t b = 0; b < 16; b++) bands[b] = 0;
     peakHz = 0;
     peakMag = 0;
-    if (!mag || nMag == 0 || sampleRate == 0) return;
+    const uint8_t count = bank.bandCount();
+    if (count == 0) return 0;
 
-    // Hz per bin = sampleRate / (2 * nMag).
-    const float binHz = static_cast<float>(sampleRate) / (2.0f * static_cast<float>(nMag));
-
-    size_t edge[17];
-    audioBandEdges(nMag, sampleRate, edge);
-    float bandDb[16];
-
-    // The same logarithmic mapping the level path uses, so the two knobs mean one thing across both.
-    auto toByte = [noiseFloor, gain](float m) -> uint8_t {
-        return magToByte(m, noiseFloor, gain);
-    };
-
-    float peakVal = 0.0f;
-    size_t peakBin = 0;
-    for (size_t i = 1; i < nMag; i++)              // single peak scan (skip DC)
-        if (mag[i] > peakVal) { peakVal = mag[i]; peakBin = i; }
-
-    for (uint8_t b = 0; b < 16; b++) {
-        size_t lo = edge[b], hi = edge[b + 1];
-        if (hi <= lo) hi = lo + 1;
-        if (hi > nMag) hi = nMag;
-        // The peak rather than the average, so a narrow tone lights one band instead of smearing.
-        float best = 0.0f;
-        for (size_t i = lo; i < hi; i++) if (mag[i] > best) best = mag[i];
-        bandDb[b] = best <= 1.0f ? 0.0f : 20.0f * std::log10(best);
+    float db[31];
+    uint8_t loudest = 0;
+    for (uint8_t b = 0; b < count; b++) {
+        db[b] = bandPowerDbFs(bank.power(b));
+        if (db[b] > db[loudest]) loudest = b;
     }
-    // Conditioned in decibels, then through the shared window, so the two paths cannot disagree.
-    if (cond) {
-        float out[16];
-        // The gate sits at the window floor, with no margin: see the appendix on why.
-        cond->process(bandDb, out, dtMs, windowFloorDb(noiseFloor), windowSpanDb(gain), ratioN,
-                      maxGainDb, learning, windowFloorDb(noiseFloor));
-        for (uint8_t b = 0; b < 16; b++) bands[b] = bandDb[b] <= 0.0f ? 0 : dbToByte(out[b], noiseFloor, gain);
-    } else {
-        for (uint8_t b = 0; b < 16; b++) bands[b] = bandDb[b] <= 0.0f ? 0 : dbToByte(bandDb[b], noiseFloor, gain);
-    }
+    dyn.update(levelDb, db[loudest], dtMs);
+    for (uint8_t b = 0; b < count; b++) thirds[b] = dyn.toByte(db[b]);
+    for (uint8_t b = 0; b < 16; b++) bands[b] = thirds[kSixteenOfThirds[b]];
 
-    if (peakVal > 0.0f) {
-        peakHz = static_cast<uint16_t>(static_cast<float>(peakBin) * binHz);
-        peakMag = toByte(peakVal);
+    if (!dyn.gateOpen) return count;
+    float offset = 0.0f;   // in bands, from the loudest band's center: @xref{the-dominant-frequency}
+    if (loudest > 0 && loudest + 1 < count) {
+        const float curve = db[loudest - 1] - 2.0f * db[loudest] + db[loudest + 1];
+        if (curve < 0.0f) offset = 0.5f * (db[loudest - 1] - db[loudest + 1]) / curve;
+        if (offset > 0.5f) offset = 0.5f;
+        if (offset < -0.5f) offset = -0.5f;
     }
+    peakHz = static_cast<uint16_t>(bank.centerHz(loudest) * std::exp2(offset / 3.0f));
+    peakMag = dyn.toByte(db[loudest]);
+    return count;
+}
+
+/// The last third-octave band of the bass and of the mids: 125 Hz and 2 kHz, the treble from 2.5 kHz up.
+inline constexpr uint8_t kBassTopThird = 8, kMidTopThird = 20;
+
+/// The range of a third-octave band: 0 the bass, 1 the mids, 2 the treble.
+constexpr uint8_t rangeOfThird(uint8_t third) { return third <= kBassTopThird ? 0 : third <= kMidTopThird ? 1 : 2; }
+
+/// The bass, mid and treble of a frame, each its loudest band on its bars' own scale, from the thirds or else the sixteen, so a frame from audio sync carries them too.
+inline void bandsToRanges(AudioFrame& f) {
+    uint8_t* out[3] = {&f.bass, &f.mid, &f.treble};
+    for (uint8_t* o : out) *o = 0;
+    if (f.thirdsCount > 0)
+        for (uint8_t b = 0; b < f.thirdsCount && b < 31; b++) { uint8_t& o = *out[rangeOfThird(b)]; o = f.thirds[b] > o ? f.thirds[b] : o; }
+    else
+        for (uint8_t b = 0; b < 16; b++) { uint8_t& o = *out[rangeOfThird(kSixteenOfThirds[b])]; o = f.bands[b] > o ? f.bands[b] : o; }
 }
 
 } // namespace mm

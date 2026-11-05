@@ -72,13 +72,6 @@ CONFIG_ETH_DMA_TX_BUFFER_NUM=10
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
 
-
-# esp-dsp's optimized P4 assembly kernels: the default, and what we ship. The line below forces the portable C kernels instead, and is off.
-# Some of those kernels break the P4's hardware-loop constraints, so an interrupt landing on a loop boundary corrupts the loop counter: the FFT crash
-# loop (Illegal instruction, Load access fault) of 2026-08-28, once HLS added a second task. Turn the line on if it returns; the portable kernels
-# take the audio tick from about 615 to 658 us. Status: docs/reference/issues-in-other-projects.md. In the board fragment, since every P4 image layers on it.
-# CONFIG_DSP_ANSI=y
-
 # The capture: the UVC host and the JPEG decode, on the only chip here with a High-Speed USB host.
 CONFIG_MM_USB_VIDEO=y
 

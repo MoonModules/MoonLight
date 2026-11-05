@@ -1,10 +1,20 @@
 # WLED-MM: monthly activity digest
 
-What landed on [WLED-MM](https://github.com/MoonModules/WLED-MM)'s `mdev` (default) branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md). Months are split at versioned-release boundaries (the rolling `nightly` tag is not a release).
+What landed on [WLED-MM](https://github.com/MoonModules/WLED-MM)'s `mdev` (default) branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md). Months are split at versioned-release boundaries (the rolling `nightly` tag is not a release).
+
+## October 2026
+
+*Summarized from 2 commits on `mdev`, both 2026-10-21 (no versioned release cut this month; the rolling `nightly` prerelease was not republished, its assets still date from 2026-09-05).*
+
+Near-dormant month. `platformio.ini` now tracks the tip of the [WLED-AudioReactive-Usermod](https://github.com/MoonModules/WLED-AudioReactive-Usermod) repo instead of a pinned commit; a second, comment-only commit triggers a build.
+
+- Watching: the tracked usermod (now "Audioreactive V2") gained five audio-driven palettes, sync that stops in silence and ESP-IDF v5 support. No published WLED-MM binary carries it yet: the nightly did not rebuild.
+
+_Checked: 2 commits on `mdev`, author-date 2026-10-01..2026-10-31 (35b939e9 "Update WLED-AudioReactive-Usermod dependencies to use latest dev" and 25a6073a "dummy change", both 2026-10-21), via `git log origin/mdev --first-parent` after `git fetch --all --tags`. Issues checked: `search/issues?q=repo:MoonModules/WLED-MM+is:issue+created:2026-10-01..2026-10-31` (0) and `closed:2026-10-01..2026-10-31` (0), no issues opened or closed all month. Releases checked (`repos/MoonModules/WLED-MM/releases`): only the rolling `nightly` prerelease, still published 2026-09-05 with its tag at 272dab59 (the scheduled nightly workflow ran daily through 2026-10-08 without republishing, and only the push CI ran after 2026-10-21), no versioned release, so no month split. Dependency context: `repos/MoonModules/WLED-AudioReactive-Usermod/commits?since=2026-10-01&until=2026-11-01` (38 commits on `main`)._
 
 ## September 2026
 
-*Summarised from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-09-05).*
+*Summarized from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-09-05).*
 
 Dormant month. The single commit is a crash guard: the lookup of the last active segment no longer wraps around to a huge number when a device has no segments, which prevents an out-of-range access in that case.
 
@@ -12,7 +22,7 @@ _Auditability: 1 commit on `mdev`, author-date 2026-09-01..2026-09-30 (272dab59,
 
 ## August 2026
 
-*Summarised from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-08-13).*
+*Summarized from 1 commit on `mdev` (no versioned release cut this month; the rolling `nightly` prerelease republished on 2026-08-13).*
 
 Dormant month. The single commit is a build-configuration fix with no user-visible change: the audio-reactive usermod is pinned by its full commit hash, because the pioarduino build tooling fails on short hashes. Nightly builds therefore keep resolving the audio-reactive dependency correctly.
 
@@ -20,7 +30,7 @@ _Auditability: 1 commit on `mdev`, author-date 2026-08-01..2026-08-31 (f2d32c9c,
 
 ## July 2026
 
-*Summarised from 2 commits on `mdev`, both 2026-07-01 (no versioned release cut this month; the `nightly` prerelease republished on 2026-07-02 packages June's work).*
+*Summarized from 2 commits on `mdev`, both 2026-07-01 (no versioned release cut this month; the `nightly` prerelease republished on 2026-07-02 packages June's work).*
 
 Near-dormant month, a single small change and a build-number bump.
 
@@ -30,7 +40,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## June 2026
 
-*Summarised from 38 commits on `mdev`, 2026-06-01 … 2026-06-25 (no versioned release cut this month, so the month is not split; the `nightly` prerelease is not a release).*
+*Summarized from 38 commits on `mdev`, 2026-06-01 … 2026-06-25 (no versioned release cut this month, so the month is not split; the `nightly` prerelease is not a release).*
 
 **New**
 
@@ -43,14 +53,14 @@ Near-dormant month, a single small change and a build-number bump.
 - LEDs no longer flicker on startup and during GIF playback.
 - Custom palettes reload immediately after you upload a palette file (previously needed a manual refresh; relates to long-standing issue #105).
 - Fixed `esp32dev_compat` firmware build failing (issue #371) and a broken `-D WLEDMM` build flag.
-- ArtiFX (ARTI effect engine) robustness: call-stack bounds checks, safer string/lexer handling, and fixes for glitches seen only in speed-optimised builds (relates to issue #295); ARTI status now shown in the Info panel.
+- ArtiFX (ARTI effect engine) robustness: call-stack bounds checks, safer string/lexer handling, and fixes for glitches seen only in speed-optimized builds (relates to issue #295); ARTI status now shown in the Info panel.
 - Upstream compatibility: accepts `I2CSDAPIN`/`I2CSCLPIN` as alternatives to the older I2C pin defines; fixed the arduinoFFT dependency; brown-out restart info now checked on both cores.
 
 *Auditability: 38 commits on `mdev`, author-date 2026-06-01..2026-06-30 (range 84669c3 … 70fe1b8; several are CHANGELOG/version-bump/CodeRabbit-config/internal-refactor commits, omitted as not user-facing). Issues checked: created 2026-06-01..2026-06-30 and closed 2026-06-01..2026-06-30, 4 relevant surfaced (#367, #371 fixed this month; #105, #295 long-standing, closed/addressed this month).*
 
 ## May 2026
 
-*Summarised from 34 first-parent commits on `mdev`, 2026-05-01 … 2026-05-30.*
+*Summarized from 34 first-parent commits on `mdev`, 2026-05-01 … 2026-05-30.*
 
 - **Ethernet board support:** added QuinLED v4 Ethernet profiles, a legacy Olimex ETH-Gateway option, and fixed the KIT-VE PHY address. **Breaking:** a duplicate Ethernet option was removed, re-select your board if you used the previous Olimex-ESP32-Gateway entry.
 - Audio-reactive auto-disables during DDP / DMX / Art-Net input (avoids the two fighting over the LEDs).
@@ -59,7 +69,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## April 2026
 
-*Summarised from 47 first-parent commits on `mdev`, 2026-04-01 … 2026-04-30.*
+*Summarized from 47 first-parent commits on `mdev`, 2026-04-01 … 2026-04-30.*
 
 - **DDP input** hardened, rejects malformed / unsupported / "control" packets, relaxed header checks for compatibility.
 - Robustness: recovers gracefully from an empty `{}` config file (`cfg.json` / `wsec.json`) instead of misbehaving; steadier serial on ESP32; ESP8266 build fixes.
@@ -67,7 +77,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## March 2026
 
-*Summarised from 43 first-parent commits on `mdev`, 2026-03-01 … 2026-03-31.*
+*Summarized from 43 first-parent commits on `mdev`, 2026-03-01 … 2026-03-31.*
 
 **New / effects**
 
@@ -81,7 +91,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## February 2026
 
-*Summarised from 42 first-parent commits on `mdev`, 2026-02-01 … 2026-02-28.*
+*Summarized from 42 first-parent commits on `mdev`, 2026-02-01 … 2026-02-28.*
 
 - **Memory / "Heap too low" work:** moved the WS-LED preview buffer into PSRAM, PSRAM-aware allocation, reduced JSON buffers on S3-without-PSRAM, fewer out-of-memory failures on tight boards.
 - **Board support:** ESP32-S3 QSPI build, builds without the HUB75 driver (4 MB / 16 MB variants), better handling of ESP32 PICO-D2/V3 and D0WDR2-V3 (frees GPIO17), startup serial now prints HUB75 pins + full chip revision.
@@ -90,7 +100,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## January 2026 (post-v14.7.1)
 
-*Summarised from 48 first-parent commits on `mdev`, 2026-01-13 (after v14.7.1) … 2026-01-31.*
+*Summarized from 48 first-parent commits on `mdev`, 2026-01-13 (after v14.7.1) … 2026-01-31.*
 
 - **Animartrix** overhauled, optional gamma correction, always paints in 2D, big math speedups, dependency upgrade, and several bugfixes (segment-option changes now respected).
 - **New ESP32 node types** for ESP-NOW (WizMote data); Philips Hue robustness; PixelForge GIF tool gains image rotation.
@@ -99,7 +109,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## January 2026 (up to v14.7.1)
 
-*Summarised from 32 first-parent commits on `mdev`, 2026-01-01 … 2026-01-13, released as **v14.7.1**.*
+*Summarized from 32 first-parent commits on `mdev`, 2026-01-01 … 2026-01-13, released as **v14.7.1**.*
 
 - **Release v14.7.1.**
 - Random per-LED colors via the JSON API (`"col":["r","r","r"]`); manual/dual auto-white modes work with palettes; segment-palette functions inlined for speed.
@@ -108,7 +118,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## December 2025
 
-*Summarised from 48 first-parent commits on `mdev`, 2025-12-01 … 2025-12-31.*
+*Summarized from 48 first-parent commits on `mdev`, 2025-12-01 … 2025-12-31.*
 
 **New / effects**
 
@@ -121,7 +131,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## November 2025
 
-*Summarised from 100 first-parent commits on `mdev`, 2025-11-01 … 2025-11-30.*
+*Summarized from 100 first-parent commits on `mdev`, 2025-11-01 … 2025-11-30.*
 
 **New**
 
@@ -139,7 +149,7 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## October 2025
 
-*Summarised from 28 first-parent commits on `mdev`, 2025-10-01 … 2025-10-31.*
+*Summarized from 28 first-parent commits on `mdev`, 2025-10-01 … 2025-10-31.*
 
 **New / effects**
 
@@ -152,6 +162,6 @@ Near-dormant month, a single small change and a build-number bump.
 
 ## September 2025
 
-*Summarised from 3 first-parent commits on `mdev`, 2025-09-01 … 2025-09-30.*
+*Summarized from 3 first-parent commits on `mdev`, 2025-09-01 … 2025-09-30.*
 
 - Quiet month on `mdev`, build instructions, npm `ci` for dependencies, and GitHub Copilot contributor instructions. Nothing user-facing.

@@ -5,7 +5,6 @@
 #include "light/effects/EffectBase.h"
 #include "light/effects/SpriteCast.h"   // the shared cast, when the ball is a sprite
 #include "light/effects/PlayerSeat.h"   // a person takes a paddle, the game plays it again later
-#include "light/powerfunctions/fonts.h"     // the score digits
 
 namespace mm {
 

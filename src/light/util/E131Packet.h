@@ -13,14 +13,16 @@ namespace mm {
 ///
 /// ## Three nested layers
 ///
-/// A 126-byte header precedes the channel data, and every multi-byte field is big-endian.
-/// The root layer carries the packet identifier and the sender's stable component id.
-/// The framing layer carries the source name, the priority, the sequence and the universe.
-/// The DMP layer carries the property count and the start code, and the channel data follows it.
+/// A 126-byte big-endian header precedes the channel data: a root layer (packet identifier, the sender's component id), a framing layer (source name, priority, sequence, universe) and a DMP layer (property count, start code).
 
 constexpr uint16_t E131_PORT = 5568;
 constexpr size_t E131_HEADER_SIZE = 126;
 constexpr size_t E131_CID_LENGTH = 16;
+/// The highest universe E1.31 carries; §6.2.7 reserves 64000 up.
+constexpr uint16_t E131_LAST_UNIVERSE = 63999;
+
+/// The first E1.31 universe for a configured universe start: E1.31 has no universe 0 (§6.2.7), so a start of 0 sends and receives from 1, as xLights and FPP number them, while Art-Net keeps its 0.
+constexpr uint16_t e131FirstUniverse(uint16_t universeStart) { return universeStart ? universeStart : 1; }
 
 namespace detail {
 inline void putU16(uint8_t* p, uint16_t v) {
@@ -32,7 +34,7 @@ inline uint16_t getU16(const uint8_t* p) {
 }
 } // namespace detail
 
-/// Build a data packet; priority and sync address stay at their defaults until a consumer needs them.
+/// Build a data packet, @xref{three-nested-layers|its three layers}; priority and sync address stay at their defaults until a consumer needs them.
 inline size_t buildE131Packet(uint8_t* outBuf, uint16_t universe, uint8_t sequence,
                               const uint8_t cid[E131_CID_LENGTH],
                               const uint8_t* data, uint16_t dataLen) {

@@ -4,9 +4,7 @@
 ///
 /// ## Why it is vendored
 ///
-/// One permissively licensed header with no link dependencies replaces three hand-written system backends plus device enumeration.
-/// It links the system audio frameworks itself at run time, which matches the rule that the build needs no vendor kits, as the raw-frame and video precedents already do.
-/// The header lives untouched and is excluded from the quality gates; everything below the include is ours and stays warning-clean.
+/// One permissively licensed header replaces three system backends and device enumeration, linking the system audio frameworks at run time, so the build needs no vendor kits. It stays untouched, outside the quality gates.
 
 // GCC cannot parse Apple's block syntax in those framework headers; that compile-proof build falls back to the null backend, the shipped clang build keeps CoreAudio.
 #if defined(__APPLE__) && defined(__GNUC__) && !defined(__clang__)
@@ -54,6 +52,9 @@
 
 // Ours below the include: the library's device thread pushes samples into a lock-free ring that the render thread pops; the ring documents overflow and sizing.
 
+#include <chrono>
+#include <thread>   // the read's wait
+
 #include "platform/platform.h"
 #include "core/util/SpscRing.h"
 
@@ -95,7 +96,7 @@ void captureCallback(ma_device* /*dev*/, void* /*out*/, const void* in, ma_uint3
 
 }  // namespace
 
-bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/) {
+bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/, uint8_t /*gainDb*/) {
     return true;   // no codec hardware on a desktop host; nothing to bring up
 }
 void audioCodecDeinit() {}
@@ -156,9 +157,15 @@ bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRat
 // The desktop captures from an OS device, which shares no peripheral with anything: never retries.
 bool audioMicSharedBusFree(MicMode) { return false; }
 
-size_t audioMicRead(AudioMicHandle& /*h*/, int32_t* out, size_t maxSamples) {
+size_t audioMicRead(AudioMicHandle& /*h*/, int32_t* out, size_t maxSamples, uint32_t waitMs) {
     if (!deviceOpen_ || out == nullptr) return 0;
-    return ring_.pop(out, maxSamples);
+    size_t got = ring_.pop(out, maxSamples);
+    // An empty ring waits for the capture thread in 1 ms steps, the read an audio task blocks in.
+    for (uint32_t waited = 0; got == 0 && waited < waitMs; waited++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        got = ring_.pop(out, maxSamples);
+    }
+    return got;
 }
 
 void audioMicDeinit(AudioMicHandle& h) {

@@ -1,13 +1,13 @@
 # MoonLive: the language roadmap
 
-[MoonLive](../explanation/architecture/moonlive.md) is the engine as built (grammar, IR, codegen), and [power-functions.md](../moonmodules/light/power-functions.md) is the builtin surface it calls into. This analysis is the ordered plan for closing the gap between them: which language features to add next, and why that order. Every limit quoted was measured against the shipped compiler, not read off the source. The steps and the code cap are two backlog items, both listed in [MoonLive language and catalog](https://github.com/MoonModules/MoonLight/issues/221).
+[MoonLive](../explanation/architecture/moonlive.md) is the engine as built (grammar, IR, codegen), and [power-functions.md](../moonmodules/light/power-functions.md) is the built-in surface it calls into. This analysis is the ordered plan for closing the gap between them: which language features to add next, and why that order. Every limit quoted was measured against the shipped compiler, not read off the source. The steps and the code cap are two backlog items, both listed in [issue #221](https://github.com/MoonModules/MoonLight/issues/221).
 
 ## What this is for
 
 MoonLive compiles a C-subset to native code on the device. The subset is deliberately small: it started at "fill a buffer with a color" and grew a feature at a time. What follows is the ordered list of what to grow next, and why that order.
 
 **The bar is a corpus, not one effect.** The predecessor MoonLight publishes a body of live scripts at
-[ewowi/MoonLight/livescripts](https://github.com/ewowi/MoonLight/tree/main/livescripts), and the goal is that MoonLive can **run them**, not that we migrate them into this repo. They are written against a language with floats, structs and a wide builtin surface, so they are an honest external measure of how far the subset still has to grow: each one that compiles unchanged is a feature below that landed, and each one that does not names the next gap.
+[ewowi/MoonLight/livescripts](https://github.com/ewowi/MoonLight/tree/main/livescripts), and the goal is that MoonLive can **run them**, not that we migrate them into this repo. They are written against a language with floats, structs and a wide built-in surface, so they are an honest external measure of how far the subset still has to grow: each one that compiles unchanged is a feature below that landed, and each one that does not names the next gap.
 
 The measure throughout is **what a real effect needs**. A simulation effect (particles, physics, anything where this frame depends on the last) is the honest test, because it exercises state, arithmetic and control flow together rather than one at a time. `moonlive/effects/particles/balls.mle` is the worked example: bouncing balls, written against the language as it stands, and every compromise it had to make is a line item below.
 

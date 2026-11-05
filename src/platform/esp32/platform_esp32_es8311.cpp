@@ -88,7 +88,7 @@ const audio_codec_if_t* newCodec(CodecType type, const audio_codec_ctrl_if_t* ct
 }
 }  // namespace
 
-bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate) {
+bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate, uint8_t gainDb) {
     if (type == CodecType::None) return true;     // direct-mic board: nothing to do
     if (type != CodecType::Es8311 && type != CodecType::Es7210) return false;  // unknown codec for this build
     if (!i2cBusHandle()) { ESP_LOGE(ES_TAG, "no I2C bus open for the codec"); return false; }
@@ -125,7 +125,7 @@ bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate) {
         deinitState(st);
         return false;
     }
-    esp_codec_dev_set_in_gain(st->dev, 30.0f);            // mic gain (dB), a reasonable default
+    esp_codec_dev_set_in_gain(st->dev, static_cast<float>(gainDb));   // the analog gain, rounded to the codec's step
 
     g_codec = st;
     return true;
@@ -142,7 +142,7 @@ void audioCodecDeinit() {
 #include <new>
 
 namespace mm::platform {
-bool audioCodecInit(CodecType type, uint8_t, uint32_t) {
+bool audioCodecInit(CodecType type, uint8_t, uint32_t, uint8_t) {
     // No codec: there's nothing to configure, so a None request succeeds and any codec request fails (a board asking for a codec this build can't drive).
     return type == CodecType::None;
 }

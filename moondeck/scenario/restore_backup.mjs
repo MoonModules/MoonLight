@@ -56,7 +56,8 @@ if (!after || after.uptime + 2 < before.uptime + elapsed) {
     failures++;
     console.log(`FAIL the device restarted during the restore (bootReason ${await bootReason().catch(() => "unknown")})`);
 }
-for (const e of entries.filter(e => e.kind !== "renamed")) { failures++; console.log(`FAIL report: ${e.where}: ${e.detail}`); }
+for (const e of entries.filter(e => e.kind !== "renamed" && e.kind !== "retired")) { failures++;   // a rename or a retirement is a known break, mapped
+    console.log(`FAIL report: ${e.where}: ${e.detail}`); }
 
 // Every value the migrated bundle holds is back on the device, as it reads its own config files.
 const live = (await (await at("/api/state")).json()).modules || [];

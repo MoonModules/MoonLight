@@ -199,3 +199,66 @@ def test_a_failure_other_than_a_refused_channel_is_raised_not_read_as_an_empty_c
 
 def test_a_limit_of_zero_reads_no_messages():
     assert dr.read_messages("anything", limit=0) == "no messages in that window"
+
+
+def test_a_post_goes_to_the_agent_forum_and_pings_no_one(monkeypatch):
+    posts = []
+    monkeypatch.setattr(dr, "_post", lambda path, body: posts.append((path, body)) or {"id": "77"})
+    link = dr.post_agent("Tempo harness", "hello")
+    assert posts == [(f"/channels/{dr.AGENT_FORUM}/threads", {"name": "Tempo harness", "message": {"content": "hello", "allowed_mentions": {"parse": []}}})]
+    assert link.endswith("/77")
+
+
+def test_a_later_part_that_fails_names_the_started_post_so_the_rest_goes_on_there(monkeypatch):
+    calls = []
+    def post(path, body):
+        calls.append(path)
+        if len(calls) == 2:
+            raise urllib.error.HTTPError("u", 500, "Server Error", {}, io.BytesIO(b"{}"))
+        return {"id": "77"}
+    monkeypatch.setattr(dr, "_post", post)
+    with pytest.raises(RuntimeError, match="77"):
+        dr.post_agent("Long", "\n\n".join(["a" * 1500] * 3))
+    serve(monkeypatch, {"/channels/77": {"id": "77", "parent_id": dr.AGENT_FORUM}})
+    assert dr.reply_agent("77", "the rest").endswith("/77/77")
+    assert calls.count(f"/channels/{dr.AGENT_FORUM}/threads") == 1   # one post, resumed rather than started again
+
+
+def test_a_reply_outside_the_agent_forum_is_refused_before_anything_is_sent(monkeypatch):
+    serve(monkeypatch, {"/channels/5": {"id": "5", "parent_id": "1203994211301728296"}})
+    monkeypatch.setattr(dr, "_post", lambda path, body: pytest.fail("posted outside the agent forum"))
+    with pytest.raises(PermissionError):
+        dr.reply_agent("5", "hi")
+
+
+def test_a_reply_inside_the_agent_forum_is_sent_in_that_post(monkeypatch):
+    serve(monkeypatch, {"/channels/9": {"id": "9", "parent_id": dr.AGENT_FORUM}})
+    posts = []
+    monkeypatch.setattr(dr, "_post", lambda path, body: posts.append(path) or {"id": "10"})
+    assert dr.reply_agent("9", "hi").endswith("/9/10")
+    assert posts == ["/channels/9/messages"]
+
+
+def test_a_long_text_splits_at_paragraph_breaks_each_part_under_the_limit():
+    text = "\n\n".join(["a" * 900] * 5)
+    parts = dr._chunks(text)
+    assert len(parts) == 3
+    assert all(len(p) <= dr.MAX_MESSAGE for p in parts)
+    assert "".join(p.replace("\n", "") for p in parts) == "a" * 4500
+    assert dr._chunks("b" * 4100) == ["b" * 2000, "b" * 2000, "b" * 100]   # one paragraph past the limit splits hard
+
+
+def test_a_post_carries_its_tags_by_name_and_an_unknown_tag_is_refused(monkeypatch):
+    serve(monkeypatch, {f"/channels/{dr.AGENT_FORUM}": {"available_tags": [{"id": "1", "name": "question"}, {"id": "2", "name": "audio"}]}})
+    posts = []
+    monkeypatch.setattr(dr, "_post", lambda path, body: posts.append(body) or {"id": "3"})
+    dr.post_agent("T", "x", ["question", "audio"])
+    assert posts[0]["applied_tags"] == ["1", "2"]
+    with pytest.raises(ValueError):
+        dr.post_agent("T", "x", ["gossip"])
+
+
+def test_a_reply_id_that_is_not_digits_is_refused_before_any_request(monkeypatch):
+    monkeypatch.setattr(dr, "_get", lambda *a, **k: pytest.fail("asked Discord about a malformed id"))
+    with pytest.raises(ValueError):
+        dr.reply_agent("9/messages", "hi")
