@@ -263,11 +263,11 @@ TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localh
     REQUIRE((artTx.open() && e131Tx.open() && ddpTx.open()));
     const uint8_t loopback[4] = {127, 0, 0, 1};
 
-    // Three distinct payloads at three distinct buffer positions: ArtNet → universe 0 (offset 0), E1.31 → universe 1 (offset 510), DDP → byte 600.
+    // Three distinct payloads at three distinct buffer positions: Art-Net universe 0 (offset 0), E1.31 universe 2 (offset 510, since E1.31 numbers from 1), DDP byte 600.
     uint8_t a[3] = {11, 12, 13}, e[3] = {21, 22, 23}, d[3] = {31, 32, 33};
     uint8_t pkt[mm::E131_HEADER_SIZE + 3];
     artTx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, mm::buildArtDmxPacket(pkt, 0, 0, a, 3));
-    e131Tx.sendToAddr(loopback, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, 1, 0, cid, e, 3));
+    e131Tx.sendToAddr(loopback, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, 2, 0, cid, e, 3));
     ddpTx.sendToAddr(loopback, mm::DDP_PORT, pkt, mm::buildDdpPacket(pkt, 600, true, d, 3));
 
     bool landed = false;
@@ -286,4 +286,218 @@ TEST_CASE("NetworkReceiveEffect receives all three protocols at once over localh
     e131Tx.close();
     ddpTx.close();
     r.fx.release();
+}
+
+// --- E1.31 multicast ------------------------------------------------------------
+
+// E1.31 multicasts each universe to its own group, so the receiver joins the group of every universe its layer covers, from 1 since E1.31 has no universe 0.
+TEST_CASE("NetworkReceiveEffect joins the E1.31 group of each universe its layer covers") {
+    Rig r(32, 32);   // 3072 bytes: universes 0 to 6
+    r.fx.setup();
+    REQUIRE(r.fx.groupCountForTest() == 7);
+    const auto* g = r.fx.groupsForTest();
+    for (uint8_t i = 0; i < 7; i++) {
+        CHECK(g[i].ip[0] == 239);
+        CHECK(g[i].ip[1] == 255);
+        CHECK(g[i].ip[2] == 0);
+        CHECK(g[i].ip[3] == i + 1);
+    }
+    CHECK(r.fx.e131JoinCountForTest() == 7);   // one join each, whatever the host's network answers
+    r.fx.release();
+}
+
+// The universe is in the address, its high byte in the third octet, so a live universe_start change moves the groups with it.
+TEST_CASE("NetworkReceiveEffect moves its E1.31 groups with a live universe_start") {
+    Rig r;   // 768 bytes: two universes
+    r.fx.setup();
+    REQUIRE(r.fx.affectsPrepare("universe_start"));
+    r.fx.universeStart = 300;
+    r.fx.prepare();   // what the live change runs
+    REQUIRE(r.fx.groupCountForTest() == 2);
+    const auto* g = r.fx.groupsForTest();
+    CHECK(g[0].ip[2] == 1);
+    CHECK(g[0].ip[3] == 44);   // 300 is 1 × 256 + 44
+    CHECK(g[1].ip[2] == 1);
+    CHECK(g[1].ip[3] == 45);
+    r.fx.release();
+}
+
+// The status says what multicast cannot reach: the universes it joined, or none, and nothing when it joined them all.
+TEST_CASE("NetworkReceiveEffect's multicast note names the universes only unicast reaches") {
+    char s[80];
+    mm::NetworkReceiveEffect::formatMulticastNote(s, sizeof(s), 1, 25, 13, false);
+    CHECK(std::strcmp(s, "E1.31 multicast reaches universes 1 to 13, the rest only by unicast") == 0);
+    mm::NetworkReceiveEffect::formatMulticastNote(s, sizeof(s), 1, 25, 13, true);
+    CHECK(std::strcmp(s, ", multicast to universe 13") == 0);
+    mm::NetworkReceiveEffect::formatMulticastNote(s, sizeof(s), 1, 25, 0, false);
+    CHECK(std::strcmp(s, "E1.31 multicast unavailable: unicast only") == 0);
+    mm::NetworkReceiveEffect::formatMulticastNote(s, sizeof(s), 1, 25, 0, true);
+    CHECK(std::strcmp(s, ", unicast only") == 0);
+    mm::NetworkReceiveEffect::formatMulticastNote(s, sizeof(s), 1, 25, 25, false);
+    CHECK(s[0] == 0);
+}
+
+// A network without multicast still delivers unicast: the warning shows until E1.31 arrives, and the receiving status then carries the note.
+TEST_CASE("NetworkReceiveEffect warns when E1.31 multicast is unavailable, and unicast still lands") {
+    mm::platform::setTestJoin(mm::platform::TestJoin::Fail);
+    Rig r;
+    r.fx.setup();
+    REQUIRE(r.fx.status() != nullptr);
+    CHECK(std::strcmp(r.fx.status(), "E1.31 multicast unavailable: unicast only") == 0);
+
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    uint8_t cid[mm::E131_CID_LENGTH];
+    cidFill(cid);
+    uint8_t payload[3] = {5, 6, 7};
+    uint8_t pkt[mm::E131_HEADER_SIZE + 3];
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.sendToAddr(loopback, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, 1, 0, cid, payload, 3)));
+    // Loopback UDP is asynchronous: tick until the status names the sender, bounded at about 100 ms.
+    for (int i = 0; i < 100 && std::strstr(r.fx.status(), "E1.31 from") == nullptr; i++) {
+        r.layer.tick();
+        mm::platform::delayMs(1);
+    }
+    CHECK(r.layer.buffer().data()[0] == 5);   // E1.31's universe 1 is the first
+    CHECK(std::strstr(r.fx.status(), "E1.31 from") != nullptr);
+    CHECK(std::strstr(r.fx.status(), ", unicast only") != nullptr);
+    tx.close();
+    r.fx.release();
+}
+
+// sACN senders multicast by default: a datagram to the universe's group reaches the layer, joined through the host's network.
+TEST_CASE("NetworkReceiveEffect receives E1.31 multicast on its universe's group") {
+    mm::platform::setTestJoin(mm::platform::TestJoin::Network);
+    Rig r;
+    r.fx.setup();
+    r.fx.universeStart = 63000;   // a universe no sender on the LAN is likely to use, so only this case's datagram lands
+    r.fx.prepare();               // what the live change runs
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    uint8_t cid[mm::E131_CID_LENGTH];
+    cidFill(cid);
+    uint8_t payload[3] = {8, 9, 10};
+    uint8_t pkt[mm::E131_HEADER_SIZE + 3];
+    const uint8_t group[4] = {239, 255, 63000 >> 8, 63000 & 0xFF};
+    if (!tx.sendToAddr(group, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, 63000, 0, cid, payload, 3))) {
+        MESSAGE("this host has no multicast route, so only the joins are checked");
+        tx.close();
+        r.fx.release();
+        return;
+    }
+    if (r.fx.e131JoinedForTest() == 0) {   // a host that sends to the group but refused the join delivers nothing to it
+        MESSAGE("this host refused the group's join, so only the send is checked");
+        tx.close();
+        r.fx.release();
+        return;
+    }
+    bool landed = false;
+    for (int i = 0; i < 100 && !landed; i++) {
+        r.layer.tick();
+        landed = r.layer.buffer().data()[0] == 8;
+        if (!landed) mm::platform::delayMs(1);
+    }
+    CHECK(landed);
+    tx.close();
+    r.fx.release();
+}
+
+// A large set joins again one group per read while silent, so no read pays for the whole set, and a finished pass waits the interval again.
+TEST_CASE("UdpSocket joins a silent set of groups again one group per read") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1);
+    mm::platform::UdpSocket s;
+    REQUIRE(s.open());
+    REQUIRE(s.bind(0));
+    const mm::platform::UdpSocket::MulticastGroup groups[3] = {{{239, 255, 0, 1}}, {{239, 255, 0, 2}}, {{239, 255, 0, 3}}};
+    s.setMulticastGroups(groups, 3);
+    CHECK(s.joinCountForTest() == 3);
+    uint8_t buf[8];
+    mm::platform::setTestNowMs(1 + mm::platform::UdpSocket::kRejoinMs);
+    for (uint32_t joins : {4u, 5u, 6u, 6u}) {
+        CHECK(s.recvFrom(buf, sizeof(buf)) == -1);
+        CHECK(s.joinCountForTest() == joins);
+    }
+    s.close();
+}
+
+// A second joinMulticast leaves the group the first joined, not the one it is about to join, so a reused socket keeps one membership.
+TEST_CASE("UdpSocket's joinMulticast leaves the earlier group before it joins the next") {
+    mm::platform::UdpSocket s;
+    REQUIRE(s.open());
+    REQUIRE(s.bind(0));
+    const uint8_t first[4] = {239, 255, 0, 1}, second[4] = {239, 255, 0, 2};
+    s.joinMulticast(first);
+    s.joinMulticast(second);
+    const uint8_t* left = mm::platform::testLastLeftGroup();
+    CHECK((left[0] == 239 && left[1] == 255 && left[2] == 0 && left[3] == 1));
+    s.close();
+}
+
+// E1.31 has no universe 0, so with universe_start 0 its universe 1 lands where Art-Net's universe 0 does, as xLights and FPP number them; a set start maps as is.
+TEST_CASE("NetworkReceiveEffect maps E1.31 from universe 1 when universe_start is 0, and from the start otherwise") {
+    Rig r;
+    r.fx.setup();
+    uint8_t cid[mm::E131_CID_LENGTH];
+    cidFill(cid);
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    uint8_t pkt[mm::E131_HEADER_SIZE + 3];
+    const auto sendUntil = [&](uint16_t universe, uint8_t value, size_t at) {
+        const uint8_t payload[3] = {value, value, value};
+        REQUIRE(tx.sendToAddr(loopback, mm::E131_PORT, pkt, mm::buildE131Packet(pkt, universe, 0, cid, payload, 3)));
+        for (int i = 0; i < 100 && r.layer.buffer().data()[at] != value; i++) {
+            r.layer.tick();
+            mm::platform::delayMs(1);
+        }
+        return r.layer.buffer().data()[at] == value;
+    };
+    CHECK(sendUntil(1, 41, 0));     // universe 1 is the first
+    CHECK(sendUntil(2, 42, 510));   // and 2 the second
+    r.fx.universeStart = 5;
+    r.fx.prepare();   // what the live change runs
+    CHECK(sendUntil(5, 45, 0));     // a set start maps as is
+    tx.close();
+    r.fx.release();
+}
+
+namespace {
+// The rig one rejoin period on, `each` run every millisecond while the task gets its pass: true once the E1.31 socket joined its groups again.
+template <class Each>
+bool rejoinsAfterOnePeriod(Each each) {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } clock;
+    mm::platform::setTestNowMs(1000);
+    Rig r;
+    r.fx.setup();
+    REQUIRE(r.fx.receivesInTask());
+    const uint32_t joins = r.fx.e131JoinCountForTest();
+    REQUIRE(joins == r.fx.groupCountForTest());
+    mm::platform::setTestNowMs(1000 + mm::platform::UdpSocket::kRejoinMs);
+    // The task waits 20 ms per read: poll a bounded while for its pass.
+    for (int i = 0; i < 300 && r.fx.e131JoinCountForTest() == joins; i++) {
+        each();
+        mm::platform::delayMs(1);
+    }
+    const bool rejoined = r.fx.e131JoinCountForTest() > joins;
+    r.fx.release();
+    return rejoined;
+}
+}  // namespace
+
+// The receive task reads on a timeout too, so a silent E1.31 socket joins its groups again rather than letting a router forget them.
+TEST_CASE("NetworkReceiveEffect joins its groups again while no packet arrives") {
+    CHECK(rejoinsAfterOnePeriod([] {}));
+}
+
+// Art-Net streaming keeps the receive task's wait ready on every wake, so the E1.31 socket's rejoin check runs on the clock rather than only when its own socket is silent.
+TEST_CASE("NetworkReceiveEffect joins its E1.31 groups again while Art-Net keeps streaming") {
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    const uint8_t payload[3] = {1, 2, 3};
+    uint8_t pkt[mm::ARTNET_HEADER_SIZE + 4];
+    const size_t len = mm::buildArtDmxPacket(pkt, 0, 0, payload, 3);
+    CHECK(rejoinsAfterOnePeriod([&] { tx.sendToAddr(loopback, mm::ARTNET_PORT, pkt, len); }));
+    tx.close();
 }

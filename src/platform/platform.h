@@ -65,8 +65,12 @@ void setTestNowMs(uint32_t ms);
 /// Make the next bind fail, so a test reaches that path; false restores. Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
 void setTestBindFails(bool fail);
 #ifndef ESP_PLATFORM   // host-test seams, which no ESP32 code calls
-/// Make the next multicast join fail, as on a network without multicast; false restores.
-void setTestJoinFails(bool fail);
+/// How a multicast join behaves in a host test: through the host's network, succeeding without it so the network's traffic stays out of the test, or failing as on a network without multicast.
+enum class TestJoin : uint8_t { Network, Succeed, Fail };
+/// Set how multicast joins behave; the test binary starts every case on Succeed.
+void setTestJoin(TestJoin mode);
+/// The group a socket left last, as a host test reads it.
+const uint8_t* testLastLeftGroup();
 /// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the desktop's unreported figure.
 void setTestFreeInternalHeap(size_t bytes);
 /// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the desktop's none.
@@ -978,18 +982,30 @@ public:
     static int waitReadable(UdpSocket* const* sockets, int count, uint32_t timeoutMs);
     /// Send once to an explicit address.
     bool sendToAddr(const uint8_t ip[4], uint16_t port, const uint8_t* data, size_t len);
-    /// Join a multicast group on a bound socket, its own sends not looping back, and keep the membership while silent. Without it the OS never delivers those datagrams.
-    bool joinMulticast(const char* group) {
-        if (joined_) { membership(group_, false); joined_ = false; }   // an earlier group is left, not leaked
-        size_t i = 0;
-        for (; group && group[i] && i + 1 < sizeof(group_); i++) group_[i] = group[i];
-        group_[i] = 0;
-        return rejoin();
+    /// One IPv4 multicast group, its octets in order.
+    struct MulticastGroup { uint8_t ip[4]; };
+    /// Join this set of groups, leaving the earlier one, and keep it while silent; `groups` stays the caller's, read unchanged until close() or the next call. Answers how many joined, as a full table refuses the rest.
+    uint8_t setMulticastGroups(const MulticastGroup* groups, uint8_t count) {
+        for (uint8_t i = 0; i < count_; i++) membership(groups_[i].ip, false);   // the earlier set is left, not leaked
+        groups_ = groups;
+        count_ = groups ? count : 0;
+        rejoinNext_ = cycleJoined_ = 0;
+        uint8_t joined = 0;
+        for (uint8_t i = 0; i < count_; i++) joined += join(i);
+        joined_.store(joined, std::memory_order_relaxed);
+        lastJoinMs_ = millis();
+        return joined;
     }
-    /// Whether the last join of the group succeeded, so a caller can say when only unicast reaches it.
-    bool multicastJoined() const { return joined_; }
-    /// How many times the group was joined since the socket opened, for the tests.
-    uint32_t joinCountForTest() const { return joinCount_; }
+    /// Join one group, the set of one, its address kept in the socket.
+    bool joinMulticast(const uint8_t group[4]) {
+        setMulticastGroups(nullptr, 0);   // leave the earlier set while own_ still holds the group it joined
+        for (int i = 0; i < 4; i++) own_.ip[i] = group[i];
+        return setMulticastGroups(&own_, 1) == 1;
+    }
+    /// How many groups the last pass over the set joined, so a caller can say when only unicast reaches the rest.
+    uint8_t multicastJoined() const { return joined_.load(std::memory_order_relaxed); }
+    /// How many joins the socket made since it opened, for the tests.
+    uint32_t joinCountForTest() const { return joinCount_.load(std::memory_order_relaxed); }
     /// How long a socket in a group stays silent before it joins again.
     static constexpr uint32_t kRejoinMs = 3000;
     /// Close it, which the destructor also does.
@@ -997,26 +1013,30 @@ public:
 
 private:
     int fd_ = -1;
-    char group_[16] = "";       // the group joined, empty when none
-    bool joined_ = false;
+    const MulticastGroup* groups_ = nullptr;   // the caller's set, or own_
+    MulticastGroup own_ = {};   // the one group joinMulticast keeps
+    uint8_t count_ = 0;         // groups in the set
+    std::atomic<uint8_t> joined_{0};   // how many the last pass joined, which another thread reads
+    uint8_t rejoinNext_ = 0;    // the group the next rejoin takes, 0 between passes
+    uint8_t cycleJoined_ = 0;   // how many the pass under way joined
     uint32_t lastHeardMs_ = 0;  // millis of the last datagram received
-    uint32_t lastJoinMs_ = 0;
-    uint32_t joinCount_ = 0;
+    uint32_t lastJoinMs_ = 0;   // when the last pass ended
+    std::atomic<uint32_t> joinCount_{0};
     /// Join (`join`) or leave a group, the one OS call both take.
-    bool membership(const char* group, bool join);
-    bool rejoin() {
-        if (joined_) membership(group_, false);   // a fresh join announces the membership again
-        joined_ = membership(group_, true);
-        lastJoinMs_ = millis();
-        joinCount_++;
-        return joined_;
-    }
-    void heard() { if (group_[0]) lastHeardMs_ = millis(); }
-    /// Join again when the socket has been silent, since a router can stop forwarding a group to a member it has not heard from; this also retries a failed join.
+    bool membership(const uint8_t group[4], bool join);
+    bool join(uint8_t i) { joinCount_++; return membership(groups_[i].ip, true); }
+    /// Forget the set, which close() does once the membership went with the socket.
+    void forgetGroups() { groups_ = nullptr; count_ = rejoinNext_ = cycleJoined_ = 0; joined_.store(0, std::memory_order_relaxed); }
+    /// Note a datagram. Silence is the socket's, since a datagram does not name its group; one group lost among streaming ones relies on IGMP's query and report cycle.
+    void heard() { if (count_) lastHeardMs_ = millis(); }
+    /// Join again, one group per call, while the socket is silent, since a router can stop forwarding a group to a member it has not heard from; this also retries a failed join.
     void keepMembership() {
-        if (!group_[0]) return;
+        if (!count_) return;
         const uint32_t now = millis();
-        if (now - lastHeardMs_ >= kRejoinMs && now - lastJoinMs_ >= kRejoinMs) rejoin();
+        if (rejoinNext_ == 0 && (now - lastHeardMs_ < kRejoinMs || now - lastJoinMs_ < kRejoinMs)) return;
+        membership(groups_[rejoinNext_].ip, false);   // a fresh join announces the membership again
+        cycleJoined_ += join(rejoinNext_);
+        if (++rejoinNext_ == count_) { joined_.store(cycleJoined_, std::memory_order_relaxed); cycleJoined_ = rejoinNext_ = 0; lastJoinMs_ = now; }
     }
 };
 
@@ -1439,13 +1459,13 @@ const char* hub75Backend(const Hub75Handle& h);
 /// Release the port and its buffer.
 void hub75Deinit(Hub75Handle& h);
 
-// I2S audio input: two seams only, the read and the FFT, with everything between them domain code.
+// I2S audio input: one seam, the read, with everything after it domain code.
 
 /// Which codec sits in front of the microphone, none for a microphone that speaks I2S itself.
 enum class CodecType : uint8_t { None = 0, Es8311 = 1, Es7210 = 2 };
 
-/// Configure the audio codec at this 7-bit address, where the board has one; true when there is nothing to do. It is a device on the I2C bus (i2cBusOpen), and its master clock is the microphone's `mclkPin`.
-bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate);
+/// Configure the audio codec at this 7-bit address with this analog input gain, where the board has one; true when there is nothing to do. It is a device on the I2C bus (i2cBusOpen), and its master clock is the microphone's `mclkPin`.
+bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate, uint8_t gainDb);
 
 /// Release the codec.
 void audioCodecDeinit();
@@ -1470,16 +1490,13 @@ bool audioMicInit(AudioMicHandle& h, uint16_t wsPin, uint16_t sdPin,
                   uint16_t sckPin, int16_t mclkPin, uint32_t sampleRate,
                   MicMode mode = MicMode::I2sStd);
 
-/// Read up to `maxSamples` samples, answering the count; cheap enough for the render tick.
-size_t audioMicRead(AudioMicHandle& h, int32_t* out, size_t maxSamples);
+/// Read up to `maxSamples` samples, answering the count: at once with `waitMs` 0, as the render tick reads, or waiting up to `waitMs` for them, as an audio task reads.
+size_t audioMicRead(AudioMicHandle& h, int32_t* out, size_t maxSamples, uint32_t waitMs = 0);
 /// Whether the I2S instance a PDM microphone needs is free right now.
 bool audioMicSharedBusFree(MicMode mode);
 
 /// Release the input.
 void audioMicDeinit(AudioMicHandle& h);
-
-/// Fill `outMag` with the magnitude bins of `n` windowed samples, `n` being a power of two.
-void audioFft(const float* windowed, size_t n, float* outMag);
 
 // The board's I2C bus: one master bus, opened by its owner (I2cBusModule) and shared by every device on it, such as an audio codec.
 

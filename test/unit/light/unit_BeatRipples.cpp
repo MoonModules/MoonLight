@@ -6,6 +6,7 @@
 #include "doctest.h"
 #include "golden_frame.h"
 #include "light/effects/BeatRipplesEffect.h"
+#include "core/services/AudioService.h"
 
 using namespace mm;
 
@@ -17,17 +18,25 @@ int brightestLight(const Layer& layer) {
     for (size_t i = 0; i < b.bytes(); i++) if (b.data()[i] > peak) peak = b.data()[i];
     return peak;
 }
+/// The effect on a 32 by 32 grid, set before `start` places it.
+struct Ripples {
+    Layouts layouts; GridLayout grid; Layer layer; BeatRipplesEffect e;
+    void start() {
+        grid.width = 32; grid.height = 32; grid.depth = 1;
+        layouts.addChild(&grid);
+        layer.setLayouts(&layouts);
+        layer.setChannelsPerLight(3);
+        layer.addChild(&e);
+        layer.applyState();
+    }
+};
 }  // namespace
 
 TEST_CASE("still water shows its ripples, and they spread") {
     golden::ScopedTestClock clock(1000);
-    Layouts layouts; GridLayout grid; Layer layer; BeatRipplesEffect e;
-    grid.width = 32; grid.height = 32; grid.depth = 1;
-    layouts.addChild(&grid);
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-    layer.addChild(&e);
-    layer.applyState();
+    Ripples r;
+    r.start();
+    Layer& layer = r.layer;
 
     // With no audio at all the idle rain is the only source, and the first drop lands on the opening frame rather than after a silent interval of black water.
     for (int f = 0; f < 40; f++) { platform::setTestNowMs(1000 + f * 20u); layer.tick(); }
@@ -49,4 +58,28 @@ TEST_CASE("ripples walk the whole palette, and each stone shifts it") {
     }
     CHECK(distinct > 100);
     CHECK(mm::BeatRipplesEffect::paletteIndex(0, 1) != mm::BeatRipplesEffect::paletteIndex(0, 0));
+}
+
+// The showcase for steps 4 and 5 of the audio plan: on `kick` a stone drops only on the bass's own onset, so the water answers the kick drum and not a hi-hat.
+TEST_CASE("on the kick trigger a hit in the treble drops no stone and a hit in the bass does") {
+    golden::ScopedTestClock clock(1000);
+    static AudioService audio;
+    audio.defineControls();
+    audio.setup();
+    audio.tick();   // claims the seat latestFrame reads
+    Ripples r;
+    r.e.rain = 0;                              // no idle drops: only a hit moves the water
+    r.e.trigger = BeatRipplesEffect::kKick;
+    r.start();
+    Layer& layer = r.layer;
+    auto hit = [&](uint8_t bass, uint8_t treble, uint32_t at) {
+        AudioFrame& f = audio.frameForTest();
+        f.onset = 200; f.onsetLow = bass; f.onsetHigh = treble;
+        for (int i = 0; i < 20; i++) { platform::setTestNowMs(at + i * 20u); layer.tick(); f.onset = f.onsetLow = f.onsetHigh = 0; }
+    };
+    hit(0, 220, 1000);    // a hi-hat: the treble's onset alone
+    CHECK(brightestLight(layer) == 0);
+    hit(220, 0, 2000);    // a kick: the bass's own onset
+    CHECK(brightestLight(layer) > 16);
+    audio.release();
 }

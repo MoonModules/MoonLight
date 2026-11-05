@@ -193,7 +193,7 @@ Kind: Bug · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&i
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
 
-### E1.31 multicast never arrives (2026-10-30)
+### E1.31 multicast never arrives: Network Receive joins no group
 
 Kind: Bug · Status: Next · Issue: [#216](https://github.com/MoonModules/MoonLight/issues/216) · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372206)
 

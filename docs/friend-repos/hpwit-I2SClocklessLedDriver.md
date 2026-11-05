@@ -1,10 +1,25 @@
 # hpwit/I2SClocklessLedDriver: monthly activity digest
 
-What landed on [hpwit/I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/I2SClocklessLedDriver](https://github.com/hpwit/I2SClocklessLedDriver)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-The library: Yves Bazin's (hpwit) clockless-LED driver that clocks WS2812-class strips out over the ESP32's I2S/LCD peripheral with DMA, the technique behind MoonLight's `ParallelLedDriver`. Summarised via the GitHub commits API (all commits on `main`), filtering out merge commits, lint/format churn, and 🐰-review fixups. No versioned release is cut from `main` in this window (latest tag is 1.4), so months are kept whole.
+The library: Yves Bazin's (hpwit) clockless-LED driver that clocks WS2812-class strips out over the ESP32's I2S/LCD peripheral with DMA, the technique behind MoonLight's `ParallelLedDriver`. Summarized via the GitHub commits API (all commits on `main`), filtering out merge commits, lint/format churn, and 🐰-review fixups. The one versioned release in this window, 1.4, is the tip of `main` (2026-04-06), so months are kept whole.
 
 > **Authorship note.** Most of the activity in this window is MoonLight's own, `ewowi` authored ~53 of the in-window commits, with the rest from the maintainer (Yves Bazin / hpwit) and a couple of others. The IDF 5.5 / arduino-less ESP-IDF / RGBCCT / >65K-LED work below is largely MoonLight upstreaming its driver needs into hpwit's library, then tracking the result here.
+
+## October 2026
+
+No commits. Nothing landed on `main` in October 2026, and nothing on any other branch. The driver last changed on 2026-04-06, and the `esp32-p4-support` branch last moved on 2026-04-11.
+
+**Watching**
+
+- PR #57 (Moret84, 2026-10-13, no maintainer reply yet) fixes a link error in a plain ESP-IDF 5.5 project: `i2sReset()` is now always inlined, 96 bytes of flash.
+- PR #58, on top of #57, builds the driver on ESP-IDF 6 for the ESP32, tested on hardware with 8 outputs of 1024 RGBW LEDs at 24 fps.
+- The ESP32-S3 still fails to build on IDF 6.1, with or without them.
+- A user asked on the 2022 temporal-dithering request (#5) whether dithering is still on the roadmap, for color depth at low brightness.
+
+No issues were opened or closed. No release; the most recent is 1.4 from April 2026.
+
+_Checked: `main` and every other remote branch (after `git fetch --all --tags`) for author-date 2026-10-01..2026-10-31 (0 commits on each); releases published (none); issue search `repo:hpwit/I2SClocklessLedDriver is:issue created:2026-10-01..2026-10-31` and the same with `closed:` (0 results each) and `updated:` (1, #5); pull-request search `is:pr created:2026-10-01..2026-10-31` (2, #57 and #58, both open)._
 
 ## September 2026
 

@@ -7,35 +7,33 @@
 ///
 /// ## What it covers
 ///
-/// The lazy open, once per mode, where syncEnsureSocket latches.
-/// The send path reaching "sending", and the throttle that paces it.
-/// The receive path over a real localhost round-trip: a frame replaced, then the fresh-to-stale fallback a pure sink falls back to.
-/// platform::networkReady() is true on desktop, so the lazy open fires on the first tick the way it does once a device's interface is up.
+/// The lazy open, once per mode, where syncEnsureSocket latches; the send path reaching "sending", and the throttle that paces it.
+///
+/// The receive path over a real localhost round trip: a frame replaced, then the fresh-to-stale fallback a pure sink falls back to.
+///
+/// platform::networkReady() is true on desktop, so the lazy open fires on the first tick, as on a device once its interface is up.
 ///
 /// ## Leaving local clears the mic status
 ///
 /// The other modes report through the separate sync row and have no input to diagnose, so a stale mic message there points at nothing.
-/// Before the fix, prepare()'s non-local branch deinitialized the peripheral and left the string set.
-/// What local leaves behind depends on the host: a capture-capable desktop says nothing, a locked-down one says "capture init failed", an I2S target with unset pins asks for its pins.
-/// The rule is the same in every case: whatever local left, leaving local clears.
+///
+/// What local leaves depends on the host: nothing on a capture-capable desktop, "capture init failed" on a locked-down one, a request for pins on an I2S target without them. Whatever it left, leaving local clears.
 ///
 /// ## Capture and send coexist
 ///
 /// Send fires from the same tick() that runs the capture path, so the capture gate cannot starve the sender.
-/// Before capture existed, tick() returned before ever sending, which made local-mode sending impossible.
 ///
 /// ## Forcing a bind to fail
 ///
-/// Hogging the port with a second socket is not portable.
-/// On Linux, SO_REUSEADDR on a UDP socket bound to INADDR_ANY permits the overlapping bind, so the hog succeeds and the failure never happens.
-/// That silently broke this test on Linux for as long as it existed, and nothing caught it because CI did not compile the C++ tests until the sanitizer job.
-/// A privileged port is no better, since modern macOS lets a non-root process bind port 80.
+/// Hogging the port with a second socket is not portable: on Linux, SO_REUSEADDR on a UDP socket bound to INADDR_ANY permits the overlapping bind, so the failure never happens.
+///
+/// A privileged port is no better, since macOS lets a non-root process bind port 80.
 ///
 /// ## Why the clock is fake and the socket is real
 ///
-/// Time comes from platform::setTestNowMs(), the animation-test idiom, so a throttle window is exact and the suite never sleeps a real second.
-/// Only the delivery is real, polled with a bounded retry the way the NetworkReceiveEffect round-trip does.
-/// The port is a test one rather than 11988, since a running desktop app would hold the real sync port.
+/// Time comes from platform::setTestNowMs(), so a throttle window is exact and the suite never sleeps a real second; only the delivery is real, polled with a bounded retry.
+///
+/// The port is a test one rather than 11988, since a running desktop app holds the real sync port.
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
@@ -56,7 +54,7 @@ const char* status(AudioService& a) { a.tick1s(); return a.syncStatusForTest(); 
 
 // A guard that freezes virtual time for a case and restores the real clock on scope exit, so a thrown assertion can't leak frozen time into the next case.
 struct FrozenClock {
-    FrozenClock(uint32_t ms) { platform::setTestNowMs(ms); }
+    FrozenClock(uint32_t ms) : now_(ms) { platform::setTestNowMs(ms); }
     ~FrozenClock() { platform::setTestNowMs(0); }
     void advance(uint32_t ms) { now_ += ms; platform::setTestNowMs(now_); }
     uint32_t now_ = 1;
@@ -254,6 +252,34 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     a.release();
 }
 
+// The receiver numbers the frames itself, so two identical packets are two frames: the `seq` the Drum Kit reads to take each hit once.
+TEST_CASE("AudioService Receive: each packet is a new frame number, the same audio twice too") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    REQUIRE(sendLevel(a, 77));
+    const uint16_t first = a.audioFrame()->seq;
+    AudioFrame peer;
+    peer.level = 77;   // the same packet again
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    platform::UdpSocket tx;
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    REQUIRE(tx.open());
+    REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
+    bool next = false;
+    for (int i = 0; i < 100 && !next; i++) {   // loopback delivery is asynchronous in real time
+        a.tick();
+        next = a.audioFrame()->seq != first;
+        if (!next) platform::delayMs(1);
+    }
+    CHECK(next);
+    CHECK(a.audioFrame()->seq == static_cast<uint16_t>(first + 1));
+    tx.close();
+    a.release();
+}
+
 TEST_CASE("AudioService Receive: a failed bind backs off instead of retrying every tick") {
     FrozenClock clk(1);
     // Force the bind to fail deterministically, which is harder than it looks: @xref{forcing-a-bind-to-fail}.
@@ -285,8 +311,7 @@ TEST_CASE("AudioService Receive: a failed bind backs off instead of retrying eve
 
 // A network without multicast still delivers unicast, so the receiver listens and says what it is missing rather than refusing to open.
 TEST_CASE("AudioService Receive: a failed group join still listens for unicast, and says so") {
-    struct JoinGuard { ~JoinGuard() { platform::setTestJoinFails(false); } } guard;
-    platform::setTestJoinFails(true);
+    platform::setTestJoin(platform::TestJoin::Fail);
     FrozenClock clk(1);
     AudioService a;
     openReceiver(a);
@@ -329,15 +354,14 @@ TEST_CASE("AudioService Receive: a silent receiver joins the group again every r
 
 // A join that failed is retried the same way, so a network that comes to allow multicast later is joined without a mode toggle.
 TEST_CASE("AudioService Receive: a failed group join is retried once silent, and the warning clears") {
-    struct JoinGuard { ~JoinGuard() { platform::setTestJoinFails(false); } } guard;
-    platform::setTestJoinFails(true);
+    platform::setTestJoin(platform::TestJoin::Fail);
     FrozenClock clk(1);
     AudioService a;
     openReceiver(a);
     REQUIRE(a.syncOpenForTest());
     CHECK(std::strcmp(status(a), "listening, unicast only: multicast unavailable") == 0);
 
-    platform::setTestJoinFails(false);
+    platform::setTestJoin(platform::TestJoin::Succeed);
     clk.advance(platform::UdpSocket::kRejoinMs);
     a.tick();
     CHECK(std::strcmp(status(a), "listening") == 0);

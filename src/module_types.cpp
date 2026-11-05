@@ -80,6 +80,7 @@
 #include "light/effects/RadialSpectrumEffect.h"
 #include "light/effects/VuMetersEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
+#include "light/effects/DrumKitEffect.h"
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/effects/SineEffect.h"
 #include "light/effects/DistortionWavesEffect.h"
@@ -92,6 +93,7 @@
 #include "light/effects/AuroraEffect.h"
 #include "light/effects/PolarNoiseEffect.h"
 #include "light/effects/WaterRippleEffect.h"
+#include "light/effects/WaterfallEffect.h"
 #include "light/effects/TrailsEffect.h"
 #include "light/effects/ColorTrailsEffect.h"
 #include "light/effects/TunnelEffect.h"
@@ -244,6 +246,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::RadialSpectrumEffect>("RadialSpectrumEffect", "light/effects.md#radialspectrum");
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
     mm::ModuleFactory::registerType<mm::BeatRipplesEffect>("BeatRipplesEffect", "light/effects.md#beatripples");
+    mm::ModuleFactory::registerType<mm::DrumKitEffect>("DrumKitEffect", "light/effects.md#drumkit");
     mm::ModuleFactory::registerType<mm::BlurzEffect>("BlurzEffect", "light/effects.md#blurz");
     mm::ModuleFactory::registerType<mm::BouncingBallsEffect>("BouncingBallsEffect", "light/effects.md#bouncingballs");
     mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect", "light/effects.md#demoreel");
@@ -281,6 +284,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::AuroraEffect>("AuroraEffect", "light/effects.md#aurora");
     mm::ModuleFactory::registerType<mm::PolarNoiseEffect>("PolarNoiseEffect", "light/effects.md#polarnoise");
     mm::ModuleFactory::registerType<mm::WaterRippleEffect>("WaterRippleEffect", "light/effects.md#waterripple");
+    mm::ModuleFactory::registerType<mm::WaterfallEffect>("WaterfallEffect", "light/effects.md#waterfall");
     mm::ModuleFactory::registerType<mm::FluidEffect>("FluidEffect", "light/effects.md#fluid");
     mm::ModuleFactory::registerType<mm::NebulaEffect>("NebulaEffect", "light/effects.md#nebula");
     mm::ModuleFactory::registerType<mm::TrailsEffect>("TrailsEffect", "light/effects.md#trails");

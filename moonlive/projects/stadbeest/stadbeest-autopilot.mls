@@ -87,7 +87,7 @@ class StadBeestAutopilot {
       look = mod(scene, 3);
       fadeAt = t;
       palette = random16(60); // any built-in palette
-      if (look == 2) { if (random16(3) == 0) { palette = 65; } } // a third of the thruster scenes burn in stadbeest-fire, its place in the palette list on every device
+      if (look == 2) { if (random16(3) == 0) { palette = 66; } } // a third of the thruster scenes burn in stadbeest-fire, its place in the palette list on every device
       mood = random16(256);
       pulseOn = random16(2);
       hearing = 80 + random16(150);

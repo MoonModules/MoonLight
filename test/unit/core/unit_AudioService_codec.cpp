@@ -19,9 +19,15 @@ TEST_CASE("a microphone asks for no codec until one is named") {
 }
 
 // Every codec setting re-initializes the microphone, as a pin change does, so an edit applies live.
-TEST_CASE("changing the codec or its address re-initializes the microphone") {
+TEST_CASE("changing the codec, its address or its gain re-initializes the microphone") {
     mm::AudioService audio;
-    for (const char* name : {"codec", "codecAddr"}) CHECK(audio.affectsPrepare(name));
+    for (const char* name : {"codec", "codecAddr", "codecGain"}) CHECK(audio.affectsPrepare(name));
+}
+
+// A microphone is the default input behind a codec; a line-in source takes the gain down to 0 dB.
+TEST_CASE("the codec gain defaults to a microphone's 30 dB") {
+    mm::AudioService audio;
+    CHECK(audio.codecGain == 30);
 }
 
 // The bus scan names the codec at its address only while the wired microphone uses one.

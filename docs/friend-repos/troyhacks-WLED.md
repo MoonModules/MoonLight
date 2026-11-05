@@ -1,10 +1,31 @@
 # troyhacks/WLED: monthly activity digest
 
-What landed on [troyhacks/WLED](https://github.com/troyhacks/WLED)'s `mdev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [troyhacks/WLED](https://github.com/troyhacks/WLED)'s `mdev` branch, month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-This is a personal fork of [MoonModules/WLED-MM](https://github.com/MoonModules/WLED-MM) (the `mdev` branch), so much of the `mdev` traffic is merges from and alignments with the MM and upstream WLED lines; the bullets below pick out what a *user* of this fork would notice. Summarised via the GitHub commits API (all commits on `mdev`, not first-parent merges), filtering out build-number bumps, merge commits, typo/comment churn, and pure refactors. No versioned release is cut from this branch (it tracks `mdev` and ships nightly `mdev` builds), so months are kept whole.
+This is a personal fork of [MoonModules/WLED-MM](https://github.com/MoonModules/WLED-MM) (the `mdev` branch), so much of the `mdev` traffic is merges from and alignments with the MM and upstream WLED lines; the bullets below pick out what a *user* of this fork would notice. Summarized from the local clone (`git log --first-parent origin/mdev`; August 2026 and earlier via the GitHub commits API), filtering out build-number bumps, merge commits, typo/comment churn, and pure refactors. No release is cut from this fork (its releases page is empty and the scheduled nightly workflow fails), so months are kept whole.
 
-**Branch note, the experiments live off `mdev`.** troyhacks branches heavily: `mdev` is the merge/alignment stream, but the distinctive work happens in named experimental branches (HDMI output, ESP32-P4, W5500 Ethernet, hardware-panel ports, voice control, a pure-IDFv5 port, a new settings subsystem). Those are *experiments*, not necessarily destined for `mdev`, so each month below carries a separate **Experimental branches** line for what moved on them, the frontier of what this fork is probing.
+**Branch note, the experiments live off `mdev`.** troyhacks branches heavily: `mdev` is the merge/alignment stream, but the distinctive work happens in named experimental branches (HDMI output, ESP32-P4, W5500 Ethernet, hardware-panel ports, voice control, a pure-IDFv5 port, a new settings subsystem, an FFT-free audio-reactive measurement, USB-host control surfaces). Those are *experiments*, not necessarily destined for `mdev`, so each month below carries a separate **Experimental branches** line for what moved on them, the frontier of what this fork is probing.
+
+## October 2026
+
+No activity on `mdev`: the branch tip is still the 2026-08-24 merge of `MoonModules:mdev`, so there are 0 commits in the window. No versioned release was published, so the month is kept whole.
+
+- **Experimental branches:** `troy/hdmi-on-p4-experimental` is the only branch that moved, and it moved a lot: 69 commits between 2026-10-02 and 2026-10-30 (36 files, about 14,000 lines added).
+- Nearly all of the commits rework the audio-reactive usermod on the ESP32-P4 HDMI board. The FFT is out of the measurement: 31 ISO third-octave bands are now read from two biquad filter banks (8 low bands at 3 kHz, 23 at 48 kHz), cutting latency by 27 to 38 ms and CPU six-fold.
+- Effects read 16 of the 31 bands, and which 16 is a live setting with seven patterns (from "Sub Sub - 20Hz" to "Mid Bass - 80Hz").
+- The AGC and the "target pink" curve give way to a latched loudest-band reference and a once-measured input-chain calibration, checked bar for bar against a hardware RTA (white noise rises, pink reads flat).
+- The GEQ PPA effect gains an "RTA Mode" checkbox that draws all 31 bars, and every effect that reads the bands now snapshots them first (readers could see the frame change under them).
+- The ES8311 codec's line input drops from +30 dB to 0 dB analog gain (it was overloading the ADC), and the codec input gain becomes a live setting on the ES8311 and ES8388.
+- Hang fix: the analysis task parks itself at a safe point instead of being suspended while holding the publish lock.
+- Hang fix: one shared I2C bus now serves the codec, the HDMI bridge and the touch controller (under the IDF v5 driver the second bus installed on a pin pair silently took the pins from the first, so codec writes NACKed forever).
+- HDMI: a tearing fix, and after a link timeout the display stack is torn down and rebuilt instead of re-initialized, so a missing or slow monitor no longer panics the board.
+- P4: the USB-Serial-JTAG peripheral is handed from the IDF to the Arduino HWCDC (ending a reset loop under console traffic), and a reset on serial disconnect on combined Serial+JTAG boards is fixed.
+- Started but not working: a `usermod_v3_deck` usermod that makes the P4 the USB host for a Soomfon CN003 / Mirabox N4 stream deck (keys, encoders, LCD keys as a WLED control surface), stuck at transport bring-up with commands going out and no input arriving.
+- The Pioneer Pro DJ Link effect (live deck title, artist and waveform) gains auto scaling and fixes.
+- A `tools/verify_ar.py` checker reads `/json/ar` from a running board and checks its invariants, and the simulation scripts move to `tools/ar_sim/`.
+- Many commit messages carry a Claude Code or MiniMax co-author trailer. The branch's 2026-11-01..03 commits (a tempo tracker, LTO back on) fall outside the window.
+
+_Checked: commits on `mdev` for author-date 2026-10-01..2026-10-31 (0 commits, tip b537e0c9 dated 2026-08-24), via `git log --first-parent origin/mdev` after `git fetch --all --tags`. All 31 remote branches were scanned for October commits; only `troy/hdmi-on-p4-experimental` moved (69 commits, 913a8b9d 2026-10-02 .. 3fdf015a 2026-10-30, three of them self-merges). Releases published in October 2026: none (`repos/troyhacks/WLED/releases` is empty; the scheduled `Deploy Nightly` workflow on `mdev` ran daily through 2026-10-08 and ended in failure each time, with every build job passing). Issue search `repo:troyhacks/WLED+is:issue+created:2026-10-01..2026-10-31` and `closed:2026-10-01..2026-10-31` both return 0, the issue tracker is disabled on this fork._
 
 ## September 2026
 

@@ -42,29 +42,29 @@
       "op": "set_control",
       "id": "Audio",
       "key": "sampleRate",
-      "value": 3
+      "value": "22050"
     },
     {
       "name": "the-rate-took",
       "op": "expect_control",
       "id": "Audio",
       "key": "sampleRate",
-      "equals": 3
+      "equals": "22050"
     },
     {
-      "name": "set-the-gain",
-      "description": "Gain is a plain write rather than a rebuild: the contrast with the rate above is the point.",
+      "name": "set-the-squelch",
+      "description": "Squelch is a plain write rather than a rebuild: the contrast with the rate above is the point.",
       "op": "set_control",
       "id": "Audio",
-      "key": "gain",
-      "value": 200
+      "key": "squelch",
+      "value": 20
     },
     {
-      "name": "the-gain-took",
+      "name": "the-squelch-took",
       "op": "expect_control",
       "id": "Audio",
-      "key": "gain",
-      "equals": 200
+      "key": "squelch",
+      "equals": 20
     },
     {
       "name": "restart",
@@ -85,7 +85,7 @@
       "op": "expect_control",
       "id": "Audio",
       "key": "sampleRate",
-      "equals": 3
+      "equals": "22050"
     },
     {
       "name": "back-to-simulate",
@@ -101,14 +101,14 @@
       "op": "set_control",
       "id": "Audio",
       "key": "sampleRate",
-      "value": 2
+      "value": "24000"
     },
     {
-      "name": "back-to-the-default-gain",
+      "name": "back-to-the-default-squelch",
       "op": "set_control",
       "id": "Audio",
-      "key": "gain",
-      "value": 128
+      "key": "squelch",
+      "value": 10
     }
   ],
   "reset": [
@@ -126,14 +126,14 @@
       "op": "set_control",
       "id": "Audio",
       "key": "sampleRate",
-      "value": 2
+      "value": "24000"
     },
     {
-      "name": "reset-audio-gain",
+      "name": "reset-audio-squelch",
       "op": "set_control",
       "id": "Audio",
-      "key": "gain",
-      "value": 128
+      "key": "squelch",
+      "value": 10
     }
   ]
 }

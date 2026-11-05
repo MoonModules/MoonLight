@@ -106,6 +106,7 @@ _STALE_HELP_RULE = "help.json stale"
 _PROCESS_SIZE_RULE = "process over its caps"
 _PROCESS_REPEAT_RULE = "steps repeated across processes"   # a run two processes share, which one process both call holds once
 _MOONWALK_BUILD_RULE = "MoonWalk does not build"   # a stage file the generator refuses: an error, since the map and the site fail with it
+_STALE_STAGE_TABLE_RULE = "CLAUDE.md stage table stale"   # an error, since a table that drifted points every agent at the wrong file
 _RESTATES_RULE = "control restates the UI"
 # A control's longer help, its `@guide` section, adds what its line cannot hold: what each option does, a consequence, a reason. Words shared with the line show a repeat mechanically.
 _GUIDE_REPEATS_RULE = "guide repeats its control"
@@ -167,7 +168,7 @@ def _blocks(key: str, why: str = "") -> bool:
     everywhere too, being the diff rather than the page, and a rule met everywhere is a rule that
     should hold everywhere.
     """
-    if why.startswith((_HARD_WRAP_RULE, _STALE_HELP_RULE, _MOONWALK_BUILD_RULE)):
+    if why.startswith((_HARD_WRAP_RULE, _STALE_HELP_RULE, _MOONWALK_BUILD_RULE, _STALE_STAGE_TABLE_RULE)):
         return True
     if why.startswith(_LINE_LENGTH_RULES) and "chars >" in why:
         return False
@@ -222,6 +223,7 @@ _RULE_NAMES = (
     "hard wrap", "split paragraph", _STALE_HELP_RULE,
     _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
     _TAG_GROUP_RULE, _NOTE_ON_DECL_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
+    _MOONWALK_BUILD_RULE, _STALE_STAGE_TABLE_RULE,
 )
 
 
@@ -1165,9 +1167,25 @@ def _unverified_processes():
     return [(files[stage], why) for stage, why in gen_moonwalk.unverified(model["processes"])]
 
 
+def _stage_table_freshness():
+    """CLAUDE.md's table of the stage files against their summaries. None to report when the stage files do not build, which `_process_sizes` reports."""
+    import gen_moonwalk
+    try:
+        model = gen_moonwalk.build()
+    except ValueError:
+        return []
+    text = gen_moonwalk.CLAUDE_MD.read_text(encoding="utf-8")
+    fresh = gen_moonwalk.with_stage_table(text, model["stages"])
+    if fresh == text:
+        return []
+    why = "its markers are missing" if fresh is None else "run `uv run moondeck/docs/gen_moonwalk.py --claude-md` and commit the result"
+    return [("CLAUDE.md", f"{_STALE_STAGE_TABLE_RULE}: {why}")]
+
+
 def _violations(fresh):
     out = list(fresh)
     out.extend(_process_sizes())
+    out.extend(_stage_table_freshness())
     out.extend(_guide_repeats(_hooks._help_file()))
     out.extend(_help_size(_hooks._help_file()))
     out.extend(_guide_names_control(_hooks._help_file()))

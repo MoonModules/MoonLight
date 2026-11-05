@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device.
+/// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device. It joins the E1.31 multicast group of each universe the layer covers, up to what the network stack holds, and the status names the universes only unicast reaches.
 class NetworkReceiveEffect : public EffectBase {
 public:
     /// Catalog tags: network input, a MoonModules origin.
@@ -32,7 +32,7 @@ public:
     /// The sender decides the geometry, so this writes whatever the layer has.
     Dim dimensions() const override { return Dim::D3; }
 
-    /// The first incoming universe to map, mirroring the sender.
+    /// The first universe to map; E1.31 reads 0 as 1.
     uint16_t universeStart = 0;
     /// Bytes each universe maps to, 510 or 512.
     uint16_t channelsPerUniverse = static_cast<uint16_t>(MAX_CHANNELS_PER_UNIVERSE);
@@ -65,6 +65,11 @@ public:
             lostPerS_ = perSecond(lost, span);
         }
         lastProto_ = nullptr;   // the status is built again on the next tick, with these rates and a board heard since by name
+        const uint8_t joined = e131Socket_.multicastJoined();   // a join refused at prepare can succeed on a later pass
+        if (joined != mcastJoined_) {
+            mcastJoined_ = joined;
+            if (!senderProto_.load(std::memory_order_acquire)) noteMulticast();   // a receiving status carries the note itself
+        }
         EffectBase::tick1s();
     }
 
@@ -75,13 +80,20 @@ public:
     /// Packets missing from the last second's sequences or offsets.
     uint32_t lostPerS() const { return lostPerS_; }
 
-    /// Who maps sizes staging, by logical cells or by physical lights, so only it rebuilds.
+    /// Who maps sizes staging, by logical cells or by physical lights, so only it rebuilds; the universes set the multicast groups too.
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "mapped_by") == 0 || std::strcmp(name, "channels_per_universe") == 0;   // the latter sizes the per-universe sequences
+        return std::strcmp(name, "mapped_by") == 0 || std::strcmp(name, "channels_per_universe") == 0   // the latter sizes the per-universe sequences
+            || std::strcmp(name, "universe_start") == 0;
     }
 
     /// A task still running would read a destroyed object, so the destructor stops it too.
-    ~NetworkReceiveEffect() override { stopReceiveTask(); }
+    ~NetworkReceiveEffect() override {
+        stopReceiveTask();
+        // Closed here, while groups_ still lives: a socket leaves its groups by reading them, and members go in reverse order.
+        artnetSocket_.close();
+        e131Socket_.close();
+        ddpSocket_.close();
+    }
 
     /// Stop the receive task, close the three sockets, then chain so the staging buffer is freed too.
     void release() override {
@@ -111,8 +123,9 @@ public:
         sink_.prepare(mappedBy == kMappedBySender);
         pkt_.resize(kDatagramBytes);
         // One last sequence per universe the staging holds, each starting unknown.
-        lastSeq_.resize(channelsPerUniverse ? sink_.bytes() / channelsPerUniverse + 1 : 0);
+        lastSeq_.resize(universesCovered());
         for (size_t u = 0; u < lastSeq_.count(); u++) lastSeq_[u] = 0;
+        if (e131Ok) joinUniverseGroups();
         ddpEnd_ = ddpFrameBytes_ = ddpPacketBytes_ = 0;
         ddpSynced_ = false;
         ddpPushes_ = false;
@@ -168,6 +181,22 @@ public:
     uint8_t stagedAt(size_t i) { return sink_.byteAt(i); }
     /// Test seam: how many staging bytes are allocated.
     size_t stagingBytes() const { return sink_.bytes(); }
+    /// Test seam: the E1.31 multicast groups handed to the socket, and how many.
+    const platform::UdpSocket::MulticastGroup* groupsForTest() const { return groups_.data(); }
+    uint8_t groupCountForTest() const { return static_cast<uint8_t>(groups_.count()); }
+    /// Test seam: the E1.31 socket's joins since it opened.
+    uint32_t e131JoinCountForTest() const { return e131Socket_.joinCountForTest(); }
+    /// How many of its universes' groups the E1.31 socket holds now.
+    uint8_t e131JoinedForTest() const { return e131Socket_.multicastJoined(); }
+
+    /// The note for universes from `first` on, `wanted` of them, when multicast joined only the first `joined`: the warning before any packet, or a short suffix for the receiving status; empty when it joined them all.
+    static void formatMulticastNote(char* out, size_t len, uint16_t first, uint32_t wanted, uint8_t joined, bool suffix) {
+        const unsigned last = first + joined - 1u;
+        if (joined >= wanted) out[0] = 0;
+        else if (joined == 0) mm::formatTo(out, len, "%s", suffix ? ", unicast only" : "E1.31 multicast unavailable: unicast only");
+        else if (suffix) mm::formatTo(out, len, ", multicast to universe %u", last);
+        else mm::formatTo(out, len, "E1.31 multicast reaches universes %u to %u, the rest only by unicast", static_cast<unsigned>(first), last);
+    }
 
     /// Note the last sender, per packet from the receive path; a test calls it to stand in for one.
     void recordSender(const char* proto, const uint8_t ip[4]) {
@@ -182,6 +211,8 @@ private:
     static constexpr uint32_t kCoalesceUs = 1000;   ///< the wait after a drain, so one wake drains several packets, as Linux's NAPI coalesces interrupts
     static constexpr uint32_t kWaitMs = 20;   ///< how long the task waits for a packet before it checks for a stop
     static constexpr const char* kBindFailMsg = "UDP bind failed, port in use?";
+    static constexpr int kE131Socket = 0b010;   ///< E1.31's bit in waitReadable's order
+    static constexpr uint8_t kMaxE131Groups = 64;   ///< groups one receiver asks for, which bounds the joins a prepare makes; the stack's table usually holds fewer
     char recvStatus_[128] = "";         ///< "<n> fps, <n> packets/s, <n> lost/s, <protocol> from <board> (<ip>), <path>", a member since setStatus holds the pointer
     const char* lastProto_ = nullptr;   ///< the last protocol literal the status was built from
     uint8_t lastPath_ = 0;              ///< the last path the status was built from
@@ -202,6 +233,10 @@ private:
     uint32_t packetsPerS_ = 0, framesPerS_ = 0, lostPerS_ = 0;   ///< the last second's rates
     /// Each universe's last sequence, the protocol's tag in the high byte so a switch between Art-Net and E1.31 starts over; 0 is none yet.
     ScratchBuffer<uint16_t> lastSeq_{*this};
+    ScratchBuffer<platform::UdpSocket::MulticastGroup> groups_{*this};   ///< the E1.31 socket's groups, which it reads while it keeps them
+    uint8_t mcastJoined_ = 0;            ///< how many of them it joined, a prefix since a full table refuses the rest
+    uint16_t mcastFirst_ = 0;            ///< the first universe the layer covers that E1.31 allows
+    uint16_t mcastWanted_ = 0;           ///< how many universes from there the layer covers, which the note compares the joins against
     uint32_t ddpEnd_ = 0;                ///< where the last DDP packet ended
     uint32_t ddpFrameBytes_ = 0;         ///< the furthest end a DDP frame reached, its size
     uint16_t ddpPacketBytes_ = 0;        ///< the largest DDP payload seen, what a missing stretch is counted in
@@ -223,9 +258,9 @@ private:
         platform::UdpSocket* sockets[3] = {&artnetSocket_, &e131Socket_, &ddpSocket_};
         while (!receiveStop_.load(std::memory_order_acquire)) {
             const int ready = platform::UdpSocket::waitReadable(sockets, 3, kWaitMs);
-            if (ready > 0) {
-                drainSockets<true>(ready);
-                platform::sleepUs(receiveTask_, kCoalesceUs);   // the next packets gather meanwhile, so one wake drains several
+            if (ready >= 0) {
+                drainSockets<true>(ready | kE131Socket);   // E1.31 reads on every wake, so its socket keeps its groups while the other protocols stream
+                if (ready > 0) platform::sleepUs(receiveTask_, kCoalesceUs);   // the next packets gather meanwhile, so one wake drains several
             }
         }
     }
@@ -286,6 +321,9 @@ private:
         const uint8_t* data = nullptr;
         uint8_t seq = 0;
         if (!parseE131Packet(pkt, n, universe, data, dataLen, &seq)) return;
+        const uint16_t first = e131FirstUniverse(universeStart);
+        if (universe < first) return;
+        universe = static_cast<uint16_t>(universe - first + universeStart);   // onto the slots Art-Net numbers from universeStart
         countPacket(universe == universeStart);
         countGap(universe, kTagE131, seq, 0);
         applyDmx<kWait>(universe, data, dataLen);
@@ -305,6 +343,36 @@ private:
         if (push) ddpPushes_ = true;
         applyBytes<kWait>(byteOffset, data, dataLen, push || !ddpPushes_);   // a sender without pushes shows every packet
         recordSender("DDP", srcIp);
+    }
+
+    /// Join the E1.31 group of each universe the layer covers, 239.255.(N >> 8).(N & 0xFF) as E1.31 §9.3.1 addresses it, so a multicasting sender reaches it; the status names what only unicast reaches.
+    void joinUniverseGroups() {
+        const size_t universes = universesCovered();
+        const uint32_t first = e131FirstUniverse(universeStart);
+        uint32_t end = first + universes;   // one past the last universe the layer covers
+        if (end > E131_LAST_UNIVERSE + 1u) end = E131_LAST_UNIVERSE + 1u;
+        const uint32_t wanted = end > first ? end - first : 0;   // none when the start lies past E1.31's last
+        groups_.resize(wanted < kMaxE131Groups ? wanted : kMaxE131Groups);   // a failed allocation counts 0, so nothing is joined
+        for (size_t i = 0; i < groups_.count(); i++) {
+            const uint32_t u = first + i;
+            groups_[i] = {{239, 255, static_cast<uint8_t>(u >> 8), static_cast<uint8_t>(u & 0xFF)}};
+        }
+        mcastJoined_ = e131Socket_.setMulticastGroups(groups_.data(), static_cast<uint8_t>(groups_.count()));
+        mcastFirst_ = static_cast<uint16_t>(first);
+        mcastWanted_ = static_cast<uint16_t>(wanted);
+        noteMulticast();
+    }
+
+    /// How many universes the staging holds at the per-universe stride, the last one partial.
+    size_t universesCovered() const { return channelsPerUniverse ? (sink_.bytes() + channelsPerUniverse - 1) / channelsPerUniverse : 0; }
+
+    /// Show what multicast cannot reach, in the receiving status's buffer, which packets arriving format over; a bind error wins.
+    void noteMulticast() {
+        if (status() != nullptr && status() != recvStatus_) return;
+        lastProto_ = nullptr;
+        formatMulticastNote(recvStatus_, sizeof(recvStatus_), mcastFirst_, mcastWanted_, mcastJoined_, false);
+        if (recvStatus_[0]) setStatus(recvStatus_, Severity::Warning);
+        else clearStatus();
     }
 
     /// Count one packet, and a frame when it starts or ends one, with read-modify-writes on both sides since a module lives in PSRAM, as TryLock explains.
@@ -361,7 +429,7 @@ private:
     /// Update the receiving diagnostic, short-circuiting the common case since this is the hot path.
     void noteReceiving(const char* proto, const uint8_t ip[4], uint8_t path) {
         const char* s = status();
-        if (s != nullptr && s != recvStatus_) return;   // a bind error (or foreign status) wins
+        if (s != nullptr && s != recvStatus_) return;   // a bind error (or foreign status) wins; packets arriving replace the multicast warning
         // Already showing this source and path, so skip both the format and the setStatus.
         if (s == recvStatus_ && proto == lastProto_ && path == lastPath_ && std::memcmp(ip, lastIp_, 4) == 0) return;
         lastProto_ = proto;
@@ -369,9 +437,11 @@ private:
         std::memcpy(lastIp_, ip, 4);
         char peer[HostResolver::kPeerChars];
         HostResolver::formatPeer(peer, sizeof(peer), ip);
-        mm::formatTo(recvStatus_, sizeof(recvStatus_), "%u fps, %u packets/s, %u lost/s, %s from %s%s",
-                     static_cast<unsigned>(framesPerS_), static_cast<unsigned>(packetsPerS_), static_cast<unsigned>(lostPerS_),
-                     proto, peer, kPathNotes[path]);
+        const int n = mm::formatTo(recvStatus_, sizeof(recvStatus_), "%u fps, %u packets/s, %u lost/s, %s from %s%s",
+                                   static_cast<unsigned>(framesPerS_), static_cast<unsigned>(packetsPerS_), static_cast<unsigned>(lostPerS_),
+                                   proto, peer, kPathNotes[path]);
+        if (std::strcmp(proto, "E1.31") == 0 && n > 0 && static_cast<size_t>(n) < sizeof(recvStatus_))   // what multicast cannot reach, for an E1.31 sender
+            formatMulticastNote(recvStatus_ + n, sizeof(recvStatus_) - n, mcastFirst_, mcastWanted_, mcastJoined_, true);
         setStatus(recvStatus_, Severity::Status);
     }
 

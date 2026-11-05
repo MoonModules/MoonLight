@@ -1,8 +1,16 @@
 # hpwit/I2SClocklessVirtualLedDriver: monthly activity digest
 
-What landed on [hpwit/I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [hpwit/I2SClocklessVirtualLedDriver](https://github.com/hpwit/I2SClocklessVirtualLedDriver), month by month. External-context reference, a factual log of a friend repo's activity, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
-The library: Yves Bazin's (hpwit) "virtual pins" variant of the I2S clockless driver, drives far more strips than the chip has usable pins by fanning the I2S output through external shift registers. This multiplex technique is the one behind `pinExpander` on `MoonI80` (factoring the shift-register multiplex out of the I2S/LCD peripheral code). Summarised via the GitHub commits API, read across all branches (`main`, `integration`, `int2`, `variable`, `hpwit-patch-1`, `dev`, `optomize`), not just `main`.
+The library: Yves Bazin's (hpwit) "virtual pins" variant of the I2S clockless driver, drives far more strips than the chip has usable pins by fanning the I2S output through external shift registers. This multiplex technique is the one behind `pinExpander` on `MoonI80` (factoring the shift-register multiplex out of the I2S/LCD peripheral code). Summarized via the GitHub commits API, read across all branches (`main`, `integration`, `int2`, `variable`, `hpwit-patch-1`, `dev`, `optomize`), not just `main`.
+
+## October 2026
+
+No activity. The repository remains dormant: no commits on `main` or any other branch in October 2026, and `main` has not moved since November 2024.
+
+No issues were opened or closed. No release; the most recent is 2.1 from January 2024.
+
+_Checked: `main` and every other remote branch (after `git fetch --all --tags`) for author-date 2026-10-01..2026-10-31 (0 commits on each); releases published (none); issue search `repo:hpwit/I2SClocklessVirtualLedDriver is:issue created:2026-10-01..2026-10-31` and the same with `closed:` (0 results each)._
 
 ## September 2026
 

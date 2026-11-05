@@ -1,8 +1,58 @@
 # WLED (upstream): monthly activity digest
 
-What landed on [wled/WLED](https://github.com/wled/WLED)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [README.md](index.md).
+What landed on [wled/WLED](https://github.com/wled/WLED)'s `main` branch, month by month. External-context reference, a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these lives in [index.md](index.md).
 
 Months are **not** split at release dates: upstream WLED cuts releases from separate release branches (`0_15`, `16_x`), so the version tags aren't on `main`, `main` is the development trunk that feeds future releases. Each month notes which release shipped, as context.
+
+## October 2026
+
+A fuller month on `main` than September: three new 2D effects, a palette, reworked segment transitions and the audio usermod on the V5 framework.
+
+No versioned release in October: v16.0.1 (2026-07-07, from a release branch) is still the latest, so the month is not split. Nightly builds stay off while `main` migrates frameworks (#5880).
+
+**New**
+
+- A 2D Analog Clock effect with hour, minute and optional second hands from local time, bringing antialiased line and circle drawing with it (#3943, open since 2024).
+- A 2D Perlinscape effect in the user_fx usermod: a Perlin noise landscape with sliders for speed, zoom, X and Y stretch, and rotation (#5587).
+- A 2D Jack-o-Lantern effect in user_fx: a carved pumpkin whose candle flickers and whose mouth follows the microphone volume, with an idle animation when there is no audio (#5917).
+- A Fireworks palette, sorted in rainbow order with slight gradients per color (#5910).
+- Segment transitions are reworked: opacity and CCT changes now fade in every transition style instead of jumping, a swipe in progress carries through while a second change degrades to a fade, global and per-segment fades run alongside spatial transitions, and on/off transitions take priority (#5729).
+- The AudioReactive usermod runs on the V5 (ESP-IDF 5) framework on every ESP32 variant: I2S uses the new API, and analog microphones now work on all variants through a shared ADC manager that samples in the background and pauses for about a millisecond when another usermod (analog button, battery) reads a pin (#5764, #5773).
+- HUB75 output uses the global buffer, saving RAM and running faster; large buffers now go to PSRAM so a 128x128 panel fits on an ESP32-S3, and an off-by-one that stopped MAX_LEDS from being reached is fixed (#5744).
+- The Arc Expand mapping gets a new algorithm that closes holes on wide matrices and nearly doubles the frame rate (45 to 80 FPS on a 64x32 HUB75 build) (#4994).
+- Flash use drops by about 4 KB on classic ESP32 through shared settings helpers, about 1 KB by removing implicit double floats, and about 3 KB by using `powf()` instead of `pow()` for color temperature (#5927, #5925, #5899).
+- CI now builds a set of HUB75 environments.
+
+**Fixed**
+
+- Security: a playlist posted with an empty `transition` array caused an out-of-bounds read; fixed per advisory GHSA-rrjq-j36x-xrpq (medium) (#5909).
+- 2D effects on panels 128 pixels wide and up: DNA Spiral no longer freezes, Crazy Bee keeps its bees on track (and allows eight), Colored Bursts and Rotozoomer use the full panel, Polar Light scales to large fixtures, Sun Radiation's undefined `byte` to `int8_t` casts are gone, and GEQ peak indicators stay within the display (#5908, from #5903).
+- Plasma Ball draws correctly on non-square segments, wobbles less on large panels, and runs up to 40 percent faster (#5907).
+- `color_fade()`, used for global brightness scaling, gave coarser steps than needed in the video path; fixed with fewer branches, and marked for backport to 16_x (#5897).
+- At boot the output buses are blanked directly instead of running a full `show()`, so usermod overlays are no longer called before setup; the show callback hook is removed (#5933).
+- The Fireworks palette is aligned with the 16 palette slots.
+- The preset Quick Load button no longer misaligns with wide, CJK or emoji labels (#5886).
+- The removed WizLights usermod gets a README pointing to its new repository (#5892).
+
+**Fixed (reported by users)**
+
+- The segment power toggle is shown again when the only segment is off at full brightness, so the strip can be switched back on from the web UI (#5913).
+- The ESP32-ETH01 "TypeError" on 0.15.x, open since February 2025, is closed after the fix was cherry-picked to a 0.15.6 beta (#4535).
+- The expired certificate on download.wled.me was renewed within a day (#5938).
+
+**Watching**
+
+- UDP sync on ESP32 16.x: the sync master leaks heap on every notification it sends and reboots every 40 minutes or so (#5924, the month's busiest thread), and a master can block itself from receiving further sync packets after rejecting its own broadcast, since `WiFiUDP` on ESP32 needs an explicit flush (#5929, confirmed).
+- Short or crafted packets can read beyond the buffer in UDP sync (#5942) and in the Art-Net and E1.31 effect modes (#5940); the maintainers are weighing whether to harden every network input against fabricated packets.
+- A partial `POST /json/cfg` resets unrelated settings such as linked remotes, FPS, auto-white mode, gamma, I2C pins and the 2D setup (#5883).
+- Gravimeter bars turn black at full volume through a `uint8_t` overflow (#5891, confirmed); the thread notes that casting an out-of-range float to `uint8_t` is undefined behavior and already misbehaves on the C3.
+- ESP8266 on 16.0.1 with audio reactive runs out of RAM ("No Ram for Buffer") and drops to a solid color; the reporter went back to 0.15.4 (#5931).
+- Nightly builds have been disabled on purpose since July because `main` is not stable enough during the ESP-IDF 5.5 and arduino-esp32 3.x migration, with flicker and crashes on multiple outputs still open (#5880).
+- A proposal to transform sRGB into LED RGB "Hue-like" through XYZ color space (#5934); a maintainer is reading up on the color theory before deciding.
+- Feature requests include native UCS2904 RGBW support (#5887), Matter over Thread (#5941, marked backburner), and OTA pushes from other subnets (#5926).
+- The "Version 17 - key features" issue (#5867) did not move in October (last update 2026-09-27, five comments).
+
+_Checked: 59 commits on `main` with author-date 2026-10-01..2026-10-31 via `git log --first-parent origin/main` (59 by committer date too; newest fce41f26, oldest acde35a4). Issues via `search/issues` for `repo:wled/WLED+is:issue+created:2026-10-01..2026-10-31` (20 opened) and `repo:wled/WLED+is:issue+closed:2026-10-01..2026-10-31` (7 closed); only user-facing ones surfaced. No versioned release published in October 2026 (`repos/wled/WLED/releases`; the `v16.0.1` tag is not an ancestor of `main`), so no month split. The `CONTRIBUTING.md`, `AGENTS.md` and `.coderabbit.yaml` edits (AI attribution, CodeRabbit interaction, PSRAM, I2C and SPI, usermod security guidance) and the dependabot bumps are omitted._
 
 ## September 2026
 
@@ -104,7 +154,7 @@ The month `main` switched to the **V5** platform: WLED's trunk moved from the ES
 
 - The loudest thread of the month is #5746, asking the project to do unstable work on a `dev` branch rather than breaking `main`.
 - Ethernet users want the WiFi access point to switch off entirely once the wired link is up (#5762).
-- Open v16 field reports: Animated Staircase segments switching instead of fading (#5731), APA102 on GPIO19 misbehaving (#5728), HUB75 colour-order options hidden and mostly unimplemented (#5723), and a request for current-limited LED support in the brightness limiter (#5715).
+- Open v16 field reports: Animated Staircase segments switching instead of fading (#5731), APA102 on GPIO19 misbehaving (#5728), HUB75 color-order options hidden and mostly unimplemented (#5723), and a request for current-limited LED support in the brightness limiter (#5715).
 
 _Auditability: 40 first-parent commits on `main` with author-date 2026-07-01..2026-07-31 (56 including merged sub-commits). Issues via `search/issues` for `repo:wled/WLED+is:issue+created:2026-07-01..2026-07-31` (20 opened) and `closed:2026-07-01..2026-07-31` (15 closed); only user-facing ones surfaced. v16.0.1 (2026-07-07) is not an ancestor of `main` (GitHub compare reports `main` and `v16.0.1` diverged), so no month split._
 
@@ -127,7 +177,7 @@ Post-16.0 stabilisation month: no new version tag (v16.0.0 shipped 2026-05-03 of
 - Fixed LED glitches on long strips with ESP32-C3.
 - Nightlight: brightness now applies correctly, including small transition steps, and no longer resets when set to max brightness.
 - Color no longer jumps when you change it mid-transition; gamma is now applied correctly during realtime/live-data override.
-- Improved boot behaviour for boot presets, and "Reset segments" now respects "Make a segment for each output".
+- Improved boot behavior for boot presets, and "Reset segments" now respects "Make a segment for each output".
 - Fixed a ledmap parser reading past the end of the map, an analog-button reading fix, and a pixel-buffer refresh after changing matrix dimensions.
 - Better brownout detection and extended error codes aligned with WLED-MM.
 
@@ -140,7 +190,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## May 2026
 
-*Summarised from 72 first-parent commits on `main`, 2026-05-01 … 2026-05-31. (Trunk after the **v16.0.0** release on May 3; v16 is codenamed "Kagayaki".)*
+*Summarized from 72 first-parent commits on `main`, 2026-05-01 … 2026-05-31. (Trunk after the **v16.0.0** release on May 3; v16 is codenamed "Kagayaki".)*
 
 **New / boards**
 
@@ -155,7 +205,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## April 2026
 
-*Summarised from 67 first-parent commits on `main`, 2026-04-01 … 2026-04-30. (v16.0.0-beta was tagged April 11.)*
+*Summarized from 67 first-parent commits on `main`, 2026-04-01 … 2026-04-30. (v16.0.0-beta was tagged April 11.)*
 
 **New / effects**
 
@@ -169,7 +219,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## March 2026
 
-*Summarised from 65 first-parent commits on `main`, 2026-03-01 … 2026-03-31. (v0.15.4 shipped March 14 from the 0_15 release branch; trunk version bumped to 17.0.0-dev.)*
+*Summarized from 65 first-parent commits on `main`, 2026-03-01 … 2026-03-31. (v0.15.4 shipped March 14 from the 0_15 release branch; trunk version bumped to 17.0.0-dev.)*
 
 **New / effects**
 
@@ -184,7 +234,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## February 2026
 
-*Summarised from 35 first-parent commits on `main`, 2026-02-01 … 2026-02-28.*
+*Summarized from 35 first-parent commits on `main`, 2026-02-01 … 2026-02-28.*
 
 **New**
 
@@ -199,7 +249,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## January 2026
 
-*Summarised from 38 first-parent commits on `main`, 2026-01-01 … 2026-01-31.*
+*Summarized from 38 first-parent commits on `main`, 2026-01-01 … 2026-01-31.*
 
 **New**
 
@@ -212,7 +262,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## December 2025
 
-*Summarised from 39 first-parent commits on `main`, 2025-12-01 … 2025-12-31. (v0.15.3 shipped December 4 from the 0_15 release branch.)*
+*Summarized from 39 first-parent commits on `main`, 2025-12-01 … 2025-12-31. (v0.15.3 shipped December 4 from the 0_15 release branch.)*
 
 **New / effects**
 
@@ -225,7 +275,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## November 2025
 
-*Summarised from 46 first-parent commits on `main`, 2025-11-01 … 2025-11-30. (v0.15.2-beta1 → **v0.15.2** shipped Nov 9 / Nov 29 from the 0_15 release branch.)*
+*Summarized from 46 first-parent commits on `main`, 2025-11-01 … 2025-11-30. (v0.15.2-beta1 → **v0.15.2** shipped Nov 9 / Nov 29 from the 0_15 release branch.)*
 
 **New**
 
@@ -239,17 +289,17 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 ## October 2025
 
-*Summarised from 9 first-parent commits on `main`, 2025-10-01 … 2025-10-31.*
+*Summarized from 9 first-parent commits on `main`, 2025-10-01 … 2025-10-31.*
 
 - Quiet month on trunk. **DDP over WebSocket** groundwork (shared WS connection in common.js); Twinkle blank-area fix; low-brightness gradient "jumpyness" fix; bootloop-tracker safety check; GIF-player inactive-segment + copy-FX bugfixes.
 
 ## September 2025
 
-*Summarised from 41 first-parent commits on `main`, 2025-09-01 … 2025-09-30.*
+*Summarized from 41 first-parent commits on `main`, 2025-09-01 … 2025-09-30.*
 
 **New / effects**
 
-- **Shimmer FX** added; "unrestricted" number of custom palettes; center-bin selection for 2D GEQ; Twinklecat reverse option; speed optimisations + `restoreColorLossy` fix.
+- **Shimmer FX** added; "unrestricted" number of custom palettes; center-bin selection for 2D GEQ; Twinklecat reverse option; speed optimizations + `restoreColorLossy` fix.
 - Heap-memory and PSRAM handling improvements; HUB75 AC fixes.
 
 **Fixed**

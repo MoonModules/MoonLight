@@ -1,6 +1,81 @@
 # FastLED: monthly activity digest
 
-What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, month by month. External-context reference (like the v1/v2/MoonLight inventories), a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these digests lives in [README.md](index.md).
+What landed on [FastLED](https://github.com/FastLED/FastLED)'s main branch, month by month. External-context reference (like the v1/v2/MoonLight inventories), a factual log of a friend repo's releases, not MoonLight's own history or roadmap. Newest month on top. The reusable prompt that generates these digests lives in [index.md](index.md).
+
+## October 2026 (up to 3.10.6)
+
+Released **3.10.6** (2026-10-04), cut from `master`, the first published release since 3.10.4 in June. It carries the July to September work: the color pipeline at the output path, the slim bridge drivers, Pico 2 W WiFi and Bluetooth, the minimp3 decoder. The three days before it are release blockers: seven "Release blocker" issues (#4684 through #4690) opened on the 3rd and closed on the 4th, mostly toolchain pins.
+
+**Fixed**
+
+- ESP32-P4: the PARLIO driver keeps its data pins driven while its transmit unit is re-created, and LCD_RGB folds frames into 12-bit-wide lines (#4669, still open for the P4 loopback capture).
+- ESP32-C6: the PARLIO loopback capture accepts a 1-LED frame, closing the "1-LED strip produces no output" report (#4609).
+- LPC845: interrupt-driven UART receive ends the lost RPC replies, and printf and the channel manager are no longer linked on small tiers.
+- Tiny AVR parts (ATtiny, ATmega8) no longer overflow SRAM in the example sweep, and the ESP32 IDF 3.3 toolchain compiles again.
+- Binary dithering is its own module that can be compiled out, and the dither state is initialized under `NO_DITHERING`.
+
+## October 2026 (3.10.6 to 3.10.7)
+
+Released **3.10.7** (2026-10-10), cut from `master`. The week is one memory sweep: a user measured a Lolin D32 sketch at 2.5x the flash of 3.10.3 under 3.10.6 (#4707, 443 KB more flash and 8 KB more RAM), the maintainer opened a per-board reduction tracker (#4737, ten child issues) and a regressions tracker (#4801), and 3.10.7 is the result.
+
+**New**
+
+- Code a sketch cannot use is no longer linked: the FlexIO clockless pipeline in SPI-only sketches, the I2S clockless peripheral on esp32dev, the ADC driver unless `fl::analogRead` is used, the WiFi stack unless `fl::net` is used (1.3 KB of RAM on esp32dev), RGBW conversion in RGB-only sketches, Arduino `Serial` on AVR unless the sketch uses it, and the task scheduler in driver wait loops.
+- The release notes give the deltas against 3.10.6-era master: esp32dev Blink 5.2 KB less flash and 1.9 KB less RAM, esp32dev APA102 15.9 KB and 2.2 KB less, esp32s3 APA102 16.6 KB and 0.7 KB less; Uno Blink static RAM is 118 bytes, below 3.10.3.
+- Teensy 4: the ObjectFLED DMA buffer is sized to the frame instead of a fixed 38.4 KB, the I2S audio-input buffers are allocated on first use, and the Channel API no longer registers every driver up front (72 KB of RAM1, #4708).
+- Teensy 4: an ISR-streamed FlexPWM receive and FlexIO transmit ring, verified with a 1000-LED loopback, and a platform-neutral early-boot watchdog guard so a board stuck in setup recovers before USB is up.
+- `FL_NO_EXCEPT` is now a real `noexcept` on ESP targets rather than a no-op macro (the change behind the C3/C6 compile failure fixed later this month).
+- Non-release builds default to errors-only logging.
+
+**Fixed**
+
+- 3.10.6 failed to link on the Arduino UNO R4 WiFi (duplicate `FileSystem::beginSd`, #4704), and in-place upgrades over 3.10.5 link again.
+- `fl::aligned_alloc` honors the requested alignment on AVR, ESP8266 and ARM instead of returning plain `malloc`.
+- Teensy 4 WS2812 loopback decode mismatches across FlexPWM, FlexIO and ObjectFLED.
+- The AVR power limiter drops its 64-bit math, and legacy white settings survive the channel encoder.
+- WASM preview: strips are placed relative to the shared screen bounds instead of each strip's own minimum, screen maps with an unset diameter render, and tall layouts no longer size the canvas past the texture limit.
+
+## October 2026 (3.10.7 to 3.10.8)
+
+Released **3.10.8** (2026-10-17), cut from `master`, a compatibility fix for the two releases before it.
+
+**Fixed**
+
+- Plain `memset`, `memcpy`, `memmove` and `free` on `CRGB` pointers compile again, and `std::sort` and `std::reverse` no longer collide with FastLED's generic functions; 3.10.6 and 3.10.7 had made these ambiguous, which "affects a LOT of code in the wild" (#4827, and #4826 for PlatformIO). Bare calls that found FastLED's algorithms through argument-dependent lookup now need the `fl::` qualifier.
+- SD file error overrides match their `noexcept` contract on ESP32, the other 3.10.7 PlatformIO failure.
+- The ESP32 Arduino 4 / ESP-IDF 6 release candidate builds the Test example, and the Mega (ATmega2560) joins the build matrix.
+
+## October 2026 (post-3.10.8)
+
+No further release in October (3.10.9 followed on 2026-11-01). Two threads: the ESP32 platform layer is cut loose from the Arduino core piece by piece, and the ESP8266 gets a week of native drivers.
+
+**New**
+
+- ESP32: clocked SPI chipsets (APA102, SK9822, WS2801) get a real DMA burst instead of one polling transaction per byte, closing a 2024 report (#1609), and an explicitly chosen SPI host is honored for clocked LEDs, so output no longer depends on `addLeds` order (#4864).
+- ESP32: Arduino's SPI and LittleFS are optional providers, an unused `Serial0` stays out of stock Arduino-ESP32 images (#4892), the native UART console stays out of output-only builds, the legacy RMT4 backend is selectable again with nonblocking output, and IDF 4.4 capabilities are normalized so RMT and WiFi are no longer silently disabled.
+- ESP8266: native HSPI output for clocked chipsets (APA102 had been bit-banged at 1.4 Mbit/s, #4925, and the 2022 "too slow data rate for dotstar" report #1443 closes with it), an I2S output engine, an I2S-based `fl::RxChannel` input, a UART WS2812 engine selected as `Bus::UART`, OTA through ArduinoOTA, automatic embedded LittleFS, and `fl::Bus::AUTO` resolving on the chip.
+- The `FASTLED_ESP8266_UART`, `FASTLED_ALL_PINS_HARDWARE_SPI` and `FL_ESP8266_EMBEDDED_FS` defines are retired in favor of template selection, and a lint flags any new driver-enabling define.
+- Pull requests get a per-target memory usage report, and a no-Serial Blink scorecard per board is recorded as the new footprint baseline (#4760).
+- The fastled.io documentation site moved to its own repository and the generated `gh-pages` history is purged from the main repo, so a clone no longer fetches about 500 MB of generated pages (#4878).
+
+**Fixed**
+
+- 3.10.7 and 3.10.8 fail to compile on ESP32-C3 and C6 ("different exception specifier", #4869, #4924, #4964): fixed on master with a lint so it cannot return, shipping in 3.10.9.
+- Arduino Nano ESP32 compiles again (pin functions are shielded from the board's pin remap macros, #4914), and the remaining compile warnings from #4837 are cleared.
+- AVR Uno: `Servo.h` and `FastLED.h` together no longer collide on the Timer1 vector (#4836).
+- ESP32: an idle SPI bus or a cached RMT channel whose pin another driver took is rebuilt rather than losing the pin (#4905, #4907), and the S3 loopback capture no longer stops at 200 edges.
+- ESP32-S3: discovery JSON serialization no longer crashes under a constrained heap.
+- `fl::unordered_map` keeps about 1 KB of rehash scratch off the stack, which overflowed the ESP8266's 4 KB loop stack.
+- The never-used ESP-DSP FFT adapter is removed; the tested FFT stays.
+
+**Watching**
+
+- The flash regression against 3.10.3 is not closed: #4707 (2.5x on 3.10.6) stays open with the optimization parked on a checkpoint branch (#4771), and a 3.10.8 measurement still shows 107% more flash and 37% more RAM (#4870).
+- A proposal to replace Arduino-ESP32's startup on stock cores so `Serial0` is never linked (#4911) awaits a maintainer decision, and an audit to retire the legacy SPI output paths where the Channel API is the default (#4928) is open.
+- ESP32-P4: PARLIO emits nothing and LCD_RGB capture truncates in the loopback bench (#4669) is still open.
+- The proposed "FastLED Reciprocal License" (#4046) is still open; `LICENSE` on master is still MIT.
+
+_Auditability: 179 commits on `origin/master` with author-date 2026-10-01..2026-10-31 via `git log --first-parent` (newest 5bf59bfa19, oldest 696faa1de4; the first-parent view counts 176 by committer date), split at the three releases cut from `master`: 30 up to 3.10.6 (ebf8c2823c, published 2026-10-04), 54 to 3.10.7 (6062bee6f2, 2026-10-10), 23 to 3.10.8 (d7402f1294, 2026-10-17), 72 after. Issues via `search/issues` for `repo:FastLED/FastLED+is:issue+created:2026-10-01..2026-10-31` (140 opened) and `repo:FastLED/FastLED+is:issue+closed:2026-10-01..2026-10-31` (122 closed); only user-facing ones surfaced, and many are the project's own tracking issues. Releases via `repos/FastLED/FastLED/releases` (3.10.6, 3.10.7 and 3.10.8 in October, 3.10.9 on 2026-11-01). The 3.10.6 release notes on GitHub are a cumulative changelog reaching back to 2025 and are not used as the October record. Internal study/CI/test/lint/refactor commits are omitted._
 
 ## September 2026
 
@@ -163,7 +238,7 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 
 ## May 2026
 
-*Summarised from 150 first-parent commits on `master`, 2026-05-01 … 2026-05-31.*
+*Summarized from 150 first-parent commits on `master`, 2026-05-01 … 2026-05-31.*
 
 **New**
 
@@ -189,7 +264,7 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 
 ## April 2026
 
-*Summarised from 237 first-parent commits on `master`, 2026-04-01 … 2026-04-30.*
+*Summarized from 237 first-parent commits on `master`, 2026-04-01 … 2026-04-30.*
 
 **New**
 
@@ -205,28 +280,28 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 
 ## March 2026
 
-*Summarised from 444 first-parent commits on `master`, 2026-03-01 … 2026-03-31.*
+*Summarized from 444 first-parent commits on `master`, 2026-03-01 … 2026-03-31.*
 
 - Mostly an internal stability and build-correctness month (sanitizer fixes, WASM build speed, IWYU/PCH hygiene), little user-facing.
 - **Fixed:** AVR builds (replaced defaulted `noexcept` with explicit implementations in container types); ESP32-C3/C5 and Teensy build breakages; printf/Arduino-compatibility shim; an audio-path bug.
 
 ## February 2026
 
-*Summarised from 516 first-parent commits on `master`, 2026-02-01 … 2026-02-28.*
+*Summarized from 516 first-parent commits on `master`, 2026-02-01 … 2026-02-28.*
 
 - **Fixed (broad platform-stability month):** AVR math bugs (left-shifts wider than AVR's 16-bit int; `PROGMEM` LUT reads), ESP32-C6 dual-mode async/sync SPI, ESP32 WROOM + mbedTLS, ESP8266, Teensy LC, UART compiler issues, RGBW mode, and the UCS chipset preamble.
 - HTTP-server / loopback networking pieces stabilised; OTA validation fixed.
 
 ## January 2026
 
-*Summarised from 582 first-parent commits on `master`, 2026-01-01 … 2026-01-31.*
+*Summarized from 582 first-parent commits on `master`, 2026-01-01 … 2026-01-31.*
 
 - A heavy **stability-hardening month**, most of the work was fixing memory and initialization bugs surfaced by sanitizers (ASan/LSan/UBSan): use-after-free, memory leaks, static-initialization-order issues, shared-pointer errors.
 - **Fixed (user-visible):** a crash in power management; RP2350 system defines not being included; an ISR error where an int was read as a bool; i2s/LCD-CAM.
 
 ## December 2025
 
-*Summarised from 392 first-parent commits on `master`, 2025-12-01 … 2025-12-31.*
+*Summarized from 392 first-parent commits on `master`, 2025-12-01 … 2025-12-31.*
 
 **New**
 
@@ -237,7 +312,7 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 
 ## November 2025
 
-*Summarised from 528 first-parent commits on `master`, 2025-11-01 … 2025-11-30.*
+*Summarized from 528 first-parent commits on `master`, 2025-11-01 … 2025-11-30.*
 
 **New**
 
@@ -250,7 +325,7 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 
 ## October 2025
 
-*Summarised from 1,185 first-parent commits on `master`, 2025-10-01 … 2025-10-31.*
+*Summarized from 1,185 first-parent commits on `master`, 2025-10-01 … 2025-10-31.*
 
 **New**
 
@@ -258,12 +333,12 @@ _Auditability: 481 commits with author-date in 2026-06-01..2026-06-30 on `master
 - Per-platform ESP32 clockless controllers + configurable ESP32/ESP8266 timing; nanosecond timing support for ARM K66/KL26; SPI chipset controllers split into their own headers.
 - Fallback **OTA** implementation for ESP-IDF < 4.0.
 - PARLIO strategic buffer-breaking at color boundaries.
-- 8-bit math optimised for ATtiny; math template/float overloads; a beat-detection `AudioProcessor` facade.
+- 8-bit math optimized for ATtiny; math template/float overloads; a beat-detection `AudioProcessor` facade.
 - New "advanced effects" and "LED cookbook" documentation chapters.
 
 ## September 2025 (post-3.10.3)
 
-*Summarised from 162 first-parent commits on `master`, 2025-09-21 … 2025-09-30 (after the 3.10.3 release on the 20th).*
+*Summarized from 162 first-parent commits on `master`, 2025-09-21 … 2025-09-30 (after the 3.10.3 release on the 20th).*
 
 **New**
 

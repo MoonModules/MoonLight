@@ -444,6 +444,7 @@ TEST_CASE("a brightness change does not rescan the palette scripts; a palette fi
     mm::Drivers drivers;
     drivers.defineControls();
     drivers.setup();                                 // the scan that counts, once the filesystem is up
+    drivers.onFileChanged("/");                      // the scan is the process's, made in whichever root an earlier case left: count this one's
     const uint8_t before = paletteOptions(drivers);
 
     const char script[] = "void tick() {}";
