@@ -92,6 +92,8 @@ export const CONTROL_RENAMES = {
         onTypes: ["FishTankEffect", "FlyingToastersEffect", "PacmanEffect", "PongEffect",
                   "SpaceInvadersEffect", "SpriteFountainEffect", "MovingHeadEffect"],
     },
+    // AudioSpectrum's level bar grew into every readout drawn with the bars: the frequency, the gate, the ranges and the pitch classes.
+    "levelBar": { name: "readouts", date: "2026-11-04", onTypes: ["AudioSpectrumEffect"] },
     // ControlModule's encoders spell the word out: the interface uses the industry term, the UI
     // abbreviates it to `enc` for the strip. Scoped, because `enc1` is a plausible name anywhere.
     "enc1": { name: "encoder1", date: "2026-08-30", onTypes: ["ControlModule"] },
@@ -380,21 +382,27 @@ function renameKeys(obj, file, report) {
     return out;
 }
 
-// Drop a retired control from a state document's modules, as renameKeys drops it from a flat file: a backup saved after configs became documents still holds them. The root module's type is the file's; a child names its own. True when one went.
-function retireInDocument(doc, type, file, report) {
-    let dropped = false;
+// Rename and retire a state document's controls, as renameKeys does for a flat file: a backup or a preset saved after configs became documents still holds the old names. A root module's type is its own, else the file's, else its name; a child names its own. True when one changed.
+function migrateDocument(doc, type, file, report) {
+    let changed = false;
     const walk = (node, nodeType, where) => {
         for (const [key, value] of Object.entries(node)) {
             if (isObject(value)) { walk(value, value.type, `${where}.${key}`); continue; }
             const retired = CONTROL_RETIREMENTS[key];
-            if (!retired || !typeInScope(retired.onTypes, nodeType)) continue;
-            delete node[key];
-            dropped = true;
-            report.push({ kind: "retired", where: `${file} ${where}.${key}`, detail: `${retired.detail} (${retired.date})` });
+            const cr = CONTROL_RENAMES[key];
+            if (retired && typeInScope(retired.onTypes, nodeType)) {
+                delete node[key];
+                report.push({ kind: "retired", where: `${file} ${where}.${key}`, detail: `${retired.detail} (${retired.date})` });
+            } else if (cr && typeInScope(cr.onTypes, nodeType) && !(cr.name in node)) {
+                node[cr.name] = value;
+                delete node[key];
+                report.push({ kind: "renamed", where: `${file} ${where}.${key}`, detail: `${key} → ${cr.name} (${cr.date})` });
+            } else continue;
+            changed = true;
         }
     };
-    for (const [name, root] of Object.entries(doc)) if (isObject(root)) walk(root, root.type || type, name);
-    return dropped;
+    for (const [name, root] of Object.entries(doc)) if (isObject(root)) walk(root, root.type || type || name, name);
+    return changed;
 }
 
 /// Apply every known rename to a backup bundle's files. Returns {files, report}: a NEW files
@@ -429,6 +437,8 @@ export function applyMigrations(files, live = []) {
             try { parsed = JSON.parse(text); } catch (_) { /* not JSON: restored as it is */ }
             if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && "captures" in parsed) {
                 text = JSON.stringify(presetToDocument(parsed, newPath, report));
+            } else if (isObject(parsed) && migrateDocument(parsed, null, newPath, report)) {
+                text = JSON.stringify(parsed);   // already a document: its old names still go
             }
             out[newPath] = text;
             continue;
@@ -437,8 +447,8 @@ export function applyMigrations(files, live = []) {
             try {
                 const parsed = JSON.parse(content);
                 const type = newPath.slice("/.config/".length, -".json".length);
-                if (!isFlatConfig(parsed)) {   // already a document: only a retired control leaves it
-                    out[newPath] = isObject(parsed) && retireInDocument(parsed, type, newPath, report) ? JSON.stringify(parsed) : content;
+                if (!isFlatConfig(parsed)) {   // already a document: its old names still go
+                    out[newPath] = isObject(parsed) && migrateDocument(parsed, type, newPath, report) ? JSON.stringify(parsed) : content;
                     continue;
                 }
                 const migrated = moveToChild(renameKeys(parsed, newPath, report), newPath, report);

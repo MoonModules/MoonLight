@@ -237,10 +237,9 @@ struct TuningEstimator {
 private:
     static constexpr float kAverageMs = 10000.0f;
     static constexpr float kStrong = 0.01f;   // a peak within 20 dB of the loudest note
-    static float db(float p) { return 10.0f * std::log10(p > 1e-20f ? p : 1e-20f); }
     /// A peak's offset from its band's center in semitones, -0.5..0.5: the parabola through it and its neighbors in dB.
     static float offsetAt(const SemitoneBank& bank, uint8_t b) {
-        const float l = db(bank.power(b - 1)), m = db(bank.power(b)), r = db(bank.power(b + 1));
+        const float l = powerDb(bank.power(b - 1)), m = powerDb(bank.power(b)), r = powerDb(bank.power(b + 1));
         const float den = l - 2.0f * m + r;
         return den < 0.0f ? 0.5f * (l - r) / den : 0.0f;
     }

@@ -70,13 +70,9 @@ namespace mm {
 ///
 /// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
 ///
-/// The harmony's state, the semitone bank and its trackers, about 7 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
-class AudioService : public MoonModule, public platform::InternalRamObject {   // the filter bank touches its state every sample, so internal RAM
+/// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
+class AudioService : public MoonModule {
 public:
-    /// Internal RAM, where MoonModule places other modules in PSRAM.
-    using platform::InternalRamObject::operator new;
-    /// Return the allocation above.
-    using platform::InternalRamObject::operator delete;
     /// Finish a block of raw bands in `f` at `nowMs`: the meter ballistic, the flux and the onset.
     void finishBands(AudioFrame& f, uint32_t nowMs) {
         smoothBands(f.bands, f.bandsSmoothed);
@@ -293,7 +289,7 @@ public:
         if (mode == kLocalMode) {
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
             if (!inited_ || reinitPending_ || micConfig() != openedWith_) reinit();
-            else if (harmony != (harmonyState_ != nullptr)) switchHarmony();
+            else if (harmony != harmonyApplied_) switchHarmony();
         } else {
             if (deinit()) clearStatus();   // the others free the channel and its pins; a mic diagnosis would otherwise linger
         }
@@ -614,6 +610,7 @@ private:
     using Harmony = AudioHarmonyState;
     std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
     std::unique_ptr<Harmony> harmonyState_;     // and this only while `harmony` is on
+    bool harmonyApplied_ = false;               // the `harmony` the state was last applied for, held or not for want of RAM
     std::atomic<int16_t> tuningX10_{0};   // the bank's tuning in tenths of a cent, for the readout
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
@@ -720,6 +717,12 @@ private:
         resetAnalysis();   // start the high-pass and the bank clean for the new stream
         startAudioTask();
         clearStatus();
+        settleHarmony();
+    }
+
+    /// Remember the `harmony` the state was applied for, so a board with no room for it tries once per switch rather than on every prepare, and say so.
+    void settleHarmony() {
+        harmonyApplied_ = harmony;
         if (harmony && !harmonyState_) setStatus("audio: no internal RAM for the harmony, running without it", Severity::Warning);
     }
 
@@ -796,6 +799,7 @@ private:
         }
         applyHarmony();
         startAudioTask();
+        settleHarmony();
     }
 
     /// Hold the harmony's state exactly while `harmony` is on, with the analysis's task stopped or absent.

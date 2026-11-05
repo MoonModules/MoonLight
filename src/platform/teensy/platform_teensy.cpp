@@ -876,7 +876,12 @@ size_t i2cScan(uint8_t*, size_t) { return kI2cBusUnavailable; }
 bool irRead(uint16_t, uint32_t&) { return false; }
 void irStop() {}
 bool irChannelReady(uint16_t) { return false; }
+size_t audioCaptureDevices(const char* const** optionsOut) { if (optionsOut) *optionsOut = nullptr; return 0; }
+bool audioCaptureInit(AudioMicHandle&, uint8_t, uint32_t) { return false; }
+bool audioMicInit(AudioMicHandle&, uint16_t, uint16_t, uint16_t, int16_t, uint32_t, MicMode) { return false; }
+size_t audioMicRead(AudioMicHandle&, int32_t*, size_t, uint32_t) { return 0; }
 bool audioMicSharedBusFree(MicMode) { return true; }   // nothing shares a bus with a microphone here
+void audioMicDeinit(AudioMicHandle&) {}
 bool usbMidiBegin() { return false; }
 void usbMidiEnd() {}
 bool usbMidiConnected() { return false; }

@@ -286,6 +286,21 @@ test("soundReactive is left alone on a module outside its scope", () => {
     assert.ok(!("audioReactive" in noise));
 });
 
+test("AudioSpectrum's saved levelBar comes back as readouts", () => {
+    const files = {
+        "/.config/Effects.json": JSON.stringify({
+            "type": "Effects",
+            "enabled": true,
+            "0.type": "AudioSpectrumEffect",
+            "0.levelBar": false,
+        }),
+    };
+    const { files: out } = applyMigrations(files);
+    const [spectrum] = kids(rootOf(out, "/.config/Effects.json"), "AudioSpectrumEffect");
+    assert.equal(spectrum.readouts, false, "a level bar switched off keeps the readouts off");
+    assert.ok(!("levelBar" in spectrum), "the old key must be gone");
+});
+
 test("the receiver lists become hosts, and discovery's WLED switch becomes its addressing", () => {
     const drivers = { enabled: true, "0.type": "NetworkSendDriver", "0.ips": "192.168.1.70-74", "0.lightsPerIp": "100" };
     const network = { enabled: true, "0.type": "DevicesModule", "0.wledCompatible": true, "1.type": "OscModule", "1.feedbackTo": "192.168.1.147" };
@@ -393,6 +408,34 @@ test("a state-document backup drops a retired control too, reported as retired r
     assert.equal(JSON.parse(files["/.config/Services.json"]).Services.Other.gain, 7);   // scoped by type, as in a flat file
     assert.deepEqual(report.filter(r => r.kind === "retired").map(r => r.where),
                      ["/.config/Services.json Services.Audio.levels", "/.config/Services.json Services.Audio.gain", "/.config/Services.json Services.Audio.floor"]);
+});
+
+test("a state-document backup renames a control too: AudioSpectrum's levelBar comes back as readouts", () => {
+    const doc = { Effects: { "$patch": "replace", enabled: true,
+                             Layer: { type: "Layer", AudioSpectrum: { type: "AudioSpectrumEffect", levelBar: false } } } };
+    const { files, report } = applyMigrations({ "/.config/Effects.json": JSON.stringify(doc) });
+    const spectrum = JSON.parse(files["/.config/Effects.json"]).Effects.Layer.AudioSpectrum;
+    assert.equal(spectrum.readouts, false);
+    assert.ok(!("levelBar" in spectrum));
+    assert.ok(report.some(r => r.kind === "renamed" && r.where === "/.config/Effects.json Effects.Layer.AudioSpectrum.levelBar"));
+});
+
+test("a preset saved as a document drops a retired control and renames an old one", () => {
+    const preset = { "$slot": 3, Services: { Audio: { type: "AudioService", gain: 100, squelch: 12 } },
+                     Effects: { Layer: { type: "Layer", AudioSpectrum: { type: "AudioSpectrumEffect", levelBar: true } } } };
+    const { files, report } = applyMigrations({ "/.config/presets/party.json": JSON.stringify(preset) });
+    const out = JSON.parse(files["/.config/presets/party.json"]);
+    assert.equal(out.Services.Audio.gain, undefined);
+    assert.equal(out.Services.Audio.squelch, 12);
+    assert.equal(out.Effects.Layer.AudioSpectrum.readouts, true);
+    assert.equal(out.$slot, 3);   // the file's own key is the preset's, untouched
+    assert.equal(report.filter(r => r.kind === "retired" || r.kind === "renamed").length, 2);
+});
+
+test("a preset document with nothing old passes through byte-exact", () => {
+    const text = JSON.stringify({ "$slot": 1, Effects: { Layer: { type: "Layer" } } }, null, 2);
+    const { files } = applyMigrations({ "/.config/presets/calm.json": text });
+    assert.equal(files["/.config/presets/calm.json"], text);
 });
 
 test("a retirement is scoped by module type: another module's gain stays", () => {

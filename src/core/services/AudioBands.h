@@ -80,10 +80,12 @@ inline constexpr float kSemitoneTopHz = 2500.0f;
 /// The sixteen display bands as third-octave bands, WLED-MM's default GEQ pattern: @xref{sixteen-of-the-thirty-one}.
 inline constexpr uint8_t kSixteenOfThirds[16] = {3, 5, 6, 8, 9, 11, 13, 14, 16, 17, 19, 20, 22, 24, 25, 27};
 
+/// A power in dB, held at -120 so silence reads a number: one floor for every detector on the bands.
+inline float powerDb(float power) { return 10.0f * std::log10(power > 1e-12f ? power : 1e-12f); }
+
 /// A band's power in dBFS, a full-scale sine at its center reading 0; nothing audible reads -120.
 inline float bandPowerDbFs(float power) {
-    const float scaled = power * (2.0f / 70368744177664.0f);   // 2 / 2^46: a 24-bit full-scale sine's power, A * A / 2 with A = 2^23
-    return scaled <= 1e-12f ? -120.0f : 10.0f * std::log10(scaled);
+    return powerDb(power * (2.0f / 70368744177664.0f));   // 2 / 2^46: a 24-bit full-scale sine's power, A * A / 2 with A = 2^23
 }
 
 /// The 31 band bytes and the sixteen picked from them, and the dominant peak, from the bank's powers through the dynamics, which this block's level and loudest band update first; answers how many of the 31 the bank measures, the ones above reading 0.

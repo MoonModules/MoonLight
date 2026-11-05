@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cmath>     // the bands' log power
 #include <cstdint>
 
 #include "core/services/AudioBands.h"   // ThirdOctaveBank, OnsetDetector, the range edges
@@ -62,8 +61,7 @@ public:
         const uint8_t count = bank.bandCount() <= First ? 0 : bank.bandCount() - First < N ? static_cast<uint8_t>(bank.bandCount() - First) : N;
         float loudest = -240.0f;
         for (uint8_t i = 0; i < count; i++) {
-            const float power = bank.power(static_cast<uint8_t>(First + i));
-            db_[i] = 10.0f * std::log10(power > 1e-12f ? power : 1e-12f);
+            db_[i] = powerDb(bank.power(static_cast<uint8_t>(First + i)));
             loudest = db_[i] > loudest ? db_[i] : loudest;
         }
         floor = loudest - kRangeDb;

@@ -43,6 +43,12 @@ The P4 firmware images read code from flash over four data lines at 80 MHz (QIO)
 
 The service learns the room's noise floor, gates silence and holds the loudest band at the top of the display, so `levels`, `gain` and the per-band learner are gone. `floor`, the threshold, is now `squelch`: how many dB above the learned floor sound must rise, in place of a fixed level; a stored `floor` is not carried over.
 
+### AudioSpectrum's `levelBar` is `readouts`
+
+**Action: *nothing*; a restored backup or preset carries the setting over.**
+
+The switch that drew the level bar now draws every readout beside the bars: the dominant frequency, the gate, the bass, mids and treble, and the twelve pitch classes. A stored `levelBar` comes back as `readouts`, and the new `bands` starts on the 31 third octaves.
+
 ### The audio sample rate is 24 kHz by default, and stored by name
 
 **Action: *check the Audio card's `sampleRate`* on a board that analyzes its own microphone, and pick 24000 unless the board needs the bands above 10 kHz.**
