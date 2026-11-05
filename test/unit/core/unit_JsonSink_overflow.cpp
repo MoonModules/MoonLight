@@ -29,7 +29,7 @@ TEST_CASE("a heap sink that runs out of memory says so instead of truncating sil
 }
 
 TEST_CASE("a document larger than one doubling still serializes whole") {
-    // Growth doubles, and old + new are both live across the copy, so a doubling asks for ~3x the current size in CONTIGUOUS memory. This document crosses several doublings: it must come out byte-for-byte complete, whatever route the allocator took to get there.
+    // Growth doubles, and old + new are both live across the copy, so a doubling asks for ~3x the current size in CONTIGUOUS memory. The JSON built below crosses several doublings: it must come out byte-for-byte complete, whatever route the allocator took to get there.
     mm::JsonSink sink;
     std::string expect;
     sink.append("[");

@@ -14,8 +14,8 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 # A step left out names its reason, so the exemption reads as a debt rather than a rule: what only GitHub's own services or runner can do. Keyed by (workflow, job, step name).
 EXEMPT = {
     ("release.yml", "build-windows-x64", "Install NSIS (the Windows installer compiler)"): "runner plumbing: choco installs the tool this runner image lacks",
-    ("release.yml", "build-linux-x64", "Install libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the library this runner image lacks",
-    ("release.yml", "build-linux-arm64", "Install libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the library this runner image lacks",
+    ("release.yml", "build-linux-x64", "Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the build tools and library the job declares",
+    ("release.yml", "build-linux-arm64", "Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the build tools and library the job declares",
     ("release.yml", "release", "Re-create the `latest` release fresh"): "publishing: the `latest` tag force-push and the release deletion are GitHub's own",
     ("release.yml", "deploy-pages", "Stage cumulative release content"): "publishing: it downloads the kept releases' assets through GitHub's release API",
     ("release.yml", "restage-pages-for-tag", "Dispatch a main-context Pages deploy for this tag"): "publishing: it dispatches a GitHub workflow run",
