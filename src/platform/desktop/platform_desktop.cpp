@@ -125,6 +125,7 @@
 /// A host has no second card, so a subfolder of the one real root stands in. `sdMounted_` gates it as a missing card would, and format is a wipe-and-recreate.
 
 #include "platform/platform.h"
+#include "platform/Hub75Bus.h"          // the HUB75 test port sizes its frame as the ESP32 port does
 #include "platform/usbvideo_frames.h"   // areaMean: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
 #include "core/util/H264Bitstream.h"  // where the encoder's frames begin and end
@@ -2755,23 +2756,46 @@ RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*
     return {};   // no wire on a host
 }
 
-// No panel on a desktop, and inert rather than emulated: this port has no analogue worth faking, and its encoder is already tested on plain buffers. So the init refuses with a cause and the driver reports it as it would on a chip without the silicon.
-const char* hub75LastError() { return "HUB75 needs an ESP32-S3, P4 or S31"; }
-bool hub75BackendAvailable(Hub75Backend /*backend*/, size_t /*frameBytes*/) { return false; }
+// No panel on a desktop: the init refuses, as on a chip without the silicon. setTestHub75 opens the port for a test, which reads the bit planes the driver packs into a frame sized as the ESP32 port sizes it.
+namespace {
+bool hub75TestOpen_ = false;
+std::vector<uint8_t> hub75TestFrame_;
+}  // namespace
+const char* hub75LastError() { return hub75TestOpen_ ? nullptr : "HUB75 needs an ESP32-S3, P4 or S31"; }
+bool hub75BackendAvailable(Hub75Backend backend, size_t /*frameBytes*/) {
+    return hub75TestOpen_ && backend == Hub75Backend::LcdCam;
+}
 const char* hub75BackendLabel(Hub75Backend backend) {
     return backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
 }
 bool hub75Init(Hub75Handle& /*h*/, Hub75Backend /*backend*/, const Hub75Pins& /*pins*/,
-               uint16_t /*width*/, uint16_t /*height*/, uint8_t /*scanRate*/,
-               uint8_t /*bitDepth*/) {
-    return false;
+               uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
+    if (!hub75TestOpen_) return false;
+    Hub75Geometry geo;
+    geo.width = width;
+    geo.height = height;
+    geo.scanRate = scanRate;
+    geo.bitDepth = bitDepth;
+    if (!geo.valid()) return false;
+    hub75TestFrame_.assign(geo.frameBytes(), 0);
+    return true;
 }
-uint8_t* hub75Buffer(const Hub75Handle& /*h*/) MM_NONBLOCKING { return nullptr; }
-size_t hub75BufferCapacity(const Hub75Handle& /*h*/) MM_NONBLOCKING { return 0; }
-bool hub75Start(Hub75Handle& /*h*/) { return false; }
+uint8_t* hub75Buffer(const Hub75Handle& /*h*/) MM_NONBLOCKING {
+    return hub75TestFrame_.empty() ? nullptr : hub75TestFrame_.data();
+}
+size_t hub75BufferCapacity(const Hub75Handle& /*h*/) MM_NONBLOCKING { return hub75TestFrame_.size(); }
+bool hub75Start(Hub75Handle& /*h*/) { return !hub75TestFrame_.empty(); }
 uint16_t hub75RefreshHz(const Hub75Handle& /*h*/) MM_NONBLOCKING { return 0; }
-const char* hub75Backend(const Hub75Handle& /*h*/) { return nullptr; }
-void hub75Deinit(Hub75Handle& /*h*/) {}
+const char* hub75Backend(const Hub75Handle& /*h*/) { return hub75TestFrame_.empty() ? nullptr : "LCD_CAM"; }
+void hub75Deinit(Hub75Handle& /*h*/) { hub75TestFrame_.clear(); }
+void setTestHub75(bool on) {
+    hub75TestOpen_ = on;
+    hub75TestFrame_.clear();
+}
+const uint8_t* hub75TestFrame(size_t* bytes) {
+    if (bytes) *bytes = hub75TestFrame_.size();
+    return hub75TestFrame_.empty() ? nullptr : hub75TestFrame_.data();
+}
 RmtLoopbackResult parlioWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,
                                        uint16_t /*rxGpio*/, const uint8_t* /*frame*/,
                                        size_t /*frameBytes*/, size_t /*dataBytes*/,
