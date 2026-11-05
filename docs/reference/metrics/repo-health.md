@@ -12,15 +12,15 @@ Current state only; the trend is this file's git history (`git log -p docs/refer
 | flash esp32 | 2,095 KB | 2,101 KB | +5.9 KB (+0.3%) |
 | flash esp32-16mb | 2,343 KB | 2,210 KB | -133.1 KB (-5.7%) |
 | flash esp32-eth | 1,642 KB | 1,707 KB | +65.2 KB (+4.0%) |
-| flash esp32-pico | 2,058 KB | 2,271 KB | +213.0 KB (+10.4%) |
+| flash esp32-pico | 2,058 KB | 2,286 KB | +228.0 KB (+11.1%) |
 | flash esp32-wrover | 1,801 KB | 2,145 KB | +344.1 KB (+19.1%) |
 | flash esp32c3 | 2,199 KB | 2,200 KB | +0.8 KB (+0.0%) |
-| flash esp32p4rev1-eth | 2,360 KB | 2,435 KB | +75.3 KB (+3.2%) |
+| flash esp32p4rev1-eth | 2,360 KB | 2,436 KB | +76.0 KB (+3.2%) |
 | flash esp32p4rev1-eth-wifi | 2,606 KB | 2,608 KB | +1.5 KB (+0.1%) |
 | flash esp32p4rev3-eth | 2,357 KB | 2,422 KB | +64.4 KB (+2.7%) |
 | flash esp32p4rev3-eth-wifi | - | 2,612 KB | new |
 | flash esp32s3-n16r8 | 2,300 KB | 2,321 KB | +21.2 KB (+0.9%) |
-| flash esp32s3-n32r16 | 2,322 KB | 2,332 KB | +10.0 KB (+0.4%) |
+| flash esp32s3-n32r16 | 2,322 KB | 2,344 KB | +21.6 KB (+0.9%) |
 | flash esp32s3-n8r2 | - | 2,194 KB | new |
 | flash esp32s3-n8r8 | 2,277 KB | 2,301 KB | +23.8 KB (+1.0%) |
 | flash esp32s3-zero | 2,068 KB | 2,076 KB | +8.0 KB (+0.4%) |
@@ -33,10 +33,10 @@ Current state only; the trend is this file's git history (`git log -p docs/refer
 | lines light | 31,681 | 32,593 | +912 (+2.9%) |
 | lines platform | 22,993 | 24,800 | +1,807 (+7.9%) |
 | lines ui | 13,043 | 13,191 | +148 (+1.1%) |
-| lines test | 76,140 | 79,355 | +3,215 (+4.2%) |
+| lines test | 76,140 | 79,403 | +3,263 (+4.3%) |
 | lines moondeck | 32,680 | 33,770 | +1,090 (+3.3%) |
 | code findings | 1,642 | 1,620 | -22 (-1.3%) |
-| unit tests | 2,836 | 2,955 | +119 (+4.2%) |
+| unit tests | 2,836 | 2,957 | +121 (+4.3%) |
 | scenarios | 36 | 37 | +1 (+2.8%) |
 
 Against the release `v7.0.0`, the fixed point a user compares with; the tables below compare against the last commit. A firmware not rebuilt since `v7.0.0` is left out, and a measure the release did not record yet, such as the code check, joins from the next one.
@@ -51,15 +51,15 @@ Against the release `v7.0.0`, the fixed point a user compares with; the tables b
 | esp32 | 2,101 KB | 2,496 KB | 84% | carried 2d |
 | esp32-16mb | 2,210 KB | 4,096 KB | 54% | carried 6d |
 | esp32-eth | 1,707 KB | 2,496 KB | 68% | carried 6d |
-| esp32-pico | 2,271 KB | 3,072 KB | 74% | yes |
+| esp32-pico | 2,286 KB (+15 KB) ⚠ | 3,072 KB | 74% | yes |
 | esp32-wrover | 2,145 KB | 2,496 KB | 86% | carried 6d |
 | esp32c3 | 2,200 KB | 2,496 KB | 88% | carried 6d |
-| esp32p4rev1-eth | 2,435 KB (+9 KB) ⚠ | 4,096 KB | 59% | yes |
+| esp32p4rev1-eth | 2,436 KB (+10 KB) ⚠ | 4,096 KB | 59% | yes |
 | esp32p4rev1-eth-wifi | 2,608 KB | 4,096 KB | 64% | carried 6d |
 | esp32p4rev3-eth | 2,422 KB | 4,096 KB | 59% | carried 3d |
 | esp32p4rev3-eth-wifi | 2,612 KB | 4,096 KB | 64% | carried 6d |
 | esp32s3-n16r8 | 2,321 KB (+8 KB) ⚠ | 4,096 KB | 57% | yes |
-| esp32s3-n32r16 | 2,332 KB | 4,096 KB | 57% | yes |
+| esp32s3-n32r16 | 2,344 KB (+12 KB) ⚠ | 4,096 KB | 57% | yes |
 | esp32s3-n8r2 | 2,194 KB | 3,072 KB | 71% | carried 6d |
 | esp32s3-n8r8 | 2,301 KB | 3,072 KB | 75% | carried 6d |
 | esp32s3-zero | 2,076 KB | 2,496 KB | 83% | carried 6d |
@@ -73,17 +73,17 @@ Against the release `v7.0.0`, the fixed point a user compares with; the tables b
 
 | Target | Net | New | Removed | Grown | Shrunk | Other | Since |
 |---|---:|---:|---:|---:|---:|---:|---|
-| esp32-pico | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | `73bf5e60` |
-| esp32p4rev1-eth | +9.2 KB | +17.3 KB | -3.7 KB | +1.8 KB | -6.0 KB | -0.2 KB | `73bf5e60` |
+| esp32-pico | +15.0 KB | +16.6 KB | -4.3 KB | +4.7 KB | -2.3 KB | +0.3 KB | `73bf5e60` |
+| esp32p4rev1-eth | +9.9 KB | +16.3 KB | -4.5 KB | +2.6 KB | -4.4 KB | -0.1 KB | `73bf5e60` |
 | esp32s3-n16r8 | +8.3 KB | +11.0 KB | -2.4 KB | +2.5 KB | -2.8 KB | -0.0 KB | `73bf5e60` |
-| esp32s3-n32r16 | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | +0.0 KB | `73bf5e60` |
+| esp32s3-n32r16 | +11.6 KB | +14.7 KB | -4.7 KB | +4.0 KB | -2.7 KB | +0.3 KB | `73bf5e60` |
 
 Largest moves:
 
-- **esp32-pico**: none
-- **esp32p4rev1-eth**: `mm::AudioOnsets::update(mm::FractionalOctaveBank<(unsigned c` +2,086 B, `mm::AudioService::analyzeBlock()` -1,836 B, `mm::AudioService::analyzeHarmony()` +1,766 B, `mm::AudioService::AudioService()` -1,680 B, `void mm::BandOnsets<(unsigned char)79, (unsigned char)6, tru` +1,600 B
+- **esp32-pico**: `mm::AudioSpectrumEffect::tick()` +2,118 B, `mm::AudioService::analyzeHarmony()` +1,901 B, `mm::AudioAnalysis::AudioAnalysis()` +1,432 B, `mm::DrumKitEffect::tick()` +1,393 B, `mm::AudioService::AudioService()` -1,224 B
+- **esp32p4rev1-eth**: `mm::AudioService::analyzeHarmony()` +1,796 B, `mm::AudioService::AudioService()` -1,664 B, `mm::AudioAnalysis::AudioAnalysis()` +1,564 B, `mm::DrumKitEffect::tick()` +1,524 B, `mm::AudioOnsets::update(mm::FractionalOctaveBank<(unsigned c` +1,154 B
 - **esp32s3-n16r8**: `mm::AudioService::analyzeHarmony()` +1,831 B, `mm::AudioService::analyzeHarmony(bool)` -1,632 B, `mm::AudioService::analyzeBlock()` +1,465 B, `mm::DrumKitEffect::tick()` +1,424 B, `mm::AudioService::AudioService()` -1,376 B
-- **esp32s3-n32r16**: none
+- **esp32s3-n32r16**: `mm::AudioSpectrumEffect::tick()` +2,052 B, `mm::AudioService::analyzeHarmony()` +1,831 B, `mm::DrumKitEffect::tick()` +1,424 B, `mm::AudioAnalysis::AudioAnalysis()` +1,354 B, `mm::AudioService::AudioService()` -1,270 B
 
 What this commit's flash went to, symbol by symbol against the measurement at `Since`. New is new functionality, removed and shrunk are what a cleanup saved, and other is what no symbol owns, such as merged strings and alignment. A rename reads as removed plus new, which the largest moves expose.
 
@@ -153,14 +153,14 @@ These build a bare pipeline with no optional modules, so a change here is a chan
 | light | 32,593 (+176) ⚠ | 6,842 | 23.6 % |
 | platform | 24,800 | 4,420 | 20.0 % |
 | ui | 13,191 (+20) ⚠ | 3,501 | 28.1 % |
-| test | 79,355 (+498) ⚠ | 7,627 | 11.1 % |
+| test | 79,403 (+546) ⚠ | 7,629 | 11.1 % |
 | moondeck | 33,770 (+6) ⚠ | 4,477 | 15.2 % |
 
 ## Tests
 
 | Kind | Count |
 |---|---:|
-| unit cases | 2,955 (+16) ✓ |
+| unit cases | 2,957 (+18) ✓ |
 | scenarios | 37 |
 
 ## Complexity

@@ -3,7 +3,7 @@
   "flash": {
     "esp32s3-n16r8": 2377120,
     "esp32": 2151168,
-    "esp32p4rev1-eth": 2493616,
+    "esp32p4rev1-eth": 2494352,
     "esp32p4rev1-eth-wifi": 2670560,
     "esp32s3-n8r8": 2355984,
     "esp32s31": 2660656,
@@ -13,12 +13,12 @@
     "qemu": 1383648,
     "esp32p4rev3-eth": 2480000,
     "esp32s3-zero": 2125456,
-    "esp32-pico": 2325312,
+    "esp32-pico": 2340656,
     "desktop-macos": 2395480,
     "desktop-windows": 1925120,
     "esp32c3": 2252320,
     "desktop-linux": 2548000,
-    "esp32s3-n32r16": 2388096,
+    "esp32s3-n32r16": 2399968,
     "teensy41": 1173448,
     "esp32p4rev3-eth-wifi": 2675184,
     "esp32s3-n8r2": 2247072
@@ -845,7 +845,7 @@
     "light": 32593,
     "platform": 24800,
     "ui": 13191,
-    "test": 79355,
+    "test": 79403,
     "moondeck": 33770
   },
   "comments": {
@@ -866,7 +866,7 @@
       "ratio": 0.281
     },
     "test": {
-      "lines": 7627,
+      "lines": 7629,
       "ratio": 0.111
     },
     "moondeck": {
@@ -875,7 +875,7 @@
     }
   },
   "tests": {
-    "cases": 2955,
+    "cases": 2957,
     "scenarios": 37
   },
   "docs": {
