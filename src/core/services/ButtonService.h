@@ -174,7 +174,7 @@ private:
         bool        candidate = false;   ///< the level being timed
         uint16_t    sinceChange = 0;     ///< ms the candidate has held
         bool        synced = false;      ///< a set row has written its settled state once, so its target follows the switch from the start
-        bool        tried = false;       ///< the first write ran; a failed one is retried on the slow tick rather than every poll
+        bool        tried = false;       ///< a set row's first write ran, a failed one retried on the slow tick; a flip row's baseline is taken
     };
 
     /// The row with this id, or null.

@@ -1,6 +1,8 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioNotesBase.h"
+
+#include <array>
 
 namespace mm {
 
@@ -10,12 +12,12 @@ constexpr bool pianoIsBlack(uint8_t i) {
     const uint8_t pc = static_cast<uint8_t>((21 + i) % 12);
     return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
 }
-/// How many white keys sit below key `i`.
-constexpr uint8_t pianoWhiteBefore(uint8_t i) {
-    uint8_t k = 0;
-    for (uint8_t j = 0; j < i; j++) if (!pianoIsBlack(j)) k++;
-    return k;
-}
+/// How many white keys sit below each key, one past the last included: a table in flash, read per key per frame.
+constexpr std::array<uint8_t, kAudioNoteKeys + 1> kPianoWhiteBefore = [] {
+    std::array<uint8_t, kAudioNoteKeys + 1> t{};
+    for (uint8_t i = 0; i < kAudioNoteKeys; i++) t[i + 1] = static_cast<uint8_t>(t[i] + (pianoIsBlack(i) ? 0 : 1));
+    return t;
+}();
 /// The octaves the keys span.
 constexpr uint8_t kPianoOctaves = (kAudioNoteKeys + 11) / 12;
 }  // namespace detail
@@ -30,15 +32,13 @@ constexpr uint8_t kPianoOctaves = (kAudioNoteKeys + 11) / 12;
 /// ## Geometry and hits
 ///
 /// Each ivory key takes an equal share of the width and the full half height; each ebony key sits over the boundary before it at three fifths of an ivory key's width and two thirds of its length. Bottom-half circles sit on fixed octave rows, always smaller than the key. The shared `NoteHits` keeps when each key was last struck, so a frame two ticks read is one hit, told by its `seq`.
-class KeyboardEffect : public EffectBase {
+class KeyboardEffect : public AudioNotesBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }
     /// The keyboard is drawn on a plane; a cube takes it extruded.
     Dim dimensions() const override { return Dim::D2; }
 
-    /// How long a struck key glows, in tens of milliseconds.
-    uint8_t decay = 100;
     /// How bright the ivory rests between notes, 0 for dark.
     uint8_t ivory = 128;
     /// The detected key picks the first shown key.
@@ -47,24 +47,65 @@ public:
     uint8_t octave = 2;
     /// How many octaves the keyboard shows, the rest only as circles.
     uint8_t octaves = 2;
-    /// The strongest pitch classes top left, the key top right.
-    bool noteNames = true;
 
-    /// Publish how long a struck key glows, the ivory rest, the shown octaves, auto and the note names.
+    /// Publish the ivory rest, the shown octaves and auto, then the glow and the note names.
     void defineControls() override {
-        controls_.addControl("decay", decay, 5, 100);
         controls_.addControl("ivory", ivory, 0, 255);
         controls_.addControl("auto", autoKey);
         controls_.addControl("octave", octave, 0, 6);
         controls_.setHidden(controls_.count() - 1, autoKey);   // defineControls reruns on every change, so this re-hides live
         controls_.addControl("octaves", octaves, 1, 7);
-        controls_.addControl("noteNames", noteNames);
+        addNoteControls();
     }
 
     /// Draw the two halves from the keys' magnitudes and the hits' ages: @xref{geometry-and-hits}.
     void tick() MM_NONBLOCKING override {
-        const AudioScene a = beginAudioTick(*this, decay, hits_);
+        const AudioScene a = beginNotes(RGB{0, 0, 0});
         if (a.w == 0 || a.h == 0) return;
+        const Keys k = layout(a);
+        if (a.h == 1) {
+            drawRow(a, k);
+            return;
+        }
+        const lengthType topH = a.h / 2 > 0 ? static_cast<lengthType>(a.h / 2) : 1;
+        const lengthType botH = static_cast<lengthType>(a.h - topH);
+        drawKeyboard(a, k, 0, topH, false, true);      // pressed keys colored
+        drawKeyboard(a, k, topH, botH, true, false);   // the piano picture with circles
+        if (a.h > fonts::kFont4x6.height) drawOverlays(a, k, topH, botH);
+        endNotes(a);
+    }
+
+private:
+    /// The shown keys' layout across the width, worked out once a frame.
+    struct Keys {
+        uint8_t s0, shown;       ///< first shown key, how many
+        uint8_t white, base;     ///< ivory keys shown, ivory keys below the first shown
+        lengthType w, whiteW, gap;   ///< grid width, one ivory key's width, the hairline between keys
+
+        /// Where ivory boundary `b` falls, counted from the first shown ivory key.
+        int32_t edge(uint32_t b) const MM_NONBLOCKING { return static_cast<int32_t>(b * w / white); }
+        /// Ivory key `i`'s first column and width, the width 0 when the key is too narrow.
+        void ivory(uint8_t i, lengthType& x0, lengthType& kw) const MM_NONBLOCKING {
+            const uint32_t b = static_cast<uint32_t>(detail::kPianoWhiteBefore[i] - base);
+            x0 = static_cast<lengthType>(edge(b));
+            const lengthType x1 = static_cast<lengthType>(edge(b + 1));
+            kw = x1 - x0 > gap ? static_cast<lengthType>(x1 - x0 - gap) : 0;
+        }
+        /// Call `f(i, x0, kw)` for each shown ivory key wide enough to draw.
+        template <typename F>
+        void forEachIvory(F&& f) const MM_NONBLOCKING {
+            for (uint8_t j = 0; j < shown; j++) {
+                const uint8_t i = static_cast<uint8_t>(s0 + j);
+                if (detail::pianoIsBlack(i)) continue;
+                lengthType x0, kw;
+                ivory(i, x0, kw);
+                if (kw) f(i, x0, kw);
+            }
+        }
+    };
+
+    /// The shown window: `octaves` from `octave`, or from the detected key's root in the middle octave under `auto`.
+    Keys layout(const AudioScene& a) const MM_NONBLOCKING {
         const uint8_t shown = static_cast<uint8_t>(std::min<uint32_t>(kAudioNoteKeys, static_cast<uint32_t>(octaves) * 12u));
         uint8_t s0;
         if (autoKey && a.f->key) {
@@ -74,120 +115,86 @@ public:
         } else {
             s0 = static_cast<uint8_t>(std::min<uint32_t>(static_cast<uint32_t>(octave) * 12u, kAudioNoteKeys - shown));
         }
-        if (a.h == 1) {
-            // One row has no halves, ebony over ivory, letters or circles: each shown semitone takes its own span.
-            for (uint8_t j = 0; j < shown; j++) {
-                const uint8_t i = static_cast<uint8_t>(s0 + j);
-                const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(j) * a.w / shown);
-                const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(j + 1) * a.w / shown);
-                const uint8_t g = hits_.glow(i, a.ms, a.span);
-                const uint8_t lvl = std::max({ivory, magnitude(*a.f, i), g});
-                if (x1 > x0 && lvl)
-                    draw::fillRect(a.cv, x0, 0, static_cast<lengthType>(x1 - x0), 1,
-                                   keyColor(*a.pal, i, lvl, g, detail::pianoIsBlack(i)));
-            }
-            return;
-        }
-        const lengthType topH = a.h / 2 > 0 ? static_cast<lengthType>(a.h / 2) : 1;
-        const Half top{a.w, 0, topH, s0, shown, a.ms, a.span, a.f};
-        const Half bot{a.w, topH, static_cast<lengthType>(a.h - topH), s0, shown, a.ms, a.span, a.f};
-        drawKeyboard(a.cv, *a.pal, top, false, true);    // pressed keys colored
-        drawKeyboard(a.cv, *a.pal, bot, true, false);    // the piano picture with circles
-        if (a.h > fonts::kFont4x6.height) drawOverlays(a.cv, top, bot, a.h);
-        if (noteNames && a.h > 1) draw::noteNames(a.cv, *a.f, a.w, 0);   // a single row has no room above the keys
+        const uint8_t base = detail::kPianoWhiteBefore[s0];
+        const uint8_t white = static_cast<uint8_t>(detail::kPianoWhiteBefore[s0 + shown] - base);
+        const lengthType whiteW = static_cast<lengthType>((a.w + white - 1) / white);
+        return Keys{s0, shown, white, base, a.w, whiteW, static_cast<lengthType>(whiteW >= 3 ? 1 : 0)};   // a hairline when keys are wide enough
     }
 
-private:
-    NoteHits hits_;   ///< when each key last struck and its flash
-
-    /// What one keyboard half needs, so the drawing helpers stay under the parameter budget.
-    struct Half {
-        lengthType w, y0, kh;          ///< grid width, top row, height of this half
-        uint8_t s0, shown;             ///< first shown key, how many
-        uint32_t ms, span;             ///< now, hit flash span
-        const AudioFrame* f;
-    };
-
-    /// One keyboard half: ivory keys across the width at the full half height, ebony over the boundaries at two thirds of it.
-    void drawKeyboard(const draw::Canvas& cv, const Palette& pal, const Half& h, bool circles, bool colorKeys) MM_NONBLOCKING {
-        const uint8_t kWhite = static_cast<uint8_t>(detail::pianoWhiteBefore(static_cast<uint8_t>(h.s0 + h.shown)) - detail::pianoWhiteBefore(h.s0));
-        const lengthType whiteW = static_cast<lengthType>((h.w + kWhite - 1) / kWhite);
-        const lengthType gap = whiteW >= 3 ? 1 : 0;   // a hairline between keys when they are wide enough
-        for (uint8_t j = 0; j < h.shown; j++) {
-            const uint8_t i = static_cast<uint8_t>(h.s0 + j);
-            if (detail::pianoIsBlack(i)) continue;
-            const uint8_t k = static_cast<uint8_t>(detail::pianoWhiteBefore(i) - detail::pianoWhiteBefore(h.s0));
-            const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(k) * h.w / kWhite);
-            const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(k + 1) * h.w / kWhite);
-            const lengthType kw = x1 - x0 > gap ? static_cast<lengthType>(x1 - x0 - gap) : 0;
-            if (!kw) continue;
-            const uint8_t g = hits_.glow(i, h.ms, h.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*h.f, i), g}) : ivory;
-            if (lvl) draw::fillRect(cv, x0, h.y0, kw, h.kh, colorKeys ? keyColor(pal, i, lvl, g, false) : scaled(RGB{255, 255, 255}, ivory));
-            if (circles) drawCircles(cv, pal, h, i, x0, kw);
+    /// One row has no halves, ebony over ivory, letters or circles: each shown semitone takes its own span.
+    void drawRow(const AudioScene& a, const Keys& k) MM_NONBLOCKING {
+        for (uint8_t j = 0; j < k.shown; j++) {
+            const uint8_t i = static_cast<uint8_t>(k.s0 + j);
+            const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(j) * a.w / k.shown);
+            const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(j + 1) * a.w / k.shown);
+            const uint8_t g = hits_.glow(i, a.ms, a.span);
+            const uint8_t lvl = std::max({ivory, magnitude(*a.f, i), g});
+            if (x1 > x0 && lvl)
+                draw::fillRect(a.cv, x0, 0, static_cast<lengthType>(x1 - x0), 1, keyColor(*a.pal, i, lvl, g, detail::pianoIsBlack(i)));
         }
-        const lengthType blackW = whiteW * 3 / 5 > 0 ? static_cast<lengthType>(whiteW * 3 / 5) : 1;
-        const lengthType blackH = h.kh * 2 / 3 > 0 ? static_cast<lengthType>(h.kh * 2 / 3) : 1;   // ebony keys two thirds as long as ivory
-        for (uint8_t j = 0; j < h.shown; j++) {
-            const uint8_t i = static_cast<uint8_t>(h.s0 + j);
+    }
+
+    /// One keyboard half from row `y0`, `kh` tall: ivory keys across the width at the full height, ebony over the boundaries at two thirds of it.
+    void drawKeyboard(const AudioScene& a, const Keys& k, lengthType y0, lengthType kh, bool circles, bool colorKeys) MM_NONBLOCKING {
+        k.forEachIvory([&](uint8_t i, lengthType x0, lengthType kw) MM_NONBLOCKING {
+            const uint8_t g = hits_.glow(i, a.ms, a.span);
+            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*a.f, i), g}) : ivory;
+            if (lvl) draw::fillRect(a.cv, x0, y0, kw, kh, colorKeys ? keyColor(*a.pal, i, lvl, g, false) : scale8(RGB{255, 255, 255}, ivory));
+            if (circles) drawCircles(a, i, y0, kh, x0, kw);
+        });
+        const lengthType blackW = k.whiteW * 3 / 5 > 0 ? static_cast<lengthType>(k.whiteW * 3 / 5) : 1;
+        const lengthType blackH = kh * 2 / 3 > 0 ? static_cast<lengthType>(kh * 2 / 3) : 1;   // ebony keys two thirds as long as ivory
+        for (uint8_t j = 0; j < k.shown; j++) {
+            const uint8_t i = static_cast<uint8_t>(k.s0 + j);
             if (!detail::pianoIsBlack(i)) continue;
-            const int32_t b = static_cast<int32_t>(static_cast<uint32_t>(detail::pianoWhiteBefore(i) - detail::pianoWhiteBefore(h.s0)) * h.w / kWhite);
-            const int32_t x0 = b - static_cast<int32_t>(blackW) / 2 > 0 ? b - static_cast<int32_t>(blackW) / 2 : 0;
-            const int32_t x1 = b + static_cast<int32_t>(blackW + 1) / 2 < static_cast<int32_t>(h.w) ? b + static_cast<int32_t>(blackW + 1) / 2 : static_cast<int32_t>(h.w);
+            const int32_t b = k.edge(static_cast<uint32_t>(detail::kPianoWhiteBefore[i] - k.base));
+            const int32_t x0 = std::max<int32_t>(0, b - blackW / 2);
+            const int32_t x1 = std::min<int32_t>(a.w, b + (blackW + 1) / 2);
             if (x1 <= x0) continue;
-            const uint8_t g = hits_.glow(i, h.ms, h.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*h.f, i), g}) : ivory;
-            if (lvl) draw::fillRect(cv, static_cast<lengthType>(x0), h.y0, static_cast<lengthType>(x1 - x0), blackH,
-                                    colorKeys ? keyColor(pal, i, lvl, g, true) : scaled(RGB{255, 255, 255}, static_cast<uint8_t>(ivory / 4u)));
-            if (circles) drawCircles(cv, pal, h, i, static_cast<lengthType>(x0), static_cast<lengthType>(x1 - x0));
+            const uint8_t g = hits_.glow(i, a.ms, a.span);
+            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*a.f, i), g}) : ivory;
+            if (lvl) draw::fillRect(a.cv, static_cast<lengthType>(x0), y0, static_cast<lengthType>(x1 - x0), blackH,
+                                    colorKeys ? keyColor(*a.pal, i, lvl, g, true) : scale8(RGB{255, 255, 255}, static_cast<uint8_t>(ivory / 4u)));
+            if (circles) drawCircles(a, i, y0, kh, static_cast<lengthType>(x0), static_cast<lengthType>(x1 - x0));
         }
     }
 
     /// One small circle per octave this pitch sounds in, stacked from the top of the key; always smaller than the key, so it drops on it.
-    void drawCircles(const draw::Canvas& cv, const Palette& pal, const Half& h, uint8_t i, lengthType px0, lengthType pxW) MM_NONBLOCKING {
+    void drawCircles(const AudioScene& a, uint8_t i, lengthType y0, lengthType kh, lengthType px0, lengthType pxW) MM_NONBLOCKING {
         if (!pxW) return;
-        const lengthType slot = h.kh / detail::kPianoOctaves > 0 ? static_cast<lengthType>(h.kh / detail::kPianoOctaves) : 1;
+        const lengthType slot = kh / detail::kPianoOctaves > 0 ? static_cast<lengthType>(kh / detail::kPianoOctaves) : 1;
         const lengthType r = std::min<lengthType>(pxW / 4, slot / 3);
         const lengthType cx = static_cast<lengthType>(px0 + pxW / 2);
         for (uint8_t o = 0; o < detail::kPianoOctaves; o++) {
             const uint16_t hk = static_cast<uint16_t>((i % 12) + 12u * o);   // this pitch in octave o
             if (hk >= kAudioNoteKeys) break;
-            const uint8_t g = hits_.glow(static_cast<uint8_t>(hk), h.ms, h.span);
-            const uint8_t lvl = std::max(magnitude(*h.f, static_cast<uint8_t>(hk)), g);
+            const uint8_t g = hits_.glow(static_cast<uint8_t>(hk), a.ms, a.span);
+            const uint8_t lvl = std::max(magnitude(*a.f, static_cast<uint8_t>(hk)), g);
             if (!lvl) continue;
-            const lengthType cy = static_cast<lengthType>(h.y0 + o * slot + slot / 2);
-            if (cy + r >= static_cast<lengthType>(h.y0 + h.kh)) break;
+            const lengthType cy = static_cast<lengthType>(y0 + o * slot + slot / 2);
+            if (cy + r >= static_cast<lengthType>(y0 + kh)) break;
             // The circle shrinks with its level, so the dim tail of the glow is a small dot, not a big black one.
             const lengthType rr = std::max<lengthType>(1, static_cast<lengthType>(r * lvl / 255));
-            draw::fillCircle(cv, cx, cy, rr, colorFromPalette(pal, static_cast<uint8_t>(hk * 256u / kAudioNoteKeys), lvl));
+            draw::fillCircle(a.cv, cx, cy, rr, colorFromPalette(*a.pal, static_cast<uint8_t>(hk * 256u / kAudioNoteKeys), lvl));
         }
     }
 
     /// The ivory letter strip along the bottom edge and the octave numbers at the left of each circle row and the top half.
-    void drawOverlays(const draw::Canvas& cv, const Half& top, const Half& bot, lengthType h) MM_NONBLOCKING {
-        const uint8_t kWhite = static_cast<uint8_t>(detail::pianoWhiteBefore(static_cast<uint8_t>(top.s0 + top.shown)) - detail::pianoWhiteBefore(top.s0));
-        const lengthType whiteW = static_cast<lengthType>((top.w + kWhite - 1) / kWhite);
-        const lengthType gap = whiteW >= 3 ? 1 : 0;
-        for (uint8_t j = 0; j < top.shown; j++) {
-            const uint8_t i = static_cast<uint8_t>(top.s0 + j);
-            if (detail::pianoIsBlack(i)) continue;
-            const uint8_t k = static_cast<uint8_t>(detail::pianoWhiteBefore(i) - detail::pianoWhiteBefore(top.s0));
-            const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(k) * top.w / kWhite);
-            const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(k + 1) * top.w / kWhite);
-            const lengthType kw = x1 - x0 > gap ? static_cast<lengthType>(x1 - x0 - gap) : 0;
-            if (kw) drawLetter(cv, i, x0, kw, static_cast<lengthType>(h - fonts::kFont4x6.height), RGB{0, 0, 0});
-        }
-        const lengthType slot = bot.kh / detail::kPianoOctaves > 0 ? static_cast<lengthType>(bot.kh / detail::kPianoOctaves) : 1;
+    void drawOverlays(const AudioScene& a, const Keys& k, lengthType topH, lengthType botH) MM_NONBLOCKING {
+        k.forEachIvory([&](uint8_t i, lengthType x0, lengthType kw) MM_NONBLOCKING {
+            drawLetter(a.cv, i, x0, kw, static_cast<lengthType>(a.h - fonts::kFont4x6.height), RGB{0, 0, 0});
+        });
+        const lengthType slot = botH / detail::kPianoOctaves > 0 ? static_cast<lengthType>(botH / detail::kPianoOctaves) : 1;
         for (uint8_t o = 0; o < detail::kPianoOctaves; o++) {
             char num[2] = {static_cast<char>('0' + o), 0};
-            int32_t ly = static_cast<int32_t>(bot.y0 + o * slot + slot / 2 - 3);
-            if (ly < static_cast<int32_t>(bot.y0)) ly = static_cast<int32_t>(bot.y0);
-            if (ly + 6 > static_cast<int32_t>(h)) ly = static_cast<int32_t>(h) - 6;
-            draw::text(cv, fonts::kFont4x6, num, 0, static_cast<lengthType>(ly), RGB{255, 255, 255});
+            int32_t ly = static_cast<int32_t>(topH + o * slot + slot / 2 - 3);
+            if (ly < static_cast<int32_t>(topH)) ly = static_cast<int32_t>(topH);
+            if (ly + 6 > static_cast<int32_t>(a.h)) ly = static_cast<int32_t>(a.h) - 6;
+            draw::text(a.cv, fonts::kFont4x6, num, 0, static_cast<lengthType>(ly), RGB{255, 255, 255});
         }
-        char sel[2] = {static_cast<char>('0' + top.s0 / 12), 0};
-        int32_t ty = static_cast<int32_t>(top.kh / 2 - 3) > 0 ? static_cast<int32_t>(top.kh / 2 - 3) : 0;
-        draw::text(cv, fonts::kFont4x6, sel, 0, static_cast<lengthType>(ty), RGB{255, 255, 255});
+        char sel[2] = {static_cast<char>('0' + k.s0 / 12), 0};
+        int32_t ty = static_cast<int32_t>(topH / 2 - 3) > 0 ? static_cast<int32_t>(topH / 2 - 3) : 0;
+        draw::text(a.cv, fonts::kFont4x6, sel, 0, static_cast<lengthType>(ty), RGB{255, 255, 255});
     }
 
     /// The key's note letter at `y`, centered in the key, when the key is wide enough for a glyph.
@@ -205,13 +212,11 @@ private:
     }
 
     /// A key's color: its palette hue while its strike flashes, else ivory or ebony at its level.
-    RGB keyColor(const Palette& pal, uint8_t i, uint8_t lvl, uint8_t g, bool black) const MM_NONBLOCKING {
+    static RGB keyColor(const Palette& pal, uint8_t i, uint8_t lvl, uint8_t g, bool black) MM_NONBLOCKING {
         if (g > 0)
             return colorFromPalette(pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), lvl);
-        return scaled(RGB{255, 255, 255}, black ? static_cast<uint8_t>(lvl / 4u) : lvl);
+        return scale8(RGB{255, 255, 255}, black ? static_cast<uint8_t>(lvl / 4u) : lvl);
     }
-
-    static RGB scaled(RGB c, uint8_t k) MM_NONBLOCKING { return RGB{scale8(c.r, k), scale8(c.g, k), scale8(c.b, k)}; }
 };
 
 }  // namespace mm

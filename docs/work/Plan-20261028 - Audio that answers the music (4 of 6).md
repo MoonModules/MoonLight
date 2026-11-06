@@ -89,7 +89,7 @@ A solo instrument through line-in does much better than a full mix, and a MIDI i
 
 Each step ends in a desktop test, its two effects, and a bench look. The bench's songs, for the product owner and for end users, are one playlist: [MoonLight audio test songs](https://open.spotify.com/playlist/0iL47MM8XcUpJzzdKdHQD3).
 
-For the StringsEffect, one solo per instrument, all on Spotify: guitar — Eagles, "Hotel California" (the outro guitar solo); bass — Jaco Pastorius, "Portrait of Tracy" (solo fretless bass); violin — Hilary Hahn, Bach "Sonata No. 1 in G minor for solo violin, BWV 1001: I. Adagio" (violin only, no band); cello — Yo-Yo Ma, Bach "Cello Suite No. 1 in G Major, BWV 1007: I. Prélude".
+For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, "Hotel California" (the outro guitar solo); bass: Jaco Pastorius, "Portrait of Tracy" (solo fretless bass); violin: Hilary Hahn, Bach "Sonata No. 1 in G minor for solo violin, BWV 1001: I. Adagio" (violin alone); cello: Yo-Yo Ma, Bach "Cello Suite No. 1 in G Major, BWV 1007: I. Prélude".
 
 ### 1. The bands by the book ✅
 

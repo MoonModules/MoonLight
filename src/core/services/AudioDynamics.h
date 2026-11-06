@@ -89,8 +89,8 @@ struct AudioDynamics {
     uint8_t toByte(float db) const { return gateOpen ? position(db, topDb, roomBandFloorDb) : 0; }
     /// The level in dBFS through its own window, 0 while the gate is shut.
     uint8_t levelToByte(float db) const { return gateOpen ? position(db, levelTopDb, floorDb) : 0; }
-    /// Where the gate opens on the bands' scale, at least 1 so a frame tells a measured gate from none, whether open or shut.
-    uint8_t gateToByte() const { const uint8_t at = position(bandFloorDb + squelchDb, topDb, bandFloorDb); return at ? at : 1; }
+    /// Where the gate opens on the bands' scale, the one `toByte` draws on, at least 1 so a frame tells a measured gate from none, whether open or shut.
+    uint8_t gateToByte() const { const uint8_t at = position(bandFloorDb + squelchDb, topDb, roomBandFloorDb); return at ? at : 1; }
 
 private:
     bool  primed_ = false;

@@ -121,6 +121,16 @@ TEST_CASE("the gate sits on the bands' scale where the squelch puts it, open or 
     CHECK(d.gateToByte() > 75);   // the line stays where the music must reach
 }
 
+// The gate's floor rises into a long song while the window's bottom stays at the room, so the line is placed on the window the bars use.
+TEST_CASE("after a long song the gate line still sits on the bands' scale") {
+    mm::AudioDynamics d;
+    feed(d, -80.0f, 2.0f);   // the room, its loudest band at -86
+    song(d, 120.0f);
+    REQUIRE(d.gateOpen);
+    REQUIRE(d.bandFloorDb > d.roomBandFloorDb + 10.0f);   // the gate's band floor rose into the song
+    CHECK(d.gateToByte() == d.toByte(d.bandFloorDb + d.squelchDb));
+}
+
 // Regression: the bands' window stopped at the RMS floor, but a band's power sits well under the block's RMS, so quiet music got a window of a dB or two and every bar read empty or full.
 TEST_CASE("the bands' window stops at the bands' own floor, so quiet music over the squelch still has a scale") {
     mm::AudioDynamics d;

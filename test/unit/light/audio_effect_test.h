@@ -50,10 +50,6 @@ struct EffectOnGrid {
         for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) peak = std::max(peak, at(x, y));
         return peak;
     }
-    /// The brightest light in a rectangle.
-    int brightestIn(int x0, int x1, int y0, int y1) const {
-        return maxIn(x0, x1, y0, y1);
-    }
     /// The darkest light in a rectangle.
     int minIn(int x0, int x1, int y0, int y1) const {
         int dark = 1 << 30;

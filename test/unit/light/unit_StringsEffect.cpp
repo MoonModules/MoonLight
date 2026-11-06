@@ -170,7 +170,7 @@ TEST_CASE("noteNames writes the strongest pitch classes top left, and nothing wh
     AudioService& audio = seat();
     Strings s;
     AudioFrame f;
-    f.notesCount = 79;
+    f.notesCount = kAudioNoteKeys;
     f.chroma[0] = 200; f.chroma[4] = 180; f.chroma[7] = 220;   // C E G
     f.key = 1;
     f.tuning = 12;

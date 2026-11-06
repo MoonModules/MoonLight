@@ -87,7 +87,7 @@ struct AudioHarmonyState : platform::InternalRamObject {
     HarmonyTracker tracker;             ///< the pitch classes and the moment they move
     KeyTracker key;                     ///< the key over the last 15 s
     TuningEstimator tuning;             ///< how far the music sits from the bank's tuning
-    BandOnsets<79, kNotesLowBand, true> noteOnsets;   ///< a new note's start, one per piano key
+    BandOnsets<kAudioNoteKeys, kNotesLowBand, true> noteOnsets;   ///< a new note's start, one per piano key
     float tuningCents = 0.0f;           ///< the bank's tuning from A440, in cents
     float tuningHeldMs = 0.0f;          ///< how long the reading has stayed past the retune threshold
 

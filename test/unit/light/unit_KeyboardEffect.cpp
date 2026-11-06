@@ -35,7 +35,7 @@ TEST_CASE("the keyboard rests as a piano in both halves, ivory bright and ebony 
     CHECK(keys.at(16, 0) < keys.at(16, 31));
     keys.e.ivory = 0;
     play(keys, audio, AudioFrame{}, 1020);
-    CHECK(keys.brightestIn(4, 32, 0, 32) == 0);   // the octave labels at the left stay white
+    CHECK(keys.maxIn(4, 32, 0, 32) == 0);   // the octave labels at the left stay white
     audio.release();
 }
 
@@ -55,7 +55,7 @@ TEST_CASE("a struck key takes its palette color across the top half, then fades 
     CHECK(keys.at(19, 31) == 0);                // the bottom half stays the dark picture
     platform::setTestNowMs(1400);   // past the 300 ms glow
     keys.layer.tick();
-    CHECK(keys.brightestIn(4, 32, 0, 32) == 0);
+    CHECK(keys.maxIn(4, 32, 0, 32) == 0);
     audio.release();
 }
 
@@ -83,7 +83,7 @@ TEST_CASE("a sounding key brightens as ivory, and only the strike gives it a col
     keys.e.ivory = 0;
     keys.e.noteNames = false;
     AudioFrame f;
-    f.notesCount = 79;
+    f.notesCount = kAudioNoteKeys;
     f.notes[48] = 200;                          // sounds, no hit: ivory, brighter than rest
     play(keys, audio, f, 1000);
     CHECK(keys.ch(19, 10, 0) == keys.ch(19, 10, 1));   // grey, not a palette hue
@@ -151,7 +151,7 @@ TEST_CASE("the bottom half draws a small circle per sounding octave on fixed oct
     CHECK(keys.at(7, 104) == 0);                                // the circle drops on the 8-wide key, not past it
     CHECK(keys.at(4, 30) == 0);                                 // the top half key is not struck
     AudioFrame line;
-    line.notesCount = 79;
+    line.notesCount = kAudioNoteKeys;
     line.notesHits[48 >> 3] = static_cast<uint8_t>(1u << (48 & 7));
     line.notesHits[49 >> 3] = static_cast<uint8_t>(1u << (49 & 7));   // A#4: same octave row, on the ebony key
     play(keys, audio, line, 1000);
@@ -166,7 +166,7 @@ TEST_CASE("the bottom half draws a small circle per sounding octave on fixed oct
     CHECK(keys.at(4, 10) == want0.r + want0.g + want0.b);
     CHECK(keys.at(4, 68) == want0.r + want0.g + want0.b);
     AudioFrame sound;
-    sound.notesCount = 79;
+    sound.notesCount = kAudioNoteKeys;
     sound.notes[36] = 200;                 // sounds, no hit: still a palette-colored circle
     play(keys, audio, sound, 1000);
     const RGB want36 = expectedColor(36, 200);
@@ -184,10 +184,10 @@ TEST_CASE("auto picks the shown window from the detected key") {
     keys.e.noteNames = false;
     keys.e.octaves = 2;
     AudioFrame f;
-    f.notesCount = 79;
+    f.notesCount = kAudioNoteKeys;
     f.key = 13;                            // C minor: root C, the 4th key of an octave A-based: window starts at key 39
     play(keys, audio, f, 1000);
-    CHECK(keys.brightestIn(4, 128, 6, 26) == 0);               // nothing struck yet: top half dark
+    CHECK(keys.maxIn(4, 128, 6, 26) == 0);               // nothing struck yet: top half dark
     f.notesHits[39 >> 3] = static_cast<uint8_t>(1u << (39 & 7));
     play(keys, audio, f, 1000);
     const RGB want39 = expectedColor(39, 255);
@@ -210,7 +210,7 @@ TEST_CASE("octave selects which octaves the top half shows") {
     keys.e.octave = 2;
     keys.e.octaves = 2;   // shown keys 24..47
     play(keys, audio, struck(0), 1000);    // A0, octave 0: not shown on top, but its pitch circles below
-    CHECK(keys.brightestIn(4, 128, 6, 26) == 0);   // top half dark, past the letter strip and labels
+    CHECK(keys.maxIn(4, 128, 6, 26) == 0);   // top half dark, past the letter strip and labels
     const RGB want0 = expectedColor(0, 255);
     CHECK(keys.at(4, 68) == want0.r + want0.g + want0.b);    // on the shown A key 24
     CHECK(keys.at(68, 68) == want0.r + want0.g + want0.b);   // and on the shown A key 36
@@ -243,7 +243,7 @@ TEST_CASE("noteNames writes the strongest pitch classes top left and the key wit
     Keys keys(64, 32);
     keys.e.ivory = 0;
     AudioFrame f;
-    f.notesCount = 79;
+    f.notesCount = kAudioNoteKeys;
     f.chroma[0] = 200; f.chroma[4] = 180; f.chroma[7] = 220;   // C E G
     f.key = 1;                                                  // C major
     f.tuning = 12;

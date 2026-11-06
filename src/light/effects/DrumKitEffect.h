@@ -67,7 +67,7 @@ private:
     static constexpr uint8_t kFirstTomThird = 6;   // 80 Hz
     static constexpr uint8_t kSparkles = 12;       // the stars over a hat
     enum Drum : uint8_t { kKick, kSnare, kHat, kFirstTom };
-    uint32_t hitMs_[kFirstTom + kToms] = {};       ///< when each drum last hit, on the effect's clock
+    uint32_t hitMs_[kFirstTom + kToms] = {};       ///< when each drum last hit, on the effect's clock: a handful of drums from the band onsets, not NoteHits' 79 notes, and a linear fade so a drum's hit reads as a strike
     uint8_t heard_ = 0;                            ///< bit d once drum d has hit
     uint32_t hatSeed_ = 0;                         ///< where the last hat's stars fall
     uint16_t lastSeq_ = 0;                         ///< the frame the last hits came from
@@ -96,8 +96,6 @@ private:
         return hit > idle ? hit : idle;
     }
 
-    static RGB scaled(RGB c, uint8_t k) MM_NONBLOCKING { return RGB{scale8(c.r, k), scale8(c.g, k), scale8(c.b, k)}; }
-
     /// A drum as a filled oval at `p` in `color` at `level`, its rim half again as bright, so the drum reads as a drum at rest too.
     static void drawDrum(const draw::Canvas& cv, lengthType w, lengthType h, Place p, RGB color, uint8_t level) MM_NONBLOCKING {
         if (!level) return;
@@ -105,8 +103,8 @@ private:
         const int32_t cx = static_cast<int32_t>(p.x) * w / 1000, cy = static_cast<int32_t>(p.y) * h / 1000;
         const int32_t rx = static_cast<int32_t>(p.rx) * side / 1000, ry = static_cast<int32_t>(p.ry) * side / 1000;
         const int32_t ax = rx > 0 ? rx : 1, ay = ry > 0 ? ry : 1;
-        const RGB face = scaled(color, level);
-        const RGB rim = scaled(color, static_cast<uint8_t>(level > 170 ? 255 : level * 3 / 2));
+        const RGB face = scale8(color, level);
+        const RGB rim = scale8(color, static_cast<uint8_t>(level > 170 ? 255 : level * 3 / 2));
         for (int32_t dy = -ry; dy <= ry; dy++)
             for (int32_t dx = -rx; dx <= rx; dx++) {
                 const int32_t x = cx + dx, y = cy + dy;
@@ -122,7 +120,7 @@ private:
     /// The hat's stars over the top quarter, the same pixels for one hit.
     void drawStars(const draw::Canvas& cv, lengthType w, lengthType h, uint8_t level) const MM_NONBLOCKING {
         if (level <= idle) return;
-        const RGB c = scaled(RGB{255, 255, 255}, level);
+        const RGB c = scale8(RGB{255, 255, 255}, level);
         const uint32_t rows = h / 4 > 0 ? h / 4 : 1;
         for (uint8_t i = 0; i < kSparkles; i++) {
             const lengthType x = static_cast<lengthType>(hashInt(hatSeed_, i, 1) % w);

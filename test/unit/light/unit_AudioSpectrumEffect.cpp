@@ -242,9 +242,9 @@ TEST_CASE("AudioSpectrumEffect draws the piano's keys as notes, and the third oc
     Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, false, mm::AudioSpectrumEffect::kBandsNotes);
     s.audio.tick();
     auto& f = s.audio.frameForTest();
-    for (uint8_t i = 0; i < 79; i++) f.notes[i] = 0;
+    for (uint8_t i = 0; i < mm::kAudioNoteKeys; i++) f.notes[i] = 0;
     f.notes[48] = 255;   // A4 alone
-    f.notesCount = 79;
+    f.notesCount = mm::kAudioNoteKeys;
     s.layer.tick();
     for (int x = 0; x < GW; x++) CHECK(lit(s.px(x, GH - 1)) == (x == 48));
     f.notesCount = 0;    // no notes in the frame
@@ -283,7 +283,7 @@ TEST_CASE("AudioSpectrumEffect draws the pitch classes along the top with the re
     auto draw = [&](bool change) {
         s.audio.tick();
         auto& f = s.audio.frameForTest();
-        f.notesCount = 79;
+        f.notesCount = mm::kAudioNoteKeys;
         for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 0;
         f.chroma[0] = 255;   // C alone
         f.harmonyChange = change;
@@ -302,7 +302,7 @@ TEST_CASE("AudioSpectrumEffect's level meter, pitch classes and marks round a ba
     Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsNotes);
     s.audio.tick();
     auto& f = s.audio.frameForTest();
-    f.notesCount = 79;
+    f.notesCount = mm::kAudioNoteKeys;
     for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 255;   // every class lit, so the row shows across
     f.level = 255;                                         // the meter full
     f.harmonyChange = false;
@@ -325,10 +325,10 @@ TEST_CASE("AudioSpectrumEffect keeps one row of level meter and pitch classes on
         Spectrum s(16, 16, mm::AudioSpectrumEffect::kColorSweep, true, bands);
         s.audio.tick();
         auto& f = s.audio.frameForTest();
-        f.notesCount = 79;
+        f.notesCount = mm::kAudioNoteKeys;
         for (uint8_t i = 0; i < 31; i++) f.thirds[i] = 0;
         for (uint8_t i = 0; i < 16; i++) f.bands[i] = 0;
-        for (uint8_t i = 0; i < 79; i++) f.notes[i] = 0;   // dark bars, so only the two rows light
+        for (uint8_t i = 0; i < mm::kAudioNoteKeys; i++) f.notes[i] = 0;   // dark bars, so only the two rows light
         for (uint8_t c = 0; c < 12; c++) f.chroma[c] = 255;
         f.level = 255;
         f.harmonyChange = false;

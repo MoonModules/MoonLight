@@ -836,9 +836,6 @@
    "summary": "The mic's semitone bands are the piano's keys from A0 up; `octave` and `octaves` pick the octaves the top half shows (`auto` lets the detected key pick the first shown key), ivory letters run along the bottom edge, each circle row on the bottom labeled with its octave at the left, and `noteNames` writes the strongest pitch classes and the key at the top corners.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/KeyboardEffect.gif",
    "controls": {
-    "decay": {
-     "line": "How long a struck key glows, in tens of milliseconds."
-    },
     "ivory": {
      "line": "How bright the ivory rests between notes, 0 for dark."
     },
@@ -851,6 +848,9 @@
     "octaves": {
      "line": "How many octaves the keyboard shows, the rest only as circles."
     },
+    "decay": {
+     "line": "How long a struck note glows, in tens of milliseconds."
+    },
     "noteNames": {
      "line": "The strongest pitch classes top left, the key top right."
     }
@@ -861,6 +861,28 @@
    "doc": "light/effects.md#keyboard",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/KeyboardEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#keyboardeffect"
+  },
+  "StringsEffect": {
+   "line": "A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem beside it.",
+   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, snares and body emblem; guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up on every string and fret that plays them, a struck note flashing over `decay`.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/StringsEffect.gif",
+   "controls": {
+    "instrument": {
+     "line": "Guitar, bass, violin or cello."
+    },
+    "decay": {
+     "line": "How long a struck note glows, in tens of milliseconds."
+    },
+    "noteNames": {
+     "line": "The strongest pitch classes top left, the key top right."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#strings",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StringsEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#stringseffect"
   },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
@@ -2855,28 +2877,6 @@
    "doc": "light/effects.md#starsky",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StarSkyEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#starskyeffect"
-  },
-  "StringsEffect": {
-   "line": "A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem beside it.",
-   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, snares and body emblem; guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up on every string and fret that plays them, a struck note flashing over `decay`.",
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/StringsEffect.gif",
-   "controls": {
-    "instrument": {
-     "line": "Guitar, bass, violin or cello."
-    },
-    "decay": {
-     "line": "How long a struck note glows, in tens of milliseconds."
-    },
-    "noteNames": {
-     "line": "The strongest pitch classes top left, the key top right."
-    }
-   },
-   "role": "effect",
-   "tags": "💫🎶",
-   "dim": 2,
-   "doc": "light/effects.md#strings",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StringsEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#stringseffect"
   },
   "TetrixEffect": {
    "line": "Falling Tetris-style blocks: each column drops a brick that lands on the growing stack, fills the column, then clears and restarts.",
@@ -5409,7 +5409,7 @@
    "title": "Effects",
    "base": "EffectBase",
    "line": "An effect draws: each frame it writes a color per light into its [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer)'s buffer, which modifiers reshape and a driver sends out.",
-   "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes; a new one starts at writing an effect. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
+   "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
   },
   "light/drivers.md": {
    "title": "Drivers",

@@ -68,7 +68,7 @@ public:
     }
 
     /// Whether it listens for `p`: the chosen protocol, or every one under `all`.
-    bool listensFor(uint8_t p) const { return protocol == kProtoAll || protocol == p || protocol >= kProtocolCount; }
+    bool listensFor(uint8_t p) const { return protocol == kProtoAll || protocol == p; }
 
     /// Turn what arrived since the last call into per-second rates for the status, so loss shows against what the sender sent.
     void tick1s() MM_NONBLOCKING override {

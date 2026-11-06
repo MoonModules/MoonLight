@@ -41,7 +41,7 @@
 ///
 /// ## A Set needs a release to clear it
 ///
-/// A remote sends a code as one event with no release, so a Set is offered only where a release exists, or it would latch forever; toggle and delta are complete in one event.
+/// A remote sends a code as one event with no release, so a Set is offered only where a release exists, or it would latch forever, and a flip there acts as a toggle; toggle and delta are complete in one event.
 ///
 /// ## A name the surface does not have is refused
 ///
@@ -305,7 +305,7 @@ inline void writeInputActionDetailFields(JsonSink& sink, const InputAction& a,
                  "\"min\":%d,\"max\":%d}",
                  kindValue,
                  hasRelease ? "[\"toggle\",\"set\",\"delta\",\"flip\"]"
-                            : "[\"toggle\",\"set (needs a release)\",\"delta\",\"flip\"]",
+                            : "[\"toggle\",\"set (needs a release)\",\"delta\",\"flip (needs a release)\"]",
                  static_cast<int>(a.value),
                  static_cast<int>(kMinActionValue), static_cast<int>(kMaxActionValue));
 }

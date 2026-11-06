@@ -6,13 +6,10 @@
 
 namespace mm {
 
-/// How many semitone notes an AudioFrame carries, A0 to D#7.
-constexpr uint8_t kAudioNoteKeys = 79;
-
 /// The per-note hit state the audio-reactive effects share: when each note last struck, a tick and a bit a note, so a frame two ticks read is one hit, told by its `seq`.
 struct NoteHits {
     uint16_t tick[kAudioNoteKeys] = {};  ///< when each note last struck, in 4 ms ticks
-    uint8_t lit[10] = {};                ///< a bit per note while its flash shows
+    uint8_t lit[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note while its flash shows
     uint16_t lastSeq = 0;                ///< the frame the last hits came from
 
     /// Each note a new frame carries a hit for starts its flash now, and every flash older than `span` ends, so a note no effect draws cannot flash again when the tick wraps.

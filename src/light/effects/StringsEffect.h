@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioNotesBase.h"
 
 namespace mm {
 
@@ -25,7 +25,7 @@ constexpr uint8_t kDotFrets[] = {3, 5, 7, 9, 12};   // position dots, 12 doubled
 /// ## Fret spacing and hits
 ///
 /// The 12 frets sit equally spaced from nut to bridge and are numbered along the bottom; fret `f` is `f` semitones above the open string, so 12 frets are one octave. Position dots mark frets 3, 5, 7, 9 and 12. The shared `NoteHits` keeps when each note was last struck, so a frame two ticks read is one hit. `noteNames` writes the pitch classes top left and the key top right.
-class StringsEffect : public EffectBase {
+class StringsEffect : public AudioNotesBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }
@@ -36,136 +36,143 @@ public:
     enum Instrument : uint8_t { kGuitar, kBass, kViolin, kCello, kInstrumentCount };
     /// Guitar, bass, violin or cello.
     uint8_t instrument = kGuitar;
-    /// How long a struck note glows, in tens of milliseconds.
-    uint8_t decay = 100;
-    /// The strongest pitch classes top left, the key top right.
-    bool noteNames = true;
 
-    /// Publish the instrument, the note names and the glow.
+    /// Publish the instrument, then the glow and the note names.
     void defineControls() override {
         static constexpr const char* kInstrumentOptions[] = {"guitar", "bass", "violin", "cello"};
         controls_.addSelect("instrument", instrument, kInstrumentOptions, kInstrumentCount);
-        controls_.addControl("decay", decay, 5, 100);
-        controls_.addControl("noteNames", noteNames);
+        addNoteControls();
     }
 
     /// Draw the instrument, then light each sounding note on every string and fret that plays it: @xref{fret-spacing-and-hits}.
     void tick() MM_NONBLOCKING override {
-        const AudioScene a = beginAudioTick(*this, decay, hits_);
+        const AudioScene a = beginNotes(kBoardC);
         if (a.w == 0 || a.h == 0) return;
-        const draw::Canvas& cv = a.cv;
-        const lengthType w = a.w, h = a.h;
-        const AudioFrame& f = *a.f;
-        const uint32_t ms = a.ms, span = a.span;
-        const Palette& pal = *a.pal;
-
-        const uint8_t n = stringCount();
-        // The rounded wooden enclosure: board fill, wood frame with rounded corners, body strip beside the bridge.
-        const lengthType frame = w / 32 > 2 ? static_cast<lengthType>(w / 32) : 2;
-        const lengthType labelW = 3 * fonts::kFont4x6.width + 2;   // room for a name like "C#2"
-        const lengthType wideW = labelW > w / 6 ? labelW : static_cast<lengthType>(w / 6);
-        // The strips give way to the fingerboard on a narrow grid, so a 32-wide panel keeps a fret a column.
-        const lengthType fitW = static_cast<lengthType>((w - 1 - 2 * frame - detail::kMinBoard) / 2);
-        const lengthType bodyW = std::max<lengthType>(0, std::min(wideW, fitW));
-        // The left margin equals the body strip, so the fingerboard with its frets and strings sits exactly in the middle.
-        const lengthType nutX = static_cast<lengthType>(frame + bodyW);
-        const lengthType bridgeX = static_cast<lengthType>(w - 1 - frame - bodyW);
-        const bool fretted = instrument == kGuitar || instrument == kBass;
-        const bool numRoom = h - 1 - frame - 7 > frame + 2;   // six rows under the board for fret numbers
-        const lengthType fbTop = static_cast<lengthType>(frame + 2);
-        const lengthType fbBot = static_cast<lengthType>(h - 1 - frame - (numRoom ? 7 : 2));
-        const RGB wood{200, 120, 45}, board{105, 62, 24}, body{135, 82, 30};
-        draw::fill(cv, board);
-        draw::rect(cv, 0, 0, w, h, wood);
-        draw::fillRect(cv, static_cast<lengthType>(bridgeX + 1), frame, static_cast<lengthType>(w - 1 - frame - bridgeX), static_cast<lengthType>(h - 1 - frame), body);
-        roundCorners(cv, w, h, frame, nutX, wood);
-        if (bridgeX <= nutX || fbBot <= fbTop) {   // no room for a fingerboard: the enclosure and the names alone
-            if (noteNames && h > 1) draw::noteNames(cv, f, w, 0);
-            return;
+        const Board b = layout(a.w, a.h);
+        drawEnclosure(a, b);
+        if (b.fits()) {   // no room for a fingerboard leaves the enclosure and the names alone
+            drawFingerboard(a, b);
+            drawSnares(a, b);
+            drawEmblem(a.cv, static_cast<lengthType>((b.frame + b.nutX) / 2 - 1), b.bodyW, b.frame, static_cast<lengthType>(a.h - 1 - b.frame));   // in the left margin, clear of the note names and the nut
+            drawNotes(a, b);
         }
-
-        // The frets equally spaced, metal and 2px wide when fretted, thin pseudo-frets otherwise; the strings run over them, as on a real instrument.
-        const RGB stringC{230, 190, 90}, fretC{200, 200, 210}, pseudoC{120, 80, 40}, nutC{235, 235, 240};
-        const lengthType strW = (instrument == kBass || instrument == kCello) ? 2 : 1;   // bass and cello strings are thicker than violin's
-        const lengthType fretW = fretted ? 2 : 1;
-        const RGB fretCol = fretted ? fretC : pseudoC;
-        for (uint8_t fr = 1; fr <= detail::kFrets; fr++)
-            draw::fillRect(cv, fretX(fr, nutX, bridgeX), static_cast<lengthType>(fbTop - 1), fretW, static_cast<lengthType>(fbBot - fbTop + 3), fretCol);
-        for (uint8_t s = 0; s < n; s++) {
-            const lengthType y = stringY(s, fbTop, fbBot, n);
-            draw::fillRect(cv, nutX, static_cast<lengthType>(y > strW / 2 ? y - strW / 2 : 0),
-                           static_cast<lengthType>(bridgeX - nutX + 1), strW, stringC);
-        }
-        draw::fillRect(cv, nutX, frame, 2, static_cast<lengthType>(h - 1 - 2 * frame), nutC);
-        draw::bar(cv, bridgeX, frame, static_cast<lengthType>(h - 1 - 2 * frame), draw::Grow::Down, fretC);
-        // Fret numbers along the bottom of the board.
-        if (numRoom) {
-            const RGB numC{225, 220, 200};
-            for (uint8_t fr = 1; fr <= detail::kFrets; fr++) {
-                char num[3] = {0, 0, 0};
-                uint8_t len = 0;
-                if (fr >= 10) num[len++] = static_cast<char>('0' + fr / 10);
-                num[len++] = static_cast<char>('0' + fr % 10);
-                num[len] = 0;
-                const lengthType tw = static_cast<lengthType>(len * fonts::kFont4x6.width);
-                int32_t tx = static_cast<int32_t>(fretX(fr, nutX, bridgeX)) - static_cast<int32_t>(tw) / 2;
-                if (tx < static_cast<int32_t>(frame)) tx = frame;
-                if (tx + static_cast<int32_t>(tw) > static_cast<int32_t>(w - frame)) tx = static_cast<int32_t>(w - frame - tw);
-                draw::text(cv, fonts::kFont4x6, num, static_cast<lengthType>(tx), static_cast<lengthType>(fbBot + 2), numC);
-            }
-        }
-        // Position dots at 3, 5, 7, 9 and a double at 12, like a real fingerboard.
-        const lengthType midY = static_cast<lengthType>((fbTop + fbBot) / 2);
-        const RGB dotC{225, 220, 200};
-        for (uint8_t d = 0; d < 5; d++) {
-            const uint8_t fr = detail::kDotFrets[d];
-            draw::fillCircle(cv, fretX(fr, nutX, bridgeX), midY, 1, dotC);
-            if (fr == 12) draw::fillCircle(cv, fretX(fr, nutX, bridgeX), static_cast<lengthType>(midY + 3), 1, dotC);
-        }
-        // One snare per string at the bridge, a thin tick the color of the frets, with the open string's note named beside it.
-        const bool labels = bodyW >= labelW;   // the body strip holds the names beside the bridge
-        for (uint8_t s2 = 0; s2 < n; s2++) {
-            const lengthType y = stringY(s2, fbTop, fbBot, n);
-            draw::bar(cv, bridgeX, static_cast<lengthType>(y > 2 ? y - 2 : 0), 5, draw::Grow::Down, fretC);   // over the frets
-            if (labels) {
-                char name[4];
-                openName(openString(s2), name);
-                lengthType nl = 0;
-                while (name[nl]) nl++;
-                const lengthType tw = static_cast<lengthType>(nl * fonts::kFont4x6.width);
-                int32_t tx = static_cast<int32_t>(bridgeX) + 1 + (static_cast<int32_t>(bodyW) - 1 - static_cast<int32_t>(tw)) / 2;   // centered in the body strip
-                if (tx < static_cast<int32_t>(bridgeX + 1)) tx = static_cast<int32_t>(bridgeX + 1);
-                draw::text(cv, fonts::kFont4x6, name, static_cast<lengthType>(tx),
-                           static_cast<lengthType>(y > 3 ? y - 3 : 0), RGB{255, 255, 255});
-            }
-        }
-        drawEmblem(cv, static_cast<lengthType>((frame + nutX) / 2 - 1), bodyW, frame, static_cast<lengthType>(h - 1 - frame));   // the emblem in the left margin, clear of the note names and the nut
-
-        // Each sounding note lights every string and fret that plays it; a dot's radius is capped by the fret spacing, so adjacent frets' dots do not overlap.
-        const lengthType bandH = fbBot - fbTop > 0 ? static_cast<lengthType>(fbBot - fbTop) : 1;
-        const lengthType fretGap = static_cast<lengthType>((bridgeX - nutX) / detail::kFrets);   // one fret's columns
-        const lengthType rCap = std::min<lengthType>(std::min<lengthType>(bandH / n / 3, 4), fretGap > 2 ? static_cast<lengthType>((fretGap - 2) / 2) : 1);
-        const lengthType r = std::max<lengthType>(1, rCap);
-        for (uint8_t i = 0; i < kAudioNoteKeys; i++) {
-            const uint8_t g = hits_.glow(i, ms, span);
-            const uint8_t lvl = std::max(static_cast<uint8_t>(i < f.notesCount ? f.notes[i] : 0), g);
-            if (!lvl) continue;
-            const uint8_t midi = static_cast<uint8_t>(21 + i);
-            for (uint8_t s = 0; s < n; s++) {
-                const int16_t fret = static_cast<int16_t>(midi) - openString(s);
-                if (fret < 0 || fret > detail::kFrets) continue;
-                const lengthType cx = fret == 0 ? nutX : fretX(static_cast<uint8_t>(fret), nutX, bridgeX);
-                const lengthType cy = stringY(s, fbTop, fbBot, n);
-                // The dot shrinks with its level, so the dim tail of the glow is a small dot, not a big black one.
-                const lengthType rr = std::max<lengthType>(1, static_cast<lengthType>(r * lvl / 255));
-                draw::fillCircle(cv, cx, cy, rr, colorFromPalette(pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), lvl));
-            }
-        }
-        if (noteNames && h > 1) draw::noteNames(cv, f, w, 0);
+        endNotes(a);
     }
 
 private:
-    NoteHits hits_;   ///< when each note last struck and its flash
+    static constexpr RGB kBoardC{105, 62, 24};    ///< the fingerboard's wood, the background
+    static constexpr RGB kFretC{200, 200, 210};   ///< metal: frets, the bridge and the snares
+    static constexpr lengthType kLabelW = 3 * fonts::kFont4x6.width + 2;   ///< room for an open-string name like "C#2"
+
+    /// Where the instrument's parts fall on a grid, worked out once a frame.
+    struct Board {
+        lengthType frame, bodyW;     ///< the wood frame's width, each side strip's width
+        lengthType nutX, bridgeX;    ///< the fingerboard's left and right columns
+        lengthType fbTop, fbBot;     ///< the fingerboard's top and bottom rows
+        bool numRoom;                ///< six rows under the board for fret numbers
+        /// Whether a fingerboard fits between the strips and the frame.
+        bool fits() const MM_NONBLOCKING { return bridgeX > nutX && fbBot > fbTop; }
+    };
+
+    /// The geometry on a `w` by `h` grid: the strips give way to the fingerboard on a narrow grid, so a 32-wide panel keeps a fret a column, and the left margin equals the body strip, centering the board.
+    static Board layout(lengthType w, lengthType h) MM_NONBLOCKING {
+        const lengthType frame = w / 32 > 2 ? static_cast<lengthType>(w / 32) : 2;
+        const lengthType wideW = kLabelW > w / 6 ? kLabelW : static_cast<lengthType>(w / 6);
+        const lengthType fitW = static_cast<lengthType>((w - 1 - 2 * frame - detail::kMinBoard) / 2);
+        const lengthType bodyW = std::max<lengthType>(0, std::min(wideW, fitW));
+        const bool numRoom = h - 1 - frame - 7 > frame + 2;
+        return Board{frame, bodyW, static_cast<lengthType>(frame + bodyW), static_cast<lengthType>(w - 1 - frame - bodyW),
+                     static_cast<lengthType>(frame + 2), static_cast<lengthType>(h - 1 - frame - (numRoom ? 7 : 2)), numRoom};
+    }
+
+    /// The rounded wooden enclosure over the board-colored background: the wood frame with rounded corners and the body strip beside the bridge.
+    static void drawEnclosure(const AudioScene& a, const Board& b) MM_NONBLOCKING {
+        const RGB wood{200, 120, 45}, body{135, 82, 30};
+        draw::rect(a.cv, 0, 0, a.w, a.h, wood);
+        draw::fillRect(a.cv, static_cast<lengthType>(b.bridgeX + 1), b.frame, static_cast<lengthType>(a.w - 1 - b.frame - b.bridgeX), static_cast<lengthType>(a.h - 1 - b.frame), body);
+        roundCorners(a.cv, a.w, a.h, b.frame, b.nutX, wood);
+    }
+
+    /// The frets equally spaced, metal and 2px wide when fretted, thin pseudo-frets otherwise, the strings over them as on a real instrument, the nut, the bridge, the fret numbers and the dots.
+    void drawFingerboard(const AudioScene& a, const Board& b) const MM_NONBLOCKING {
+        const bool fretted = instrument == kGuitar || instrument == kBass;
+        const RGB stringC{230, 190, 90}, pseudoC{120, 80, 40}, nutC{235, 235, 240};
+        const uint8_t n = stringCount();
+        const lengthType strW = (instrument == kBass || instrument == kCello) ? 2 : 1;   // bass and cello strings are thicker than violin's
+        for (uint8_t fr = 1; fr <= detail::kFrets; fr++)
+            draw::fillRect(a.cv, fretX(fr, b), static_cast<lengthType>(b.fbTop - 1), fretted ? 2 : 1, static_cast<lengthType>(b.fbBot - b.fbTop + 3), fretted ? kFretC : pseudoC);
+        for (uint8_t s = 0; s < n; s++) {
+            const lengthType y = stringY(s, b, n);
+            draw::fillRect(a.cv, b.nutX, static_cast<lengthType>(y > strW / 2 ? y - strW / 2 : 0), static_cast<lengthType>(b.bridgeX - b.nutX + 1), strW, stringC);
+        }
+        draw::fillRect(a.cv, b.nutX, b.frame, 2, static_cast<lengthType>(a.h - 1 - 2 * b.frame), nutC);
+        draw::bar(a.cv, b.bridgeX, b.frame, static_cast<lengthType>(a.h - 1 - 2 * b.frame), draw::Grow::Down, kFretC);
+        if (b.numRoom) drawFretNumbers(a, b);
+        drawDots(a, b);
+    }
+
+    /// Position dots at frets 3, 5, 7, 9 and a double at 12, like a real fingerboard.
+    static void drawDots(const AudioScene& a, const Board& b) MM_NONBLOCKING {
+        const RGB dotC{225, 220, 200};
+        const lengthType midY = static_cast<lengthType>((b.fbTop + b.fbBot) / 2);
+        for (const uint8_t fr : detail::kDotFrets) {
+            draw::fillCircle(a.cv, fretX(fr, b), midY, 1, dotC);
+            if (fr == 12) draw::fillCircle(a.cv, fretX(fr, b), static_cast<lengthType>(midY + 3), 1, dotC);
+        }
+    }
+
+    /// The fret numbers along the bottom of the board, each kept inside the frame.
+    static void drawFretNumbers(const AudioScene& a, const Board& b) MM_NONBLOCKING {
+        const RGB numC{225, 220, 200};
+        for (uint8_t fr = 1; fr <= detail::kFrets; fr++) {
+            char num[3] = {0, 0, 0};
+            uint8_t len = 0;
+            if (fr >= 10) num[len++] = static_cast<char>('0' + fr / 10);
+            num[len++] = static_cast<char>('0' + fr % 10);
+            const lengthType tw = static_cast<lengthType>(len * fonts::kFont4x6.width);
+            int32_t tx = static_cast<int32_t>(fretX(fr, b)) - static_cast<int32_t>(tw) / 2;
+            if (tx < b.frame) tx = b.frame;
+            if (tx + tw > a.w - b.frame) tx = a.w - b.frame - tw;   // the right edge wins on a grid too narrow for both
+            draw::text(a.cv, fonts::kFont4x6, num, static_cast<lengthType>(tx), static_cast<lengthType>(b.fbBot + 2), numC);
+        }
+    }
+
+    /// One snare per string at the bridge, a thin tick the color of the frets, with the open string's note named beside it where the body strip holds it.
+    void drawSnares(const AudioScene& a, const Board& b) const MM_NONBLOCKING {
+        const uint8_t n = stringCount();
+        for (uint8_t s = 0; s < n; s++) {
+            const lengthType y = stringY(s, b, n);
+            draw::bar(a.cv, b.bridgeX, static_cast<lengthType>(y > 2 ? y - 2 : 0), 5, draw::Grow::Down, kFretC);   // over the frets
+            if (b.bodyW < kLabelW) continue;
+            char name[4];
+            openName(openString(s), name);
+            lengthType nl = 0;
+            while (name[nl]) nl++;
+            const lengthType tw = static_cast<lengthType>(nl * fonts::kFont4x6.width);
+            const int32_t tx = std::max<int32_t>(b.bridgeX + 1, b.bridgeX + 1 + (b.bodyW - 1 - tw) / 2);   // centered in the body strip
+            draw::text(a.cv, fonts::kFont4x6, name, static_cast<lengthType>(tx), static_cast<lengthType>(y > 3 ? y - 3 : 0), RGB{255, 255, 255});
+        }
+    }
+
+    /// Each sounding note lights every string and fret that plays it; a dot's radius is capped by the fret spacing, so adjacent frets' dots do not overlap, and shrinks with its level, so the dim tail of the glow is a small dot.
+    void drawNotes(const AudioScene& a, const Board& b) MM_NONBLOCKING {
+        const uint8_t n = stringCount();
+        const lengthType bandH = static_cast<lengthType>(b.fbBot - b.fbTop);
+        const lengthType fretGap = static_cast<lengthType>((b.bridgeX - b.nutX) / detail::kFrets);   // one fret's columns
+        const lengthType r = std::max<lengthType>(1, std::min<lengthType>({static_cast<lengthType>(bandH / n / 3), lengthType{4}, static_cast<lengthType>(fretGap > 2 ? (fretGap - 2) / 2 : 1)}));
+        for (uint8_t i = 0; i < kAudioNoteKeys; i++) {
+            const uint8_t g = hits_.glow(i, a.ms, a.span);
+            const uint8_t lvl = std::max(static_cast<uint8_t>(i < a.f->notesCount ? a.f->notes[i] : 0), g);
+            if (!lvl) continue;
+            const lengthType rr = std::max<lengthType>(1, static_cast<lengthType>(r * lvl / 255));
+            const RGB c = colorFromPalette(*a.pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), lvl);
+            for (uint8_t s = 0; s < n; s++) {
+                const int16_t fret = static_cast<int16_t>(21 + i) - openString(s);
+                if (fret < 0 || fret > detail::kFrets) continue;
+                draw::fillCircle(a.cv, fret == 0 ? b.nutX : fretX(static_cast<uint8_t>(fret), b), stringY(s, b, n), rr, c);
+            }
+        }
+    }
 
     /// How many strings the selected instrument has.
     uint8_t stringCount() const MM_NONBLOCKING {
@@ -182,14 +189,14 @@ private:
         }
     }
 
-    /// The string's center row between `fbTop` and `fbBot`.
-    static lengthType stringY(uint8_t s, lengthType fbTop, lengthType fbBot, uint8_t n) MM_NONBLOCKING {
-        return static_cast<lengthType>(fbTop + (2u * s + 1u) * (fbBot - fbTop) / (2u * n));
+    /// String `s`'s center row, the `n` strings spread evenly over the fingerboard.
+    static lengthType stringY(uint8_t s, const Board& b, uint8_t n) MM_NONBLOCKING {
+        return static_cast<lengthType>(b.fbTop + (2 * s + 1) * (b.fbBot - b.fbTop) / (2 * n));
     }
 
     /// The fret's column: equally spaced from the nut to the bridge.
-    static lengthType fretX(uint8_t fret, lengthType nutX, lengthType bridgeX) MM_NONBLOCKING {
-        return static_cast<lengthType>(nutX + static_cast<uint32_t>(fret) * (bridgeX - nutX) / detail::kFrets);
+    static lengthType fretX(uint8_t fret, const Board& b) MM_NONBLOCKING {
+        return static_cast<lengthType>(b.nutX + fret * (b.bridgeX - b.nutX) / detail::kFrets);
     }
 
     /// One corner of the frame: its anchor pixel, the directions the arc runs in, and the arc's radius.

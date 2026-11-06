@@ -243,13 +243,14 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpiralLayout>("SpiralLayout", "light/layouts.md#spiral");
     mm::ModuleFactory::registerType<mm::TubesLayout>("TubesLayout", "light/layouts.md#tubes");
     mm::ModuleFactory::registerType<mm::WheelLayout>("WheelLayout", "light/layouts.md#wheel");
-    // Effects, registered alphabetically by display name: @xref{what-registertype-captures}.
+    // Effects, the audio-reactive ones first, then alphabetically by display name: @xref{what-registertype-captures}.
     mm::ModuleFactory::registerType<mm::AudioSpectrumEffect>("AudioSpectrumEffect", "light/effects.md#audiospectrum");
     mm::ModuleFactory::registerType<mm::RadialSpectrumEffect>("RadialSpectrumEffect", "light/effects.md#radialspectrum");
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
     mm::ModuleFactory::registerType<mm::BeatRipplesEffect>("BeatRipplesEffect", "light/effects.md#beatripples");
     mm::ModuleFactory::registerType<mm::DrumKitEffect>("DrumKitEffect", "light/effects.md#drumkit");
     mm::ModuleFactory::registerType<mm::KeyboardEffect>("KeyboardEffect", "light/effects.md#keyboard");
+    mm::ModuleFactory::registerType<mm::StringsEffect>("StringsEffect", "light/effects.md#strings");
     mm::ModuleFactory::registerType<mm::BlurzEffect>("BlurzEffect", "light/effects.md#blurz");
     mm::ModuleFactory::registerType<mm::BouncingBallsEffect>("BouncingBallsEffect", "light/effects.md#bouncingballs");
     mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect", "light/effects.md#demoreel");
@@ -317,7 +318,6 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpiralEffect>("SpiralEffect", "light/effects.md#spiral");
     mm::ModuleFactory::registerType<mm::StarFieldEffect>("StarFieldEffect", "light/effects.md#starfield");
     mm::ModuleFactory::registerType<mm::StarSkyEffect>("StarSkyEffect", "light/effects.md#starsky");
-    mm::ModuleFactory::registerType<mm::StringsEffect>("StringsEffect", "light/effects.md#strings");
     mm::ModuleFactory::registerType<mm::TetrixEffect>("TetrixEffect", "light/effects.md#tetrix");
     mm::ModuleFactory::registerType<mm::TextEffect>("TextEffect", "light/effects.md#text");
     mm::ModuleFactory::registerType<mm::WaveEffect>("WaveEffect", "light/effects.md#wave");

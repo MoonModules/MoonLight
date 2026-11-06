@@ -13,7 +13,7 @@ class Layer; // forward declaration, defined in light/layers/Layer.h and include
 
 /// An effect draws: each frame it writes a color per light into its @ref Layer's buffer, which modifiers reshape and a driver sends out.
 ///
-/// Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes; a new one starts at @xref{writing-an-effect|writing an effect}. One that names an index color reads the global palette, the `palette` control on @ref Drivers.
+/// Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on @ref Drivers.
 ///
 /// Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid.
 ///
@@ -84,7 +84,7 @@ public:
 
 } // namespace mm
 
-// The effect author's helper surface, pulled in after the class: @xref{why-the-helper-includes-sit-at-the-bottom}.
+// The effect author's helper surface (@xref{writing-an-effect}), pulled in after the class: @xref{why-the-helper-includes-sit-at-the-bottom}.
 #include "light/layers/Layer.h"   // EffectBase's out-of-line accessors
 #include "light/powerfunctions/draw.h"           // draw::pixel / fill / line / fade / blur: write pixels by coordinate
 #include "light/util/Palette.h"        // colorFromPalette, Palettes::active: the palette system
@@ -96,7 +96,6 @@ public:
 #include "core/util/oscillators.h"     // OscillatorBank / Wave: the motion kernel five effects share
 #include "core/util/math16.h"          // angle16, kaleido, halfLifeKeep: the fixed-point trig and decay
 #include "light/powerfunctions/polar.h"          // PolarLut: the per-pixel angle and radius four radial effects read
-#include "light/powerfunctions/audioReadout.h"   // draw::noteNames: the pitch-class and key readout three audio effects share
 #include "core/services/AudioService.h"    // AudioService::latestFrame(): the shared audio source
 #include "core/util/AudioFrame.h"      // AudioFrame: level and 16-band spectrum for an audio-reactive effect
 
@@ -104,25 +103,3 @@ public:
 #include <cmath>                  // sqrtf / sinf / log10f: per-frame float math, never per-light
 #include <array>                  // std::array: fixed-size effect state tables
 #include <algorithm>              // std::min / std::max / std::clamp: bounds on a size or a count
-
-namespace mm {
-
-/// What every audio-reactive effect's tick starts from, read once a frame: the layer's surface filled black, the grid size, the latest audio frame, the effect's clock, the glow span from the decay control and the active palette.
-struct AudioScene {
-    draw::Canvas cv;      ///< the layer's surface, filled black
-    lengthType w, h;      ///< the grid size, both 0 on an empty grid
-    const AudioFrame* f;  ///< the latest audio frame
-    uint32_t ms;          ///< milliseconds since render start
-    uint32_t span;        ///< the glow span from the decay control, in milliseconds
-    const Palette* pal;   ///< the active palette
-};
-
-/// The shared start of an audio-reactive effect's tick: `fx`'s black-filled surface, grid, latest frame, clock, glow span from `decay`, palette, and `hits` refreshed from the frame. The scene reads 0-sized on an empty grid.
-inline AudioScene beginAudioTick(EffectBase& fx, uint8_t decay, NoteHits& hits) MM_NONBLOCKING {
-    AudioScene s{fx.canvas(), fx.width(), fx.height(), AudioService::latestFrame(), fx.elapsed(), static_cast<uint32_t>(decay) * 10u, Palettes::active()};
-    draw::fill(s.cv, RGB{0, 0, 0});
-    if (s.w != 0 && s.h != 0) hits.note(*s.f, s.ms, s.span);
-    return s;
-}
-
-}  // namespace mm

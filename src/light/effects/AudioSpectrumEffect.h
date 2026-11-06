@@ -1,6 +1,7 @@
 #pragma once
 
 #include "light/effects/EffectBase.h"
+#include "light/powerfunctions/audioReadout.h"   // draw::noteNames
 
 namespace mm {
 
@@ -155,13 +156,13 @@ private:
     static constexpr uint32_t kChangeFlashMs = 100;
     uint32_t changeUntilMs_ = 0;  ///< until when the row shows the last change
     uint32_t rangeUntilMs_[3] = {};   ///< until when each range's line shows its last hit
-    uint8_t barHitTick_[79] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
+    uint8_t barHitTick_[kAudioNoteKeys] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
     uint8_t barsLit_[10] = {};        ///< a bit per bar while it shows its hit
 
     /// Light each bar of `n` whose bit is set in `hits`, and darken each whose hit is older than the flash.
     void markBarHits(const uint8_t* hits, uint8_t n, uint32_t ms) MM_NONBLOCKING {
         const uint8_t tick = static_cast<uint8_t>(ms >> 2);
-        for (uint8_t b = 0; b < n && b < 79; b++) {
+        for (uint8_t b = 0; b < n && b < kAudioNoteKeys; b++) {
             const uint8_t bit = static_cast<uint8_t>(1u << (b & 7));
             if (hitAt(hits, b)) { barHitTick_[b] = tick; barsLit_[b >> 3] |= bit; }
             else if (static_cast<uint8_t>(tick - barHitTick_[b]) >= kOnsetFlashMs / 4) barsLit_[b >> 3] &= static_cast<uint8_t>(~bit);
