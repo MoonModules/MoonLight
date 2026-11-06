@@ -132,7 +132,7 @@ public:
             secondsSinceRefresh_ = 0;
             if (auto* c = ControlModule::active()) c->resendPaced(this);
         }
-        refreshNamedHosts();
+        refreshNamedHosts(hosts_, hostList_, hostCount_);
         const bool fresh = peerFresh();
         if (fresh != peerWasFresh_) { peerWasFresh_ = fresh; reportPeer(); }
     }
@@ -316,25 +316,13 @@ private:
         hostsError_ = parseHostList(hosts_, hostList_, kMaxHosts, hostCount_);
         if (hostsError_) { hostCount_ = 0; return; }
         if (!mayStart) return;
-        for (uint8_t i = 0; i < hostCount_; i++)
-            if (hostList_[i].isName()) { HostResolver::ensureStarted(); break; }
-        refreshNamedHosts();
+        startResolverForNames(hostList_, hostCount_);
+        refreshNamedHosts(hosts_, hostList_, hostCount_);
     }
 
     /// Parse the group once, rather than on every feedback message.
     void parseGroup() { groupValid_ = parseDottedQuad(group_, groupIp_); }
 
-    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
-    void refreshNamedHosts() {
-        for (uint8_t i = 0; i < hostCount_; i++) {
-            if (!hostList_[i].isName()) continue;
-            char name[kMaxHostName + 1];
-            hostName(hosts_, hostList_[i], name);
-            uint8_t ip[4];
-            const HostResolver::State st = HostResolver::lookup(name, ip);
-            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(hostList_[i].ip, ip, 4);
-        }
-    }
 
     /// Addresses or names feedback goes to (unicast).
     /// @guide Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else.

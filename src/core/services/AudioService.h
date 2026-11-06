@@ -15,6 +15,7 @@
 #include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
 #include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
 #include "core/services/AudioAnalysis.h"   // the state an open input and `harmony` hold
+#include "core/util/MoonLightAudioSyncPacket.h"   // the MoonLight audio-sync format (send/receive)
 #include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
 #include "platform/platform.h"
 
@@ -30,7 +31,7 @@ namespace mm {
 /// The audio source the audio-reactive effects read: a level, sixteen bands, the 31 third octaves and the peak.
 /// @card AudioService.png
 ///
-/// Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.
+/// Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's audio, MoonLight's or WLED's, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.
 ///
 /// @attribution softhack007, troyhacks, NetMindz, wladi
 ///
@@ -38,7 +39,7 @@ namespace mm {
 ///
 /// ## Choosing a source
 ///
-/// Simulate needs nothing. Receive network needs a WLED-compatible sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop.
+/// Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop.
 ///
 /// ## Wiring and capture
 ///
@@ -64,27 +65,42 @@ namespace mm {
 ///
 /// ## The stream's own clock
 ///
-/// The analysis keeps time by the samples it has analyzed, a block at a time, not by the wall clock: the onset's refractory and the beat latch then measure the music, whether a block is analyzed late on a busy core or a file is fed faster than real time on the host. A synthesized or received frame lives on the wall clock, which is its time.
+/// The analysis keeps time by the samples it has analyzed, a block at a time, not by the wall clock: the onsets' refractories then measure the music, whether a block is analyzed late on a busy core or a file is fed faster than real time on the host. A synthesized or received frame lives on the wall clock, which is its time.
 ///
 /// ## Memory follows the mode
 ///
 /// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
 ///
 /// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
+///
+/// ## Audio sync, one packet a frame
+///
+/// A sending board sends its frame in `syncFormat`, MoonLight's whole frame or WLED's packet, never both, since a second copy costs every receiver a parse. The hits of the frames between two packets ride in the next, so the throttle drops none.
+///
+/// A receiving board tells the formats by their header. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and one without, a WLED frame among them, gets the bands' ballistic here; a late or repeated MoonLight frame number is dropped.
 class AudioService : public MoonModule {
 public:
-    /// Finish a block of raw bands in `f` at `nowMs`: the meter ballistic, the flux and the onset.
-    void finishBands(AudioFrame& f, uint32_t nowMs) {
+    /// `level` through the bands' peak-meter ballistic into `levelSmoothed`, for a frame this engine measured or synthesized; a synced frame keeps the sender's own.
+    static void smoothLevel(AudioFrame& f) {
+        const uint8_t level = static_cast<uint8_t>(f.level > 255 ? 255 : f.level);
+        f.levelSmoothed = ballistic(static_cast<uint8_t>(f.levelSmoothed > 255 ? 255 : f.levelSmoothed), level, kBandRise, kBandFall);
+    }
+
+    /// Finish a block of raw bands in `f`: the bands' ballistic, then what derives from the bands.
+    void finishBands(AudioFrame& f) {
         smoothBands(f.bands, f.bandsSmoothed);
+        deriveFromBands(f);
+    }
+    /// The flux readout and the ranges, and count its onset and harmony change, which its source set, the analysis, the song or the sender.
+    void deriveFromBands(AudioFrame& f) {
         f.flux = spectralFlux(prevBands_, f.bands);
         std::memcpy(prevBands_, f.bands, sizeof(prevBands_));
-        f.onset = onset_.feed(f.flux, nowMs) ? f.flux : 0;
         bandsToRanges(f);
         if (f.onset) onsetCount_.fetch_add(1, std::memory_order_relaxed);
+        if (f.harmonyChange) harmonyChanges_.fetch_add(1, std::memory_order_relaxed);
         if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
     uint8_t       prevBands_[16] = {};   ///< the previous block's bands, the flux's reference
-    OnsetDetector onset_;                ///< the hit decision, with its running mean and refractory
 
     /// The block an input is read in, kAudioBlock.
     static constexpr size_t kBlock = kAudioBlock;
@@ -160,7 +176,7 @@ public:
     /// What the sync machinery does: nothing, broadcast the local analysis, or sink a peer's.
     enum Sync : uint8_t { kSyncNone, kSyncSend, kSyncReceive };
     /// The role the current mode and `send` give the sync socket.
-    Sync     sync() const { return (platform::hasNetwork && mode == kReceiveMode) ? kSyncReceive
+    Sync     sync() const { return !platform::hasNetwork ? kSyncNone : mode == kReceiveMode ? kSyncReceive
                                  : (mode == kLocalMode && send ? kSyncSend : kSyncNone); }
     /// The UDP port both directions use, matching on both ends.
     /// @guide WLED listens on 11988, so another port is not WLED-compatible.
@@ -172,6 +188,11 @@ public:
     uint8_t  addressing = kAddressMulticast;
     /// The boards a unicast send reaches, addresses or names.
     char     hosts[64] = {};
+    /// The packet formats `syncFormat` picks from, in its option order.
+    enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatCount };
+    /// What a sending board sends: the whole frame for MoonLight boards, or WLED's packet.
+    /// @guide A receiving board reads either. Pick WLED on a board that feeds WLED devices.
+    uint8_t  syncFormat = kFormatMoonLight;
 
     /// Each option's rate in hertz.
     static constexpr uint16_t kSampleRates[kSampleRateCount] = {8000, 16000, 22050, 24000, 44100, 48000};
@@ -235,6 +256,9 @@ public:
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
+            static constexpr const char* kFormatNames[] = {"MoonLight", "WLED"};
+            controls_.addSelect("syncFormat", syncFormat, kFormatNames, kFormatCount);
+            controls_.setHidden(controls_.count() - 1, !localMode || !send);
             // Multicast first, the WLED-compatible default; unicast reaches a few MoonLight boards faster on WiFi.
             static constexpr const char* kSyncModeNames[] = {"multicast", "unicast"};
             controls_.addSelect("addressing", addressing, kSyncModeNames, kAddressCount);
@@ -256,7 +280,7 @@ public:
         // These stay visible in every mode.
         /// The level of the audio driving the effects, from any source.
         controls_.addReadOnly("level RMS", levelStr_, sizeof(levelStr_));
-        /// The beats heard per second and their spectral flux.
+        /// The drum hits heard per second, and the spectral flux.
         controls_.addReadOnly("onsets", onsetStr_, sizeof(onsetStr_));
         /// The dominant frequency of the audio driving the effects.
         controls_.addReadOnly("peakHz", peakStr_, sizeof(peakStr_));
@@ -365,32 +389,34 @@ public:
         // Re-claim an empty seat, so removing the active module lets a survivor take over.
         micSeat_.claim();
 
-        // Sending broadcasts the frame and falls through to produce it; receiving is a pure sink.
-        if constexpr (platform::hasNetwork) {
-            const Sync s = sync();
-            if (s != kSyncNone && syncEnsureSocket()) {   // lazy-open once the network is up
-                if (s == kSyncSend) syncSend();
-                else if (s == kSyncReceive) { syncReceive(); return; }
-            }
-            if (s == kSyncReceive) return;   // sink with no socket yet: still never runs the local mic
+        // Receiving is a pure sink; sending produces the frame first, then sends it with the hits since the last packet.
+        const Sync s = sync();
+        const bool open = s != kSyncNone && syncEnsureSocket();   // lazy-open once the network is up
+        if (s == kSyncReceive) {   // with no socket yet, still never runs the local mic
+            if (open) syncReceive();
+            return;
         }
+        const bool fresh = produceFrame();
+        if (open) {
+            if (fresh) syncHits_.add(frame_);
+            syncSend();
+        }
+    }
 
-        // A whole mode rather than a fill-in, so it always runs and returns.
-        if (mode == kSimMode) { synthesizeFrame(simulate == kSimSweep); return; }
+    /// This tick's frame from the synthesizer or the local input, true when one is new.
+    bool produceFrame() MM_NONBLOCKING {
+        // A whole mode rather than a fill-in, so it always runs.
+        if (mode == kSimMode) { synthesizeFrame(simulate == kSimSweep); return true; }
 
         // From here it is the local mode, which holds the last frame until an input is up.
-        if constexpr (!platform::hasAudioInput) {
-            return;
-        } else {
-            if (!inited_) return;
-        }
+        if (!platform::hasAudioInput || !inited_) return false;
 
         // The audio task reads and analyzes; a board without tasks does it here. Either way the tick takes the frames through the ring.
-        if (!analysis_) return;
+        if (!analysis_) return false;
         squelchNow_.store(squelch, std::memory_order_relaxed);   // the setting, handed to whichever thread analyzes
         // Only once no task loop runs: a stop that timed out leaves the loop reading with the handle already gone.
         if (!audioTask_.impl && audioLoopExited_.load(std::memory_order_acquire)) readAndAnalyze(0);
-        takeNewest(analysis_->frames, frame_);
+        return takeNewest(analysis_->frames, frame_);
     }
 
     /// Drain what the input holds, a block analyzed each time one fills, so no sample overflows the driver between reads: `waitMs` 0 in the tick, a wait in the audio task.
@@ -434,9 +460,7 @@ public:
         w.key = h.key.update(w.chroma, dyn.gateOpen, dtMs);
         w.bassNote = semitonesToBassNote(h.semitones, dyn.gateOpen);
         w.tuning = static_cast<int8_t>(std::lround(h.tuningCents));
-        if (w.harmonyChange) harmonyChanges_.fetch_add(1, std::memory_order_relaxed);
-        if (h.retune(h.tuning.update(h.semitones, dyn.gateOpen, dtMs), analysis_->openedRate, dtMs))
-            tuningX10_.store(static_cast<int16_t>(h.tuningCents * 10.0f), std::memory_order_relaxed);
+        h.retune(h.tuning.update(h.semitones, dyn.gateOpen, dtMs), analysis_->openedRate, dtMs);
     }
 
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
@@ -450,7 +474,6 @@ public:
         // The block's time is the stream's, its samples counted, so a block analyzed late or faster than real time keeps its own: @xref{the-streams-own-clock}.
         const uint64_t blockStart = a.streamSamples;
         a.streamSamples += kBlock;
-        const uint32_t nowMs = static_cast<uint32_t>(a.streamSamples * 1000u / a.openedRate);
         // Removes the offset before any analysis, continuous across blocks.
         a.dc.process(a.samples, kBlock, a.dcPole);
         const float levelDb = blockLevelDbFs(a.samples, kBlock);
@@ -475,9 +498,9 @@ public:
         w.gateOpen = a.dyn.gateOpen;
         a.onsets.take(w, a.dyn.gateOpen);   // the block's own gate, decided by its own level
         analyzeHarmony();
-        w.levelSmoothed = static_cast<uint16_t>((w.levelSmoothed * 3 + w.level) / 4);
         w.seq++;
-        finishBands(w, nowMs);
+        smoothLevel(w);
+        finishBands(w);
         levelDbX10_.store(static_cast<int16_t>(a.dyn.levelDb * 10.0f), std::memory_order_relaxed);
         floorDbX10_.store(static_cast<int16_t>(a.dyn.floorDb * 10.0f), std::memory_order_relaxed);
         topDbX10_.store(static_cast<int16_t>(a.dyn.topDb * 10.0f), std::memory_order_relaxed);
@@ -486,24 +509,19 @@ public:
         // Held when there is no real signal, so it does not wander in silence.
         if (peakMag > 8) { w.peakHz = peakHz; w.peakMag = peakMag; }
 
-        // Analysis runs faster than the send, so latching here reports each beat exactly once.
-        if (w.level > w.levelSmoothed + kSyncPeakMargin &&
-            nowMs - lastPeakMs_ >= kSyncPeakRefractoryMs) {
-            syncPeakLatched_.store(true, std::memory_order_relaxed);
-            lastPeakMs_ = nowMs;
-        }
-
         // The window's peak, since sampling the instantaneous value once a second lands in the gaps.
         if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
     }
 
     /// Fill frame_ with a synthesized signal, on the wall clock that is its time.
     void synthesizeFrame(bool sweep) {
-        simulateAudio(frame_, platform::millis(), sweep);
+        const uint32_t now = platform::millis();
+        simulateAudio(frame_, now, sweep, simPrevMs_);
+        simPrevMs_ = now;
         frame_.seq++;
-        finishBands(frame_, platform::millis());
-        frame_.levelSmoothed = static_cast<uint16_t>((frame_.levelSmoothed * 3 + frame_.level) / 4);
-        // Feed the same 1 s peak-hold the mic path uses, so the "level RMS" display tracks the.
+        smoothLevel(frame_);
+        finishBands(frame_);
+        // Feed the same 1 s peak-hold the mic path uses, so the "level RMS" readout tracks the simulation too.
         if (frame_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
     }
 
@@ -529,8 +547,7 @@ public:
                      static_cast<unsigned>(harmonyChanges_.exchange(0, std::memory_order_relaxed)));
         char keyName[12];
         formatKey(frame_.key, keyName, sizeof(keyName));
-        const int tuning = tuningX10_.load(std::memory_order_relaxed);
-        mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, tuning / 10);
+        mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, static_cast<int>(frame_.tuning));   // the frame's, so a receiver shows the sender's
         mm::formatTo(rangesStr_, sizeof(rangesStr_), "bass %u, mid %u, treble %u", static_cast<unsigned>(frame_.bass),
                      static_cast<unsigned>(frame_.mid), static_cast<unsigned>(frame_.treble));
         mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
@@ -540,7 +557,7 @@ public:
         mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
                      static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
                      static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
-        refreshSyncHosts();
+        refreshNamedHosts(hosts, syncHosts_, syncHostCount_);
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
@@ -569,7 +586,7 @@ public:
                     // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
                     char peer[HostResolver::kPeerChars];
                     HostResolver::formatPeer(peer, sizeof(peer), syncPeer_);
-                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving from %s", peer);
+                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving %s from %s", syncRxWled_ ? "WLED" : "MoonLight", peer);
                     setStatus(syncStr_);
                 } else {
                     reportListening();
@@ -611,7 +628,6 @@ private:
     std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
     std::unique_ptr<Harmony> harmonyState_;     // and this only while `harmony` is on
     bool harmonyApplied_ = false;               // the `harmony` the state was last applied for, held or not for want of RAM
-    std::atomic<int16_t> tuningX10_{0};   // the bank's tuning in tenths of a cent, for the readout
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
@@ -640,12 +656,17 @@ private:
     std::atomic<uint32_t> micNonzero1s_{0};
     bool     micStatusStale_ = false;
 
-    /// The WLED audio sync socket (core/util/WLEDAudioSyncPacket.h): one, bound only in Send/Receive.
+    /// The audio sync socket, either format: one, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
-    uint32_t syncSendCount_ = 0;         // sends made; test-visible so the throttle can be observed, NOT a wire field (byte 17 is WLED's reserved2)
-    std::atomic<bool> syncPeakLatched_{false};   // a beat seen since the last transmit (WLED's udpSamplePeak)
-    uint32_t lastPeakMs_ = 0;            // when that beat was, for the refractory window
+    uint32_t syncSendCount_ = 0;     // sends made; test-visible so the throttle can be observed
+    AudioHits syncHits_;             // the hits of the frames since the last packet, which a throttled send would drop
+    AudioFrame syncRx_;              // the packet being parsed, a member since it and the datagram together would pass the stack's budget
+    AudioHits syncRxHits_;           // the hits of the packets since the last frame taken, late ones among them
+    uint16_t syncRxSeq_ = 0;         // the last MoonLight frame number taken, so a late or repeated one is dropped
+    bool     syncRxSeqValid_ = false;   // whether syncRxSeq_ holds one, false until the first and after a silence
+    bool     syncRxWled_ = false;    // whether the last frame taken came in WLED's format, for the status line
+    uint32_t simPrevMs_ = 0;             ///< the last simulated frame's time, so the song's kick reads once
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
@@ -663,11 +684,12 @@ private:
         else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
     }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
-    char     syncStr_[64] = {};      // scratch for the "receiving from <board> (<ip>)" status line
+    char     syncStr_[sizeof("receiving MoonLight from ") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)"
     static constexpr uint32_t kSyncSendIntervalMs = 25;   // ~40/s, WLED-friendly, well under a flood
     static constexpr uint32_t kSyncFallbackMs = 1000;     // no packet this long → resume local mic
     static constexpr uint32_t kSyncOpenRetryMs = 1000;    // pause between socket bring-up retries after a failure
     static constexpr int kSyncMaxRecvPerTick = 8;         // bounded non-blocking drain (sync is low-rate)
+    static constexpr uint16_t kSyncSeqWindow = 64;        // how far behind the last MoonLight frame number is late, not a restarted sender
 
     static constexpr const char* kInitFailMsg = "mic init failed, check pins / rate";
 
@@ -813,7 +835,6 @@ private:
     /// The harmony from silence, at the opened rate and on A440.
     void resetHarmony() {
         harmonyState_->reset(analysis_->openedRate);
-        tuningX10_.store(0, std::memory_order_relaxed);
     }
 
     /// Free the input and clear the analysis, false while a task that would not stop still reads them.
@@ -835,7 +856,6 @@ private:
         frame_ = AudioFrame{};
         // The ANALYSIS history goes with it, so a restarted source begins from a DEFINED state rather.
         std::memset(prevBands_, 0, sizeof(prevBands_));
-        onset_ = OnsetDetector{};
         return true;
     }
 
@@ -849,15 +869,22 @@ private:
         lastSyncOpenFailMs_ = 0;           // a mode change retries bring-up immediately (no stale backoff)
         lastSyncRecv_ = 0;
         std::memset(syncPeer_, 0, sizeof(syncPeer_));
+        syncHits_ = {};
+        syncRxHits_ = {};
+        syncRxSeqValid_ = false;
         const Sync s = sync();
         // Only when there IS a socket to wait for.
         if (s == kSyncSend)         setStatus("send: waiting for network");
         else if (s == kSyncReceive) setStatus("receive: waiting for network");
-        else if (const char* cur = status();
-                 cur && (std::strstr(cur, "waiting for network") || std::strstr(cur, "socket failed")
-                         || std::strstr(cur, "bind failed") || std::strstr(cur, "from ")
-                         || std::strstr(cur, "listening on")))
-            setStatus("");
+        else if (isSyncStatus(status())) setStatus("");
+    }
+
+    /// Whether the status line holds one of the sync's own messages, which a mode without a socket clears.
+    static bool isSyncStatus(const char* s) {
+        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "from ", "listening", "sending", "set hosts"};
+        if (!s) return false;
+        for (const char* k : kOwn) if (std::strstr(s, k)) return true;
+        return false;
     }
 
     /// Lazily open the sync socket for the current mode, once the network stack is up.
@@ -894,59 +921,63 @@ private:
         return syncOpen_;
     }
 
-    /// Broadcast the current frame_ as a WLED v2 packet, throttled to ~40/s.
+    /// Send the current frame in `syncFormat`, with the hits since the last packet, throttled to ~40/s: @xref{audio-sync-one-packet-a-frame}.
     void syncSend() {
         if constexpr (!platform::hasNetwork) return;
         const uint32_t now = platform::millis();
         if (now - lastSyncSend_ < kSyncSendIntervalMs) return;
         lastSyncSend_ = now;
-        // samplePeak is a LATCHED beat flag, the way WLED sends it:
-        const bool peak = syncPeakLatched_.exchange(false, std::memory_order_relaxed);
-        uint8_t pkt[WLED_SYNC_PACKET_SIZE];
-        buildWledAudioSync(pkt, frame_, peak);
+        AudioFrame out = frame_;
+        syncHits_.applyTo(out);
+        syncHits_ = {};
+        uint8_t pkt[kMlSyncMaxPacket];
+        const size_t n = syncFormat == kFormatWled ? buildWledAudioSync(pkt, out) : buildMoonLightAudioSync(pkt, out);
         // A steady 40 frames a second is a stream, so no broadcast copy on any network.
         sendAddressed(addressing == kAddressUnicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
                       syncHosts_, syncHostCount_, kSyncMulticastAddr_,
-                      [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, WLED_SYNC_PACKET_SIZE); });
+                      [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, n); });
         syncSendCount_++;
     }
 
-    /// Drain the sync socket (bounded, non-blocking) in Receive mode.
-    bool syncReceive() {
-        if constexpr (!platform::hasNetwork) return false;
-        uint8_t pkt[WLED_SYNC_PACKET_SIZE + 8];   // a little slack over the 44-byte v2
+    /// Drain the sync socket (bounded, non-blocking) in Receive mode, either format, into one new frame with the hits of every packet.
+    void syncReceive() {
+        if constexpr (!platform::hasNetwork) return;
+        if (lastSyncRecv_ != 0 && platform::millis() - lastSyncRecv_ >= kSyncFallbackMs) syncRxSeqValid_ = false;   // a silent sender may come back restarted
+        uint8_t pkt[kMlSyncMaxDatagram];     // what the format allows, so a later version's sections arrive whole
         uint8_t srcIp[4] = {};
+        const uint16_t seq = static_cast<uint16_t>(frame_.seq + 1);   // the receiver numbers its frames, so a consumer reading one on two ticks takes its hits once
+        bool fresh = false, smoothHere = false;
         for (int i = 0; i < kSyncMaxRecvPerTick; i++) {
             const int n = syncSock_.recvFrom(pkt, sizeof(pkt), srcIp);
             if (n <= 0) break;                     // -1 = nothing pending
-            AudioFrame rf;
-            if (parseWledAudioSync(pkt, static_cast<size_t>(n), rf)) {
-                // The packet carries RAW bands; the ballistic is ours and lives across packets.
-                uint8_t keep[16];
-                std::memcpy(keep, frame_.bandsSmoothed, sizeof(keep));
-                const uint16_t seq = frame_.seq;
-                frame_ = rf;                       // received audio drives the effects
-                frame_.seq = static_cast<uint16_t>(seq + 1);
-                std::memcpy(frame_.bandsSmoothed, keep, sizeof(keep));
-                finishBands(frame_, platform::millis());   // a received frame arrives on the wall clock
-                lastSyncRecv_ = platform::millis();
-                // Whose audio this is.
-                std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));
-                // Feed the peer level into the same 1 s peak window the local mic uses, so the "level RMS".
-                if (frame_.level > levelPeak_.load(std::memory_order_relaxed))
-                    levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
-            }
-            // else: a v1 / foreign packet, ignore, keep draining.
+            const uint16_t sections = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), syncRx_);
+            const bool ml = sections != 0;
+            if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), syncRx_)) continue;   // a v1 / foreign packet
+            lastSyncRecv_ = platform::millis();
+            std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));   // whose audio this is
+            const uint16_t behind = static_cast<uint16_t>(syncRxSeq_ - syncRx_.seq);
+            const bool late = ml && syncRxSeqValid_ && behind < kSyncSeqWindow;   // repeated, or late
+            if (!late || behind != 0) syncRxHits_.add(syncRx_);   // a late frame's hits went in no other packet, so the next frame carries them
+            if (late) continue;
+            if (ml) { syncRxSeq_ = syncRx_.seq; syncRxSeqValid_ = true; }
+            smoothHere = !(sections & (1u << kMlSectionSmoothed));   // WLED's packet, or a sender that does not smooth
+            if (smoothHere) std::memcpy(syncRx_.bandsSmoothed, frame_.bandsSmoothed, sizeof(syncRx_.bandsSmoothed));   // the ballistic run here lives across packets
+            frame_ = syncRx_;
+            syncRxWled_ = !ml;
+            fresh = true;
         }
-        // Fresh received audio → skip local mic. Stale (peer quiet) → fall through.
-        return lastSyncRecv_ != 0
-            && (platform::millis() - lastSyncRecv_) < kSyncFallbackMs;
+        if (!fresh) return;
+        syncRxHits_.applyTo(frame_);
+        syncRxHits_ = {};
+        if (smoothHere) finishBands(frame_);
+        else deriveFromBands(frame_);              // the sender's smoothed bands kept, so every board shows the same frame
+        frame_.seq = seq;
+        // Feed the peer level into the same 1 s peak window the local mic uses, so the "level RMS".
+        if (frame_.level > levelPeak_.load(std::memory_order_relaxed))
+            levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
     }
 
-    static constexpr uint16_t kSyncPeakMargin = 8;   // level over smoothed = a beat (samplePeak hint)
-    /// Minimum gap between latched beats, matching WLED's own gate of `millis() - timeOfPeak > 80`, so one loud passage reports one beat.
-    static constexpr uint32_t kSyncPeakRefractoryMs = 80;
-    /// The IP multicast address WLED audio sync uses.
+    /// The IP multicast address audio sync uses, WLED's, in both formats.
     static constexpr uint8_t kSyncMulticastAddr_[4] = {239, 0, 0, 1};
 
     /// How many boards a unicast audio send reaches.
@@ -959,21 +990,8 @@ private:
     void parseSyncHosts() {
         syncHostsError_ = parseHostList(hosts, syncHosts_, kMaxSyncHosts, syncHostCount_);
         if (syncHostsError_) { syncHostCount_ = 0; return; }
-        for (uint8_t i = 0; i < syncHostCount_; i++)
-            if (syncHosts_[i].isName()) { HostResolver::ensureStarted(); break; }
-        refreshSyncHosts();
-    }
-
-    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
-    void refreshSyncHosts() {
-        for (uint8_t i = 0; i < syncHostCount_; i++) {
-            if (!syncHosts_[i].isName()) continue;
-            char name[kMaxHostName + 1];
-            hostName(hosts, syncHosts_[i], name);
-            uint8_t ip[4];
-            const HostResolver::State st = HostResolver::lookup(name, ip);
-            if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(syncHosts_[i].ip, ip, 4);
-        }
+        startResolverForNames(syncHosts_, syncHostCount_);
+        refreshNamedHosts(hosts, syncHosts_, syncHostCount_);
     }
 };
 

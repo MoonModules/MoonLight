@@ -246,6 +246,7 @@ nav:
           - Making beautiful effects: explanation/generative-effects.md
           - Integrating: reference/integrating.md
           - REST API: reference/api.md
+          - Audio sync format: reference/audio-sync.md
       - Light pipeline modules: moonmodules/light/supporting.md
       - Examples:
           - Playing an effect while a button is held: reference/examples/hold-to-play.md

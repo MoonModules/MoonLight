@@ -69,9 +69,9 @@ public:
         if (pixVal > 255) pixVal = 255;
         const uint8_t bri = static_cast<uint8_t>(pixVal);
 
-        // Black unless a real tone sits above 80 Hz and the volume above a quarter scale.
+        // Black unless a real tone sits above 80 Hz while there is sound; the level sets how bright it paints.
         RGB newColor{0, 0, 0};
-        if (f->peakHz > 80 && level > 64) {
+        if (f->peakHz > 80 && f->heard()) {
             // The frequency window mapped onto a palette index, WLED's own limits.
             const int upperLimit = 80 + 42 * static_cast<int>(highBin);
             const int lowerLimit = 80 + 3 * static_cast<int>(lowBin);

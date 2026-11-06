@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.
 ///
-/// `readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each hit, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the three strongest classes at the top left, "C E G", and the key with its tuning at the right, "Am +12".
+/// `readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each drum's hit, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the three strongest classes at the top left, "C E G", and the key with its tuning at the right, "Am +12".
 ///
 /// @attribution Andrew Tuline, troyhacks
 ///
@@ -26,13 +26,13 @@ namespace mm {
 ///
 /// Each mark is a bar wide, rounded up as the rows are: along the bars' top, white over the dominant frequency; at the right edge, the height where the gate opens, white while open and red while the room is gated.
 ///
-/// The bass, mids and treble each draw as a grey line across their own bars at their level, a silent one on the bottom row, so all three always show; a line flashes white on its range's own hit. On the third octaves and the keys each bar's top row flashes white on its own hit, so a tom fill sweeps across the bars and a key flashes as it is struck.
+/// The bass, mids and treble each draw as a gray line across their own bars at their level, a silent one on the bottom row, so all three always show; a line flashes white on its range's own hit. On the third octaves and the keys each bar's top row flashes white on its own hit, so a tom fill sweeps across the bars and a key flashes as it is struck.
 ///
-/// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square that flashes red on each hit. With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
+/// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square split in three for the range hits: kick red, snare amber, hats blue. With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
 ///
 /// ## The instrument
 ///
-/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds. A frame from audio sync carries the sixteen alone, so the third octaves and the keys fall back to them; with `harmony` off the keys fall back to the third octaves.
+/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds. A frame synced in the WLED format carries the sixteen alone, so the third octaves and the keys fall back to them; with `harmony` off the keys fall back to the third octaves.
 ///
 /// Of `n` bars, bar `i` spans columns `i*w/n` up to `(i+1)*w/n` and rises `band*h/255` rows, as GEQ PPA computes them for sixteen, so the two compare pixel for pixel.
 ///
@@ -51,9 +51,7 @@ public:
     uint8_t colorMode = kColorPerBand;
     /// The level meter, hits, gate and peak, drawn with the bars.
     bool readouts = true;
-    /// The bands to draw, in option order.
-    enum Bands : uint8_t { kBands16, kBandsThirds, kBandsNotes, kBandsCount };
-    /// WLED-MM's sixteen, every third octave, or the piano's keys.
+    /// The bars: the sixteen, the third octaves or the piano's keys.
     uint8_t bands = kBandsThirds;
     /// The sweep's swings through the palette a minute.
     uint8_t speed = 60;
@@ -69,8 +67,7 @@ public:
         controls_.setHidden(controls_.count() - 1, colorMode != kColorSweep);
         controls_.addControl("readouts", readouts);
         controls_.addControl("noteNames", noteNames);
-        static constexpr const char* kBandOptions[] = {"16", "thirds", "notes"};
-        controls_.addSelect("bands", bands, kBandOptions, kBandsCount);
+        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
     }
 
     /// Draw the level meter and the pitch classes, one bar per column from its band's magnitude, then the gate and the peak over them.
@@ -83,9 +80,9 @@ public:
 
         const AudioFrame* f = AudioService::latestFrame();
         // The scale asked for, falling back to the next coarser one a frame does not carry: @xref{the-instrument}.
-        const Bands scale = bands == kBandsNotes && f->notesCount > 0 ? kBandsNotes
-                          : bands != kBands16 && f->thirdsCount > 0 ? kBandsThirds : kBands16;
-        const uint8_t n = scale == kBandsNotes ? f->notesCount : scale == kBandsThirds ? f->thirdsCount : 16;   // 79 keys, or 28 thirds at the default 24 kHz
+        const AudioBars bars = barsOf(*f, bands);
+        const BarScale scale = bars.scale;
+        const uint8_t n = bars.n;   // 79 keys, or 28 thirds at the default 24 kHz
 
         // A bar's width rounded up, so a bar under two columns wide still gets two rows of meter and a mark two wide: the width every readout takes.
         const lengthType barW = static_cast<lengthType>((w + n - 1) / n);
@@ -96,20 +93,19 @@ public:
         const lengthType barsH = static_cast<lengthType>(specH - pitchRows);   // the rows the bars rise in
 
         const uint32_t ms = elapsed();
-        if (f->onset) onsetUntilMs_ = ms + kOnsetFlashMs;
         if (f->harmonyChange) changeUntilMs_ = ms + kChangeFlashMs;
         const uint8_t rangeHits[3] = {f->onsetLow, f->onsetMid, f->onsetHigh};
         for (uint8_t r = 0; r < 3; r++) if (rangeHits[r]) rangeUntilMs_[r] = ms + kOnsetFlashMs;
         // Each bar's own hit, where the bars are the bands that carry them.
-        const uint8_t* hits = !readouts || h == 1 ? nullptr : scale == kBandsNotes ? f->notesHits : scale == kBandsThirds ? f->thirdsHits : nullptr;
+        const uint8_t* hits = !readouts || h == 1 ? nullptr : bars.hits;
         if (hits) markBarHits(hits, n, ms);
-        if (levelRows) drawLevelMeter(cv, f->level, specH, ms < onsetUntilMs_);
+        if (levelRows) drawLevelMeter(cv, f->level, specH, ms);
         if (pitchRows) drawPitchClasses(cv, f->chroma, pitchRows, ms < changeUntilMs_);
 
         // The bars sit on the level meter, or on the floor without one.
         const lengthType specBottom = static_cast<lengthType>(specH - 1);
         for (uint8_t band = 0; band < n; band++) {
-            const uint8_t mag = scale == kBandsNotes ? f->notes[band] : scale == kBandsThirds ? f->thirds[band] : f->bands[band];
+            const uint8_t mag = bars.mag[band];
             // The bar's height over the spectrum area, where a single row lights whole.
             const lengthType lit = (h == 1) ? 1 : static_cast<lengthType>(static_cast<uint32_t>(mag) * barsH / 255u);
             // The bar's one color, once per bar rather than per pixel; height varies it per row instead.
@@ -137,7 +133,7 @@ public:
     }
 
     /// Where `hz` sits across `n` bars, in bars: the key from A0, the third-octave index, or that mapped between the sixteen when only those show.
-    static float peakBar(uint16_t hz, Bands scale, uint8_t n) MM_NONBLOCKING {
+    static float peakBar(uint16_t hz, BarScale scale, uint8_t n) MM_NONBLOCKING {
         if (scale == kBandsNotes) return std::fmin(std::fmax(12.0f * std::log2(static_cast<float>(hz) / 27.5f), 0.0f), static_cast<float>(n - 1));
         const float third = 17.0f + 3.0f * std::log2(static_cast<float>(hz) / 1000.0f);   // band 17 is 1 kHz
         if (scale == kBandsThirds) return std::fmin(std::fmax(third, 0.0f), static_cast<float>(n - 1));
@@ -151,7 +147,8 @@ public:
 private:
     /// How long the square stays red after a hit: an onset lasts one audio block, 21 ms at 24 kHz, too short for the eye.
     static constexpr uint32_t kOnsetFlashMs = 100;
-    uint32_t onsetUntilMs_ = 0;   ///< until when the square shows the last hit
+    /// Each range's hit in the square: the kick red, the snare amber, the hats blue.
+    static constexpr RGB kHitColors[3] = {{255, 0, 0}, {255, 160, 0}, {0, 120, 255}};
     /// How long the pitch classes go dark after a chord change, one block too short for the eye as an onset is.
     static constexpr uint32_t kChangeFlashMs = 100;
     uint32_t changeUntilMs_ = 0;  ///< until when the row shows the last change
@@ -170,27 +167,32 @@ private:
     }
 
     /// The level meter on the rows from `top` down: the raw level across the palette, since a lag is wrong for judging response, and at its right end a square, red while a hit shows.
-    void drawLevelMeter(const draw::Canvas& cv, uint16_t level, lengthType top, bool hit) MM_NONBLOCKING {
+    void drawLevelMeter(const draw::Canvas& cv, uint16_t level, lengthType top, uint32_t ms) MM_NONBLOCKING {
         const lengthType side = static_cast<lengthType>(height() - top);
         const lengthType w = width() > side ? static_cast<lengthType>(width() - side) : 0;   // the meter stops short of the square
         const lengthType litW = static_cast<lengthType>(static_cast<uint32_t>(level > 255 ? 255 : level) * w / 255u);
+        const lengthType sq = static_cast<lengthType>(width() - w);
         for (lengthType y = top; y < height(); y++) {
             draw::bar(cv, 0, y, litW, draw::Grow::Right, [w](lengthType x) {
                 return colorFromPalette(*Palettes::active(), static_cast<uint8_t>(static_cast<uint32_t>(x) * 255u / (w > 1 ? w : 1)), 255);
             });
-            if (hit) draw::bar(cv, w, y, static_cast<lengthType>(width() - w), draw::Grow::Right, [](lengthType) { return RGB{255, 0, 0}; });
+            // The square in three, the kick, the snare and the hats left to right, each lit while its range's hit shows.
+            for (lengthType x = 0; x < sq; x++) {
+                const uint8_t r = static_cast<uint8_t>(static_cast<uint32_t>(x) * 3u / static_cast<uint32_t>(sq));
+                if (ms < rangeUntilMs_[r]) draw::pixel(cv, {static_cast<lengthType>(w + x), y, 0}, kHitColors[r]);
+            }
         }
     }
 
     /// The dominant frequency as a white mark `barW` wide along the bars' top row `y`, centered where it sits on the bars' axis.
-    void drawPeak(const draw::Canvas& cv, uint16_t hz, Bands scale, uint8_t n, lengthType barW, lengthType y) MM_NONBLOCKING {
+    void drawPeak(const draw::Canvas& cv, uint16_t hz, BarScale scale, uint8_t n, lengthType barW, lengthType y) MM_NONBLOCKING {
         const float center = (peakBar(hz, scale, n) + 0.5f) * width() / n;
         const lengthType x = static_cast<lengthType>(std::fmin(std::fmax(center - barW / 2.0f, 0.0f), static_cast<float>(width() - barW)));
         draw::bar(cv, x, y, barW, draw::Grow::Right, [](lengthType) { return RGB{255, 255, 255}; });
     }
 
-    /// The bass, mids and treble, each a grey line across its own bars at its height, a silent range on the bottom row and white while its hit shows: the range's level read where its bands are.
-    void drawRanges(const draw::Canvas& cv, const AudioFrame& f, Bands scale, uint8_t n, lengthType specH, lengthType barsH, uint32_t ms) MM_NONBLOCKING {
+    /// The bass, mids and treble, each a gray line across its own bars at its height, a silent range on the bottom row and white while its hit shows: the range's level read where its bands are.
+    void drawRanges(const draw::Canvas& cv, const AudioFrame& f, BarScale scale, uint8_t n, lengthType specH, lengthType barsH, uint32_t ms) MM_NONBLOCKING {
         const lengthType w = width();
         const float edgesHz[4] = {0.0f, 140.0f, 2240.0f, 0.0f};   // between 125 and 160 Hz, and 2 and 2.5 kHz
         const uint8_t levels[3] = {f.bass, f.mid, f.treble};

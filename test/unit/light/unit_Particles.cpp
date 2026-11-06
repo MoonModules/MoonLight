@@ -1,9 +1,9 @@
 /// @module particles
 /// @also draw, math16
 
-/// The particle kernel.
-/// Five effects each carried their own integrator, wall bounce and aging before this existed.
-/// These tests pin the PHYSICS an effect relies on, that a constant force accelerates, that a bounce loses the right fraction of speed, that a dead slot is reusable, rather than exact coordinates, which are an implementation detail of the fixed-point scale.
+/// The particle kernel: one integrator, wall bounce and aging for every particle effect.
+///
+/// These tests pin the physics an effect relies on (a force accelerates, a bounce loses its fraction, a dead slot is reused), not coordinates on the fixed-point scale.
 
 #include "doctest.h"
 #include "light/powerfunctions/particles.h"
@@ -15,8 +15,7 @@ using namespace mm::particles;
 using draw::toSub;
 
 namespace {
-/// A pool over plain arrays, the test's stand-in for an effect's ScratchBuffers.
-/// The kernel is a view and owns nothing, which is exactly what makes this possible.
+/// A pool over plain arrays, standing in for an effect's ScratchBuffers, which works because the kernel is a view that owns nothing.
 template <uint16_t N>
 struct TestPool {
     draw::pos_t x[N]{}, y[N]{}, vx[N]{}, vy[N]{};
@@ -268,7 +267,7 @@ TEST_CASE("an attractor does not fling a particle sitting on top of it") {
     TestPool<2> t;
     t.pool.spawn(toSub(8), toSub(8), 0, 0, 200, 0);
     t.pool.attract(toSub(8), toSub(8), 100000);
-    // MAGNITUDE, not just the upper side: an unclamped inverse-square blows up in whichever direction the rounding sends it, and a one-sided check passes on a large negative. Widen before taking the magnitude: draw::pos_t is int32, and std::abs of its minimum has no representation in the same type.
+    // The magnitude, since the blow-up goes either way; widened first, as std::abs of int32's minimum has no int32 value.
     CHECK(std::llabs(static_cast<int64_t>(t.vx[0])) < toSub(100));   // finite, not a blowup
     CHECK(std::llabs(static_cast<int64_t>(t.vy[0])) < toSub(100));
 }
@@ -344,9 +343,7 @@ TEST_CASE("a pool with no storage reports itself invalid") {
 
 // --- The industry-standard details ------------------------------------------------------------
 
-// The documented rounding trap: `-1 >> 1` is `-1`, not `0`, so a signed right shift rounds negative values away from zero and positive ones toward it.
-// Applied per frame that asymmetry is a drift, particles moving left creep further than particles moving right.
-// Scaling must be symmetric.
+// `-1 >> 1` is `-1`, so a signed shift rounds negatives away from zero; per frame that drifts leftward movers further, so scaling is symmetric.
 TEST_CASE("drag slows left and right movers by the same amount") {
     TestPool<4> t;
     t.pool.spawn(0, 0,  toSub(3), 0, 200, 0);   // moving right
@@ -400,9 +397,7 @@ TEST_CASE("a pool without an accumulator ignores sub-unit forces") {
 
 // --- Framerate independence -------------------------------------------------------------------
 
-// The system rule (architecture.md): everything that changes over time is driven by elapsed time, never by the frame count.
-// A pool advanced a fixed amount per frame has physics that are a property of the hardware, the same gravity is an explosion at 5000 fps and a drift at 60.
-// Simulating the same span of real time at wildly different framerates must land a particle in the same place.
+// Time, not the frame count, drives the physics: the same span of real time at any framerate lands a particle in the same place.
 TEST_CASE("a particle lands in the same place at any framerate") {
     auto simulate = [](int fps) {
         TestPool<2> t;
@@ -551,7 +546,7 @@ TEST_CASE("wrapping can be enabled per axis") {
     CHECK(t.y[0] < 0);                            // ...y was left alone, so a snowfall still lands
 }
 
-// Wrapping reduces by modulo rather than by repeated subtraction, so a particle thrown a long way out costs the same as one just over the line. These pin the exact landing points, including the two edges, because "somewhere back inside" would pass for an implementation that is off by a span.
+// Wrapping reduces by modulo, so a far throw costs what a near one does; the exact landing points are pinned, as "back inside" passes an off-by-a-span wrap.
 TEST_CASE("wrapping puts a particle at an exact position, however far out it started") {
     TestPool<4> t;
     const draw::pos_t w = toSub(16), h = toSub(16);
@@ -564,7 +559,7 @@ TEST_CASE("wrapping puts a particle at an exact position, however far out it sta
     CHECK(t.x[2] == toSub(5));
 }
 
-// The two edges are deliberately not symmetric: coming down from above stops AT the far edge, while climbing from below stops at 0. Both name the same point on a wrapped axis, and the wall passes agree with this, so it is pinned rather than left to drift.
+// The edges differ on purpose: from above a particle stops at the far edge, from below at 0, the same point on a wrapped axis, as the wall passes agree.
 TEST_CASE("an exact multiple of the axis lands on the edge it approached from") {
     TestPool<4> t;
     const draw::pos_t w = toSub(16), h = toSub(16);
@@ -621,11 +616,9 @@ TEST_CASE("a pool without size storage still renders every particle") {
     CHECK((buf.data()[at] || buf.data()[at + 1] || buf.data()[at + 2]));   // drawn, not skipped
 }
 
-// FrameTime is the branch's shared answer to "how much of a reference frame did this frame cover". Its reference PERIOD has to be exact: deriving it as `1000 / referenceHz` truncates to 16 ms for 60 Hz, which is a 62.5 Hz reference, and every 60-fps-calibrated setting in the codebase then runs about 4% fast, invisible per frame, a drift of seconds over a minute.
+// FrameTime measures how much of a reference frame a frame covered, so its period is exact: `1000 / 60` truncates to 16 ms, and every setting runs 4% fast.
 TEST_CASE("one second of motion is the same amount of motion however fast the device renders") {
-    // A setting written against 60 fps has to mean the same thing everywhere.
     // One second of real time is 60 reference frames of movement, whether the device drew 30 frames or 1200.
-    // Deriving the reference period as `1000 / 60` gives 16 ms, a 62.5 Hz clock, and every calibrated setting in the codebase then runs about 4% fast, which is a drift of seconds over a minute.
     for (int fps : {30, 60, 240, 1200}) {
         CAPTURE(fps);
         particles::FrameTime t{60};
@@ -640,11 +633,7 @@ TEST_CASE("one second of motion is the same amount of motion however fast the de
     }
 }
 
-// Slots map onto DISTINCT lanes at any count.
-// Effects assign slots by species or role, and species differ in speed, so a straight stride sorts the scene and the fast ones bunch at one edge.
-// The interleave exists to mix them.
-// Its step must be coprime with the count, or the mapping collapses.
-// `(i * 5) % 5` is zero for every i, which stacked a five-character cast on one row (bench, PacmanEffect).
+// Slots map onto distinct lanes at any count: the interleave's step is coprime with the count, where `(i * 5) % 5` stacked Pacman's five on one row.
 TEST_CASE("spreadLane gives every slot its own lane, for any count") {
     // The extent is a multiple of every count tested, so each lane lands on its own exact position and two slots sharing a lane is a real collision rather than a rounding artifact.
     constexpr mm::lengthType kExtent = 27720;   // lcm(1..12), divisible by every count below
@@ -664,7 +653,7 @@ TEST_CASE("spreadLane gives every slot its own lane, for any count") {
 
 // The interleave is the point: consecutive slots must not land on adjacent lanes, or assigning slots by species puts every fast one together regardless of the lanes being distinct.
 TEST_CASE("spreadLane interleaves rather than striding in order") {
-    // EVERY consecutive pair must be non-adjacent, not merely one of them. The weaker form of this test passed against a stride of `slots - 1`, which is coprime but congruent to -1, so consecutive slots walked DOWN neighboring lanes and nothing was interleaved at all.
+    // Every consecutive pair, since a stride of `slots - 1` is coprime yet walks consecutive slots down neighboring lanes.
     constexpr mm::lengthType kExtent = 27720;      // lcm(1..12): every count below divides it
     for (uint16_t slots = 5; slots <= 12; slots++) {
         if (slots == 6) continue;   // 6 has no coprime near 3 (2 and 3 both share a factor)
@@ -685,6 +674,17 @@ TEST_CASE("Silence stands the sprites still") {
     for (uint16_t i = 0; i < 8; i++) CHECK(mm::particles::audioDrive(&quiet, i, 8) == 0);
 }
 
+// The pauses inside the music are part of the dance: a quiet moment slows the scene toward a stop while the gate stays open.
+TEST_CASE("A quiet moment in the music slows the sprites toward a stop") {
+    mm::AudioFrame playing, hush;
+    playing.gate = hush.gate = 40;
+    playing.gateOpen = hush.gateOpen = true;   // the music plays on, so the gate holds
+    playing.level = 200;
+    hush.level = 0;                            // a breath between phrases
+    CHECK(mm::particles::audioDrive(&hush, 0, 8) == 0);
+    CHECK(mm::particles::audioDrive(&playing, 0, 8) > 0);
+}
+
 TEST_CASE("Without an audio source the sprites keep moving normally") {
     // A device with no microphone must not end up with a frozen scene.
     CHECK(mm::particles::audioDrive(nullptr, 0, 8) == mm::particles::FrameTime::kOne);
@@ -692,8 +692,8 @@ TEST_CASE("Without an audio source the sprites keep moving normally") {
 
 TEST_CASE("Loud music moves the sprites faster than quiet music") {
     mm::AudioFrame quiet, loud;
-    quiet.levelSmoothed = 40;
-    loud.levelSmoothed  = 200;
+    quiet.level = quiet.levelSmoothed = 40;
+    loud.level  = loud.levelSmoothed  = 200;
     for (uint8_t b = 0; b < 16; b++) { quiet.bands[b] = 20; loud.bands[b] = 240; }
     CHECK(mm::particles::audioDrive(&loud, 0, 8) > mm::particles::audioDrive(&quiet, 0, 8));
 }
@@ -701,7 +701,7 @@ TEST_CASE("Loud music moves the sprites faster than quiet music") {
 // The point of a per-sprite band rather than one overall volume. A bass-heavy moment moves the bass sprites and leaves the treble ones alone, so the scene never surges as a single block.
 TEST_CASE("Each sprite follows its own frequency band") {
     mm::AudioFrame f;
-    f.levelSmoothed = 128;
+    f.level = f.levelSmoothed = 128;
     for (uint8_t b = 0; b < 16; b++) f.bands[b] = 0;
     f.bands[0] = 255;                            // bass only
     const uint32_t bass   = mm::particles::audioDrive(&f, 0, 8);
@@ -710,13 +710,10 @@ TEST_CASE("Each sprite follows its own frequency band") {
     CHECK(treble > 0);                           // a quiet band drifts, it does not freeze mid-air
 }
 
-// The bands must be spread over the sprites that EXIST, not over the pool's capacity.
-// Passing the capacity (a Pool is allocated for the maximum, then partly filled) crowds every live sprite into the low bands and leaves the treble driving nothing at all.
-// With 5 sprites in a pool of 12, `i * 16 / 12` yields bands 0,1,2,4,5 - all bass.
-// Caught in review after shipping; the earlier tests missed it because they all passed the live count as `slots`.
+// The bands spread over the live sprites, not the pool's capacity, which would crowd every sprite into the bass and leave the treble driving nothing.
 TEST_CASE("The spectrum is spread over the live sprites, not the pool capacity") {
     AudioFrame f;
-    f.levelSmoothed = 128;
+    f.level = f.levelSmoothed = 128;
     for (uint8_t b = 0; b < 16; b++) f.bands[b] = 0;
 
     // Five live sprites in a pool sized for twelve. Spread over the LIVE count they take bands 0, 3, 6, 9, 12; spread over the capacity they would take 0, 1, 2, 4, 5 - the bottom third.

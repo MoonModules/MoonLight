@@ -7,6 +7,9 @@
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
 #include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "audio_effect_test.h"   // EffectOnGrid, seat, play
+
+#include <cstdlib>
 
 // Lines oscillate with a length scaled by their band, so silence draws nothing; a frozen clock makes the frame and the oscillators deterministic.
 
@@ -164,4 +167,43 @@ TEST_CASE("PaintBrushEffect survives degenerate grid sizes") {
         for (int i = 0; i < 4; i++) { mic.tick(); layer.tick(); }   // must not crash on 0×0×0 or 1×1×1
     }
     CHECK(true);
+}
+
+// The endpoints' phase was elapsed time times the rate, so ten minutes in, the bass moving the rate by one jumped every endpoint ten whole cycles: the chaos the bench saw. An accumulated phase speeds the sweep from where it is.
+using namespace mm;
+
+TEST_CASE("PaintBrushEffect: a bass change at ten minutes' uptime moves the strokes on from where they are") {
+    golden::ScopedTestClock clock(600000);
+    AudioService& audio = seat();
+    EffectOnGrid<PaintBrushEffect> p(64, 64);
+    AudioFrame quiet;
+    quiet.bandsSmoothed[0] = 0;
+    play(p, audio, quiet, 600000);
+    play(p, audio, quiet, 600020);
+    const int before = p.e.endpointForTest(0, 100, 64);
+    AudioFrame bass = quiet;
+    bass.bandsSmoothed[0] = 240;   // the bass adds 15 cycles a minute to every oscillator
+    play(p, audio, bass, 600021);
+    const int after = p.e.endpointForTest(0, 100, 64);
+    CHECK(std::abs(after - before) <= 1);   // a millisecond's sweep, not a jump across the grid
+    audio.release();
+}
+
+// The summary's promise: each drum hit stretches the strokes to their span, so the brush answers the drums.
+TEST_CASE("PaintBrushEffect: a drum hit stretches the strokes") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    auto litAfter = [&](uint8_t onset) {
+        EffectOnGrid<PaintBrushEffect> p(32, 32);
+        AudioFrame f;
+        for (uint8_t b = 0; b < 16; b++) f.bandsSmoothed[b] = 40;   // quiet bands: short strokes
+        play(p, audio, f, 1000);
+        f.onset = onset;
+        play(p, audio, f, 1500);
+        int lit = 0;
+        for (int y = 0; y < 32; y++) for (int x = 0; x < 32; x++) lit += p.at(x, y) > 0;
+        return lit;
+    };
+    CHECK(litAfter(200) > litAfter(0));
+    audio.release();
 }

@@ -196,8 +196,7 @@ public:
         if (mode() == Addressing::Unicast) {
             const char* err = parseHostList(hosts, dest, kMaxDestinations, n);
             if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
-            for (uint8_t d = 0; d < n; d++)
-                if (dest[d].isName()) { HostResolver::ensureStarted(); break; }   // here, where allocating is allowed
+            startResolverForNames(dest, n);
             if (n == 0) {
                 // A Warning, not an Error: an unset host is unfinished, not faulty.
                 stopSendTask();

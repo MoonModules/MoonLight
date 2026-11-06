@@ -31,6 +31,18 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### Audio sync sends the whole frame, in MoonLight's own format
+
+**Action: *re-set a control*: `syncFormat` to `WLED` on the Audio card of a board whose audio feeds WLED devices.**
+
+A sending board now sends the MoonLight format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. WLED does not read it, so a board feeding WLED devices picks `WLED`, whose packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
+
+### The audio effects read the drums, and four bar effects default to the third octaves
+
+**Action: *nothing*, or *re-set a control* to keep a look you tuned.**
+
+An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, Space Invaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush sweeps instead of jumping. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
+
 ### ESP32-P4 boards read their flash over four lines
 
 **Action: *install over USB* once, on every ESP32-P4 device (`esp32p4rev1-eth`, `esp32p4rev1-eth-wifi`, `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi`).**

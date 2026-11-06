@@ -1955,9 +1955,6 @@ function mlLiveEditors(name) {
 /// the offset counts into. Each returns the same rewritten text, so which one supplies it does not
 /// matter; a module with no editor open shows the raw status unchanged.
 function setStatusText(valEl, mod) {
-    // Every editor on this module marks the line; each returns the same rewritten text, since they
-    // hold the same file. Keeping the first answer rather than the last says that plainly: the
-    // string does not depend on which editor supplied it.
     // Every editor on this module marks the line and returns the SAME rewritten text, since they
     // hold the same file: so mark them all, and take any one answer.
     let text = mod.status;

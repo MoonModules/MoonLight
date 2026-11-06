@@ -75,11 +75,34 @@ TEST_CASE("on the kick trigger a hit in the treble drops no stone and a hit in t
     auto hit = [&](uint8_t bass, uint8_t treble, uint32_t at) {
         AudioFrame& f = audio.frameForTest();
         f.onset = 200; f.onsetLow = bass; f.onsetHigh = treble;
+        f.seq++;   // a new frame, as every source numbers one
         for (int i = 0; i < 20; i++) { platform::setTestNowMs(at + i * 20u); layer.tick(); f.onset = f.onsetLow = f.onsetHigh = 0; }
     };
     hit(0, 220, 1000);    // a hi-hat: the treble's onset alone
     CHECK(brightestLight(layer) == 0);
     hit(220, 0, 2000);    // a kick: the bass's own onset
     CHECK(brightestLight(layer) > 16);
+    audio.release();
+}
+
+// Two drums on consecutive frames are two stones, and one frame read on two ticks is one: hits are taken once a frame by its number, where a level edge merged back-to-back hits (review, 2026-11-06).
+TEST_CASE("a hit on each of two consecutive frames drops two stones, and a frame read twice drops one") {
+    golden::ScopedTestClock clock(1000);
+    static AudioService audio;
+    audio.defineControls();
+    audio.setup();
+    audio.tick();   // claims the seat latestFrame reads
+    Ripples r;
+    r.e.rain = 0;   // no idle drops: only a hit drops a stone
+    r.start();
+    AudioFrame& f = audio.frameForTest();
+    f.onset = 200;
+    f.seq++;
+    platform::setTestNowMs(1020); r.layer.tick();
+    platform::setTestNowMs(1040); r.layer.tick();   // the same frame again
+    CHECK(r.e.stonesForTest() == 1);
+    f.seq++;                                         // the next frame, a hit too
+    platform::setTestNowMs(1060); r.layer.tick();
+    CHECK(r.e.stonesForTest() == 2);
     audio.release();
 }

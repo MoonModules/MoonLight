@@ -695,7 +695,7 @@
   },
   "AudioSpectrumEffect": {
    "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -724,7 +724,7 @@
      "line": "The strongest pitch classes top left, the key top right."
     },
     "bands": {
-     "line": "WLED-MM's sixteen, every third octave, or the piano's keys."
+     "line": "The bars: the sixteen, the third octaves or the piano's keys."
     }
    },
    "role": "effect",
@@ -749,7 +749,7 @@
      "line": "Read the meter ballistic rather than the raw bands."
     },
     "beat": {
-     "line": "A white shockwave born at the center on every onset."
+     "line": "A shockwave on each drum hit, in its range's sectors."
     }
    },
    "role": "effect",
@@ -886,7 +886,7 @@
   },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
-   "summary": "The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position.",
+   "summary": "The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position. A band struck that frame flashes its dot white.",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BlurzEffect.gif",
    "controls": {
@@ -1104,6 +1104,9 @@
     "method": {
      "line": "The phase model that places the saw.",
      "more": "`Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps."
+    },
+    "bands": {
+     "line": "The bars: the sixteen, the third octaves or the piano's keys."
     }
    },
    "role": "effect",
@@ -1245,8 +1248,8 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#gameoflifeeffect"
   },
   "GEQEffect": {
-   "line": "A flat graphic equalizer: the 16 audio bands rise as vertical bars from the bottom.",
-   "summary": "The bands spread across the columns, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. [GEQ3D](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#geq3d) draws the same data in perspective.",
+   "line": "A flat graphic equalizer: the audio bands rise as vertical bars from the bottom.",
+   "summary": "The bands spread across the columns, the third octaves by default or the sixteen or the piano's keys with `bands`, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. [GEQ3D](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#geq3d) draws the same data in perspective.",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/GEQEffect.gif",
    "controls": {
@@ -1261,6 +1264,9 @@
     },
     "smoothBars": {
      "line": "Blend neighboring bands for smoother bar heights."
+    },
+    "bands": {
+     "line": "The bars: the sixteen, the third octaves or the piano's keys."
     }
    },
    "role": "effect",
@@ -1282,6 +1288,9 @@
     "frontFill": {
      "line": "How strongly a bar's front face fills."
     },
+    "sideFill": {
+     "line": "How strongly a bar's side faces fill, which is what shows its depth."
+    },
     "horizon": {
      "line": "The row the vanishing point (the projector) sits on."
     },
@@ -1289,10 +1298,13 @@
      "line": "How far the side and top lines reach toward the projector."
     },
     "numBands": {
-     "line": "How many bands are shown, where fewer gives wider bars."
+     "line": "The bars shown, capped by the source and the grid; fewer are wider."
     },
     "borders": {
      "line": "Outline each bar."
+    },
+    "bands": {
+     "line": "The bars: the sixteen, the third octaves or the piano's keys."
     }
    },
    "role": "effect",
@@ -1499,7 +1511,7 @@
   },
   "PaintBrushEffect": {
    "line": "Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat over a fading field.",
-   "summary": "Each stroke is shortened to a band-magnitude length, so the moving tip sweeps a curve. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.",
+   "summary": "Each stroke is shortened to its band's length, so the moving tip sweeps a curve, and each drum hit stretches every stroke to its full span before it settles back. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.",
    "attribution": "[troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/PaintBrushEffect.gif",
    "controls": {
@@ -1673,6 +1685,9 @@
     },
     "drift": {
      "line": "How far the origin wanders from the center; 0 pins it there."
+    },
+    "trigger": {
+     "line": "Whether any drum fires a shell, or the kick alone."
     }
    },
    "role": "effect",
@@ -2291,7 +2306,7 @@
   },
   "SpectrumEffect": {
    "line": "An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read.",
-   "summary": "A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.",
+   "summary": "The bars are the third octaves by default, or the sixteen or the piano's keys with `bands`. A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.",
    "attribution": "[IEC 60268-17](https://moonmodules.org/MoonLight/reference/attributions.html#iec-60268-17), [WLED](https://moonmodules.org/MoonLight/reference/attributions.html#wled)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpectrumEffect.gif",
    "controls": {
@@ -2309,6 +2324,9 @@
     },
     "colorByColumn": {
      "line": "Color each bar by its column rather than by height."
+    },
+    "bands": {
+     "line": "The bars: the sixteen, the third octaves or the piano's keys."
     }
    },
    "role": "effect",
@@ -2481,7 +2499,7 @@
      "line": "The gobo or prism spin as a raw byte, see the fixture's manual."
     },
     "goboOnBeat": {
-     "line": "Roll a new gobo when the level jumps, then hold it a moment.",
+     "line": "Roll a new gobo on a drum hit, then hold it a moment.",
      "more": "The hold stops a busy track from strobing through patterns."
     }
    },
@@ -2545,7 +2563,7 @@
      "line": "Magnification per art pixel: 1 on a matrix, 2 or more on a wall."
     },
     "audioReactive": {
-     "line": "The formation steps on the beat, and silence holds it still."
+     "line": "The formation steps on the kick, and silence holds it still."
     },
     "player": {
      "line": "The cannon, for a fader or an input; idle, the game plays it."
@@ -4178,12 +4196,12 @@
   },
   "AudioService": {
    "line": "The audio source the audio-reactive effects read: a level, sixteen bands, the 31 third octaves and the peak.",
-   "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's WLED-compatible audio, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
+   "summary": "Local analyzes a microphone, line-in or capture device here. Receive network follows a peer's audio, MoonLight's or WLED's, and Simulate synthesizes a song for demos. A local source can send its analysis on to other devices.",
    "attribution": "[softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks), [NetMindz](https://moonmodules.org/MoonLight/reference/attributions.html#netmindz), [wladi](https://moonmodules.org/MoonLight/reference/attributions.html#wladi)",
    "guide": [
     {
      "title": "Choosing a source",
-     "text": "Simulate needs nothing. Receive network needs a WLED-compatible sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop."
+     "text": "Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop."
     },
     {
      "title": "Wiring and capture",
@@ -4258,6 +4276,10 @@
     "send audio": {
      "line": "Send the local analysis as audio-sync packets."
     },
+    "syncFormat": {
+     "line": "What a sending board sends: the whole frame for MoonLight boards, or WLED's packet.",
+     "more": "A receiving board reads either. Pick WLED on a board that feeds WLED devices."
+    },
     "addressing": {
      "line": "How the analysis travels: multicast, which WLED hears, or unicast.",
      "more": "Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it."
@@ -4276,7 +4298,7 @@
      "line": "The level of the audio driving the effects, from any source."
     },
     "onsets": {
-     "line": "The beats heard per second and their spectral flux."
+     "line": "The drum hits heard per second, and the spectral flux."
     },
     "peakHz": {
      "line": "The dominant frequency of the audio driving the effects."

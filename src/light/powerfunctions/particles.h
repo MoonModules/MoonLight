@@ -93,15 +93,15 @@ inline lengthType spreadLane(uint16_t i, uint16_t slots, lengthType extent) {
 inline uint32_t audioDrive(const AudioFrame* frame, uint16_t i, uint16_t slots) {
     if (!frame) return FrameTime::kOne;       // no audio source: move normally, never freeze
 
-    // Below this the input is room noise rather than music, and the scene stands still.
-    constexpr uint16_t kSilence = 8;
-    if (frame->levelSmoothed < kSilence) return 0;
+    if (!frame->heard()) return 0;   // room noise rather than music: the scene stands still
 
     const uint8_t band = slots ? static_cast<uint8_t>((static_cast<uint32_t>(i) * 16u) / slots) : 0;
+    // Raw values: a speed is integrated into the position, so a lively speed moves a sprite without a jump.
     const uint32_t mag = frame->bands[band > 15 ? 15 : band];
+    const uint32_t level = frame->level > 255 ? 255 : frame->level;
 
-    // A floor under the band keeps a sprite whose own band is quiet drifting slowly rather than frozen mid-air while the music plays.
-    return FrameTime::kOne / 4 + (mag * FrameTime::kOne * 7) / (255 * 4);
+    // The floor follows the level, so a quiet moment slows the scene toward a stop and a pause stops it; the sprite's own band adds its speed on top.
+    return (level * FrameTime::kOne) / (255 * 4) + (mag * FrameTime::kOne * 7) / (255 * 4);
 }
 
 struct Pool {

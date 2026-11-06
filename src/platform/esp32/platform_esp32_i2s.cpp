@@ -35,8 +35,6 @@ namespace mm::platform {
 
 namespace {
 
-const char* I2S_TAG = "mm_i2s";
-
 struct MicState {
     i2s_chan_handle_t rx = nullptr;
     bool pdm = false;          ///< PDM reads 16-bit samples; the std path reads 32
@@ -97,7 +95,7 @@ bool audioMicInit(AudioMicHandle& h, uint16_t wsPin, uint16_t sdPin,
         return true;
 #else
         // The chip has no PDM receiver. Fail rather than quietly configure a standard-mode channel on two pins, which would read noise and look like a wiring fault.
-        ESP_LOGE(I2S_TAG, "PDM microphone requested, but this chip has no PDM receiver");
+        ESP_LOGE("mm_i2s", "PDM microphone requested, but this chip has no PDM receiver");
         i2s_del_channel(st->rx);
         delete st;
         return false;

@@ -48,7 +48,7 @@ public:
     uint8_t gobo   = 0;
     /// The gobo or prism spin as a raw byte, see the fixture's manual.
     uint8_t rotate = 0;
-    /// Roll a new gobo when the level jumps, then hold it a moment.
+    /// Roll a new gobo on a drum hit, then hold it a moment.
     /// @guide The hold stops a busy track from strobing through patterns.
     bool goboOnBeat = false;
 
@@ -109,10 +109,12 @@ public:
 
         // Once a frame rather than per head, and either feature needs it.
         const AudioFrame* audio = (audioReactive || goboOnBeat) ? AudioService::latestFrame() : nullptr;
-        const bool live = audio && audio->levelSmoothed >= kSilence;
+        const bool live = audio && audio->heard();
 
-        // A beat widens the sweep and decays over about 20 frames, since one frame is invisible.
-        const bool beat = live && audio->level > audio->levelSmoothed + kBeatMargin;
+        // A hit widens the sweep and decays over about 20 frames, since one frame is invisible; taken once a frame, by its number.
+        const bool fresh = audio && audio->seq != lastSeq_;
+        if (audio) lastSeq_ = audio->seq;
+        const bool beat = fresh && live && audio->onset != 0;
         if (beat) beatDecay_ = 255;
         else if (beatDecay_ > kBeatDecayStep) beatDecay_ = static_cast<uint8_t>(beatDecay_ - kBeatDecayStep);
         else beatDecay_ = 0;
@@ -175,8 +177,6 @@ public:
     }
 
 private:
-    static constexpr uint16_t kSilence       = 8;   ///< below this the room is quiet, not playing
-    static constexpr uint16_t kBeatMargin    = 8;   ///< raw over smoothed is a transient
     static constexpr uint8_t  kBeatDecayStep = 12;  ///< about 20 frames from a kick back to rest
     static constexpr uint8_t  kDimFloor      = 40;  ///< a quiet band still shows its head
     /// How long a rolled gobo stays put: long enough to read, short enough to answer the music.
@@ -237,6 +237,7 @@ private:
     BeatPhase pan_;                ///< the pan sweep clock
     BeatPhase tilt_;               ///< the tilt sweep clock, at its own rate
     uint8_t   beatDecay_ = 0;      ///< how far the last beat has decayed
+    uint16_t  lastSeq_ = 0;        ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
     /// The gobo written, which is the slider until a beat rolls it, held separate so the slider stands.
     uint8_t   goboNow_   = 0;
     uint32_t goboHoldUntil_ = 0;   ///< elapsed() past which a new gobo may be rolled

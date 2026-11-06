@@ -117,7 +117,7 @@ private:
     /// The steady fountain: `rate` sprites a frame, species picked at random.
     void emitSteady(draw::pos_t ox, draw::pos_t oy, angle16 aim, draw::pos_t speed) {
         for (uint8_t k = 0; k < rate; k++) {
-            // `hue` carries the sprite kind, picked once so a particle keeps its species in flight.
+            // `hue` carries the sprite kind, picked once so a particle keeps its species in flight: @xref{the-hue-byte-carries-the-sprite-kind}.
             const uint8_t kind = static_cast<uint8_t>(hashInt(seed_, k, 7) % spritecast::kKindCount);
             // One at a time: angleEmit's own loop would give a frame's sprites one species.
             pool_.angleEmit(ox, oy, aim, speed, /*cone=*/3000, /*n=*/1, /*life=*/160, kind, seed_);
@@ -128,7 +128,7 @@ private:
     /// The reactive fountain: one sprite per band, thrown when that band is loud.
     void emitByBand(const AudioFrame& audio, draw::pos_t ox, draw::pos_t oy,
                     angle16 aim, draw::pos_t speed) {
-        if (audio.levelSmoothed < kSilence) return;      // a quiet room is a still fountain
+        if (!audio.heard()) return;                      // a quiet room is a still fountain
         for (uint8_t b = 0; b < kBandCount; b++) {
             const uint8_t mag = audio.bands[b];
             if (mag < kBandFloor) continue;              // that band is not playing
@@ -142,7 +142,6 @@ private:
         }
     }
 
-    static constexpr uint16_t kSilence   = 8;    ///< below this the room is quiet, not playing
     static constexpr uint8_t  kBandFloor = 40;   ///< a band under this is not throwing anything
     static constexpr uint8_t  kBandCount = 16;   ///< AudioFrame's spectrum width
 

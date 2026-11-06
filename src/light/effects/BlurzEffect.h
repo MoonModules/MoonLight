@@ -7,7 +7,7 @@ namespace mm {
 /// Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.
 /// @card BlurzEffect.gif
 ///
-/// The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position.
+/// The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position. A band struck that frame flashes its dot white.
 ///
 /// @attribution Andrew Tuline, softhack007
 ///
@@ -95,7 +95,9 @@ public:
         // Colored by the band's magnitude, where a value past 255 wraps the palette rather than clamping.
         const int denom = (maxLen - 1) > 1 ? (maxLen - 1) : 1;   // max(1, maxLen-1)
         const int pixColor = (2 * static_cast<int>(f->bands[freqBand_]) * 240) / denom;
-        const RGB c = colorFromPalette(*Palettes::active(), static_cast<uint8_t>(pixColor));
+        // A band struck this frame flashes its dot white, its own third's hit, where the frame measured the thirds.
+        const bool struck = f->thirdsCount > 0 && hitAt(f->thirdsHits, kSixteenOfThirds[freqBand_]);
+        const RGB c = struck ? RGB{255, 255, 255} : colorFromPalette(*Palettes::active(), static_cast<uint8_t>(pixColor));
 
         // The linear index addressed as a position on the flat run.
         const int dx = segLoc % cols;

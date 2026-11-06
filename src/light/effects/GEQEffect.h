@@ -2,13 +2,14 @@
 
 #include "core/util/math16.h"            // map32: the shared, fencepost-safe range map
 #include "light/effects/EffectBase.h"
+#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
 
 namespace mm {
 
-/// A flat graphic equalizer: the 16 audio bands rise as vertical bars from the bottom.
+/// A flat graphic equalizer: the audio bands rise as vertical bars from the bottom.
 /// @card GEQEffect.gif
 ///
-/// The bands spread across the columns, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. @ref GEQ3DEffect draws the same data in perspective.
+/// The bands spread across the columns, the third octaves by default or the sixteen or the piano's keys with `bands`, each rising to its loudness, with optional smoothing, per-bar palette coloring and falling peak markers. A peak dot sits at the highest the bar recently reached and falls back slowly. @ref GEQ3DEffect draws the same data in perspective.
 ///
 /// @attribution Andrew Tuline, softhack007
 ///
@@ -30,13 +31,16 @@ public:
     bool    colorBars  = false;
     /// Blend neighboring bands for smoother bar heights.
     bool    smoothBars = false;
+    /// The bars: the sixteen, the third octaves or the piano's keys.
+    uint8_t bands      = kBandsThirds;
 
-    /// Publish the trail, the peak fall rate and the two coloring toggles.
+    /// Publish the trail, the peak fall rate, the two coloring toggles and the bars.
     void defineControls() override {
         controls_.addControl("fadeOut", fadeOut, 0, 255);
         controls_.addControl("ripple", ripple, 0, 255);
         controls_.addControl("colorBars", colorBars);
         controls_.addControl("smoothBars", smoothBars);
+        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
     }
 
     /// Size one peak tracker per column, and start every peak at the floor.
@@ -67,18 +71,20 @@ public:
             if (++rippleCounter_ >= ripple) { rippleCounter_ = 0; fallThisFrame = true; }
         }
 
+        const AudioBars bars = barsOf(*f, bands);
+        const int nBars = bars.n;
         for (int x = 0; x < cols; x++) {
-            // Mapped over 0..cols-1 and 0..15, which keeps the last column off an out-of-range band 16.
-            int band = map32(x, 0, cols - 1, 0, NUM_GEQ_CHANNELS - 1);
+            // Mapped over 0..cols-1 and 0..n-1, which keeps the last column off an out-of-range bar.
+            int band = map32(x, 0, cols - 1, 0, nBars - 1);
             if (band < 0) band = 0;
-            if (band > NUM_GEQ_CHANNELS - 1) band = NUM_GEQ_CHANNELS - 1;
+            if (band > nBars - 1) band = nBars - 1;
 
-            int bandHeight = f->bands[band];
+            int bandHeight = bars.mag[band];
 
             // WLED's 7/3/3 weights over 12, for interior bands only. Reconstructed from its behavior.
-            if (smoothBars && band > 0 && band < NUM_GEQ_CHANNELS - 1) {
-                const int lastBandHeight = f->bands[band - 1];
-                const int nextBandHeight = f->bands[band + 1];
+            if (smoothBars && band > 0 && band < nBars - 1) {
+                const int lastBandHeight = bars.mag[band - 1];
+                const int nextBandHeight = bars.mag[band + 1];
                 bandHeight = (7 * bandHeight + 3 * lastBandHeight + 3 * nextBandHeight) / 12;
                 if (bandHeight < 0)   bandHeight = 0;
                 if (bandHeight > 255) bandHeight = 255;
@@ -119,8 +125,6 @@ public:
     }
 
 private:
-    /// The spectrum's width, which the columns map onto.
-    static constexpr int NUM_GEQ_CHANNELS = 16;
 
     /// Each column's peak-dot row, counted up from the floor, and lengthType so a tall panel fits.
     ScratchBuffer<lengthType> peaks_{*this};

@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing: a header, two little-endian float levels and a peak flag, sixteen bands clamped to 254, then the dominant bin. Padding goes out zero.
+/// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing. Each offset, what WLED and WLED-MM put there, and what MoonLight sends and reads: [Audio sync format](https://moonmodules.org/MoonLight/reference/audio-sync.html#the-wled-format).
 ///
 /// **The network.** The WLED-compatible default is multicast group 239.0.0.1 on port 11988; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
 ///
@@ -43,15 +43,19 @@ inline uint16_t wledFloatToU16(float v) {
     return static_cast<uint16_t>(v);
 }
 
-/// Build a packet from a frame; `peak` is the beat flag the caller owns, and it answers the size.
-inline size_t buildWledAudioSync(uint8_t out[WLED_SYNC_PACKET_SIZE], const AudioFrame& f,
-                                 bool peak) {
+/// `samplePeak`'s bits: any hit, then the kick, the snare and the hats beside it.
+enum WledPeakBit : uint8_t { kWledPeakAny = 1, kWledPeakLow = 2, kWledPeakMid = 4, kWledPeakHigh = 8 };
+
+/// Build a packet from a frame, its hits those since the last packet, and answer the size.
+inline size_t buildWledAudioSync(uint8_t out[WLED_SYNC_PACKET_SIZE], const AudioFrame& f) {
     std::memset(out, 0, WLED_SYNC_PACKET_SIZE);        // zeroes header pad + both gaps
     std::memcpy(out, WLED_SYNC_HEADER, 6);             // "00002\0"
     wledPutFloatLE(out + 8,  static_cast<float>(f.level));          // sampleRaw
     wledPutFloatLE(out + 12, static_cast<float>(f.levelSmoothed));  // sampleSmth
-    out[16] = peak ? 1 : 0;                            // samplePeak
-    // The reserved byte stays zero, and bands clamp to 254, which a receiver may treat 255 as a sentinel against.
+    if (f.onset)                                       // samplePeak, the ranges only beside a hit, which a WLED receiver reads as its peak
+        out[16] = static_cast<uint8_t>(kWledPeakAny | (f.onsetLow ? kWledPeakLow : 0) | (f.onsetMid ? kWledPeakMid : 0) | (f.onsetHigh ? kWledPeakHigh : 0));
+    out[17] = static_cast<uint8_t>(f.seq);             // frameCounter
+    // Bands clamp to 254, which a receiver may treat 255 as a sentinel against.
     for (size_t i = 0; i < WLED_SYNC_NUM_BANDS; i++)
         out[18 + i] = f.bands[i] > 254 ? 254 : f.bands[i];           // fftResult[16]
     wledPutFloatLE(out + 36, static_cast<float>(f.peakMag) * kWledMagScale);   // FFT_Magnitude
@@ -59,13 +63,18 @@ inline size_t buildWledAudioSync(uint8_t out[WLED_SYNC_PACKET_SIZE], const Audio
     return WLED_SYNC_PACKET_SIZE;
 }
 
-/// Parse and validate a packet into a frame; true only for a well-formed one of exactly the right size and header.
+/// Parse and validate a packet into a whole frame, every field it does not carry 0; true only for a well-formed one of exactly the right size and header.
 inline bool parseWledAudioSync(const uint8_t* pkt, size_t len, AudioFrame& out) {
     if (!pkt || len != WLED_SYNC_PACKET_SIZE) return false;
     if (std::memcmp(pkt, WLED_SYNC_HEADER, 6) != 0) return false;
+    out = AudioFrame{};   // the thirds, the keys and the harmony a MoonLight packet left in a reused frame are not this one's
     out.level         = wledFloatToU16(wledGetFloatLE(pkt + 8));
     out.levelSmoothed = wledFloatToU16(wledGetFloatLE(pkt + 12));
-    // pkt[16] samplePeak is a hint the AudioFrame doesn't carry; pkt[17] is WLED's reserved2.
+    const uint8_t peak = pkt[16];   // samplePeak, with the ranges when a MoonLight board sent it
+    out.onset     = peak ? 255 : 0;
+    out.onsetLow  = (peak & kWledPeakLow) ? 255 : 0;
+    out.onsetMid  = (peak & kWledPeakMid) ? 255 : 0;
+    out.onsetHigh = (peak & kWledPeakHigh) ? 255 : 0;
     std::memcpy(out.bands, pkt + 18, WLED_SYNC_NUM_BANDS);
     // Back into our units and clamped: an upstream magnitude can run past the range after the divide.
     const float mag = wledGetFloatLE(pkt + 36) / kWledMagScale;

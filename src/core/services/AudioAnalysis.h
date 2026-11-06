@@ -3,7 +3,6 @@
 #include <cmath>     // the retune's bounds
 #include <cstddef>
 #include <cstdint>
-#include <cstring>   // memcpy: the hits of dropped frames
 
 #include "platform/platform.h"            // InternalRamObject: the bank touches its state every sample
 #include "core/util/AudioFrame.h"
@@ -52,32 +51,18 @@ private:
     static constexpr float kDcCornerHz = 5.0f;   // under the 20 Hz band
 };
 
-/// Drain `ring` into `out`, keeping the newest frame with the strongest onset among them, so a hit in an earlier block of the same tick still reaches the effects.
+/// Drain `ring` into `out`, keeping the newest frame with the hits of all of them, so a hit in an earlier block of the same tick still reaches the effects.
 inline bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
     AudioFrame f;
-    uint8_t onset = 0, low = 0, mid = 0, high = 0;
-    uint8_t bandHits[4] = {}, noteHits[10] = {};
-    bool change = false;
+    AudioHits hits;
     bool fresh = false;
     while (ring.pop(&f, 1) == 1) {
         fresh = true;
-        onset = f.onset > onset ? f.onset : onset;
-        low = f.onsetLow > low ? f.onsetLow : low;
-        mid = f.onsetMid > mid ? f.onsetMid : mid;
-        high = f.onsetHigh > high ? f.onsetHigh : high;
-        for (uint8_t k = 0; k < 4; k++) bandHits[k] |= f.thirdsHits[k];
-        for (uint8_t k = 0; k < 10; k++) noteHits[k] |= f.notesHits[k];
-        change = change || f.harmonyChange;
+        hits.add(f);
     }
     if (!fresh) return false;
     out = f;
-    out.onset = onset;            // a hit, a range's or a band's hit or a chord change in a dropped block is one too
-    out.onsetLow = low;
-    out.onsetMid = mid;
-    out.onsetHigh = high;
-    std::memcpy(out.thirdsHits, bandHits, sizeof(bandHits));
-    std::memcpy(out.notesHits, noteHits, sizeof(noteHits));
-    out.harmonyChange = change;
+    hits.applyTo(out);
     return true;
 }
 

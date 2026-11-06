@@ -7,13 +7,19 @@ namespace mm {
 /// Audio-reactive brush strokes: lines whose 3D endpoints oscillate on the beat over a fading field.
 /// @card PaintBrushEffect.gif
 ///
-/// Each stroke is shortened to a band-magnitude length, so the moving tip sweeps a curve. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.
+/// Each stroke is shortened to its band's length, so the moving tip sweeps a curve, and each drum hit stretches every stroke to its full span before it settles back. The field fades each frame, so the lines leave brush strokes rather than redrawing cleanly, and silence fades the field to black.
 ///
 /// @attribution troyhacks
 ///
 /// @technical
 ///
 /// Each line takes one band, and its Euclidean span scaled by that band becomes the shorten amount. The lines are crisp, since `draw::line` has no anti-aliased form.
+///
+/// ## Motion that glides
+///
+/// The six endpoint coordinates are an oscillator bank, its phase accumulated frame by frame, so the bass raising the rate speeds the sweep from where it is; elapsed time times rate would jump by the elapsed minutes in whole cycles on every rate change.
+///
+/// The bass and the lengths read the bands' meter ballistic, so a stroke swells with its band rather than twitching with every block.
 class PaintBrushEffect : public EffectBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
@@ -44,7 +50,7 @@ public:
         controls_.addControl("phase_chaos", phase_chaos);
     }
 
-    /// Fade the field, then draw each line between its two oscillating endpoints.
+    /// Fade the field, then draw each line between its two oscillating endpoints: @xref{motion-that-glides}.
     void tick() MM_NONBLOCKING override {
         const lengthType cols = width(), rows = height(), depth = this->depth();
 
@@ -60,8 +66,16 @@ public:
         const AudioFrame* f = AudioService::latestFrame();
         if (!f) return;   // a silence frame is non-null in practice, but guard before dereferencing
         const uint32_t ms = elapsed();
-        // The bass term, added to every oscillator's rate.
-        const uint8_t base = static_cast<uint8_t>(f->bands[0] / kBands);
+        // The smoothed bass added to every oscillator's rate, and the bank advanced from the phase it reached.
+        const uint32_t base = f->bandsSmoothed[0] / kBands;
+        for (uint8_t k = 0; k < kAxes; k++)
+            osc_.set(k, Oscillator{static_cast<uint16_t>(oscillatorOffset * (k + 1u) + base), 0, 65535, static_cast<angle16>(k * (65536u / kAxes)), Wave::Sine});   // a sixth of a turn apart, so the strokes have length from the first frame
+        osc_.advanceTo(ms);
+        // A drum hit stretches every stroke to its span, then the stretch halves every kSurgeHalfLifeMs.
+        surge_ = static_cast<uint8_t>((static_cast<uint32_t>(surge_) * halfLifeKeep(ms - lastMs_, kSurgeHalfLifeMs)) >> 16);
+        lastMs_ = ms;
+        if (f->seq != lastSeq_ && f->onset != 0) surge_ = 255;   // once a frame, by its number
+        lastSeq_ = f->seq;
 
         // The loop stops below `numLines`, so the map's input high is one less or the top is never reached.
         const int lineHi = numLines - 1;
@@ -69,26 +83,25 @@ public:
         for (size_t i = 0; i < numLines; i++) {
             const uint8_t bin = static_cast<uint8_t>(
                 map(static_cast<int>(i), 0, lineHi, 0, kBands - 1));
-            const uint8_t band = f->bands[bin];
+            const uint8_t band = f->bandsSmoothed[bin];
+            if (band == 0) continue;   // a silent band draws no stroke
 
-            // Generated full-range then mapped, since beatsin8's 8-bit range truncates a wide grid.
-            const lengthType x1 = osc(static_cast<uint8_t>(oscillatorOffset * 1 + base), ms, band, cols);
-            const lengthType x2 = osc(static_cast<uint8_t>(oscillatorOffset * 2 + base), ms, band, cols);
-            const lengthType y1 = osc(static_cast<uint8_t>(oscillatorOffset * 3 + base), ms, band, rows);
-            const lengthType y2 = osc(static_cast<uint8_t>(oscillatorOffset * 4 + base), ms, band, rows);
+            // Each band leads its line's oscillators by its own small angle, so the lines of different bands sit apart.
+            const lengthType x1 = axis(0, band, cols), x2 = axis(1, band, cols);
+            const lengthType y1 = axis(2, band, rows), y2 = axis(3, band, rows);
 
             lengthType z1 = 0, z2 = 0;
             int length;
             if (depth > 1) {
-                z1 = osc(static_cast<uint8_t>(oscillatorOffset * 5 + base), ms, band, depth);
-                z2 = osc(static_cast<uint8_t>(oscillatorOffset * 6 + base), ms, band, depth);
+                z1 = axis(4, band, depth);
+                z2 = axis(5, band, depth);
                 length = isqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1) + (z2 - z1) * (z2 - z1));
             } else {
                 length = isqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
             }
 
-            // The band scales the span into the shorten amount, clamped before the cast against a wrap.
-            length = map8(band, 0, static_cast<uint8_t>(length > 255 ? 255 : length));
+            // The band, or the hit's stretch while it lasts, scales the span into the shorten amount, clamped before the cast against a wrap.
+            length = map8(band > surge_ ? band : surge_, 0, static_cast<uint8_t>(length > 255 ? 255 : length));
 
             if (length > MAX(1, minLength)) {
                 const uint8_t index = color_chaos
@@ -100,18 +113,30 @@ public:
         }
     }
 
+    /// Test seam: oscillator `k`'s endpoint across `len` for a band of `band`, as this frame draws it.
+    lengthType endpointForTest(uint8_t k, uint8_t band, lengthType len) const { return axis(k, band, len); }
+
 private:
     /// The spectrum's width, tied to the array so the band map stays in sync with it.
     static constexpr int kBands = static_cast<int>(sizeof(AudioFrame::bands) / sizeof(AudioFrame::bands[0]));
+    static constexpr uint8_t kAxes = 6;                  ///< x, y and z of both endpoints
+    static constexpr uint32_t kSurgeHalfLifeMs = 120;    ///< how fast a hit's stretch settles
+    static constexpr uint32_t kLeadPerBand = 16;         ///< a band unit's lead, as an angle: a full band leads by a sixteenth of a turn
 
     uint16_t aux0Hue = 0;    ///< the running hue, advanced each frame
     uint8_t  aux1Chaos = 0;  ///< this frame's phase jitter, 0 unless `phase_chaos`
     Random8  rng_{0xB17EB00Bu};   ///< fixed-seed, so the goldens reproduce
+    OscillatorBank<kAxes> osc_;   ///< the endpoints' phases, accumulated so a rate change glides
+    uint32_t lastMs_ = 0;         ///< the last frame's time, which the stretch decays over
+    uint8_t  surge_ = 0;          ///< the last hit's stretch, 255 on the hit
+    uint16_t lastSeq_ = 0;        ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
 
-    /// One endpoint on an axis, generated full-range then mapped so a wide grid keeps its sweep.
-    lengthType osc(uint8_t bpm, uint32_t ms, uint8_t timebase, lengthType len) const {
-        const uint8_t s = beatsin8(bpm, ms, 0, 255, timebase, aux1Chaos);
-        return static_cast<lengthType>(map(s, 0, 255, 0, len > 0 ? len - 1 : 0));
+    /// Oscillator `k`'s endpoint coordinate across `len`, led by `band` as a fixed angle, so a rate change moves no line's lead, and shifted by this frame's jitter.
+    lengthType axis(uint8_t k, uint8_t band, lengthType len) const MM_NONBLOCKING {
+        const uint32_t lead = static_cast<uint32_t>(band) * kLeadPerBand;
+        const angle16 theta = static_cast<angle16>(osc_.phase(k) - lead + (static_cast<uint32_t>(aux1Chaos) << 8));
+        const uint32_t u = static_cast<uint32_t>(sin16(theta) + 32768);   // 0..65535
+        return static_cast<lengthType>(u * static_cast<uint32_t>(len > 0 ? len - 1 : 0) / 65535u);
     }
 
     /// Kept local so the loop above reads like the MoonLight source it follows.
