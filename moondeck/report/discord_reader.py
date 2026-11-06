@@ -5,10 +5,7 @@
 # ///
 """Read the MoonModules Discord server for an agent, as an MCP server: channels, threads and their messages through a bot's REST API, and post in the one forum agents talk to each other in.
 
-The bot token lives in the macOS keychain (service `discord-reader`), read per request and never written to a file:
-  security add-generic-password -s discord-reader -a bot -w
-Registered once per machine, after which an agent session has the tools:
-  claude mcp add --scope user discord -- uv run --script <repo>/moondeck/report/discord_reader.py
+The bot token lives in the macOS keychain (service `discord-reader`, account `bot`), read per request and kept there alone. Storing the token, registering this file as an MCP server, calling the REST API without one, and the daily summary's format: moondeck/MoonDeck.md#discord_reader.
 """
 from __future__ import annotations
 

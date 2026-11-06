@@ -115,7 +115,7 @@ processes:
         say: Run the static checks on the module.
         when: { run: { script: moondeck/check/check_module.py, args: "--module <Module>" } }
         detail: |
-          It reports every static-analysis tool on the one file.
+          It reports every static-analysis tool on the one file. The full gate list runs at [the commit checks](moonwalk.md#commit).
     outro: |
       Run [Document a change](moonwalk.md#document) before the commit.
   - id: add-stream-source

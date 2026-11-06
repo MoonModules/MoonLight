@@ -400,6 +400,16 @@
   "number": null
  },
  {
+  "title": "The encode worker is parked before a control change or a prepare reallocates a driver's buffers (2026-11-05)",
+  "area": "Core",
+  "module": "Drivers",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=294535117",
+  "number": null
+ },
+ {
   "title": "The HTTP server is audited for the two PHP request-handling bug classes (2026-10-21)",
   "area": "Core",
   "module": "HttpServerModule",
@@ -820,6 +830,16 @@
   "number": null
  },
  {
+  "title": "Stutter past 76 fps on NanoPi R3S driving a ColorLight PanelCard over DDP (2026-11-04)",
+  "area": "Drivers",
+  "module": "PanelCard",
+  "kind": "Bug",
+  "status": "In progress",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=295134421",
+  "number": 238
+ },
+ {
   "title": "The interface picker re-enumerates adapters on every control rebuild (2026-09-28)",
   "area": "Drivers",
   "module": "PanelCardDriver",
@@ -944,7 +964,7 @@
   "area": "Effects",
   "module": "",
   "kind": "Bug",
-  "status": "Next",
+  "status": "In review",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372206",
   "number": 216
@@ -978,6 +998,16 @@
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081692",
   "number": null
+ },
+ {
+  "title": "Receive several DDP streams on separate ports and mix them in MoonLight (2026-11-04)",
+  "area": "Effects",
+  "module": "NetworkReceiveEffect",
+  "kind": "Feature",
+  "status": "In review",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=295134459",
+  "number": 237
  },
  {
   "title": "Speed up the fluid solver: 4 fps at 128x128, and it is not the divide (2026-09-05)",

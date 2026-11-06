@@ -39,7 +39,7 @@ int play(mm::HarmonyTracker& tracker, std::initializer_list<float> hz, double& t
     for (float done = 0; done < seconds * 1000.0f; done += kBlockMs) {
         for (size_t i = 0; i < kBlock; i++) {
             x[i] = 0.0f;
-            for (const float f : hz) x[i] += 1000.0f * static_cast<float>(std::sin(2.0 * std::numbers::pi * f * (t + static_cast<double>(i) / kRate)));
+            for (const float f : hz) x[i] += 1000.0f * static_cast<float>(std::sin(2.0 * std::numbers::pi * static_cast<double>(f) * (t + static_cast<double>(i) / kRate)));
         }
         t += static_cast<double>(kBlock) / kRate;
         bank.process({x, kBlock});
@@ -173,8 +173,8 @@ TEST_CASE("the notes are the piano's keys from A0, a tone lighting its own key t
     for (int i = 0; i < 50; i++) dyn.update(-100.0f, -106.0f, kBlockMs);   // a quiet room learned
     dyn.update(-40.0f, -40.0f, kBlockMs);
     for (int i = 0; i < 50; i++) dyn.update(-40.0f, mm::bandPowerDbFs(bank.power(mm::kA4Band)), kBlockMs);
-    uint8_t notes[79];
-    CHECK(mm::semitonesToNotes(bank, dyn, notes) == 79);   // A0 to D#7
+    uint8_t notes[mm::kAudioNoteKeys];
+    CHECK(mm::semitonesToNotes(bank, dyn, notes) == mm::kAudioNoteKeys);   // A0 to D#7
     int loudest = 0;
     for (int i = 1; i < 79; i++) if (notes[i] > notes[loudest]) loudest = i;
     CHECK(loudest == 48);                                   // A4, four octaves over A0
@@ -236,7 +236,7 @@ TEST_CASE("a tone 40 cents sharp reads sharp, one in tune reads in tune") {
         CAPTURE(cents);
         auto& bank = freshNotes();
         mm::TuningEstimator est;
-        const double hz = 440.0 * std::exp2(cents / 1200.0);
+        const double hz = 440.0 * std::exp2(static_cast<double>(cents) / 1200.0);
         float x[kBlock];
         double t = 0;
         float reading = 0;

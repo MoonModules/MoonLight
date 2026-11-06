@@ -1,6 +1,7 @@
 #pragma once
 
 #include "light/effects/EffectBase.h"
+#include "light/powerfunctions/audioReadout.h"   // draw::noteNames
 
 namespace mm {
 
@@ -132,26 +133,7 @@ public:
             // The dominant frequency, while there is sound to have one.
             if (f->peakHz && (f->gate == 0 || f->gateOpen)) drawPeak(cv, f->peakHz, scale, n, barW, pitchRows);
         }
-        if (noteNames) {
-            char names[12];
-            formatNotes(f->chroma, names, sizeof(names));
-            draw::text(cv, fonts::kFont4x6, names, 0, pitchRows, RGB{255, 255, 255});
-            // The key at the right, short, with the tuning when it is off A440: "Am +12".
-            char key[12];
-            formatKey(f->key, key, sizeof(key), true);
-            lengthType keyLen = 0;
-            while (key[keyLen]) keyLen++;
-            if (f->tuning != 0 && static_cast<size_t>(keyLen) + 5 < sizeof(key)) {
-                const int cents = f->tuning < 0 ? -f->tuning : f->tuning;
-                key[keyLen++] = ' ';
-                key[keyLen++] = f->tuning < 0 ? '-' : '+';
-                if (cents >= 10) key[keyLen++] = static_cast<char>('0' + cents / 10);
-                key[keyLen++] = static_cast<char>('0' + cents % 10);
-                key[keyLen] = 0;
-            }
-            const lengthType keyW = static_cast<lengthType>(keyLen * fonts::kFont4x6.width);
-            if (f->key && w > keyW) draw::text(cv, fonts::kFont4x6, key, static_cast<lengthType>(w - keyW), pitchRows, RGB{255, 255, 255});
-        }
+        if (noteNames) draw::noteNames(cv, *f, w, pitchRows);
     }
 
     /// Where `hz` sits across `n` bars, in bars: the key from A0, the third-octave index, or that mapped between the sixteen when only those show.
@@ -174,13 +156,13 @@ private:
     static constexpr uint32_t kChangeFlashMs = 100;
     uint32_t changeUntilMs_ = 0;  ///< until when the row shows the last change
     uint32_t rangeUntilMs_[3] = {};   ///< until when each range's line shows its last hit
-    uint8_t barHitTick_[79] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
+    uint8_t barHitTick_[kAudioNoteKeys] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
     uint8_t barsLit_[10] = {};        ///< a bit per bar while it shows its hit
 
     /// Light each bar of `n` whose bit is set in `hits`, and darken each whose hit is older than the flash.
     void markBarHits(const uint8_t* hits, uint8_t n, uint32_t ms) MM_NONBLOCKING {
         const uint8_t tick = static_cast<uint8_t>(ms >> 2);
-        for (uint8_t b = 0; b < n && b < 79; b++) {
+        for (uint8_t b = 0; b < n && b < kAudioNoteKeys; b++) {
             const uint8_t bit = static_cast<uint8_t>(1u << (b & 7));
             if (hitAt(hits, b)) { barHitTick_[b] = tick; barsLit_[b >> 3] |= bit; }
             else if (static_cast<uint8_t>(tick - barHitTick_[b]) >= kOnsetFlashMs / 4) barsLit_[b >> 3] &= static_cast<uint8_t>(~bit);

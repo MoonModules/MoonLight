@@ -19,13 +19,13 @@ namespace mm {
 ///
 /// ## What a row does
 ///
-/// Each row binds one pin to a surface control; a catalog board's first button targets `Control.switch1`, the lights and their relay. The pressed readout shows a button working before it is bound.
+/// Each row binds a pin to a surface control; a catalog board's first button drives `Control.switch1`, the lights' relay. The pressed readout shows a button working before it is bound.
 ///
-/// A push button takes `toggle`, each press flipping the target. A latching switch takes `set` with value 1: on while closed, off once open.
+/// A push button takes `toggle`. A latching switch takes `set` with value 1, on while closed, or `flip`, toggling on every change, for a staircase with a remote.
 ///
 /// @technical
 ///
-/// **Momentary or latching.** A toggle row flips its target on each press and ignores the release; a set row writes while held and clears on release, which a pedal needs. Only a set row acts on the release, or a toggle would fire twice per push.
+/// **Momentary or latching.** A toggle row flips its target on each press and ignores the release; a set row writes while held and clears on release, which a pedal needs. Only a set row acts on the release, or a toggle would fire twice per push; a flip row acts on both edges, which is what a latching switch needs, from the level it settles at first, so a switch closed at boot flips nothing.
 ///
 /// **Debounce.** A bouncing contact is a property of the switch, so this module owns the time constant, polled at 50 Hz since a press lasts tens of milliseconds.
 class ButtonService : public MoonModule, public ListSource {
@@ -174,7 +174,7 @@ private:
         bool        candidate = false;   ///< the level being timed
         uint16_t    sinceChange = 0;     ///< ms the candidate has held
         bool        synced = false;      ///< a set row has written its settled state once, so its target follows the switch from the start
-        bool        tried = false;       ///< the first write ran; a failed one is retried on the slow tick rather than every poll
+        bool        tried = false;       ///< a set row's first write ran, a failed one retried on the slow tick; a flip row's baseline is taken
     };
 
     /// The row with this id, or null.
@@ -205,6 +205,14 @@ private:
         return raw == r.pressed && (r.synced || r.tried || !set);
     }
 
+    /// A flip row's first settled level is its baseline, so a switch closed at boot flips nothing.
+    void takeBaseline(Row& r, bool raw) MM_NONBLOCKING {
+        if (r.sinceChange < debounceMs_) { r.sinceChange += 20; return; }
+        r.pressed = raw;
+        r.tried = true;
+        r.sinceChange = 0;
+    }
+
     /// Read one row, debounce it, and act on a settled edge.
     void pollRow(Row& r) MM_NONBLOCKING {
         if (r.pin < 0 || !r.open) return;
@@ -213,15 +221,26 @@ private:
         // By time rather than by sample count, which would change meaning with the poll rate.
         if (raw != r.candidate) { r.candidate = raw; r.sinceChange = 0; return; }
         const bool set = r.action.kind == InputAction::Kind::Set;
-        if (settled(r, raw, set)) { r.sinceChange = 0; return; }
-        if (r.sinceChange < debounceMs_) { r.sinceChange += 20; return; }
-
+        const bool flip = r.action.kind == InputAction::Kind::Flip;
+        if (flip && !r.tried) { takeBaseline(r, raw); return; }
+        if (!debounced(r, raw, set)) return;
         r.pressed = raw;
-        r.sinceChange = 0;
-        // Only a set row acts on the release: the others would fire twice for one push.
-        if (!set && !r.pressed) return;
+        onSettled(r, set, flip);
+    }
+
+    /// Act on a settled level: a toggle on the press alone, a set and a flip on both edges.
+    void onSettled(Row& r, bool set, bool flip) MM_NONBLOCKING {
+        if (!set && !flip && !r.pressed) return;
         const bool done = act(r);
         if (set) { r.synced = done; r.tried = true; }   // a target still missing, as on a surface restoring, is retried by tick1s
+    }
+
+    /// Whether `raw` is a new level held for the debounce time, restarting the count when it is.
+    bool debounced(Row& r, bool raw, bool set) MM_NONBLOCKING {
+        if (settled(r, raw, set)) { r.sinceChange = 0; return false; }
+        if (r.sinceChange < debounceMs_) { r.sinceChange += 20; return false; }
+        r.sinceChange = 0;
+        return true;
     }
 
     /// Run the row's action on its settled state and report it, since doing nothing looks identical to a broken switch.

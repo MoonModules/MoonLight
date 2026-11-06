@@ -132,7 +132,7 @@ const mm::AudioFrame& analyze(mm::AudioService& audio, std::initializer_list<flo
         for (size_t i = 0; i < mm::AudioService::kBlock; i++) {
             seed = seed * 1664525u + 1013904223u;
             double v = static_cast<double>(static_cast<int32_t>(seed) >> 26);   // a hiss of a few 24-bit counts
-            for (const float h : hz) v += 100000.0 * std::sin(2.0 * 3.14159265358979 * h * (t + static_cast<double>(i) / 24000.0));
+            for (const float h : hz) v += 100000.0 * std::sin(2.0 * 3.14159265358979 * static_cast<double>(h) * (t + static_cast<double>(i) / 24000.0));
             block[i] = static_cast<int32_t>(v) * 256;   // left-justified, as the input delivers 24-bit samples
         }
         t += static_cast<double>(mm::AudioService::kBlock) / 24000.0;

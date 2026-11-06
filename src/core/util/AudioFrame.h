@@ -4,6 +4,9 @@
 
 namespace mm {
 
+/// How many semitone notes a frame carries, the piano's keys A0 to D#7: the one count `notes`, `notesHits` and every note reader size by.
+constexpr uint8_t kAudioNoteKeys = 79;
+
 /// The whole contract between the audio analysis and the effects that react to it.
 ///
 /// @technical
@@ -49,7 +52,7 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     bool     gateOpen = false;         ///< whether the gate is open, so a band over zero is sound rather than the room
     uint8_t  chroma[12] = {};          ///< the twelve pitch classes, C first, 0..255 against the loudest over the last 200 ms; all 0 while gated, with `harmony` off, from audio sync or simulated
     bool     harmonyChange = false;    ///< true on the one block the harmony moved, a chord changing
-    uint8_t  notes[79] = {};           ///< the piano's keys from A0 to D#7, one band a semitone, 0..255 on the bands' scale
+    uint8_t  notes[kAudioNoteKeys] = {};   ///< the piano's keys from A0 to D#7, one band a semitone, 0..255 on the bands' scale
     uint8_t  notesCount = 0;           ///< how many of `notes` this frame measured: 0 with `harmony` off, from audio sync or simulated
     uint8_t  key = 0;                  ///< the key over the last 15 s: 0 none yet, 1..12 C to B major, 13..24 C to B minor
     int8_t   tuning = 0;               ///< how far the notes are tuned from A440, in cents
@@ -61,7 +64,7 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  onsetMid = 0;             ///< the same for the mids: the snare, the toms, a vocal's attack
     uint8_t  onsetHigh = 0;            ///< the same for the treble: the hi-hat, the cymbals
     uint8_t  thirdsHits[4] = {};       ///< a bit per third, set on the block it had a hit: a tom in its own band; read with `hitAt`
-    uint8_t  notesHits[10] = {};       ///< a bit per note of `notes`, set on the block it started: a key's attack, a plucked string
+    uint8_t  notesHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note of `notes`, set on the block it started: a key's attack, a plucked string
     uint16_t seq = 0;                  ///< counts the frames its source produced, so a consumer that reads one frame on two ticks takes its hits once
 };
 

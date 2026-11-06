@@ -89,6 +89,8 @@ A solo instrument through line-in does much better than a full mix, and a MIDI i
 
 Each step ends in a desktop test, its two effects, and a bench look. The bench's songs, for the product owner and for end users, are one playlist: [MoonLight audio test songs](https://open.spotify.com/playlist/0iL47MM8XcUpJzzdKdHQD3).
 
+For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, "Hotel California" (the outro guitar solo); bass: Jaco Pastorius, "Portrait of Tracy" (solo fretless bass); violin: Hilary Hahn, Bach "Sonata No. 1 in G minor for solo violin, BWV 1001: I. Adagio" (violin alone); cello: Yo-Yo Ma, Bach "Cello Suite No. 1 in G Major, BWV 1007: I. Prélude".
+
 ### 1. The bands by the book ✅
 
 - **The bank** ([FractionalOctaveBank.h](../../src/core/services/FractionalOctaveBank.h), built 2026-11-03, `B` bands to the octave and used at three). A third-octave filter bank, multirate octave by octave: the top two octaves' band-pass filters, each three second-order sections, run at the full rate; a low-pass halves the rate, and the same three filters measure each octave below at the rate that puts it in the same place, ten octaves deep. 31 bands at 48 kHz, 20 Hz to 20 kHz, with base-2 octaves, which IEC 61260-1 allows beside base-10, so the centers sit within 2.5% of their ISO 266 labels. A band's value is the power through its filter, through a one-pole detector.

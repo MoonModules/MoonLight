@@ -144,6 +144,8 @@ add_executable(mm_tests
     unit/light/unit_BlendMap.cpp
     unit/light/unit_BeatRipples.cpp
     unit/light/unit_DrumKit.cpp
+    unit/light/unit_KeyboardEffect.cpp
+    unit/light/unit_StringsEffect.cpp
     unit/light/unit_ColorTrailsEffect.cpp
     unit/light/unit_TrailsEffect.cpp
     unit/light/unit_Fluid.cpp

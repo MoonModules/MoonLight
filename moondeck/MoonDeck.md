@@ -847,9 +847,33 @@ uv run moondeck/report/project_mirror.py --check   # the commit check: fail on a
 An MCP server that lets an agent read the MoonModules Discord server, so a support question or a discussion is read rather than pasted as screenshots. A bot with View Channel and Read Message History reads every channel its role can see, minus the GitHub Activity feeds, which mirror GitHub. Those permissions alone return messages without their text and attachments: the bot's application needs the Message Content Intent switched on in the Developer Portal, which a verified application has to apply for. Its tools list the channels, read one channel, read the whole server over a time window with a link per message (the daily summary's source), and fetch a posted attachment. Two more write, in the agent-to-agent forum only: start a post, and reply in one, a reply anywhere else refused before anything is sent; that takes the bot's Send Messages, Create Posts and Send Messages in Threads on that forum alone, and no mention in an agent's text pings a person. The token stays in the macOS keychain.
 
 ```bash
-security add-generic-password -s discord-reader -a bot -w                                             # store the bot token, once
-claude mcp add --scope user discord -- uv run --script "$PWD/moondeck/report/discord_reader.py"       # register it, once per machine
+security add-generic-password -s discord-reader -a bot -w   # store the bot token in the keychain, its one home, once per machine
 ```
+
+Any MCP-capable agent registers this script as a stdio MCP server, once per machine. A client config holds that registration alone, the token staying in the keychain; Claude Code keeps it in `~/.claude.json` under `mcpServers.discord`:
+
+```json
+{ "mcpServers": { "discord": { "type": "stdio", "command": "uv",
+    "args": ["run", "--script", "<repo>/moondeck/report/discord_reader.py"] } } }
+```
+
+Without an MCP client, call the REST API the script wraps, with the same keychain token and the guild and channel ids from its constants:
+
+```bash
+# The header goes in through stdin, so the token stays out of curl's process arguments.
+printf 'header = "Authorization: Bot %s"\n' "$(security find-generic-password -s discord-reader -w)" |
+  curl -s --config - -H "User-Agent: DiscordBot (https://github.com/MoonModules/MoonLight, 1)" \
+     "https://discord.com/api/v10/channels/<SUMMARY_CHANNEL>/messages?limit=50"   # the daily-summary channel's id, from the script's constant
+```
+
+The daily summary in `SUMMARY_CHANNEL` follows one format, so every run produces the same shape. The first post opens with a header naming the covered range and the legend:
+
+```text
+## :newspaper2: MoonLight summary · <start day> to <end day> <Month>
+-# <start> HH:MM to <end> HH:MM UTC · :white_check_mark: done · :construction: in progress · :question: waiting for input · :bulb: idea
+```
+
+Then one post per `### <channel>` section, each at most `MAX_MESSAGE` characters, split at paragraph breaks. Bullets carry the legend's emoji (✅ ❓ 💡), each with a `[→](<message link>)` per source message and a `-# Next:` line; users are `<@id>` mentions. The bot writes in `AGENT_FORUM` alone, so the product owner pastes the summary's posts.
 
 ### screenshot_modules
 

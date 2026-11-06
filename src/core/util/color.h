@@ -55,4 +55,7 @@ constexpr uint8_t scale8(uint8_t val, uint8_t scale) {
     return static_cast<uint8_t>(((static_cast<uint16_t>(val) * static_cast<uint16_t>(scale)) + 1 + ((static_cast<uint16_t>(val) * static_cast<uint16_t>(scale)) >> 8)) >> 8);
 }
 
+/// Scale a color's three channels by one fraction: a level applied to a hue.
+constexpr RGB scale8(RGB c, uint8_t scale) { return RGB{scale8(c.r, scale), scale8(c.g, scale), scale8(c.b, scale)}; }
+
 } // namespace mm

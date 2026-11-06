@@ -18,13 +18,17 @@ namespace mm {
 /// Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx.
 /// @card NetworkReceiveEffect.gif
 ///
-/// It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.
+/// It listens for Art-Net, E1.31 and DDP at once by default, so whatever a sender speaks works and the status names it; `protocol` narrows it to one, so several receivers share a device. The received lights land in the layer buffer, so they compose with modifiers and blending.
 ///
 /// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
 /// @technical
 ///
-/// Sender mapping is one copy alone on its layer, else two mappings, as the status shows. It binds Art-Net 6454, E1.31 5568 and DDP 4048, and an ArtPoll gets an ArtPollReply so controllers list the device. It joins the E1.31 multicast group of each universe the layer covers, up to what the network stack holds, and the status names the universes only unicast reaches.
+/// Sender mapping is one copy alone on its layer, else two mappings, as the status shows.
+///
+/// It binds the ports of the protocols it listens for: Art-Net 6454, E1.31 5568 and DDP on its `ddp_port`. A port binds once per device, so a second receiver listens for DDP alone on its own port and the streams mix in the layers.
+///
+/// An ArtPoll gets an ArtPollReply so controllers list the device. It joins the E1.31 multicast group of each universe the layer covers, up to what the network stack holds, and the status names the universes only unicast reaches.
 class NetworkReceiveEffect : public EffectBase {
 public:
     /// Catalog tags: network input, a MoonModules origin.
@@ -43,13 +47,28 @@ public:
     /// Whether the sender or the receiver maps the frame onto the wiring.
     /// @guide **receiver**: frames arrive row by row and this board applies its wiring. **sender**: a @ref NetworkSendDriver sends wiring order, keeping byte order, brightness 255 and the linear curve.
     uint8_t mappedBy = kMappedByReceiver;
+    /// The protocols `protocol` picks from, in its option order: all three, or one alone.
+    enum Protocol : uint8_t { kProtoAll, kProtoArtNet, kProtoE131, kProtoDdp, kProtocolCount };
+    /// The `protocol` option names, the protocols as @ref NetworkSendDriver names them.
+    static constexpr const char* kProtocolOptions[kProtocolCount] = {"all", "ArtNet", "E1.31", "DDP"};
+    /// All protocols, or one, leaving the rest to another receiver.
+    /// @guide **all** takes any sender; a second receiver in a device picks **DDP** on its own `ddp_port`.
+    uint8_t protocol = kProtoAll;
+    /// The UDP port DDP listens on; each receiver in a mix takes its own.
+    uint16_t ddpPort = DDP_PORT;
 
-    /// Publish the universe start, the per-universe stride and who maps.
+    /// Publish the universe start, the per-universe stride, who maps, the protocol and the DDP port.
     void defineControls() override {
         controls_.addControl("universe_start", universeStart);
         controls_.addControl("channels_per_universe", channelsPerUniverse, 1, 512);
         controls_.addSelect("mapped_by", mappedBy, kMappers, kMappedByCount);
+        controls_.addSelect("protocol", protocol, kProtocolOptions, kProtocolCount);
+        controls_.addControl("ddp_port", ddpPort, 1024, 65535);
+        controls_.setHidden(controls_.count() - 1, !listensFor(kProtoDdp));
     }
+
+    /// Whether it listens for `p`: the chosen protocol, or every one under `all`.
+    bool listensFor(uint8_t p) const { return protocol == kProtoAll || protocol == p; }
 
     /// Turn what arrived since the last call into per-second rates for the status, so loss shows against what the sender sent.
     void tick1s() MM_NONBLOCKING override {
@@ -83,7 +102,8 @@ public:
     /// Who maps sizes staging, by logical cells or by physical lights, so only it rebuilds; the universes set the multicast groups too.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "mapped_by") == 0 || std::strcmp(name, "channels_per_universe") == 0   // the latter sizes the per-universe sequences
-            || std::strcmp(name, "universe_start") == 0;
+            || std::strcmp(name, "universe_start") == 0
+            || std::strcmp(name, "protocol") == 0 || std::strcmp(name, "ddp_port") == 0;   // both rebind the sockets
     }
 
     /// A task still running would read a destroyed object, so the destructor stops it too.
@@ -95,7 +115,7 @@ public:
         ddpSocket_.close();
     }
 
-    /// Stop the receive task, close the three sockets, then chain so the staging buffer is freed too.
+    /// Stop the receive task, close the sockets, then chain so the staging buffer is freed too.
     void release() override {
         stopReceiveTask();
         // Chaining is required, or the registered staging buffer leaks on disable.
@@ -105,27 +125,21 @@ public:
         MoonModule::release();
     }
 
-    /// Bind the three receive sockets independently, and size the staging buffer to the layer.
+    /// Bind the socket of each protocol it listens for, and size the staging buffer to the layer.
     void prepare() override {
         stopReceiveTask();   // the task writes into staging, which is resized below
         // Closed first: a rebuild prepares again without a release, and a socket bound once refuses a second bind.
         artnetSocket_.close();
         e131Socket_.close();
         ddpSocket_.close();
-        const bool artnetOk = artnetSocket_.open() && artnetSocket_.bind(ARTNET_PORT);
-        const bool e131Ok = e131Socket_.open() && e131Socket_.bind(E131_PORT);
-        const bool ddpOk = ddpSocket_.open() && ddpSocket_.bind(DDP_PORT);
-        if (artnetOk && e131Ok && ddpOk) {
-            if (status() == kBindFailMsg) clearStatus();
-        } else {
-            setStatus(kBindFailMsg, Severity::Error);
-        }
+        const bool e131Bound = bindSockets();
         sink_.prepare(mappedBy == kMappedBySender);
         pkt_.resize(kDatagramBytes);
         // One last sequence per universe the staging holds, each starting unknown.
         lastSeq_.resize(universesCovered());
         for (size_t u = 0; u < lastSeq_.count(); u++) lastSeq_[u] = 0;
-        if (e131Ok) joinUniverseGroups();
+        if (e131Bound) joinUniverseGroups();
+        else mcastJoined_ = mcastWanted_ = 0;   // no E1.31 socket, so no multicast note
         ddpEnd_ = ddpFrameBytes_ = ddpPacketBytes_ = 0;
         ddpSynced_ = false;
         ddpPushes_ = false;
@@ -222,7 +236,7 @@ private:
 
     platform::UdpSocket artnetSocket_;   ///< ArtNet, port 6454
     platform::UdpSocket e131Socket_;     ///< E1.31, port 5568
-    platform::UdpSocket ddpSocket_;      ///< DDP, port 4048
+    platform::UdpSocket ddpSocket_;      ///< DDP, port ddpPort
     static constexpr size_t kDatagramBytes = 1500;   ///< one datagram of any protocol, DDP reaching 1450
     ScratchBuffer<uint8_t> pkt_{*this};  ///< the datagram being read, taken in prepare
     ChannelDataSink sink_{*this};        ///< where the frames land, held and placed
@@ -344,6 +358,22 @@ private:
         applyBytes<kWait>(byteOffset, data, dataLen, push || !ddpPushes_);   // a sender without pushes shows every packet
         recordSender("DDP", srcIp);
     }
+
+    /// Bind the socket of each protocol it listens for, reporting a port in use; true when E1.31 is bound, so its groups can be joined. A socket left closed reads nothing: the wait skips it and its drain finds no datagram.
+    bool bindSockets() {
+        const bool artnetOk = bindIf(kProtoArtNet, artnetSocket_, ARTNET_PORT);
+        const bool e131Ok = bindIf(kProtoE131, e131Socket_, E131_PORT);
+        const bool ddpOk = bindIf(kProtoDdp, ddpSocket_, ddpPort);
+        if (artnetOk && e131Ok && ddpOk) {
+            if (status() == kBindFailMsg) clearStatus();
+        } else {
+            setStatus(kBindFailMsg, Severity::Error);
+        }
+        return listensFor(kProtoE131) && e131Ok;
+    }
+
+    /// Open and bind `sock` on `port` when it listens for `p`; a protocol it ignores counts as bound.
+    bool bindIf(uint8_t p, platform::UdpSocket& sock, uint16_t port) { return !listensFor(p) || (sock.open() && sock.bind(port)); }
 
     /// Join the E1.31 group of each universe the layer covers, 239.255.(N >> 8).(N & 0xFF) as E1.31 §9.3.1 addresses it, so a multicasting sender reaches it; the status names what only unicast reaches.
     void joinUniverseGroups() {

@@ -13,35 +13,27 @@
 
 /// The binding table behind every input service: a row says what one input does to one control.
 ///
-/// Shared by button, infrared and every later transport, because the half that differs between them is only how the event is detected.
-/// What happens next is identical, so it lives here once rather than in each module.
+/// Shared by button, infrared and every later transport, which differ only in how an event is detected; what happens next lives here once.
 ///
 /// @technical
 ///
 /// ## The target is the surface
 ///
-/// A row names a surface control, a switch, an encoder, a fader or a pad, and the surface decides what that control drives.
-/// One place then shows what the device's controls do, and every transport reaches the same switch.
-/// A row stores the bank and the number rather than a name, so it cannot point anywhere else.
-/// The name, such as `Control.switch1`, exists only at the edges: the wire, the persisted list and the interface.
+/// A row names a surface control, a switch, an encoder, a fader or a pad, and the surface decides what it drives, so every transport reaches the same switch.
+///
+/// A row stores the bank and the number; a name such as `Control.switch1` exists only on the wire, in the persisted list and in the interface.
 ///
 /// ## A pad is a row, not a control
 ///
-/// A pad grid renders from a list, so a pad is reached through that list rather than by control name.
-/// Every such list already publishes each row's slot and applies a row, so this needs to know nothing about presets.
-/// Any module that grows a pad grid therefore becomes targetable by every input at once.
-/// Resolving it here rather than in each service is what makes a button, a remote and every later transport reach a pad the same way.
+/// A pad grid renders from a list that publishes each row's slot and applies a row, so a module that grows one becomes targetable by every input at once.
 ///
-/// A pad fires on the press alone. A release firing it again would re-apply the same preset for no reason, and would make a momentary row unusable.
+/// A pad fires on the press alone: a release firing it again would re-apply the preset and make a momentary row unusable.
 ///
 /// ## An event and a reading are different shapes
 ///
-/// A press carries no number, so a Set row writes the fixed value it was given and zero on release.
-/// An analog input's value IS the reading, so a row's stored value has nothing to say, and the two paths stay separate rather than sharing a parameter.
-/// They differ in what they do with every kind: a toggle or a delta driven fifty times a second is not something a user can mean.
+/// A press carries no number, so a Set row writes its fixed value and zero on release; an analog reading is the value, so the two paths stay separate.
 ///
-/// A reading arrives in the range every surface control uses and is rescaled to whatever the target holds.
-/// So a pedal is configured once and works on any target, rather than needing a range per target.
+/// A toggle or a delta driven fifty times a second is nothing a user means, so a reading only sets, rescaled from the surface range to the target's.
 ///
 /// ## Reading and writing in the control's own units
 ///
@@ -49,16 +41,13 @@
 ///
 /// ## A Set needs a release to clear it
 ///
-/// A button reports letting go; a remote does not, since a code arrives as a single event with no matching release.
-/// So a Set is offered only where a release exists to clear it, or it would write its value and latch forever.
-/// An input without one offers toggle and delta, which are both complete in one event.
+/// A remote sends a code as one event with no release, so a Set is offered only where a release exists, or it would latch forever, and a flip there acts as a toggle; toggle and delta are complete in one event.
 ///
 /// ## A name the surface does not have is refused
 ///
-/// The whole suffix of a name must parse, and the number must be in that bank's own range.
-/// A trailing character would otherwise fire the wrong pad, and a number past the range would wrap through the cast and fire another one entirely.
-/// A name set through the interface that is not a surface control is refused.
-/// A persisted one leaves its row unassigned and the service says so on its status, so a row never points somewhere the editor cannot show.
+/// The whole suffix must parse and the number must be in its bank's range, or a trailing character or a wrapped cast would fire another pad.
+///
+/// A name set through the interface is refused; a persisted one leaves its row unassigned and the status says so, so no row points where the editor cannot show.
 namespace mm {
 
 /// What a row's value may hold, stated once and used by both the editor's bounds and the field that parses an edit.
@@ -73,19 +62,20 @@ inline constexpr unsigned long kMaxPadNumber = 64;
 /// @xref{the-target-is-the-surface|what a target may name}.
 /// @field target The bank of the Control card the row drives: a switch, an encoder, a fader or a pad.
 /// @field number Which control of that bank, from 1.
-/// @field kind Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value.
-/// @field value What set writes, or the signed step delta adds; a toggle ignores it.
+/// @field kind Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value, flip flips on every state change for a latching switch.
+/// @field value What set writes, or the signed step delta adds; a toggle or a flip ignores it.
 struct InputAction {
     /// How the input changes its target; a toggle is its own kind because a delta cannot express it.
     enum class Kind : uint8_t {
         Toggle = 0,   ///< read the current value, write its inverse. A light switch.
         Set,          ///< write `value`. A momentary hold writes 1 then 0; a pad writes a slot.
         Delta,        ///< add `value` to the target, clamped to its declared bounds. A nudge.
+        Flip,         ///< like Toggle, but on every state change: a latching switch flips the target on open and on close. A staircase.
     };
 
     uint8_t type = 0;             ///< an index into kTargetTypes, the `target` field; 0 for an unassigned row
     uint8_t number = 1;           ///< the `number` field, stored as the editor shows it
-    Kind    kind = Kind::Toggle;   ///< which of the three this row does
+    Kind    kind = Kind::Toggle;   ///< which of these this row does
     int16_t value = 0;            ///< the `value` field, signed for a delta
 
     /// Whether this row names a target at all.
@@ -226,7 +216,8 @@ inline bool runInputAction(const InputAction& a, bool pressed,
     if (!Scheduler::instance()->getControlWide(kSurfaceModule, control, current)) return false;
     int next = 0;
     switch (a.kind) {
-        case InputAction::Kind::Toggle: next = current == 0 ? 1 : 0; break;
+        case InputAction::Kind::Toggle:
+        case InputAction::Kind::Flip:   next = current == 0 ? 1 : 0; break;   // flip also fires on the release; the caller's guard lets it through
         case InputAction::Kind::Set:    next = pressed ? a.value : 0; break;
         case InputAction::Kind::Delta:  next = static_cast<int>(current) + a.value; break;
     }
@@ -262,7 +253,8 @@ inline void writeInputActionFields(JsonSink& sink, const InputAction& a) {
     sink.writeJsonString(name);
     sink.append(",\"kind\":");
     sink.writeJsonString(a.kind == InputAction::Kind::Toggle ? "toggle"
-                       : a.kind == InputAction::Kind::Set    ? "set" : "delta");
+                       : a.kind == InputAction::Kind::Set    ? "set"
+                       : a.kind == InputAction::Kind::Flip   ? "flip" : "delta");
     sink.appendf(",\"value\":%d", static_cast<int>(a.value));
 }
 
@@ -304,7 +296,7 @@ inline void writeInputActionDetailFields(JsonSink& sink, const InputAction& a,
     sink.appendf("{\"name\":\"target\",\"type\":\"select\",\"optionsRef\":\"targets\",\"value\":%d},"
                  "{\"name\":\"number\",\"type\":\"uint8\",\"value\":%d},",
                  static_cast<int>(a.type), static_cast<int>(a.number));
-    // All three positions stay whatever is usable, the parser mapping an index straight onto the kind; dropping one would make a delta arrive as the latch this prevents.
+    // Every position stays whatever is usable, the parser mapping an index straight onto the kind; dropping one would make a delta arrive as the latch this prevents.
     const int kindValue = static_cast<int>(a.kind);
     sink.appendf("{\"name\":\"kind\",\"type\":\"select\",\"value\":%d,"
                  "\"options\":%s},"
@@ -312,8 +304,8 @@ inline void writeInputActionDetailFields(JsonSink& sink, const InputAction& a,
                  "{\"name\":\"value\",\"type\":\"uint8\",\"value\":%d,"
                  "\"min\":%d,\"max\":%d}",
                  kindValue,
-                 hasRelease ? "[\"toggle\",\"set\",\"delta\"]"
-                            : "[\"toggle\",\"set (needs a release)\",\"delta\"]",
+                 hasRelease ? "[\"toggle\",\"set\",\"delta\",\"flip\"]"
+                            : "[\"toggle\",\"set (needs a release)\",\"delta\",\"flip (needs a release)\"]",
                  static_cast<int>(a.value),
                  static_cast<int>(kMinActionValue), static_cast<int>(kMaxActionValue));
 }
@@ -353,13 +345,14 @@ inline bool setInputActionField(InputAction& a, const char* field, const char* v
         json::parseString(valueJson, "value", buf, sizeof(buf));
         if (buf[0] == 0) {
             const int idx = json::parseInt(valueJson, "value");
-            if (idx < 0 || idx > 2) return false;
+            if (idx < 0 || idx > static_cast<int>(InputAction::Kind::Flip)) return false;
             a.kind = static_cast<InputAction::Kind>(idx);
             return true;
         }
         if (std::strcmp(buf, "toggle") == 0)     a.kind = InputAction::Kind::Toggle;
         else if (std::strcmp(buf, "set") == 0)   a.kind = InputAction::Kind::Set;
         else if (std::strcmp(buf, "delta") == 0) a.kind = InputAction::Kind::Delta;
+        else if (std::strcmp(buf, "flip") == 0)  a.kind = InputAction::Kind::Flip;
         else return false;   // an unknown kind is refused rather than silently defaulted
         return true;
     }
@@ -382,6 +375,7 @@ inline bool readInputAction(const json::JsonDoc& doc, const json::JsonNode* el, 
     json::readString(json::member(doc, el, "kind"), kind, sizeof(kind));
     a.kind = std::strcmp(kind, "set") == 0   ? InputAction::Kind::Set
            : std::strcmp(kind, "delta") == 0 ? InputAction::Kind::Delta
+           : std::strcmp(kind, "flip") == 0  ? InputAction::Kind::Flip
                                              : InputAction::Kind::Toggle;
     a.value = static_cast<int16_t>(json::readInt(json::member(doc, el, "value")));
     return onSurface;

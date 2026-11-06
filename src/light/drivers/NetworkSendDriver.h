@@ -92,6 +92,8 @@ public:
     uint8_t addressing = 0;
     /// The wire protocol: Art-Net, E1.31 or DDP; the port follows.
     uint8_t protocol = 0;
+    /// The UDP port DDP sends to: the `ddp_port` of the receiver it feeds.
+    uint16_t ddpPort = DDP_PORT;
     /// The first universe, sent as is, except E1.31 sends a 0 as 1; DDP ignores it.
     uint16_t universeStart = 0;
     /// Channels each Art-Net or E1.31 universe carries, exactly; DDP ignores it.
@@ -107,10 +109,12 @@ public:
     /// It sends a slice of the shared buffer.
     bool hasWindowControls() const override { return true; }
 
-    /// Bind the protocol, the destinations, the universe offset and the rate cap.
+    /// Bind the protocol, the DDP port, the destinations, the universe offset and the rate cap.
     void defineDriverControls() override {
         controls_.addSelect("protocol", protocol, kProtocolOptions, kProtocolCount);
         const uint8_t p = protocol < kProtocolCount ? protocol : 0;
+        controls_.addControl("ddp_port", ddpPort, 1024, 65535);
+        controls_.setHidden(controls_.count() - 1, p != kProtoDdp);
         // Every write rebuilds the controls, so a protocol without the chosen mode falls back to unicast here.
         if (addressing >= kModeCount[p]) addressing = 0;
         controls_.addSelect("addressing", addressing, kModeNames[p], kModeCount[p]);
@@ -437,7 +441,7 @@ private:
     void sendFrame(const uint8_t* data, size_t totalBytes, uint8_t bytesPerLight, uint32_t spacingUs) {
         const size_t chunk = packetPayload();
         uint8_t* packet = packet_;
-        const uint16_t port = protocolPort(protocol);
+        const uint16_t port = protocolPort();
 
         const Addressing sendMode = mode();
         uint32_t packets = 0;   // sent so far this frame: the first goes out at once, and the status reports the count
@@ -505,9 +509,9 @@ private:
         packetsSent_.fetch_add(packets, std::memory_order_relaxed);
     }
 
-    /// The UDP port for a protocol index: each wire format has its own registered port.
-    static uint16_t protocolPort(uint8_t p) {
-        return p == kProtoE131 ? E131_PORT : p == kProtoDdp ? DDP_PORT : ARTNET_PORT;
+    /// The UDP port the protocol sends to: Art-Net's and E1.31's registered ports, DDP's `ddp_port`.
+    uint16_t protocolPort() const {
+        return protocol == kProtoE131 ? E131_PORT : protocol == kProtoDdp ? ddpPort : ARTNET_PORT;
     }
 
     /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing, then report.

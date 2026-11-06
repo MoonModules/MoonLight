@@ -192,6 +192,36 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 
 Do it as its own increment. The multi-destination unicast it builds on has shipped.
 
+## PanelCard
+
+### Stutter past 76 fps on NanoPi R3S driving a ColorLight PanelCard over DDP (2026-11-04)
+
+Kind: Bug · Platform: Pi · Status: In progress · Issue: [#238](https://github.com/MoonModules/MoonLight/issues/238) · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=295134421)
+
+Reported 2026-11-04 in the MoonModules Discord, #moonlight-support; summarized 2026-11-05. A frame-rate cliff with visible stutter/tearing when a NanoPi R3S drives a ColorLight PanelCard (HUB75 panel) over DDP.
+
+**Measurements (belrik, NanoPi R3S, 128x128 panel, DDP receive + BeatRipples + one more effect):**
+
+- At 60 fps the R3S sits at ~90% CPU; beyond that the PanelCard output stutters because frames fail to render in time.
+- The frame rate breaks up around 74 fps. At 76 fps the PanelCard driver sends ~8,190-8,500 packets/s and everything is clean; at 77 fps the packet rate jumps to ~10,660 pps and the stutter/errors appear. The cliff is the single 76->77 fps step, and it comes with a packet-rate jump, which points at packet timing, not volume.
+- Two presets, both rendering at 120 fps: the "working" one (NetworkReceive + SpaceInvaders + BeatRipples + Nebula) happily uses more than one core; the "stuttering" one (NetworkReceive + BeatRipples + GEQ) locks to a single core and stutters with barely any visible rendering. Swapping presets flips between the two instantly, and turning on the GEQ effect is what pushed it over the edge. A single-core lockup under one preset but not the other points at a lock or contention in that path, not at raw CPU. (The presets were attached in the thread as working.json and stuttering.json.)
+
+**Same tearing chased for weeks by robwomp:** on a panel of three chained HUB75 cards (24 columns) the tear runs right-to-left and widens along the panel (video attached in the thread); also seen on a 256x256 using half the outputs of a board. Sometimes raising the fps helps, sometimes it makes it worse. He noticed older builds pinned to a single core, while newer builds are better because networking runs in a thread outside the main tick loop.
+
+**Related ColorLight timing facts:** 1920 Hz / 16 segments = 120 Hz effective refresh (one complete frame with all bit planes), so at 60 fps each frame is displayed twice; from experience the highest reliable content rate is ~60 fps (two refresh cycles per frame).
+
+**Next:** diff the working vs stuttering presets on the R3S (the GEQ path) and find the lock that serializes the render loop; check NetworkSend packet pacing above 76 fps (why 77 fps jumps to 10,660 pps).
+
+Sources (Discord, #moonlight-support, 2026-11-04): 76 vs 77 fps <https://discord.com/channels/700041398778331156/1513874957564903584/1567600398125244518>, working/stuttering presets <https://discord.com/channels/700041398778331156/1513874957564903584/1567601795734446281>, tearing video <https://discord.com/channels/700041398778331156/1513874957564903584/1567687348789977309>; daily summary <https://discord.com/channels/700041398778331156/1565668213759676426/1567804335436464243>.
+
+**Second bench:** the product owner's NanoPi R28S at 192.168.1.156 (Linux build, 128x128 grid, PanelCard driver, audio in simulate mode on 2026-11-05), the same mechanism to compare: the cliff fps differs per SoC, so record its 76->77-equivalent numbers alongside the R3S measurements above.
+
+**R28S measurements (2026-11-05, the product owner's bench 192.168.1.156, DDP send to FPP 192.168.1.70, 128x128):** with the stock three effects the render loop is the bottleneck, not the send: flat ~38-39 fps for send targets 50-120, tick 25.4 ms of which the MoonLive script alone costs 20.9 ms, so no send-side pps cliff is reachable. With MoonLive disabled the render jumps to ~220 fps and the DDP send follows the target cleanly up to 120 fps. So on this Linux board the cliff is render-load-dependent rather than a fixed 76->77 step; to reproduce the R3S pps jump here, load the render loop to ~76 fps and sweep the send target across it.
+
+**R28S fluency check (2026-11-05, same bench):** with Layer-2/MoonLive disabled the R28S renders 215-216 fps (tick 4.6 ms, Tunnel 2.4 ms + ColorTrails 2.0 ms of it) with 4 layers incl. NetworkReceive; the PanelCard wire rate stays ~4.7k packets/s (same as at 38 fps) with no jump, and the panel is fluent. So the R28S ceiling sits far above the R3S's 76->77: the cliff is board-specific, appearing when render fps exceeds what that board sustains (R3S ~77, R28S >215 at 128x128).
+
+**Negative control (2026-11-05):** the product owner's own chain (desktop -> DDP -> R28S NetworkReceive -> PanelCard -> HUB75) never stuttered, even at 215 fps, consistent with the board-specific ceiling: the R28S never exceeded what it sustains, while the R3S reports clipped at ~77 fps.
+
 ## PanelCardDriver
 
 ### MoonLight hangs when a USB network adapter is re-plugged (2026-09-28)

@@ -44,7 +44,7 @@ def find_moonmodules():
         # default read_text encoding is cp1252 and rejects those bytes.
         content = h_file.read_text(encoding="utf-8")
         # Check if file defines a class inheriting from MoonModule or its subclasses
-        if re.search(r'class\s+\w+\s*:\s*public\s+\w*(MoonModule|EffectBase|DriverBase|ModifierBase|LayoutBase)', content):
+        if re.search(r'class\s+\w+\s*:\s*public\s+\w*(MoonModule|Base)\b', content):
             # Skip abstract base classes (pure virtual methods + no controls)
             has_pure_virtual = re.search(r'=\s*0\s*;', content)
             has_controls = re.search(r'controls_\.add', content)
@@ -58,6 +58,10 @@ def find_moonmodules():
             if re.search(r'template\s*<[^>]*>\s*class\s+\w+\s*:\s*public\s+\w*'
                          r'(MoonModule|EffectBase|DriverBase|ModifierBase|LayoutBase)',
                          content):
+                continue
+            # An intermediate base (`class AudioNotesBase : public EffectBase`) is the same shared
+            # infrastructure: never registered, its controls documented on the concrete classes.
+            if re.search(r'class\s+\w+Base\s*:\s*public\s+(EffectBase|DriverBase|ModifierBase|LayoutBase)\b', content):
                 continue
             modules.append(h_file)
     return modules

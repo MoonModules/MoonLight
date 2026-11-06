@@ -45,7 +45,7 @@ std::vector<uint32_t> playToms(const std::vector<Tom>& toms, const std::vector<u
     const auto signal = [&](double s) {
         double v = 0;
         for (const Tom& t : toms)
-            if (const double u = s - t.atMs / 1000.0; u >= 0) v += 4.0e5 * attack(u, 0.002) * std::exp(-u * 15.0) * std::sin(2.0 * std::numbers::pi * t.hz * u);
+            if (const double u = s - t.atMs / 1000.0; u >= 0) v += 4.0e5 * attack(u, 0.002) * std::exp(-u * 15.0) * std::sin(2.0 * std::numbers::pi * static_cast<double>(t.hz) * u);
         return v;
     };
     feed(bank, kRate, untilMs, signal, [&](uint32_t nowMs) {
@@ -76,7 +76,7 @@ TEST_CASE("three toms a fourth apart fire three bands in order, each timed withi
 
 namespace {
 
-using NoteOnsets = mm::BandOnsets<79, mm::kNotesLowBand, true>;
+using NoteOnsets = mm::BandOnsets<mm::kAudioNoteKeys, mm::kNotesLowBand, true>;
 
 // Plucked notes through the semitone bank, each its fundamental and two harmonics with a 2 ms soft attack, decaying slowly; answers, per key, whether it fired in the 100 ms after `windowMs`.
 std::vector<bool> keysFiredAfter(const std::vector<Tom>& notes, uint32_t windowMs) {
@@ -84,19 +84,19 @@ std::vector<bool> keysFiredAfter(const std::vector<Tom>& notes, uint32_t windowM
     static NoteOnsets onsets;
     bank.init(kRate, 440.0f, mm::kSemitoneTopHz);
     onsets.reset();
-    std::vector<bool> fired(79, false);
+    std::vector<bool> fired(mm::kAudioNoteKeys, false);
     const auto signal = [&](double s) {
         double v = 0;
         for (const Tom& n : notes)
             if (const double u = s - n.atMs / 1000.0; u >= 0)
-                for (int k = 1; k <= 3; k++) v += 3.0e5 / (k * k) * attack(u, 0.002) * std::exp(-u * 2.0 * k) * std::sin(2.0 * std::numbers::pi * n.hz * k * u);
+                for (int k = 1; k <= 3; k++) v += 3.0e5 / (k * k) * attack(u, 0.002) * std::exp(-u * 2.0 * k) * std::sin(2.0 * std::numbers::pi * static_cast<double>(n.hz) * k * u);
         return v;
     };
     feed(bank, kRate, windowMs + 100, signal, [&](uint32_t nowMs) {
         onsets.update(bank, nowMs);
         uint8_t hits[NoteOnsets::kBytes];
         onsets.take(hits, true);
-        if (nowMs >= windowMs) for (uint8_t k = 0; k < 79; k++) fired[k] = fired[k] || mm::hitAt(hits, k);
+        if (nowMs >= windowMs) for (uint8_t k = 0; k < mm::kAudioNoteKeys; k++) fired[k] = fired[k] || mm::hitAt(hits, k);
     });
     return fired;
 }
@@ -151,7 +151,7 @@ int burstHits(float hz, uint8_t band, uint32_t periodMs, uint32_t burstMs, int b
     const auto signal = [&](double s) {
         const double u = s - 0.3;
         const bool on = u >= 0 && u * 1000.0 < periodMs * bursts && std::fmod(u * 1000.0, periodMs) < burstMs;
-        return on ? 3.0e5 * std::sin(2.0 * std::numbers::pi * hz * s) : 0.0;
+        return on ? 3.0e5 * std::sin(2.0 * std::numbers::pi * static_cast<double>(hz) * s) : 0.0;
     };
     feed(bank, kRate, 300 + periodMs * static_cast<uint32_t>(bursts) + 100, signal, [&](uint32_t nowMs) {
         onsets.update(bank, nowMs);

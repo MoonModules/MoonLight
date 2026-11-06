@@ -58,7 +58,7 @@ public:
     uint8_t channelsPerLight() const;
     /// Lights in the whole layer.
     nrOfLightsType nrOfLights() const;
-    /// Milliseconds since render start. Drive animation off this rather than a frame count.
+    /// Milliseconds since render start, which @xref{animation|animation} follows rather than a frame count.
     uint32_t elapsed() const;
 
     /// The layer's surface as one value, read once a frame since nothing may cache extents across ticks.
@@ -84,7 +84,7 @@ public:
 
 } // namespace mm
 
-// The effect author's helper surface, pulled in after the class so Layer.h re-enters harmlessly.
+// The effect author's helper surface (@xref{writing-an-effect}), pulled in after the class: @xref{why-the-helper-includes-sit-at-the-bottom}.
 #include "light/layers/Layer.h"   // EffectBase's out-of-line accessors
 #include "light/powerfunctions/draw.h"           // draw::pixel / fill / line / fade / blur: write pixels by coordinate
 #include "light/util/Palette.h"        // colorFromPalette, Palettes::active: the palette system
