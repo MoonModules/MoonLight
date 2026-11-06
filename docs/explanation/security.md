@@ -17,7 +17,7 @@ The UDP listeners follow the same model and accept any sender:
 | Listener | Port | Open while |
 |---|---|---|
 | Device presence | 65506 and multicast 239.255.77.77 | the network is up |
-| Art-Net, E1.31, DDP | 6454, 5568, 4048 | a Network Receive effect exists |
+| Art-Net, E1.31, DDP | 6454, 5568, 4048 (`ddp_port`) | a Network Receive effect listens for the protocol |
 | OSC | 9000 | OSC is switched on (off by default) |
 | RTP-MIDI | 5004, 5005 | the MIDI source is the network |
 | Audio sync | 11988 | audio sync receives |

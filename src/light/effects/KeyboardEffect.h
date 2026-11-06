@@ -38,7 +38,7 @@ public:
     Dim dimensions() const override { return Dim::D2; }
 
     /// How long a struck key glows, in tens of milliseconds.
-    uint8_t decay = 30;
+    uint8_t decay = 100;
     /// How bright the ivory rests between notes, 0 for dark.
     uint8_t ivory = 128;
     /// The detected key picks the first shown key.
@@ -157,7 +157,9 @@ private:
             if (!lvl) continue;
             const lengthType cy = static_cast<lengthType>(h.y0 + o * slot + slot / 2);
             if (cy + r >= static_cast<lengthType>(h.y0 + h.kh)) break;
-            draw::fillCircle(cv, cx, cy, r, colorFromPalette(pal, static_cast<uint8_t>(hk * 256u / kAudioNoteKeys), lvl));
+            // The circle shrinks with its level, so the dim tail of the glow is a small dot, not a big black one.
+            const lengthType rr = std::max<lengthType>(1, static_cast<lengthType>(r * lvl / 255));
+            draw::fillCircle(cv, cx, cy, rr, colorFromPalette(pal, static_cast<uint8_t>(hk * 256u / kAudioNoteKeys), lvl));
         }
     }
 

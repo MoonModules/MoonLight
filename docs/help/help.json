@@ -1396,7 +1396,7 @@
   },
   "NetworkReceiveEffect": {
    "line": "Receives lights over UDP into the layer, from Resolume, Madrix, xLights and LedFx.",
-   "summary": "It listens for Art-Net, E1.31 and DDP at once, with no protocol control, so whatever a sender speaks works and the status names it. The received lights land in the layer buffer, so they compose with modifiers and blending.",
+   "summary": "It listens for Art-Net, E1.31 and DDP at once by default, so whatever a sender speaks works and the status names it; `protocol` narrows it to one, so several receivers share a device. The received lights land in the layer buffer, so they compose with modifiers and blending.",
    "attribution": "[Art-Net](https://moonmodules.org/MoonLight/reference/attributions.html#art-net), [E1.31](https://moonmodules.org/MoonLight/reference/attributions.html#e1-31), [DDP](https://moonmodules.org/MoonLight/reference/attributions.html#ddp), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/NetworkReceiveEffect.gif",
    "controls": {
@@ -1415,6 +1415,13 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkreceiveeffect:live:scenario_NetworkReceive_two_boards"
       }
      ]
+    },
+    "protocol": {
+     "line": "All protocols, or one, leaving the rest to another receiver.",
+     "more": "**all** takes any sender; a second receiver in a device picks **DDP** on its own `ddp_port`."
+    },
+    "ddp_port": {
+     "line": "The UDP port DDP listens on; each receiver in a mix takes its own."
     }
    },
    "role": "effect",
@@ -2850,7 +2857,7 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#starskyeffect"
   },
   "StringsEffect": {
-   "line": "A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem on the body.",
+   "line": "A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem beside it.",
    "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, snares and body emblem; guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up on every string and fret that plays them, a struck note flashing over `decay`.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/StringsEffect.gif",
    "controls": {
@@ -3333,6 +3340,9 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networksenddriver:live:scenario_NetworkSend_one_sender_many_receivers"
       }
      ]
+    },
+    "ddp_port": {
+     "line": "The UDP port DDP sends to: the `ddp_port` of the receiver it feeds."
     },
     "addressing": {
      "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
@@ -4471,7 +4481,7 @@
    "guide": [
     {
      "title": "What a row does",
-     "text": "Each row binds one pin to a surface control; a catalog board's first button targets `Control.switch1`, the lights and their relay. The pressed readout shows a button working before it is bound.\n\nA push button takes `toggle`, each press flipping the target. A latching switch takes `set` with value 1: on while closed, off once open."
+     "text": "Each row binds a pin to a surface control; a catalog board's first button drives `Control.switch1`, the lights' relay. The pressed readout shows a button working before it is bound.\n\nA push button takes `toggle`. A latching switch takes `set` with value 1, on while closed, or `flip`, toggling on every change, for a staircase with a remote."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/ButtonService.png",
@@ -4495,10 +4505,10 @@
        "line": "Which control of that bank, from 1."
       },
       "kind": {
-       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value, flip flips on every state change for a latching switch."
       },
       "value": {
-       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+       "line": "What set writes, or the signed step delta adds; a toggle or a flip ignores it."
       }
      }
     }
@@ -4545,10 +4555,10 @@
        "line": "Which control of that bank, from 1."
       },
       "kind": {
-       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value, flip flips on every state change for a latching switch."
       },
       "value": {
-       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+       "line": "What set writes, or the signed step delta adds; a toggle or a flip ignores it."
       }
      }
     }
@@ -4653,10 +4663,10 @@
        "line": "Which control of that bank, from 1."
       },
       "kind": {
-       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value, flip flips on every state change for a latching switch."
       },
       "value": {
-       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+       "line": "What set writes, or the signed step delta adds; a toggle or a flip ignores it."
       }
      }
     }
@@ -4703,10 +4713,10 @@
        "line": "Which control of that bank, from 1."
       },
       "kind": {
-       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value."
+       "line": "Toggle flips the target each press, set writes the value while held and 0 on release, delta nudges the target by the value, flip flips on every state change for a latching switch."
       },
       "value": {
-       "line": "What set writes, or the signed step delta adds; a toggle ignores it."
+       "line": "What set writes, or the signed step delta adds; a toggle or a flip ignores it."
       }
      }
     }
@@ -5399,7 +5409,7 @@
    "title": "Effects",
    "base": "EffectBase",
    "line": "An effect draws: each frame it writes a color per light into its [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer)'s buffer, which modifiers reshape and a driver sends out.",
-   "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
+   "summary": "Effects are built from the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html), the drawing, field and motion routines every effect composes; a new one starts at writing an effect. One that names an index color reads the global palette, the `palette` control on [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers).\n\nEach card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains, and its dimension is its native axes: a Layer extrudes a lower-dimensional effect onto a bigger grid."
   },
   "light/drivers.md": {
    "title": "Drivers",

@@ -45,6 +45,7 @@ TEST_CASE("a struck key takes its palette color across the top half, then fades 
     Keys keys;
     keys.e.ivory = 0;
     keys.e.noteNames = false;
+    keys.e.decay = 30;   // pin the short glow this test fades past
     play(keys, audio, struck(48), 1000);
     const RGB want = expectedColor(48, 255);
     CHECK(keys.ch(19, 10, 0) == want.r);
@@ -103,6 +104,7 @@ TEST_CASE("a frame two ticks read is one hit: the glow fades on instead of start
     Keys keys;
     keys.e.ivory = 0;
     keys.e.noteNames = false;
+    keys.e.decay = 30;   // pin the 300 ms glow this test reads 80 ms into
     audio.frameForTest() = struck(48);
     audio.frameForTest().seq = 7;
     platform::setTestNowMs(1000);
@@ -110,13 +112,28 @@ TEST_CASE("a frame two ticks read is one hit: the glow fades on instead of start
     const RGB full = expectedColor(48, 255);
     const int first = keys.at(19, 10);
     CHECK(first == full.r + full.g + full.b);
-    platform::setTestNowMs(1080);   // the same frame, read again: 187 of 255 left
+    platform::setTestNowMs(1080);   // the same frame, read again: 237 of 255 left on the quadratic fade
     keys.layer.tick();
-    const RGB faded = expectedColor(48, 187);
+    const RGB faded = expectedColor(48, 237);
     const int again = keys.at(19, 10);
     CHECK(again == faded.r + faded.g + faded.b);
     CHECK(again < first);           // fading, not started again
     audio.frameForTest() = AudioFrame{};
+    audio.release();
+}
+
+// The default glow lasts a second (decay 100), so a struck note stays colored instead of flashing out.
+TEST_CASE("the default glow lasts a second") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    Keys keys;
+    keys.e.ivory = 0;
+    keys.e.noteNames = false;
+    play(keys, audio, struck(48), 1000);
+    platform::setTestNowMs(1500);   // 500 ms into the 1000 ms glow: 192 of 255 left on the quadratic fade
+    keys.layer.tick();
+    const RGB half = expectedColor(48, 192);
+    CHECK(keys.at(19, 10) == half.r + half.g + half.b);
     audio.release();
 }
 
@@ -252,4 +269,21 @@ TEST_CASE("a single row lights the struck key's own span, and the keyboard survi
     CHECK(row.at(18, 0) == 0);
     survivesTinyGrids<Keys>(audio);
     audio.release();
+}
+
+// A key off the shown window is never drawn, so nothing polls its flash: the hit state must still end it, or the tick wraps and it flashes again.
+TEST_CASE("a struck note's flash ends on time, polled late or never polled") {
+    AudioFrame hit = struck(10);
+    hit.seq = 1;   // a new frame, as a source numbers it
+    // Polled late: 1040 ms after the hit is past a 1000 ms span, never a wrapped 16 ms.
+    NoteHits late;
+    late.note(hit, 0, 1000);
+    CHECK(late.glow(10, 1040, 1000) == 0);
+    // Never polled: note ends the flash on its own, so a poll a whole wrap later finds nothing.
+    NoteHits idle;
+    idle.note(hit, 0, 1000);
+    AudioFrame quiet;
+    quiet.seq = 2;   // the next frame, with no hit
+    idle.note(quiet, 1010, 1000);
+    CHECK(idle.glow(10, 262144 + 500, 1000) == 0);   // 2^16 ticks of 4 ms on: the age would read 500
 }

@@ -11,10 +11,11 @@ constexpr uint8_t kBassStrings[] = {28, 33, 38, 43};             // E A D G
 constexpr uint8_t kViolinStrings[] = {55, 62, 69, 76};           // G D A E
 constexpr uint8_t kCelloStrings[] = {36, 43, 50, 57};            // C G D A
 constexpr uint8_t kFrets = 12;   // the fingerboard shows a full octave of frets
+constexpr int16_t kMinBoard = kFrets;   // the narrowest fingerboard the strips give way to: a column a fret
 constexpr uint8_t kDotFrets[] = {3, 5, 7, 9, 12};   // position dots, 12 doubled
 }  // namespace detail
 
-/// A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem on the body.
+/// A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem beside it.
 /// @card StringsEffect.gif
 ///
 /// `instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, snares and body emblem; guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up on every string and fret that plays them, a struck note flashing over `decay`.
@@ -36,7 +37,7 @@ public:
     /// Guitar, bass, violin or cello.
     uint8_t instrument = kGuitar;
     /// How long a struck note glows, in tens of milliseconds.
-    uint8_t decay = 30;
+    uint8_t decay = 100;
     /// The strongest pitch classes top left, the key top right.
     bool noteNames = true;
 
@@ -62,8 +63,12 @@ public:
         // The rounded wooden enclosure: board fill, wood frame with rounded corners, body strip beside the bridge.
         const lengthType frame = w / 32 > 2 ? static_cast<lengthType>(w / 32) : 2;
         const lengthType labelW = 3 * fonts::kFont4x6.width + 2;   // room for a name like "C#2"
-        const lengthType bodyW = labelW > w / 6 ? labelW : static_cast<lengthType>(w / 6);
-        const lengthType nutX = frame + (w / 12 > 2 ? static_cast<lengthType>(w / 12) : 2);
+        const lengthType wideW = labelW > w / 6 ? labelW : static_cast<lengthType>(w / 6);
+        // The strips give way to the fingerboard on a narrow grid, so a 32-wide panel keeps a fret a column.
+        const lengthType fitW = static_cast<lengthType>((w - 1 - 2 * frame - detail::kMinBoard) / 2);
+        const lengthType bodyW = std::max<lengthType>(0, std::min(wideW, fitW));
+        // The left margin equals the body strip, so the fingerboard with its frets and strings sits exactly in the middle.
+        const lengthType nutX = static_cast<lengthType>(frame + bodyW);
         const lengthType bridgeX = static_cast<lengthType>(w - 1 - frame - bodyW);
         const bool fretted = instrument == kGuitar || instrument == kBass;
         const bool numRoom = h - 1 - frame - 7 > frame + 2;   // six rows under the board for fret numbers
@@ -74,6 +79,10 @@ public:
         draw::rect(cv, 0, 0, w, h, wood);
         draw::fillRect(cv, static_cast<lengthType>(bridgeX + 1), frame, static_cast<lengthType>(w - 1 - frame - bridgeX), static_cast<lengthType>(h - 1 - frame), body);
         roundCorners(cv, w, h, frame, nutX, wood);
+        if (bridgeX <= nutX || fbBot <= fbTop) {   // no room for a fingerboard: the enclosure and the names alone
+            if (noteNames && h > 1) draw::noteNames(cv, f, w, 0);
+            return;
+        }
 
         // The frets equally spaced, metal and 2px wide when fretted, thin pseudo-frets otherwise; the strings run over them, as on a real instrument.
         const RGB stringC{230, 190, 90}, fretC{200, 200, 210}, pseudoC{120, 80, 40}, nutC{235, 235, 240};
@@ -114,7 +123,7 @@ public:
             if (fr == 12) draw::fillCircle(cv, fretX(fr, nutX, bridgeX), static_cast<lengthType>(midY + 3), 1, dotC);
         }
         // One snare per string at the bridge, a thin tick the color of the frets, with the open string's note named beside it.
-        const bool labels = w > 2 * (nutX + labelW) + 4;
+        const bool labels = bodyW >= labelW;   // the body strip holds the names beside the bridge
         for (uint8_t s2 = 0; s2 < n; s2++) {
             const lengthType y = stringY(s2, fbTop, fbBot, n);
             draw::bar(cv, bridgeX, static_cast<lengthType>(y > 2 ? y - 2 : 0), 5, draw::Grow::Down, fretC);   // over the frets
@@ -124,17 +133,19 @@ public:
                 lengthType nl = 0;
                 while (name[nl]) nl++;
                 const lengthType tw = static_cast<lengthType>(nl * fonts::kFont4x6.width);
-                int32_t tx = static_cast<int32_t>(bridgeX) + (static_cast<int32_t>(bodyW) - static_cast<int32_t>(tw)) / 2;   // middle of the body strip
+                int32_t tx = static_cast<int32_t>(bridgeX) + 1 + (static_cast<int32_t>(bodyW) - 1 - static_cast<int32_t>(tw)) / 2;   // centered in the body strip
                 if (tx < static_cast<int32_t>(bridgeX + 1)) tx = static_cast<int32_t>(bridgeX + 1);
                 draw::text(cv, fonts::kFont4x6, name, static_cast<lengthType>(tx),
                            static_cast<lengthType>(y > 3 ? y - 3 : 0), RGB{255, 255, 255});
             }
         }
-        drawEmblem(cv, bridgeX, bodyW, fbTop, fbBot);
+        drawEmblem(cv, static_cast<lengthType>((frame + nutX) / 2 - 1), bodyW, frame, static_cast<lengthType>(h - 1 - frame));   // the emblem in the left margin, clear of the note names and the nut
 
-        // Each sounding note lights every string and fret that plays it.
+        // Each sounding note lights every string and fret that plays it; a dot's radius is capped by the fret spacing, so adjacent frets' dots do not overlap.
         const lengthType bandH = fbBot - fbTop > 0 ? static_cast<lengthType>(fbBot - fbTop) : 1;
-        const lengthType r = std::max<lengthType>(1, std::min<lengthType>(bandH / n / 3, 4));
+        const lengthType fretGap = static_cast<lengthType>((bridgeX - nutX) / detail::kFrets);   // one fret's columns
+        const lengthType rCap = std::min<lengthType>(std::min<lengthType>(bandH / n / 3, 4), fretGap > 2 ? static_cast<lengthType>((fretGap - 2) / 2) : 1);
+        const lengthType r = std::max<lengthType>(1, rCap);
         for (uint8_t i = 0; i < kAudioNoteKeys; i++) {
             const uint8_t g = hits_.glow(i, ms, span);
             const uint8_t lvl = std::max(static_cast<uint8_t>(i < f.notesCount ? f.notes[i] : 0), g);
@@ -145,7 +156,9 @@ public:
                 if (fret < 0 || fret > detail::kFrets) continue;
                 const lengthType cx = fret == 0 ? nutX : fretX(static_cast<uint8_t>(fret), nutX, bridgeX);
                 const lengthType cy = stringY(s, fbTop, fbBot, n);
-                draw::fillCircle(cv, cx, cy, r, colorFromPalette(pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), lvl));
+                // The dot shrinks with its level, so the dim tail of the glow is a small dot, not a big black one.
+                const lengthType rr = std::max<lengthType>(1, static_cast<lengthType>(r * lvl / 255));
+                draw::fillCircle(cv, cx, cy, rr, colorFromPalette(pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), lvl));
             }
         }
         if (noteNames && h > 1) draw::noteNames(cv, f, w, 0);
@@ -208,16 +221,16 @@ private:
             }
     }
 
-    /// The instrument's abstract emblem on the body: a sound hole for guitar, a pickup for bass, f-holes for violin, f-holes and an endpin for cello.
-    void drawEmblem(const draw::Canvas& cv, lengthType bridgeX, lengthType bodyW, lengthType fbTop, lengthType fbBot) const MM_NONBLOCKING {
-        const lengthType bx = static_cast<lengthType>(bridgeX + bodyW / 2);
-        const lengthType by = static_cast<lengthType>((fbTop + fbBot) / 2);
-        const lengthType s = std::min(bodyW, static_cast<lengthType>(fbBot - fbTop)) / 3;
+    /// The instrument's abstract emblem centered in its strip at `cx`, as large as the strip fits: a sound hole for guitar, a pickup for bass, f-holes for violin, f-holes and an endpin for cello.
+    void drawEmblem(const draw::Canvas& cv, lengthType cx, lengthType stripW, lengthType top, lengthType bottom) const MM_NONBLOCKING {
+        const lengthType by = static_cast<lengthType>((top + bottom) / 2);
+        const lengthType s = (std::min(stripW, static_cast<lengthType>(bottom - top)) - 1) / 2;   // diameter fits the strip
         if (s < 2) return;
         const RGB c{215, 150, 80};
+        const lengthType bx = cx;
         switch (instrument) {
             case kGuitar:
-                draw::circle(cv, bx, by, s, c);   // the sound hole
+                draw::circle(cv, bx, by, s > 3 ? s - 2 : s, c);   // the sound hole, 2 px clear of the nut
                 break;
             case kBass:
                 draw::fillRect(cv, static_cast<lengthType>(bx - s / 2), static_cast<lengthType>(by - s / 3),

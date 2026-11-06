@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "light/drivers/NetworkSendDriver.h"
 #include "correction_presets.h"
+#include "unit/core/conditional_controls.h"   // isVisible, isHidden
 
 #include <cstring>
 #include <cstdio>
@@ -399,10 +400,11 @@ struct PaceRig {
     mm::Buffer source;
     mm::NetworkSendDriver driver;
     mm::platform::UdpSocket rx;
-    PaceRig(mm::nrOfLightsType lights, uint16_t gapUs, uint8_t fps) {
+    PaceRig(mm::nrOfLightsType lights, uint16_t gapUs, uint8_t fps, uint16_t port = mm::DDP_PORT) {
         REQUIRE(source.allocate(lights, 3));
         REQUIRE(rx.open());
-        REQUIRE(rx.bind(mm::DDP_PORT));   // a running desktop app holds this port: don't run it and the tests at once
+        REQUIRE(rx.bind(port));   // a running desktop app holds 4048: don't run it and the tests at once
+        driver.ddpPort = port;
         mm::Correction correction;
         mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
         driver.correctionForTest() = correction;
@@ -462,6 +464,20 @@ TEST_CASE("NetworkSendDriver: a packet gap of 0 sends the frame as one burst fro
     CHECK_FALSE(r.driver.sendsInTask());
     r.driver.tick();
     CHECK(r.arrivals(3).size() == 3);
+}
+
+// Issue #237: DDP sends to its own ddp_port, so several senders reach one device's receivers on 4049, 4050 and mix in its layers.
+TEST_CASE("NetworkSendDriver: DDP sends to its ddp_port, shown only while the protocol is DDP") {
+    mm::NetworkSendDriver d;
+    d.defineControls();
+    CHECK(mm::test::isHidden(d, "ddp_port"));    // Art-Net, the default, has its registered port
+    d.protocol = mm::NetworkSendDriver::kProtoDdp;
+    d.rebuildControls();
+    CHECK(mm::test::isVisible(d, "ddp_port"));
+
+    PaceRig r(10, 0, 50, 4049);   // a receiver on 4049 alone
+    r.driver.tick();
+    CHECK(r.arrivals(1).size() == 1);
 }
 
 // A gap too long for the frame rate is shortened so a frame's packets fit in 80% of its period, leaving the rest for the next.

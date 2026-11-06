@@ -96,6 +96,33 @@ struct Rig {
 
 }  // namespace
 
+TEST_CASE("a flip row toggles on every state change, press and release alike (a latching staircase switch)") {
+    Rig rig;
+    rig.addRow("Control.switch1", "flip");
+    rig.hold(false, 100);                 // settle unpressed first
+    const bool settled = rig.surface->switch1;
+
+    rig.hold(true, 100);
+    CHECK(rig.surface->switch1 == !settled);   // the close toggled it
+    rig.hold(true, 200);
+    CHECK(rig.surface->switch1 == !settled);   // holding does NOT toggle again
+    rig.hold(false, 100);
+    CHECK(rig.surface->switch1 == settled);    // the release toggled it back
+    rig.hold(true, 100);
+    CHECK(rig.surface->switch1 == !settled);   // and the next close does
+}
+
+// A staircase switch left closed must not flip the light on every reboot: the level it settles at first is where it starts from.
+TEST_CASE("a flip row takes a switch closed at boot as its baseline, and flips from the next change") {
+    Rig rig;
+    const bool before = rig.surface->switch1;
+    rig.addRow("Control.switch1", "flip");
+    rig.hold(true, 200);                       // closed from the start
+    CHECK(rig.surface->switch1 == before);     // the boot level flips nothing
+    rig.hold(false, 100);
+    CHECK(rig.surface->switch1 == !before);    // the first change does
+}
+
 // @step hold-to-play/add-button
 TEST_CASE("a press toggles the control its row targets, once per press") {
     Rig rig;

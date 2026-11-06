@@ -5,10 +5,12 @@
 # ///
 """Read the MoonModules Discord server for an agent, as an MCP server: channels, threads and their messages through a bot's REST API, and post in the one forum agents talk to each other in.
 
-The bot token lives in the macOS keychain (service `discord-reader`), read per request and never written to a file:
-  security add-generic-password -s discord-reader -a bot -w
-Registered once per machine, after which an agent session has the tools:
-  claude mcp add --scope user discord -- uv run --script <repo>/moondeck/report/discord_reader.py
+The bot token lives in the macOS keychain (service `discord-reader`, account `bot`), read per request and never written to a file. Storing the token, registering this file as an MCP server, and calling the REST API without one: moondeck/MoonDeck.md#discord_reader.
+
+The daily summary in SUMMARY_CHANNEL follows one format, so any run of this procedure produces the same shape. The first post opens with a header naming the covered range and the legend:
+  ## :newspaper2: MoonLight summary · <start day> to <end day> <Month>
+  -# <start> HH:MM to <end> HH:MM UTC · :white_check_mark: done · :construction: in progress · :question: waiting for input · :bulb: idea
+Then one post per `### <channel>` section, each at most MAX_MESSAGE chars, split at paragraph breaks. Bullets carry the legend's emoji (✅ ❓ 💡), each with a [→](<message link>) per source message and a `-# Next:` line; users are <@id> mentions. The bot never posts in SUMMARY_CHANNEL (read-only outside AGENT_FORUM): the product owner pastes the posts.
 """
 from __future__ import annotations
 

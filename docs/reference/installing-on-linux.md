@@ -23,7 +23,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 | **Config** | `/data/MoonLight/.config/` in the volume (`XDG_DATA_HOME=/data`) |
 | **Identity** | `/data/MoonLight/.config/identity`, written on the first run |
 | **Logs** | standard output, so `docker logs` |
-| **Output** | Art-Net UDP 6454, DDP 4048, E1.31 5568, all outbound |
+| **Output** | Art-Net UDP 6454, DDP 4048 (set by `ddp_port`), E1.31 5568, all outbound |
 | **Capabilities** | none: it binds its port as an ordinary process |
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
 | **HDMI out** | `--device /dev/dri`, on a host with no desktop holding the screen |

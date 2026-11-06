@@ -133,6 +133,17 @@ TEST_CASE("the bands' window stops at the bands' own floor, so quiet music over 
     CHECK(mid < 175);
 }
 
+// Regression (2026-11-06, PO bench): a song outlasting the floor's window taught the window's bottom its quiet moments, and the bars lost energy until a pause. The bottom learns only while the gate is shut.
+TEST_CASE("a long song keeps the window wide: the bottom's floor learns only while the gate is shut") {
+    mm::AudioDynamics d;
+    feed(d, -80.0f, 2.0f);          // the room, its loudest band at -86
+    song(d, 120.0f);                 // a two-minute song with no pause, far past the 10 s half window
+    REQUIRE(d.gateOpen);
+    REQUIRE(d.floorDb > -40.0f);     // the gate's floor rose into the song, so soft passages keep the gate open
+    CHECK(d.toByte(-86.0f) == 0);    // the room's loudest band stays dark
+    CHECK(d.toByte(-47.0f) > 100);   // a band mid-window still reads mid, not compressed to the bottom
+}
+
 // Regression: a song with no pause lifted the floor into its quiet moments, and the gate shut on every soft passage while its bars still showed (.221, Satie, 2026-11-04).
 TEST_CASE("a soft passage near a floor that rose into the music keeps its bars, the gate open") {
     mm::AudioDynamics d;

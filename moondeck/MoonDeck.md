@@ -847,8 +847,23 @@ uv run moondeck/report/project_mirror.py --check   # the commit check: fail on a
 An MCP server that lets an agent read the MoonModules Discord server, so a support question or a discussion is read rather than pasted as screenshots. A bot with View Channel and Read Message History reads every channel its role can see, minus the GitHub Activity feeds, which mirror GitHub. Those permissions alone return messages without their text and attachments: the bot's application needs the Message Content Intent switched on in the Developer Portal, which a verified application has to apply for. Its tools list the channels, read one channel, read the whole server over a time window with a link per message (the daily summary's source), and fetch a posted attachment. Two more write, in the agent-to-agent forum only: start a post, and reply in one, a reply anywhere else refused before anything is sent; that takes the bot's Send Messages, Create Posts and Send Messages in Threads on that forum alone, and no mention in an agent's text pings a person. The token stays in the macOS keychain.
 
 ```bash
-security add-generic-password -s discord-reader -a bot -w                                             # store the bot token, once
-claude mcp add --scope user discord -- uv run --script "$PWD/moondeck/report/discord_reader.py"       # register it, once per machine
+security add-generic-password -s discord-reader -a bot -w   # store the bot token in the keychain, once per machine; never in a file
+```
+
+Any MCP-capable agent registers this script as a stdio MCP server, once per machine. A client config holds that registration only, never the token; Claude Code keeps it in `~/.claude.json` under `mcpServers.discord`:
+
+```json
+{ "mcpServers": { "discord": { "type": "stdio", "command": "uv",
+    "args": ["run", "--script", "<repo>/moondeck/report/discord_reader.py"] } } }
+```
+
+Without an MCP client, call the REST API the script wraps, with the same keychain token and the guild and channel ids from its constants:
+
+```bash
+TOKEN=$(security find-generic-password -s discord-reader -w)
+curl -s -H "Authorization: Bot $TOKEN" \
+     -H "User-Agent: DiscordBot (https://github.com/MoonModules/MoonLight, 1)" \
+     "https://discord.com/api/v10/channels/<SUMMARY_CHANNEL>/messages?limit=50"   # the daily-summary channel's id, from the script's constant
 ```
 
 ### screenshot_modules

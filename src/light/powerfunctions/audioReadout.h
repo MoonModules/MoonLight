@@ -11,15 +11,17 @@ constexpr uint8_t kAudioNoteKeys = 79;
 
 /// The per-note hit state the audio-reactive effects share: when each note last struck, a tick and a bit a note, so a frame two ticks read is one hit, told by its `seq`.
 struct NoteHits {
-    uint8_t tick[kAudioNoteKeys] = {};   ///< when each note last struck, in 4 ms ticks
+    uint16_t tick[kAudioNoteKeys] = {};  ///< when each note last struck, in 4 ms ticks
     uint8_t lit[10] = {};                ///< a bit per note while its flash shows
     uint16_t lastSeq = 0;                ///< the frame the last hits came from
 
-    /// Each note a new frame carries a hit for starts its flash now.
-    void note(const AudioFrame& f, uint32_t ms) MM_NONBLOCKING {
+    /// Each note a new frame carries a hit for starts its flash now, and every flash older than `span` ends, so a note no effect draws cannot flash again when the tick wraps.
+    void note(const AudioFrame& f, uint32_t ms, uint32_t span) MM_NONBLOCKING {
+        for (uint8_t i = 0; i < kAudioNoteKeys; i++)
+            if ((lit[i >> 3] >> (i & 7)) & 1u) glow(i, ms, span);   // glow ends an expired flash
         if (f.seq == lastSeq) return;
         lastSeq = f.seq;
-        const uint8_t t = static_cast<uint8_t>(ms >> 2);
+        const uint16_t t = static_cast<uint16_t>(ms >> 2);
         for (uint8_t i = 0; i < kAudioNoteKeys && i < f.notesCount; i++)
             if (hitAt(f.notesHits, i)) {
                 tick[i] = t;
@@ -27,17 +29,17 @@ struct NoteHits {
             }
     }
 
-    /// A struck note's flash, full on its hit and fading over `span`; a tick is 4 ms and the flash ends within 250 of them, so the byte never wraps unseen.
+    /// A struck note's flash, full on its hit and fading quadratically over `span`, so a time-dimmed panel still shows it until the last stretch; `note` ends it long before the 16-bit age wraps.
     uint8_t glow(uint8_t i, uint32_t ms, uint32_t span) MM_NONBLOCKING {
         const uint8_t bit = static_cast<uint8_t>(1u << (i & 7));
         if (!(lit[i >> 3] & bit)) return 0;
-        const uint8_t t = static_cast<uint8_t>(ms >> 2);
-        const uint32_t age = static_cast<uint32_t>(static_cast<uint8_t>(t - tick[i])) * 4u;   // the difference in a byte, so the wrap is the age
+        const uint16_t t = static_cast<uint16_t>(ms >> 2);
+        const uint32_t age = static_cast<uint32_t>(static_cast<uint16_t>(t - tick[i])) * 4u;   // the difference in 16 bits, so the wrap is the age
         if (span == 0 || age >= span) {
             lit[i >> 3] = static_cast<uint8_t>(lit[i >> 3] & ~bit);
             return 0;
         }
-        return static_cast<uint8_t>(255u - age * 255u / span);
+        return static_cast<uint8_t>(255u - 255u * age * age / (span * span));   // 255 * (1 - (age/span)^2); age <= span <= 1000, so age*age*255 fits a uint32
     }
 };
 

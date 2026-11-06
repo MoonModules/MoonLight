@@ -10,6 +10,7 @@
 #include "light/modifiers/TransposeModifier.h"
 #include "light/effects/SolidEffect.h"
 #include "platform/platform.h"
+#include "unit/core/conditional_controls.h"   // isVisible, isHidden
 
 #include <cstring>
 #include <string>
@@ -272,6 +273,52 @@ TEST_CASE("NetworkReceiveEffect counts the packets and frames of the last second
     mm::platform::setTestNowMs(0);
     tx.close();
     r.fx.release();
+}
+
+// Issue #237: a port binds once per device, so a second receiver listens for DDP alone on its own ddp_port, and the streams mix in the layers.
+TEST_CASE("NetworkReceiveEffect: a second receiver in one device listens for DDP alone on its own ddp_port") {
+    mm::platform::setTestNowMs(1000);
+    Rig first;    // all protocols, DDP on 4048
+    Rig second;   // its first prepare fails every bind, the first holding the ports, and shows the bind error
+    second.fx.protocol = mm::NetworkReceiveEffect::kProtoDdp;
+    second.fx.ddpPort = 4049;
+    second.fx.prepare();   // a control change prepares again: it binds 4049 alone and clears the error
+    REQUIRE(first.fx.status() == nullptr);    // binds succeeded on both
+    REQUIRE(second.fx.status() == nullptr);
+    mm::platform::UdpSocket tx;
+    REQUIRE(tx.open());
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    uint8_t payload[3] = {42, 43, 44};
+    uint8_t pkt[mm::DDP_HEADER_SIZE + 3];
+    // Each port reaches its own receiver: 42 on 4048 to the first, 43 on 4049 to the second.
+    REQUIRE(tx.sendToAddr(loopback, mm::DDP_PORT, pkt, mm::buildDdpPacket(pkt, 0, true, payload, 3)));
+    REQUIRE(tx.sendToAddr(loopback, 4049, pkt, mm::buildDdpPacket(pkt, 0, true, payload + 1, 1)));
+    bool landed = false;
+    for (int i = 0; i < 100 && !landed; i++) {
+        first.layer.tick();
+        second.layer.tick();
+        landed = first.layer.buffer().data()[0] == 42 && second.layer.buffer().data()[0] == 43;
+        if (!landed) mm::platform::delayMs(1);
+    }
+    CHECK(first.layer.buffer().data()[0] == 42);
+    CHECK(second.layer.buffer().data()[0] == 43);
+    mm::platform::setTestNowMs(0);
+    tx.close();
+    second.fx.release();
+    first.fx.release();
+}
+
+// ddp_port belongs to DDP, so it shows while the receiver listens for DDP: alone or among all three.
+TEST_CASE("NetworkReceiveEffect: ddp_port shows only while the receiver listens for DDP") {
+    mm::NetworkReceiveEffect fx;
+    fx.defineControls();
+    CHECK(mm::test::isVisible(fx, "ddp_port"));   // all, the default
+    fx.protocol = mm::NetworkReceiveEffect::kProtoArtNet;
+    fx.rebuildControls();
+    CHECK(mm::test::isHidden(fx, "ddp_port"));
+    fx.protocol = mm::NetworkReceiveEffect::kProtoDdp;
+    fx.rebuildControls();
+    CHECK(mm::test::isVisible(fx, "ddp_port"));
 }
 
 // --- mapped by: the receiver against the sender ------------------------------
