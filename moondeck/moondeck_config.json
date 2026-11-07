@@ -85,6 +85,17 @@
       "process_name": "open-stage-control"
     },
     {
+      "id": "bench_tempo",
+      "tab": "desktop",
+      "group": "run",
+      "label": "Tempo Report",
+      "help": "bench_tempo",
+      "script": "check/bench_tempo.py",
+      "args": [
+        "--show"
+      ]
+    },
+    {
       "id": "check_module",
       "tab": "repo",
       "group": "tools",

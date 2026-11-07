@@ -73,6 +73,55 @@ phone or another laptop on the same network. Options: `--host` / `--port` for th
 itself, and `--app` when the binary is not on PATH or in the usual place. Install Open Stage Control
 first; it is a free download.
 
+### bench_tempo
+
+Run audio files through `AudioService` on the desktop, faster than real time, and score the tempo against labeled tracks. Runs come from the command line, yours or an agent's, as the [Measure the tempo](../docs/moonwalk.md#measure-tempo) process lays out; the **Tempo Report** card shows the latest report in the View pane and starts nothing.
+
+```bash
+uv run moondeck/check/bench_tempo.py --generated                     # the exact-tempo set, written once
+uv run moondeck/check/bench_tempo.py --dir <folder> --limit=20       # a first look at a folder or mount
+uv run moondeck/check/bench_tempo.py --dir <folder> --private        # your own music, tracks named by a hash
+uv run moondeck/check/bench_tempo.py --show                          # the latest report, as the card shows it
+```
+
+**The data stays where it is.** A folder or a mounted volume given by `--dir` is only read; with no `--dir`, the run takes the generated set. Runs and reports go to `build/tempo/`. Each file is checked before it is decoded: one that cannot be read, has no audio, has no length or runs under eight seconds is skipped, and one that decodes with errors is marked damaged; the report lists both, unscored.
+
+**Labels** come from a `labels.csv` in the folder (`path,bpm,source`, optionally `genre` and `id`), from `--labels`, or from the files' BPM tags, where a file has no `labels.csv` row (a row with an empty `bpm` keeps it unlabeled); a track's genre comes from `labels.csv` or else the file's genre tag. Each label carries its source: `tapped`, `generated`, `metronome` and `annotated` measure accuracy, and `uploader`, `store`, `dj-software` and `tag` measure agreement with whoever wrote the label.
+
+**The report** gives, per label source and per genre within each source, the share right and at each metrical ratio, then every miss with its source, ratio and verdict, the tracks without a label with their estimate, and the figures' limits. `--limit` takes that many files from each folder, spread through it, and the generated set runs whole. Every run keeps its report and its run file, one line per file, in `build/tempo/`; a file that breaks the analysis is listed with its error and the run goes on.
+
+**What is scored.** A baseline: Ellis's autocorrelation (2007) of the frame's flux under a log-normal prior at 120 BPM, which reads tempos above about 170 at half by that prior. It is a whole-track reading of files near full scale, the analysis's first seconds of learning the levels included, so it measures the method on music rather than a board's live accuracy through a microphone. The binary is `mm_tempo` ([bench_tempo.cpp](../test/bench/bench_tempo.cpp)), built alone like `mm_bench`; decoding needs FFmpeg.
+
+#### Reading the tempo report
+
+Every percentage is a share of the labeled tracks in that row. The examples are for a track labeled 128 BPM.
+
+| Term | What it counts | For a 128 BPM label |
+|---|---|---|
+| Tracks | Labeled tracks in the row; a track without a label is listed apart, unscored | |
+| Right | The estimate within 2% of the label, Acc1 at 2%. Right 95% means 95 of every 100 tracks read within 2% of their label | 125.4 to 130.6 |
+| Right at 4% | The same within 4%: Acc1 as Gouyon et al. (2006) define it, the tolerance of Gouyon et al. and Schreiber and Müller (2018); MIREX's tempo task uses 8% and its P-score instead | 122.9 to 133.1 |
+| Double or half | Within 4% of twice or half the label: the right pulse at the wrong level | about 256 or 64 |
+| triple or third | Within 4% of three times or a third of the label, the other two ratios Acc2 forgives | about 384 or 42.7 |
+| 3:2 | Within 4% of one and a half times or two thirds of the label, typical of swing, triplets and half-time | about 192 or 85.3 |
+| 4:3 | Within 4% of four thirds or three quarters of the label: an offbeat hat or a dotted note read as the pulse | about 170.7 or 96 |
+| within 4% | A miss at Right's 2% that Right at 4% counts | 123 or 133 |
+| Acc2 | Within 4% of the label or of double, half, three times or a third of it (Gouyon et al., 2006) | |
+| wrong | At none of these ratios | 110 |
+| no tempo | No estimate: silence, or a file whose flux never rises above its one-second mean, as the generated noise; a file under eight seconds is skipped before scoring | |
+| Source | Who wrote the label: a bold source measures accuracy, the others agreement with that writer | |
+
+Double, half, triple, third, 3:2 and 4:3 are level errors: the method hears the music's pulse and counts a multiple or a subdivision of the beat, which the tempo prior or a tapped label settles. Wrong is a reading at none of these ratios, which includes the rarer ones such as 5:4. A low score against a `store` or `tag` label can be the label's fault: Drum & Bass is often listed at half its tempo.
+
+### tempo_compare
+
+Two runs of `bench_tempo.py`, track by track: better, worse, or chance. Tracks pair by a hash of their audio, so a moved or renamed file still pairs; the comparison gives each run's share right, the exact McNemar test on the tracks right in one run only (a p below 0.05 means a split this lopsided is unlikely under chance alone), and every track whose reading changed. It goes to the View pane, where the **Tempo Report** card shows it.
+
+```bash
+uv run moondeck/check/tempo_compare.py --last                                 # the two newest runs on the same files
+uv run moondeck/check/tempo_compare.py <older run.jsonl> <newer run.jsonl> --key acc2_4
+```
+
 ## Repo Tab
 
 The work on the source tree, whatever the target: tests, the checks and tools, the repo-health record, and the docs.
@@ -85,7 +134,7 @@ Compile the test binaries (unit + scenario) without running them.
 uv run moondeck/build/build_desktop.py --tests
 ```
 
-Builds `mm_tests` + `mm_scenarios` (the `--tests` target set of `build_desktop.py`), in the same per-host build dir. Separate from `build_desktop` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_desktop` (unit) and `scenario_pipeline` (scenarios).
+Builds `mm_tests`, `mm_scenarios` and `mm_tempo` (the `--tests` target set of `build_desktop.py`), in the same per-host build dir. Separate from `build_desktop` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_desktop` (unit) and `scenario_pipeline` (scenarios).
 
 ### test_desktop
 

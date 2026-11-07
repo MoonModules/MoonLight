@@ -235,3 +235,41 @@ processes:
         when: { manual: "The scenario, its target, and which way the contract moved." }
     outro: |
       The contract's own `reason` field keeps the why next to the number.
+  - id: measure-tempo
+    title: Measure the tempo the audio analysis reads
+    actor: contributor
+    goal: A report scores the tempo AudioService reads against labeled tracks, and a change is compared with the run before it.
+    systems: [MoonDeck]
+    page: reference/testing.md
+    intro: |
+      The harness feeds audio files through `AudioService`'s own analysis on the desktop, faster than real time, and scores the tempo against labels: [bench_tempo](../moondeck/MoonDeck.md#bench_tempo). An agent runs it from the command line; the product owner reviews on the **Tempo Report** card, which shows the latest report and starts nothing. The tempo is a baseline in Python, Ellis's autocorrelation of the shipped flux, so a figure describes the flux under that baseline, read over whole files near full scale.
+    steps:
+      - id: agree
+        say: Agree with the product owner what runs.
+        when: { manual: "Name the command, the folders it reads, what it writes under build/tempo/ and about how long it takes, then act on their go." }
+      - id: generated
+        say: Run the generated set first.
+        when: { run: { script: moondeck/check/bench_tempo.py, args: "--generated" } }
+        detail: |
+          Click tracks with exact tempi, the yardstick every run is read against. 174, 185 and 200 BPM read at half by design: the baseline's prior is one octave wide around 120, so from about 170 the half wins. A change that improves the clicks and moves nothing on labeled music has tuned to the clicks.
+      - id: first-look
+        say: Take a first look at a folder.
+        when: { run: { script: moondeck/check/bench_tempo.py, args: "--dir <folder> --limit=20" } }
+        detail: |
+          A folder is only read. `--private` names the product owner's own tracks by a hash of their audio. A whole folder takes minutes, so it runs only when the product owner asks for it.
+      - id: read
+        say: Read the figures per label source.
+        when: { manual: "Accuracy and agreement stay apart: a bold source measures accuracy, the others agreement with whoever wrote the label." }
+        detail: |
+          Double, half, triple, third, 3:2 and 4:3 mean the method hears the pulse and counts a multiple or a subdivision of it; only `wrong` means it found no ratio of the beat. A low score against a `store` or `tag` label can be the label's fault, Drum & Bass listed at half tempo being the common case. The terms: [Reading the tempo report](../moondeck/MoonDeck.md#reading-the-tempo-report).
+      - id: compare
+        say: Compare the runs before and after a change.
+        when: { run: { script: moondeck/check/tempo_compare.py, args: "--last" } }
+        detail: |
+          The two newest runs on the same files, paired by the audio's hash. A difference McNemar's p puts at 0.05 or above is not shown to be more than chance: report it as such rather than as a gain. [tempo_compare](../moondeck/MoonDeck.md#tempo_compare).
+      - id: review
+        say: Review it on the Tempo Report card.
+        actor: product-owner
+        when: { manual: "Read the report or the comparison and give your observation; the agent waits for it before going on." }
+    outro: |
+      Runs and reports stay in `build/tempo/`, outside the repository, and a label file naming the product owner's tracks stays theirs.

@@ -20,6 +20,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Christophe Gagnier / Moustachauve](https://github.com/Moustachauve) | 🧑 | Author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let MoonLight devices appear in them. |
 | [Conical spiral](https://en.wikipedia.org/wiki/Conical_spiral) File:Spiral-cone-arch-s.svg | 🧮 | A spiral wound up the surface of a cone. |
 | [Damian Schneider / DedeHai](https://github.com/DedeHai) | 🧑 | Author of the WLED Particle System, whose shape our [particle kernel](../moonmodules/light/power-functions.md#particles) follows in fixed point. |
+| [Dan Ellis / Ellis](https://www.ee.columbia.edu/~dpwe/pubs/Ellis07-beattrack.pdf) | 🧑🧮 | Beat tracking by dynamic programming (2007), whose autocorrelation tempo is the tempo harness's baseline. |
 | [Daniel Shiffman / Coding Train / Nature of Code](https://thecodingtrain.com) | 🧑 | The Coding Train's starfield, and The Nature of Code's cellular automata. |
 | [David Jupijn / Rising Step](https://github.com/risingstep) | 🧑 | The contributor the 🦅 tag credits on the effects he shaped. |
 | [DDP](http://www.3waylabs.com/ddp/) | 📜 | The Distributed Display Protocol, pixel data over UDP. |
@@ -32,6 +33,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Espressif](https://www.espressif.com) | 🏢 | The ESP32 family and ESP-IDF, and the esp_lcd_lt8912b component the HDMI output drives its bridge with. |
 | [Euclidean distance](https://en.wikipedia.org/wiki/Euclidean_distance) File:Euclidean_distance_2d.svg | 🧮 | The straight-line metric. |
 | [ewowi](https://github.com/ewowi) | 🧑 | MoonLight, StarLight, WLED 2D, LED preview. |
+| [Fabien Gouyon / Gouyon](https://doi.org/10.1109/TSA.2005.858509) | 🧑 | Acc1 and Acc2 at 4%, from An experimental comparison of audio tempo induction algorithms (2006), the tempo harness's scores. |
 | [FastLED](https://github.com/FastLED/FastLED) | 🧰 | The canonical LED-effects library whose names and models MoonLight carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned. Color maths and the basic power functions. |
 | [FFmpeg](https://ffmpeg.org) | 🧰 | The open video toolkit the desktop HLS and RTSP drivers encode through. |
 | [Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) File:Durstenfeld_shuffle.svg | 🧮 | A uniform random permutation in one pass. |
@@ -40,6 +42,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) | 📜 | The OpenGL shading language, whose built-in function names the shader kernel keeps. |
 | Gomez | 🧑 | The demoscene water effect, 2000. |
 | [Harald Kubota](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/) | 🧑 | An independent write-up of the ColorLight 5A-75B wire format. |
+| [Hendrik Schreiber and Meinard Müller / Schreiber and Müller](https://ismir2018.ismir.net/doc/pdfs/220_Paper.pdf) | 🧑 | The crowdsourced revision of GiantSteps Tempo's annotations (2018), and Acc1 and Acc2 as tempo studies use them. |
 | [HLS](https://www.rfc-editor.org/rfc/rfc8216) | 📜 | HTTP Live Streaming, RFC 8216: video as a playlist of short segments. |
 | Hugo Elias | 🧑 | The water surface algorithm. |
 | [hzeller](https://github.com/hzeller) | 🧑 | Henner Zeller: the HUB75 lineage on the Pi. |
@@ -50,8 +53,10 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Jos Stam / Stable Fluids](https://en.wikipedia.org/wiki/Jos_Stam) File:Jos_Stam_2005_-_by_Azam_Khan.jpg | 🧑🧮 | Stable Fluids, the solver behind the fluid effect. |
 | [Ken Perlin / Perlin noise](https://en.wikipedia.org/wiki/Perlin_noise) File:Perlin_noise_example.png | 🧑🧮 | Gradient noise, the field behind fire and clouds. |
 | [ldirko](https://github.com/ldirko) | 🧑 | The Distortion Waves effect. |
+| [librosa](https://librosa.org) | 🧰 | The log-normal tempo prior at 120 BPM the tempo harness's baseline uses. |
 | [Limpkin](https://github.com/limpkin) | 🧑 | The SE16 and LightCrafter boards, RGBW tuning. |
 | [Mark Kriegsman](https://github.com/kriegsman) | 🧑 | FastLED's Fire2012, DemoReel100, noise field and rainbow. |
+| [McNemar's test](https://en.wikipedia.org/wiki/McNemar%27s_test) | 🧮 | The exact paired test the tempo harness compares two runs with. |
 | [Meshtastic](https://meshtastic.org) | 🧰 | The off-grid text mesh whose channel chat gives Talk its shape. |
 | [MONSOONO / Flavourdynamics](https://github.com/Flavourdynamics) | 🧑 | The Praxis effect. |
 | [mplayer-colorlight](http://www.mylifesucks.de/oss/mplayer-colorlight/) | 🧰 | The original reverse engineering of the ColorLight receiving cards. |
