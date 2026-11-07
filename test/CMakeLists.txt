@@ -344,3 +344,9 @@ target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR
 add_executable(mm_bench bench/bench_kernels.cpp)
 target_include_directories(mm_bench PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(mm_bench PRIVATE mm_core mm_platform)
+
+# Tempo harness: decoded audio through AudioService's block analysis, one line per frame. A report,
+# not a test: moondeck/check/bench_tempo.py pipes files through it and scores the tempo.
+add_executable(mm_tempo bench/bench_tempo.cpp)
+target_include_directories(mm_tempo PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(mm_tempo PRIVATE mm_core mm_platform)

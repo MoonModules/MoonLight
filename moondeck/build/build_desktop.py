@@ -7,7 +7,7 @@ flavours without one wiping the other, and so the layout matches the
 ESP32 side (``build/esp32-<board>/``, one dir per target).
 
 Builds ONE target, not the whole project: the firmware binary (``MoonLight``) by
-default, or the test binaries (``--tests`` → ``mm_tests`` + ``mm_scenarios``).
+default, or the test binaries (``--tests`` → ``mm_tests``, ``mm_scenarios`` and ``mm_tempo``).
 Keeping them separate means the "just give me the binary" build doesn't wait on
 the ~130-file test suite (and vice-versa).
 """
@@ -62,6 +62,28 @@ def desktop_binary(build_dir=None):
     return max(found, key=lambda p: p.stat().st_mtime) if found else None
 
 
+def test_binary(name, build_dir=None):
+    """A host binary of the test tree (mm_bench, mm_tempo) inside `build_dir` (default: this host's): at test/ for a single-config generator, test/Release/ for a multi-config one, and the first of those when neither exists yet."""
+    root = Path(build_dir) if build_dir else ROOT / host_build_dir()
+    exe = f"{name}.exe" if platform.system() == "Windows" else name
+    for candidate in (root / "test" / exe, root / "test" / "Release" / exe):
+        if candidate.exists():
+            return candidate
+    return root / "test" / exe
+
+
+def build_target(name, quiet=False):
+    """Configure this host's tree as Release and build the one target `name`, as the bench scripts do; the exit code of the step that failed, or 0."""
+    bdir = str(ROOT / host_build_dir())
+    out = subprocess.DEVNULL if quiet else None
+    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"],
+                ["cmake", "--build", bdir, "--target", name] + (["--config", "Release"] if platform.system() == "Windows" else [])):
+        rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
+        if rc != 0:
+            return rc
+    return 0
+
+
 def gcc_pair():
     """(cc, cxx) for a real GCC, or exit with how to get one.
 
@@ -90,7 +112,7 @@ def main():
                          "succeeds passes on an arm64 bench and fails only on CI. This runs the "
                          "suite the way those hosts see it.")
     ap.add_argument("--tests", action="store_true",
-                    help="compile the test binaries (mm_tests + mm_scenarios) instead of the firmware. "
+                    help="compile the test binaries (mm_tests, mm_scenarios, mm_tempo) instead of the firmware. "
                          "The default build makes only MoonLight; the ~130 test units are a separate, "
                          "slower compile, run afterwards by test_desktop.py / run_scenario.py.")
     ap.add_argument("--configure", action="store_true",
@@ -131,11 +153,9 @@ def main():
     if args.configure:
         sys.exit(subprocess.run([sys.executable, str(ROOT / "moondeck" / "build" / "generate_build_info.py")], cwd=ROOT).returncode)
 
-    # Build a SPECIFIC target, never the whole "all" — the firmware and the ~130 test translation units are
-    # separate concerns. Default builds only MoonLight (the "give me the desktop binary" path stays
-    # fast; a header edit no longer drags the test suite through the compiler). `--tests` builds the test
-    # binaries instead, which test_desktop.py runs (mm_tests) and run_scenario.py runs (mm_scenarios).
-    targets = ["mm_tests", "mm_scenarios"] if args.tests else ["MoonLight"]
+    # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the desktop binary builds alone and a header edit leaves the test suite out of the compile.
+    # `--tests` builds the test binaries instead: mm_tests (test_desktop.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
+    targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
     build_cmd = ["cmake", "--build", bdir, "--target", *targets]
     if is_windows:
         build_cmd += ["--config", "Release"]

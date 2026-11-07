@@ -22,15 +22,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-BUILD_DIR = ROOT / "build" / "macos"
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_desktop import build_target, test_binary  # noqa: E402  the one home of the build tree and its binaries
 
 
 def binary() -> Path:
-    exe = "mm_bench.exe" if platform.system() == "Windows" else "mm_bench"
-    for candidate in (BUILD_DIR / "test" / exe, BUILD_DIR / "test" / "Release" / exe):
-        if candidate.exists():
-            return candidate
-    return BUILD_DIR / "test" / exe
+    return test_binary("mm_bench")
 
 
 def main() -> None:
@@ -38,16 +35,8 @@ def main() -> None:
     ap.add_argument("--no-build", action="store_true", help="run the already-built binary")
     args = ap.parse_args()
 
-    if not args.no_build:
-        # Same tree and build type build_desktop.py uses for the test binaries, one target only.
-        cfg = ["cmake", "-B", str(BUILD_DIR), "-DCMAKE_BUILD_TYPE=Release"]
-        if subprocess.run(cfg, cwd=ROOT).returncode != 0:
-            sys.exit(1)
-        cmd = ["cmake", "--build", str(BUILD_DIR), "--target", "mm_bench"]
-        if platform.system() == "Windows":
-            cmd += ["--config", "Release"]
-        if subprocess.run(cmd, cwd=ROOT).returncode != 0:
-            sys.exit(1)
+    if not args.no_build and build_target("mm_bench") != 0:
+        sys.exit(1)
 
     exe = binary()
     if not exe.exists():

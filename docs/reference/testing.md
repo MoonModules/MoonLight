@@ -504,6 +504,10 @@ The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube
 
 **Opt-in, because it needs something running.** A bare `test_host.py` leaves this lane out, and it is never a gate: it runs on request only. `--ui` skips rather than fails when nothing answers, the same way the JS lane skips without node. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
 
+## The tempo harness
+
+A report rather than a test: [bench_tempo](../../moondeck/MoonDeck.md#bench_tempo) runs labeled music through the shipped audio analysis on the desktop and scores the tempo it reads. Steps: [Measure the tempo](../moonwalk.md#measure-tempo).
+
 ## Hardware Verification
 
 All live scenarios pass on both desktop and ESP32. Steps to verify on boards: [Run a live verification on boards](../moonwalk.md#live-verification). Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
