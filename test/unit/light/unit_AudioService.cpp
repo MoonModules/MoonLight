@@ -232,8 +232,8 @@ TEST_CASE("AudioService: music 40 cents flat retunes the bank and every note kee
     CHECK(((loudest == 9) || (loudest == 1) || (loudest == 4)));   // A, C# or E: the chord's own notes, not a semitone up
 }
 
-// Every frame a source makes carries a new `seq`, so an effect that reads one frame on two ticks, the Drum Kit, takes its hits once and misses none.
-TEST_CASE("AudioService: each analyzed block and each simulated frame is a new frame number") {
+// Every frame a source makes carries a new `seq`, so the Drum Kit takes its hits once; a simulated frame comes a block apart, as an input's do, so its smoothing keeps its rate.
+TEST_CASE("AudioService: each analyzed block and each simulated frame is a new frame number, the simulated ones a block apart") {
     static mm::AudioService audio;
     audio.defineControls();
     audio.resetAnalysisForTest();
@@ -244,12 +244,39 @@ TEST_CASE("AudioService: each analyzed block and each simulated frame is a new f
     static mm::AudioService sim;
     sim.defineControls();
     sim.mode = mm::AudioService::kSimMode;
+    mm::platform::setTestNowMs(1000);
     sim.setup();
     sim.tick();
     const uint16_t simFirst = sim.audioFrame()->seq;
     sim.tick();
+    CHECK(sim.audioFrame()->seq == simFirst);   // the same instant: no new block yet
+    mm::platform::setTestNowMs(1000 + mm::kSimFrameMs);
+    sim.tick();
     CHECK(sim.audioFrame()->seq == static_cast<uint16_t>(simFirst + 1));
+    mm::platform::setTestNowMs(0);
     sim.release();
+}
+
+// The simulation keeps the block grid, so a 60 fps render gets as many frames a second as a fast one, and the smoothing runs at one rate (review, 2026-11-07).
+TEST_CASE("AudioService: the simulation makes a frame a block at 60 fps and at 1000 fps alike") {
+    auto framesInASecond = [](uint32_t tickMs) {
+        static mm::AudioService sim;
+        sim.defineControls();
+        sim.mode = mm::AudioService::kSimMode;
+        mm::platform::setTestNowMs(1000);
+        sim.setup();
+        sim.tick();
+        const uint16_t first = sim.audioFrame()->seq;
+        for (uint32_t t = tickMs; t <= 1000; t += tickMs) { mm::platform::setTestNowMs(1000 + t); sim.tick(); }
+        const int frames = static_cast<uint16_t>(sim.audioFrame()->seq - first);
+        sim.release();
+        mm::platform::setTestNowMs(0);
+        return frames;
+    };
+    const int slow = framesInASecond(16), fast = framesInASecond(1);
+    CHECK(slow >= 45);
+    CHECK(slow <= fast + 1);
+    CHECK(fast <= 48);
 }
 
 // Memory follows the mode: the analysis is held only while an input is open, the harmony's state only while `harmony` is on, so a receiver or a simulation spends no internal RAM on either.

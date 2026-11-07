@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing. Each offset, what WLED and WLED-MM put there, and what MoonLight sends and reads: [Audio sync format](https://moonmodules.org/MoonLight/reference/audio-sync.html#the-wled-format).
 ///
-/// **The network.** The WLED-compatible default is multicast group 239.0.0.1 on port 11988; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
+/// **The network.** WLED's multicast group is 239.0.0.1 on port 11988, the MoonLight format's 239.0.0.2 on the same port; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
 ///
 /// See [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
 ///

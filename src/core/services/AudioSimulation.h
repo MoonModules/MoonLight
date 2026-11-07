@@ -5,11 +5,16 @@
 #include "core/util/AudioFrame.h"
 #include "core/util/math8.h"              // sin8 / triwave8, the oscillators
 #include "core/services/AudioBands.h"     // kSixteenOfThirds
+#include "core/services/AudioAnalysis.h"  // kAudioBlock: the input's block, which the simulation's frames keep
 
 namespace mm {
 
 /// The simulated song's beat period, in milliseconds.
 constexpr uint32_t kSimBeatMs = 600;
+/// The simulated frame's period: a block at the default 24 kHz, as an input makes them, so the smoothing runs at its own rate whatever the render's.
+constexpr uint32_t kSimFrameMs = kAudioBlock * 1000u / 24000u;
+/// Whether a simulated frame is due at `now`, the last made at `prevMs`, 0 before the first.
+constexpr bool simFrameDue(uint32_t now, uint32_t prevMs) { return prevMs == 0 || now - prevMs >= kSimFrameMs; }
 
 /// AudioService's `simulate` signal at time `t`, so a device shows sound before anything is wired: the bands, thirds, level and peak, and the kick as an onset when a beat starts after `prevT`.
 inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep, uint32_t prevT) {

@@ -321,7 +321,7 @@ Every device joins its WiFi, and the audio source is wired to it by Ethernet, so
 
 | What travels | From, to | How |
 |---|---|---|
-| Audio | the S31 to every device | audio sync in the MoonLight format, multicast `239.0.0.1`, port 11988 |
+| Audio | the S31 to every device | audio sync in the MoonLight format, multicast `239.0.0.2`, port 11988 |
 | Shared controls | the leader to the eyes | OSC, multicast `239.255.77.78`, port 9001 |
 | The desk | the bridge and the leader | RTP-MIDI, unicast, port 5004 |
 | Discovery | every device | multicast and broadcast |

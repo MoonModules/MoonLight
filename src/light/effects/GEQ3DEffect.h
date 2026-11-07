@@ -53,6 +53,12 @@ public:
         controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
     }
 
+    /// The bar of `n` across `cols` columns whose columns hold column `x`, the inverse of the bar edges `i * cols / n`; past the last column, the last bar.
+    static int barAt(int x, int cols, int n) {
+        const int b = ((x + 1) * n - 1) / cols;
+        return b < n - 1 ? b : n - 1;
+    }
+
     /// Sweep the projector, then draw each bar's faces converging toward it.
     void tick() MM_NONBLOCKING override {
         if (numBands == 0) return;
@@ -78,7 +84,7 @@ public:
         const int projector = static_cast<int>(static_cast<uint32_t>(sweep) * cols / 255u);
         // The control is clamped to the grid, since it spans a fixed range.
         const int hzn = horizon < rows ? horizon : rows - 1;
-        const int split = map32(projector, 0, cols, 0, NUM_BANDS - 1);
+        const int split = barAt(projector, cols, NUM_BANDS);
 
         // Each band's magnitude mapped onto the bar height, reduced a little on a small panel.
         uint8_t heights[kAudioNoteKeys] = {0};

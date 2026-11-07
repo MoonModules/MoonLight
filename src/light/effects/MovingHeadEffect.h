@@ -76,6 +76,9 @@ public:
         controls_.setHidden(last - 1, noBeam);   // goboOnBeat
     }
 
+    /// How many hits have rolled a gobo, for tests.
+    uint32_t goboRollsForTest() const { return beatCount_; }
+
     /// Reset both sweep clocks and return the gobo to the user's own choice.
     void prepare() override {
         pan_ = BeatPhase{};
@@ -107,13 +110,14 @@ public:
         const uint16_t panPhase  = static_cast<uint16_t>(pan_.phase(65536));
         const uint16_t tiltPhase = static_cast<uint16_t>(tilt_.phase(65536));
 
-        // Once a frame rather than per head, and either feature needs it.
-        const AudioFrame* audio = (audioReactive || goboOnBeat) ? AudioService::latestFrame() : nullptr;
+        // Once a frame rather than per head. The frame number is tracked with both features off too, so turning one on never replays a hit already past.
+        const AudioFrame* latest = AudioService::latestFrame();
+        const bool fresh = latest->seq != lastSeq_;
+        lastSeq_ = latest->seq;
+        const AudioFrame* audio = (audioReactive || goboOnBeat) ? latest : nullptr;
         const bool live = audio && audio->heard();
 
         // A hit widens the sweep and decays over about 20 frames, since one frame is invisible; taken once a frame, by its number.
-        const bool fresh = audio && audio->seq != lastSeq_;
-        if (audio) lastSeq_ = audio->seq;
         const bool beat = fresh && live && audio->onset != 0;
         if (beat) beatDecay_ = 255;
         else if (beatDecay_ > kBeatDecayStep) beatDecay_ = static_cast<uint8_t>(beatDecay_ - kBeatDecayStep);

@@ -98,7 +98,7 @@ public:
     void prepare() override {
         // Restart discards the elapsed gap, so the first tick after a re-prepare cannot jump a trail.
         fadeTime_.reset();
-        fadeCarry_ = 0;
+        fadeCarry_ = fadeDue_ = 0;
         // No layouts wired reads the same as every layout disabled: the layer ends up empty.
         const nrOfLightsType physicalCount = layouts_ ? layouts_->totalLightCount() : 0;
 
@@ -151,10 +151,13 @@ public:
         elapsed_ = platform::millis();
         // Advance on every frame: a frozen clock spends a whole idle gap at once and wipes the trail.
         const uint32_t frameScale = fadeTime_.advance(elapsed_);
-        if (fadeBy_ > 0) {
-            fadeCarry_ += static_cast<uint32_t>(fadeBy_) * frameScale;
+        fadeDue_ = fadeDue_ + frameScale < particles::FrameTime::kOne ? fadeDue_ + frameScale : particles::FrameTime::kOne;   // saturates: the carry, not this, holds how much
+        // Once a reference frame has elapsed, as Echo's pass: each fade rounds every pixel down by up to a unit, so run every frame of a fast render the rounding alone erases a trail.
+        if (fadeBy_ > 0) fadeCarry_ += static_cast<uint32_t>(fadeBy_) * frameScale;
+        fadeBy_ = 0;
+        if (fadeCarry_ > 0 && fadeDue_ >= particles::FrameTime::kOne) {
+            fadeDue_ = 0;
             uint32_t amt = fadeCarry_ / particles::FrameTime::kOne;
-            fadeBy_ = 0;
             // A stall tops up rather than bursting, and drops the remainder so the next frame is clean.
             if (amt > 255) {
                 amt = 255;
@@ -495,7 +498,8 @@ private:
     lengthType depth_ = 0;
     uint32_t elapsed_ = 0;
     uint8_t  fadeBy_ = 0;   // fade RATE collected from effects (MIN), consumed once at frame start
-    uint32_t fadeCarry_ = 0;               // sub-unit fade remainder, so a high frame rate does not over-fade
+    uint32_t fadeCarry_ = 0;               // the fade collected since the last pass, so a high frame rate does not over-fade
+    uint32_t fadeDue_ = 0;                 // the reference frames' share elapsed since the last pass, 256 a whole one
     particles::FrameTime fadeTime_{60};    // elapsed-to-scale, the shared conversion
     uint32_t bufferGen_ = 0;   // bumped by every write to buffer_; see bufferGen()
     char statusBuf_[20] = {};  // "999×999×999" fits; owned (setStatus borrows the pointer)

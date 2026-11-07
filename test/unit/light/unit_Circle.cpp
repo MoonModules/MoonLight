@@ -142,6 +142,17 @@ TEST_CASE("an anti-aliased line spreads a shallow diagonal over neighboring cell
     CHECK(foundPair);
 }
 
+// Shortened as `line` is, so an effect can swap one for the other: half the way stops at the midpoint.
+TEST_CASE("an anti-aliased line shortened to half stops at its midpoint") {
+    Surface s(16, 4);
+    draw::lineAA(s.cv, {0, 1, 0}, {14, 1, 0}, RGB{255, 0, 0}, 128);
+    CHECK(s.at(7, 1) > 0);
+    CHECK(s.at(8, 1) == 0);
+    Surface none(16, 4);
+    draw::lineAA(none.cv, {0, 1, 0}, {14, 1, 0}, RGB{255, 0, 0}, 0);
+    CHECK(none.litCount() == 0);
+}
+
 TEST_CASE("an anti-aliased line reaches both endpoints") {
     Surface s(8, 8);
     draw::lineAA(s.cv, {0, 0, 0}, {7, 3, 0}, RGB{255, 0, 0});

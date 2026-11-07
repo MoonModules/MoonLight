@@ -33,15 +33,27 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ### Audio sync sends the whole frame, in MoonLight's own format
 
-**Action: *re-set a control*: `syncFormat` to `WLED` on the Audio card of a board whose audio feeds WLED devices.**
+**Action: *re-set a control*: `syncFormat` to `WLED` on the Audio card of a board whose audio feeds only WLED devices, or to `both` when it feeds MoonLight boards too.**
 
-A sending board now sends the MoonLight format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. WLED does not read it, so a board feeding WLED devices picks `WLED`, whose packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
+A sending board now sends the MoonLight format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. The MoonLight format multicasts to its own group, `239.0.0.2`, and WLED's stays on `239.0.0.1`. WLED does not read the MoonLight format, so a board feeding WLED devices picks `WLED` or `both`; WLED's packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
+
+### Freq Matrix spreads the pitch over the whole palette
+
+**Action: *re-set a control*: `lowHz` and `highHz` on a Freq Matrix whose `lowBin` or `highBin` you tuned.**
+
+Freq Matrix colors each moment by its dominant pitch, now on a log scale from `lowHz` to `highHz`, 50 Hz to 5 kHz by default, so the bass, the voice and the cymbals each take their own part of the palette, where WLED's linear window from 134 Hz to 2 kHz showed mostly its first colors. `lowBin`, `highBin` and `sensitivity` are gone: the level is already scaled to its range, and `fx` sets the brightness alone. `speed` is now a rate, 255 scrolling about 60 rows a second at any frame rate, where it scrolled once a frame.
+
+### Fireworks burst at a share of the grid's height
+
+**Action: *re-set a control*: `burstHeight` on a Fireworks effect whose `launchSpeed` you tuned.**
+
+Fireworks fill any grid: the shells burst at `burstHeight`, a share of the grid's height, where `launchSpeed` threw them a fixed distance that reached the top of a 16-row grid and a fifth of a 128-row one. `gravity` now sets only how fast the shells rise and fall, from 1 to 32; a saved value above 32 is clamped.
 
 ### The audio effects read the drums, and four bar effects default to the third octaves
 
 **Action: *nothing*, or *re-set a control* to keep a look you tuned.**
 
-An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, Space Invaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush sweeps instead of jumping. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
+An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, Space Invaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
 
 ### ESP32-P4 boards read their flash over four lines
 

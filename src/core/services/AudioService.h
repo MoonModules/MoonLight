@@ -75,9 +75,9 @@ namespace mm {
 ///
 /// ## Audio sync, one packet a frame
 ///
-/// A sending board sends its frame in `syncFormat`, MoonLight's whole frame or WLED's packet, never both, since a second copy costs every receiver a parse. The hits of the frames between two packets ride in the next, so the throttle drops none.
+/// A sending board sends its frame in `syncFormat`: MoonLight's whole frame, WLED's packet, or both for an installation that mixes the two. Each format multicasts to its own group, so a WLED device never wakes for a packet it cannot read. The hits of the frames between two packets ride in the next, so the throttle drops none.
 ///
-/// A receiving board tells the formats by their header. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and one without, a WLED frame among them, gets the bands' ballistic here; a late or repeated MoonLight frame number is dropped.
+/// A receiving board joins both groups and tells the formats by their header. A board sending both sends each frame twice, so MoonLight's packet outranks WLED's while it arrives. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and one without, a WLED frame among them, gets the bands' ballistic here; a late or repeated MoonLight frame number is dropped.
 class AudioService : public MoonModule {
 public:
     /// `level` through the bands' peak-meter ballistic into `levelSmoothed`, for a frame this engine measured or synthesized; a synced frame keeps the sender's own.
@@ -189,9 +189,9 @@ public:
     /// The boards a unicast send reaches, addresses or names.
     char     hosts[64] = {};
     /// The packet formats `syncFormat` picks from, in its option order.
-    enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatCount };
-    /// What a sending board sends: the whole frame for MoonLight boards, or WLED's packet.
-    /// @guide A receiving board reads either. Pick WLED on a board that feeds WLED devices.
+    enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatBoth, kFormatCount };
+    /// What a sending board sends: MoonLight's whole frame, WLED's packet, or both.
+    /// @guide Receivers read either. WLED feeds only WLED devices; both feeds MoonLight boards too.
     uint8_t  syncFormat = kFormatMoonLight;
 
     /// Each option's rate in hertz.
@@ -256,7 +256,7 @@ public:
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
-            static constexpr const char* kFormatNames[] = {"MoonLight", "WLED"};
+            static constexpr const char* kFormatNames[] = {"MoonLight", "WLED", "both"};
             controls_.addSelect("syncFormat", syncFormat, kFormatNames, kFormatCount);
             controls_.setHidden(controls_.count() - 1, !localMode || !send);
             // Multicast first, the WLED-compatible default; unicast reaches a few MoonLight boards faster on WiFi.
@@ -406,7 +406,7 @@ public:
     /// This tick's frame from the synthesizer or the local input, true when one is new.
     bool produceFrame() MM_NONBLOCKING {
         // A whole mode rather than a fill-in, so it always runs.
-        if (mode == kSimMode) { synthesizeFrame(simulate == kSimSweep); return true; }
+        if (mode == kSimMode) { if (!simFrameDue(platform::millis(), simPrevMs_)) return false; synthesizeFrame(simulate == kSimSweep); return true; }
 
         // From here it is the local mode, which holds the last frame until an input is up.
         if (!platform::hasAudioInput || !inited_) return false;
@@ -517,7 +517,7 @@ public:
     void synthesizeFrame(bool sweep) {
         const uint32_t now = platform::millis();
         simulateAudio(frame_, now, sweep, simPrevMs_);
-        simPrevMs_ = now;
+        simPrevMs_ = simPrevMs_ != 0 && now - simPrevMs_ < 4 * kSimFrameMs ? simPrevMs_ + kSimFrameMs : now;   // on the block grid, so a slow render still gets a frame a block; a long pause resumes
         frame_.seq++;
         smoothLevel(frame_);
         finishBands(frame_);
@@ -661,13 +661,14 @@ private:
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
     uint32_t syncSendCount_ = 0;     // sends made; test-visible so the throttle can be observed
     AudioHits syncHits_;             // the hits of the frames since the last packet, which a throttled send would drop
-    AudioFrame syncRx_;              // the packet being parsed, a member since it and the datagram together would pass the stack's budget
+    AudioFrame syncFrame_;           // the frame a packet is parsed into or built from, a member since it and the datagram together would pass the stack's budget
     AudioHits syncRxHits_;           // the hits of the packets since the last frame taken, late ones among them
     uint16_t syncRxSeq_ = 0;         // the last MoonLight frame number taken, so a late or repeated one is dropped
     bool     syncRxSeqValid_ = false;   // whether syncRxSeq_ holds one, false until the first and after a silence
     bool     syncRxWled_ = false;    // whether the last frame taken came in WLED's format, for the status line
     uint32_t simPrevMs_ = 0;             ///< the last simulated frame's time, so the song's kick reads once
     uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
+    uint32_t syncMlHeardMs_ = 0;     // millis of the last MoonLight packet, which outranks WLED's while it arrives
     uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
     bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
 
@@ -680,8 +681,9 @@ private:
 
     /// Report an open receive socket, saying so when only unicast can reach it.
     void reportListening() {
-        if (syncSock_.multicastJoined()) setStatus("listening");
-        else setStatus("listening, unicast only: multicast unavailable", Severity::Warning);
+        const uint8_t joined = syncSock_.multicastJoined();
+        if (joined == kSyncGroupCount) setStatus("listening");
+        else setStatus(joined ? "listening, one format's multicast group refused" : "listening, unicast only: multicast unavailable", Severity::Warning);
     }
     uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
     char     syncStr_[sizeof("receiving MoonLight from ") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)"
@@ -867,7 +869,7 @@ private:
         syncSock_.close();                 // syncEnsureSocket() re-opens per mode when the net is up
         syncOpen_ = false;
         lastSyncOpenFailMs_ = 0;           // a mode change retries bring-up immediately (no stale backoff)
-        lastSyncRecv_ = 0;
+        lastSyncRecv_ = syncMlHeardMs_ = 0;
         std::memset(syncPeer_, 0, sizeof(syncPeer_));
         syncHits_ = {};
         syncRxHits_ = {};
@@ -897,24 +899,16 @@ private:
         // Back off between failed bring-ups:
         const uint32_t now = platform::millis();
         if (lastSyncOpenFailMs_ != 0 && now - lastSyncOpenFailMs_ < kSyncOpenRetryMs) return false;
-        if (s == kSyncSend) {             // send → the WLED multicast group, or the hosts (configurable port)
-            if (syncSock_.open()) {
-                syncOpen_ = true;
-                reportSending();
-            } else {
-                syncSock_.close();
-                setStatus("send: socket failed", Severity::Error);
-            }
-        } else {                           // receive → bind the port, then JOIN the group
-            // The join is what makes a multicast datagram reach this socket; a network without multicast still delivers unicast, so a failed join degrades rather than refuses.
-            if (syncSock_.open() && syncSock_.bind(syncPort)) {
-                syncOpen_ = true;
-                syncSock_.joinMulticast(kSyncMulticastAddr_);
-                reportListening();
-            } else {
-                syncSock_.close();
-                setStatus("receive: bind failed", Severity::Error);
-            }
+        // Send → each format's group, or the hosts; receive → bind, then join both groups. A failed join degrades rather than refuses, since unicast still arrives.
+        syncOpen_ = syncSock_.open() && (s == kSyncSend || syncSock_.bind(syncPort));
+        if (!syncOpen_) {
+            syncSock_.close();
+            setStatus(s == kSyncSend ? "send: socket failed" : "receive: bind failed", Severity::Error);
+        } else if (s == kSyncSend) {
+            reportSending();
+        } else {
+            syncSock_.setMulticastGroups(kSyncGroups_, kSyncGroupCount);
+            reportListening();
         }
         // Stamp a failure (or clear the timer on success).
         lastSyncOpenFailMs_ = syncOpen_ ? 0 : (now == 0 ? 1 : now);
@@ -927,16 +921,19 @@ private:
         const uint32_t now = platform::millis();
         if (now - lastSyncSend_ < kSyncSendIntervalMs) return;
         lastSyncSend_ = now;
-        AudioFrame out = frame_;
-        syncHits_.applyTo(out);
+        syncFrame_ = frame_;
+        syncHits_.applyTo(syncFrame_);
         syncHits_ = {};
         uint8_t pkt[kMlSyncMaxPacket];
-        const size_t n = syncFormat == kFormatWled ? buildWledAudioSync(pkt, out) : buildMoonLightAudioSync(pkt, out);
-        // A steady 40 frames a second is a stream, so no broadcast copy on any network.
-        sendAddressed(addressing == kAddressUnicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
-                      syncHosts_, syncHostCount_, kSyncMulticastAddr_,
-                      [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, n); });
+        if (syncFormat != kFormatWled) sendSyncPacket(pkt, buildMoonLightAudioSync(pkt, syncFrame_), kSyncGroups_[kFormatMoonLight].ip);
+        if (syncFormat != kFormatMoonLight) sendSyncPacket(pkt, buildWledAudioSync(pkt, syncFrame_), kSyncGroups_[kFormatWled].ip);
         syncSendCount_++;
+    }
+
+    /// One packet to its format's group, or to the hosts. A steady 40 frames a second is a stream, so no broadcast copy on any network.
+    void sendSyncPacket(const uint8_t* pkt, size_t n, const uint8_t group[4]) {
+        sendAddressed(addressing == kAddressUnicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
+                      syncHosts_, syncHostCount_, group, [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, n); });
     }
 
     /// Drain the sync socket (bounded, non-blocking) in Receive mode, either format, into one new frame with the hits of every packet.
@@ -950,19 +947,21 @@ private:
         for (int i = 0; i < kSyncMaxRecvPerTick; i++) {
             const int n = syncSock_.recvFrom(pkt, sizeof(pkt), srcIp);
             if (n <= 0) break;                     // -1 = nothing pending
-            const uint16_t sections = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), syncRx_);
+            const uint16_t sections = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), syncFrame_);
             const bool ml = sections != 0;
-            if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), syncRx_)) continue;   // a v1 / foreign packet
+            if (!ml && (syncMlHeardMs_ != 0 && platform::millis() - syncMlHeardMs_ < kSyncFallbackMs)) continue;   // the same frame again, from a board sending both
+            if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), syncFrame_)) continue;   // a v1 / foreign packet
             lastSyncRecv_ = platform::millis();
+            if (ml) syncMlHeardMs_ = lastSyncRecv_;
             std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));   // whose audio this is
-            const uint16_t behind = static_cast<uint16_t>(syncRxSeq_ - syncRx_.seq);
+            const uint16_t behind = static_cast<uint16_t>(syncRxSeq_ - syncFrame_.seq);
             const bool late = ml && syncRxSeqValid_ && behind < kSyncSeqWindow;   // repeated, or late
-            if (!late || behind != 0) syncRxHits_.add(syncRx_);   // a late frame's hits went in no other packet, so the next frame carries them
+            if (!late || behind != 0) syncRxHits_.add(syncFrame_);   // a late frame's hits went in no other packet, so the next frame carries them
             if (late) continue;
-            if (ml) { syncRxSeq_ = syncRx_.seq; syncRxSeqValid_ = true; }
+            if (ml) { syncRxSeq_ = syncFrame_.seq; syncRxSeqValid_ = true; }
             smoothHere = !(sections & (1u << kMlSectionSmoothed));   // WLED's packet, or a sender that does not smooth
-            if (smoothHere) std::memcpy(syncRx_.bandsSmoothed, frame_.bandsSmoothed, sizeof(syncRx_.bandsSmoothed));   // the ballistic run here lives across packets
-            frame_ = syncRx_;
+            if (smoothHere) std::memcpy(syncFrame_.bandsSmoothed, frame_.bandsSmoothed, sizeof(syncFrame_.bandsSmoothed));   // the ballistic run here lives across packets
+            frame_ = syncFrame_;
             syncRxWled_ = !ml;
             fresh = true;
         }
@@ -977,8 +976,9 @@ private:
             levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
     }
 
-    /// The IP multicast address audio sync uses, WLED's, in both formats.
-    static constexpr uint8_t kSyncMulticastAddr_[4] = {239, 0, 0, 1};
+    /// Each format's multicast group, in `SyncFormat` order: MoonLight's own, and WLED's, which every WLED device joins.
+    static constexpr platform::UdpSocket::MulticastGroup kSyncGroups_[] = {{{239, 0, 0, 2}}, {{239, 0, 0, 1}}};
+    static constexpr uint8_t kSyncGroupCount = sizeof(kSyncGroups_) / sizeof(kSyncGroups_[0]);
 
     /// How many boards a unicast audio send reaches.
     static constexpr uint8_t kMaxSyncHosts = 8;

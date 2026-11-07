@@ -113,6 +113,13 @@ public:
         drawSprites(cv);
     }
 
+    /// How many sprites are in flight, for tests.
+    uint16_t inFlightForTest() const {
+        uint16_t n = 0;
+        for (uint16_t i = 0; i < pool_.count; i++) if (pool_.ttl[i] != 0) n++;
+        return n;
+    }
+
 private:
     /// The steady fountain: `rate` sprites a frame, species picked at random.
     void emitSteady(draw::pos_t ox, draw::pos_t oy, angle16 aim, draw::pos_t speed) {

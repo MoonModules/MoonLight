@@ -167,6 +167,8 @@ public:
 
     /// The cannon's left edge in pixels, for tests.
     int16_t cannonForTest() const { return cannonX_; }
+    /// The formation's left edge in pixels, which a march step moves, for tests.
+    int16_t formationForTest() const { return ox_; }
     /// How many cannon shots are in the air, for tests.
     uint8_t cannonShotsForTest() const {
         uint8_t n = 0;
@@ -187,11 +189,12 @@ public:
         if (width() == 0 || height() == 0) return;
         draw::fill(cv, RGB{0, 0, 0});
 
-        const AudioFrame* audio = audioReactive ? AudioService::latestFrame() : nullptr;
+        // The march steps on the kick, once a frame by its number, since two ticks can read one frame. The number is tracked with `audioReactive` off too, so turning it on never replays a kick already past.
+        const AudioFrame* latest = AudioService::latestFrame();
+        const bool fresh = latest->seq != lastSeq_;
+        lastSeq_ = latest->seq;
+        const AudioFrame* audio = audioReactive ? latest : nullptr;
         const bool live = audio && audio->heard();
-        // The march steps on the kick, once a frame by its number, since two ticks can read one frame.
-        const bool fresh = audio && audio->seq != lastSeq_;
-        if (audio) lastSeq_ = audio->seq;
         const bool beat = fresh && live && audio->onsetLow != 0;
 
         // A held cannon sits where its control says and fires on request; a free one is played, and its control follows it.

@@ -69,3 +69,14 @@ test("a preview reconnect armed before hiding is cancelled, and never fires on a
     assert.ok(app.includes("!document.hidden) connectPreview()"),
               "a retry that fires anyway must refuse to open a socket on a hidden tab");
 });
+
+// A tab hidden for less than the grace keeps its socket, and the device sends only what changed, so a
+// frame dropped while hidden was a change lost until it changed again: the Audio status stuck on a
+// format switched from another tab (Safari, 2026-11-07).
+test("the control socket applies every frame while the tab is hidden", () => {
+    const i = app.indexOf("ws.onmessage = (e) => {");
+    assert.ok(i > 0, "no control-socket message handler");
+    const guard = app.slice(i, app.indexOf("\n", app.indexOf("return;", i)));
+    assert.ok(!guard.includes("wsPaused"),
+              "the control socket must not drop frames while hidden: the next patch carries only what changed");
+});
