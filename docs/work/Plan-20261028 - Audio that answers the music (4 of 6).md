@@ -38,7 +38,7 @@ MoonModules: [his AudioReactive rewrite](https://github.com/troyhacks/WLED), bra
 - **No FFT.** 31 ISO 266 bands from two filter banks: the bottom 8 (20 to 100 Hz) on the input decimated by 16 to 3 kHz, behind a 4th-order Butterworth anti-alias filter, and the top 23 at the full 48 kHz. Each band is a 4th-order Butterworth band-pass, two second-order sections, solved per band so its equivalent noise bandwidth is 0.85 of the nominal width.
 - **Measured on his design:** the leakage into the neighboring band is −12.2 dB at the bottom and −7.8 dB at the top; the two banks cost 0.12 and 0.99 ms per 10.7 ms frame on the P4, about 2.1 ms of analysis per frame in all.
 - **The display:** sixteen bars as a subset of the 31 picked by a pattern that shifts them −3 to +3 bands, one-pole smoothing at 8 ms attack and 60 ms release, a dB window auto-ranged to the loudest band.
-- **A tempo tracker** (`ar_tempo.h`): onsets from the 40 to 160 Hz energy of the 3 kHz stream, a phase-locked comb that scores each candidate period by how tightly the onsets cluster in phase, a PLL grid and a weak prior at 125 BPM; median hit rate 0.817 on a hundred house tracks. Prior art for step 5.
+- **A tempo tracker** (`ar_tempo.h`, commit `9b416ad3` of 2026-11-06): onsets from the 90 to 320 Hz energy of the 3 kHz stream, a phase-locked comb over the last 12 s that scores each candidate period from 90 to 175 BPM by how tightly the onsets cluster in phase, a PLL grid and a weak prior at 125 BPM; median hit rate 0.817 on a hundred house tracks. Prior art for step 6.
 
 Two decisions carry over as the plan's own:
 
@@ -89,7 +89,7 @@ A solo instrument through line-in does much better than a full mix, and a MIDI i
 
 Each step ends in a desktop test, its two effects, and a bench look. The bench's songs, for the product owner and for end users, are one playlist: [MoonLight audio test songs](https://open.spotify.com/playlist/0iL47MM8XcUpJzzdKdHQD3).
 
-For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, "Hotel California" (the outro guitar solo); bass: Jaco Pastorius, "Portrait of Tracy" (solo fretless bass); violin: Hilary Hahn, Bach "Sonata No. 1 in G minor for solo violin, BWV 1001: I. Adagio" (violin alone); cello: Yo-Yo Ma, Bach "Cello Suite No. 1 in G Major, BWV 1007: I. Prélude".
+For the StringsEffect, one solo per instrument, all on Spotify: guitar: Fernando Sor, "Etude No. 22 in B Minor" (Paul Erickson); bass: Miroslav Vitouš, "Variations On Spanish Themes"; violin: Hilary Hahn, Bach "Sonata No. 1 in G minor for solo violin, BWV 1001: I. Adagio" (violin alone); cello: Rafael Krux, "Cello Solo".
 
 ### 1. The bands by the book ✅
 
@@ -183,6 +183,7 @@ For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, 
 - Tempo and beat phase from the onset curve. Two trackers, run side by side: the textbook (Ellis, *Beat tracking by dynamic programming*, 2007: autocorrelation of the onset curve over 12 s or more picks the tempo in 60 to 200 BPM, and the phase that lines up with the recent onsets picks the beat), and Troy's phase-locked comb, measured on real house music, its comb run over the continuous onset curve rather than picked kicks, corrected for the score a period earns by chance and given a lock confidence, so noise no longer locks near 130. The two fail in opposite directions, Troy's at double the tempo and the textbook's to be measured, which is what makes their agreement a lock. Where the two agree the tempo is locked, the confidence an effect reads; where they disagree the frame says so. The frame carries `bpm`, `beatPhase` in 0 to 1 and `beat` for the block the phase wraps. MoonLive's `audioBeat`, a level-above-its-average guess until now, returns the tracked beat, and `audioOnset` and `audioBpm` are added.
 - **Harmonic changes find the downbeat.** A beat tracker hears beats but not which is the bar's first; Troy's says so of its own. Chords mostly change on the bar line, so step 3's harmonic changes, lined up with the beat grid, place the one, and the frame carries `downbeat` and the beat in the bar. A board without harmony counts the bar from the lock, as Troy's does.
 - The beat phase is what the live-performance plan's `MidiFrame` takes from a MIDI clock when one runs; the audio estimate fills the same field when none does, so an effect reads one phase from either source.
+- **A Pioneer deck first, and the beat to every board (2026-11-07).** Pro DJ Link's master deck is the first beat source, ahead of the MIDI clock, tap and the tracker, since its track was analyzed beforehand and it knows the bar. The sending board puts the beat it decided in the sync packet's beat section, so every board lands on the same beat: [the proposal](../reference/audio-sync.md#a-proposal-the-beat-section), to agree with WLED-MM first. troyhacks's WLED-MM reads the decks in `usermod_v3_pioneer_prolink.h` and keeps the beat on the board.
 - **Tap tempo, the escape route (robwomp, 2026-11-04).** A third beat source beside the MIDI clock and the tracker, as lighting consoles, DJ mixers and pedals have it: the tempo is the mean of the last four to eight intervals between taps, a gap over about 2 s starts a new count, and the last tap sets the phase. The order is MIDI clock, then tap, then the tracker; a tap also re-phases a tracker whose tempo is right and whose beat is not. A button on the card, a MIDI pad or a GPIO through input mapping; four taps average the WiFi's 5 to 20 ms jitter well inside ±20 ms.
 - **Beat-synchronous analysis once the beat locks (Anjin, 2026-11-04).** Each feature averaged over a beat rather than a block (Bello and Pickens 2005; Ellis 2007), time-synchronous averaging in vibration analysis: step 3's pitch classes per beat, their change checked on the beat boundaries where chords change, so fewer false changes and each on the beat; step 5's band onsets folded at the beat period, so hats and rides gather at their places in the sixteenth grid and random noise spreads. It sharpens timing, not the spectrum, and needs a tempo within about 1%, a 2% error smearing the fold within a few bars; Troy's bass-led tracker guides it. The bank suits it, every band updating every block, so a beat boundary falls anywhere.
 - **`AudioSpectrumEffect`** shows the tempo and a marker on each beat.
@@ -191,6 +192,59 @@ For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, 
 - **Corpus tests:** Anjin's labelled sets and [the tempo harness](Plan-20261103%20-%20Tempo%20evaluation%20harness%20(2%20of%205).md) through the desktop build, the Freesound loops with a 12 s warm-up each, known tempos across 40 to 190 BPM, scored as Gouyon et al. (2006) define it (accuracy 1 within 4%, accuracy 2 forgiving the double, half and triple) and reported per genre, with 3:2 as its own class rather than "wrong"; beside Troy's tracker's 97% on house, about 70% on mixed EDM and 47% on loops, and BpmDj's table.
 - **Chance and silence tests:** random onsets at 90 and 175 BPM lock at neither, after the chance correction; beatless music (ambient, implied beats) reads "no lock" rather than a tempo.
 - **Bench material:** drum and bass, hard techno with a 909 kick whose fast click must not read as a hat, Jeff Mills' unquantized swing, breakcore and sliced amen breaks, and a jam band for the non-dance end.
+
+### 7. Every effect reads the new engine ⏳
+
+Steps 1 to 5 built the measurements; most effects still read the old engine's three stand-ins for them ([the plan change, 2026-11-06](#the-plan-change-2026-11-06)). This step moves them over, one mechanism per question:
+
+- **One onset.** `onset` is one drum hit across step 5's range hits, `onsetLow`, `onsetMid` and `onsetHigh`, the ranges firing within the bass's delay of each other counted once, and the broadband flux onset goes; its decision kernel, `OnsetDetector`, stays, since the range and band detectors run on it, and `flux` stays as a readout. Every effect reading `onset` gets the per-drum detector unchanged, and the Audio card's onsets per second count real hits. A synced frame takes `onset` from WLED's `samplePeak`, which the receive path dropped; step 8 carries the range hits.
+- **One test for sound.** An `AudioFrame` helper, true while the gate is open, and on a frame with no gate measured (audio sync, simulate) while the level is over a small floor, replaces the five `kSilence = 8` copies.
+- **One test for a beat.** The hand-rolled `level > levelSmoothed + 8` in MovingHead, SpaceInvaders and the MoonLive `onBeat` builtin goes: a beat is `onset` now, and step 6's `beat` once it lands.
+- **The level means what its comment says.** `level` is the level's place in its own dynamics window, 0 while gated, where its comment still says "raw RMS, the instantaneous VU value"; `levelSmoothed`, a four-block average today, takes the peak-meter ballistic `bandsSmoothed` already has.
+
+Per effect, the proposal:
+
+| Effect | Reads today | Proposal |
+|---|---|---|
+| `PaintBrushEffect` | raw `bands` as each endpoint's `beatsin8` time offset, and `bands[0]` added to every oscillator's bpm | **The worked example, see below.** Phases from an `OscillatorBank`, the bass and the stroke lengths from `bandsSmoothed`, a stroke surge on each hit as `surge` |
+| `AudioSpectrumEffect` | the flux `onset` for the red square under the level meter, beside the range lines that flash on step 5's hits | the square split in three, the kick red, the snare amber and the hats blue, the same hits the range lines show. The gate on the meter waits for a field: the frame carries the gate on the bands' scale, and the meter has the level's own window |
+| `BeatRipplesEffect` | `onset`, or `onsetLow` with `trigger` on the kick | unchanged in code, the better `onset` for free; step 6 adds the beat |
+| `PulseEffect` | the flux `onset`, the shell's hue from `peakHz` | a `trigger` select as Beat Ripples has: any hit, the kick, and the beat after step 6 |
+| `RadialSpectrumEffect` | the flux `onset` flashing the whole ring | each range flashing its own sectors: the bass sectors on `onsetLow`, the treble's on `onsetHigh` |
+| `MovingHeadEffect` | `level > levelSmoothed + 8` rolling a gobo, `levelSmoothed < 8` as silence | the gobo rolls on `onset`, the sound test for silence |
+| `SpaceInvadersEffect` | the same beat test and silence test | the invaders step on the kick, `onsetLow`; the sound test |
+| `SpriteFountainEffect` | `levelSmoothed < 8` as silence, raw `bands` as the launch force | the sound test; the throw's force stays on the raw band, since a speed is integrated (judged on the bench, 2026-11-06); a sprite thrown on each hit is a later look |
+| The ten sprite effects on `audioDrive` (Particles, Ballpit, Bouncing Balls, Fish Tank, Pacman, and the rest) | `levelSmoothed < 8` freezes the scene, a raw band per sprite drives its speed | the sound test; the raw band per sprite stays, a speed being integrated, over a floor that follows `level`, so a quiet moment slows the scene to a pause while the sound test still holds (judged on the bench, 2026-11-06) |
+| `FreqMatrixEffect` | `levelSmoothed > 64` before it trusts `peakHz` | `gateOpen` instead of a level threshold |
+| `NoiseMeterEffect`, `BreakoutEffect` | `level` | unchanged in code; `level` reads truly once its comment does |
+| `BlurzEffect` | the raw band and `peakHz` | a dot flashes on its own band's hit, `thirdsHits`, while live |
+| `GEQEffect`, `GEQ3DEffect`, `SpectrumEffect`, `FreqSawsEffect` | the sixteen raw `bands` | AudioSpectrum's `bands` select, the sixteen, the third octaves or the keys, thirds by default (decided 2026-11-06), through one shared `barsOf` that falls back to the sixteen on a synced frame; GEQ 3D shows up to all 79 keys across the full width, and a `sideFill` control sets how bright the side faces show the depth |
+| `VuMetersEffect`, `WaterfallEffect` | `bands` or `bandsSmoothed`, the thirds | already on the new engine |
+| `DrumKitEffect`, `KeyboardEffect`, `StringsEffect` | the range, band and note hits | already on the new engine |
+| MoonLive builtins | `onBeat` by the level test | `onBeat` on `onset`; `audioOnset(range)` already reads step 5 |
+
+**PaintBrush, the worked example.** It looks chaotic for a reason in the arithmetic, not the music. `beatsin8`'s phase is the elapsed time times the bpm, and the bass adds up to 15 to every oscillator's bpm each 21 ms block, so a change of one bpm moves every endpoint by the elapsed minutes in whole cycles: ten minutes in, ten cycles. The strokes jump instead of sweeping, worse the longer the device runs. The raw band as each endpoint's time offset jumps them again on every block. The textbook motion is a phase accumulator, which `OscillatorBank` already is: a rate change glides from the phase it reached. So the endpoint oscillators become a bank; a band leads its line by the angle its milliseconds are at the oscillator's base rate, so a bass change moves no lead; the bass term and each stroke's length read `bandsSmoothed`; and `surge`, off by default, surges the strokes to full length on each hit, halving every 120 ms. **Back to troyhacks's look (2026-11-07):** compared with his current effect, our port had drifted: 255 lines where his slider maps to 1 to 16, a third of his rate, crisp lines where his are anti-aliased by default, a fade floor of 0 where his is 10, `minLength` on the scaled stroke where his tests the span, and endpoints started a sixth of a turn apart. Each now follows his, and so does the motion by default: the jumps on each bass step are what fill his field with crossed strokes and tie it to the music, so the glide became the `glide` option. The 3D endpoints stay ours. The lines stay on the sixteen bands: the frame has no smoothed third octaves, and motion reads the smoothed values.
+
+- **Desktop tests:** with `glide`, a frame whose bass steps by one bpm moves PaintBrush's endpoints by less than a pixel at ten minutes' uptime, where `beatsin8` moved them across the grid; one broadband hit reads as one `onset`, its ranges counted once; a synced frame with `samplePeak` set reads an onset; the sound test is false in a gated room and true on a synced frame with music.
+- **Bench:** PaintBrush, MovingHead and SpaceInvaders side by side before and after, on the step 5 drum material and a long pop song, judged by eye for strokes that sweep and heads that move on the drums.
+
+### 8. Audio sync carries the new engine ⏳
+
+Audio sync shares one board's analysis with the others: today the WLED v2 packet, 44 bytes, which carries the level, a peak flag, the sixteen bands and the dominant frequency, so a receiving board loses everything steps 1 to 7 added. The goal: one packet per frame in the format the network needs, compatible with WLED and WLED-MM both ways, and the whole frame between MoonLight boards.
+
+**One packet per frame, chosen on the Audio card.** A `syncFormat` select, `MoonLight` or `WLED`, picks what a sending board sends: one packet a frame, since a second copy costs every receiver a parse and the network a packet for nothing, and MoonLight runs more and more on networks with no WLED device. `MoonLight` is the default; a board feeding WLED devices picks `WLED`. A receiving board needs no setting: it recognizes either format by its header.
+
+**The WLED format, mapped in one place.** `WLEDAudioSyncPacket.h` is the one place that names a WLED field: a builder from an `AudioFrame` and a parser into one. It fills WLED-MM's `frameCounter` from `seq`, and sends which drum was hit as bits beside `samplePeak`'s bit 0, which WLED reads as the peak it always saw; the offsets are in [Audio sync format](../reference/audio-sync.md#the-wled-format).
+
+**The MoonLight format, as small as the frame allows and open to growth.** An eight-byte header with the sender's `seq` and a section mask, then length-prefixed sections a receiver skips when it does not know them: the core always, the smoothed bands, the thirds, the harmony and the keys when measured, 36 to 198 bytes against WLED's 44. An absent section means not measured, never zeros, so a WLED sender adopting the format sends the 36-byte core alone. The ranges and the flux do not travel, since the receiver derives them; the sender's smoothing does when sent, so every board shows the same frame, and a receiver smooths itself when it is not. The layout, both formats side by side and the receiver's rules are in [Audio sync format](../reference/audio-sync.md), the one home; step 6 adds the beat as a new section.
+
+**The hits survive the throttle.** The sender sends about 40 frames a second while the analysis makes 47 at 24 kHz, so the hits of the frames between two packets ride in the next, merged by one `AudioHits` that the render tick's ring drain and the receiver's drain of several packets use too.
+
+**One receive path.** The audio service reads the header and hands the bytes to the WLED mapper or the MoonLight decoder; both fill an `AudioFrame`, and from there a synced frame is one frame whatever carried it: the effects fall back where a field is absent, as `barsOf` does for the bars.
+
+- **Desktop tests (built):** golden vectors for both formats; a frame round-trips through the MoonLight format field for field, with and without the harmony; a receiver skips a section bit it does not know and reads the known prefix of a longer section; a malformed packet is refused; the WLED packet carries `frameCounter` and the range bits beside `samplePeak`, and a WLED peer's plain 1 reads as a hit alone; over loopback a MoonLight packet drives the whole frame with the sender's smoothing, a repeated or late frame number is dropped and a restarted sender taken; `syncFormat` picks the one format sent.
+- **Bench:** a board on `WLED` feeding the WLED-MM board (.223), which reacts as before; a board on `MoonLight` feeding a MoonLight board, whose AudioSpectrum shows the thirds, the range hits, the harmony and the keys as the sender's does.
+- **Open:** whether the mapper fills WLED-MM's `pressure`, its sound-pressure estimate in 8.8 fixed point; MoonLight measures dBFS, which needs a calibration to become a pressure.
 
 ## What an effect reads
 
@@ -204,6 +258,7 @@ For the StringsEffect, one solo per instrument, all on Spotify: guitar: Eagles, 
 | 4 | `bass`, `mid`, `treble`, and the bass note | `audioBass`, `audioMid`, `audioTreble`, `audioBassNote` |
 | 5 | `onsetLow`, `onsetMid`, `onsetHigh`, an onset per band, and a new note | `audioOnset(range)`, `audioBandOnset(i)`, `audioNoteOnset` |
 | 6 | `bpm`, `beatPhase`, `beat`, `downbeat` and the beat in the bar | `audioBpm`, `audioBeat`, `audioDownbeat` |
+| 7 | none; `onset` from the range hits, `level` and `levelSmoothed` read truly, and a sound test | `onBeat` on `onset` |
 
 A field is 0 when its source is absent, so an effect on a board without a microphone draws its idle state, as today. The new fields are local: the WLED audio-sync packet carries the sixteen and none of the rest, so a board in receive mode leaves them at 0, `AudioSpectrumEffect` falls back to sixteen bars there, and a desktop test pins both.
 
@@ -219,6 +274,7 @@ A field is 0 when its source is absent, so an effect on a board without a microp
 | 4 | three sums over 31 values, and the loudest bass semitone | negligible |
 | 5 | three flux decisions, and one per band | negligible: a comparison a band a frame |
 | 6 | an autocorrelation or comb over 12 s or more of the onset curve, a phase fit, and the harmonic changes lined up with the grid | about 16,000 multiply-adds per block, well under a millisecond on a classic ESP32 |
+| 7 | one comparison a reading for the hit, a ballistic for `levelSmoothed`; the broadband detector goes | negligible, slightly less than today |
 
 **Each chip measures what it can carry, and audio sync shares it.** Every chip that analyzes audio carries the three-band signals, so those behave alike on each; the harmony runs where step 3 finds the twelve-band bank fits (decided 2026-11-03: differences between boards are accepted). A chip with spare cycles spends them on resolution: 48 kHz for the top three bands, three sections per band rather than two, twelve bands to the octave rather than three. Each is chosen per chip by the platform, a default rather than a user setting, so it adds no knob. A board that measures less reads more through audio sync: the packet says how many bands to the octave it carries, and a receiver sums finer bands into the coarser ones its effects read.
 
@@ -234,6 +290,7 @@ A field is 0 when its source is absent, so an effect on a board without a microp
 | 4 | the bass, mid and treble sums, and the bass note | `BeatRipplesEffect` on the bass |
 | 5 | each range's and each band's onset | a drum kit: kick, snare and hi-hat a sprite each, each tom its own place |
 | 6 | the tempo, a marker per beat, and the downbeat | `BeatRipplesEffect` on the beat, a beat sweep, and a palette per bar |
+| 7 | the hits under the level meter split by range, and the gate on the meter | `PaintBrushEffect` sweeping, its strokes surging on the hits |
 
 More effects on the same signals, each a small change once its field exists: **a harmony color**, the rig tinted by the twelve pitch classes, from step 3; **three zones** (bass on the floor, mids between, treble at the top, breathing with their range) from step 4; **`PulseEffect` and `PaintBrushEffect` on the beat**, one shell or stroke per beat, from step 6.
 
@@ -263,7 +320,26 @@ On the topic and not a step. What remains here when the plan ships returns to th
 
 ## What it removes
 
-In code: the loudest-bin estimator, the band-edge and bin-ownership code in `AudioBands.h` with their technical notes, and the FFT with its window, the platform's `audioFft` seam on both platforms and its test (decided 2026-11-03: the readers of `peakHz` map it to a hue or a position on a log scale, which the interpolated band gives at a fraction of the cost; whether esp-dsp stays, for its assembly biquad kernels, is step 1's measurement on the classic ESP32); removed in step 2, `levels`, `gain`, the conditioner's ratio and maximum gain and the two learned tables. In the docs: the backlog's decimated FFT and filter-bank trial, settled by step 1; earlier, the audio DSP roadmap, the audio-reactive follow-ups and the desktop-capture and noise-floor items moved into this plan, and per-band onsets left the live-performance plan for step 5.
+In code: the loudest-bin estimator, the band-edge and bin-ownership code in `AudioBands.h` with their technical notes, and the FFT with its window, the platform's `audioFft` seam on both platforms and its test (decided 2026-11-03: the readers of `peakHz` map it to a hue or a position on a log scale, which the interpolated band gives at a fraction of the cost; whether esp-dsp stays, for its assembly biquad kernels, is step 1's measurement on the classic ESP32); removed in step 2, `levels`, `gain`, the conditioner's ratio and maximum gain and the two learned tables. Step 7 removes the broadband flux onset, the level-against-average beat test in three effects, a builtin and the sync sender, and five copies of the silence threshold. In the docs: the backlog's decimated FFT and filter-bank trial, settled by step 1; earlier, the audio DSP roadmap, the audio-reactive follow-ups and the desktop-capture and noise-floor items moved into this plan, and per-band onsets left the live-performance plan for step 5.
+
+## The plan change (2026-11-06)
+
+**What changed.** A seventh step moves the effects onto the new engine: one onset, one sound test, one beat, and a level that means what its comment says, with a proposal per effect.
+
+**Why.** After step 5 the frame answers each question twice. A hit is the flux `onset` and the per-range hits, two detectors judging one event on the same display: AudioSpectrum's red square on the first, the range lines on the second. A beat is also a third, hand-rolled test on the level in three effects and a builtin. Silence is five copies of a level threshold, where the gate now decides it. Two mechanisms doing one job is what [CLAUDE.md, principle 3](../../CLAUDE.md#principles) removes. PaintBrush, which looked chaotic on the bench, shows the cost of the old reads at its plainest.
+
+**Pros.**
+
+- Every effect that reacts to hits gets the per-drum detector, the kick timed by its click, with no code of its own.
+- The effects move on the drums rather than on any rise in the level, and keep still in a gated room on every board alike.
+- PaintBrush sweeps instead of jumping, however long the device runs.
+- Code goes: the flux detector, the beat test, five silence constants.
+
+**Cons.**
+
+- Until step 8, effects on audio sync lose what only the local engine measures: no range hits on a synced frame, so `onset` there rests on WLED's single `samplePeak`.
+- Every effect's goldens that read `onset`, `level` or the bands move, and each needs its look judged again on the bench.
+- `levelSmoothed` on the peak-meter ballistic rises faster than today's average, so an effect tuned to the old lag reads livelier.
 
 ## The plan change (2026-11-03)
 

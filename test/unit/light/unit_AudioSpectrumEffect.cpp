@@ -30,7 +30,7 @@ struct Spectrum {
     mm::AudioSpectrumEffect effect;
     int w;
 
-    Spectrum(int width, int height, uint8_t colorMode, bool readouts, uint8_t bands = mm::AudioSpectrumEffect::kBands16) : w(width) {
+    Spectrum(int width, int height, uint8_t colorMode, bool readouts, uint8_t bands = mm::kBands16) : w(width) {
         mm::platform::setTestNowMs(1000);
         audio.defineControls();
         audio.simulate = mm::AudioService::kSimMusic;
@@ -89,7 +89,7 @@ TEST_CASE("AudioSpectrumEffect's level meter is as tall as a bar is wide, and ne
     CHECK_FALSE(meter(GH - 3));
 }
 
-TEST_CASE("AudioSpectrumEffect's square at the meter's right end flashes red on a detected hit") {
+TEST_CASE("AudioSpectrumEffect's square at the meter's right end flashes per range, the kick red") {
     constexpr int GW = 32, GH = 8;
     Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true);
 
@@ -104,16 +104,17 @@ TEST_CASE("AudioSpectrumEffect's square at the meter's right end flashes red on 
     s.layer.tick();
 
     auto red = [&](int x, int y) { const uint8_t* p = s.px(x, y); return p[0] == 255 && p[1] == 0 && p[2] == 0; };
-    // The meter is two rows tall at 32 wide, so the square is the last two columns of those rows.
-    CHECK(red(GW - 1, GH - 1));
+    // The meter is two rows tall at 32 wide, so the square is the last two columns of those rows, split by range: the simulated song's hit is its kick, the left part.
+    CHECK(red(GW - 2, GH - 1));
     CHECK(red(GW - 2, GH - 2));
+    CHECK_FALSE(red(GW - 1, GH - 1));   // the snare's part stays dark
     CHECK_FALSE(red(GW - 3, GH - 1));   // the meter itself stops short of the square
 }
 
 // The 31 third octaves take the width when the frame carries them: of 31 bars on 62 columns each takes two, and the simulated music lights most.
 TEST_CASE("AudioSpectrumEffect draws the 31 third octaves, two columns a bar on a 62-wide grid") {
     constexpr int GW = 62, GH = 6;
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, false, mm::AudioSpectrumEffect::kBandsThirds);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, false, mm::kBandsThirds);
     s.run(8);
     int risen = 0;
     for (int band = 0; band < 31; band++) {
@@ -127,7 +128,7 @@ TEST_CASE("AudioSpectrumEffect draws the 31 third octaves, two columns a bar on 
 // The level meter is as tall as a bar is wide at 31 bars too: on 62 columns a bar is two wide, so the meter takes two rows.
 TEST_CASE("AudioSpectrumEffect's level meter follows the bar width at 31 bands") {
     constexpr int GW = 62, GH = 8;
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsThirds);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::kBandsThirds);
     s.run(8);
     auto meter = [&](int y) { return is(s.px(0, y), palette(0)); };   // the meter starts on the palette's first color
     CHECK(meter(GH - 1));
@@ -239,7 +240,7 @@ TEST_CASE("AudioSpectrumEffect shows its speed only for the sweep") {
 // The notes are the piano's keys, one bar a semitone; without them, as with `harmony` off, the third octaves draw instead.
 TEST_CASE("AudioSpectrumEffect draws the piano's keys as notes, and the third octaves without them") {
     constexpr int GW = 79, GH = 8;   // one column a key
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, false, mm::AudioSpectrumEffect::kBandsNotes);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, false, mm::kBandsNotes);
     s.audio.tick();
     auto& f = s.audio.frameForTest();
     for (uint8_t i = 0; i < mm::kAudioNoteKeys; i++) f.notes[i] = 0;
@@ -279,7 +280,7 @@ TEST_CASE("AudioSpectrumEffect writes the strongest pitch classes at the top lef
 // The harmony as the frame gives it: the twelve pitch classes along the top, C at the left, each as bright as it sounds, the whole row dark for an instant as the chord changes.
 TEST_CASE("AudioSpectrumEffect draws the pitch classes along the top with the readouts, going dark on a chord change") {
     constexpr int GW = 48, GH = 20;   // four columns a pitch class
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::AudioSpectrumEffect::kBandsThirds);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::kBandsThirds);
     auto draw = [&](bool change) {
         s.audio.tick();
         auto& f = s.audio.frameForTest();
@@ -299,7 +300,7 @@ TEST_CASE("AudioSpectrumEffect draws the pitch classes along the top with the re
 // A bar under two columns wide, the 79 keys on 128 columns, still gets a level meter and a pitch-class row two rows tall: the bar's width rounded up.
 TEST_CASE("AudioSpectrumEffect's level meter, pitch classes and marks round a bar's width up, two for the keys on 128 columns") {
     constexpr int GW = 128, GH = 32;
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::AudioSpectrumEffect::kBandsNotes);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true, mm::kBandsNotes);
     s.audio.tick();
     auto& f = s.audio.frameForTest();
     f.notesCount = mm::kAudioNoteKeys;
@@ -320,7 +321,7 @@ TEST_CASE("AudioSpectrumEffect's level meter, pitch classes and marks round a ba
 
 // A small grid keeps one row for each: on 16x16 a bar is at most a column wide, whatever the band count.
 TEST_CASE("AudioSpectrumEffect keeps one row of level meter and pitch classes on a 16x16 grid") {
-    for (const uint8_t bands : {mm::AudioSpectrumEffect::kBands16, mm::AudioSpectrumEffect::kBandsThirds, mm::AudioSpectrumEffect::kBandsNotes}) {
+    for (const uint8_t bands : {mm::kBands16, mm::kBandsThirds, mm::kBandsNotes}) {
         CAPTURE(int(bands));
         Spectrum s(16, 16, mm::AudioSpectrumEffect::kColorSweep, true, bands);
         s.audio.tick();
@@ -343,10 +344,10 @@ TEST_CASE("AudioSpectrumEffect keeps one row of level meter and pitch classes on
     }
 }
 
-// The bass, mids and treble drawn where their bands are: each a grey line across its own bars at its level.
+// The bass, mids and treble drawn where their bands are: each a gray line across its own bars at its level.
 TEST_CASE("AudioSpectrumEffect draws the bass, mids and treble as lines across their own bars") {
     constexpr int GW = 56, GH = 20;   // two columns a third at 28 bands
-    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::AudioSpectrumEffect::kBandsThirds);
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true, mm::kBandsThirds);
     s.audio.tick();
     auto& f = s.audio.frameForTest();
     f.thirdsCount = 28;
@@ -354,8 +355,23 @@ TEST_CASE("AudioSpectrumEffect draws the bass, mids and treble as lines across t
     f.bass = 255; f.mid = 0; f.treble = 0;
     f.peakHz = 0; f.gate = 0; f.notesCount = 0;
     s.layer.tick();
-    const mm::RGB grey{160, 160, 160};
-    CHECK(is(s.px(2, 0), grey));          // the bass line at the top, over the bass bars
-    CHECK_FALSE(is(s.px(50, 0), grey));   // the silent treble not at the top...
-    CHECK(is(s.px(50, GH - 3), grey));    // ...but on the bars' bottom row, over the two-row meter, so all three lines show
+    const mm::RGB gray{160, 160, 160};
+    CHECK(is(s.px(2, 0), gray));          // the bass line at the top, over the bass bars
+    CHECK_FALSE(is(s.px(50, 0), gray));   // the silent treble not at the top...
+    CHECK(is(s.px(50, GH - 3), gray));    // ...but on the bars' bottom row, over the two-row meter, so all three lines show
+}
+
+// One fallback for every bar effect: the scale asked for, else the next coarser one the frame carries, so a WLED-synced board shows the sixteen whatever is chosen.
+TEST_CASE("barsOf falls back to the next coarser scale a frame does not carry") {
+    mm::AudioFrame synced;   // the sixteen alone, as a WLED packet carries
+    CHECK(mm::barsOf(synced, mm::kBandsNotes).scale == mm::kBands16);
+    CHECK(mm::barsOf(synced, mm::kBandsThirds).n == 16);
+    mm::AudioFrame local;
+    local.thirdsCount = 28;   // measured thirds, harmony off
+    CHECK(mm::barsOf(local, mm::kBandsNotes).scale == mm::kBandsThirds);
+    CHECK(mm::barsOf(local, mm::kBandsThirds).n == 28);
+    CHECK(mm::barsOf(local, mm::kBands16).scale == mm::kBands16);
+    local.notesCount = mm::kAudioNoteKeys;
+    CHECK(mm::barsOf(local, mm::kBandsNotes).n == mm::kAudioNoteKeys);
+    CHECK(mm::barsOf(local, mm::kBandsNotes).hits == local.notesHits);
 }

@@ -2,6 +2,7 @@
 
 #include "core/util/math16.h"            // map32: the shared, fencepost-safe range map
 #include "light/effects/EffectBase.h"
+#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
 
 namespace mm {
 
@@ -37,8 +38,10 @@ public:
     /// The phase model that places the saw.
     /// @guide `Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps.
     uint8_t method    = kMethodBandPhases;
+    /// The bars: the sixteen, the third octaves or the piano's keys.
+    uint8_t bands     = kBandsThirds;
 
-    /// Publish the trail, the band physics and the position method.
+    /// Publish the trail, the band physics, the position method and the bands.
     void defineControls() override {
         controls_.addControl("fade", fade, 0, 255);
         controls_.addControl("increaser", increaser, 0, 255);
@@ -48,6 +51,7 @@ public:
         controls_.addControl("keepOn", keepOn);
         static constexpr const char* kMethodOptions[] = {"Chaos", "Chaos fix", "BandPhases"};
         controls_.addSelect("method", method, kMethodOptions, kMethodCount);
+        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
     }
 
     /// Start every band from rest, since the state is per band rather than per light.
@@ -55,7 +59,7 @@ public:
         clearState();
     }
 
-    /// Advance all sixteen bands once, then draw each column from its band's cached position.
+    /// Advance every band once, then draw each column from its band's cached position.
     void tick() MM_NONBLOCKING override {
         const int sizeX = width();
         const int sizeY = height();
@@ -73,10 +77,11 @@ public:
         lastTime = now;
 
         // Once a tick, cached, so a band spanning several columns still integrates once a frame.
-        bool    bandActive[NUM_GEQ_CHANNELS] = {};
-        uint8_t bandY[NUM_GEQ_CHANNELS]      = {};
-        for (int band = 0; band < NUM_GEQ_CHANNELS; band++) {
-            const uint8_t volume = f->bands[band];
+        const AudioBars bars = barsOf(*f, bands);
+        bool    bandActive[kMaxBands] = {};
+        uint8_t bandY[kMaxBands]      = {};
+        for (int band = 0; band < bars.n; band++) {
+            const uint8_t volume = bars.mag[band];
             // Scaled into the 16-bit speed space.
             const uint32_t targetSpeed = static_cast<uint32_t>(volume) * increaser * 257u;
 
@@ -124,10 +129,10 @@ public:
 
         // Each column reads its band's cache, so only the mirroring and the color are per column.
         for (int x = 0; x < sizeX; x++) {
-            // This column mapped onto one of the sixteen bands.
-            int band = map32(x, 0, sizeX, 0, NUM_GEQ_CHANNELS);
+            // This column mapped onto one of the bands.
+            int band = map32(x, 0, sizeX, 0, bars.n);
             if (band < 0) band = 0;
-            if (band > NUM_GEQ_CHANNELS - 1) band = NUM_GEQ_CHANNELS - 1;
+            if (band > bars.n - 1) band = bars.n - 1;
 
             if (!bandActive[band]) continue;
 
@@ -141,8 +146,8 @@ public:
     }
 
 private:
-    /// The spectrum's width, which the bands and the columns both map onto.
-    static constexpr int NUM_GEQ_CHANNELS = 16;
+    /// The most bands a scale has, the piano's keys, which the per-band state is sized for.
+    static constexpr int kMaxBands = kAudioNoteKeys;
 
     /// Return every band to rest.
     void clearState() {
@@ -153,10 +158,10 @@ private:
         lastTime = 0;
     }
 
-    uint16_t bandSpeed[NUM_GEQ_CHANNELS]   = {};   ///< each band's current run-rate, per band rather than per light so inline
-    uint16_t bandPhase[NUM_GEQ_CHANNELS]   = {};   ///< the BandPhases accumulator
-    uint8_t  lastBpm[NUM_GEQ_CHANNELS]     = {};   ///< the Chaos fix method's previous rate
-    uint8_t  phaseOffset[NUM_GEQ_CHANNELS] = {};   ///< and its carried offset
+    uint16_t bandSpeed[kMaxBands]   = {};   ///< each band's current run-rate, per band rather than per light so inline
+    uint16_t bandPhase[kMaxBands]   = {};   ///< the BandPhases accumulator
+    uint8_t  lastBpm[kMaxBands]     = {};   ///< the Chaos fix method's previous rate
+    uint8_t  phaseOffset[kMaxBands] = {};   ///< and its carried offset
     unsigned long lastTime                 = 0;    ///< the previous frame's timestamp
 };
 

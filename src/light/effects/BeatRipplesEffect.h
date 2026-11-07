@@ -55,7 +55,6 @@ public:
         cur_.resize(n); prev_.resize(n);
         if (cur_) std::memset(cur_.data(), 0, cur_.bytes());
         if (prev_) std::memset(prev_.data(), 0, prev_.bytes());
-        onsetSeen_ = false;
         started_ = false;
         seq_ = 0;
         // Starts full, so the first drop lands on the opening frame rather than two seconds in.
@@ -74,8 +73,9 @@ public:
         started_ = true;
 
         const AudioFrame* f = AudioService::latestFrame();
-        const bool onsetNow = f && (trigger == kKick ? f->onsetLow != 0 : f->onset != 0);
-        if (onsetNow && !onsetSeen_) {
+        const bool fresh = f->seq != lastSeq_;   // once a frame, by its number
+        lastSeq_ = f->seq;
+        if (fresh && (trigger == kKick ? f->onsetLow != 0 : f->onset != 0)) {
             // The loudest band picks the radius, and the angle walks so successive hits spread out.
             uint8_t loudest = 0, best = 0;
             for (uint8_t b = 0; b < 16; b++) if (f->bands[b] > best) { best = f->bands[b]; loudest = b; }
@@ -89,7 +89,6 @@ public:
             splash(sx, sy, static_cast<int16_t>(-(static_cast<int32_t>(drop) * kSplashScale / 255) * hit / 255));
             seq_++;
         }
-        onsetSeen_ = onsetNow;
 
         // Idle rain, so the surface is alive with no music. Time-paced, not per frame.
         if (rain > 0) {
@@ -113,6 +112,9 @@ public:
         for (uint8_t it = 0; it < steps; it++) waveStep();
         renderSurface(cv, w, h);
     }
+
+    /// How many stones have dropped since the start, for the tests.
+    uint32_t stonesForTest() const { return seq_; }
 
     /// One step of the wave equation, which is what makes ripples pass through each other. @xref{the-wave-equation-and-rendering-by-slope}
     void waveStep() {
@@ -176,7 +178,8 @@ private:
     }
 
     ScratchBuffer<int16_t> cur_{*this}, prev_{*this};   ///< the two height fields, exchanging roles
-    bool     onsetSeen_ = false, started_ = false;
+    bool     started_ = false;
+    uint16_t lastSeq_ = 0;   ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
     uint32_t lastMs_ = 0, carry_ = 2000, seq_ = 0, stepCarry_ = 0;
 };
 

@@ -8,8 +8,16 @@
 
 namespace mm {
 
-/// A synthesized signal for AudioService's `simulate`, so a device demonstrates sound before anything is wired: the bands, the thirds, the level and the peak at time `t`; the caller finishes the bands as it does a measured frame.
-inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep) {
+/// The simulated song's beat period, in milliseconds.
+constexpr uint32_t kSimBeatMs = 600;
+/// The simulated frame's period: a block at the default 24 kHz, as an input makes them, so the smoothing runs at its own rate whatever the render's.
+constexpr uint32_t kSimFrameMs = kAudioBlock * 1000u / 24000u;
+/// Whether a simulated frame is due at `now`, the last made at `prevMs`, 0 before the first.
+constexpr bool simFrameDue(uint32_t now, uint32_t prevMs) { return prevMs == 0 || now - prevMs >= kSimFrameMs; }
+
+/// AudioService's `simulate` signal at time `t`, so a device shows sound before anything is wired: the bands, thirds, level and peak, and the kick as an onset when a beat starts after `prevT`.
+inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep, uint32_t prevT) {
+    f.onset = f.onsetLow = 0;
     if (sweep) {
         // One band lit at a time, stepping bass to treble every 250 ms and wrapping.
         const uint8_t pos = static_cast<uint8_t>((t / 250u) % 16u);
@@ -21,8 +29,9 @@ inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep) {
         f.peakMag = env;
         return;
     }
-    // A plausible song: a beat every 600 ms lifting the bass, each band its own oscillator.
-    const uint8_t beat = (t % 600u < 90u) ? static_cast<uint8_t>(triwave8(static_cast<uint8_t>((t % 600u) * 255u / 90u))) : 0;
+    // A plausible song: a beat every kSimBeatMs lifting the bass, each band its own oscillator; the song knows its kick, so it states it.
+    if (prevT != 0 && t / kSimBeatMs != prevT / kSimBeatMs) f.onset = f.onsetLow = 200;   // a first frame, prevT 0, starts the count
+    const uint8_t beat = (t % kSimBeatMs < 90u) ? static_cast<uint8_t>(triwave8(static_cast<uint8_t>((t % kSimBeatMs) * 255u / 90u))) : 0;
     uint16_t sum = 0;
     for (uint8_t b = 0; b < 16; b++) {
         const uint8_t osc = sin8(static_cast<uint8_t>(t * (1u + b) / 8u + b * 24u));   // the treble flickers faster

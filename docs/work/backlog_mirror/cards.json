@@ -960,16 +960,6 @@
   "number": null
  },
  {
-  "title": "E1.31 multicast never arrives: Network Receive joins no group",
-  "area": "Effects",
-  "module": "",
-  "kind": "Bug",
-  "status": "In review",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=288372206",
-  "number": 216
- },
- {
   "title": "E1.31 multicast receive (IGMP join)",
   "area": "Effects",
   "module": "NetworkReceiveEffect",
@@ -998,16 +988,6 @@
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081692",
   "number": null
- },
- {
-  "title": "Receive several DDP streams on separate ports and mix them in MoonLight (2026-11-04)",
-  "area": "Effects",
-  "module": "NetworkReceiveEffect",
-  "kind": "Feature",
-  "status": "In review",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=295134459",
-  "number": 237
  },
  {
   "title": "Speed up the fluid solver: 4 fps at 128x128, and it is not the divide (2026-09-05)",

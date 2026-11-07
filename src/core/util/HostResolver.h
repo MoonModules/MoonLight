@@ -196,4 +196,22 @@ private:
     }
 };
 
+/// Start the resolver when a parsed host list names a board, here where allocating is allowed.
+inline void startResolverForNames(const Host* hosts, uint8_t n) {
+    for (uint8_t i = 0; i < n; i++)
+        if (hosts[i].isName()) { HostResolver::ensureStarted(); return; }
+}
+
+/// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
+inline void refreshNamedHosts(const char* text, Host* hosts, uint8_t n) {
+    for (uint8_t i = 0; i < n; i++) {
+        if (!hosts[i].isName()) continue;
+        char name[kMaxHostName + 1];
+        hostName(text, hosts[i], name);
+        uint8_t ip[4];
+        const HostResolver::State st = HostResolver::lookup(name, ip);
+        if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(hosts[i].ip, ip, 4);
+    }
+}
+
 }  // namespace mm

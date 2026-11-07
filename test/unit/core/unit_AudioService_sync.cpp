@@ -37,6 +37,7 @@
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
+#include "core/util/MoonLightAudioSyncPacket.h"
 #include "core/util/WLEDAudioSyncPacket.h"
 #include "platform/platform.h"
 
@@ -71,7 +72,7 @@ bool sendLevel(AudioService& a, uint8_t level) {
     AudioFrame peer;
     peer.level = level;
     uint8_t pkt[WLED_SYNC_PACKET_SIZE];
-    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    buildWledAudioSync(pkt, peer);
     platform::UdpSocket tx;
     const uint8_t loopback[4] = {127, 0, 0, 1};
     if (!tx.open() || !tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE)) return false;
@@ -81,6 +82,31 @@ bool sendLevel(AudioService& a, uint8_t level) {
         platform::delayMs(1);
     }
     return false;
+}
+// Send `pkt` to the receiver over loopback and tick until `landed` holds; false when it never does.
+template <typename Pred>
+bool sendUntil(AudioService& a, const uint8_t* pkt, size_t n, Pred landed) {
+    platform::UdpSocket tx;
+    const uint8_t loopback[4] = {127, 0, 0, 1};
+    if (!tx.open() || !tx.sendToAddr(loopback, kTestSyncPort, pkt, n)) return false;
+    for (int i = 0; i < 100; i++) {   // loopback delivery is asynchronous in real time
+        a.tick();
+        if (landed()) return true;
+        platform::delayMs(1);
+    }
+    return false;
+}
+// The first byte a sending board puts on the wire, read by a socket of the test's own on the port.
+int firstByteSent(AudioService& a, platform::UdpSocket& rx) {
+    uint8_t buf[kMlSyncMaxPacket + 8];
+    uint8_t src[4];
+    for (int i = 0; i < 100; i++) {
+        a.tick();
+        const int n = rx.recvFrom(buf, sizeof(buf), src);
+        if (n > 0) return buf[0];
+        platform::delayMs(1);
+    }
+    return -1;
 }
 }  // namespace
 
@@ -211,7 +237,7 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     peer.level = 222; peer.levelSmoothed = 111; peer.peakHz = 660; peer.peakMag = 55;
     for (int i = 0; i < 16; i++) peer.bands[i] = static_cast<uint8_t>(i * 8);
     uint8_t pkt[WLED_SYNC_PACKET_SIZE];
-    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    buildWledAudioSync(pkt, peer);
 
     platform::UdpSocket tx;
     REQUIRE(tx.open());
@@ -230,7 +256,7 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     // The ballistic is ours rather than the packet's, and it survives the whole-frame copy each packet makes.
     CHECK(a.audioFrame()->bandsSmoothed[15] > 80);   // peer.bands[15] is 120; one block of rise
     AudioFrame quiet;                                  // then the peer goes silent
-    buildWledAudioSync(pkt, quiet, /*peak=*/false);
+    buildWledAudioSync(pkt, quiet);
     REQUIRE(tx.sendToAddr(loopback, kTestSyncPort, pkt, WLED_SYNC_PACKET_SIZE));
     bool fell = false;
     for (int i = 0; i < 100 && !fell; i++) {
@@ -240,8 +266,8 @@ TEST_CASE("AudioService Receive: a localhost WLED packet drives frame_, then hol
     }
     CHECK(fell);
     CHECK(a.audioFrame()->bandsSmoothed[15] > 40);   // still falling, not reset by the copy
-    // Named, not just "receiving": the packet came from loopback, so the status has to say so. A receiver that cannot name its source looks identical to one locked onto the wrong device.
-    CHECK(std::strcmp(status(a), "receiving from 127.0.0.1") == 0);
+    // Named, not just "receiving": the packet came from loopback in WLED's format, so the status has to say both. A receiver that cannot name its source looks identical to one locked onto the wrong device.
+    CHECK(std::strcmp(status(a), "receiving WLED from 127.0.0.1") == 0);
 
     // A pure sink with no packet goes stale and falls back to "listening", holding its last frame.
     clk.advance(AudioService::syncFallbackMsForTest() + 20);
@@ -263,7 +289,7 @@ TEST_CASE("AudioService Receive: each packet is a new frame number, the same aud
     AudioFrame peer;
     peer.level = 77;   // the same packet again
     uint8_t pkt[WLED_SYNC_PACKET_SIZE];
-    buildWledAudioSync(pkt, peer, /*peak=*/false);
+    buildWledAudioSync(pkt, peer);
     platform::UdpSocket tx;
     const uint8_t loopback[4] = {127, 0, 0, 1};
     REQUIRE(tx.open());
@@ -326,29 +352,30 @@ TEST_CASE("AudioService Receive: a failed group join still listens for unicast, 
     a.release();
 }
 
-// A router can stop forwarding the group to a member it has not heard from, so the socket announces itself again while silent, paced, and audio arriving holds it off.
-TEST_CASE("AudioService Receive: a silent receiver joins the group again every rejoin interval, a receiving one does not") {
+// A router can stop forwarding a group to a member it has not heard from, so the socket announces itself again while silent, paced, and audio arriving holds it off.
+TEST_CASE("AudioService Receive: a silent receiver joins both groups again every rejoin interval, a receiving one does not") {
     FrozenClock clk(1);
     AudioService a;
     openReceiver(a);
     REQUIRE(a.syncOpenForTest());
-    CHECK(a.syncJoinCountForTest() == 1);
+    CHECK(a.syncJoinCountForTest() == 2);   // MoonLight's group and WLED's
 
     const uint32_t rejoin = platform::UdpSocket::kRejoinMs;
     clk.advance(rejoin - 10);
     a.tick();
-    CHECK(a.syncJoinCountForTest() == 1);   // inside the interval
+    CHECK(a.syncJoinCountForTest() == 2);   // inside the interval
     clk.advance(10);
     a.tick();
-    CHECK(a.syncJoinCountForTest() == 2);   // silent for the whole interval
     a.tick();
-    CHECK(a.syncJoinCountForTest() == 2);   // paced: one join per interval
+    CHECK(a.syncJoinCountForTest() == 4);   // silent for the whole interval: one group a tick, the pair rejoined
+    a.tick();
+    CHECK(a.syncJoinCountForTest() == 4);   // paced: one pass per interval
 
     clk.advance(rejoin - 10);
     REQUIRE(sendLevel(a, 99));
     clk.advance(rejoin - 10);   // past the last join's interval, but audio arrived within it
     a.tick();
-    CHECK(a.syncJoinCountForTest() == 2);
+    CHECK(a.syncJoinCountForTest() == 4);
     a.release();
 }
 
@@ -364,6 +391,7 @@ TEST_CASE("AudioService Receive: a failed group join is retried once silent, and
     platform::setTestJoin(platform::TestJoin::Succeed);
     clk.advance(platform::UdpSocket::kRejoinMs);
     a.tick();
+    a.tick();   // one group a tick, so the pair takes two
     CHECK(std::strcmp(status(a), "listening") == 0);
     a.release();
 }
@@ -441,4 +469,185 @@ TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for the
     b.tick();
     CHECK(std::strcmp(b.syncStatusForTest(), "sending") == 0);
     b.release();
+}
+
+// Between MoonLight boards the whole frame travels: the thirds, the keys, the hits, and the sender's own smoothing, so both boards show the same frame.
+TEST_CASE("AudioService Receive: a MoonLight packet drives the whole frame, the sender's smoothed values kept") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 180; peer.levelSmoothed = 120; peer.gate = 30; peer.gateOpen = true;
+    peer.onsetLow = 99; peer.onset = 99;
+    for (uint8_t i = 0; i < 16; i++) { peer.bands[i] = 200; peer.bandsSmoothed[i] = 17; }
+    peer.thirdsCount = 28;
+    peer.thirds[2] = 210;
+    peer.seq = 500;
+    uint8_t pkt[kMlSyncMaxPacket];
+    const size_t n = buildMoonLightAudioSync(pkt, peer);
+    REQUIRE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->level == 180; }));
+    const AudioFrame& f = *a.audioFrame();
+    CHECK(f.levelSmoothed == 120);
+    CHECK(f.bandsSmoothed[7] == 17);   // the sender's, not a ballistic run again here
+    CHECK(f.thirdsCount == 28);
+    CHECK(f.thirds[2] == 210);
+    CHECK(f.onsetLow == 99);
+    CHECK(f.heard());                  // by the sender's gate
+    CHECK(f.bass == 210);              // derived here from the thirds, which is why the ranges do not travel
+    CHECK(std::strcmp(status(a), "receiving MoonLight from 127.0.0.1") == 0);   // the format named, so a mixed network says which board sends what
+    a.release();
+}
+
+// UDP may deliver a frame twice or late, and a sender with no new frame repeats its last; each is one frame, its hits taken once.
+TEST_CASE("AudioService Receive: a repeated or late MoonLight frame number is dropped, a restarted sender is taken") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 60; peer.seq = 1000;
+    uint8_t pkt[kMlSyncMaxPacket];
+    size_t n = buildMoonLightAudioSync(pkt, peer);
+    REQUIRE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->level == 60; }));
+    const uint16_t first = a.audioFrame()->seq;
+
+    peer.level = 61;                   // the same frame number again, and one behind it
+    n = buildMoonLightAudioSync(pkt, peer);
+    CHECK_FALSE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->seq != first; }));
+    peer.seq = 999;
+    n = buildMoonLightAudioSync(pkt, peer);
+    CHECK_FALSE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->seq != first; }));
+
+    peer.seq = 3;                      // far behind: the sender restarted
+    n = buildMoonLightAudioSync(pkt, peer);
+    CHECK(sendUntil(a, pkt, n, [&] { return a.audioFrame()->level == 61; }));
+    a.release();
+}
+
+// One packet a frame in each format the network needs: the select picks MoonLight's, WLED's or both, MoonLight's first.
+TEST_CASE("AudioService Local+send: syncFormat picks the format sent, and both sends MoonLight's then WLED's") {
+    FrozenClock clk(1);
+    platform::UdpSocket rx;
+    REQUIRE(rx.open());
+    REQUIRE(rx.bind(kTestSyncPort));
+    AudioService a;
+    a.mode = AudioService::kLocalMode;
+    a.send = true;
+    a.addressing = AudioService::kAddressUnicast;
+    std::snprintf(a.hosts, sizeof(a.hosts), "%s", "127.0.0.1");
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    CHECK(a.syncFormat == AudioService::kFormatMoonLight);   // the default
+    clk.advance(AudioService::syncSendIntervalMsForTest() + 5);
+    CHECK(firstByteSent(a, rx) == 'M');
+
+    a.syncFormat = AudioService::kFormatWled;
+    clk.advance(AudioService::syncSendIntervalMsForTest() + 5);
+    CHECK(firstByteSent(a, rx) == '0');                      // WLED's "00002"
+
+    a.syncFormat = AudioService::kFormatBoth;
+    clk.advance(AudioService::syncSendIntervalMsForTest() + 5);
+    CHECK(firstByteSent(a, rx) == 'M');
+    uint8_t second[kMlSyncMaxPacket];
+    CHECK(rx.recvFrom(second, sizeof(second)) == WLED_SYNC_PACKET_SIZE);   // the same frame, sent right after
+    CHECK(second[0] == '0');
+    a.release();
+    rx.close();
+}
+
+// A board switching from a MoonLight sender to a WLED one shows the WLED frame alone, its thirds and keys gone (bench, 2026-11-06).
+TEST_CASE("AudioService Receive: a WLED packet after a MoonLight one carries no thirds or keys of it") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 90; peer.thirdsCount = 28; peer.thirds[4] = 200; peer.notesCount = kAudioNoteKeys; peer.key = 5;
+    uint8_t ml[kMlSyncMaxPacket];
+    REQUIRE(sendUntil(a, ml, buildMoonLightAudioSync(ml, peer), [&] { return a.audioFrame()->level == 90; }));
+    REQUIRE(a.audioFrame()->thirdsCount == 28);
+    clk.advance(AudioService::syncFallbackMsForTest());   // the MoonLight sender gone quiet, so WLED's packet is taken
+    AudioFrame wled;
+    wled.level = 91;
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, wled);
+    REQUIRE(sendUntil(a, pkt, WLED_SYNC_PACKET_SIZE, [&] { return a.audioFrame()->level == 91; }));
+    CHECK(a.audioFrame()->thirdsCount == 0);
+    CHECK(a.audioFrame()->notesCount == 0);
+    CHECK(a.audioFrame()->key == 0);
+    a.release();
+}
+
+// A board sending both formats sends each frame twice: MoonLight's packet outranks WLED's while it arrives, so its thirds and keys stay.
+TEST_CASE("AudioService Receive: a WLED packet beside a streaming MoonLight one is ignored") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 90; peer.thirdsCount = 28; peer.seq = 7;
+    uint8_t ml[kMlSyncMaxPacket];
+    REQUIRE(sendUntil(a, ml, buildMoonLightAudioSync(ml, peer), [&] { return a.audioFrame()->level == 90; }));
+    AudioFrame wled;
+    wled.level = 91;
+    uint8_t pkt[WLED_SYNC_PACKET_SIZE];
+    buildWledAudioSync(pkt, wled);
+    CHECK_FALSE(sendUntil(a, pkt, WLED_SYNC_PACKET_SIZE, [&] { return a.audioFrame()->level == 91; }));
+    CHECK(a.audioFrame()->thirdsCount == 28);
+    CHECK(std::strncmp(status(a), "receiving MoonLight", 19) == 0);
+    a.release();
+}
+
+// Turning send off leaves nothing on the card claiming the board still sends (bench, 2026-11-06).
+TEST_CASE("AudioService Local+send: turning send off clears the sending status") {
+    FrozenClock clk(1);
+    AudioService a;
+    a.mode = AudioService::kLocalMode;
+    a.send = true;
+    a.syncPort = kTestSyncPort;
+    a.applyState();
+    a.tick();
+    REQUIRE(std::strcmp(status(a), "sending") == 0);
+    a.send = false;
+    a.applyState();
+    a.tick();
+    CHECK(std::strstr(status(a), "sending") == nullptr);
+    a.release();
+}
+
+// A MoonLight-format sender without the smoothed bands gets them smoothed here, as a WLED one does, so the bars rise rather than read zero.
+TEST_CASE("AudioService Receive: a MoonLight packet without the smoothed bands is smoothed here") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 70; peer.seq = 9;
+    for (uint8_t i = 0; i < 16; i++) peer.bands[i] = 200;
+    uint8_t pkt[kMlSyncMaxPacket];
+    buildMoonLightAudioSync(pkt, peer);
+    pkt[6] = 1u << kMlSectionCore;   // the core alone
+    REQUIRE(sendUntil(a, pkt, kMlSyncHeaderSize + 1 + kMlSyncCoreSize, [&] { return a.audioFrame()->level == 70; }));
+    CHECK(a.audioFrame()->bandsSmoothed[5] > 80);   // one block of the ballistic's rise toward 200
+    a.release();
+}
+
+// A late frame's hits went in no other packet, since the sender clears them each send, so the next frame carries them rather than losing a drum (review, 2026-11-06).
+TEST_CASE("AudioService Receive: a late MoonLight frame's hit rides in the next frame taken") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 50; peer.seq = 100;
+    uint8_t pkt[kMlSyncMaxPacket];
+    REQUIRE(sendUntil(a, pkt, buildMoonLightAudioSync(pkt, peer), [&] { return a.audioFrame()->level == 50; }));
+    peer.seq = 99; peer.onsetLow = 180; peer.onset = 180; peer.level = 51;   // late, with a kick
+    const size_t lateN = buildMoonLightAudioSync(pkt, peer);
+    CHECK_FALSE(sendUntil(a, pkt, lateN, [&] { return a.audioFrame()->level == 51; }));   // not taken as a frame
+    peer.seq = 101; peer.onsetLow = 0; peer.onset = 0; peer.level = 52;   // the next frame, no hit of its own
+    REQUIRE(sendUntil(a, pkt, buildMoonLightAudioSync(pkt, peer), [&] { return a.audioFrame()->level == 52; }));
+    CHECK(a.audioFrame()->onsetLow == 180);
+    a.release();
 }

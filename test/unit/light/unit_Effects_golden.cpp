@@ -93,7 +93,7 @@ TEST_CASE("time-driven effects render byte-identical frames (migration guard)") 
     SUBCASE("a texture-mapped tunnel flying toward a vanishing point")          { TunnelEffect e;          golden::checkGolden("TunnelEffect", golden::renderHash(e, 16, 16, 1), 0x7b4d4451a3de3887ull); }
     SUBCASE("the previous frame fed back zoomed and rotated, leaving trails")            { EchoEffect e;            golden::checkGolden("EchoEffect", golden::renderHash(e, 16, 16, 1), 0x53d2ba4d4fdf9499ull); }
     SUBCASE("two color fields trade places pixel by pixel")        { DissolveEffect e;        golden::checkGolden("DissolveEffect", golden::renderHash(e, 16, 16, 1), 0xeb7810ca874152bcull); }
-    SUBCASE("shells rise, stall at their apex and burst into falling sparks")       { FireworksEffect e;       golden::checkGolden("FireworksEffect", golden::renderHash(e, 16, 16, 1), 0x5ffbfcab94c90a94ull); }
+    SUBCASE("shells rise, stall at their apex and burst into falling sparks")       { FireworksEffect e;       golden::checkGolden("FireworksEffect", golden::renderHash(e, 16, 16, 1), 0x7636d32bfb3f4b2bull); }
     SUBCASE("balls fall, pile up and shove each other aside")         { BallpitEffect e;         golden::checkGolden("BallpitEffect", golden::renderHash(e, 16, 16, 1), 0xdd4efe1ccba2a4b2ull); }
     SUBCASE("fish swim across the tank, each its own color from the palette")  { FishTankEffect e;  golden::checkGolden("FishTankEffect", golden::renderHash(e, 16, 16, 1), 0x3564663bebacac3aull); }
     SUBCASE("Pacman and the ghosts cross the wall, each ghost its own color")  { PacmanEffect e;  golden::checkGolden("PacmanEffect", golden::renderHash(e, 16, 16, 1), 0x776b749b4d02eb9bull); }

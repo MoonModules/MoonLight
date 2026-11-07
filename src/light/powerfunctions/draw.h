@@ -107,18 +107,20 @@ inline RGB get(const Canvas& cv, Coord3D p) { return detail::readAt(cv, cv.offse
 inline RGB get(const Canvas& cv, size_t index) { return detail::readAt(cv, cv.offsetOf(index)); }
 
 namespace detail {
+/// The end of a line from a to b drawn only `shorten` / 255 of the way, rounded at double resolution; b itself at 255.
+inline Coord3D shortenedEnd(Coord3D a, Coord3D b, uint8_t shorten) {
+    if (shorten == 255) return b;
+    const int bx = ((2 * int(b.x) - 2 * int(a.x)) * int(shorten)) / 255 + 2 * int(a.x);
+    const int by = ((2 * int(b.y) - 2 * int(a.y)) * int(shorten)) / 255 + 2 * int(a.y);
+    const int bz = ((2 * int(b.z) - 2 * int(a.z)) * int(shorten)) / 255 + 2 * int(a.z);
+    return {static_cast<lengthType>((bx + 1) / 2), static_cast<lengthType>((by + 1) / 2), static_cast<lengthType>((bz + 1) / 2)};
+}
+
 /// Walk the pixels of a 3D Bresenham line from a to b, calling `plot` for each.
 template <typename PlotFn>
 inline void walkLine(Coord3D a, Coord3D b, uint8_t shorten, PlotFn plot) {
     if (shorten == 0) return;
-    if (shorten < 255) {
-        const int bx = ((2 * int(b.x) - 2 * int(a.x)) * int(shorten)) / 255 + 2 * int(a.x);
-        const int by = ((2 * int(b.y) - 2 * int(a.y)) * int(shorten)) / 255 + 2 * int(a.y);
-        const int bz = ((2 * int(b.z) - 2 * int(a.z)) * int(shorten)) / 255 + 2 * int(a.z);
-        b = {static_cast<lengthType>((bx + 1) / 2),
-             static_cast<lengthType>((by + 1) / 2),
-             static_cast<lengthType>((bz + 1) / 2)};
-    }
+    b = shortenedEnd(a, b, shorten);
     Coord3D p = a;
     const lengthType dx = b.x > a.x ? static_cast<lengthType>(b.x - a.x) : static_cast<lengthType>(a.x - b.x);
     const lengthType dy = b.y > a.y ? static_cast<lengthType>(b.y - a.y) : static_cast<lengthType>(a.y - b.y);
@@ -635,8 +637,10 @@ inline void fillCircle(const Canvas& cv, lengthType cx, lengthType cy, lengthTyp
 
 // Wu 1991, at roughly twice the writes, so Bresenham stays the default.
 
-/// A 2D anti-aliased line between two integer endpoints (Wu 1991), z taken from `a`.
-inline void lineAA(const Canvas& cv, Coord3D a, Coord3D b, RGB c) {
+/// A 2D anti-aliased line between two integer endpoints (Wu 1991), z taken from `a`, drawn `shorten` / 255 of the way as `line` is.
+inline void lineAA(const Canvas& cv, Coord3D a, Coord3D b, RGB c, uint8_t shorten = 255) {
+    if (shorten == 0) return;
+    b = detail::shortenedEnd(a, b, shorten);
     int x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
     const bool steep = (y1 > y0 ? y1 - y0 : y0 - y1) > (x1 > x0 ? x1 - x0 : x0 - x1);
     if (steep) { std::swap(x0, y0); std::swap(x1, y1); }       // walk the major axis

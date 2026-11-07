@@ -99,7 +99,7 @@ Contrast with signed distance fields below: same shapes, opposite approach, diff
 | `draw::sprite` | Blits one frame of a small palette-indexed bitmap (index 0 = transparent key), clipped at every edge, the multi-color sibling of `glyph`; movement belongs to the particle pool, never to the sprite | FlyingToasters | — |
 | `draw::circle` | A circle outline on integer coordinates, exact and symmetric | *(no caller yet)* | — |
 | `draw::rect`, `fillRect` | An axis-aligned rectangle, outlined or filled | *(no caller yet)* | — |
-| `draw::lineAA` | An anti-aliased line (Wu 1991) that splits its light between the two cells straddling the true path | *(no caller yet)* | — |
+| `draw::lineAA` | An anti-aliased line (Wu 1991) that splits its light between the two cells straddling the true path, shortened as `draw::line` is | PaintBrush | — |
 
 </div>
 
@@ -198,7 +198,8 @@ The 16-bit forms matter here: the 8-bit versions step visibly on a large fixture
 | `atan16` | The angle of a point as a 16-bit turn, smooth enough that a sweep shows no steps on a large fixture | Rings, and the fallback path of every `PolarLut` caller | — |
 | `dist16` | True Euclidean radius, not the octagon `dist8` approximates, and it does not saturate at 255 | Rings, and the fallback path of every `PolarLut` caller | — |
 | `kaleido` | Folds an angle into n mirrored wedges, giving any field n-fold symmetry for one modulo | PolarNoise, Tunnel, Aurora | — |
-| `isqrt` | Integer square root with no divide and no float | PaintBrush, WaterRipple | — |
+| `isqrt` | Integer square root with no divide and no float | Fireworks, PaintBrush, WaterRipple | — |
+| `log2Q8` | log2 in 8.8 fixed point, within 0.09 of an octave: a pitch's place on a log scale | FreqMatrix | — |
 | `sin8` / `cos8` | The 8-bit oscillators, the internal fast path where a mod-256 result is exactly right | *(the 16-bit forms are the contract)* | **Rotate** |
 
 </div>

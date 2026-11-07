@@ -37,14 +37,20 @@ public:
     uint8_t audioGain = 200;
     /// How far the origin wanders from the center; 0 pins it there.
     uint8_t drift = 120;
+    /// The hits a shell fires on, in the `trigger` options' order.
+    enum Trigger : uint8_t { kAnyHit, kKick, kTriggerCount };
+    /// Whether any drum fires a shell, or the kick alone.
+    uint8_t trigger = kAnyHit;
 
-    /// Publish the rhythm, the shell's shape, and how much the room drives it.
+    /// Publish the rhythm, the shell's shape, how much the room drives it, and which hits fire it.
     void defineControls() override {
         controls_.addControl("bpm", bpm, 0, 200);
         controls_.addControl("speed", speed, 1, 255);
         controls_.addControl("thickness", thickness, 1, 255);
         controls_.addControl("audioGain", audioGain, 0, 255);
         controls_.addControl("drift", drift, 0, 255);
+        static constexpr const char* kTriggerOptions[] = {"any hit", "kick"};
+        controls_.addSelect("trigger", trigger, kTriggerOptions, kTriggerCount);
     }
 
     /// Dim what is there, fire a pulse where one is due, then draw every live shell.
@@ -61,10 +67,12 @@ public:
 
         // When: a hit fires at once, and the idle clock fires while the room is quiet.
         const AudioFrame* f = AudioService::latestFrame();
-        const bool heard = f != nullptr && f->onset != 0 && audioGain > 0;
-        if (heard && !onsetSeen_) {
+        const uint8_t hit = trigger == kKick ? f->onsetLow : f->onset;
+        const bool fresh = f->seq != lastSeq_;   // once a frame, by its number
+        lastSeq_ = f->seq;
+        if (fresh && hit != 0 && audioGain > 0) {
             // Strength sets the shell's brightness, so a loud hit reads as a loud one.
-            const uint16_t lift = (static_cast<uint16_t>(f->onset) * audioGain) / 255;
+            const uint16_t lift = (static_cast<uint16_t>(hit) * audioGain) / 255;
             // What color: the dominant frequency, so a bass note and a cymbal differ on sight.
             emit(now, static_cast<uint8_t>(155 + (lift > 100 ? 100 : lift)), hueFromPitch(f->peakHz));
             lastIdle_ = now;   // a beat is a pulse, so the quiet clock waits a full interval after it
@@ -72,7 +80,6 @@ public:
             lastIdle_ = now;
             emit(now, 150, static_cast<uint8_t>(now / 64));   // a slow walk through the palette
         }
-        onsetSeen_ = heard;
 
         // Where: three oscillators whose periods share no factor, so the path never repeats.
         const Coord3D origin{axisCenter(w, now, 9001, 0),
@@ -149,7 +156,7 @@ private:
     uint32_t lastIdle_ = 0;      ///< when the idle clock last fired
     uint32_t lastMs_ = 0;        ///< the previous frame's time, for the wake's half-life
     bool     started_ = false;   ///< the first frame has no previous one to measure against
-    bool     onsetSeen_ = false; ///< an onset is a rising edge rather than a level
+    uint16_t lastSeq_ = 0;      ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
 
     /// Start a shell, taking the oldest slot when every one is busy.
     void emit(uint32_t now, uint8_t strength, uint8_t hue) {

@@ -2,6 +2,8 @@
 
 #include "doctest.h"
 #include "light/effects/SpriteCast.h"
+#include "light/effects/SpriteFountainEffect.h"
+#include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
 
 using namespace mm;
 
@@ -64,4 +66,25 @@ TEST_CASE("Luna and Momo keep their own colors") {
             CHECK(got.r == lens.r); CHECK(got.g == lens.g); CHECK(got.b == lens.b);
         }
     }
+}
+
+// A gated frame is heard by its gate whatever its level, and a band throws a sprite from 40 up: 39 throws none, 40 throws.
+TEST_CASE("the audio fountain, heard by the gate at a low level, throws a band from 40 up") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    AudioFrame& f = audio.frameForTest();
+    f = AudioFrame{};
+    f.gate = 40; f.gateOpen = true; f.levelSmoothed = 0;   // under kHeardLevel: only the gate says sound
+    f.bands[0] = 39;
+
+    EffectOnGrid<SpriteFountainEffect> fx(32, 32);
+    fx.e.audioReactive = true;
+    fx.e.rate = 6;   // every loud band throws: the odds are rate * 3 in 16
+    uint32_t now = 1000;
+    for (int i = 0; i < 4; i++) { platform::setTestNowMs(now += 300); fx.layer.tick(); }   // past several emit beats
+    CHECK(fx.e.inFlightForTest() == 0);
+    f.bands[0] = 40;
+    for (int i = 0; i < 4; i++) { platform::setTestNowMs(now += 300); fx.layer.tick(); }
+    CHECK(fx.e.inFlightForTest() > 0);
+    audio.release();
 }

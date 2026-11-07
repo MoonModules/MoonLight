@@ -48,7 +48,7 @@ The three looks, as each device's preview shows them; the mouth, one light, brea
 | the thrusters | <img src="../../assets/reference/examples/multi-board/legs-thrusters.gif" width="240" alt="The thrusters in the preview: ten plumes of sparks pouring down the legs, white-yellow at the body and red at the tips"> | <img src="../../assets/reference/examples/multi-board/eye-sauron.gif" width="240" alt="The burning eye in the preview: an orange and yellow iris around a black slit, red flames at the rim"> |
 
 The legs device leads: its control surface holds the shared settings, and the eyes and the mouth follow it over OSC.
-Every device hears the same music through WLED audio sync, so legs, eyes and mouth move on the same beat.
+Every device hears the same music through audio sync, so legs, eyes and mouth move on the same beat.
 See it at the [Museumnacht Den Haag](https://museumnachtdenhaag.nl/programma/het-stad-beest-ontwaakt/), where it runs through the night as *Het Stad Beest ontwaakt*.
 
 ---
@@ -321,7 +321,7 @@ Every device joins its WiFi, and the audio source is wired to it by Ethernet, so
 
 | What travels | From, to | How |
 |---|---|---|
-| Audio | the S31 to every device | WLED audio sync, multicast `239.0.0.1`, port 11988 |
+| Audio | the S31 to every device | audio sync in the MoonLight format, multicast `239.0.0.2`, port 11988 |
 | Shared controls | the leader to the eyes | OSC, multicast `239.255.77.78`, port 9001 |
 | The desk | the bridge and the leader | RTP-MIDI, unicast, port 5004 |
 | Discovery | every device | multicast and broadcast |

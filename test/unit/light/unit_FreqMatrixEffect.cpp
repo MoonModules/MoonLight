@@ -40,11 +40,11 @@ struct AudioGuard {
 // Frozen time at which the sweep sits on band 1 with a near-full level.
 constexpr uint32_t kToneMs = 375;
 
-// Converge the mic's smoothed level to a lit value at the frozen time, then return it as the (now) active source. Several ticks let the /4 EMA climb past 254*3/4… so f->levelSmoothed clears the effect's >64 gate deterministically.
+// One simulated frame at the frozen time, the mic then the active source: the smoothed level rises at once, past the effect's gate.
 void driveLoudTone(mm::AudioService& mic) {
     mic.simulate = mm::AudioService::kSimSweep;   // sweep: deterministic single-band sweep
     mm::platform::setTestNowMs(kToneMs);
-    for (int i = 0; i < 20; i++) mic.tick();   // EMA converges toward level 254
+    mic.tick();
     const mm::AudioFrame* f = mm::AudioService::latestFrame();
     REQUIRE(f->peakHz > 80);          // a real tone, above the effect's gate
     REQUIRE(f->levelSmoothed > 64);   // above the effect's brightness/color gate
@@ -61,7 +61,7 @@ TEST_CASE("FreqMatrixEffect paints a lit source pixel from a live tone") {
     GridLayer g(1, 8, 1, 3);
 
     mm::FreqMatrixEffect fx;
-    fx.speed = 255;   // period = 256 - 255 = 1 ms → scrolls on the first tick
+    fx.speed = 255;   // the first tick scrolls one row
     g.layer.addChild(&fx);
     g.layer.applyState();
 
@@ -81,7 +81,7 @@ TEST_CASE("FreqMatrixEffect scrolls the painted pixel one step along Y") {
     GridLayer g(1, 8, 1, 3);
 
     mm::FreqMatrixEffect fx;
-    fx.speed = 255;   // period 1 ms → any millis advance re-scrolls
+    fx.speed = 255;   // 60 rows a second: a row every 16 ms
     g.layer.addChild(&fx);
     g.layer.applyState();
 
@@ -91,7 +91,7 @@ TEST_CASE("FreqMatrixEffect scrolls the painted pixel one step along Y") {
     REQUIRE((r0 > 0 || g0 > 0 || b0 > 0));   // something lit landed at the source
 
     // Advance the clock so the throttle passes again and the sweep still lands a lit band (pos = (t/250)%16 = 1 at t=380, env still high), the column shifts.
-    mm::platform::setTestNowMs(kToneMs + 5);
+    mm::platform::setTestNowMs(kToneMs + 16);
     mic.tick();     // refresh the frame at the new time (still a loud tone on band 1)
     g.layer.tick();   // tick 2: the y=0 color of tick 1 moves up to y=1
 
@@ -138,4 +138,53 @@ TEST_CASE("FreqMatrixEffect survives degenerate grid sizes") {
         g.layer.tick();   // must not crash on 0×0×0 or 1×1×1
     }
     CHECK(true);
+}
+
+// Pitch is logarithmic, so the window spreads over the palette octave by octave: the geometric middle of 50 Hz and 5 kHz, 500 Hz, takes the palette's middle, and a peak past either end takes that end's color.
+TEST_CASE("FreqMatrixEffect spreads the pitch window over the whole palette, octave by octave") {
+    mm::FreqMatrixEffect fx;
+    CHECK(fx.paletteIndex(50) == 0);
+    CHECK(fx.paletteIndex(5000) == 255);
+    CHECK(fx.paletteIndex(500) > 115);
+    CHECK(fx.paletteIndex(500) < 140);
+    CHECK(fx.paletteIndex(30) == 0);
+    CHECK(fx.paletteIndex(9000) == 255);
+    fx.lowHz = 5000; fx.highHz = 50;   // the edges swapped read as the same window
+    CHECK(fx.paletteIndex(500) > 115);
+}
+
+// The scroll keeps its speed at any frame rate: a frame that comes three periods late scrolls three rows, each painted.
+TEST_CASE("FreqMatrixEffect scrolls one row per period elapsed, however few frames come") {
+    mm::AudioService mic;
+    AudioGuard guard{mic};
+    driveLoudTone(mic);
+    GridLayer g(1, 8, 1, 3);
+    mm::FreqMatrixEffect fx;
+    fx.speed = 255;   // a row every 16 ms
+    g.layer.addChild(&fx);
+    g.layer.applyState();
+    g.layer.tick();
+    mm::platform::setTestNowMs(kToneMs + 48);   // three periods later
+    g.layer.tick();
+    auto* data = g.layer.buffer().data();
+    for (int y = 0; y < 3; y++) CHECK((data[y * 3] > 0 || data[y * 3 + 1] > 0 || data[y * 3 + 2] > 0));
+}
+
+// A pause longer than the column resumes the scroll by a row, so the column never turns one color at once.
+TEST_CASE("FreqMatrixEffect resumes after a long pause by one row") {
+    mm::AudioService mic;
+    AudioGuard guard{mic};
+    driveLoudTone(mic);
+    auto litRows = [&] {
+        GridLayer g(1, 8, 1, 3);
+        mm::FreqMatrixEffect fx;
+        g.layer.addChild(&fx);
+        g.layer.applyState();
+        g.layer.tick();   // the first tick, far past the zero time: a pause longer than the column
+        auto* data = g.layer.buffer().data();
+        int lit = 0;
+        for (int y = 0; y < 8; y++) lit += (data[y * 3] > 0 || data[y * 3 + 1] > 0 || data[y * 3 + 2] > 0);
+        return lit;
+    };
+    CHECK(litRows() == 1);
 }

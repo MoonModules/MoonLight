@@ -5,6 +5,7 @@
 #include "light/effects/MovingHeadEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
+#include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
 
 #include <set>
 #include <utility>
@@ -208,4 +209,46 @@ TEST_CASE("a head with no gobo channel is not written past its own channels") {
         CHECK(light[mm::FixtureChannels::kMotionBase + 2] == 0);
         CHECK(light[mm::FixtureChannels::kMotionBase + 3] == 0);
     }
+}
+
+// The frame number is tracked with goboOnBeat off too: turning it on with a hit still in the last frame rolls nothing, and the next frame's hit rolls once (review, 2026-11-06).
+TEST_CASE("turning goboOnBeat on does not replay the hit of a frame already past") {
+    mm::golden::ScopedTestClock clock(1000);
+    mm::AudioService& audio = mm::seat();
+    mm::AudioFrame& f = audio.frameForTest();
+    f.gate = 40; f.gateOpen = true; f.onset = 200;
+    f.seq++;
+
+    mm::EffectOnGrid<mm::MovingHeadEffect> heads(3, 1);   // the roll is counted whatever channels the heads have
+    heads.layer.tick();
+    heads.e.goboOnBeat = true;
+    mm::platform::setTestNowMs(1020);
+    heads.layer.tick();
+    CHECK(heads.e.goboRollsForTest() == 0);
+    f.seq++;   // the next frame, a hit too
+    mm::platform::setTestNowMs(1040);
+    heads.layer.tick();
+    CHECK(heads.e.goboRollsForTest() == 1);
+    audio.release();
+}
+
+// The beat's widening fades by the time since the beat, so it lasts as long at 1000 fps as at 60 (review, 2026-11-07).
+TEST_CASE("a beat's widening fades over the same time at 60 fps and at 1000 fps") {
+    auto leftAfter170ms = [](uint32_t tickMs) {
+        mm::golden::ScopedTestClock clock(1000);
+        mm::AudioService& audio = mm::seat();
+        mm::EffectOnGrid<mm::MovingHeadEffect> heads(3, 1);
+        heads.e.audioReactive = true;
+        mm::AudioFrame beat;
+        beat.gate = 40; beat.gateOpen = true; beat.onset = 200;
+        mm::play(heads, audio, beat, 1000);   // the beat, then frames without one
+        mm::tickFor(heads, 1000, 170, tickMs);
+        const int left = heads.e.beatDecayForTest();
+        audio.release();
+        return left;
+    };
+    const int slow = leftAfter170ms(17), fast = leftAfter170ms(1);
+    CHECK(fast > 100);
+    CHECK(fast < 160);   // about half of 255, half the fade's 340 ms
+    CHECK(std::abs(slow - fast) <= 2);
 }

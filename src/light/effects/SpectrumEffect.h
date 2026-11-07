@@ -2,13 +2,14 @@
 
 #include "core/util/math16.h"              // peakHold, smoothFollow, map32
 #include "light/effects/EffectBase.h"
+#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
 
 namespace mm {
 
 /// An audio analyzer with real meter ballistics: bars rise fast enough to catch a transient and fall slowly enough to read.
 /// @card SpectrumEffect.gif
 ///
-/// A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.
+/// The bars are the third octaves by default, or the sixteen or the piano's keys with `bands`. A peak dot marks the recent maximum and drifts down. The asymmetry is the whole point: a symmetric follower either misses the hit or flickers.
 ///
 /// @attribution IEC 60268-17, WLED
 ///
@@ -32,14 +33,17 @@ public:
     bool    showPeaks = true;
     /// Color each bar by its column rather than by height.
     bool    colorByColumn = false;
+    /// The bars: the sixteen, the third octaves or the piano's keys.
+    uint8_t bands = kBandsThirds;
 
-    /// Publish the ballistics, the peak's decay and the coloring.
+    /// Publish the ballistics, the peak's decay, the coloring and the bars.
     void defineControls() override {
         controls_.addControl("attack", attack, 1, 255);
         controls_.addControl("release", release, 1, 128);
         controls_.addControl("peakDecay", peakDecay, 0, 32);
         controls_.addControl("showPeaks", showPeaks);
         controls_.addControl("colorByColumn", colorByColumn);
+        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
     }
 
     /// Size one follower and one peak per column.
@@ -60,11 +64,12 @@ public:
         const AudioFrame* f = AudioService::latestFrame();
         if (!f) return;   // no audio leaves a dark panel rather than a crash
 
+        const AudioBars bars = barsOf(*f, bands);
         for (lengthType x = 0; x < w; x++) {
-            // The column mapped onto one of the bands, so the analyzer fits any width.
+            // The column mapped onto one of the bars, so the analyzer fits any width.
             const uint8_t band = static_cast<uint8_t>(
-                static_cast<uint32_t>(x) * kBands / static_cast<uint32_t>(w > 0 ? w : 1));
-            const uint8_t mag = f->bands[band];
+                static_cast<uint32_t>(x) * bars.n / static_cast<uint32_t>(w > 0 ? w : 1));
+            const uint8_t mag = bars.mag[band];
 
             // The asymmetry is the point, so rise and fall take separate rates.
             const uint8_t rate = mag > levels_[x] ? attack : release;
@@ -99,7 +104,6 @@ public:
 
 private:
     /// The spectrum's width, which the columns map onto.
-    static constexpr uint32_t kBands = 16;
 
     ScratchBuffer<uint8_t> levels_{*this};   ///< each column's followed bar height
     ScratchBuffer<uint8_t> peaks_{*this};    ///< and its held peak

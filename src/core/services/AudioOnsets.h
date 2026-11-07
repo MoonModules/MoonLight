@@ -183,17 +183,20 @@ struct AudioOnsets {
             bool fire = rangeDetector_[r].feed(flux, nowMs, 3, 2, Bands::kMinFlux);
             if (r == 0) fire = decideKick(fire, rangeRise[0], nowMs);
             if (fire && flux > rangeFired_[r]) rangeFired_[r] = flux > 0 ? flux : 1;
+            if (fire) noteHit(flux, nowMs);
         }
     }
 
     /// When the last kick started, timed by its click where it had one: @xref{the-kick-and-its-click}.
     uint32_t kickStartMs() const { return kickStartMs_; }
 
-    /// The strongest onset each range fired and the bands that fired since the last take into `f`, none while the block's gate is shut, then clear for the next block.
+    /// The strongest onset each range fired, the drum hit they make as the frame's `onset`, and the bands that fired since the last take into `f`, none while the block's gate is shut, then clear for the next block.
     void take(AudioFrame& f, bool gateOpen) {
         f.onsetLow = gateOpen ? rangeFired_[0] : 0;
         f.onsetMid = gateOpen ? rangeFired_[1] : 0;
         f.onsetHigh = gateOpen ? rangeFired_[2] : 0;
+        f.onset = gateOpen ? hitFired_ : 0;
+        hitFired_ = 0;
         for (uint8_t& r : rangeFired_) r = 0;
         bands_.take(f.thirdsHits, gateOpen);
     }
@@ -206,8 +209,9 @@ struct AudioOnsets {
         bands_.reset();
         for (OnsetDetector& d : rangeDetector_) d = OnsetDetector{};
         for (uint8_t& r : rangeFired_) r = 0;
-        clickMs_ = clickStartMs_ = kickMs_ = kickStartMs_ = 0;
-        clicked_ = kicked_ = false;
+        clickMs_ = clickStartMs_ = kickMs_ = kickStartMs_ = hitMs_ = 0;
+        hitFired_ = 0;
+        clicked_ = kicked_ = hit_ = false;
     }
 
 private:
@@ -231,6 +235,12 @@ private:
             if (bands_.firedAt(b, nowMs)) { clickMs_ = nowMs; clickStartMs_ = bands_.startMs(b); clicked_ = true; return; }
     }
 
+    /// One drum hit across the ranges: a range firing within the bass's delay of the last is the same hit, its treble heard first and its bass a filter's delay later, so the frame's `onset` fires once per drum.
+    void noteHit(uint8_t flux, uint32_t nowMs) {
+        const bool same = hit_ && nowMs - hitMs_ <= bands_.delayMs(kBassTopThird) + Bands::kReadMs;
+        if (!same) { hitMs_ = nowMs; hit_ = true; hitFired_ = flux > 0 ? flux : 1; }
+    }
+
     /// The bass's onset `own`, or the bass starting to rise within its fastest band's delay of a click, once a kick: @xref{the-kick-and-its-click}.
     bool decideKick(bool own, float bassRise, uint32_t nowMs) {
         const uint32_t window = bands_.delayMs(kBassTopThird) + Bands::kReadMs;
@@ -246,6 +256,9 @@ private:
     Bands bands_;
     float prevDb_[31] = {};          // each band's last reading
     OnsetDetector rangeDetector_[3];
+    uint32_t hitMs_ = 0;             // when the last drum hit started across the ranges
+    uint8_t hitFired_ = 0;           // that hit's strength, waiting for the next take
+    bool hit_ = false;               // whether a hit has started yet
     uint32_t clickMs_ = 0, clickStartMs_ = 0, kickMs_ = 0, kickStartMs_ = 0;
     uint8_t rangeFired_[3] = {};
     bool clicked_ = false, kicked_ = false;

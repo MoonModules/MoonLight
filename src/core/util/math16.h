@@ -240,6 +240,15 @@ constexpr uint64_t isqrt64(uint64_t x) {
     return last;
 }
 
+/// log2 of `v` in 8.8 fixed point, 0 for v under 2: whole octaves from the top bit, the fraction from the bits below it read linearly, within 0.09 of an octave.
+constexpr uint32_t log2Q8(uint32_t v) {
+    if (v < 2) return 0;
+    uint32_t msb = 0;
+    while ((v >> msb) > 1) msb++;
+    const uint32_t frac = msb >= 8 ? (v >> (msb - 8)) & 0xFF : (v << (8 - msb)) & 0xFF;
+    return (msb << 8) | frac;
+}
+
 constexpr uint32_t isqrt(uint32_t v) {
     uint32_t rem = v, root = 0, bit = 1u << 30;
     while (bit > rem) bit >>= 2;

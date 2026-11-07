@@ -152,3 +152,15 @@ TEST_CASE("GEQ3DEffect handles a grid narrower than numBands") {
     }
     CHECK(leftLit);
 }
+
+// The projector's bar is found by the edges the bars are drawn with, so the faces turn at the bar it stands over (review, 2026-11-06).
+TEST_CASE("GEQ3DEffect finds the bar under every column by the bars' own edges") {
+    for (int cols = 1; cols <= 96; cols++) {
+        for (int n = 1; n <= cols && n <= mm::kAudioNoteKeys; n++) {
+            for (int i = 0; i < n; i++)
+                for (int x = i * cols / n; x < (i + 1) * cols / n; x++)
+                    REQUIRE(mm::GEQ3DEffect::barAt(x, cols, n) == i);
+            REQUIRE(mm::GEQ3DEffect::barAt(cols, cols, n) == n - 1);   // the projector's sweep ends one past the last column
+        }
+    }
+}

@@ -15,9 +15,11 @@
 #include "light/util/Palette.h"
 #include "light/effects/EchoEffect.h"
 #include "light/effects/FireworksEffect.h"
+#include "core/services/AudioService.h"
 #include "platform/platform.h"
 
 #include <cmath>
+#include <memory>
 #include <cstdio>
 #include <string>
 
@@ -25,9 +27,11 @@ using namespace mm;
 
 namespace {
 
-/// Mean lit pixels per frame over `seconds` of SIMULATED time at `fps`.
+/// Mean lit pixels per frame over `seconds` of SIMULATED time at `fps`, with a fresh simulated song, when `withAudio`, producing its frame each tick from the same clock.
 template <typename Make>
-double meanLit(Make make, int fps, int seconds) {
+double meanLit(Make make, int fps, int seconds, bool withAudio = false) {
+    std::unique_ptr<AudioService> audio;   // its own per measurement, so neither rate starts from the other's smoothing
+    if (withAudio) { audio = std::make_unique<AudioService>(); audio->mode = AudioService::kSimMode; audio->setup(); }
     Layouts layouts;
     auto* grid = new GridLayout();
     grid->width = 24; grid->height = 24; grid->depth = 1;
@@ -49,6 +53,7 @@ double meanLit(Make make, int fps, int seconds) {
     for (int f = 0; f < frames; f++) {
         // Start away from zero: platform::millis() treats a test override of 0 as "not set" and falls through to the real clock, which would make the first delta enormous.
         platform::setTestNowMs(100000u + static_cast<uint32_t>(static_cast<long long>(f) * 1000 / fps));
+        if (audio) audio->tick();
         layer.tick();
         const uint8_t* buf = layer.buffer().data();
         int lit = 0;
@@ -57,6 +62,7 @@ double meanLit(Make make, int fps, int seconds) {
         total += lit;
     }
     delete effect;
+    if (audio) audio->release();
     platform::setTestNowMs(0);      // hand the real clock back before the next test sees it
     return static_cast<double>(total) / frames;
 }
@@ -64,7 +70,7 @@ double meanLit(Make make, int fps, int seconds) {
 }  // namespace
 
 TEST_CASE("every effect behaves the same at any framerate") {
-    // Two pieces of PROCESS-WIDE state have to be handed back, or this sweep silently corrupts every test that runs after it. Both were found the hard way: they moved all 23 golden hashes at once, which reads exactly like a rendering regression and is not one.
+    // Two pieces of process-wide state go back, or this sweep corrupts every later test: found when they moved all 23 golden hashes at once, which reads like a rendering regression.
     //   - the test clock, restored per measurement below;
     //   - the active palette, which DemoReelEffect reassigns (`Palettes::setActive`) when its
     //     randomPalette control fires. Every effect reads that global, so a changed palette
@@ -74,36 +80,35 @@ TEST_CASE("every effect behaves the same at any framerate") {
         ~RestoreGlobals() { platform::setTestNowMs(0); Palettes::setActiveDirect(palette); }
     } restore;
 
+    // The simulated song, a function of the clock alone, so the audio effects are measured too rather than dark at both rates.
     int audited = 0;
     forEachEffect([&](const char* name, auto make) {
-        const double slow = meanLit(make, 60, 4);
-        const double fast = meanLit(make, 1200, 4);
+        const double slow = meanLit(make, 60, 4, true);
+        const double fast = meanLit(make, 1200, 4, true);
 
-        // A dark effect at both rates (audio-driven with no input, say) is consistent by definition.
+        // A dark effect at both rates is consistent by definition.
         if (slow < 0.5 && fast < 0.5) { audited++; return; }
 
         INFO("effect: " << std::string(name));
         CAPTURE(slow);
         CAPTURE(fast);
-        // A 20x framerate change must not change how much is happening by more than a third. That band absorbs integration and rounding differences while still catching a frame counter, which shows up as a multiple rather than a percentage.
+        // A 20x framerate change must not move how much is happening by more than a third: that absorbs rounding, while a frame counter shows as a multiple.
         const double ratio = (slow > fast) ? (slow / (fast + 0.01)) : (fast / (slow + 0.01));
-        // Three effects sit outside the band, each recorded rather than hidden by widening it for all 51. This metric counts pixels that are ANY nonzero, so it also moves when the same amount of light is quantised differently across frames, which is not a frame counter.
-        //
-        // RandomEffect (2.31) and StarFieldEffect (1.44): both were migrated onto elapsed time and their PHYSICS is now rate-independent within 0.5% across 60/240/1200 fps (spawns 59.7/60.0/60.0 per second; fade 7679/7710/7720 units per second). What still differs is how the continuous fade quantises between their discrete steps, so a pixel crosses the nonzero threshold at a slightly different time. Random's figure also depends on where the shared RNG has been left by earlier tests (1.93 alone, 2.31 in suite order), which is a property of the effect rather than of this change: it picks its pixels at random, so a different draw sequence lights a different number of distinct cells.
-        //
-        // BlurzEffect (3.57): NOT migrated, and the one genuine open case. Its per-frame `draw::blur` is a COMPOUNDING spatial operation, so the carry pattern that fixed the others does not transfer: blurring twice at half strength is not one blur at full strength. Three attempts each made the ratio worse. Fixing it needs draw::blur itself to become time-aware, which is a shared primitive and its own change.
-        //
-        // BouncingBalls: its MOTION was always rate-independent (ball height comes from absolute wall-clock time); its trail now comes from the Layer and its golden is unchanged.
-        // NebulaEffect (1.36): the same shape as FluidEffect below, for the same reason: its births are placed by an oscillator and paced by a time budget, so a batched frame seeds along a different path than a spread one.
-        //
-        // FluidEffect (1.36): its jets are POSITIONED by an oscillator and poured on a time-paced budget with catch-up. At a low framerate several pours land in one frame, all reading the jet's position at that instant, where a fast device spreads the same pours across the arc. So the dye is laid down along a slightly different path, which is a property of pouring a moving source in batches rather than a rate bug: the pour COUNT is already rate-correct. Surfaced when the oscillator was fixed to advance on absolute time; before that the jets never moved and the paths could not differ.
+        // The effects outside that band, each recorded with its reason rather than hidden by widening it for all: lit cells move with more than a frame counter.
+        struct Band { const char* effect; double band; };
+        static constexpr Band kWider[] = {
+            {"BlurzEffect", 3.70},          // a compounding per-frame blur, the open case: draw::blur has to become time-aware
+            {"FireworksEffect", 2.10},      // a moving light's trail is dots at 60 fps and a filled line at 1200: the sharpness a faster device buys; about 2 in suite order
+            {"LissajousEffect", 1.90},      // the same filled trail
+            {"StarFieldEffect", 1.95},      // the same filled trail
+            {"RandomEffect", 2.40},         // its spawns are discrete, and how many cells it lights follows the shared RNG's state
+            {"FluidEffect", 1.45},          // at a low rate it pours its moving jet in batches, so the dye takes a slightly different path
+            {"NebulaEffect", 1.45},         // its births are placed in batches by an oscillator, as Fluid's pours are
+            {"BouncingBallsEffect", 1.40},  // its motion is wall-clock; its trail rounds differently between the two rates
+        };
         const std::string en(name);
-        const double band = (en == "BlurzEffect")       ? 3.70
-                          : (en == "FluidEffect")       ? 1.45
-                          : (en == "NebulaEffect")      ? 1.45
-                          : (en == "RandomEffect")      ? 2.40
-                          : (en == "StarFieldEffect")   ? 1.50
-                          : (en == "BouncingBallsEffect") ? 1.40 : 1.35;
+        double band = 1.35;
+        for (const Band& b : kWider) if (en == b.effect) band = b.band;
         if (!(ratio < band)) MESSAGE("FRAMERATE " << en << " ratio=" << ratio << " band=" << band);
         CHECK(ratio < band);
         audited++;
@@ -111,10 +116,10 @@ TEST_CASE("every effect behaves the same at any framerate") {
     MESSAGE("audited " << audited << " effects at 60 vs 1200 fps");
 }
 
-// The sweep above measures how much light is on screen, which catches a runaway frame counter but not its opposite: a gate that fires too RARELY still leaves the mean plausible. These pin the two mechanisms directly, at the rate each one was measured broken.
+// The sweep catches a runaway frame counter but not a gate that fires too rarely, which leaves the mean plausible; these pin the two mechanisms at the rate each was measured broken.
 
 TEST_CASE("a feedback trail compounds at the same rate however fast the device renders") {
-    // Echo re-samples its own previous frame, so the pass must run once per elapsed reference frame. Testing it against a whole unit instead of accumulating made the gate fire once per SECOND at 240 fps rather than 60 times, which froze the trail while the source kept orbiting.
+    // Echo re-samples its own previous frame, so its pass runs once per elapsed reference frame; a gate on a whole unit fired once a second at 240 fps and froze the trail.
     const double slow = meanLit([] { return new EchoEffect(); }, 60, 3);
     const double mid  = meanLit([] { return new EchoEffect(); }, 240, 3);
     const double fast = meanLit([] { return new EchoEffect(); }, 1200, 3);
@@ -130,5 +135,5 @@ TEST_CASE("fireworks launch the same number of shells per second at any framerat
     const double fast = meanLit([] { return new FireworksEffect(); }, 1200, 3);
     CAPTURE(slow); CAPTURE(fast);
     CHECK(slow > 0.5);
-    CHECK(fast < slow * 2.0);                // not a sky full of shells
+    CHECK(fast < slow * 2.0);                // not a sky full of shells, which is near 20x; the trails' fill at 1200 fps is about 1.5x
 }

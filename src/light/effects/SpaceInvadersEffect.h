@@ -138,7 +138,7 @@ public:
     /// Magnification per art pixel: 1 on a matrix, 2 or more on a wall.
     uint8_t size = 1;
 
-    /// The formation steps on the beat, and silence holds it still.
+    /// The formation steps on the kick, and silence holds it still.
     bool audioReactive = false;
     /// The cannon, for a fader or an input; idle, the game plays it.
     uint8_t player = 0;
@@ -167,6 +167,8 @@ public:
 
     /// The cannon's left edge in pixels, for tests.
     int16_t cannonForTest() const { return cannonX_; }
+    /// The formation's left edge in pixels, which a march step moves, for tests.
+    int16_t formationForTest() const { return ox_; }
     /// How many cannon shots are in the air, for tests.
     uint8_t cannonShotsForTest() const {
         uint8_t n = 0;
@@ -187,10 +189,13 @@ public:
         if (width() == 0 || height() == 0) return;
         draw::fill(cv, RGB{0, 0, 0});
 
-        const AudioFrame* audio = audioReactive ? AudioService::latestFrame() : nullptr;
-        const bool live = audio && audio->levelSmoothed >= kSilence;
-        // `level` against its own smoothed average: the same beat test the moving-head effect uses.
-        const bool beat = live && audio->level > audio->levelSmoothed + kBeatMargin;
+        // The march steps on the kick, once a frame by its number, since two ticks can read one frame. The number is tracked with `audioReactive` off too, so turning it on never replays a kick already past.
+        const AudioFrame* latest = AudioService::latestFrame();
+        const bool fresh = latest->seq != lastSeq_;
+        lastSeq_ = latest->seq;
+        const AudioFrame* audio = audioReactive ? latest : nullptr;
+        const bool live = audio && audio->heard();
+        const bool beat = fresh && live && audio->onsetLow != 0;
 
         // A held cannon sits where its control says and fires on request; a free one is played, and its control follows it.
         human_ = seat_.held(elapsed());
@@ -215,8 +220,6 @@ private:
     static constexpr uint8_t kCols = 8;
     static constexpr uint8_t kRows = 5;
     static constexpr uint8_t kShots = 6;
-    static constexpr uint16_t kSilence = 8;
-    static constexpr uint16_t kBeatMargin = 8;
 
     /// One rank's species. Rank 0 is the squid at the top, the way the machine dealt them.
     enum : uint8_t { kSquid = 0, kCrab, kOcto };
@@ -253,7 +256,7 @@ private:
         stepFormation();
     }
 
-    /// Steps per minute, rising as the ranks thin, which is the game's defining mechanic.
+    /// Steps per minute, rising as the ranks thin, which is the game's defining mechanic: @xref{the-march-is-the-signature}.
     uint8_t stepInterval() const {
         const uint16_t total = static_cast<uint16_t>(kRows) * kCols;
         const uint16_t left = alive_ == 0 ? 1 : alive_;
@@ -459,6 +462,7 @@ private:
     BeatPhase formation_;
     PlayerSeat seat_;              ///< who holds the cannon
     bool     human_ = false;       ///< this frame's answer, read once
+    uint16_t lastSeq_ = 0;         ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
     bool     firePending_ = false; ///< a press of `fire` waiting for the next frame
 };
 

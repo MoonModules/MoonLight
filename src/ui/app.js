@@ -145,7 +145,8 @@ function connectWs() {
     };
 
     ws.onmessage = (e) => {
-        if (sock !== ws || wsPaused) return;   // ignore a stale socket's late frame
+        // Every frame is applied, the tab hidden or not: the device sends only what changed, so a frame dropped is a change lost for good.
+        if (sock !== ws) return;   // ignore a stale socket's late frame
         // Binary never arrives here: the preview has its own `/wsp` connection (see
         // connectPreview below), so this socket carries only control-plane JSON. A binary frame
         // would mean an older firmware still multiplexing both, so keep handling it.
@@ -239,8 +240,8 @@ function setWsDot(connected) {
 }
 
 // Visibility / bfcache hooks: ONE handler per event (two handlers for the same event is the
-// split-rule trap). wsPaused gates message handling for the interval where a socket is open but
-// the tab just hid.
+// split-rule trap). wsPaused gates the preview's frames for the interval where its socket is open
+// but the tab just hid.
 document.addEventListener("visibilitychange", () => {
     wsPaused = (document.visibilityState === "hidden");
     if (document.hidden) {
@@ -1947,6 +1948,18 @@ function mlLiveEditors(name) {
     return [...set];
 }
 
+/// The number box beside a slider, as wide as the longest number its range holds, so 11647 is not cut to 1164.
+function valueBox(min, max, value) {
+    const box = document.createElement("input");
+    box.type = "number";
+    box.className = "control-value-input";
+    box.min = min;
+    box.max = max;
+    box.value = value;
+    box.style.width = `${Math.max(4, String(min).length, String(max).length)}ch`;
+    return box;
+}
+
 /// Write a module's status, and mark the line it names in every editor showing that script.
 ///
 /// Both render paths (createCard and updateModuleControls) come here, because a rule that lives in
@@ -1955,9 +1968,6 @@ function mlLiveEditors(name) {
 /// the offset counts into. Each returns the same rewritten text, so which one supplies it does not
 /// matter; a module with no editor open shows the raw status unchanged.
 function setStatusText(valEl, mod) {
-    // Every editor on this module marks the line; each returns the same rewritten text, since they
-    // hold the same file. Keeping the first answer rather than the last says that plainly: the
-    // string does not depend on which editor supplied it.
     // Every editor on this module marks the line and returns the SAME rewritten text, since they
     // hold the same file: so mark them all, and take any one answer.
     let text = mod.status;
@@ -3098,12 +3108,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // manual refresh rebuilt the card at a moment when the order happened to work out.
             redrawRangeDecorations(input);
             queueMicrotask(() => redrawRangeDecorations(input));
-            const numInput = document.createElement("input");
-            numInput.type = "number";
-            numInput.className = "control-value-input";
-            numInput.min = input.min;
-            numInput.max = input.max;
-            numInput.value = input.value;
+            const numInput = valueBox(input.min, input.max, input.value);
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;
@@ -3137,12 +3142,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 input.value = Math.max(uMin, Math.min(uMax, Number(ctrl.value ?? 0)));
                 input.dataset.mid = moduleName;
                 input.dataset.key = ctrl.name;
-                const numInput = document.createElement("input");
-                numInput.type = "number";
-                numInput.className = "control-value-input";
-                numInput.min = uMin;
-                numInput.max = uMax;
-                numInput.value = input.value;
+                const numInput = valueBox(uMin, uMax, input.value);
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
                     numInput.value = input.value;
@@ -3230,12 +3230,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             input.value = clamped;
             input.dataset.mid = moduleName;
             input.dataset.key = ctrl.name;
-            const numInput = document.createElement("input");
-            numInput.type = "number";
-            numInput.className = "control-value-input";
-            numInput.min = min;
-            numInput.max = max;
-            numInput.value = input.value;
+            const numInput = valueBox(min, max, input.value);
             input.addEventListener("input", () => {
                 dragTs[key] = Date.now();
                 numInput.value = input.value;

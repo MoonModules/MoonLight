@@ -7,6 +7,7 @@
 #include "light/effects/GEQEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
+#include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
 
 #include <array>
 
@@ -183,4 +184,24 @@ TEST_CASE("GEQEffect survives degenerate grid sizes") {
     CHECK(true);   // no crash at 0×0×0 or 1×1
 
     audio.release();
+}
+
+// The peak dots fall by elapsed time, a row every `ripple` reference frames, so they drop as far at 1000 fps as at 60 (review, 2026-11-07).
+TEST_CASE("GEQEffect's peak dots fall as far at 60 fps as at 1000 fps") {
+    auto peakAfter500ms = [](uint32_t tickMs) {
+        mm::golden::ScopedTestClock clock(1000);
+        mm::AudioService& audio = mm::seat();
+        mm::EffectOnGrid<mm::GEQEffect> geq(16, 32);
+        geq.e.bands = mm::kBands16;
+        mm::AudioFrame loud;
+        for (uint8_t b = 0; b < 16; b++) loud.bands[b] = 255;
+        mm::play(geq, audio, loud, 1000);   // the bars and their peaks at the top, then silence
+        mm::tickFor(geq, 1000, 500, tickMs);
+        const int peak = geq.e.peakForTest(0);
+        audio.release();
+        return peak;
+    };
+    const int slow = peakAfter500ms(17), fast = peakAfter500ms(1);
+    CHECK(slow < 32);   // it fell
+    CHECK(std::abs(slow - fast) <= 1);
 }

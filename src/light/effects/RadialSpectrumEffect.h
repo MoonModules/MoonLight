@@ -27,7 +27,7 @@ public:
     uint8_t persistence = 128;
     /// Read the meter ballistic rather than the raw bands.
     bool    smooth      = false;
-    /// A white shockwave born at the center on every onset.
+    /// A shockwave on each drum hit, in its range's sectors.
     bool    beat        = true;
     /// The polar address: the table, its precision, and the mapping a cube takes.
     PolarLut::Controls polar;
@@ -49,7 +49,6 @@ public:
         head_ = 0;
         carry_ = 0;
         started_ = false;
-        onsetSeen_ = false;
     }
 
     /// Birth any due rings from the current spectrum, then read one out per light.
@@ -63,10 +62,12 @@ public:
 
         const AudioFrame* f = AudioService::latestFrame();
         const uint8_t* src = f ? (smooth ? f->bandsSmoothed : f->bands) : nullptr;
-        // Edge-detected and latched, so a hit landing between two rings is not lost.
-        const bool onsetNow = f && f->onset != 0;
-        if (onsetNow && !onsetSeen_) pendingBeat_ = 255;
-        onsetSeen_ = onsetNow;
+        // Each range's hit, once a frame by its number and latched, so a hit landing between two rings is not lost: the kick flashes the bass sectors, a hat the treble's.
+        if (f->seq != lastSeq_) {
+            const uint8_t hits[3] = {f->onsetLow, f->onsetMid, f->onsetHigh};
+            for (uint8_t r = 0; r < 3; r++) if (hits[r]) pendingBeat_[r] = 255;
+        }
+        lastSeq_ = f->seq;
 
         // A ring on a fixed period, the remainder carried and a stall capped.
         const uint32_t ringMs = 110u - static_cast<uint32_t>(speed);
@@ -77,8 +78,7 @@ public:
             head_ = static_cast<uint16_t>((head_ + 1) % kMaxHistory);
             if (src) std::memcpy(history_[head_], src, 16);
             else     std::memset(history_[head_], 0, 16);
-            beats_[head_] = beat ? pendingBeat_ : 0;
-            pendingBeat_ = 0;
+            for (uint8_t k = 0; k < 3; k++) { beats_[head_][k] = beat ? pendingBeat_[k] : 0; pendingBeat_[k] = 0; }
             born++;
         }
         if (born > 0) carry_ %= ringMs;
@@ -115,8 +115,8 @@ public:
                     const uint32_t v = (static_cast<uint32_t>(history_[slot][band]) * fade_[r]) >> 8;
                     RGB c = colorFromPalette(*Palettes::active(), static_cast<uint8_t>(band * 16u),
                                              static_cast<uint8_t>(v));
-                    // The shockwave, fading with the same age as the ring carrying it.
-                    const uint32_t bw = (static_cast<uint32_t>(beats_[slot]) * fade_[r]) >> 8;
+                    // The shockwave in this band's range, fading with the same age as the ring carrying it.
+                    const uint32_t bw = (static_cast<uint32_t>(beats_[slot][rangeOfThird(kSixteenOfThirds[band])]) * fade_[r]) >> 8;
                     if (bw) {
                         c.r = static_cast<uint8_t>(c.r + bw > 255u ? 255u : c.r + bw);
                         c.g = static_cast<uint8_t>(c.g + bw > 255u ? 255u : c.g + bw);
@@ -129,14 +129,14 @@ public:
 private:
     PolarLut lut_{*this};
     uint8_t  history_[kMaxHistory][16] = {};   ///< the rings: one band frame per step
-    uint8_t  beats_[kMaxHistory] = {};         ///< the shockwave strength born with each ring
+    uint8_t  beats_[kMaxHistory][3] = {};      ///< the shockwave strength born with each ring, per range
     uint8_t  fade_[kMaxHistory] = {};           ///< the keep fraction per ring of age
     uint8_t  fadeFor_ = 255;                    ///< the `persistence` fade_[] was built for
     uint16_t head_ = 0;                         ///< the newest ring
     uint32_t carry_ = 0;                        ///< time owed toward the next ring, in ms
-    uint8_t  pendingBeat_ = 0;                  ///< a hit waiting for the next ring
+    uint8_t  pendingBeat_[3] = {};              ///< each range's hit waiting for the next ring
     bool     started_ = false;      ///< false until a frame has been timed
-    bool     onsetSeen_ = false;    ///< the previous frame's onset, for the edge detect
+    uint16_t lastSeq_ = 0;          ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
     uint32_t lastMs_ = 0;           ///< the previous frame's timestamp
 };
 

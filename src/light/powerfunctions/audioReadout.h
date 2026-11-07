@@ -6,6 +6,26 @@
 
 namespace mm {
 
+/// The bar scales an audio effect picks from, in the `bands` options' order: the sixteen bands, the third octaves, the piano's keys.
+enum BarScale : uint8_t { kBands16, kBandsThirds, kBandsNotes, kBandsCount };
+/// The `bands` option names, in `BarScale` order.
+inline constexpr const char* kBarScaleOptions[kBandsCount] = {"16", "thirds", "notes"};
+
+/// One frame's bars at a scale: their magnitudes, their hits (none for the sixteen), how many, and the scale they came from.
+struct AudioBars {
+    const uint8_t* mag;    ///< one magnitude a bar, 0..255
+    const uint8_t* hits;   ///< a bit a bar, set on the block it was struck; null for the sixteen
+    uint8_t n;             ///< how many bars
+    BarScale scale;        ///< the scale they came from, which may be coarser than the one asked for
+};
+
+/// The bars at the scale `asked`, falling back to the next coarser one a frame does not carry: a frame synced in the WLED format has the sixteen alone, a board with `harmony` off has no keys.
+inline AudioBars barsOf(const AudioFrame& f, uint8_t asked) MM_NONBLOCKING {
+    if (asked == kBandsNotes && f.notesCount > 0) return {f.notes, f.notesHits, f.notesCount, kBandsNotes};
+    if (asked != kBands16 && f.thirdsCount > 0) return {f.thirds, f.thirdsHits, f.thirdsCount, kBandsThirds};
+    return {f.bands, nullptr, 16, kBands16};
+}
+
 /// The per-note hit state the audio-reactive effects share: when each note last struck, a tick and a bit a note, so a frame two ticks read is one hit, told by its `seq`.
 struct NoteHits {
     uint16_t tick[kAudioNoteKeys] = {};  ///< when each note last struck, in 4 ms ticks

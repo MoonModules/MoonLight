@@ -648,12 +648,9 @@ extern "C" inline uint32_t mm_light_noteOnset(const uintptr_t* args, uint32_t, c
 extern "C" inline uint32_t mm_light_chordChange(const uintptr_t*, uint32_t, const uint8_t*) {
     return AudioService::latestFrame()->harmonyChange ? 1 : 0;
 }
-/// True on a transient, by the test the compiled effects use, so a beat means one thing across the project.
+/// True on the frame a drum is heard, the frame's `onset`, so a beat means one thing across the project.
 extern "C" inline uint32_t mm_light_onBeat(const uintptr_t*, uint32_t, const uint8_t*) {
-    const AudioFrame* a = AudioService::latestFrame();
-    constexpr uint16_t kSilence = 8, kBeatMargin = 8;
-    if (a->levelSmoothed < kSilence) return 0;
-    return a->level > a->levelSmoothed + kBeatMargin ? 1 : 0;
+    return AudioService::latestFrame()->onset ? 1 : 0;
 }
 
 /// The one body all five motion builtins share, differing only in the axis they name. ByteArg rather than a raw widen, since an aim below zero would clamp to the opposite extreme.
