@@ -112,7 +112,7 @@ inline AudioFrame noteFrame(uint8_t i, uint8_t mag, bool hit) {
 }
 
 /// A frame whose key `i` is struck at `mag`.
-inline AudioFrame struck(uint8_t i, uint8_t mag = 0) { return noteFrame(i, mag, true); }
+inline AudioFrame struck(uint8_t i, uint8_t mag = 200) { return noteFrame(i, mag, true); }   // loud enough to count on its first frame: NoteConfirm
 
 /// A frame whose note `midi` sounds at `mag`, struck when `hit`.
 inline AudioFrame note(uint8_t midi, uint8_t mag, bool hit = false) { return noteFrame(static_cast<uint8_t>(midi - 21), mag, hit); }

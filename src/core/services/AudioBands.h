@@ -25,6 +25,14 @@ namespace mm {
 ///
 /// The loudest band, refined by a parabola through its decibels and its two neighbors': the textbook peak interpolation, on bands rather than bins. Its readers map it to a hue or a place on a log scale, which this serves.
 ///
+/// It is coarser than a transform's bin in the treble, a band being 2 kHz wide at 10 kHz, and finer in the bass, where a band is narrower than a bin.
+///
+/// ## Two banks
+///
+/// The bars and the onsets read the third octaves, and the harmony reads a semitone bank beside them, limited to 2.5 kHz. A semitone band is a quarter of a third wide and answers about three times slower, 187 ms at 63 Hz against 67, so bars summed from semitones would lag every kick.
+///
+/// Harmony needs nothing above 2.5 kHz and a bank's cost sits in its top octaves, so the two banks cost 2.1 times the third octaves alone, where a full-range semitone bank beside them costs 3.55 times. The notes answer in 115 ms at 110 Hz and 34 ms at 440 Hz, which a chord's pace allows.
+///
 /// ## How an onset is decided
 ///
 /// The textbook decision: flux against its own recent mean, not an absolute threshold, so a loud room and a quiet one fire on the same event. A refractory window makes one hit one onset.
@@ -72,7 +80,7 @@ struct OnsetDetector {
 /// The third-octave bank the bands are measured with.
 using ThirdOctaveBank = FractionalOctaveBank<3>;
 
-/// The semitone bank the harmony is measured with, counted from A440.
+/// The semitone bank the harmony is measured with, counted from A440: @xref{two-banks}.
 using SemitoneBank = FractionalOctaveBank<12>;
 /// The notes' top: harmony lives under it.
 inline constexpr float kSemitoneTopHz = 2500.0f;

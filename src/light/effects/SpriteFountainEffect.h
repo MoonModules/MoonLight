@@ -16,6 +16,8 @@ namespace mm {
 ///
 /// Colors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.
 ///
+/// With `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: Pacman on the kick, a ghost on the snare, a small fish on the hats.
+///
 /// @technical
 ///
 /// ## The `hue` byte carries the sprite kind
@@ -39,7 +41,7 @@ public:
     /// Integer magnification per art pixel.
     uint8_t size = 1;
 
-    /// One sprite per band, so the cast maps onto the spectrum.
+    /// A sprite per loud band, and one per drum hit.
     bool audioReactive = false;
 
     /// Publish the nozzle, the emit clock, the sprite scale and the audio switch.
@@ -69,6 +71,7 @@ public:
         launch_ = BeatPhase{};
         emit_ = BeatPhase{};
         lastEmit_ = 0;
+        lastSeq_ = 0;
         seed_ = 0;
     }
 
@@ -94,7 +97,10 @@ public:
         const uint32_t tick = emit_.phase(2);
         const bool due = tick != lastEmit_;
         lastEmit_ = tick;
-        if (audio) { if (due) emitByBand(*audio, ox, oy, aim, speed); }
+        if (audio) {
+            if (due) emitByBand(*audio, ox, oy, aim, speed);
+            emitOnHits(*audio, ox, oy, aim, speed);
+        }
         else if (due) emitSteady(ox, oy, aim, speed);
 
         // Physics by elapsed time: the pool's verbs take a FrameTime scale, 256 being one 60 fps frame.
@@ -149,6 +155,20 @@ private:
         }
     }
 
+    /// One sprite per drum hit, once a frame however many ticks read it: Pacman on the kick, a ghost on the snare, a small fish on the hats, thrown higher the harder the hit.
+    void emitOnHits(const AudioFrame& audio, draw::pos_t ox, draw::pos_t oy, angle16 aim, draw::pos_t speed) {
+        if (audio.seq == lastSeq_) return;
+        lastSeq_ = audio.seq;
+        const uint8_t hits[3] = {audio.onsetLow, audio.onsetMid, audio.onsetHigh};
+        for (uint8_t r = 0; r < 3; r++) {
+            if (!hits[r]) continue;
+            const draw::pos_t v = static_cast<draw::pos_t>(speed / 2 + (speed * hits[r]) / 512);
+            pool_.angleEmit(ox, oy, aim, v, /*cone=*/3000, /*n=*/1, /*life=*/160, kHitKinds[r], seed_);
+            seed_++;
+        }
+    }
+
+    static constexpr uint8_t kHitKinds[3] = {spritecast::kPac, spritecast::kGhost, spritecast::kTiny};   ///< the sprite each range's hit throws: kick, snare, hats
     static constexpr uint8_t  kBandFloor = 40;   ///< a band under this is not throwing anything
     static constexpr uint8_t  kBandCount = 16;   ///< AudioFrame's spectrum width
 
@@ -179,6 +199,7 @@ private:
     /// The full phase counter: phase() keeps counting, so a narrower latch wraps and fires every frame.
     uint32_t  lastEmit_ = 0;
     particles::FrameTime time_;   ///< the physics clock: one step per reference frame, not per frame
+    uint16_t lastSeq_ = 0;        ///< the audio frame whose hits were last thrown
     uint32_t seed_ = 0;
 };
 

@@ -36,6 +36,7 @@
 /// The port is a test one rather than 11988, since a running desktop app holds the real sync port.
 
 #include "doctest.h"
+#include "core/services/AudioChords.h"   // kChordMajor
 #include "core/services/AudioService.h"
 #include "core/util/MoonLightAudioSyncPacket.h"
 #include "core/util/WLEDAudioSyncPacket.h"
@@ -496,6 +497,25 @@ TEST_CASE("AudioService Receive: a MoonLight packet drives the whole frame, the 
     CHECK(f.heard());                  // by the sender's gate
     CHECK(f.bass == 210);              // derived here from the thirds, which is why the ranges do not travel
     CHECK(std::strcmp(status(a), "receiving MoonLight from 127.0.0.1") == 0);   // the format named, so a mixed network says which board sends what
+    a.release();
+}
+
+// The chord is named from whichever source made the frame, so a receiving board names it from the sender's pitch classes.
+TEST_CASE("AudioService Receive: a received frame's chord is named here, from the sender's pitch classes") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 180; peer.gate = 30; peer.gateOpen = true;
+    peer.chroma[0] = 220; peer.chroma[4] = 200; peer.chroma[7] = 210;   // C, E and G: C major
+    peer.notesCount = kAudioNoteKeys;   // the harmony section travels with the keys, as a board with harmony on sends
+    peer.seq = 600;
+    uint8_t pkt[kMlSyncMaxPacket];
+    const size_t n = buildMoonLightAudioSync(pkt, peer);
+    REQUIRE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->level == 180; }));
+    CHECK(a.audioFrame()->chordRoot == 0);
+    CHECK(a.audioFrame()->chordQuality == kChordMajor);
     a.release();
 }
 

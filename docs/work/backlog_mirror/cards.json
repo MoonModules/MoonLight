@@ -710,6 +710,16 @@
   "number": null
  },
  {
+  "title": "Panel cards over a veth or a bridge: list virtual interfaces after the real NICs, and say so on a NAT bridge (2026-11-07, from Discord)",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=296929668",
+  "number": null
+ },
+ {
   "title": "Preview does not resume after a long tab hibernation (observed once, 2026-08-27)",
   "area": "Drivers",
   "module": "PreviewDriver",
@@ -1617,6 +1627,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085540",
+  "number": null
+ },
+ {
+  "title": "Video in: an HDMI source on the lights through V4L2 capture (2026-11-07, from Discord)",
+  "area": "Platform",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=296929750",
   "number": null
  },
  {

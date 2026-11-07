@@ -159,6 +159,28 @@ TEST_CASE("AudioSpectrumEffect marks the gate a bar wide at its right edge, whit
     CHECK(is(GH - 2 - 1, 255, 0, 0));
 }
 
+TEST_CASE("AudioSpectrumEffect ticks the gate on the level meter where it opens on the level's scale, white while open and red while shut") {
+    constexpr int GW = 32, GH = 10;   // a two-row meter, 30 columns before the square
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true);
+    auto draw = [&](uint8_t levelGate, bool open) {
+        s.audio.tick();
+        mm::AudioFrame& f = s.audio.frameForTest();
+        f.level = 0;                  // the meter dark, so the tick alone shows
+        f.levelGate = levelGate;
+        f.gateOpen = open;
+        s.layer.tick();
+    };
+    constexpr int x = 128 * 30 / 255;   // halfway along the meter
+    draw(128, true);
+    CHECK(is(s.px(x, GH - 1), mm::RGB{255, 255, 255}));
+    CHECK(is(s.px(x, GH - 2), mm::RGB{255, 255, 255}));
+    CHECK_FALSE(lit(s.px(x - 1, GH - 1)));
+    draw(128, false);
+    CHECK(is(s.px(x, GH - 1), mm::RGB{255, 0, 0}));
+    draw(0, false);                   // none measured, as on a synced or simulated frame: no tick
+    for (int c = 0; c < 30; c++) CHECK_FALSE(is(s.px(c, GH - 1), mm::RGB{255, 0, 0}));
+}
+
 TEST_CASE("AudioSpectrumEffect draws no gate for a frame no dynamics measured, or with the readouts off") {
     constexpr int GW = 32, GH = 10;
     Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorSweep, true);

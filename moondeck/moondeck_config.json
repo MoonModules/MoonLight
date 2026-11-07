@@ -96,6 +96,17 @@
       ]
     },
     {
+      "id": "bench_notes",
+      "tab": "desktop",
+      "group": "run",
+      "label": "Notes Report",
+      "help": "bench_notes",
+      "script": "check/bench_notes.py",
+      "args": [
+        "--show"
+      ]
+    },
+    {
       "id": "check_module",
       "tab": "repo",
       "group": "tools",

@@ -37,6 +37,8 @@ struct WindowMinimum {
 ///
 /// Otherwise it shuts after 3 s, so a soft passage near a floor that rose into the music keeps its bars, and a room whose noise sits within the window still goes dark.
 ///
+/// The gate decides only whether there is sound and leaves the scaling to the top, and it reads the RMS the level already computes, so it adds no delay.
+///
 /// The **top** follows the loudest band while there is sound over the close threshold and holds still otherwise; the level keeps a top of its own, since a block's RMS sits over its loudest band.
 ///
 /// ## One window, capped by the room
@@ -89,6 +91,8 @@ struct AudioDynamics {
     uint8_t toByte(float db) const { return gateOpen ? position(db, topDb, roomBandFloorDb) : 0; }
     /// The level in dBFS through its own window, 0 while the gate is shut.
     uint8_t levelToByte(float db) const { return gateOpen ? position(db, levelTopDb, floorDb) : 0; }
+    /// Where the gate opens on the level's own scale, the one `levelToByte` draws on, at least 1 so a frame tells a measured gate from none.
+    uint8_t levelGateToByte() const { const uint8_t at = position(floorDb + squelchDb, levelTopDb, floorDb); return at ? at : 1; }
     /// Where the gate opens on the bands' scale, the one `toByte` draws on, at least 1 so a frame tells a measured gate from none, whether open or shut.
     uint8_t gateToByte() const { const uint8_t at = position(bandFloorDb + squelchDb, topDb, roomBandFloorDb); return at ? at : 1; }
 

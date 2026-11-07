@@ -43,6 +43,7 @@ UI_DIR = SCRIPTS_DIR / "moondeck_ui"
 BUILD_PAGES = {
     "/api/history-report": ("build/history.md", "run the History Report button first."),
     "/api/tempo-view": ("build/tempo/view.md", "a run of bench_tempo.py makes it."),
+    "/api/notes-view": ("build/notes/view.md", "a run of bench_notes.py makes it."),
 }
 ASSETS_DIR = ROOT / "docs" / "assets"
 STATE_FILE = SCRIPTS_DIR / "moondeck.json"

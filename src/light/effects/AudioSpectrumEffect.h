@@ -10,7 +10,7 @@ namespace mm {
 ///
 /// The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.
 ///
-/// `readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each drum's hit, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the three strongest classes at the top left, "C E G", and the key with its tuning at the right, "Am +12".
+/// `readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with the gate's tick and a square for each drum's hit, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the three strongest classes at the top left, "C E G", and the key with its tuning at the right, "Am +12".
 ///
 /// @attribution Andrew Tuline, troyhacks
 ///
@@ -28,7 +28,9 @@ namespace mm {
 ///
 /// The bass, mids and treble each draw as a gray line across their own bars at their level, a silent one on the bottom row, so all three always show; a line flashes white on its range's own hit. On the third octaves and the keys each bar's top row flashes white on its own hit, so a tom fill sweeps across the bars and a key flashes as it is struck.
 ///
-/// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square split in three for the range hits: kick red, snare amber, hats blue. With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
+/// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square split in three for the range hits: kick red, snare amber, hats blue. A one-column tick on the meter is where the gate opens on the level's own scale, white while open and red while shut.
+///
+/// With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
 ///
 /// ## The instrument
 ///
@@ -99,7 +101,7 @@ public:
         // Each bar's own hit, where the bars are the bands that carry them.
         const uint8_t* hits = !readouts || h == 1 ? nullptr : bars.hits;
         if (hits) markBarHits(hits, n, ms);
-        if (levelRows) drawLevelMeter(cv, f->level, specH, ms);
+        if (levelRows) drawLevelMeter(cv, *f, specH, ms);
         if (pitchRows) drawPitchClasses(cv, f->chroma, pitchRows, ms < changeUntilMs_);
 
         // The bars sit on the level meter, or on the floor without one.
@@ -166,11 +168,11 @@ private:
         }
     }
 
-    /// The level meter on the rows from `top` down: the raw level across the palette, since a lag is wrong for judging response, and at its right end a square, red while a hit shows.
-    void drawLevelMeter(const draw::Canvas& cv, uint16_t level, lengthType top, uint32_t ms) MM_NONBLOCKING {
+    /// The level meter on the rows from `top` down: the raw level across the palette, as a lag is wrong for judging response, the gate's tick, and a square per range's hit.
+    void drawLevelMeter(const draw::Canvas& cv, const AudioFrame& f, lengthType top, uint32_t ms) MM_NONBLOCKING {
         const lengthType side = static_cast<lengthType>(height() - top);
         const lengthType w = width() > side ? static_cast<lengthType>(width() - side) : 0;   // the meter stops short of the square
-        const lengthType litW = static_cast<lengthType>(static_cast<uint32_t>(level > 255 ? 255 : level) * w / 255u);
+        const lengthType litW = static_cast<lengthType>(static_cast<uint32_t>(f.level > 255 ? 255 : f.level) * w / 255u);
         const lengthType sq = static_cast<lengthType>(width() - w);
         for (lengthType y = top; y < height(); y++) {
             draw::bar(cv, 0, y, litW, draw::Grow::Right, [w](lengthType x) {
@@ -182,6 +184,13 @@ private:
                 if (ms < rangeUntilMs_[r]) draw::pixel(cv, {static_cast<lengthType>(w + x), y, 0}, kHitColors[r]);
             }
         }
+        if (f.levelGate && w > 0) drawLevelGate(cv, f.levelGate, f.gateOpen, top, w);
+    }
+
+    /// The gate's tick on the `w` columns of level meter from row `top` down, where the gate opens on the level's scale: white while open, red while shut.
+    void drawLevelGate(const draw::Canvas& cv, uint8_t levelGate, bool open, lengthType top, lengthType w) MM_NONBLOCKING {
+        const lengthType x = static_cast<lengthType>(std::min<uint32_t>(static_cast<uint32_t>(levelGate) * w / 255u, w - 1u));
+        for (lengthType y = top; y < height(); y++) draw::pixel(cv, {x, y, 0}, open ? RGB{255, 255, 255} : RGB{255, 0, 0});
     }
 
     /// The dominant frequency as a white mark `barW` wide along the bars' top row `y`, centered where it sits on the bars' axis.

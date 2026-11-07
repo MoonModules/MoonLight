@@ -678,3 +678,11 @@ A UART that reads and writes a byte stream, as a platform seam with MoonLive bui
 **Open**
 - Delivery beyond a polled buffer: a callback per byte, line or frame; a line or frame mode for NMEA and radar packets; passing the stream through to the network.
 - Whether the input-mapping plan takes it as a step, with the LD2450 as its bench sensor. The plan's sensor table has no UART row yet; [the input-mapping design study](../../design/input-mapping.md) names the radar's need for it.
+
+### Video in: an HDMI source on the lights through V4L2 capture (2026-11-07, from Discord)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=296929750)
+
+A USB HDMI grabber (UVC) and an RK3588's HDMI input both appear on Linux as V4L2 capture devices. Platform: open the device, stream frames by mmap, YUYV first, since cheap grabbers' MJPEG at 1080p needs a JPEG decoder. Light domain: a Video In effect scaling the picture onto the layer, an HDMI source or a screen on the lights. Later: macOS (AVFoundation) and Windows (Media Foundation).
+
+Test with a USB grabber on the NanoPi R3S-LTS; an RK3588 board with HDMI in is in the community. Check whether the RK3588's HDMI input needs Rockchip's kernel or works on mainline Linux before promising it.

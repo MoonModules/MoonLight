@@ -45,9 +45,13 @@ namespace mm {
 ///
 /// Each stage filters its waiting samples a section at a time, three bands side by side with their coefficients and state in registers: one chain waits on its own feedback every sample, three independent ones overlap. A stage hands every second sample on.
 ///
+/// Every octave runs at the rate it needs, so the work per input sample is the same at any rate, about 33 sections, and half the rate is half the work. Fed a sample at a time the bank costs three to four times more, and esp-dsp's generic Xtensa biquad kernel more still, so the sections are plain C.
+///
 /// ## The detector
 ///
 /// A band's power is its filter's output squared through a one-pole low-pass of 10 ms, the same in every band, so all bars rise and fall alike and only a narrow filter's own ringing slows the bass; the display's ballistics shape the decay.
+///
+/// At 20 Hz the detector holds less than a cycle, and telling 20 Hz from 25 Hz takes about 0.2 s of signal whatever the method, so the lowest bands jitter and answer slowly.
 ///
 /// ## Each band's delay
 ///

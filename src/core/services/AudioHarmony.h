@@ -207,6 +207,8 @@ private:
 /// A note's offset is the parabola through its band and its two neighbors in dB, the position of its peak; a sine 40 cents sharp reads 34, 20 reads 15, so the reading is three quarters of the offset and of the right sign.
 ///
 /// Offsets are averaged on the circle, a note 50 cents sharp being 50 flat of the next, weighted by power, so a recording's many notes outvote one out-of-tune one. AudioService retunes the bank by the reading once it holds over 10 cents for 10 s; the residual shrinks to a quarter each time.
+///
+/// The precedent is the Chroma Toolbox (Müller and Ewert, ISMIR 2011), a multirate bank on the piano's pitches whose copies shifted by fractions of a semitone serve recordings off A440; one bank retuned by the reading serves the same end.
 struct TuningEstimator {
     /// One block of the bank's notes; answers the reading in cents, -50..50, 0 before any strong note: @xref{reading-the-tuning}.
     float update(const SemitoneBank& bank, bool gateOpen, float dtMs) {

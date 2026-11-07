@@ -15,7 +15,15 @@
 
 namespace mm {
 
-/// The analysis of an open input, which AudioService allocates in internal RAM as the input opens and frees as it closes, so a mode without an input holds none of it.
+/// The analysis of an open input, which AudioService allocates in internal RAM as the input opens and frees as it closes, so a mode without an input holds none of it: @xref{what-the-analysis-costs}.
+///
+/// @technical
+///
+/// ## What the analysis costs
+///
+/// The card's `cpu` is the analysis's share of one core over the last second. The third octaves take 3.6% of a P4 core and 7.2% of an S3's at 24 kHz, and 8.2% of a classic ESP32's at 22,050 Hz; at 48 kHz each share doubles, the work per sample being the same at any rate.
+///
+/// The semitone bank adds about 1.3 times the third octaves' share, and the onsets 5 to 7 points of a core, so with `harmony` on the analysis takes about 14%, 22% and 26%.
 struct AudioAnalysis : platform::InternalRamObject {
     int32_t samples[kAudioBlock] = {};  ///< fixed hot-path scratch, sized once
     size_t filled = 0;                  ///< samples accumulated toward the next full block

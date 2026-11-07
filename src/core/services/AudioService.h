@@ -13,6 +13,7 @@
 #include "core/services/AudioBands.h"
 #include "core/services/AudioDynamics.h"   // the level, floor, gate and window
 #include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
+#include "core/services/AudioChords.h"     // ChordTracker: the chord named from them
 #include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
 #include "core/services/AudioAnalysis.h"   // the state an open input and `harmony` hold
 #include "core/util/MoonLightAudioSyncPacket.h"   // the MoonLight audio-sync format (send/receive)
@@ -392,15 +393,9 @@ public:
         // Receiving is a pure sink; sending produces the frame first, then sends it with the hits since the last packet.
         const Sync s = sync();
         const bool open = s != kSyncNone && syncEnsureSocket();   // lazy-open once the network is up
-        if (s == kSyncReceive) {   // with no socket yet, still never runs the local mic
-            if (open) syncReceive();
-            return;
-        }
-        const bool fresh = produceFrame();
-        if (open) {
-            if (fresh) syncHits_.add(frame_);
-            syncSend();
-        }
+        if (s == kSyncReceive) { if (open) syncReceive(); }   // with no socket yet, still never runs the local mic
+        else if (const bool fresh = produceFrame(); open) { if (fresh) syncHits_.add(frame_); syncSend(); }
+        chords_.name(frame_);   // from whichever source made the frame, so a receiving board names the chord too
     }
 
     /// This tick's frame from the synthesizer or the local input, true when one is new.
@@ -495,6 +490,7 @@ public:
         w.thirdsCount = bankToBands(a.bank, levelDb, a.blockMs, a.dyn, w.thirds, w.bands, peakHz, peakMag);
         w.level = a.dyn.levelToByte(levelDb);
         w.gate = a.dyn.gateToByte();
+        w.levelGate = a.dyn.levelGateToByte();
         w.gateOpen = a.dyn.gateOpen;
         a.onsets.take(w, a.dyn.gateOpen);   // the block's own gate, decided by its own level
         analyzeHarmony();
@@ -554,7 +550,7 @@ public:
         mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
                      levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
                      topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
-        // The bands' microseconds this second, ten thousand of them a percent of one core.
+        // The bands' microseconds this second, ten thousand of them a percent of one core, the shares per chip in AudioAnalysis.h.
         mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
                      static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
                      static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
@@ -657,6 +653,7 @@ private:
     std::atomic<uint32_t> micNonzero1s_{0};
     bool     micStatusStale_ = false;
 
+    ChordTracker chords_;   ///< the chord named from each frame's pitch classes
     /// The audio sync socket, either format: one, bound only in Send/Receive.
     platform::UdpSocket syncSock_;
     uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)

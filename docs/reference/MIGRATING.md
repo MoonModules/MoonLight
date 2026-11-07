@@ -37,6 +37,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 A sending board now sends the MoonLight format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. The MoonLight format multicasts to its own group, `239.0.0.2`, and WLED's stays on `239.0.0.1`. WLED does not read the MoonLight format, so a board feeding WLED devices picks `WLED` or `both`; WLED's packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
 
+### Keyboard and Strings show the notes a player could play
+
+**Action: *re-set a control*: `notes` to `all` on a Keyboard or Strings that should show every note the engine hears.**
+
+Keyboard and Strings gain a `notes` select, `hands` by default: a weak note an octave, a twelfth or two octaves above a louder one is dropped as its overtone, and one a semitone or two beside a louder one as its leak, Keyboard keeps what two hands of five fingers within a tenth could play, its top half following the left hand and its bottom half the right in place of the octaves and the circles, and Strings plays each note at one string and fret within the fretting hand's reach, one note a string, with a strum flashing across the strings by the bridge and a bow line on a bowed violin or cello string. `no overtones` drops the overtones alone, and `all` shows every note as before. A new `chord` checkbox, off by default, keeps only the chord being played: on Keyboard under `hands` for a hand holding three keys or more, a hand playing a line keeping its notes, on Strings under `hands` as the chord's shape; the note names now show the chord beside the key. Keyboard's `auto`, the detected key picking the shown octaves, is on by default.
+
 ### Freq Matrix spreads the pitch over the whole palette
 
 **Action: *re-set a control*: `lowHz` and `highHz` on a Freq Matrix whose `lowBin` or `highBin` you tuned.**

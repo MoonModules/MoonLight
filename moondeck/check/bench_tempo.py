@@ -116,15 +116,15 @@ def probe(path: Path) -> tuple[str, float | None, str]:
     return "", bpm, str(tags.get("genre", "")).replace(";", ",").split(",")[0].strip()
 
 
-def analyze(path: Path, exe: Path) -> dict:
-    """Decode one file with FFmpeg, run it through mm_tempo, and return its frames and audio hash.
+def analyze(path: Path, exe: Path, flags: tuple = (), cast=int) -> dict:
+    """Decode one file with FFmpeg, run it through mm_tempo with `flags`, and return its frames, each column through `cast`, and its audio hash.
 
     FFmpeg's messages go to a file, not a pipe: a damaged file can write hundreds of kilobytes of them, which would fill a pipe and stall the decode. Good files decode with none, so any message marks the file damaged.
     """
     with tempfile.TemporaryFile() as errors:
         dec = subprocess.Popen(["ffmpeg", "-v", "error", "-nostdin", "-i", str(path), "-ac", "1", "-ar", str(RATE),
                                 "-f", "s32le", "-"], stdout=subprocess.PIPE, stderr=errors)
-        run = subprocess.Popen([str(exe), "--rate", str(RATE)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        run = subprocess.Popen([str(exe), "--rate", str(RATE), *flags], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL)
         digest = hashlib.sha256()
         # The hash names the track in a private report; it is taken from the decoded audio, never the path.
@@ -161,7 +161,7 @@ def analyze(path: Path, exe: Path) -> dict:
         if line.startswith("#"):
             header = dict(field.split("=", 1) for field in line[1:].split())
             continue
-        frames.append([int(v) for v in line.split("\t")])
+        frames.append([cast(v) for v in line.split("\t")])
     # The frame rate is the binary's own rate over its own block, as its header states them.
     return {"columns": header["columns"].split(","), "fps": int(header["rate"]) / int(header["block"]),
             "frames": frames, "hash": digest.hexdigest()[:16]}
@@ -360,13 +360,20 @@ def generate(target: Path) -> None:
     print(f"Wrote {len(rows)} tracks and labels.csv to {target}")
 
 
-def generated_set() -> Path:
-    """The generated set's folder, written again when missing or made by an older generator."""
-    gen = (OUT_DIR / "generated").resolve()
+def generated_set(out: Path | None = None, version: str | None = None, write=None) -> Path:
+    """A generated set's folder under `out`, written again by `write` when missing or made by an older generator than `version`; this harness's own by default, bench_notes passing its."""
+    gen = ((out or OUT_DIR) / "generated").resolve()
     stamp = gen / "version.txt"
-    if not stamp.exists() or stamp.read_text(encoding="utf-8").strip() != GENERATED_VERSION:
-        generate(gen)
+    if not stamp.exists() or stamp.read_text(encoding="utf-8").strip() != (version or GENERATED_VERSION):
+        (write or generate)(gen)
     return gen
+
+
+def show_latest(out: Path, view_url: str, what: str, how: str) -> None:
+    """Point MoonDeck's View pane at the latest `what` report in `out`, or stop saying `how` a run makes one."""
+    if not (out / "view.md").exists():
+        sys.exit(f"No {what} report yet: a run from the command line makes one, {how}")
+    print(f"MOONDECK_VIEW: {view_url}")
 
 
 # ---------------------------------------------------------------- running
@@ -485,10 +492,7 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.show:
-        if not (OUT_DIR / "view.md").exists():
-            sys.exit("No tempo report yet: a run from the command line makes one, "
-                     "uv run moondeck/check/bench_tempo.py --generated")
-        print(f"MOONDECK_VIEW: {VIEW_URL}")
+        show_latest(OUT_DIR, VIEW_URL, "tempo", "uv run moondeck/check/bench_tempo.py --generated")
         return
     if args.generate:
         generate(args.generate)

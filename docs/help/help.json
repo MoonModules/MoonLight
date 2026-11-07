@@ -695,7 +695,7 @@
   },
   "AudioSpectrumEffect": {
    "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with the gate's tick and a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -833,11 +833,17 @@
   },
   "KeyboardEffect": {
    "line": "A piano keyboard across the lights in two halves: the top shows the selected octaves with each pressed key in its palette color, the bottom the same ivory and ebony picture with one small circle per octave row on every key.",
-   "summary": "The mic's semitone bands are the piano's keys from A0 up; `octave` and `octaves` pick the octaves the top half shows (`auto` lets the detected key pick the first shown key), ivory letters run along the bottom edge, each circle row on the bottom labeled with its octave at the left, and `noteNames` writes the strongest pitch classes and the key at the top corners.",
+   "summary": "The mic's semitone bands are the piano's keys from A0 up; `octave` and `octaves` pick the octaves the top half shows (`auto` lets the detected key pick the first shown key), ivory letters run along the bottom edge, each circle row on the bottom labeled with its octave at the left, and `noteNames` writes the strongest pitch classes and the key at the top corners.\n\nWith `chord` on, every tone of the named chord glows dim in its palette hue across the keys shown, and the played keys stay bright over it.\n\n`notes` on `hands` shows what two hands could play, at most five keys a hand, each hand within a tenth: the top half follows the left hand's reach and the bottom half the right's, in place of the octaves and the circles, so `auto`, `octave` and `octaves` hide.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/KeyboardEffect.gif",
    "controls": {
     "ivory": {
      "line": "How bright the ivory rests between notes, 0 for dark."
+    },
+    "notes": {
+     "line": "All notes heard, without overtones, or what hands could play."
+    },
+    "chord": {
+     "line": "Keep only the notes of the chord being played."
     },
     "auto": {
      "line": "The detected key picks the first shown key."
@@ -863,12 +869,18 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#keyboardeffect"
   },
   "StringsEffect": {
-   "line": "A stringed instrument in its rounded wooden enclosure across the lights, each sounding note lighting its string at the fret it is played: a fingerboard with numbered frets, one snare per string at the bridge with its open note named, and the instrument's own emblem beside it.",
-   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, snares and body emblem; guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up on every string and fret that plays them, a struck note flashing over `decay`.",
+   "line": "A stringed instrument across the lights, laid out as the real one: the body at the left with its bridge, where the strings are plucked, strummed or bowed, the fingerboard with its frets closing in toward the body, and the head at the right naming each open string. Each sounding note lights its string where a finger stops it.",
+   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, bridge and body: a sound hole, a pickup, or f-holes with a tailpiece. Guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up where they are played, a struck note flashing over `decay`.\n\nUnder `notes` `hands` a note lights at one place, one note a string, within the fretting hand's reach.\n\nA plucked or bowed string lights cyan from the bridge to where it is stopped, the part that sounds; a strum flashes across the strings where they are struck; on violin and cello the bow crosses the strings by the bridge, moving while it bows. Under the other levels a note lights every string and fret that can play it.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/StringsEffect.gif",
    "controls": {
     "instrument": {
      "line": "Guitar, bass, violin or cello."
+    },
+    "notes": {
+     "line": "All notes heard, without overtones, or what hands could play."
+    },
+    "chord": {
+     "line": "Keep only the notes of the chord being played."
     },
     "decay": {
      "line": "How long a struck note glows, in tens of milliseconds."
@@ -2587,7 +2599,7 @@
   },
   "SpriteFountainEffect": {
    "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
-   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.",
+   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.\n\nWith `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: Pacman on the kick, a ghost on the snare, a small fish on the hats.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpriteFountainEffect.gif",
    "controls": {
     "lift": {
@@ -2606,7 +2618,7 @@
      "line": "Integer magnification per art pixel."
     },
     "audioReactive": {
-     "line": "One sprite per band, so the cast maps onto the spectrum."
+     "line": "A sprite per loud band, and one per drum hit."
     }
    },
    "role": "effect",

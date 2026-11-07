@@ -277,6 +277,16 @@ Today the card's configuration (panel size, panel count, scan, driver IC) is wri
 
 The route: capture what LEDVision sends while it writes a known configuration (Wireshark on the card's Ethernet), decode the frames, and replay them. [REA](https://github.com/morluto/rea) (MIT) does the decode step: its packet mode reads the capture through TShark and reports repeated values and field candidates, run from the terminal (`npx rea-agents …`) rather than installed into the agent's configuration. Its static .NET inspection could read how LEDVision builds the frames, if LEDVision is .NET and its license allows it. Then replay them from PanelCardDriver as a "configure card" action taking the wall's panel size, count, scan and IC. Reading the configuration back (the "read the wall layout" ask above) shares the same decoding. The firmware path stays with LED Upgrade: a bad write bricks a card, which a configuration write does not. Ask before building: it needs a card on the bench and a Windows machine running LEDVision for the capture.
 
+### Panel cards over a veth or a bridge: list virtual interfaces after the real NICs, and say so on a NAT bridge (2026-11-07, from Discord)
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=296929668)
+
+A request on Discord: the panel card driver should work from a container on veth networking, not only with host networking.
+
+The driver itself binds and sends on any interface; the one gate is the Linux interface picker, which skips names starting with `veth`, `docker`, `br-` and `virbr` (platform_desktop.cpp). That filter was written against macOS's virtual interfaces and Docker's default NAT bridge. A veth or a bridge is a valid path when the bridge also holds the physical NIC, a common Podman and libvirt setup, and raw frames then reach the card; a macvlan or ipvlan L2 network works too.
+
+Do: list those interfaces on Linux after the physical NICs, marked "(virtual)", so the real adapters stay on top and a container's veth or a host bridge can be picked. For the cases that cannot reach a card, Podman's default NAT bridge and rootless networking (pasta, slirp4netns, no Ethernet layer), the driver's status says so instead of sending into nothing. Document the bridge, macvlan and ipvlan setups in the Linux container install page with the Podman and Docker commands.
+
 ## ParlioPeripheral
 
 ### A '595 expander on Parlio
