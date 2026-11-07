@@ -259,6 +259,7 @@ nav:
           - MHC-WLED ESP32-P4 shield: reference/hardware/mhc-wled-esp32-p4-shield.md
           - Waveshare ESP32-P4-ETH: reference/hardware/esp32-p4-eth.md
           - Teensy 4.1: reference/hardware/teensy-4-1.md
+          - NanoPi boards: reference/hardware/nanopi-boards.md
           - Light fixtures and DMX nodes: reference/hardware/light-fixtures.md
           - Control surfaces: reference/hardware/control-surfaces.md
           - LED drivers: reference/hardware/led-drivers.md

@@ -73,8 +73,8 @@ public:
         const AudioFrame* f = AudioService::latestFrame();
         const uint32_t ms = elapsed();
         // The bass added to every endpoint's rate; the angle from elapsed time, the original's scatter, or from the bank's accumulated phase.
-        mags_ = glide ? f->bandsSmoothed : f->bands;
-        const uint32_t bass = mags_[0] / kBands;
+        const uint8_t* mags = glide ? f->bandsSmoothed : f->bands;
+        const uint32_t bass = mags[0] / kBands;
         for (uint8_t k = 0; k < kAxes; k++) {
             const uint32_t rate = oscillatorOffset * (k + 1u) + bass;
             osc_.set(k, Oscillator{static_cast<uint16_t>(rate), 0, 65535, 0, Wave::Sine});
@@ -83,10 +83,9 @@ public:
         }
         osc_.advanceTo(ms);
         if (glide) for (uint8_t k = 0; k < kAxes; k++) phase_[k] = osc_.phase(k);
-        // A drum hit stretches every stroke to its span, then the stretch halves every kSurgeHalfLifeMs.
-        surge_ = static_cast<uint8_t>((static_cast<uint32_t>(surge_) * halfLifeKeep(ms - lastMs_, kSurgeHalfLifeMs)) >> 16);
-        lastMs_ = ms;
-        if (surge && f->seq != lastSeq_ && f->onset != 0) surge_ = 255;   // once a frame, by its number
+        // A drum hit stretches every stroke to its span, then the stretch halves every kSurgeHalfLifeMs, read from the time since the hit so no tick rounds it.
+        if (surge && f->seq != lastSeq_ && f->onset != 0) { lastHitMs_ = ms; hitSeen_ = true; }   // once a frame, by its number
+        surge_ = hitSeen_ ? static_cast<uint8_t>((255u * halfLifeKeep(ms - lastHitMs_, kSurgeHalfLifeMs)) >> 16) : 0;
         lastSeq_ = f->seq;
 
         // The trail, a rate the Layer scales by elapsed time; the hue drift and the jitter run on the original's 30 frames a second: @xref{the-originals-frame-rate-as-time}.
@@ -101,7 +100,7 @@ public:
         for (size_t i = 0; i < numLines; i++) {
             const uint8_t bin = static_cast<uint8_t>(
                 map(static_cast<int>(i), 0, lineHi, 0, kBands - 1));
-            const uint8_t band = mags_[bin];
+            const uint8_t band = mags[bin];
             if (band == 0) continue;   // a silent band draws no stroke
 
             // Each band leads its line's oscillators by its own small angle, so the lines of different bands sit apart.
@@ -127,6 +126,9 @@ public:
         }
     }
 
+    /// How much of the last hit's stretch is left, for tests.
+    uint8_t surgeForTest() const { return surge_; }
+
     /// Test seam: oscillator `k`'s endpoint across `len` for a band of `band`, as this frame draws it.
     lengthType endpointForTest(uint8_t k, uint8_t band, lengthType len) const { return axis(k, band, len); }
 
@@ -142,8 +144,8 @@ private:
     OscillatorBank<kAxes> osc_;   ///< the endpoints' phases, accumulated so a rate change glides
     angle16  phase_[kAxes] = {};  ///< this frame's endpoint angles, from time or from the bank
     uint32_t leadRate_[kAxes] = {};   ///< the rate a band's milliseconds lead its endpoint at
-    const uint8_t* mags_ = nullptr;   ///< the bands this frame reads, raw or smoothed
-    uint32_t lastMs_ = 0;         ///< the last frame's time, which the stretch decays over
+    uint32_t lastHitMs_ = 0;      ///< elapsed() at the last hit, which the stretch decays from
+    bool     hitSeen_ = false;    ///< whether a hit came since the effect started
     uint8_t  surge_ = 0;          ///< the last hit's stretch, 255 on the hit
     uint16_t lastSeq_ = 0;        ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
     static constexpr uint32_t kOriginalHz = 30;      ///< the original's frame rate on troyhacks's board, which its look is judged by

@@ -516,8 +516,9 @@ public:
     /// Fill frame_ with a synthesized signal, on the wall clock that is its time.
     void synthesizeFrame(bool sweep) {
         const uint32_t now = platform::millis();
-        simulateAudio(frame_, now, sweep, simPrevMs_);
-        simPrevMs_ = simPrevMs_ != 0 && now - simPrevMs_ < 4 * kSimFrameMs ? simPrevMs_ + kSimFrameMs : now;   // on the block grid, so a slow render still gets a frame a block; a long pause resumes
+        const uint32_t t = simPrevMs_ != 0 && now - simPrevMs_ < 4 * kSimFrameMs ? simPrevMs_ + kSimFrameMs : now;   // the block grid's time, so a slow render gets a frame a block and the song's beats read once each; a long pause resumes
+        simulateAudio(frame_, t, sweep, simPrevMs_);
+        simPrevMs_ = t;
         frame_.seq++;
         smoothLevel(frame_);
         finishBands(frame_);

@@ -19,6 +19,7 @@
 #include "platform/platform.h"
 
 #include <cmath>
+#include <memory>
 #include <cstdio>
 #include <string>
 
@@ -26,9 +27,11 @@ using namespace mm;
 
 namespace {
 
-/// Mean lit pixels per frame over `seconds` of SIMULATED time at `fps`, with `audio`, when given, producing its frame each tick from the same clock.
+/// Mean lit pixels per frame over `seconds` of SIMULATED time at `fps`, with a fresh simulated song, when `withAudio`, producing its frame each tick from the same clock.
 template <typename Make>
-double meanLit(Make make, int fps, int seconds, AudioService* audio = nullptr) {
+double meanLit(Make make, int fps, int seconds, bool withAudio = false) {
+    std::unique_ptr<AudioService> audio;   // its own per measurement, so neither rate starts from the other's smoothing
+    if (withAudio) { audio = std::make_unique<AudioService>(); audio->mode = AudioService::kSimMode; audio->setup(); }
     Layouts layouts;
     auto* grid = new GridLayout();
     grid->width = 24; grid->height = 24; grid->depth = 1;
@@ -59,6 +62,7 @@ double meanLit(Make make, int fps, int seconds, AudioService* audio = nullptr) {
         total += lit;
     }
     delete effect;
+    if (audio) audio->release();
     platform::setTestNowMs(0);      // hand the real clock back before the next test sees it
     return static_cast<double>(total) / frames;
 }
@@ -77,15 +81,10 @@ TEST_CASE("every effect behaves the same at any framerate") {
     } restore;
 
     // The simulated song, a function of the clock alone, so the audio effects are measured too rather than dark at both rates.
-    AudioService audio;
-    audio.mode = AudioService::kSimMode;
-    audio.setup();
-    struct Release { AudioService& a; ~Release() { a.release(); } } release{audio};
-
     int audited = 0;
     forEachEffect([&](const char* name, auto make) {
-        const double slow = meanLit(make, 60, 4, &audio);
-        const double fast = meanLit(make, 1200, 4, &audio);
+        const double slow = meanLit(make, 60, 4, true);
+        const double fast = meanLit(make, 1200, 4, true);
 
         // A dark effect at both rates is consistent by definition.
         if (slow < 0.5 && fast < 0.5) { audited++; return; }

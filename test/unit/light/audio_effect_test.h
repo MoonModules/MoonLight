@@ -96,6 +96,12 @@ void play(F& fx, AudioService& audio, const AudioFrame& f, uint32_t ms) {
     audio.frameForTest().seq = static_cast<uint16_t>(seq + 2);
 }
 
+/// Tick `fx` every `tickMs` for `spanMs` after `startMs`, the clock following, as a device rendering at that rate would.
+template <typename F>
+void tickFor(F& fx, uint32_t startMs, uint32_t spanMs, uint32_t tickMs) {
+    for (uint32_t t = tickMs; t <= spanMs; t += tickMs) { platform::setTestNowMs(startMs + t); fx.layer.tick(); }
+}
+
 /// A frame whose note `i` (A0 = 21, so A4 is 48) sounds at `mag`, struck when `hit`.
 inline AudioFrame noteFrame(uint8_t i, uint8_t mag, bool hit) {
     AudioFrame f;

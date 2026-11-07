@@ -257,26 +257,46 @@ TEST_CASE("AudioService: each analyzed block and each simulated frame is a new f
     sim.release();
 }
 
+namespace {
+/// Run the simulation ticked every `tickMs` for `spanMs`, calling `onFrame` with each new frame, and answer how many came.
+template <typename Fn>
+int runSimulation(uint32_t tickMs, uint32_t spanMs, Fn onFrame) {
+    static mm::AudioService sim;
+    sim.defineControls();
+    sim.mode = mm::AudioService::kSimMode;
+    mm::platform::setTestNowMs(1000);
+    sim.setup();
+    sim.tick();
+    uint16_t seq = sim.audioFrame()->seq;
+    int frames = 0;
+    for (uint32_t t = tickMs; t <= spanMs; t += tickMs) {
+        mm::platform::setTestNowMs(1000 + t);
+        sim.tick();
+        if (sim.audioFrame()->seq != seq) { seq = sim.audioFrame()->seq; frames++; onFrame(*sim.audioFrame()); }
+    }
+    sim.release();
+    mm::platform::setTestNowMs(0);
+    return frames;
+}
+}  // namespace
+
 // The simulation keeps the block grid, so a 60 fps render gets as many frames a second as a fast one, and the smoothing runs at one rate (review, 2026-11-07).
 TEST_CASE("AudioService: the simulation makes a frame a block at 60 fps and at 1000 fps alike") {
-    auto framesInASecond = [](uint32_t tickMs) {
-        static mm::AudioService sim;
-        sim.defineControls();
-        sim.mode = mm::AudioService::kSimMode;
-        mm::platform::setTestNowMs(1000);
-        sim.setup();
-        sim.tick();
-        const uint16_t first = sim.audioFrame()->seq;
-        for (uint32_t t = tickMs; t <= 1000; t += tickMs) { mm::platform::setTestNowMs(1000 + t); sim.tick(); }
-        const int frames = static_cast<uint16_t>(sim.audioFrame()->seq - first);
-        sim.release();
-        mm::platform::setTestNowMs(0);
-        return frames;
-    };
-    const int slow = framesInASecond(16), fast = framesInASecond(1);
+    const int slow = runSimulation(16, 1000, [](const mm::AudioFrame&) {});
+    const int fast = runSimulation(1, 1000, [](const mm::AudioFrame&) {});
     CHECK(slow >= 45);
     CHECK(slow <= fast + 1);
     CHECK(fast <= 48);
+}
+
+// On the block grid each frame carries the grid's time, so the song's kick is seen once a beat at any tick rate (review, 2026-11-07).
+TEST_CASE("AudioService: the simulated kick comes once a beat at 60 fps and at 1000 fps alike") {
+    int slow = 0, fast = 0;
+    runSimulation(16, 6000, [&](const mm::AudioFrame& f) { slow += f.onset != 0; });
+    runSimulation(1, 6000, [&](const mm::AudioFrame& f) { fast += f.onset != 0; });
+    CHECK(fast >= 9);
+    CHECK(fast <= 11);   // a beat every 600 ms
+    CHECK(slow == fast);
 }
 
 // Memory follows the mode: the analysis is held only while an input is open, the harmony's state only while `harmony` is on, so a receiver or a simulation spends no internal RAM on either.

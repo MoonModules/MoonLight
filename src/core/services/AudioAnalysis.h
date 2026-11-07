@@ -15,9 +15,6 @@
 
 namespace mm {
 
-/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each.
-inline constexpr size_t kAudioBlock = 512;
-
 /// The analysis of an open input, which AudioService allocates in internal RAM as the input opens and frees as it closes, so a mode without an input holds none of it.
 struct AudioAnalysis : platform::InternalRamObject {
     int32_t samples[kAudioBlock] = {};  ///< fixed hot-path scratch, sized once

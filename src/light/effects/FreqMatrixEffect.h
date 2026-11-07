@@ -64,7 +64,7 @@ public:
         uint32_t steps = (now - lastScrollMs_) / period;
         if (steps == 0) return;
         const uint32_t rows = height();
-        if (now - lastScrollMs_ >= kPauseMs) { steps = 1; lastScrollMs_ = now; }   // a pause resumes, rather than repainting the column in one color
+        if (steps > 1 && now - lastScrollMs_ >= kPauseMs) { steps = 1; lastScrollMs_ = now; }   // a pause resumes, rather than repainting the column in one color
         else { lastScrollMs_ += steps * period; if (steps > rows) steps = rows; }
 
         // The smoothed level, since this is a flowing scroll rather than a transient meter.

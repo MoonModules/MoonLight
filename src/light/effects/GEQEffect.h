@@ -48,8 +48,11 @@ public:
         // Cleared on every rebuild, since resize() zero-fills only on a size change.
         peaks_.resize(static_cast<size_t>(width() > 0 ? width() : 0));
         if (peaks_) std::memset(peaks_.data(), 0, peaks_.bytes());
-        rippleCounter_ = 0;
+        rippleMs_ = lastTickMs_ = 0;
     }
+
+    /// Column `x`'s peak-dot row, for tests.
+    lengthType peakForTest(int x) const { return peaks_ && x >= 0 && static_cast<size_t>(x) < peaks_.count() ? peaks_[x] : 0; }
 
     /// Fade the trail, then fill each column to its band and drop its peak dot.
     void tick() MM_NONBLOCKING override {
@@ -65,11 +68,16 @@ public:
         // The motion trail: dim the whole buffer each frame.
         layer()->fadeToBlackBy(fadeOut);
 
-        // The peaks drop one row whenever this counter wraps `ripple`.
-        bool fallThisFrame = false;
+        // The peaks drop a row every `ripple` 60 Hz reference frames of elapsed time, so they fall alike at any frame rate.
+        const uint32_t now = elapsed();
+        uint32_t falls = 0;
         if (ripple > 0) {
-            if (++rippleCounter_ >= ripple) { rippleCounter_ = 0; fallThisFrame = true; }
+            const uint32_t period = ripple * 1000u / 60u + 1u;
+            rippleMs_ += now - lastTickMs_;
+            falls = rippleMs_ / period;
+            rippleMs_ -= falls * period;
         }
+        lastTickMs_ = now;
 
         const AudioBars bars = barsOf(*f, bands);
         const int nBars = bars.n;
@@ -98,8 +106,8 @@ public:
             // Rise instantly to a new high, otherwise fall slowly.
             if (barHeight > peaks_[x]) {
                 peaks_[x] = static_cast<lengthType>(barHeight);
-            } else if (fallThisFrame && peaks_[x] > 0) {
-                peaks_[x] = static_cast<lengthType>(peaks_[x] - 1);   // one row per ripple tick
+            } else if (falls > 0) {
+                peaks_[x] = static_cast<lengthType>(static_cast<uint32_t>(peaks_[x]) > falls ? peaks_[x] - static_cast<lengthType>(falls) : 0);   // a row per ripple period passed
             }
 
             // Filled from the floor up, taking either the column's hue or the height along the bar.
@@ -128,7 +136,8 @@ private:
 
     /// Each column's peak-dot row, counted up from the floor, and lengthType so a tall panel fits.
     ScratchBuffer<lengthType> peaks_{*this};
-    uint8_t  rippleCounter_ = 0;   ///< frames toward the next peak-fall step
+    uint32_t rippleMs_ = 0;        ///< the time toward the next peak-fall step
+    uint32_t lastTickMs_ = 0;      ///< elapsed() at the last tick
 };
 
 } // namespace mm

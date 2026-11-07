@@ -247,3 +247,24 @@ TEST_CASE("PaintBrushEffect: anti-aliased strokes light more cells than crisp on
     CHECK(aaLit > crispLit);
     audio.release();
 }
+
+// The surge is read from the time since the hit, so no tick rounds it down: it settles alike at 60 fps and at 1000 fps (review, 2026-11-07).
+TEST_CASE("PaintBrushEffect's surge settles over the same time at 60 fps and at 1000 fps") {
+    auto leftAfter120ms = [](uint32_t tickMs) {
+        golden::ScopedTestClock clock(1000);
+        AudioService& audio = seat();
+        EffectOnGrid<PaintBrushEffect> p(16, 16);
+        p.e.surge = true;
+        AudioFrame hit;
+        hit.onset = 200;
+        play(p, audio, hit, 1000);   // the hit, then frames without one
+        tickFor(p, 1000, 120, tickMs);
+        const int left = p.e.surgeForTest();
+        audio.release();
+        return left;
+    };
+    const int slow = leftAfter120ms(17), fast = leftAfter120ms(1);
+    CHECK(fast > 110);
+    CHECK(fast < 145);   // half of 255 after one half-life
+    CHECK(std::abs(slow - fast) <= 2);
+}

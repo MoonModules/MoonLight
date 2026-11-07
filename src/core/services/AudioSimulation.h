@@ -5,7 +5,6 @@
 #include "core/util/AudioFrame.h"
 #include "core/util/math8.h"              // sin8 / triwave8, the oscillators
 #include "core/services/AudioBands.h"     // kSixteenOfThirds
-#include "core/services/AudioAnalysis.h"  // kAudioBlock: the input's block, which the simulation's frames keep
 
 namespace mm {
 

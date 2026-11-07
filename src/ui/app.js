@@ -1948,13 +1948,6 @@ function mlLiveEditors(name) {
     return [...set];
 }
 
-/// Write a module's status, and mark the line it names in every editor showing that script.
-///
-/// Both render paths (createCard and updateModuleControls) come here, because a rule that lives in
-/// only one of them is a rule that applies half the time. A compile failure arrives as
-/// "message @<offset>"; an EDITOR turns that into a line and column, since only it holds the text
-/// the offset counts into. Each returns the same rewritten text, so which one supplies it does not
-/// matter; a module with no editor open shows the raw status unchanged.
 /// The number box beside a slider, as wide as the longest number its range holds, so 11647 is not cut to 1164.
 function valueBox(min, max, value) {
     const box = document.createElement("input");
@@ -1967,6 +1960,13 @@ function valueBox(min, max, value) {
     return box;
 }
 
+/// Write a module's status, and mark the line it names in every editor showing that script.
+///
+/// Both render paths (createCard and updateModuleControls) come here, because a rule that lives in
+/// only one of them is a rule that applies half the time. A compile failure arrives as
+/// "message @<offset>"; an EDITOR turns that into a line and column, since only it holds the text
+/// the offset counts into. Each returns the same rewritten text, so which one supplies it does not
+/// matter; a module with no editor open shows the raw status unchanged.
 function setStatusText(valEl, mod) {
     // Every editor on this module marks the line and returns the SAME rewritten text, since they
     // hold the same file: so mark them all, and take any one answer.

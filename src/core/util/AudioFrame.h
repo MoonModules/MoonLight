@@ -8,6 +8,8 @@ namespace mm {
 
 /// How many semitone notes a frame carries, the piano's keys A0 to D#7: the one count `notes`, `notesHits` and every note reader size by.
 constexpr uint8_t kAudioNoteKeys = 79;
+/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each.
+inline constexpr size_t kAudioBlock = 512;
 
 /// The whole contract between the audio analysis and the effects that react to it.
 ///

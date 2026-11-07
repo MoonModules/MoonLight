@@ -151,12 +151,12 @@ public:
         elapsed_ = platform::millis();
         // Advance on every frame: a frozen clock spends a whole idle gap at once and wipes the trail.
         const uint32_t frameScale = fadeTime_.advance(elapsed_);
-        fadeDue_ = fadeDue_ + frameScale < particles::FrameTime::kOne ? fadeDue_ + frameScale : particles::FrameTime::kOne;   // saturates: the carry, not this, holds how much
+        fadeDue_ = fadeDue_ + frameScale < 2 * particles::FrameTime::kOne ? fadeDue_ + frameScale : 2 * particles::FrameTime::kOne;   // bounded: the carry, not this, holds how much
         // Once a reference frame has elapsed, as Echo's pass: each fade rounds every pixel down by up to a unit, so run every frame of a fast render the rounding alone erases a trail.
         if (fadeBy_ > 0) fadeCarry_ += static_cast<uint32_t>(fadeBy_) * frameScale;
         fadeBy_ = 0;
         if (fadeCarry_ > 0 && fadeDue_ >= particles::FrameTime::kOne) {
-            fadeDue_ = 0;
+            fadeDue_ -= particles::FrameTime::kOne;   // the excess kept, so the passes keep the reference rate
             uint32_t amt = fadeCarry_ / particles::FrameTime::kOne;
             // A stall tops up rather than bursting, and drops the remainder so the next frame is clean.
             if (amt > 255) {

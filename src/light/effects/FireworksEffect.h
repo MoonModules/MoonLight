@@ -71,7 +71,7 @@ public:
             pool_.clear();
         }
         shellLive_ = false;
-        frame_ = 0;
+        lastRoll_ = 0;
         time_.reset();
     }
 
@@ -91,7 +91,6 @@ public:
         // Every frame simulates its own fraction, so a fast device gets the same arc more smoothly.
         const uint32_t scale = time_.advance(elapsed());
         if (scale > 0) {
-            frame_++;
             simulate(gy, wSub, hSub, scale);
             // The Layer takes a rate and scales it by the elapsed frame, as every fading effect does.
             layer()->fadeToBlackBy(fade);
@@ -107,6 +106,7 @@ public:
 private:
     /// One fixed slice of simulated time: launch, rise, burst, fall, age. No drawing.
     void simulate(draw::pos_t gy, draw::pos_t wSub, draw::pos_t hSub, uint32_t scale) MM_NONBLOCKING {
+        const uint32_t ref = static_cast<uint32_t>(static_cast<uint64_t>(elapsed()) * 60u / 1000u);   // the reference frame this slice ends in
         // --- The shell ---------------------------------------------------------------------
         if (shellLive_) {
             // The slice's share of each, its remainder carried as the pool carries gravity's, so a fast render's tiny slices lose none.
@@ -122,22 +122,15 @@ private:
             // Burst when it stops rising, so the apex is where the physics puts it.
             if (shellVy_ >= 0 || shellY_ <= 0) {
                 pool_.angleEmit(shellX_, shellY_, 0, static_cast<draw::pos_t>(shellV0_ * 3 / 5),
-                                65535, sparks, sparkLife, shellHue_, frame_);
+                                65535, sparks, sparkLife, shellHue_, shellRoll_);
                 shellLive_ = false;
             }
-        // Over the full range, and in proportion to the time this slice covers, so a fast render rolls more often for a smaller chance each.
-        } else if (static_cast<uint32_t>(hashInt(frame_, 0, 0, kSeed)) * 4u < static_cast<uint32_t>(launchRate) * scale) {   // the 16-bit hash against launchRate / 1024 of a reference frame
-            // From a point along the floor, thrown up to burst between three quarters and all of `burstHeight`, and a little sideways.
-            shellX_  = static_cast<draw::pos_t>(hashInt(frame_, 1, 0, kSeed) % static_cast<uint32_t>(wSub ? wSub : 1));
-            shellY_  = hSub;
-            const uint32_t rise = static_cast<uint32_t>(hSub) * burstHeight / 255u * (192u + hashInt(frame_, 4, 0, kSeed) % 64u) / 256u;
-            shellV0_ = static_cast<draw::pos_t>(isqrt(2u * static_cast<uint32_t>(gy) * rise));
-            shellVy_ = -shellV0_;
-            shellCarry_[0] = shellCarry_[1] = shellCarry_[2] = 0;
-            shellVx_ = static_cast<draw::pos_t>(((static_cast<int32_t>(hashInt(frame_, 2, 0, kSeed) % 33u) - 16) * hSub) / draw::toSub(kRefRows));
-            shellHue_ = static_cast<uint8_t>(hashInt(frame_, 3, 0, kSeed));
-            shellLive_ = true;
+        } else {
+            // A roll per 60 Hz reference frame of elapsed time, its index hashed, so devices on one clock launch alike at any frame rate; the frames a slow render skipped roll too.
+            for (uint32_t r = lastRoll_ + 1; !shellLive_ && r <= ref && r - lastRoll_ <= kMaxRolls; r++)
+                if (hashInt(r, 0, 0, kSeed) < static_cast<uint32_t>(launchRate) * 64u) launch(r, gy, wSub, hSub);   // launchRate in 1024, on the hash's top bits
         }
+        lastRoll_ = ref;
 
         // --- The sparks --------------------------------------------------------------------
         pool_.gravity(gy, scale);
@@ -147,6 +140,22 @@ private:
         pool_.age(1, scale);
     }
 
+    /// Throw a shell from a point along the floor, up to burst between three quarters and all of `burstHeight`, and a little sideways, all from roll `r`'s hashes.
+    void launch(uint32_t r, draw::pos_t gy, draw::pos_t wSub, draw::pos_t hSub) MM_NONBLOCKING {
+        shellX_  = static_cast<draw::pos_t>(hashInt(r, 1, 0, kSeed) % static_cast<uint32_t>(wSub ? wSub : 1));
+        shellY_  = hSub;
+        const uint32_t rise = static_cast<uint32_t>(hSub) * burstHeight / 255u * (192u + hashInt(r, 4, 0, kSeed) % 64u) / 256u;
+        shellV0_ = static_cast<draw::pos_t>(isqrt(2u * static_cast<uint32_t>(gy) * rise));
+        shellVy_ = -shellV0_;
+        shellCarry_[0] = shellCarry_[1] = shellCarry_[2] = 0;
+        shellVx_ = static_cast<draw::pos_t>(((static_cast<int32_t>(hashInt(r, 2, 0, kSeed) % 33u) - 16) * hSub) / draw::toSub(kRefRows));
+        shellHue_ = static_cast<uint8_t>(hashInt(r, 3, 0, kSeed));
+        shellRoll_ = r;
+        shellLive_ = true;
+    }
+
+    /// The most skipped reference frames rolled at once, so a long stall does not fire a backlog.
+    static constexpr uint32_t kMaxRolls = 8;
     /// The spark pool's size, which the default burst count sits well inside.
     static constexpr uint16_t kPool = 120;
     /// Fixed, so two devices launch alike.
@@ -167,7 +176,8 @@ private:
     int64_t shellCarry_[3] = {}; ///< the sub-unit remainders of its velocity, height and drift
     uint8_t shellHue_ = 0;       ///< the color its burst will take
     bool shellLive_ = false;     ///< whether a shell is currently rising
-    uint32_t frame_ = 0;         ///< hashed for the launch, so two devices agree
+    uint32_t lastRoll_ = 0;      ///< the last reference frame rolled for a launch
+    uint32_t shellRoll_ = 0;     ///< the roll the shell came from, which seeds its burst
 };
 
 }  // namespace mm

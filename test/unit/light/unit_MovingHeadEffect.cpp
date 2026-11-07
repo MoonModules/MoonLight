@@ -231,3 +231,24 @@ TEST_CASE("turning goboOnBeat on does not replay the hit of a frame already past
     CHECK(heads.e.goboRollsForTest() == 1);
     audio.release();
 }
+
+// The beat's widening fades by the time since the beat, so it lasts as long at 1000 fps as at 60 (review, 2026-11-07).
+TEST_CASE("a beat's widening fades over the same time at 60 fps and at 1000 fps") {
+    auto leftAfter170ms = [](uint32_t tickMs) {
+        mm::golden::ScopedTestClock clock(1000);
+        mm::AudioService& audio = mm::seat();
+        mm::EffectOnGrid<mm::MovingHeadEffect> heads(3, 1);
+        heads.e.audioReactive = true;
+        mm::AudioFrame beat;
+        beat.gate = 40; beat.gateOpen = true; beat.onset = 200;
+        mm::play(heads, audio, beat, 1000);   // the beat, then frames without one
+        mm::tickFor(heads, 1000, 170, tickMs);
+        const int left = heads.e.beatDecayForTest();
+        audio.release();
+        return left;
+    };
+    const int slow = leftAfter170ms(17), fast = leftAfter170ms(1);
+    CHECK(fast > 100);
+    CHECK(fast < 160);   // about half of 255, half the fade's 340 ms
+    CHECK(std::abs(slow - fast) <= 2);
+}
