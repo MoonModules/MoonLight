@@ -174,7 +174,7 @@ TEST_CASE("a frame two ticks read is one hit: the glow fades on instead of start
     golden::ScopedTestClock clock(1000);
     AudioService& audio = seat();
     Strings s;
-    audio.frameForTest() = note(45, 200, true);
+    audio.frameForTest() = analyzed(note(45, 200, true), s.confirm);
     audio.frameForTest().seq = 7;
     platform::setTestNowMs(1000);
     s.layer.tick();

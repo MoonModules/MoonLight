@@ -32,7 +32,7 @@ constexpr size_t kMlSyncHarmonySize = 12 + 4;
 constexpr size_t kMlSyncMaxDatagram = 256;
 /// The largest packet this version builds, every section full.
 constexpr size_t kMlSyncMaxPacket = kMlSyncHeaderSize + (1 + kMlSyncCoreSize) + (1 + kMlSyncSmoothedSize) + (1 + 1 + sizeof(AudioFrame::thirds) + sizeof(AudioFrame::thirdsHits))
-                                  + (1 + kMlSyncHarmonySize) + (1 + 1 + sizeof(AudioFrame::notes) + sizeof(AudioFrame::notesHits));
+                                  + (1 + kMlSyncHarmonySize) + (1 + 1 + sizeof(AudioFrame::notes) + sizeof(AudioFrame::notesHits) + sizeof(AudioFrame::notesKept) + sizeof(AudioFrame::notesKeptHits));
 static_assert(kMlSyncMaxPacket <= kMlSyncMaxDatagram, "a full frame fits the datagram the format allows");
 
 /// A frame field as one byte, clamped, for the fields wider than their 0..255 range.
@@ -77,10 +77,12 @@ inline size_t buildMoonLightAudioSync(uint8_t* out, const AudioFrame& f) {
         *p++ = f.bassNote;
 
         mask |= 1u << kMlSectionNotes;
-        *p++ = static_cast<uint8_t>(1 + notes + sizeof(f.notesHits));
+        *p++ = static_cast<uint8_t>(1 + notes + sizeof(f.notesHits) + sizeof(f.notesKept) + sizeof(f.notesKeptHits));
         *p++ = notes;
         std::memcpy(p, f.notes, notes); p += notes;
         std::memcpy(p, f.notesHits, sizeof(f.notesHits)); p += sizeof(f.notesHits);
+        std::memcpy(p, f.notesKept, sizeof(f.notesKept)); p += sizeof(f.notesKept);
+        std::memcpy(p, f.notesKeptHits, sizeof(f.notesKeptHits)); p += sizeof(f.notesKeptHits);
     }
 
     out[0] = kMlSyncMagic[0];
@@ -94,8 +96,7 @@ inline size_t buildMoonLightAudioSync(uint8_t* out, const AudioFrame& f) {
 
 /// Parse a packet into a frame, its `seq` the sender's, and answer the section mask it carried: 0 for a packet refused, one without the core section or with a section past the datagram, `out` then unspecified.
 inline uint16_t parseMoonLightAudioSync(const uint8_t* pkt, size_t len, AudioFrame& out) {
-    if (!pkt || len < kMlSyncHeaderSize) return 0;
-    if (pkt[0] != kMlSyncMagic[0] || pkt[1] != kMlSyncMagic[1] || pkt[2] != kMlSyncVersion) return 0;
+    if (!pkt || len < kMlSyncHeaderSize || pkt[0] != kMlSyncMagic[0] || pkt[1] != kMlSyncMagic[1] || pkt[2] != kMlSyncVersion) return 0;
     const uint16_t mask = static_cast<uint16_t>(pkt[6] | (pkt[7] << 8));
     if (!(mask & (1u << kMlSectionCore))) return 0;
 
@@ -141,10 +142,13 @@ inline uint16_t parseMoonLightAudioSync(const uint8_t* pkt, size_t len, AudioFra
             break;
         case kMlSectionNotes: {
             const uint8_t count = n > 0 ? s[0] : 0;
-            if (count > sizeof(f.notes) || n < 1u + count + sizeof(f.notesHits)) return 0;
+            const size_t kept = 1u + count + sizeof(f.notesHits);   // where the kept notes and their strikes start
+            if (count > sizeof(f.notes) || n < kept + sizeof(f.notesKept) + sizeof(f.notesKeptHits)) return 0;
             f.notesCount = count;
             std::memcpy(f.notes, s + 1, count);
             std::memcpy(f.notesHits, s + 1 + count, sizeof(f.notesHits));
+            std::memcpy(f.notesKept, s + kept, sizeof(f.notesKept));
+            std::memcpy(f.notesKeptHits, s + kept + sizeof(f.notesKept), sizeof(f.notesKeptHits));
             break;
         }
         default: break;   // a section a later version added: skipped by its length

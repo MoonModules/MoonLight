@@ -36,7 +36,7 @@ uv run moondeck/build/build_desktop.py
 uv run moondeck/build/build_desktop.py --configure   # configure and generate build_id.h only, what check_code and check_docgen read
 ```
 
-Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
+Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary, not the ~130-file test suite, so the "give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
 
 ### run_desktop
 
@@ -125,11 +125,22 @@ uv run moondeck/check/bench_notes.py --dir <folder> --instrument cello # the Str
 uv run moondeck/check/bench_notes.py --show                            # the latest report, as the card shows it
 ```
 
-**The engine as the boards run it.** `mm_tempo --notes` feeds the decoded audio through the shipped analysis and through the Keyboard and Strings effects' own `keep`, and prints each stage's keys a frame. Each stage's frames become notes, a key kept on consecutive frames being one note and a strike starting the next, scored with mir_eval's transcription measure: a note counts when its pitch matches and it starts within 50 ms, and again with its end within a fifth of its length.
+**The engine as the boards run it.** `mm_tempo --notes` feeds the decoded audio through the shipped analysis and through the Keyboard and Strings effects' own `keep`, and prints each stage's keys a frame. Each stage's frames become notes, a key kept on consecutive frames being one note and a strike starting the next, each dated where the engine says it began, the frame it lit on less its key's band delay, which `mm_tempo` prints in its header, scored with mir_eval's transcription measure: a note counts when its pitch matches and it starts within 50 ms, and again with its end within 50 ms or a fifth of its length, whichever is longer.
 
 **The sets a folder holds** are told by their files: audio beside a MIDI file of the same name, as MIDI rendered through a sound font or MAESTRO; GuitarSet's `audio_mono-mic/` beside its `annotation/*.jams`, where each note names its string and the report gives the share the hand puts on it; URMP's `AuSep_*.wav` beside its `Notes_*.txt`; and the generated set's `notes.csv`. The data is only read; runs and reports go to `build/notes/`.
 
-**The report** gives each stage's precision, recall and F-measure over every file, with the notes it invents named by kind: a flash, under 70 ms, the burst an attack spreads over the keys; an overtone, an octave, twelfth or two octaves from a played note; leakage, a semitone or two away; and the rest. Then each file's F per stage.
+**The report** gives each stage's precision, recall and F-measure over every file, its latency, the median lag from a found note's start to its key lighting, the delay a viewer sees, and the notes it invents named by kind: a flash, under 70 ms, the burst an attack spreads over the keys; an overtone, an octave, twelfth or two octaves from a played note; leakage, a semitone or two away; and the rest. Then each file's F per stage.
+
+### bench_drums
+
+Run drum recordings whose hits are labeled through the shipped analysis on the desktop, and score each onset the frame carries against the drums it stands for: `onsetLow` the kick, `onsetMid` the snare and the toms, `onsetHigh` the hi-hat and the cymbals, `onset` every drum.
+
+```bash
+uv run moondeck/check/bench_drums.py --dir <MDB Drums folder> --instrument drums   # the drums alone, the Audio card's instrument at drums
+uv run moondeck/check/bench_drums.py --dir <MDB Drums folder> --mix              # the drums inside the band, at mix
+```
+
+`mm_tempo --drums` prints each frame's four onsets; a frame whose field is above 0 is a hit, scored with mir_eval's onset measure, within 50 ms of a labeled hit. The set is [MDB Drums](https://github.com/CarlSouthall/MDBDrums) (CC BY-NC-SA 4.0), 23 tracks with every hit labeled by drum, the drums alone or the full mix; the data is only read, and runs and reports go to `build/drums/`. **The report** gives each field's labeled hits, the hits it found, precision, recall, F and latency, the median lag from a labeled hit to the frame that found it, then each track's F per field.
 
 ### tempo_compare
 
@@ -407,7 +418,7 @@ The other tool cards sweep the whole repo, which is the wrong shape when you are
 file and want to know what the tools say about *it*. This runs clang-tidy, clang-query and
 check_code against one module and prints them under one heading. It adds no analysis of its own:
 it invokes the same scripts with `--module`, so this and the repo-wide reports can never
-disagree about a finding. Each tool also accepts `--module` on its own if you want just one.
+disagree about a finding. Each tool also accepts `--module` on its own for one tool.
 
 **Module is not the same as a translation unit.** A TU is one `.cpp` plus everything it
 includes — the unit the compiler processes, and there are 15 under `src/`. A module is one class
@@ -416,7 +427,7 @@ TU of their own: `ParallelLedDriver.h` is analyzed through whichever `.cpp` incl
 why `--module` filters the findings rather than the file list — scoping by TU would analyze
 nothing for a header-only module and report a confident, wrong zero.
 
-It still scopes the *parse*, by resolving which TUs actually reach the module's files —
+It still scopes the *parse*, by resolving which TUs reach the module's files,
 following `#include` edges transitively, so a header-only module is analyzed through the one or
 two `.cpp` files that include it rather than all 15. `BouncingBallsEffect` is reached only by
 `main.cpp`: **8s for all three tools, down from over four minutes**. The run prints which TUs it
@@ -477,7 +488,7 @@ uv run moondeck/check/check_clang_query.py --min-bytes=256
 | `local` | Stack | A 2 KB local on a 4 KB task stack overflows at the wrong call depth. |
 | `member` | Per instance | 200 bytes × 90 modules is 18 KB. |
 
-`constexpr` and static-storage arrays are excluded: they live in flash. Element sizes are an order-of-magnitude guide.
+`constexpr` arrays are excluded, since they live in flash. Arrays of static storage duration are excluded too: a mutable one costs RAM in `.bss` or `.data`, which [check_footprint](#check_footprint) measures per module as its STATIC column, and `check_code` counts it as a mutable static. Element sizes are an order-of-magnitude guide.
 
 **No size threshold.** Every RAM-costing array is reported, however small. `--max-rows` (default 60, worst-first) caps volume instead and always announces the cut. `--max-rows 0` prints everything and `--min-bytes N` restores a size cutoff, both CLI-only. The per-module card keeps the cap too.
 
@@ -720,7 +731,7 @@ Without it, a module missing from that list is silently skipped until someone ed
 
 The **GIF** and **Force** checkboxes in MoonDeck toggle these flags.
 
-Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. The grid is 128×128 for the capture, the standard (`--grid` changes it), and the run leaves the pipeline as it found it: the grid's size and any modifier it takes off go back, and it removes only the modules it added, by a ledger in `build/moondeck-logs/`, so a module of yours sharing a capture's name stays; a run cut short is undone by the next run against the same host. Saves:
+Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. The grid is 128×128 for the capture, the standard (`--grid` changes it), and the run leaves the pipeline as it found it: the grid's size and any modifier it takes off go back, and it removes only the modules it added, by a ledger in `build/moondeck-logs/` with a record per host, so a module of yours sharing a capture's name stays. The record is written before the pipeline changes and after each change, and a run cut short is undone by the next run against the same host as far as the record reaches: best effort, so back up the pipeline before a run you care about. A restore that does not land keeps the record and says so. Saves:
 
 - `<TypeName>.png` — module card screenshot for every module in the catalogue
 - `<TypeName>.gif` — 3-second preview animation for effects and modifiers (requires `--gif`)
@@ -965,7 +976,7 @@ Auto-detects ESP-IDF installation, sets target if needed, builds, and shows flas
 
 An edited `sdkconfig` fragment reaches every build that uses it. IDF seeds `sdkconfig` from the fragments only when the file is absent, so each build dir records a digest of its fragments in `sdkconfig.fragments.sha256`. When they differ, the build deletes that `sdkconfig` and runs `idf.py reconfigure` (`sdkconfig_fragments.py`, shared with the MoonBase build), so only what reads a changed option recompiles. A value set by hand in menuconfig goes with it: the fragments are the config's one source.
 
-The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17 — e.g. the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (e.g. WT32-ETH01: reset on GPIO 16) just needs a different `deviceModels.json` entry — no rebuild.
+The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17, as on the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (WT32-ETH01: reset on GPIO 16) needs a different `deviceModels.json` entry, no rebuild.
 
 Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encodes flash size, partition layout, and PSRAM mode — flashing an `n16r8` binary onto a different module (e.g. N8R2) misaligns the partition table or fails PSRAM init. New SKUs become new keys (e.g. `esp32s3-n8r8`); we don't ship a generic `esp32s3` shortcut.
 
@@ -1005,7 +1016,7 @@ Wipe the entire flash on an ESP32 device, including the LittleFS partition where
 uv run moondeck/build/erase_flash_esp32.py --port /dev/tty.usbserial-0001
 ```
 
-Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device just came out of the factory. After erase, re-run **Build** then **Flash** — the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
+Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device came fresh from the factory. After erase, re-run **Build** then **Flash**: the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
 
 ### release_version
 
@@ -1135,13 +1146,13 @@ for port in /dev/tty.usbserial-*; do
 done
 ```
 
-The host-WiFi reader lives at [moondeck/build/host_wifi.py](build/host_wifi.py) and runs standalone for diagnosis (`uv run moondeck/build/host_wifi.py` prints the resolved SSID + password). It first checks `moondeck/moondeck.json`'s active network's `wifi` block; if empty, falls back to OS auto-detect. The first macOS auto-detect run pops a Keychain access dialog — the OS doing its job; we don't try to bypass it. The retired `moondeck/build/wifi_credentials.json` source is gone — credentials now live per-network in moondeck.json, so moving the laptop between networks is just a dropdown switch.
+The host-WiFi reader lives at [moondeck/build/host_wifi.py](build/host_wifi.py) and runs standalone for diagnosis (`uv run moondeck/build/host_wifi.py` prints the resolved SSID + password). It first checks `moondeck/moondeck.json`'s active network's `wifi` block; if empty, falls back to OS auto-detect. The first macOS auto-detect run pops a Keychain access dialog, the OS doing its job, left as it is. Credentials live per network in moondeck.json, so moving the laptop between networks is a dropdown switch.
 
 Replaces v1's `deploy/wifi.py` + `deploy/flashfs.py --wifi` partition-baking flow — the device stays running, no flash mode required. Full module + protocol details: [docs/moonmodules/core/ImprovProvisioningModule.md](../docs/moonmodules/core/ImprovProvisioningModule.md).
 
 ### improv_probe
 
-Non-destructive Improv health check. Sends `GET_DEVICE_INFO` + `GET_CURRENT_STATE` Improv RPCs and prints whatever the device reports — no credentials are exchanged, no WiFi state changes. Useful when ESP Web Tools shows the minimal popup instead of the rich panel and you want to know whether the device's Improv listener is actually answering on the wire.
+Non-destructive Improv health check. Sends `GET_DEVICE_INFO` + `GET_CURRENT_STATE` Improv RPCs and prints whatever the device reports; no credentials are exchanged, no WiFi state changes. Useful when ESP Web Tools shows the minimal popup instead of the rich panel and you want to know whether the device's Improv listener answers on the wire.
 
 **One-click flow**: pick the device's port in MoonDeck, hit **Improv Probe**. Typical output on a provisioned device:
 
@@ -1166,7 +1177,7 @@ End-to-end Improv test against a USB-connected ESP32. Three sequential checks; P
 
 1. **Probe** — device answers `GET_DEVICE_INFO` + `GET_CURRENT_STATE` (same checks `improv_probe` does standalone).
 2. **Provision** — sends `WIFI_SETTINGS` with the host's resolved SSID + password and waits for the device to reach `PROVISIONED` (same flow `improv_provision` drives standalone).
-3. **Reachable** — HTTP `GET /` on the device's reported URL, confirming the device actually joined the LAN. Skippable with `--no-network` for isolated provisioning networks the host can't route to.
+3. **Reachable**: HTTP `GET /` on the device's reported URL, confirming the device joined the LAN. Skippable with `--no-network` for isolated provisioning networks the host can't route to.
 
 **One-click flow**: pick the device's port in MoonDeck, hit **Improv Smoke Test**. Credentials come from the active network's `wifi` block (same source as Improv WiFi). Typical output:
 

@@ -6,6 +6,9 @@
 #include "doctest.h"
 #include "light/powerfunctions/playerHands.h"
 
+#include <initializer_list>
+#include <string>
+
 using namespace mm;
 using namespace mm::hands;
 
@@ -96,6 +99,20 @@ TEST_CASE("a melody within reach keeps the hand at one position") {
         ms += 100;
     }
     CHECK(moves == 0);
+}
+
+// The movement cost of tablature transcription: of the positions that play a note equally, the hand takes the nearest, not the lowest (GuitarSet: 19% to 24% of notes on their labeled string, 2026-11-08).
+TEST_CASE("a note out of the hand's reach moves it to the nearest position that plays it, not the lowest") {
+    static constexpr uint8_t kGuitar[] = {40, 45, 50, 55, 59, 64};
+    FrettingHand hand;
+    uint8_t level[kAudioNoteKeys] = {};
+    NoteSet e5 = keysAt({55}, 200, level);   // E5: the high E string's 12th fret, positions 9 to 12
+    hand.update(level, e5, kGuitar, 6, 12, 1000);
+    REQUIRE(hand.position == 9);
+    uint8_t level2[kAudioNoteKeys] = {};
+    NoteSet c5 = keysAt({51}, 200, level2);  // C5: the high E string's 8th fret, positions 5 to 8, none in reach of 9
+    hand.update(level2, c5, kGuitar, 6, 12, 1100);
+    CHECK(hand.position == 8);
 }
 
 // Starts spread low to high over three blocks are a downstroke, high to low an upstroke, all in one block a strum without a direction, one start no strum.

@@ -34,16 +34,14 @@ public:
     /// Whether this frame keeps note `i`, for tests.
     bool keepsForTest(uint8_t i) const { return shown_.has(i); }
 
-    /// Keep frame `f`'s notes once a frame, so the hands move by frames: under `all` every key heard, from `no overtones` on the notes that outlast an attack through the sieves, then the hands and the chord's shape; the note harness runs it too.
+    /// Keep frame `f`'s notes once a frame, so the hands move by frames: under `all` every key heard, from `no overtones` on the notes the core keeps (`keepNotes`), then the hands and the chord's shape; the note harness runs it too.
     void keep(const AudioFrame& f, uint32_t ms) MM_NONBLOCKING {
         if (f.seq == filteredSeq_) return;
         filteredSeq_ = f.seq;
-        confirm_.apply(f, shown_, struck_);   // followed under every level, so a switch away from `all` starts from the frames heard
-        if (notes == kNotesAll) {             // the raw view: every key heard, an attack's burst included
-            shown_ = soundingNotes(f);
-            std::memcpy(struck_, f.notesHits, kHitBytes);
-        }
-        if (notes >= kNotesNoOvertones) { harmonicSieve(f.notes, f.notesCount, shown_, struck_); leakageSieve(f.notes, f.notesCount, shown_); }
+        const bool raw = notes == kNotesAll;   // the raw view: every key heard, an attack's burst included
+        if (raw) shown_ = soundingNotes(f);
+        else std::memcpy(shown_.bits, f.notesKept, kHitBytes);
+        std::memcpy(struck_, raw ? f.notesHits : f.notesKeptHits, kHitBytes);
         if (notes == kNotesHands) playedBy(f, struck_, shown_, ms);
         if (chord && f.chordQuality != kChordNone) snapToChord(f, shown_);   // with no chord named, nothing to snap to
     }
@@ -51,8 +49,7 @@ public:
 protected:
     NoteHits hits_;   ///< when each note last struck and its flash
     NoteSet shown_;   ///< the notes this frame keeps
-    uint8_t struck_[kHitBytes] = {};   ///< this frame's strikes, a strike carried to the frame that counts its key
-    NoteConfirm confirm_;              ///< which heard keys count, by the minimum note duration
+    uint8_t struck_[kHitBytes] = {};   ///< this frame's strikes: every key's under `all`, the kept keys' from `no overtones` on
 
     /// Publish which notes show, where the effect places it among its own controls.
     void addNotesSelect() {

@@ -10,7 +10,9 @@
 ///
 /// Output is one tab-separated line per block, its time in milliseconds, then the frame's level, flux, onset and sixteen bands, after a `#` line naming the rate, the block and every column.
 ///
-/// With `--notes` each line instead carries the keys each stage of the note effects keeps, through the effects' own `keep`: every sounding key as `key:level`, a `*` where it was struck; then the keys `no overtones` keeps, Keyboard's two hands and Strings' fretting hand, each with and without `chord`.
+/// With `--drums` each line carries the frame's four onsets, the drums DrumKit lights, a bit each from the kick, and the 31 third-octave levels; `--drum-input` sets the Audio card's `instrument` to drums.
+///
+/// With `--notes` the header adds each key's band delay in milliseconds, and each line instead carries the keys each stage of the note effects keeps, through the effects' own `keep`: every sounding key as `key:level`, a `*` where it was struck; then the keys `no overtones` keeps, Keyboard's two hands and Strings' fretting hand, each with and without `chord`.
 ///
 /// The last column is where that hand plays, `string:fret`; `-` stands for none. Keys count from A0, the frame's own numbering, and `--instrument` picks the Strings instrument.
 ///
@@ -26,6 +28,7 @@
 
 #include "core/services/AudioService.h"
 #include "core/services/AudioChords.h"     // ChordTracker: the chord the effects' `chord` snaps to
+#include "light/effects/DrumKitEffect.h"
 #include "light/effects/KeyboardEffect.h"
 #include "light/effects/StringsEffect.h"
 
@@ -99,19 +102,25 @@ struct NoteStages {
 int main(int argc, char** argv) {
     uint32_t rate = 24000;
     bool notes = false;
+    bool drums = false;
+    bool drumInput = false;   // the Audio card's `instrument` at drums
     uint8_t instrument = mm::StringsEffect::kGuitar;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--rate") == 0 && i + 1 < argc) {
             rate = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
         } else if (std::strcmp(argv[i], "--notes") == 0) {
             notes = true;
+        } else if (std::strcmp(argv[i], "--drums") == 0) {
+            drums = true;
+        } else if (std::strcmp(argv[i], "--drum-input") == 0) {
+            drumInput = true;
         } else if (std::strcmp(argv[i], "--instrument") == 0 && i + 1 < argc) {
             instrument = static_cast<uint8_t>(std::strtoul(argv[++i], nullptr, 10));
         } else {
             std::fprintf(stderr, "usage: mm_tempo [--rate");
             for (uint8_t r = 0; r < mm::AudioService::kSampleRateCount; r++)
                 std::fprintf(stderr, "%c%u", r ? '|' : ' ', static_cast<unsigned>(mm::AudioService::kSampleRates[r]));
-            std::fprintf(stderr, "] [--notes [--instrument 0..3]] < samples.s32le\n");
+            std::fprintf(stderr, "] [--notes [--instrument 0..3] | --drums] [--drum-input] < samples.s32le\n");
             return 2;
         }
     }
@@ -125,6 +134,7 @@ int main(int argc, char** argv) {
     auto audio = std::make_unique<mm::AudioService>();
     audio->defineControls();
     audio->sampleRateSel = static_cast<uint8_t>(sel);
+    if (drumInput) audio->instrument = mm::AudioService::kInstrumentDrums;
     audio->resetAnalysisForTest();
 
 #if defined(_WIN32)
@@ -135,7 +145,13 @@ int main(int argc, char** argv) {
     std::unique_ptr<NoteStages> stages;
     if (notes) {
         stages = std::make_unique<NoteStages>(instrument);
-        std::printf("# rate=%u block=%u columns=ms,sounding,sieve,keys,keysChord,strings,stringsChord,place\n", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
+        std::printf("# rate=%u block=%u columns=ms,sounding,sieve,keys,keysChord,strings,stringsChord,place delays=", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
+        for (uint8_t k = 0; k < mm::kAudioNoteKeys; k++) std::printf("%s%u", k ? "," : "", static_cast<unsigned>(audio->noteDelayMsForTest(k)));   // each key's band delay, ms
+        std::printf("\n");
+    } else if (drums) {
+        std::printf("# rate=%u block=%u columns=ms,onset,onsetLow,onsetMid,onsetHigh,kit", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
+        for (uint8_t b = 0; b < 31; b++) std::printf(",t%u", static_cast<unsigned>(b));
+        std::printf("\n");
     } else {
         std::printf("# rate=%u block=%u columns=ms,level,flux,onset", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
         for (uint8_t b = 0; b < 16; b++) std::printf(",b%u", static_cast<unsigned>(b));
@@ -150,6 +166,13 @@ int main(int argc, char** argv) {
         if (stages) {
             std::printf("%u", static_cast<unsigned>(nowMs));
             stages->print(f, static_cast<uint16_t>(samplesIn / kBlock), nowMs);
+            continue;
+        }
+        if (drums) {
+            std::printf("%u\t%u\t%u\t%u\t%u\t%u", static_cast<unsigned>(nowMs), static_cast<unsigned>(f.onset), static_cast<unsigned>(f.onsetLow),
+                        static_cast<unsigned>(f.onsetMid), static_cast<unsigned>(f.onsetHigh), static_cast<unsigned>(mm::DrumKitEffect::hitsOf(f)));   // the drums DrumKit lights, a bit each
+            for (uint8_t b = 0; b < 31; b++) std::printf("\t%u", static_cast<unsigned>(b < f.thirdsCount ? f.thirds[b] : 0));   // the third octaves, 20 Hz up
+            std::printf("\n");
             continue;
         }
         std::printf("%u\t%u\t%u\t%u", static_cast<unsigned>(nowMs), static_cast<unsigned>(f.level),

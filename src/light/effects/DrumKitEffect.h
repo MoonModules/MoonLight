@@ -32,6 +32,18 @@ public:
         controls_.addControl("idle", idle, 0, 128);
     }
 
+    /// The drums, kick first, then the snare, the hi-hat and the four toms from the floor tom up.
+    enum Drum : uint8_t { kKick, kSnare, kHat, kFirstTom };
+    static constexpr uint8_t kToms = 4;   ///< two thirds each, from 80 to 400 Hz
+
+    /// The drums frame `f` hits, bit d for drum d: the kick, snare and hi-hat from the bass, mid and treble onsets, each tom from its two third-octave bands; the drum harness scores them against labeled drums.
+    static uint8_t hitsOf(const AudioFrame& f) MM_NONBLOCKING {
+        uint8_t bits = static_cast<uint8_t>((f.onsetLow ? 1u << kKick : 0u) | (f.onsetMid ? 1u << kSnare : 0u) | (f.onsetHigh ? 1u << kHat : 0u));
+        for (uint8_t b = 0; b < 2 * kToms; b++)
+            if (hitAt(f.thirdsHits, static_cast<uint8_t>(kFirstTomThird + b))) bits = static_cast<uint8_t>(bits | (1u << (kFirstTom + b / 2)));
+        return bits;
+    }
+
     /// Note each drum's hit on the newest frame, then draw the kit from the hits' ages: @xref{drawn-from-the-hits-ages}.
     void tick() MM_NONBLOCKING override {
         const draw::Canvas cv = canvas();
@@ -57,7 +69,6 @@ private:
     static constexpr Place kKickPlace = {500, 720, 250, 250};    // the bass drum's head, facing the audience
     static constexpr Place kSnarePlace = {220, 560, 110, 40};    // tilted toward the drummer, a flat oval
     static constexpr Place kHatPlace = {110, 380, 110, 15};      // the closed hi-hat's cymbals, a thin bar
-    static constexpr uint8_t kToms = 4;                          // two thirds each, from 80 to 400 Hz
     static constexpr Place kTomPlaces[kToms] = {
         {810, 700, 140, 140},   // the floor tom, 80 and 100 Hz, beside the bass drum
         {650, 360, 100, 90},    // the low rack tom, 125 and 160 Hz
@@ -66,7 +77,6 @@ private:
     };
     static constexpr uint8_t kFirstTomThird = 6;   // 80 Hz
     static constexpr uint8_t kSparkles = 12;       // the stars over a hat
-    enum Drum : uint8_t { kKick, kSnare, kHat, kFirstTom };
     uint32_t hitMs_[kFirstTom + kToms] = {};       ///< when each drum last hit, on the effect's clock: a handful of drums from the band onsets, not NoteHits' 79 notes, and a linear fade so a drum's hit reads as a strike
     uint8_t heard_ = 0;                            ///< bit d once drum d has hit
     uint32_t hatSeed_ = 0;                         ///< where the last hat's stars fall
@@ -76,11 +86,9 @@ private:
     void noteHits(const AudioFrame& f, uint32_t ms) MM_NONBLOCKING {
         if (f.seq == lastSeq_) return;
         lastSeq_ = f.seq;
-        const bool hit[kFirstTom] = {f.onsetLow != 0, f.onsetMid != 0, f.onsetHigh != 0};
-        for (uint8_t d = 0; d < kFirstTom; d++) if (hit[d]) start(d, ms);
-        if (hit[kHat]) hatSeed_ = ms;
-        for (uint8_t b = 0; b < 2 * kToms; b++)
-            if (hitAt(f.thirdsHits, static_cast<uint8_t>(kFirstTomThird + b))) start(static_cast<uint8_t>(kFirstTom + b / 2), ms);
+        const uint8_t bits = hitsOf(f);
+        for (uint8_t d = 0; d < kFirstTom + kToms; d++) if (bits & (1u << d)) start(d, ms);
+        if (bits & (1u << kHat)) hatSeed_ = ms;
     }
 
     void start(uint8_t drum, uint32_t ms) MM_NONBLOCKING {

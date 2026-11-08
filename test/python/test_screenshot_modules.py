@@ -60,6 +60,38 @@ def test_another_host_s_ledger_is_left_for_a_run_against_that_host(ledger):
     added.append("Strings1")
     assert sm.Ledger.left_over("board-b") is None   # board-b's own Strings1 is not touched
     assert sm.Ledger.left_over("board-a")["added"] == ["Strings1"]
+    other = sm.Ledger("board-b")
+    other.append("Ripples")
+    assert sm.Ledger.left_over("board-a")["added"] == ["Strings1"]   # a run against board-b keeps board-a's record
+    other.close()
+    assert sm.Ledger.left_over("board-a")["added"] == ["Strings1"]
+
+
+def test_each_pipeline_change_is_on_disk_the_moment_it_is_made(ledger, monkeypatch):
+    state = {"modules": [{"name": "Layouts", "type": "Layouts", "children": [
+        {"name": "Grid", "type": "GridLayout", "controls": [{"name": "width", "value": 16}, {"name": "height", "value": 16}]}]}]}
+    monkeypatch.setattr(sm, "_get", lambda url, **kwargs: Response(state))
+    monkeypatch.setattr(sm, "delete_module", lambda host, name: True)
+    record = sm.Ledger("board-a")
+
+    def cut_short(host, name, ctrl, value):
+        if ctrl == "height":
+            raise KeyboardInterrupt   # the run stops between the width and the height
+        return True
+    monkeypatch.setattr(sm, "set_control", cut_short)
+    with pytest.raises(KeyboardInterrupt):
+        sm.prepare_pipeline("board-a", drop_modifiers=False, grid=64, ledger=record)
+    assert sm.Ledger.left_over("board-a")["pipeline"] == {"modifiers": [], "grids": []}   # nothing landed yet but the record is there
+    monkeypatch.setattr(sm, "set_control", lambda *a: True)
+    sm.prepare_pipeline("board-a", drop_modifiers=False, grid=64, ledger=record)
+    assert sm.Ledger.left_over("board-a")["pipeline"]["grids"] == [{"name": "Grid", "width": 16, "height": 16}]
+
+
+def test_a_restore_that_does_not_land_says_so(monkeypatch):
+    monkeypatch.setattr(sm, "set_control", lambda *a: False)
+    monkeypatch.setattr(sm, "add_module", lambda *a: "Block")
+    assert sm.restore_pipeline("host", {"grids": [{"name": "Grid", "width": 16, "height": 16}], "modifiers": []}, "Layer") is False
+    assert sm.restore_pipeline("host", {"grids": [], "modifiers": []}, "Layer") is True
 
 
 def test_a_missing_or_unreadable_ledger_leaves_nothing_to_undo(ledger):

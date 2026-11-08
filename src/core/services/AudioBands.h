@@ -65,15 +65,23 @@ struct OnsetDetector {
     /// Feed one block's flux, true on the block an onset is detected.
     bool feed(uint8_t flux, uint32_t nowMs, uint8_t num = 3, uint8_t den = 2,
               uint8_t margin = 20, uint16_t refractoryMs = 100) {
+        return exceeds(flux, num, den, margin) && fire(nowMs, refractoryMs);
+    }
+
+    /// Whether `flux` stands over `num`/`den` of its recent mean plus `margin`, the mean taking it in: feed's test without firing.
+    bool exceeds(uint8_t flux, uint8_t num = 3, uint8_t den = 2, uint8_t margin = 20) {
         const uint32_t meanNow = mean_ >> 8;
         const bool above = flux > (meanNow * num) / den + margin;
         mean_ = static_cast<uint16_t>(mean_ - (mean_ >> 4) + (static_cast<uint16_t>(flux) << 4));
-        if (above && (!fired_ || nowMs - lastMs_ >= refractoryMs)) {
-            lastMs_ = nowMs;
-            fired_ = true;
-            return true;
-        }
-        return false;
+        return above;
+    }
+
+    /// Fire at `nowMs` unless the last onset is under `refractoryMs` old: an onset another test decided.
+    bool fire(uint32_t nowMs, uint16_t refractoryMs) {
+        if (fired_ && nowMs - lastMs_ < refractoryMs) return false;
+        lastMs_ = nowMs;
+        fired_ = true;
+        return true;
     }
 };
 

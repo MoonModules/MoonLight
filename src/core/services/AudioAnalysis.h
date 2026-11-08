@@ -11,6 +11,7 @@
 #include "core/services/AudioBands.h"     // ThirdOctaveBank, SemitoneBank
 #include "core/services/AudioDynamics.h"
 #include "core/services/AudioHarmony.h"   // the harmony's trackers
+#include "core/util/HarmonicSieve.h"    // keepNotes: the notes the core keeps
 #include "core/services/AudioOnsets.h"    // the onsets per range and per band
 
 namespace mm {
@@ -78,6 +79,7 @@ struct AudioHarmonyState : platform::InternalRamObject {
     KeyTracker key;                     ///< the key over the last 15 s
     TuningEstimator tuning;             ///< how far the music sits from the bank's tuning
     BandOnsets<kAudioNoteKeys, kNotesLowBand, true> noteOnsets;   ///< a new note's start, one per piano key
+    NoteConfirm confirm;                ///< which heard keys outlast an attack, for the notes the core keeps
     float tuningCents = 0.0f;           ///< the bank's tuning from A440, in cents
     float tuningHeldMs = 0.0f;          ///< how long the reading has stayed past the retune threshold
 
@@ -88,6 +90,7 @@ struct AudioHarmonyState : platform::InternalRamObject {
         key.reset();
         tuning.reset();
         noteOnsets.reset();
+        confirm = NoteConfirm{};
         tuningCents = tuningHeldMs = 0.0f;
     }
 

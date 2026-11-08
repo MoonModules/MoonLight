@@ -151,6 +151,8 @@ add_executable(mm_tests
     unit/light/unit_StringsEffect.cpp
     unit/light/unit_PlayerHands.cpp
     unit/light/unit_ColorTrailsEffect.cpp
+    unit/light/unit_SheetMusicEffect.cpp
+    unit/light/unit_SoapEffect.cpp
     unit/light/unit_TrailsEffect.cpp
     unit/light/unit_Fluid.cpp
     unit/light/unit_draw.cpp

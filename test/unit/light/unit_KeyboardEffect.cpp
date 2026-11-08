@@ -106,7 +106,7 @@ TEST_CASE("a frame two ticks read is one hit: the glow fades on instead of start
     keys.e.ivory = 0;
     keys.e.noteNames = false;
     keys.e.decay = 30;   // pin the 300 ms glow this test reads 80 ms into
-    audio.frameForTest() = struck(48);
+    audio.frameForTest() = analyzed(struck(48), keys.confirm);
     audio.frameForTest().seq = 7;
     platform::setTestNowMs(1000);
     keys.layer.tick();

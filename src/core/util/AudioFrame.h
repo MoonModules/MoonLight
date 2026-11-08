@@ -74,6 +74,8 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  onsetHigh = 0;            ///< the same for the treble: the hi-hat, the cymbals
     uint8_t  thirdsHits[4] = {};       ///< a bit per third, set on the block it had a hit: a tom in its own band; read with `hitAt`
     uint8_t  notesHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note of `notes`, set on the block it started: a key's attack, a plucked string
+    uint8_t  notesKept[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note the core keeps: outlasting an attack, neither an overtone nor a neighbor's leakage, the `no overtones` of the note effects
+    uint8_t  notesKeptHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per kept note, set on the block its strike counts: a strike heard a block before its key is kept is carried to that block
     uint16_t seq = 0;                  ///< counts the frames its source produced, so a consumer that reads one frame on two ticks takes its hits once
 
     /// Whether there is sound to show: the gate where one was measured, else, on a synced or simulated frame, a smoothed level over the room's hiss.
@@ -90,6 +92,7 @@ struct AudioHits {
     uint8_t onset = 0, low = 0, mid = 0, high = 0;   ///< the strongest of each onset seen
     uint8_t thirds[sizeof(AudioFrame::thirdsHits)] = {};   ///< every third's hit seen
     uint8_t notes[sizeof(AudioFrame::notesHits)] = {};     ///< every note's hit seen
+    uint8_t kept[sizeof(AudioFrame::notesKeptHits)] = {};  ///< every kept note's hit seen
     bool    change = false;                                ///< whether any frame's harmony moved
 
     /// Merge one frame's hits in.
@@ -98,6 +101,7 @@ struct AudioHits {
         h.onset = f.onset; h.low = f.onsetLow; h.mid = f.onsetMid; h.high = f.onsetHigh;
         std::memcpy(h.thirds, f.thirdsHits, sizeof(h.thirds));
         std::memcpy(h.notes, f.notesHits, sizeof(h.notes));
+        std::memcpy(h.kept, f.notesKeptHits, sizeof(h.kept));
         h.change = f.harmonyChange;
         merge(h);
     }
@@ -109,6 +113,7 @@ struct AudioHits {
         high = o.high > high ? o.high : high;
         for (size_t k = 0; k < sizeof(thirds); k++) thirds[k] |= o.thirds[k];
         for (size_t k = 0; k < sizeof(notes); k++) notes[k] |= o.notes[k];
+        for (size_t k = 0; k < sizeof(kept); k++) kept[k] |= o.kept[k];
         change = change || o.change;
     }
     /// Give a frame every hit merged so far, in place of its own.
@@ -116,6 +121,7 @@ struct AudioHits {
         f.onset = onset; f.onsetLow = low; f.onsetMid = mid; f.onsetHigh = high;
         for (size_t k = 0; k < sizeof(thirds); k++) f.thirdsHits[k] = thirds[k];
         for (size_t k = 0; k < sizeof(notes); k++) f.notesHits[k] = notes[k];
+        for (size_t k = 0; k < sizeof(kept); k++) f.notesKeptHits[k] = kept[k];
         f.harmonyChange = change;
     }
 };

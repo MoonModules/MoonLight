@@ -27,16 +27,18 @@ AudioFrame fullFrame() {
     f.notesCount = kAudioNoteKeys;
     for (uint8_t i = 0; i < kAudioNoteKeys; i++) f.notes[i] = static_cast<uint8_t>(i * 3);
     f.notesHits[0] = 0x10; f.notesHits[9] = 0x40;
+    f.notesKept[0] = 0x30; f.notesKept[5] = 0x02;
+    f.notesKeptHits[0] = 0x10; f.notesKeptHits[5] = 0x02;
     f.seq = 0xBEEF;
     return f;
 }
 }  // namespace
 
-TEST_CASE("a frame with the harmony round-trips every field it carries, in 198 bytes") {
+TEST_CASE("a frame with the harmony round-trips every field it carries, in 218 bytes") {
     const AudioFrame f = fullFrame();
     uint8_t pkt[kMlSyncMaxPacket];
     const size_t n = buildMoonLightAudioSync(pkt, f);
-    CHECK(n == 198);
+    CHECK(n == 218);
     CHECK(n == kMlSyncMaxPacket);
     AudioFrame out;
     REQUIRE(parseMoonLightAudioSync(pkt, n, out));
@@ -64,6 +66,19 @@ TEST_CASE("a frame with the harmony round-trips every field it carries, in 198 b
     CHECK(out.notesCount == f.notesCount);
     CHECK(std::memcmp(out.notes, f.notes, kAudioNoteKeys) == 0);
     CHECK(std::memcmp(out.notesHits, f.notesHits, sizeof(f.notesHits)) == 0);
+    CHECK(std::memcmp(out.notesKept, f.notesKept, sizeof(f.notesKept)) == 0);
+    CHECK(std::memcmp(out.notesKeptHits, f.notesKeptHits, sizeof(f.notesKeptHits)) == 0);
+}
+
+// Every receiver shows the notes the sender's core kept, so a notes section without them is malformed, as a section running short is.
+TEST_CASE("a notes section without the kept notes and their strikes is refused") {
+    const AudioFrame f = fullFrame();
+    uint8_t pkt[kMlSyncMaxPacket];
+    const size_t n = buildMoonLightAudioSync(pkt, f);
+    const size_t kept = sizeof(f.notesKept) + sizeof(f.notesKeptHits);
+    pkt[n - (1 + kAudioNoteKeys + sizeof(f.notesHits) + kept) - 1] = static_cast<uint8_t>(1 + kAudioNoteKeys + sizeof(f.notesHits));   // the length an older sender wrote
+    AudioFrame out;
+    CHECK_FALSE(parseMoonLightAudioSync(pkt, n - kept, out));
 }
 
 // With `harmony` off a board sends no keys and no harmony, and a receiver reads them as absent, which is what the effects fall back on.

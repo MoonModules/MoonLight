@@ -27,6 +27,8 @@ An **Akai MPK261**: 61 semi-weighted keys, 16 RGB-backlit pads, 8 knobs, 8 fader
 
 **One band member is one layer.** An effect in that layer listens to one source, a MIDI channel or an audio channel, and draws only that musician; the layer's opacity, blend mode and modifiers place and mix it. A band is a stack of layers, so no new composition mechanism exists.
 
+**An audio channel names its instrument (from the audio plan, 2026-11-08).** The Audio card's `instrument`, today `mix` or `drums`, grows to piano, guitar, bass, violin and cello: the core applies that instrument's model, the drum rule built for `drums`, the piano's two hands, the fretting hand, and the channel's `AudioFrame` carries the notes that player could play, with the string and fret where they matter, so every effect, script and receiver reads the same. The hands move from the light domain into the core as one library: the core runs it for a channel's instrument, and an effect's `hands` view, kept under `mix` because the effects aim at a nice picture as well as a true one, calls the same code.
+
 **MIDI by the book.** A stage gives each instrument its own MIDI channel, so a channel select on the effect is the routing. Drums follow the General MIDI percussion map, so a kit means something with no setup: note 36 a kick, 38 a snare, 42 a closed hi-hat, 49 a crash, the same numbers every electronic kit sends on channel 10.
 
 **The `MidiFrame`,** published by `MidiService` from any transport, in the `AudioFrame`'s publish-and-read shape:

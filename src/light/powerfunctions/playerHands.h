@@ -291,14 +291,16 @@ private:
         return -1;
     }
 
-    /// The position that places the most weight, -1 when none places any; `energy` takes its weight.
-    static int8_t bestPosition(const uint16_t* weight, const uint8_t* order, uint8_t m, const uint8_t* open, uint8_t n, uint8_t frets, uint32_t& energy) MM_NONBLOCKING {
+    /// The position that places the most weight, of equals the nearest to the hand's, the movement cost of tablature transcription, the lowest before the hand played; -1 when none places any; `energy` takes its weight.
+    int8_t bestPosition(const uint16_t* weight, const uint8_t* order, uint8_t m, const uint8_t* open, uint8_t n, uint8_t frets, uint32_t& energy) const MM_NONBLOCKING {
         int8_t tn[kMaxStrings];
         uint8_t tf[kMaxStrings];
         int8_t best = -1;
+        const int16_t from = position;
+        const auto far = [from](int16_t p) { return from < 0 ? p : (p > from ? p - from : from - p); };
         for (uint8_t p = 1; p + kReach - 1 <= frets; p++) {
             const uint32_t e = place(weight, order, m, open, n, frets, p, tn, tf);
-            if (e > energy) { energy = e; best = static_cast<int8_t>(p); }
+            if (e > energy || (e == energy && e > 0 && far(p) < far(best))) { energy = e; best = static_cast<int8_t>(p); }
         }
         return best;
     }

@@ -43,6 +43,32 @@ def test_a_urmp_note_file_gives_its_pitches_in_hertz_as_midi(tmp_path):
     assert bench_notes.urmp_notes(tmp_path / "Notes_1_vn_01_X.txt") == [(0.5, 0.75, 69), (1.0, 1.5, 60)]
 
 
+def test_a_urmp_cello_note_under_127_hz_is_a_pitch_in_hertz_and_a_line_with_no_pitch_is_skipped(tmp_path):
+    (tmp_path / "Notes_2_vc_11_X.txt").write_text("7.941\t97.629\t0.250\n9.0\t0\t0.1\n")
+    assert bench_notes.urmp_notes(tmp_path / "Notes_2_vc_11_X.txt") == [(7.941, pytest.approx(8.191), 43)]   # G2, not MIDI 98
+
+
+def test_a_urmp_folder_gives_the_parts_of_the_instrument_the_hand_plays(tmp_path):
+    for part in ("1_vn_01_X", "2_vc_01_X", "3_fl_01_X"):
+        (tmp_path / f"AuSep_{part}.wav").write_bytes(b"")
+        (tmp_path / f"Notes_{part}.txt").write_text("0.5\t440\t0.25\n")
+    assert {p.name for p, _ in bench_notes.collect(tmp_path, 0, "cello")} == {"AuSep_2_vc_01_X.wav"}
+    assert len(bench_notes.collect(tmp_path, 0, "guitar")) == 3   # no guitar in URMP: every part, for the engine's stages
+
+
+def test_the_resource_forks_macos_writes_on_an_external_disk_are_not_read_as_audio_or_notes(tmp_path):
+    for name in ("AuSep_1_vn_01_X.wav", "Notes_1_vn_01_X.txt", "._AuSep_1_vn_01_X.wav", "._Notes_1_vn_01_X.txt", "._song.wav", "._song.mid"):
+        (tmp_path / name).write_bytes(b"0.5\t440\t0.25\n" if name.endswith(".txt") else b"")
+    assert [p.name for p, _ in bench_notes.collect(tmp_path, 0)] == ["AuSep_1_vn_01_X.wav"]
+
+
+def test_a_file_that_fails_becomes_a_row_naming_why_and_the_run_goes_on(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise ValueError("bad annotation")
+    monkeypatch.setattr(bench_notes, "analyze_one", boom)
+    assert bench_notes.analyze(tmp_path / "x.wav", [], tmp_path / "mm_tempo", "guitar") == {"name": "x", "error": "ValueError: bad annotation"}
+
+
 def test_a_midi_file_gives_its_notes_and_leaves_the_drums_out(tmp_path):
     mid = mido.MidiFile(ticks_per_beat=480)
     track = mido.MidiTrack()
@@ -74,6 +100,17 @@ def test_a_stage_that_plays_the_score_scores_whole_and_its_inventions_are_named_
     assert noisy["r"] == 1.0 and noisy["p"] == pytest.approx(2 / 6)
 
 
+def test_a_note_is_dated_where_the_engine_says_it_began_and_its_lag_is_the_latency_a_viewer_sees():
+    ref = [(1.0, 1.5, 45)]                        # A2, key 24
+    delays = [0] * 24 + [106]                     # its band reports 106 ms late
+    lit = [(1.106, 1.606, 45)]                    # the frame it lit on, past the 50 ms the score allows
+    assert bench_notes.score(ref, lit)["r"] == 0.0
+    dated = bench_notes.began(lit, delays)
+    assert dated[0][:3] == (pytest.approx(1.0), pytest.approx(1.5), 45)
+    scored = bench_notes.score(ref, dated)
+    assert scored["r"] == 1.0 and scored["lags"] == [106]
+
+
 def test_the_generated_set_writes_its_tracks_its_notes_and_its_version(tmp_path):
     bench_notes.generate(tmp_path)
     items = dict((p.name, notes) for p, notes in bench_notes.collect(tmp_path, 0))
@@ -87,8 +124,8 @@ def test_the_generated_set_writes_its_tracks_its_notes_and_its_version(tmp_path)
 def test_the_generated_set_reads_through_the_shipped_analysis_and_the_note_effects_as_pinned(tmp_path):
     bench_notes.generate(tmp_path / "generated")
     rows = {r["name"]: r["scores"] for r in bench_notes.run(bench_notes.collect(tmp_path / "generated", 0), tmp_path / "out", no_build=True)}
-    # The engine hears seven of the scale's eight notes: F4 comes a semitone above E4, whose leakage already lights its key, so F4's start marks no onset.
-    assert rows["scale-c-major"]["sounding"]["r"] == pytest.approx(7 / 8)
+    # The engine hears all eight of the scale's notes, F4 a semitone above E4 among them: its rise under E4's leakage counts once it stands out.
+    assert rows["scale-c-major"]["sounding"]["r"] == pytest.approx(1.0)
     assert rows["triads"]["sieve"]["f"] > rows["triads"]["sounding"]["f"]                  # the sieve takes overtones out of held chords
     assert rows["triads"]["sieve"]["overtone"] < rows["triads"]["sounding"]["overtone"]
     assert rows["scale-c-major"]["strings"]["f"] > rows["scale-c-major"]["sounding"]["f"]  # one note a string keeps the melody, not the attack's flash

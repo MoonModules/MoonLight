@@ -6,6 +6,8 @@
 #include "core/services/AudioChords.h"
 
 #include <cstring>
+#include <initializer_list>
+#include <string>
 
 using namespace mm;
 

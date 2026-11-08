@@ -17,8 +17,8 @@ so a custom check written that way could never appear in the editor anyway.
    split by where that RAM lives, because the fix differs per category:
      locals   — on the stack; a big one risks overflow on a 4 KB task stack
      members  — per INSTANCE, so the cost multiplies by how many exist
-   `constexpr` and static-storage arrays are excluded: they live in flash and cost no RAM, so
-   reporting them would flag lookup tables as memory bloat. (Measured: including them roughly
+   `constexpr` arrays are excluded, since they live in flash, so reporting them would flag
+   lookup tables as memory bloat; static-storage ones too, whose RAM check_footprint measures. (Measured: including them roughly
    triples the list with entries nobody should act on — `MoonModule::name_[16]` was itself
    *shrunk* from [24] to save 8 bytes per module, and would have been reported as a problem.)
 
@@ -61,7 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_tidy  # noqa: E402  — reuse its build-dir and toolchain logic, one owner
 import _findings  # noqa: E402
 
-# Bytes per element for the types we actually declare arrays of. Anything unlisted (a struct,
+# Bytes per element for the types we declare arrays of. Anything unlisted (a struct,
 # an enum, a class) falls back to 4: this report is about ORDER OF MAGNITUDE, and guessing a
 # struct's exact layout would need the full ABI for no gain in what the reader does next.
 ELEM_BYTES = {
@@ -204,7 +204,7 @@ _SCOPE = {
 # What "documented well" looks like, in WORDS, per declaration kind.
 #
 # Words rather than lines: a line is a formatting accident — the same paragraph is 5 lines at 100
-# columns and 9 at 60 — while the word count is what a reader actually absorbs. Measured on this
+# columns and 9 at 60, while the word count is what a reader absorbs. Measured on this
 # tree, a comment line carries a median of 13 words in BOTH kinds, so a line-based yardstick of
 # class 10 / method 3 / attribute 3 converts to 130 and 40.
 #
@@ -214,7 +214,7 @@ _SCOPE = {
 _IDEAL_DOC_WORDS = {"class": 130, "method": 40, "attribute": 40, "other": 40}
 
 # `@technical` ends the part being measured: everything before it is the lead a reader takes in first, and everything after is the deep-dive reference, so only the lead is measured.
-# Counting the whole block punished the very structure the directive exists to encourage:
+# Counting the whole block punished the structure the directive exists to encourage:
 # NetworkSendDriver read +407% as one blob, and +48% once its 469 appendix words were separated
 # from its 193-word lead.
 #
@@ -242,7 +242,7 @@ RULES = {
     "arrays": {
         "title": "RAM-costing fixed arrays",
         "output": "dump",
-        # constexpr and static-storage arrays are excluded: they live in flash and cost no RAM.
+        # constexpr arrays are excluded, since they live in flash; static-storage ones too, whose RAM check_footprint measures.
         "matcher": ("namedDecl(anyOf("
                     "varDecl(hasType(constantArrayType()), "
                     "unless(anyOf(isConstexpr(), hasStaticStorageDuration()))), "
@@ -260,7 +260,7 @@ RULES = {
         # so ONE pass reports both kinds against the declaration each documents. Without it this
         # rule sees only `///` — 24% of the tree's comment lines.
         "shadow": True,
-        # The scopes that can actually carry a comment: class/struct, method, and class ATTRIBUTE.
+        # The scopes that can carry a comment: class/struct, method, and class ATTRIBUTE.
         # parmVarDecl is deliberately absent — a C++ parameter cannot hold a doc comment (1054
         # probed, zero with one), it is documented via `@param` in the method's own comment, and
         # this tree uses `@param` 8 times, all in a .js file. Reporting 1054 permanent violations
@@ -283,7 +283,7 @@ RULES = {
         "title": "Heap allocation sites",
         # `dump`, not `diag`: diag gives a location with no expression and print gives an
         # expression with no location. Only dump carries both, which is what makes a per-site
-        # listing possible rather than just a per-file count.
+        # listing possible rather than a per-file count alone.
         "output": "dump",
         # `stmt(...)` is REQUIRED: a bare top-level anyOf() of Stmt matchers is ambiguous
         # ("unresolved overloaded type") and clang-query then matches NOTHING while still
@@ -296,7 +296,7 @@ RULES = {
         # says which code allocates rather than only which line. clang-query then emits two
         # blocks per match ("fn" then "root"), which is why collect_heap parses per-match.
         "matcher": ("stmt(anyOf(cxxNewExpr(), cxxDeleteExpr(), callExpr(callee(functionDecl("
-                    # The project's OWN allocator belongs here, not just libc's: platform::alloc
+                    # The project's OWN allocator belongs here as well as libc's: platform::alloc
                     # is how 35 sites in src/ acquire memory, and listing only `free` made the
                     # table read as "8 frees, 0 allocations" on HueDriver — an implied leak that
                     # was not there. allocInternal pairs with the ordinary free() (platform.h:63);
@@ -410,7 +410,7 @@ def _shadow_tree(build_dir):
     # cannot change mid-run. A stale tree from a PREVIOUS run would be wrong, so the marker file
     # records which source state it was built from.
     stamp = shadow / ".built-from"
-    # A FINGERPRINT of every source path + its size and mtime, not just the newest mtime. Max-mtime
+    # A FINGERPRINT of every source path + its size and mtime, not only the newest mtime. Max-mtime
     # cannot see a DELETION (deleting anything but the newest leaves the max unchanged) nor an edit
     # that restores an older timestamp — in both cases the shadow tree stays stale and the report
     # describes source that is no longer there. Path and size are in the digest too, so a rename or

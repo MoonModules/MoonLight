@@ -7,7 +7,7 @@
 
 namespace mm {
 
-/// The notes a reader keeps of a frame: the set it keeps them in, a bit a key as the frame's strikes are held, the minimum note duration, the harmonic sieve and peak picking.
+/// The notes the core keeps of each frame: the set it keeps them in, a bit a key as the frame's strikes are held, the minimum note duration, the harmonic sieve and peak picking, run once a frame by keepNotes.
 inline constexpr uint8_t kHitBytes = (kAudioNoteKeys + 7) / 8;
 
 /// A set of the piano's keys, a bit a key: the notes a reader keeps of a frame's `notes`.
@@ -87,6 +87,21 @@ inline void leakageSieve(const uint8_t* level, uint8_t count, NoteSet& set) MM_N
         if (!before.has(i)) continue;
         for (int16_t d = 1; d <= kLeakReach; d++)
             if (leaksFrom(level, count, before, i, i - d) || leaksFrom(level, count, before, i, i + d)) { set.remove(i); break; }
+    }
+}
+
+static_assert(sizeof(AudioFrame::notesKept) == kHitBytes && sizeof(AudioFrame::notesKeptHits) == kHitBytes, "a frame's kept notes are a NoteSet's bits");
+
+/// The notes the core keeps of `f`, into `notesKept` and `notesKeptHits`: the keys that outlast an attack (`confirm` holds NoteConfirm's state), less overtones and leakage; once a frame, so every reader and receiver reads the same.
+inline void keepNotes(AudioFrame& f, NoteConfirm& confirm) MM_NONBLOCKING {
+    NoteSet set;
+    uint8_t struck[kHitBytes];
+    confirm.apply(f, set, struck);
+    harmonicSieve(f.notes, f.notesCount, set, struck);
+    leakageSieve(f.notes, f.notesCount, set);
+    for (uint8_t b = 0; b < kHitBytes; b++) {
+        f.notesKept[b] = set.bits[b];
+        f.notesKeptHits[b] = static_cast<uint8_t>(struck[b] & set.bits[b]);
     }
 }
 

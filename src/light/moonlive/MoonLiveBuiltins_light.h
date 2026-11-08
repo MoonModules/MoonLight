@@ -639,10 +639,10 @@ extern "C" inline uint32_t mm_light_bandOnset(const uintptr_t* args, uint32_t, c
     const uint32_t i = uint32_t(args[0]);
     return i < 31 && hitAt(AudioService::latestFrame()->thirdsHits, static_cast<uint8_t>(i)) ? 1 : 0;
 }
-/// 1 on the frame piano key `i`, 0 for A0, started a note, 0 otherwise.
+/// 1 on the frame piano key `i`, 0 for A0, started a note the core keeps, 0 otherwise: an attack's flash, an overtone or a neighbor's leakage starts none.
 extern "C" inline uint32_t mm_light_noteOnset(const uintptr_t* args, uint32_t, const uint8_t*) {
     const uint32_t i = uint32_t(args[0]);
-    return i < kAudioNoteKeys && hitAt(AudioService::latestFrame()->notesHits, static_cast<uint8_t>(i)) ? 1 : 0;
+    return i < kAudioNoteKeys && hitAt(AudioService::latestFrame()->notesKeptHits, static_cast<uint8_t>(i)) ? 1 : 0;
 }
 /// True on the frame a chord change was heard.
 extern "C" inline uint32_t mm_light_chordChange(const uintptr_t*, uint32_t, const uint8_t*) {

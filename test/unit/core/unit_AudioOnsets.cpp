@@ -191,3 +191,54 @@ TEST_CASE("at 8 kHz, with fewer bands, a kick with its click still fires the low
 TEST_CASE("a roll of ten strokes at 10 a second fires its band ten times") {
     CHECK(burstHits(1000.0f, 17, 100, 10, 10) >= 10);
 }
+
+namespace {
+
+struct Pluck { float hz; uint32_t atMs; };
+
+// Plucks through both banks as the analysis reads them, the note onsets told when the third octaves last heard an attack; answers how often each key fired from `fromMs` until `untilMs`.
+std::vector<int> keyHits(const std::vector<Pluck>& plucks, uint32_t fromMs, uint32_t untilMs) {
+    static mm::ThirdOctaveBank thirds;
+    static mm::SemitoneBank semis;
+    static mm::AudioOnsets onsets;
+    static NoteOnsets notes;
+    thirds.init(kRate);
+    semis.init(kRate, 440.0f, mm::kSemitoneTopHz);
+    onsets.reset();
+    notes.reset();
+    std::vector<int> hits(mm::kAudioNoteKeys, 0);
+    const auto signal = [&](double s) {
+        double v = 0;
+        for (const Pluck& p : plucks)
+            if (const double u = s - p.atMs / 1000.0; u >= 0)
+                for (int k = 1; k <= 3; k++) v += 3.0e5 / (k * k) * attack(u, 0.002) * std::exp(-u * 1.4 * k) * std::sin(2.0 * std::numbers::pi * static_cast<double>(p.hz) * k * u);
+        return v;
+    };
+    uint32_t seed = 7;
+    float x[kChunk];
+    for (size_t at = 0; at * 1000 < static_cast<size_t>(untilMs) * kRate; at += kChunk) {
+        for (size_t i = 0; i < kChunk; i++) {
+            seed = seed * 1664525u + 1013904223u;
+            x[i] = static_cast<float>(static_cast<double>(static_cast<int32_t>(seed) >> 24) + signal(static_cast<double>(at + i) / kRate));
+        }
+        thirds.process(x);
+        semis.process(x);
+        const uint32_t nowMs = static_cast<uint32_t>((at + kChunk) * 1000 / kRate);
+        onsets.update(thirds, nowMs);
+        notes.update(semis, nowMs, onsets.sinceAttackMs(nowMs));
+        mm::AudioFrame f;
+        onsets.take(f, true);
+        uint8_t h[NoteOnsets::kBytes];
+        notes.take(h, true);
+        if (nowMs >= fromMs) for (uint8_t k = 0; k < mm::kAudioNoteKeys; k++) hits[k] += mm::hitAt(h, k);
+    }
+    return hits;
+}
+
+}  // namespace
+
+// A semitone step: F4 rises inside E4's leakage and stands over it only near its top, so its rise counts from where it began (the generated scale's F4, 2026-11-07).
+TEST_CASE("F4 struck while E4 rings fires its own key") {
+    const auto hits = keyHits({{329.63f, 300}, {349.23f, 800}}, 800, 1000);
+    CHECK(hits[44] >= 1);
+}

@@ -2240,6 +2240,63 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/ColorTrailsEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#colortrailseffect"
   },
+  "SheetMusicEffect": {
+   "line": "The notes as they are played, written on a grand staff, or as a sequencer's piano roll: time scrolls to the left, each note in its pitch class's color.",
+   "summary": "The newest moment is the right edge, and `speed` columns a second scroll left. `view` picks how pitch runs up:\n\n- `staff`: the treble and bass staves of piano music with their clefs, middle C on its ledger line between them, each note a head on its line or space with its stem, ledger lines where it sits beyond the staves, and a sharp before its head. How long a note held writes its value: an eighth with its flag, a quarter, a half with a hollow head, a whole without a stem.\n- `piano roll`: one row a key where the panel is tall enough, `octave` and `octaves` picking the keys from A0 up, all 79 the engine measures (A0 to D#7) by default, a faint line on each C.\n\n`notes` starts at `no overtones`; switching it between `all`, `no overtones` and `hands` shows what each keeps: an attack's flash is a dot, a late note one that starts late, an overtone the same color an octave or a twelfth up.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/SheetMusicEffect.gif",
+   "controls": {
+    "view": {
+     "line": "A grand staff, or a piano roll."
+    },
+    "notes": {
+     "line": "All notes heard, without overtones, or what hands could play."
+    },
+    "chord": {
+     "line": "Keep only the notes of the chord being played."
+    },
+    "octave": {
+     "line": "The piano roll's first octave, counted from A0."
+    },
+    "octaves": {
+     "line": "How many octaves the piano roll shows, all 79 keys from 7."
+    },
+    "speed": {
+     "line": "How many columns scroll by a second."
+    },
+    "noteNames": {
+     "line": "The strongest pitch classes top left, the key top right."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#sheetmusic",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SheetMusicEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#sheetmusiceffect"
+  },
+  "SoapEffect": {
+   "line": "A soap film's swirl: an image colored by noise, its rows and columns sliding by a drifting noise field, smearing into marbled bands.",
+   "summary": "Each frame slides every row by the noise in its first column and every column by the noise in its first row, a fraction of a light blended between two neighbors, and a light pulled in from past the edge takes the palette color of the noise there. A heavy load at a high resolution: belrik's stress test for a large panel.",
+   "attribution": "[Stepko](https://moonmodules.org/MoonLight/reference/attributions.html#stepko), [Stefan Petrick](https://moonmodules.org/MoonLight/reference/attributions.html#stefan-petrick), [blazoncek](https://moonmodules.org/MoonLight/reference/attributions.html#blazoncek), [Damian Schneider](https://moonmodules.org/MoonLight/reference/attributions.html#damian-schneider), [softhack007](https://moonmodules.org/MoonLight/reference/attributions.html#frank)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/SoapEffect.gif",
+   "controls": {
+    "speed": {
+     "line": "How fast the noise field drifts."
+    },
+    "smoothness": {
+     "line": "How much old noise the film keeps: high is a slow, smooth swirl."
+    },
+    "density": {
+     "line": "How far a row or column slides: high folds the bands tighter."
+    }
+   },
+   "role": "effect",
+   "tags": "🐙💨",
+   "dim": 2,
+   "doc": "light/effects.md#soap",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SoapEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#soapeffect"
+  },
   "TunnelEffect": {
    "line": "A texture mapped onto the inside of an infinite tube, so the viewer appears to fly down it forever.",
    "summary": "Nothing is 3D: the angle around the center is one texture coordinate and the reciprocal of the distance is the other, which is perspective for the price of a divide.",
@@ -4290,6 +4347,10 @@
     "harmony": {
      "line": "Measure the notes, for the pitch classes, the harmony's changes and the notes bars.",
      "more": "Off saves the semitone bank's share of a core where nothing reads the harmony."
+    },
+    "instrument": {
+     "line": "What the input carries: a full mix, or the drums alone, from a drum mic or bus.",
+     "more": "On a stage with an input per instrument: each hit then lights one drum."
     },
     "send audio": {
      "line": "Send the local analysis as audio-sync packets."

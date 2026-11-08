@@ -2,6 +2,8 @@
 
 /// Pins the harmonic sieve: a note's overtones leave the set, a loud note above another stays.
 
+#include <initializer_list>   // the braced key lists the loops walk
+
 #include "doctest.h"
 #include "core/util/HarmonicSieve.h"
 
@@ -110,7 +112,7 @@ TEST_CASE("a weak key counts from its second frame running, a loud one on its fi
     NoteSet set;
     uint8_t struck[kHitBytes] = {};
     confirm.apply(keyFrame(30, 10, false), set, struck);
-    CHECK_FALSE(set.has(30));                       // one weak frame: an attack's burst, not yet a note
+    CHECK_FALSE(set.has(30));                       // one weak frame: an attack's burst, no note
     confirm.apply(keyFrame(30, 10, false), set, struck);
     CHECK(set.has(30));                             // still there a frame on: a note
     NoteConfirm loud;

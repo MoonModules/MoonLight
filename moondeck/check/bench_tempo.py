@@ -164,7 +164,7 @@ def analyze(path: Path, exe: Path, flags: tuple = (), cast=int) -> dict:
         frames.append([cast(v) for v in line.split("\t")])
     # The frame rate is the binary's own rate over its own block, as its header states them.
     return {"columns": header["columns"].split(","), "fps": int(header["rate"]) / int(header["block"]),
-            "frames": frames, "hash": digest.hexdigest()[:16]}
+            "header": header, "frames": frames, "hash": digest.hexdigest()[:16]}
 
 
 # ---------------------------------------------------------------- labels

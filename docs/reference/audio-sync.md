@@ -41,7 +41,7 @@ After the header come the sections whose mask bit is set, in bit order. Each is 
 | 1 | smoothed bands | 16 | the sender smooths its bands |
 | 2 | thirds | 1 + count + 4 | the sender measured third-octave bands |
 | 3 | harmony | 16 | the sender has `harmony` on |
-| 4 | notes | 1 + count + 10 | the sender has `harmony` on |
+| 4 | notes | 1 + count + 30 | the sender has `harmony` on |
 
 A section is there when the sender measured what it holds, so an absent section means "not measured", never zeros: a sender with no smoothing, no thirds or no harmony leaves that section out.
 
@@ -90,10 +90,14 @@ A sender that measures no gate sends `gate` 0, and one that detects no drums sen
 | 0 | 1 | count | how many keys follow, at most 79 |
 | 1 | count | notes | one band a semitone from A0 (MIDI 21) up, 0..255 on the bands' scale |
 | 1 + count | 10 | notesHits | a bit per key, set on a key's attack |
+| 11 + count | 10 | notesKept | a bit per key the sender's core keeps: outlasting an attack, neither an overtone nor a neighbor's leakage |
+| 21 + count | 10 | notesKeptHits | a bit per kept key, set on the frame its strike counts |
 
 A hit bit field is read least significant bit first: band or key *i* is bit `i % 8` of byte `i / 8`.
 
-A frame with every section is 198 bytes at a 48 kHz sample rate, 90 bytes with `harmony` off, and 36 bytes with the core alone. The bass, mid and treble levels and the spectral flux do not travel: a receiver computes them from the thirds, or from the sixteen bands when no thirds came, as the sender did.
+The sender keeps the notes once, so every receiver shows the notes it kept rather than deciding again from fewer frames: a packet carries the latest frame's kept keys and every kept key's strike since the last packet.
+
+A frame with every section is 218 bytes at a 48 kHz sample rate, 90 bytes with `harmony` off, and 36 bytes with the core alone. The bass, mid and treble levels and the spectral flux do not travel: a receiver computes them from the thirds, or from the sixteen bands when no thirds came, as the sender did.
 
 ### What a receiver does
 
@@ -142,7 +146,7 @@ WLED reads any nonzero `samplePeak` as a peak, so the drum bits are sent only be
 
 | | MoonLight | WLED |
 |---|---|---|
-| Size | 36 to 198 bytes | 44 bytes |
+| Size | 36 to 218 bytes | 44 bytes |
 | Bands | the sixteen, the 31 third octaves, the 79 keys | the sixteen |
 | Hits | which drum, each band's and each key's | one peak flag |
 | Harmony | the pitch classes, the key, the tuning, the bass note | none |
@@ -213,7 +217,7 @@ WLED's packet has served a large installed base for years, and a WLED device lis
 - **Every receiver smooths on its own.** `sampleSmth` is shared, but the bands' smoothing is each receiver's, so two devices on one sender drift apart visually. Sending the sender's smoothed bands makes every device show the same frame.
 - **Floats carry bytes.** `sampleRaw` and `sampleSmth` hold 0..255 values in 4-byte floats. In bytes, everything v2 carries plus the gate and which drum fits a 36-byte packet, against v2's 44, and reads the same on every platform.
 - **Sixteen bands is a ceiling.** Third octaves (31 bands) and semitones (79 keys) open note-accurate effects; the sixteen stay for every effect written against them.
-- **It stays small.** A full frame is under 210 bytes, far below one Ethernet frame, so it never fragments.
+- **It stays small.** A full frame is under 256 bytes, far below one Ethernet frame, so it never fragments.
 - **One format for one community.** WLED, WLED-MM and MoonLight all come from the same sound-reactive lineage. One packet lets any of them drive any other with nothing lost.
 
 ### The proposal: v2 as it is, and the MoonLight format beside it
