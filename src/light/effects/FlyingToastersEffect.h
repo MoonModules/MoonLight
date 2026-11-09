@@ -2,7 +2,7 @@
 
 #include "core/util/math16.h"      // BeatPhase: the shared wing-flap clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/powerfunctions/particles.h"  // Pool: the movable-things kernel the toasters ride
 
 namespace mm {
@@ -94,7 +94,7 @@ inline constexpr draw::sprites::Sprite kToastSprite{kToast, kPalette, TW, TH, 1,
 /// @technical
 ///
 /// Movement is `particles::Pool` at a constant diagonal velocity, respawning as it wraps, and appearance is the stateless `draw::sprite`. The wing flap is one BeatPhase, offset per toaster.
-class FlyingToastersEffect : public EffectBase {
+class FlyingToastersEffect : public AudioEffectBase {
 public:
     /// The pool size: both count controls at their maxima.
     static constexpr uint8_t kPool = 20;
@@ -114,6 +114,7 @@ public:
     uint8_t spriteSize = 0;
     /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
 
     /// Publish both counts, the drift, the sprite scale and the audio switch.
     void defineControls() override {
@@ -126,6 +127,7 @@ public:
 
     /// Size the pool's storage, wire the view over it, and fill the sky.
     void prepare() override {
+        AudioEffectBase::prepare();
         // Resize all, then test, so every buffer is sized even if an earlier one fails.
         const bool ok = x_.resize(kPool) && y_.resize(kPool) && vx_.resize(kPool) &&
                         vy_.resize(kPool) && ttl_.resize(kPool) && kind_.resize(kPool);

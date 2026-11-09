@@ -143,17 +143,18 @@ private:
         return sum;
     }
 
-    /// The window of kSpan semitones, around the heaviest key of `set` not in `skip`, that holds the most of their weight; -1 when none is left.
+    /// The window of kSpan semitones, around the heaviest key of `set` not in `skip`, that holds the most of their weight, centered on them where several hold it all, so a hand reaches either way; -1 when none is left.
     static int16_t bestWindow(const uint16_t* weight, const NoteSet& set, const NoteSet& skip) MM_NONBLOCKING {
         const int16_t anchor = strongest(weight, set, skip);
         if (anchor < 0) return -1;
-        int16_t best = anchor;
+        int16_t best = anchor, last = anchor;
         uint32_t bestSum = 0;
         for (int16_t w = anchor - kSpan < 0 ? 0 : static_cast<int16_t>(anchor - kSpan); w <= anchor; w++) {
             const uint32_t sum = windowSum(weight, set, skip, w);
-            if (sum > bestSum) { bestSum = sum; best = w; }
+            if (sum > bestSum) { bestSum = sum; best = last = w; }
+            else if (sum == bestSum && w == last + 1) last = w;   // only a run of windows that all hold it, so the middle one does too
         }
-        return best;
+        return static_cast<int16_t>((best + last) / 2);
     }
 
     /// Mark the keys of `set` in the window from `w` as taken.
@@ -198,7 +199,7 @@ inline constexpr uint8_t kMaxStrings = 6;
 /// A guitarist's fretting hand: one note a string, at the open string or within kReach frets of the position its first finger holds, the position the one that places the most weight, a recent strike outweighing a held note: the constraint form of tablature transcription (Radicioni and Lombardo 2005).
 struct FrettingHand {
     static constexpr uint8_t kReach = 4;        ///< the frets the four fingers cover
-    static constexpr uint32_t kMoveMs = 250;    ///< how long a better position must hold before the hand shifts
+    static constexpr uint32_t kMoveMs = 250;    ///< how long a better position must hold before the hand shifts; shifting at once puts 17% of GuitarSet's notes on their string against 24%, and 500 ms or 1 s place the same
 
     int8_t position = -1;   ///< the fret the first finger is at; -1 before the hand played
     int8_t wanted = -1;     ///< the best position since `since`
@@ -245,17 +246,23 @@ struct FrettingHand {
         record(tn, tf, n, set);
     }
 
-    /// Finger the chord on `root` of `quality` as a shape, the lowest position whose strings, the root as the bass, sound every chord tone on three or more; answers whether one was found: the open C, A minor and G shapes, barres higher up.
+    /// Finger the chord on `root` of `quality` as a shape, at the position nearest the hand's whose strings, the root as the bass, sound every chord tone on three or more: a guitarist voices a chord where the hand is.
     bool shape(uint8_t root, uint8_t quality, const uint8_t* open, uint8_t n, uint8_t frets) MM_NONBLOCKING {
+        const int16_t from = position < 0 ? 1 : position;
+        int16_t best = -1;
+        uint16_t bestD = UINT16_MAX;
         for (uint8_t p = 1; p + kReach - 1 <= frets; p++) {
             int8_t tn[kMaxStrings];
             uint8_t tf[kMaxStrings];
-            if (!shapeAt(root, quality, open, n, frets, p, tn, tf)) continue;
-            position = wanted = static_cast<int8_t>(p);
+            const uint16_t d = static_cast<uint16_t>(p > from ? p - from : from - p);
+            if (d >= bestD || !shapeAt(root, quality, open, n, frets, p, tn, tf)) continue;   // a nearer one only, the lowest of equals
+            best = p;
+            bestD = d;
             for (uint8_t s = 0; s < kMaxStrings; s++) { note[s] = s < n ? tn[s] : -1; fret[s] = tf[s]; }
-            return true;
         }
-        return false;
+        if (best < 0) return false;
+        position = wanted = static_cast<int8_t>(best);
+        return true;
     }
 
 private:

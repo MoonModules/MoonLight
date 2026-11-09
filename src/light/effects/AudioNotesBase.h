@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"
 #include "light/powerfunctions/audioReadout.h"   // NoteHits, draw::noteNames
 #include "core/services/AudioDemand.h"           // the notes, while a note effect is on
 
@@ -19,13 +19,14 @@ struct AudioScene {
 };
 
 /// The base of the effects that light the piano's notes as they sound: which notes they show, how long a struck note glows, the note-names readout, the hit state, and the start and end of their frame, written once.
-class AudioNotesBase : public EffectBase {
+class AudioNotesBase : public AudioEffectBase {
 public:
     /// The note levels `notes` picks from, each keeping fewer: every note heard, without the overtones, or what the player's hands could play.
     enum NotesShown : uint8_t { kNotesAll, kNotesNoOvertones, kNotesHands, kNotesShownCount };
     /// All notes heard, without overtones, or what hands could play.
     uint8_t notes = kNotesHands;
-    /// Keep only the notes of the chord being played.
+    /// Show the chord being played as a hand's shape.
+    /// @guide Tidier, but a guess: the shape lights chord tones nobody played and drops melody notes outside the chord. Leave it off to see what the player plays.
     bool chord = false;
     /// How long a struck note glows, in tens of milliseconds.
     uint8_t decay = 100;
@@ -49,7 +50,7 @@ public:
 
     /// A note effect reads the keys in every `notes` mode, so it needs the notes running while it is on, as Demand.h describes; an effect's own prepare chains this first.
     void prepare() override {
-        EffectBase::prepare();
+        AudioEffectBase::prepare();
         notesDemand_.set(true);
     }
 

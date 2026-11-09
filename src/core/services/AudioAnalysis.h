@@ -38,6 +38,7 @@ struct AudioAnalysis : platform::InternalRamObject {
     AudioOnsets onsets;                 ///< the onsets per range and per band, read every 5 ms
     AudioFrame work;                    ///< the frame the analysis writes, on the audio task where there is one
     SpscRing<AudioFrame, 8> frames;     ///< the task's finished frames, which the tick drains to the newest
+    bool resting = false;               ///< the last block ran the level alone, nothing reading the analysis
 
     /// A new stream at `rate`, from silence, field by field since a whole analysis is too large for a stack.
     void reset(uint32_t rate) {
@@ -51,6 +52,7 @@ struct AudioAnalysis : platform::InternalRamObject {
         work = AudioFrame{};
         bank.init(rate);
         onsets.reset();
+        resting = false;
     }
 
 private:

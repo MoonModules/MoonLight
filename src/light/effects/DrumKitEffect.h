@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -14,7 +14,7 @@ namespace mm {
 /// ## Drawn from the hits' ages
 ///
 /// The effect keeps only when each drum last hit and draws every frame from those ages, so the picture is the same at any frame rate and the state is a few bytes. Each drum sits at a fixed place as a fraction of the width and height and is sized by the shorter side, so the kit keeps its shape on any grid; hits add their colors where drums overlap.
-class DrumKitEffect : public EffectBase {
+class DrumKitEffect : public AudioEffectBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }

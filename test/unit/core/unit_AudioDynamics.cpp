@@ -176,3 +176,14 @@ TEST_CASE("stopped music goes dark within the hold and stays dark on the line's 
     feed(d, -76.0f, 30.0f, 14.0f);
     CHECK_FALSE(d.gateOpen);
 }
+
+// The level's window starts where the gate opens: the softest sound that opens it reads near 0 and the loudest at the top, so the level spans the whole scale while the music plays.
+TEST_CASE("the level spans from where the gate opens to its top") {
+    mm::AudioDynamics d;
+    feed(d, -45.0f, 12.0f);           // the room, the floor at -45, the gate opening at -35
+    feed(d, -20.0f, 3.0f);            // music, the level's top following it to -20
+    REQUIRE(d.gateOpen);
+    CHECK(d.levelToByte(d.floorDb + d.squelchDb + 0.5f) <= 12);
+    CHECK(d.levelToByte(-20.0f) >= 250);
+    CHECK(d.levelToByte(-27.5f) == doctest::Approx(128).epsilon(0.06));   // halfway from the gate to the top
+}

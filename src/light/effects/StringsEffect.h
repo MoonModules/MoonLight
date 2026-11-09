@@ -24,7 +24,7 @@ constexpr uint32_t kStopShare[kMaxFrets + 1] = {65536, 61858, 58386, 55109, 5201
 ///
 /// `instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, bridge and body: a sound hole, a pickup, or f-holes with a tailpiece. Guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up where they are played, a struck note flashing over `decay`.
 ///
-/// Under `notes` `hands` a note lights at one place, one note a string, within the fretting hand's reach.
+/// Under `notes` `hands` a note lights at one place, one note a string, within the fretting hand's reach. The sound carries no finger and no pick, no palm muting or other technique, and the bow's direction only as a guess from where notes start, so the effect shows none of them; a strum landing within one block has no direction.
 ///
 /// A plucked or bowed string lights cyan from the bridge to where it is stopped, the part that sounds; a strum flashes across the strings where they are struck; on violin and cello the bow crosses the strings by the bridge, moving while it bows. Under the other levels a note lights every string and fret that can play it.
 ///

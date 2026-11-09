@@ -13,6 +13,7 @@
 #include "light/drivers/Correction.h"
 #include "light/util/Palette.h"   // the global active palette + its select control
 #include "light/moonlive/MoonLivePalette.h"   // a palette computed per frame by a script
+#include "core/services/AudioDemand.h"         // what the palette script reads of the audio, as Demand.h describes
 #include "core/moonlive/script_catalog.h"       // the tags each factory palette declares
 #include "core/util/LightOutput.h"   // the seam the domain-neutral WLED, MQTT and MoonStats consumers read
 #include "platform/platform.h"
@@ -140,6 +141,14 @@ public:
         MoonLivePalette::setActiveInstance(&paletteScriptModule_);
         paletteScriptModule_.setScript(paletteScript_);
         paletteScriptModule_.prepare(*this);
+        demandPaletteAudio();
+    }
+
+    /// Need what the palette script reads of the audio, the notes or the analysis, while it runs, as an effect script does.
+    void demandPaletteAudio() {
+        const uint8_t d = paletteScript_[0] ? paletteScriptModule_.demands() : 0;
+        paletteNotes_.set(d & AudioDemand::bitOf(AudioFeature::Notes));
+        paletteAnalysis_.set(d & AudioDemand::bitOf(AudioFeature::Bands));
     }
 
     /// Stop and release the palette script, so neither the program nor its status outlives the choice. Otherwise it keeps overwriting the gradient every frame.
@@ -147,6 +156,7 @@ public:
         MoonLivePalette::setActiveInstance(nullptr);
         paletteScriptModule_.release();
         paletteScript_[0] = 0;
+        demandPaletteAudio();
         // Only the script's own message: the card shares one status with the relay and encode warnings.
         if (status() == paletteScriptModule_.statusText()) clearStatus();
     }
@@ -201,7 +211,7 @@ public:
     void onFileChanged(const char* path) override {
         if (!moonlive::touchesScripts(path)) return;
         paletteScriptModule_.fileChanged(path);
-        if (paletteScript_[0]) paletteScriptModule_.prepare(*this);
+        if (paletteScript_[0]) { paletteScriptModule_.prepare(*this); demandPaletteAudio(); }
         refreshLivePalettes();
         LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
         rebuildControls();
@@ -228,6 +238,8 @@ public:
     char paletteScript_[moonlive::kMaxScriptName + 1] = {};
     /// The engine that runs the selected scripted palette, one per Drivers.
     MoonLivePalette paletteScriptModule_;
+    AudioDemand paletteNotes_{*this, AudioFeature::Notes};      ///< the notes, while the palette script calls a note builtin
+    AudioDemand paletteAnalysis_{*this, AudioFeature::Bands};   ///< the analysis, while it calls a band, onset or peak builtin
 
     /// Bind the Effects container, which is self-healing: the source Layer re-resolves on every prepareTree.
     void setEffects(Effects* layers) {

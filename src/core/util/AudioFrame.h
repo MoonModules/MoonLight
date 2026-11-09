@@ -8,7 +8,7 @@ namespace mm {
 
 /// How many semitone notes a frame carries, the piano's keys A0 to D#7: the one count `notes`, `notesHits` and every note reader size by.
 constexpr uint8_t kAudioNoteKeys = 79;
-/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each.
+/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each; 256 leaves the notes' latency as it is and lets a third more attack flashes through (bench_notes).
 inline constexpr size_t kAudioBlock = 512;
 
 /// The whole contract between the audio analysis and the effects that react to it.
@@ -27,7 +27,7 @@ inline constexpr size_t kAudioBlock = 512;
 ///
 /// | Field | What it carries |
 /// |-------|-----------------|
-/// | `level` | this block's level, 0..255 through its own dynamics window and 0 while the gate is shut, with no smoothing, so it snaps to a transient and a drum hit spikes at once. WLED calls this `volumeRaw` |
+/// | `level` | this block's level, 0..255 from where the gate opens to the level's top and 0 while the gate is shut, with no smoothing, so it snaps to a transient and a drum hit spikes at once. WLED calls this `volumeRaw` |
 /// | `levelSmoothed` | `level` through the same peak-meter ballistic as `bandsSmoothed`, fast on a rise and slow on a fall, so it breathes with the music instead of twitching. WLED calls this `volume` or `volumeSmth` |
 /// | `bands` | this block's 16 band magnitudes with no smoothing, bass at `bands[0]` and treble at `bands[15]`: third-octave bands, 40 Hz to 10 kHz, as WLED-MM's GEQ picks them |
 /// | `bandsSmoothed` | the same bands with a meter's ballistic, fast rise and slow fall, as IEC 60268-10 defines for a PPM. Use it for a spectrum display that should read as bars |
@@ -56,7 +56,6 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  thirdsCount = 0;          ///< how many of `thirds` this frame measured: 0 on a frame synced in the WLED format, fewer than 31 at a rate that cannot reach 20 kHz
     uint8_t  gate = 0;                 ///< where the gate opens on the bands' 0..255 scale, at least 1; 0 on a frame no dynamics measured, from WLED sync or simulated
     bool     gateOpen = false;         ///< whether the gate is open, so a band over zero is sound rather than the room
-    uint8_t  levelGate = 0;            ///< where the gate opens on `level`'s own scale, at least 1; 0 when none was measured, on a synced or simulated frame
     uint8_t  chroma[12] = {};          ///< the twelve pitch classes, C first, 0..255 against the loudest over the last 200 ms; all 0 while gated, while the notes do not run, from WLED sync or simulated
     bool     harmonyChange = false;    ///< true on the one block the harmony moved, a chord changing
     uint8_t  notes[kAudioNoteKeys] = {};   ///< the piano's keys from A0 to D#7, one band a semitone, 0..255 on the bands' scale

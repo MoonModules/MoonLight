@@ -372,3 +372,21 @@ TEST_CASE("HttpServer: an embedded file still arrives whole while internal RAM i
     client.close();
     http.release();
 }
+
+// A port the system refused at boot left the server dark until a restart; the listener tries it again each second, and follows a changed `port` within one.
+TEST_CASE("HttpServer: a refused port is tried again each second, and a changed port opens within one") {
+    struct Restore { ~Restore() { mm::platform::setTestBindFails(false); } } restore;
+    mm::HttpServerModule http;
+    http.port = kTestPort + 7;
+    mm::platform::setTestBindFails(true);
+    http.setup();
+    CHECK(mm::HttpServerModule::servedPort() == 0);   // refused
+    mm::platform::setTestBindFails(false);
+    http.tick1s();
+    CHECK(mm::HttpServerModule::servedPort() == kTestPort + 7);
+    CHECK(requestOnce(http, kTestPort + 7, "OPTIONS / HTTP/1.1\r\nHost: test\r\n\r\n").rfind("HTTP/1.1 204", 0) == 0);
+    http.port = kTestPort + 8;
+    http.tick1s();
+    CHECK(mm::HttpServerModule::servedPort() == kTestPort + 8);
+    http.release();
+}

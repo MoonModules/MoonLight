@@ -40,7 +40,9 @@ endif()
 # The paths go through a file rather than the command line: a few hundred of them would overrun the
 # command-length limit on Windows long before the library stops growing.
 string(REPLACE ";" "\n" SCRIPT_LIST "${SCRIPT_PATHS}")
-set(LIST_FILE "${OUT}.filelist")
+# In the build directory the custom command runs in, never beside OUT in src/: a file there, however briefly, makes the build id,
+# stamped in parallel, read a clean checkout as modified (found by Funkelfetisch).
+set(LIST_FILE "${CMAKE_CURRENT_BINARY_DIR}/script_catalog.filelist")
 file(WRITE "${LIST_FILE}" "${SCRIPT_LIST}\n")
 
 execute_process(

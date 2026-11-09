@@ -71,6 +71,12 @@ namespace mm {
 /// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
 ///
 /// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while something reads the notes, as Demand.h describes. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
+///
+/// ## The analysis runs while something reads it
+///
+/// The bands, the onsets and what they feed run while a module reads them, an audio effect, an effect or palette script calling an audio builtin, or this board sending audio sync, as Demand.h describes; the notes imply them.
+///
+/// Without a reader the input stays open and read, so the silent-microphone diagnosis keeps working, and only the level, its floor and the gate run: the card's level and dynamics still answer a clap, `cpu` reads paused, and the frame's bands, onsets and notes stay dark.
 class AudioService : public MoonModule {
 public:
     /// `level` through the bands' peak-meter ballistic into `levelSmoothed`, for a frame this engine measured or synthesized; a synced frame keeps the sender's own.
@@ -86,6 +92,7 @@ public:
     }
     /// The flux readout and the ranges, and count its onset and harmony change, which its source set, the analysis, the song or the sender.
     void deriveFromBands(AudioFrame& f) {
+        if (fluxReseed_) { std::memcpy(prevBands_, f.bands, sizeof(prevBands_)); fluxReseed_ = false; }   // the first block after a rest is its own reference
         f.flux = spectralFlux(prevBands_, f.bands);
         std::memcpy(prevBands_, f.bands, sizeof(prevBands_));
         bandsToRanges(f);
@@ -94,6 +101,7 @@ public:
         if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
     uint8_t       prevBands_[16] = {};   ///< the previous block's bands, the flux's reference
+    bool          fluxReseed_ = false;   ///< the next block reseeds the flux's reference, back from a rest
 
     /// The block an input is read in, kAudioBlock.
     static constexpr size_t kBlock = kAudioBlock;
@@ -307,6 +315,7 @@ public:
     void prepare() override {
         micSeat_.claim();       // the first live instance wins the seat, in any mode
         notesOn_ = notesWanted();
+        analysisOn_ = analysisWanted();
         if (mode == kLocalMode) {
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
             if (!inited_ || reinitPending_ || micConfig() != openedWith_) reinit();
@@ -325,6 +334,7 @@ public:
     /// A reader's demand turned on or off: count them again at the frame boundary, and switch the notes when that changes whether anything reads them.
     void onDemandChanged() override {
         notesOn_ = notesWanted();
+        analysisOn_ = analysisWanted();
         if (mode == kLocalMode && inited_ && notesOn_ != harmonyApplied_) switchHarmony();
     }
     /// Whether anything reads the notes: a module's demand, or this board sending the MoonLight format, whose receivers show them.
@@ -332,6 +342,12 @@ public:
         if (sync() == AudioSync::kSend && syncFormat != kFormatWled) return true;
         const Scheduler* tree = Scheduler::instance();
         return tree && (tree->demandsOf(AudioDemand::kProvider) & AudioDemand::bitOf(AudioFeature::Notes));
+    }
+    /// Whether anything reads the analysis, the bands, the onsets and what they feed: a module's demand for them or for the notes on top of them, or this board sending audio sync, whose receivers show them; without a reader only the level runs.
+    bool analysisWanted() const {
+        if (notesOn_ || sync() == AudioSync::kSend) return true;
+        const Scheduler* tree = Scheduler::instance();
+        return tree && (tree->demandsOf(AudioDemand::kProvider) & AudioDemand::bitOf(AudioFeature::Bands));
     }
     /// One-time wiring only: the acquire and the election live in the build.
     void setup() override {}
@@ -361,11 +377,11 @@ public:
     /// Whether the harmony's state is held.
     bool harmonyHeldForTest() const { return harmonyState_ != nullptr; }
     /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path, after resetAnalysisForTest.
-    const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock]) {
+    const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock], bool analyzing = true) {
         if (notesOn_ != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
         std::memcpy(analysis_->samples, block, sizeof(block));
         handSettings();
-        analyzeBlock();
+        analyzeBlock(analyzing);
         return analysis_->work;
     }
 
@@ -411,7 +427,7 @@ public:
             if (fresh) sync_.addHits(frame_);
             sync_.send(frame_, syncFormat != kFormatWled, syncFormat != kFormatMoonLight, unicast, syncPort);
         }
-        chords_.name(frame_);   // from whichever source made the frame, so a receiving board names the chord too
+        chords_.name(frame_, platform::millis());   // from whichever source made the frame, so a receiving board names the chord too
     }
 
     /// This tick's frame from the synthesizer or the local input, true when one is new.
@@ -442,7 +458,7 @@ public:
             a.filled += n;
             if (a.filled == kBlock) {
                 a.filled = 0;
-                analyzeBlock();
+                analyzeBlock(analysisNow_.load(std::memory_order_relaxed));
                 a.frames.push(&a.work, 1);   // a full ring drops the newest, the tick reading the ones before
                 blocks++;
             }
@@ -480,8 +496,8 @@ public:
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
     static constexpr uint8_t kMaxBlocksPerTick = 4;
 
-    /// One full block through the high-pass, the level and the bank into the analyzed frame, on whichever thread reads.
-    void analyzeBlock() {
+    /// One full block through the high-pass, the level and, while something reads it, the bank into the analyzed frame, on whichever thread reads.
+    void analyzeBlock(bool analyzing) {
         Analysis& a = *analysis_;
         AudioFrame& w = a.work;
         a.dyn.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
@@ -492,6 +508,8 @@ public:
         // Removes the offset before any analysis, continuous across blocks.
         a.dc.process(a.samples, kBlock, a.dcPole);
         const float levelDb = blockLevelDbFs(a.samples, kBlock);
+        if (!analyzing) { restBlock(levelDb); return; }
+        if (a.resting) { a.onsets.reset(); a.resting = false; fluxReseed_ = true; }   // back from a rest: the onsets and the flux start from this block, not from the last one before it
 
         // The bands, through the window the level's dynamics set.
         const uint32_t bankStart = platform::micros();
@@ -510,7 +528,6 @@ public:
         w.thirdsCount = bankToBands(a.bank, levelDb, a.blockMs, a.dyn, w.thirds, w.bands, peakHz, peakMag);
         w.level = a.dyn.levelToByte(levelDb);
         w.gate = a.dyn.gateToByte();
-        w.levelGate = a.dyn.levelGateToByte();
         w.gateOpen = a.dyn.gateOpen;
         a.onsets.take(w, a.dyn.gateOpen);   // the block's own gate, decided by its own level
         analyzeHarmony();
@@ -526,6 +543,29 @@ public:
         if (peakMag > 8) { w.peakHz = peakHz; w.peakMag = peakMag; }
 
         // The window's peak, since sampling the instantaneous value once a second lands in the gaps.
+        if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
+    }
+
+    /// One block while nothing reads the analysis: the level, its floor and the gate run and fill the frame's level, the bands, the onsets and the notes stay dark: @xref{the-analysis-runs-while-something-reads-it}.
+    void restBlock(float levelDb) {
+        Analysis& a = *analysis_;
+        AudioFrame& w = a.work;
+        a.resting = true;
+        a.dyn.updateLevel(levelDb, a.blockMs);
+        const uint8_t gate = w.gate;
+        const uint16_t seq = w.seq;
+        const uint16_t smoothed = w.levelSmoothed;   // the ballistic's memory, which the reset would zero
+        w = AudioFrame{};
+        w.seq = static_cast<uint16_t>(seq + 1);
+        w.levelSmoothed = smoothed;
+        w.gate = gate ? gate : 1;
+        w.gateOpen = a.dyn.gateOpen;
+        w.level = a.dyn.levelToByte(levelDb);
+        smoothLevel(w);
+        levelDbX10_.store(static_cast<int16_t>(a.dyn.levelDb * 10.0f), std::memory_order_relaxed);
+        floorDbX10_.store(static_cast<int16_t>(a.dyn.floorDb * 10.0f), std::memory_order_relaxed);
+        topDbX10_.store(static_cast<int16_t>(a.dyn.levelTopDb * 10.0f), std::memory_order_relaxed);
+        gateOpen_.store(a.dyn.gateOpen, std::memory_order_relaxed);
         if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
     }
 
@@ -567,13 +607,19 @@ public:
         mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, static_cast<int>(frame_.tuning));   // the frame's, so a receiver shows the sender's
         mm::formatTo(rangesStr_, sizeof(rangesStr_), "bass %u, mid %u, treble %u", static_cast<unsigned>(frame_.bass),
                      static_cast<unsigned>(frame_.mid), static_cast<unsigned>(frame_.treble));
-        mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
-                     levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
-                     topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
+        if (mode == kLocalMode)
+            mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
+                         levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
+                         topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
+        else
+            mm::formatTo(dynStr_, sizeof(dynStr_), "no input analyzed here");   // the level path runs only on a local input, so a receiver's or a simulation's readout names that rather than an idle path's -120 dB
         // The bands' microseconds this second, ten thousand of them a percent of one core, the shares per chip in AudioAnalysis.h.
-        mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
-                     static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
-                     static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
+        if (analysisOn_)
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
+                         static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
+                         static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
+        else
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz", static_cast<unsigned>(micSamples));
         sync_.refreshHosts(hosts);
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
@@ -627,6 +673,7 @@ private:
     using Analysis = AudioAnalysis;
     using Harmony = AudioHarmonyState;
     std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
+    bool analysisOn_ = false;                   // whether the analysis runs, the bands, the onsets and what they feed: set from what reads them, as Demand.h describes
     bool notesOn_ = false;                      // whether the notes run, the semitone bank and what it feeds: set from what reads them, as Demand.h describes
     std::unique_ptr<Harmony> harmonyState_;     // and this only while the notes run
     bool harmonyApplied_ = false;               // whether the notes ran when the state was last applied, held or not for want of RAM
@@ -635,11 +682,13 @@ private:
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
     std::atomic<uint8_t> squelchNow_{10};   // the setting as the tick last saw it, for the task
     std::atomic<uint8_t> instrumentNow_{kInstrumentMix};   // the same for `instrument`
+    std::atomic<bool> analysisNow_{false};      // the same for whether the analysis runs
 
     /// The settings the analysis reads, handed from the tick to whichever thread analyzes.
     void handSettings() {
         squelchNow_.store(squelch, std::memory_order_relaxed);
         instrumentNow_.store(instrument, std::memory_order_relaxed);
+        analysisNow_.store(analysisOn_, std::memory_order_relaxed);
     }
     std::atomic<uint8_t> harmonyChanges_{0};   // the harmony's changes in the current 1 s window, for the readout
     std::atomic<int16_t> levelDbX10_{-1200}, floorDbX10_{-1200}, topDbX10_{-1200};   // the dynamics in tenths of a dB, for the readout

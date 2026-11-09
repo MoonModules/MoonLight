@@ -172,7 +172,7 @@ Lights on the beat need the tempo and where the beat is now, which onsets alone 
 A sending board takes its beat from the first source it has:
 
 1. **A Pioneer DJ deck**, over [Pro DJ Link](https://djl-analysis.deepsymmetry.org/djl-analysis/beats.html). The master deck knows the tempo and the beat in the bar exactly, since its track was analyzed beforehand.
-2. **A MIDI clock or tap tempo**, as the [audio plan's step 6](../work/Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(4%20of%206).md#6-the-beat-lands-on-the-beat) lists them.
+2. **A MIDI clock or tap tempo**, as the [audio plan's step 6](../work/Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(11%20of%2012).md#6-the-beat-lands-on-the-beat) lists them.
 3. **The audio tracker**, step 6 of the same plan, which hears the beat but not which beat starts the bar.
 
 A board that hears the decks itself reads them directly, since Pro DJ Link is broadcast already. The section carries the beat to every board that cannot hear the decks: WLED devices on the MoonLight format, boards on another subnet, and boards without a Pro DJ Link listener. It costs 8 bytes in a packet that goes out every frame anyway.

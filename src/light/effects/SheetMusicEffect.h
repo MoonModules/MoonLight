@@ -479,7 +479,8 @@ private:
 
     /// A faint line on the lowest row of each C among the `shown` keys from `s0`.
     static void drawCLines(const AudioScene& a, uint8_t s0, uint8_t shown) MM_NONBLOCKING {
-        for (uint8_t k = s0; k < s0 + shown; k++) {
+        for (uint8_t i = 0; i < shown; i++) {
+            const uint8_t k = static_cast<uint8_t>(s0 + i);
             if ((21 + k) % 12 != 0) continue;
             const int32_t y = rollRows(a, k, s0, shown).bottom;
             for (lengthType x = 0; x < a.w; x++) put(a, x, y, kLine);

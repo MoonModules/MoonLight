@@ -39,6 +39,7 @@ struct PictureRig {
     PictureRig(uint16_t pw, uint16_t ph, mm::lengthType w, mm::lengthType h, mm::lengthType d = 1,
                uint8_t fit = mm::PictureEffect::kStretch, uint8_t sampling = mm::PictureEffect::kPoint) {
         pic.defineControls();
+        pic.setShownForTest(true);   // shown, the rig holding no tree for the effect's demand to count in
         pic.width = pw;
         pic.height = ph;
         pic.prepare();

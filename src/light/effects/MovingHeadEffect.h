@@ -2,7 +2,7 @@
 
 #include "core/services/AudioService.h"   // latestFrame: the spectrum the audio-reactive mode reads
 #include "core/util/math16.h"         // sin16, BeatPhase: the sweep clocks
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -14,7 +14,11 @@ namespace mm {
 /// @technical
 ///
 /// Two sines at different rates trace a Lissajous path. It closes into a loop when the rates share a small ratio and drifts when they do not, which keeps a long show from looking like a metronome. Everything is written through EffectBase's role setters, which no-op on an absent channel, so on an LED strip this effect paints its color pattern and moves nothing.
-class MovingHeadEffect : public EffectBase {
+class MovingHeadEffect : public AudioEffectBase {
+protected:
+    /// The analysis while the audio drives this effect.
+    bool readsAnalysis() const override { return audioReactive || goboOnBeat; }
+
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
     const char* tags() const override { return "💫🎶🎯"; }
@@ -81,6 +85,7 @@ public:
 
     /// Reset both sweep clocks and return the gobo to the user's own choice.
     void prepare() override {
+        AudioEffectBase::prepare();
         pan_ = BeatPhase{};
         tilt_ = BeatPhase{};
         beatDecay_ = 0;

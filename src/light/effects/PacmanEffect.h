@@ -2,7 +2,7 @@
 
 #include "core/util/math16.h"      // BeatPhase: the chomp / shuffle clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/powerfunctions/particles.h"  // Pool: the movable-things kernel the cast rides
 
 namespace mm {
@@ -109,7 +109,7 @@ static_assert(sizeof(kGhost) == static_cast<size_t>(GW) * GH * GF, "ghost: 2 fra
 /// @technical
 ///
 /// Movement is a `particles::Pool` entry per character, and appearance is `draw::sprite`. The chomp and the ghosts' shuffle share one BeatPhase, offset so the cast never pulses together.
-class PacmanEffect : public EffectBase {
+class PacmanEffect : public AudioEffectBase {
 public:
     /// The pool size: both count controls at their maxima.
     static constexpr uint8_t kPool = 12;
@@ -129,6 +129,7 @@ public:
     uint8_t spriteSize = 0;
     /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
 
     /// Publish both counts, the speed, the sprite scale and the audio switch.
     void defineControls() override {
@@ -141,6 +142,7 @@ public:
 
     /// Size the pool's storage, wire the view over it, and put the cast on the wall.
     void prepare() override {
+        AudioEffectBase::prepare();
         const bool ok = x_.resize(kPool) && y_.resize(kPool) && vx_.resize(kPool) &&
                         vy_.resize(kPool) && ttl_.resize(kPool) && kind_.resize(kPool);
         if (!ok) { pool_ = particles::Pool{}; return; }

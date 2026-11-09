@@ -43,7 +43,7 @@ namespace mm {
 ///
 /// ## A range re-arms on its fall
 ///
-/// A range fires once a rise and fires again only once its bands fall back to half their climb from their lowest since they last began rising: one attack stays one hit, a roll's next stroke is a new one. The least gap is 40 ms: the drum walk keeps a hi-hat apart up to 20 a second and a kick up to 4, a kick on the last one's tail rising too little a reading to fire faster.
+/// A range fires once a rise and fires again only once its bands fall back to half their climb from their lowest since they last began rising: one attack stays one hit, a roll's next stroke is a new one. The least gap is 40 ms: the drum walk keeps a kick and a hi-hat apart up to 20 hits a second and a snare up to 12.
 ///
 /// ## One hit, one drum
 ///

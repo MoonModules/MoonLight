@@ -1,6 +1,6 @@
 # Plan: tempo evaluation harness
 
-The desktop build runs real music through `AudioService` faster than real time, and a MoonDeck script scores the tempo it reads against labeled tracks: Acc1 and Acc2, per genre, with the 3:2 readings counted apart. The tracker itself is [the audio plan's step 6](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(4%20of%206).md); the harness lands first, so that step is measured while it is built, and any later tracker is judged on the same footing.
+The desktop build runs real music through `AudioService` faster than real time, and a MoonDeck script scores the tempo it reads against labeled tracks: Acc1 and Acc2, per genre, with the 3:2 readings counted apart. The tracker itself is [the audio plan's step 6](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(11%20of%2012).md); the harness lands first, so that step is measured while it is built, and any later tracker is judged on the same footing.
 
 The yardstick is the field's own: Gouyon et al., *An experimental comparison of audio tempo induction algorithms* (2006), which defines Acc1 and Acc2 at 4%, as Schreiber and Müller (2018) use them, and `mir_eval` for beat and downbeat scores once the frame carries a phase.
 

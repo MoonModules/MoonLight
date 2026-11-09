@@ -116,6 +116,34 @@ TEST_CASE("AudioService wants the notes while a reader demands them or it sends 
     scheduler.release();
 }
 
+// The analysis is most of the audio's cost: AudioService runs it while a reader needs it, the notes need it, or it sends audio sync of either format, and rests otherwise.
+TEST_CASE("AudioService wants the analysis while a reader or the notes need it or it sends audio sync, and not otherwise") {
+    Scheduler scheduler;
+    auto* audio = new AudioService();
+    audio->setName("Audio");
+    struct BandReader : MoonModule {
+        AudioDemand bands{*this, AudioFeature::Bands};
+        BandReader() { setTypeName("TestBandReader"); setName("Bands"); }
+        void prepare() override { bands.set(true); }
+    };
+    auto* reader = new BandReader();
+    scheduler.addModule(audio);
+    scheduler.addModule(reader);
+    scheduler.setup();
+    reader->applyState();
+    CHECK(audio->analysisWanted());
+    reader->release();
+    CHECK_FALSE(audio->analysisWanted());
+    audio->setNotesForTest(true);   // the notes ride on the analysis
+    CHECK(audio->analysisWanted());
+    audio->setNotesForTest(false);
+    audio->mode = AudioService::kLocalMode;
+    audio->send = true;
+    audio->syncFormat = AudioService::kFormatWled;   // even WLED's packet carries the bands
+    CHECK(audio->analysisWanted());
+    scheduler.release();
+}
+
 // The provider counts the tree again whenever it is told or prepares, so a demand placed before the provider exists still counts: the order modules arrive in never decides.
 TEST_CASE("a demand placed before its provider exists counts once the provider arrives") {
     Scheduler scheduler;

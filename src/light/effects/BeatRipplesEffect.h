@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -18,7 +18,7 @@ namespace mm {
 /// ## The wave equation, and rendering by slope
 ///
 /// Each cell's next height is its four neighbors averaged and doubled, minus its previous height, damped; the field renders by slope, so crests read as bright lines.
-class BeatRipplesEffect : public EffectBase {
+class BeatRipplesEffect : public AudioEffectBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶🖌️"; }
@@ -50,6 +50,7 @@ public:
 
     /// Size both height buffers, clear them, and arm the rain clock.
     void prepare() override {
+        AudioEffectBase::prepare();
         const lengthType w = width(), h = height();
         const size_t n = static_cast<size_t>(w) * h;
         cur_.resize(n); prev_.resize(n);

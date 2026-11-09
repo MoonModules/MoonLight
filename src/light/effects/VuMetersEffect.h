@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -16,7 +16,7 @@ namespace mm {
 /// @technical
 ///
 /// Each band drives a damped harmonic oscillator, a spring and a damper; IEC 60268-17 specifies 300 ms to 99% with 1 to 1.5% overshoot.
-class VuMetersEffect : public EffectBase {
+class VuMetersEffect : public AudioEffectBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶🖌️"; }
@@ -42,6 +42,7 @@ public:
 
     /// Rest every needle and clear its peak.
     void prepare() override {
+        AudioEffectBase::prepare();
         for (uint8_t b = 0; b < 16; b++) { pos_[b] = 0; vel_[b] = 0; peak_[b] = 0; }
         started_ = false;
     }

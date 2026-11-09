@@ -55,6 +55,7 @@ OFFSET_RATIO = 0.2       # an end within a fifth of the note's length or 50 ms, 
 GAP_MS = 43              # a key missing this long or less is the same note still sounding: two frames of 512 samples at 24 kHz
 FLASH_SECONDS = 0.07     # an invented note shorter than this is a flash, the attack's broadband burst lighting keys for a frame or three
 OVERTONES = (12, 19, 24)
+FRAME_HOP_S = 0.01        # seconds: the frame measure's hop, MIREX multiple-F0's 10 ms
 SCORE_WINDOW_S = 30      # seconds of onsets matched at once: mir_eval's matrix stays small on a long piano piece
 A0 = 21                  # MIDI note of key 0, the frame's numbering
 
@@ -256,7 +257,23 @@ def score(ref: list, est: list) -> dict:
         near = [n[2] for n in ref[lo:hi] if abs(n[0] - on) <= ONSET_TOLERANCE * 2 or n[0] <= on <= n[1]]
         diffs = {midi - m for m in near}
         kinds["overtone" if diffs & set(OVERTONES) else "leakage" if diffs & {-2, -1, 1, 2} else "other"] += 1
-    return {"n_ref": len(ref), "n_est": len(est), "p": p, "r": r, "f": f, "f_off": f_off, "lags": lags, **kinds}
+    return {"n_ref": len(ref), "n_est": len(est), "p": p, "r": r, "f": f, "f_off": f_off, "lags": lags, **kinds, **frame_counts(ref, est)}
+
+
+def frame_counts(ref: list, est: list) -> dict:
+    """The frame measure of MIREX multiple-F0 estimation (mir_eval.multipitch), at a 10 ms hop: the pitches sounding in each frame, a lit key counted when a played note sounds at its pitch then, each note dated by its band's delay; how much of the lit time is on played notes, and how much of the played time is lit."""
+    import numpy as np
+    end = max(n[1] for n in ref + est) if ref or est else 0.0
+    count = int(end / FRAME_HOP_S) + 1
+    def grid(notes: list):
+        g = np.zeros((count, 128), dtype=bool)
+        for on, off, midi, *_ in notes:
+            a, b = max(0, int(on / FRAME_HOP_S)), min(count, int(off / FRAME_HOP_S) + 1)
+            if 0 <= midi < 128 and b > a:
+                g[a:b, midi] = True
+        return g
+    r, e = grid(ref), grid(est)
+    return {"frames_tp": int((r & e).sum()), "frames_est": int(e.sum()), "frames_ref": int(r.sum())}
 
 
 def placement_share(ref: list, frames: list[list[str]], instrument: str) -> float | None:
@@ -348,15 +365,18 @@ def report(rows: list[dict], instrument: str) -> str:
     good = [r for r in rows if "scores" in r and r["scores"]["sounding"].get("n_ref")]
     lines = [f"# Notes report", "", f"{len(good)} files scored, Strings as a {instrument}; onset within {ONSET_TOLERANCE * 1000:.0f} ms, "
              f"offset within 50 ms or {OFFSET_RATIO:.0%} of the note, whichever is longer; a note is dated back by its band's delay, "
-             "and the latency is the median lag from a found note's start to its key lighting.", "",
-             "| Stage | Precision | Recall | F | F with offsets | Latency | Flashes | Overtones | Leakage | Other |", "|---|---|---|---|---|---|---|---|---|---|"]
+             "and the latency is the median lag from a found note's start to its key lighting. The lit and played times are the frame measure, every 10 ms: "
+             "the share of the time a key is lit that a played note sounds at its pitch, and the share of the time a note sounds that its key is lit.", "",
+             "| Stage | Precision | Recall | F | F with offsets | Lit time on played notes | Played time lit | Latency | Flashes | Overtones | Leakage | Other |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for stage in STAGES:
         s = [r["scores"][stage] for r in good]
         n = sum(x["n_ref"] for x in s) or 1
         mean = lambda k: sum(x[k] * x["n_ref"] for x in s) / n   # weighted by the notes each file has
         lags = sorted(lag for x in s for lag in x.get("lags", []))
         latency = f"{lags[len(lags) // 2]} ms" if lags else ""   # the median lag from a found note's start to its key lighting
-        lines.append(f"| {STAGE_NAMES[stage]} | {pct(mean('p'))} | {pct(mean('r'))} | {pct(mean('f'))} | {pct(mean('f_off'))} | {latency} | "
+        tp, lit, played = (sum(x.get(k, 0) for x in s) for k in ("frames_tp", "frames_est", "frames_ref"))
+        lines.append(f"| {STAGE_NAMES[stage]} | {pct(mean('p'))} | {pct(mean('r'))} | {pct(mean('f'))} | {pct(mean('f_off'))} | "
+                     f"{pct(tp / lit if lit else None)} | {pct(tp / played if played else None)} | {latency} | "
                      f"{sum(x['flash'] for x in s)} | {sum(x['overtone'] for x in s)} | {sum(x['leakage'] for x in s)} | {sum(x['other'] for x in s)} |")
     placed = [r["placement"] for r in good if r["placement"] is not None]
     if placed:

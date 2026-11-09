@@ -183,7 +183,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## The served port is not the port control
 ///
-/// `servedPort` reports the port the listener bound, or zero, and is what a module prints in its URL; the `port` control says what was asked for.
+/// `servedPort` reports the port the listener bound, or zero, and is what a module prints in its URL; the `port` control says what was asked for. The listener follows the control each second, reopening on a change and trying a port the system refused again, printing the failure and the recovery once each (found by Funkelfetisch).
 ///
 /// The schema hook installs without the listener, so a unit test proves it fires a resync without binding a port that may be busy.
 ///
@@ -211,7 +211,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 class HttpServerModule : public MoonModule, public BinaryBroadcaster {
 public:
     /// The port the server listens on.
-    /// @guide 8080 on the desktop and 80 on a device. A change applies when the server next opens: @xref{the-served-port-is-not-the-port-control|why}.
+    /// @guide 8080 on the desktop and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: @xref{the-served-port-is-not-the-port-control|how}.
     uint16_t port = 8080;
 
     /// The scheduler every control write is applied through.
@@ -302,7 +302,7 @@ public:
     void release() override;
     /// Drain the preview and state sends, read inbound WebSocket frames, and serve a pending resync.
     void tick20ms() MM_NONBLOCKING override;
-    /// Push the state document to every WebSocket client.
+    /// Keep the listener on `port`, then push the state document to every WebSocket client.
     void tick1s() MM_NONBLOCKING override;
 
     /// What an apply-core operation did, which a transport maps onto its own error reporting.
@@ -741,6 +741,9 @@ private:
     /// Free what a client's cut frame left.
     void dropCarry(int client);
     uint16_t boundPort_ = 0;   // the port open() bound; 0 when no server is live
+    bool listenFailed_ = false;    // a refused port was reported, so its recovery is too
+    /// Listen on `port`: reopen when it changed, and try a refused one again, once a second from tick1s.
+    void ensureListener();
 
     // HTTP handling
 

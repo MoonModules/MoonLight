@@ -432,7 +432,7 @@ TEST_CASE("AudioService Local+send → Simulate: send stops, no socket") {
 }
 
 // Regression: a mic diagnosis is a local-mode read-out, so a mode without a mic must clear it, and one left standing makes a working receive look dead: @xref{leaving-local-clears-the-mic-status}.
-TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis, in every mic-less mode") {
+TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis and reads no level path, in every mic-less mode") {
     FrozenClock clk(1);
     for (const uint8_t micLess : {AudioService::kSimMode, AudioService::kReceiveMode}) {
         if (micLess == AudioService::kReceiveMode && !mm::platform::hasNetwork) continue;
@@ -440,9 +440,15 @@ TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis, in e
         a.syncPort = kTestSyncPort;
         a.mode = micLess;
         a.applyState();
+        a.rebuildControls();
         a.setMicStatusStaleForTest(true);   // what a local-mode diagnosis leaves behind
         a.tick1s();
         CHECK_FALSE(a.micStatusStaleForTest());
+        const char* dyn = nullptr;            // and the level path, which runs on a local input alone, says so
+        for (uint8_t i = 0; i < a.controls().count(); i++)
+            if (std::strcmp(a.controls()[i].name, "dynamics") == 0) dyn = static_cast<const char*>(a.controls()[i].ptr);
+        REQUIRE(dyn != nullptr);
+        CHECK(std::strcmp(dyn, "no input analyzed here") == 0);
         a.release();
     }
 }

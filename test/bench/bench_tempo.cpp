@@ -12,7 +12,9 @@
 ///
 /// With `--drums` each line carries the frame's four onsets, the drums DrumKit lights, a bit each from the kick, and the 31 third-octave levels; `--drum-input` sets the Audio card's `instrument` to drums.
 ///
-/// With `--notes` the header adds each key's band delay in milliseconds, and each line instead carries the keys each stage of the note effects keeps, through the effects' own `keep`: every sounding key as `key:level`, a `*` where it was struck; then the keys `no overtones` keeps, Keyboard's two hands and Strings' fretting hand, each with and without `chord`.
+/// With `--notes` the header adds each key's band delay in milliseconds, and each line carries the keys each stage of the note effects keeps, through their own `keep`: every sounding key as `key:level`, a `*` where struck; then `no overtones`, Keyboard's hands and Strings' hand, each with and without `chord`.
+///
+/// The line ends on the fretting hand's strings and frets, and the chord the frame names, `-` for none.
 ///
 /// The last column is where that hand plays, `string:fret`; `-` stands for none. Keys count from A0, the frame's own numbering, and `--instrument` picks the Strings instrument.
 ///
@@ -77,7 +79,7 @@ struct NoteStages {
     /// One frame's line after its time: every stage's keys, then the fretting hand's strings and frets.
     void print(mm::AudioFrame f, uint16_t seq, uint32_t ms) {
         f.seq = seq;
-        chords.name(f);
+        chords.name(f, ms);
         for (mm::AudioNotesBase* e : std::initializer_list<mm::AudioNotesBase*>{&sieve, &keys, &keysChord, &strings, &stringsChord}) e->keep(f, ms);
         bool any = false;
         std::printf("\t");
@@ -93,7 +95,9 @@ struct NoteStages {
         for (uint8_t s = 0; s < mm::hands::kMaxStrings; s++)
             if (strings.keyForTest(s) >= 0 && strings.keepsForTest(static_cast<uint8_t>(strings.keyForTest(s)))) { std::printf("%s%u:%d", any ? "," : "", static_cast<unsigned>(s), strings.fretForTest(s)); any = true; }
         if (!any) std::printf("-");
-        std::printf("\n");
+        char chord[12] = "-";
+        if (f.chordQuality != mm::kChordNone) mm::formatChord(f.chordRoot, f.chordQuality, chord, sizeof(chord));
+        std::printf("\t%s\n", chord);
     }
 };
 
@@ -146,7 +150,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<NoteStages> stages;
     if (notes) {
         stages = std::make_unique<NoteStages>(instrument);
-        std::printf("# rate=%u block=%u columns=ms,sounding,sieve,keys,keysChord,strings,stringsChord,place delays=", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
+        std::printf("# rate=%u block=%u columns=ms,sounding,sieve,keys,keysChord,strings,stringsChord,place,chord delays=", static_cast<unsigned>(rate), static_cast<unsigned>(kBlock));
         for (uint8_t k = 0; k < mm::kAudioNoteKeys; k++) std::printf("%s%u", k ? "," : "", static_cast<unsigned>(audio->noteDelayMsForTest(k)));   // each key's band delay, ms
         std::printf("\n");
     } else if (drums) {

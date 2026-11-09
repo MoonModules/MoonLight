@@ -162,32 +162,34 @@ struct ControlDescriptor {
     /// What the control was born with, for a module whose controls come from data rather than type.
     int32_t def = kNoDefault;
     /// Whether the UI hides this control, which persistence ignores so state survives the toggle.
-    bool hidden = false;
+    bool hidden : 1 = false;
     /// Whether persistence writes this Select's label, for options enumerated fresh each boot.
-    bool persistLabel = false;
+    bool persistLabel : 1 = false;
     /// Whether the UI renders this display-only, for a value tooling pushes rather than a user.
-    bool readonly = false;
+    bool readonly : 1 = false;
     /// The mode a reader needs before this control is shown: 0 everyone, 1 expert, 2 developer.
-    uint8_t minMode = 0;
+    uint8_t minMode : 2 = 0;
     /// Whether a numeric renders as a number input, for an integer that is an address not a magnitude.
-    bool numberField = false;
-    // These sit after the other flags, since the text initializers below are positional.
+    bool numberField : 1 = false;
+    // The flags are bits after the bounds, since the initializers below are positional and stop at `max`: a descriptor stays 40 bytes on a device.
 
-    bool fader = false;        ///< render as a vertical fader
-    bool encoder = false;      ///< render as a rotary encoder
-    bool switchRow = false;    ///< render in the horizontal switch strip
-    bool displayStrip = false; ///< render as the full-width readout
+    bool fader : 1 = false;        ///< render as a vertical fader
+    bool encoder : 1 = false;      ///< render as a rotary encoder
+    bool switchRow : 1 = false;    ///< render in the horizontal switch strip
+    bool displayStrip : 1 = false; ///< render as the full-width readout
     /// Whether this is live state rather than configuration, and so is never written to flash.
-    bool live = false;
+    bool live : 1 = false;
     /// Whether a number field reads and writes hexadecimal, for a value its datasheet gives in hex, such as an I2C address.
-    bool hex = false;
+    bool hex : 1 = false;
     /// Whether a text holds an address or a list of hosts, so the UI names the boards it knows among them.
-    bool hosts = false;
+    bool hosts : 1 = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
     bool (*validate)(const char* value) = nullptr;
 };
+
+static_assert(sizeof(void*) != 4 || sizeof(ControlDescriptor) == 40, "a device descriptor is 40 bytes, every control of every module paying for growth");
 
 /// The set of controls a module exposes, which is its `controls_`.
 ///
@@ -197,7 +199,7 @@ struct ControlDescriptor {
 ///
 /// ## What a control costs
 ///
-/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags, about forty-eight bytes on a host and less on a device. The value itself is the module's own variable, of one to four bytes.
+/// A descriptor is a pointer, a name, an auxiliary word, the type, the bounds and some flags, forty bytes on a device, its flags being bits. A rebuild sizes the array to the controls it declared, so the doubling that declaring them took leaves no empty slots (found by Funkelfetisch, about 9 KB on a classic ESP32). The value itself is the module's own variable, of one to four bytes.
 ///
 /// ## Persistence and rebuilding
 ///
@@ -356,6 +358,18 @@ public:
 
     /// Drop every control, which a rebuild does before redeclaring them.
     void clear() { count_ = 0; }
+    /// Size the array to the controls declared, so the doubling that declaring them took leaves no empty slots; a list that cannot move keeps its slack, and a rebuild declaring as many fills it without moving.
+    void shrinkToFit() {
+        if (count_ == capacity_) return;
+        auto* fitted = count_ ? new (std::nothrow) ControlDescriptor[count_] : nullptr;
+        if (count_ && !fitted) return;
+        for (uint8_t i = 0; i < count_; i++) fitted[i] = controls_[i];
+        delete[] controls_;
+        controls_ = fitted;
+        capacity_ = count_;
+    }
+    /// How many controls the array holds room for.
+    uint8_t capacity() const { return capacity_; }
     /// How many controls are declared.
     uint8_t count() const { return count_; }
     /// One control by index.

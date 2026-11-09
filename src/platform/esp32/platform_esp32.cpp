@@ -151,6 +151,11 @@
 #include <strings.h>   // strcasecmp: a .local suffix in any case
 #include <mutex>     // hostname store: writer (config apply) and reader (link-up events) race
 #include <unistd.h>
+#include <new>       // std::nothrow_t, the replaced allocation functions below
+
+// A failed `new (std::nothrow)` returns null, not abort(): libstdc++'s form throws, which ESP-IDF aborts on; [new.delete.single] lets a program replace it (found by Funkelfetisch).
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
+void* operator new[](std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
 
 namespace mm::platform {
 
@@ -1762,11 +1767,16 @@ static std::atomic<bool> mdnsStackUp_{false};
 // Held across a name query and the stack's release, since mdns_free deletes the semaphore an in-flight query waits on.
 static std::mutex mdnsQueryMutex_;
 
+// Why the last mdnsInit failed, for the Network card; empty after one succeeded.
+static char mdnsError_[48] = {};
+const char* mdnsError() { return mdnsError_; }
+
 static bool ensureMdnsStack() {
     if (mdnsStackUp_) return true;
     esp_err_t err = mdns_init();
     if (err != ESP_OK) {
         ESP_LOGE(NET_TAG, "mDNS init failed: %s", esp_err_to_name(err));
+        std::snprintf(mdnsError_, sizeof(mdnsError_), "init %s", esp_err_to_name(err));
         return false;
     }
     mdnsStackUp_ = true;
@@ -1816,6 +1826,7 @@ bool mdnsInit(const char* deviceName) {
     ESP_LOGI(NET_TAG, "mDNS hostname set %s: %s", deviceName, esp_err_to_name(err));
     if (err != ESP_OK) {
         ESP_LOGE(NET_TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
+        std::snprintf(mdnsError_, sizeof(mdnsError_), "hostname %s", esp_err_to_name(err));
         return false;
     }
 
@@ -1850,6 +1861,7 @@ bool mdnsInit(const char* deviceName) {
              reAdvertise ? "re-advertise" : "fresh", esp_err_to_name(httpErr));
     if (httpErr != ESP_OK) {
         ESP_LOGE(NET_TAG, "mDNS _http._tcp advertise failed: %s", esp_err_to_name(httpErr));
+        std::snprintf(mdnsError_, sizeof(mdnsError_), "_http %s", esp_err_to_name(httpErr));
         return false;
     }
     // `mm=1` TXT so a browsing MoonLight peer tells us apart from a generic `_http._tcp` box without an HTTP probe, DevicesModule classifies us MoonLight straight from the announcement. Non-fatal (advertising still works without it).
@@ -1876,6 +1888,7 @@ bool mdnsInit(const char* deviceName) {
              macStr,
              wledTxtErr == ESP_OK ? "ok" : "fail");
     for (const auto& e : extraServices_) if (e.port) announceExtra(e);
+    mdnsError_[0] = '\0';
     return true;
 }
 

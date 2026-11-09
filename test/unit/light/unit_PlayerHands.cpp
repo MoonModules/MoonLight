@@ -64,6 +64,20 @@ TEST_CASE("the two piano hands' windows never overlap") {
     CHECK(fresh.window[1] > fresh.window[0] + PianoHands::kSpan);
 }
 
+// A hand centers on the chord it plays, so the next chord a few keys up or down is in reach at once rather than after the move delay; at the chord's lowest window D's A3 was out of reach.
+TEST_CASE("a piano hand centers on its chord, so a triad two keys higher plays at once") {
+    PianoHands hands;
+    uint8_t level[kAudioNoteKeys] = {};
+    NoteSet set = keysAt({27, 31, 34}, 200, level);   // C3 E3 G3
+    hands.filter(level, set, 1000);
+    uint8_t next[kAudioNoteKeys] = {};
+    NoteSet f = keysAt({29, 33, 36}, 200, next);      // D3 F#3 A3, at once after
+    hands.filter(next, f, 1021);
+    CHECK(f.has(29));
+    CHECK(f.has(33));
+    CHECK(f.has(36));
+}
+
 // Seven notes on a guitar: at most six stay, one a string, all within one position of four frets or open.
 TEST_CASE("a fretting hand keeps at most one note a string, all within one four-fret position or open") {
     static constexpr uint8_t kGuitar[] = {40, 45, 50, 55, 59, 64};

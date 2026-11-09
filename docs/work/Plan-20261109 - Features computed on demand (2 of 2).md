@@ -15,20 +15,23 @@ A provider computes a feature only while some module reads it, through the core'
 
 ## Steps
 
-### 1. The audio analysis runs while something reads it ⏳
+### 1. The audio analysis runs while something reads it ✅
 
 In local mode the audio task analyzes every block, the third octaves, the onsets and the dynamics, whether or not anything reads the frame: 9 to 15% of a core (the third octaves 3.6% of a P4, 7.2% of an S3 and 8.2% of a classic ESP32 at 24 kHz, the onsets 5 to 7 points more, [AudioAnalysis.h](../../src/core/services/AudioAnalysis.h)), unread whenever a look without an audio effect runs on a board with a microphone.
 
 - **The feature:** `AudioFeature::Bands`, beside `Notes`. The audio effects declare it, those with an `audio` switch while it is on; effect scripts through the compiler, as the note builtins do; sending audio sync counts as the service's own want.
 - **What stays read:** the card's level, dynamics and peak readouts and the silent-microphone diagnosis are how a microphone is wired before any audio effect is on. The input stays open and read, which keeps the diagnosis, and only the analysis pauses; how the readouts show a paused analysis is decided in the step.
 - **Measured by:** the card's `cpu` with an audio look and without, on an S3 and a classic ESP32.
+- **Built (2026-11-09).** `AudioFeature::Bands`, the analysis, beside `Notes`, which implies it. Its readers: an effect reading the analysis derives from [AudioEffectBase](../../src/light/effects/AudioEffectBase.h), 16 effects and the bar and note bases, those with an `audioReactive` or `goboOnBeat` switch while it is on; NoiseMeter reads only the level and stays an EffectBase. Effect scripts and palette scripts through the band, onset and peak builtins, the palette's demand placed by Drivers, which also places the notes a palette script reads: the harmony palette had read no notes since they ran on demand. Sending audio sync of either format counts as the service's own want. While nothing reads it the input stays open and only the level, its floor and the gate run, the card's `cpu` reading paused ([AudioService.h](../../src/core/services/AudioService.h), [AudioDynamics.h](../../src/core/services/AudioDynamics.h)), the product owner's choice of a live level and gate. Tests: when the service wants the analysis, the resting block's level and gate with the bands dark and back, Space Invaders' switch.
+- **Measured (2026-11-09)** on .221, an Olimex ESP32-P4-PC on line-in: sending audio sync with SheetMusic on, the card's `cpu` 14 to 15% of a core; not sending, SheetMusic on, 16%; not sending, SheetMusic off, paused, the level and the gate live. An S3 and a classic ESP32 not yet measured.
 
-### 2. The USB capture decodes while the Picture effect shows it ⏳
+### 2. The USB capture decodes while the Picture effect shows it ✅
 
 With a USB grabber as its source, PictureService decodes every frame on a task of its own into one of two pictures of width × height × 3 bytes ([PictureService.h](../../src/core/services/PictureService.h)), whether or not a Picture effect shows it.
 
 - **The feature:** PictureService's `Picture`, which the Picture effect declares. Its `onDemandChanged` starts and stops the capture task, as its prepare and release already do, and frees the pictures while nothing reads them.
 - **Measured by:** the decode task's share of a core and the pictures' RAM, with a Picture look and without.
+- **Built (2026-11-09).** `PictureDemand`, which the Picture effect places while it is on; with none the capture closes, the pictures are freed and the card says it is idle, for the test pattern too ([PictureService.h](../../src/core/services/PictureService.h)). A test pins the picture held only while a reader shows it. Not yet run with a grabber on a board.
 
 ## Not candidates
 

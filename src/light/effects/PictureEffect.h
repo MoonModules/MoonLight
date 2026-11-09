@@ -56,6 +56,7 @@ public:
 
     /// Size the range tables to the grid; the first picture fills them.
     void prepare() override {
+        picture_.set(true);   // the picture, decoded or drawn while this effect shows it
         cols_.resize(width());
         rows_.resize(height());
         // 8.8 per channel, and only while smoothing, since a step is often a fraction of a byte.
@@ -192,6 +193,7 @@ public:
     }
 
 private:
+    PictureDemand picture_{*this};   ///< the picture, while this effect is on
     /// The smoothing control as a half-life in milliseconds, squared so the short range gets the travel, as Trails' persistence is.
     uint32_t halfLifeMs() const { return 20u + static_cast<uint32_t>(smoothing) * smoothing / 16u; }
 

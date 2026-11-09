@@ -77,6 +77,7 @@ public:
         script_.setDefineHook(&MoonLiveEffect::attachSizers, this);
         script_.sync(moonlive::effectSysVars(), *this, moonlive::lightBuiltins());
         notes_.set(script_.demands() & AudioDemand::bitOf(AudioFeature::Notes));   // a script calling a note builtin needs the notes running
+        analysis_.set(script_.demands() & AudioDemand::bitOf(AudioFeature::Bands));   // and one calling a band, onset or peak builtin the analysis
         // The planes follow the fixture, so a resize re-sizes them though the script did not.
         if (trailWanted_) resizeTrail(true);
         // Unconditional, since a walk costs little and keeps the card correct after any prepare.
@@ -195,6 +196,7 @@ private:
 
     moonlive::MoonLiveScript script_;   ///< Which `.mle` script runs, picked from the library and edited here.
     AudioDemand notes_{*this, AudioFeature::Notes};   ///< the notes, while the script calls a note builtin
+    AudioDemand analysis_{*this, AudioFeature::Bands};   ///< the analysis, while the script calls a band, onset or peak builtin
     moonlive::MoonLiveParticles particles_{*this};
     ScratchBuffer<uint16_t> trailA_{*this};   ///< the trail planes, two since advection reads one and writes the other
     ScratchBuffer<uint16_t> trailB_{*this};   ///< the second trail plane

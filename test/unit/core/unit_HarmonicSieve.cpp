@@ -36,6 +36,20 @@ TEST_CASE("a C major triad with its overtones keeps its three notes after the si
     CHECK(set.has(46));
 }
 
+// A struck string sounds its 5th and 6th harmonics too, two octaves and a third and two octaves and a fifth up: weaker than their note, they leave with the 2nd to 4th, so a low triad keeps its three notes.
+TEST_CASE("a weak note at a note's 5th or 6th harmonic is dropped as its overtone") {
+    AudioFrame f;
+    f.notesCount = kAudioNoteKeys;
+    f.notes[27] = 240;        // C3
+    f.notes[27 + 28] = 160;   // its 5th harmonic, E5
+    f.notes[27 + 31] = 150;   // its 6th, G5
+    NoteSet set = soundingNotes(f);
+    harmonicSieve(f.notes, f.notesCount, set);
+    CHECK(set.has(27));
+    CHECK_FALSE(set.has(27 + 28));
+    CHECK_FALSE(set.has(27 + 31));
+}
+
 // A twelfth above a note is its third harmonic: weaker, it goes; as loud, it is a note of its own.
 TEST_CASE("a weak note a twelfth above a loud one is dropped, a loud one is kept") {
     uint8_t level[kAudioNoteKeys] = {};

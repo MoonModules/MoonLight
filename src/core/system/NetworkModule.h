@@ -794,7 +794,17 @@ private:
         } else {
             mm::formatTo(statusBuf_, sizeof(statusBuf_), "WiFi: %s", ipStr);
         }
-        setStatus(statusBuf_, Severity::Status);
+        publishWithMdns();
+    }
+
+    /// Publish the status with whether the local name answers, its name or why it failed, a warning then, since a silent failure looks like a device nothing can find (found by Funkelfetisch).
+    void publishWithMdns() {
+        const bool wanted = mdnsEnabled_ && (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
+        const char* why = platform::mdnsError();
+        const size_t used = std::strlen(statusBuf_);
+        if (wanted && mdnsRunning_) mm::formatTo(statusBuf_ + used, sizeof(statusBuf_) - used, ", %s.local", lastMdnsName_);
+        else if (wanted && *why) mm::formatTo(statusBuf_ + used, sizeof(statusBuf_) - used, ", mDNS failed (%s)", why);
+        setStatus(statusBuf_, wanted && !mdnsRunning_ && *why ? Severity::Warning : Severity::Status);
     }
 
     /// Push the power cap to the radio whenever it changes, idempotently.
@@ -828,12 +838,13 @@ private:
         bool shouldRun = mdnsEnabled_ && (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
         const char* devName = readDeviceName();
         if (shouldRun && !mdnsRunning_) {
-            // Marked only on success, so a failure retries next tick.
+            // Marked only on success, so a failure retries next tick; the status says which it was.
             if (platform::mdnsInit(devName)) {
                 mdnsRunning_ = true;
                 std::strncpy(lastMdnsName_, devName, sizeof(lastMdnsName_) - 1);
                 lastMdnsName_[sizeof(lastMdnsName_) - 1] = 0;
             }
+            updateStatusIP();
         } else if (shouldRun && mdnsRunning_ && std::strcmp(devName, lastMdnsName_) != 0) {
             // A live rename, so re-register and the local name follows at once.
             if (platform::mdnsInit(devName)) {

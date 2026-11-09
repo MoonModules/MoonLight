@@ -1985,7 +1985,10 @@ static bool testMdns_ = false;      // the host has no mDNS responder of ours, s
 static uint32_t testMdnsInits_ = 0;
 void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits_ = 0; }
 uint32_t testMdnsInitCount() { return testMdnsInits_; }
-bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && ++testMdnsInits_; }
+static const char* testMdnsFailure_ = nullptr;   // a reason a test makes mdnsInit fail with
+void setTestMdnsFailure(const char* why) { testMdnsFailure_ = why; }
+bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && !testMdnsFailure_ && ++testMdnsInits_; }
+const char* mdnsError() { return testMdnsFailure_ ? testMdnsFailure_ : ""; }
 void mdnsStop() {}
 // The host announces nothing over mDNS, so the services are only remembered, which is what a test reads back.
 static std::map<std::string, uint16_t> mdnsServices_;
@@ -2440,6 +2443,7 @@ TcpServer::~TcpServer() {
 
 bool TcpServer::open(uint16_t port) {
     if (fd_ >= 0) return true;
+    if (testBindFails.load(std::memory_order_relaxed)) return false;   // the same seam as a UDP bind, for a refused listener
     fd_ = open_sock(AF_INET, SOCK_STREAM, 0);
     if (fd_ < 0) return false;
 

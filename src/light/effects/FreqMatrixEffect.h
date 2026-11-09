@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/util/math16.h"            // log2Q8: the pitch's octave
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -19,7 +19,7 @@ namespace mm {
 /// ## Pitch on a log scale
 ///
 /// Pitch is logarithmic, so the window from `lowHz` to `highHz` is spread over the palette octave by octave: from 50 Hz to 5 kHz the bass, the voice and the cymbals each take their own part of it. A peak outside the window takes the end color.
-class FreqMatrixEffect : public EffectBase {
+class FreqMatrixEffect : public AudioEffectBase {
 public:
     /// Catalog tags: WLED origin, audio-reactive.
     const char* tags() const override { return "🐙🎶"; }

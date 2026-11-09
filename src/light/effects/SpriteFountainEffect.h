@@ -3,7 +3,7 @@
 #include "core/services/AudioService.h"   // latestFrame: the spectrum the audio-reactive mode reads
 #include "core/util/math16.h"
 #include "light/powerfunctions/draw.h"
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/effects/SpriteCast.h"           // the shared cast: every sprite, one draw call
 #include "light/powerfunctions/particles.h"
 
@@ -23,7 +23,7 @@ namespace mm {
 /// ## The `hue` byte carries the sprite kind
 ///
 /// The pool holds one byte per particle, a palette index in every other particle effect. Here it picks the sprite, chosen once at launch so a particle keeps its species for its flight, and the color index comes from the particle's slot instead.
-class SpriteFountainEffect : public EffectBase {
+class SpriteFountainEffect : public AudioEffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
     const char* tags() const override { return "💫🎶✨👾"; }
@@ -43,6 +43,7 @@ public:
 
     /// A sprite per loud band, and one per drum hit.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
 
     /// Publish the nozzle, the emit clock, the sprite scale and the audio switch.
     void defineControls() override {
@@ -56,6 +57,7 @@ public:
 
     /// Size the pool's storage, wire the view over it, and reset both beat clocks.
     void prepare() override {
+        AudioEffectBase::prepare();
         // particles::Pool is a view, so the effect owns one ScratchBuffer per field.
         px_.resize(kPoolSize); py_.resize(kPoolSize);
         vx_.resize(kPoolSize); vy_.resize(kPoolSize);

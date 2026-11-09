@@ -66,8 +66,8 @@ struct NoteConfirm {
 };
 
 inline constexpr uint8_t kSieveMargin = 16;   ///< how much weaker a note must be than a note below it to count as its overtone, on the bands' 0..255 scale
-inline constexpr uint8_t kSieveHarmonics[] = {12, 19, 24};   ///< the 2nd, 3rd and 4th harmonics, in semitones above their note
-/// Whether key `i` of `set` is the 2nd, 3rd or 4th harmonic of a kept key below it, weaker by over kSieveMargin, unless struck while that key is not.
+inline constexpr uint8_t kSieveHarmonics[] = {12, 19, 24, 28, 31};   ///< the 2nd to 6th harmonics, in semitones above their note; the 5th and 6th lift every hand 1 to 3 points of F on GuitarSet, URMP and MAESTRO (bench_notes)
+/// Whether key `i` of `set` is the 2nd to 6th harmonic of a kept key below it, weaker by over kSieveMargin, unless struck while that key is not.
 inline bool overtoneOf(const uint8_t* level, const NoteSet& set, const uint8_t* hits, uint8_t i) MM_NONBLOCKING {
     const bool struck = hits && hitAt(hits, i) && level[i] >= kSieveMargin;   // a click with no level is no note
     for (uint8_t h : kSieveHarmonics) {

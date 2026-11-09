@@ -695,7 +695,7 @@
   },
   "AudioSpectrumEffect": {
    "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter with the gate's tick and a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter and a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -843,7 +843,8 @@
      "line": "All notes heard, without overtones, or what hands could play."
     },
     "chord": {
-     "line": "Keep only the notes of the chord being played."
+     "line": "Show the chord being played as a hand's shape.",
+     "more": "Tidier, but a guess: the shape lights chord tones nobody played and drops melody notes outside the chord. Leave it off to see what the player plays."
     },
     "auto": {
      "line": "The detected key picks the first shown key."
@@ -870,7 +871,7 @@
   },
   "StringsEffect": {
    "line": "A stringed instrument across the lights, laid out as the real one: the body at the left with its bridge, where the strings are plucked, strummed or bowed, the fingerboard with its frets closing in toward the body, and the head at the right naming each open string. Each sounding note lights its string where a finger stops it.",
-   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, bridge and body: a sound hole, a pickup, or f-holes with a tailpiece. Guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up where they are played, a struck note flashing over `decay`.\n\nUnder `notes` `hands` a note lights at one place, one note a string, within the fretting hand's reach.\n\nA plucked or bowed string lights cyan from the bridge to where it is stopped, the part that sounds; a strum flashes across the strings where they are struck; on violin and cello the bow crosses the strings by the bridge, moving while it bows. Under the other levels a note lights every string and fret that can play it.",
+   "summary": "`instrument` picks guitar, bass, violin or cello, each with its own strings, tuning, bridge and body: a sound hole, a pickup, or f-holes with a tailpiece. Guitar and bass get metal frets, violin and cello thinner pseudo-frets. The mic's semitone notes light up where they are played, a struck note flashing over `decay`.\n\nUnder `notes` `hands` a note lights at one place, one note a string, within the fretting hand's reach. The sound carries no finger and no pick, no palm muting or other technique, and the bow's direction only as a guess from where notes start, so the effect shows none of them; a strum landing within one block has no direction.\n\nA plucked or bowed string lights cyan from the bridge to where it is stopped, the part that sounds; a strum flashes across the strings where they are struck; on violin and cello the bow crosses the strings by the bridge, moving while it bows. Under the other levels a note lights every string and fret that can play it.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/StringsEffect.gif",
    "controls": {
     "instrument": {
@@ -880,7 +881,8 @@
      "line": "All notes heard, without overtones, or what hands could play."
     },
     "chord": {
-     "line": "Keep only the notes of the chord being played."
+     "line": "Show the chord being played as a hand's shape.",
+     "more": "Tidier, but a guess: the shape lights chord tones nobody played and drops melody notes outside the chord. Leave it off to see what the player plays."
     },
     "decay": {
      "line": "How long a struck note glows, in tens of milliseconds."
@@ -2252,7 +2254,8 @@
      "line": "All notes heard, without overtones, or what hands could play."
     },
     "chord": {
-     "line": "Keep only the notes of the chord being played."
+     "line": "Show the chord being played as a hand's shape.",
+     "more": "Tidier, but a guess: the shape lights chord tones nobody played and drops melody notes outside the chord. Leave it off to see what the player plays."
     },
     "octave": {
      "line": "The piano roll's first octave, counted from A0."
@@ -4097,7 +4100,7 @@
    "controls": {
     "port": {
      "line": "The port the server listens on.",
-     "more": "8080 on the desktop and 80 on a device. A change applies when the server next opens: why."
+     "more": "8080 on the desktop and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: how."
     }
    },
    "role": "generic",
@@ -4399,7 +4402,7 @@
   },
   "PictureService": {
    "line": "The picture the Picture effect samples onto the lights, from one source at a time.",
-   "summary": "One picture service is active at a time, as with Audio, and any number of effects read its picture.",
+   "summary": "One picture service is active at a time, as with Audio, and any number of effects read its picture.\n\nThe picture is drawn or decoded only while a Picture effect shows it, as Demand.h describes: with none the capture closes, the pictures are freed and the card says it is idle.",
    "image": "https://moonmodules.org/MoonLight/assets/core/PictureService.png",
    "controls": {
     "source": {

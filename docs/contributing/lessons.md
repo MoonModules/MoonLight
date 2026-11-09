@@ -445,3 +445,11 @@ The answer that shipped widens only the planes that accumulate: Trails, Nebula, 
 - **Measure the whole path, not the kernel.** On the S3 the driver read was the larger half: reassembling two bytes per channel happens lights times channels per frame whatever the effect does, and an in-order core punishes it. No host benchmark would have found it.
 - **Precision is a per-consumer property, not a pipeline one.** "16-bit end to end" is a tidy sentence and an expensive design; the code needed 16 bits in the four places that accumulate.
 - **A measured reversal is worth more than the feature.** The number is what stops the wide buffer being proposed again, which is why it lives here rather than in a commit message.
+
+## Lessons from the audio plan's measured steps (notes and drums, November 2026)
+
+Step 11 of the audio plan scored every change to the note and drum path against labeled recordings, and three of its turns cost more than they had to.
+
+- **Calibrate a synthetic test signal against real recordings before tuning on it.** The generated drum walk's kick had no beater click, so a kick landing on the last one's tail was chased as an engine defect until MDB Drums showed real kicks click a median 19 dB under their body; with the click the kick kept apart up to 20 hits a second with no code change. The synthetic re-strike of a ringing string misled the same way, rising 3 dB where a real one fires.
+- **Write the prediction before the run.** Halving the analysis block to 256 samples was tried for latency, which stayed the same, and let a third more attack flashes through, which nobody had predicted; the first flash rule removed 6% where a quarter was hoped for. A prediction written first makes a surprise visible as one, and turns a reverted try into a measured reversal rather than a lost afternoon.
+- **A core interface change runs `test_host --python` right away.** Demand made the notes run only while read, and the bench harness, which reads them without an effect, silently scored nothing; designated initializers in the MoonLive builtins broke the regex `test_scripts_are_cpp` reads them with. Both surfaced at pre-commit, after every other gate had run.

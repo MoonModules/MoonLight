@@ -36,7 +36,7 @@ processes:
         actor: agent
         when: { manual: "Save it as docs/work/Plan-YYYYMMDD - title.md." }
         detail: |
-          Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name counts them, `(3 of 7)` for three steps ✅ of seven, when the product owner asks, since a renamed file is a new file to git. Everything on the topic that is not a step sits in the plan's own `Backlog` section.
+          Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name counts them, `(3 of 7)` for three steps ✅ of seven, when the product owner asks, since a renamed file is a new file to git. Everything on the topic that is not a step sits in the plan's own `Backlog` section. A step that tunes against a measurement names its stop rule before the first run: the ceiling the field reports, the target, and the gain a change must buy to keep going.
       - id: approve
         say: Approve the plan.
         when: { manual: "Read it first: code starts after the approval." }

@@ -59,9 +59,9 @@ def find_moonmodules():
                          r'(MoonModule|EffectBase|DriverBase|ModifierBase|LayoutBase)',
                          content):
                 continue
-            # An intermediate base (`class AudioNotesBase : public EffectBase`) is the same shared
-            # infrastructure: never registered, its controls documented on the concrete classes.
-            if re.search(r'class\s+\w+Base\s*:\s*public\s+(EffectBase|DriverBase|ModifierBase|LayoutBase)\b', content):
+            # An intermediate base, any `...Base` on another (`class AudioNotesBase : public AudioEffectBase`), is the same
+            # shared infrastructure: never registered, its controls documented on the concrete classes.
+            if re.search(r'class\s+\w+Base\s*:\s*public\s+\w+Base\b', content):
                 continue
             modules.append(h_file)
     return modules

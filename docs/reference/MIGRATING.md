@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The level spans from where the gate opens to its top
+
+**Action: *nothing*, or *re-set a control* on an effect whose look you tuned to the level.**
+
+The audio level, which volume-driven effects and AudioSpectrum's meter read, now maps from where the gate opens to the level's top, where it mapped from the room's floor: while music played the level never went under the gate, so the lower part of its scale stayed unused, about half of it at the default `squelch`. Effects driven by the level now swing over the whole scale and look livelier; a soft passage barely over the gate reads near zero. AudioSpectrum's level meter drops the gate's tick, its place now the meter's left edge. The frequency bands keep their window.
+
 ### The notes run while something reads them, and `harmony` is gone
 
 **Action: *none*: a saved `harmony` is ignored.**

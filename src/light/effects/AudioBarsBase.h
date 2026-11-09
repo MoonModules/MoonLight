@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"
 #include "light/powerfunctions/audioReadout.h"   // the bar scales and barsOf
 #include "core/services/AudioDemand.h"           // the notes, while the bars show the keys
 
@@ -9,7 +9,7 @@
 namespace mm {
 
 /// An effect drawing the audio as bars: `bands` picks the sixteen, the third octaves or the piano's keys, and the notes run only while it shows them, as Demand.h describes.
-class AudioBarsBase : public EffectBase {
+class AudioBarsBase : public AudioEffectBase {
 public:
     /// The bars: the sixteen, the third octaves or the piano's keys.
     uint8_t bands = kBandsThirds;
@@ -20,7 +20,7 @@ public:
     PrepareScope prepareScope() const override { return PrepareScope::Self; }
     /// Need the notes while what this effect shows reads them; an effect's own prepare chains this first.
     void prepare() override {
-        EffectBase::prepare();
+        AudioEffectBase::prepare();
         notes_.set(readsNotes());
     }
 
