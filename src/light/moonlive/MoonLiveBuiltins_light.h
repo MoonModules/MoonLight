@@ -901,22 +901,33 @@ inline const BuiltinTable& lightBuiltins() {
     t.add({"flowCurl", 2, false, BuiltinKind::Call, &mm_light_flowCurl, {}});
     t.add({"trailDecay", 1, false, BuiltinKind::Call, &mm_light_trailDecay, {}});
     t.add({"emitTrail", 6, false, BuiltinKind::Call, &mm_light_emitTrail, {}});
+    constexpr uint8_t kNotesDemand = AudioDemand::bitOf(AudioFeature::Notes);   // the note builtins read the semitone bank, which a script calling one demands
     // The `audio` prefix leaves `level` free, since registering a builtin reserves the name.
     t.add({"audioLevel", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_level, {}});
     t.add({"audioSmooth", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_levelSmooth, {}});
     t.add({"audioBand", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_band, {}});
     t.add({"audioPeakHz", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_peakHz, {}});
     t.add({"audioBeat", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_onBeat, {}});
-    t.add({"audioChroma", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_chroma, {}});
-    t.add({"audioChordChange", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_chordChange, {}});
-    t.add({"audioKey", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_key, {}});
+    Builtin chroma{"audioChroma", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_chroma, {}};
+    chroma.demands = kNotesDemand;
+    t.add(chroma);
+    Builtin chordChange{"audioChordChange", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_chordChange, {}};
+    chordChange.demands = kNotesDemand;
+    t.add(chordChange);
+    Builtin key{"audioKey", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_key, {}};
+    key.demands = kNotesDemand;
+    t.add(key);
     t.add({"audioBass", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bass, {}});
     t.add({"audioMid", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_mid, {}});
     t.add({"audioTreble", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_treble, {}});
-    t.add({"audioBassNote", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bassNote, {}});
+    Builtin bassNote{"audioBassNote", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bassNote, {}};
+    bassNote.demands = kNotesDemand;
+    t.add(bassNote);
     t.add({"audioOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_rangeOnset, {}});
     t.add({"audioBandOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_bandOnset, {}});
-    t.add({"audioNoteOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_noteOnset, {}});
+    Builtin noteOnset{"audioNoteOnset", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_noteOnset, {}};
+    noteOnset.demands = kNotesDemand;
+    t.add(noteOnset);
     t.add({"setPan", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_pan, {}});
     t.add({"setTilt", 2, /*returns*/ false, BuiltinKind::Call, &mm_light_set_tilt, {}});
     // The rest of the fixture roles, same shape and same no-op where the channel is absent.

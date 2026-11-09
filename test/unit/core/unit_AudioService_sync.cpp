@@ -647,8 +647,7 @@ TEST_CASE("AudioService Receive: a MoonLight packet without the smoothed bands i
     for (uint8_t i = 0; i < 16; i++) peer.bands[i] = 200;
     uint8_t pkt[kMlSyncMaxPacket];
     buildMoonLightAudioSync(pkt, peer);
-    pkt[6] = 1u << kMlSectionCore;   // the core alone
-    REQUIRE(sendUntil(a, pkt, kMlSyncHeaderSize + 1 + kMlSyncCoreSize, [&] { return a.audioFrame()->level == 70; }));
+    REQUIRE(sendUntil(a, pkt, kMlSyncHeaderSize + kMlSyncSectionHeader + kMlSyncCoreSize, [&] { return a.audioFrame()->level == 70; }));   // the core alone, the first section
     CHECK(a.audioFrame()->bandsSmoothed[5] > 80);   // one block of the ballistic's rise toward 200
     a.release();
 }
@@ -669,5 +668,20 @@ TEST_CASE("AudioService Receive: a late MoonLight frame's hit rides in the next 
     peer.seq = 101; peer.onsetLow = 0; peer.onset = 0; peer.level = 52;   // the next frame, no hit of its own
     REQUIRE(sendUntil(a, pkt, buildMoonLightAudioSync(pkt, peer), [&] { return a.audioFrame()->level == 52; }));
     CHECK(a.audioFrame()->onsetLow == 180);
+    a.release();
+}
+
+// Pre-commit review (2026-11-09): the receive buffer went with a release and never came back, since the next prepare saw unchanged sync settings and left the socket as it was.
+TEST_CASE("AudioService Receive: after a release and a prepare a packet still lands") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    a.release();
+    CHECK_FALSE(a.syncOpenForTest());
+    a.applyState();
+    a.tick();
+    REQUIRE(a.syncOpenForTest());
+    CHECK(sendLevel(a, 77));
     a.release();
 }

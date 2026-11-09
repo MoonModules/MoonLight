@@ -70,6 +70,8 @@ struct Builtin {
     uint8_t      jsonArgs = 0;
     /// Whether the result is a JSON document.
     bool         jsonReturn = false;
+    /// The features a host's service computes only on demand that this builtin reads, a bit each by the host's numbering: a script calling it demands them.
+    uint8_t      demands = 0;
 };
 
 /// Most fields a struct type carries: three for a color or a coordinate, four for a color with white.

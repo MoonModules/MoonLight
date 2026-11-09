@@ -2242,7 +2242,7 @@
   },
   "SheetMusicEffect": {
    "line": "The notes as they are played, written on a grand staff, or as a sequencer's piano roll: time scrolls to the left, each note in its pitch class's color.",
-   "summary": "The newest moment is the right edge, and `speed` columns a second scroll left. `view` picks how pitch runs up:\n\n- `staff`: the treble and bass staves of piano music with their clefs, middle C on its ledger line between them, each note a head on its line or space with its stem, ledger lines where it sits beyond the staves, and a sharp before its head. How long a note held writes its value: an eighth with its flag, a quarter, a half with a hollow head, a whole without a stem.\n- `piano roll`: one row a key where the panel is tall enough, `octave` and `octaves` picking the keys from A0 up, all 79 the engine measures (A0 to D#7) by default, a faint line on each C.\n\n`notes` starts at `no overtones`; switching it between `all`, `no overtones` and `hands` shows what each keeps: an attack's flash is a dot, a late note one that starts late, an overtone the same color an octave or a twelfth up.",
+   "summary": "A note appears at the right edge the moment it starts and rolls left; the more notes come, the faster the sheet rolls to make room. `view` picks how pitch runs up:\n\n- `staff`: the treble and bass staves of piano music with their clefs, middle C on its ledger line between them, each note a head with its stem, ledger lines beyond the staves, the key signature after the clefs, and an accidental only on a note outside the key. How long a note held writes its value: an eighth with its flag, a quarter, a half with a hollow head, a whole without a stem.\n- `piano roll`: one row a key where the panel is tall enough, `octave` and `octaves` picking the keys from A0 up, all 79 the engine measures (A0 to D#7) by default, a faint line on each C.\n\n`notes` starts at `no overtones`; switching it between `all`, `no overtones` and `hands` shows what each keeps: an attack's flash is a dot, a late note one that starts late, an overtone the same color an octave or a twelfth up.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SheetMusicEffect.gif",
    "controls": {
     "view": {
@@ -2259,9 +2259,6 @@
     },
     "octaves": {
      "line": "How many octaves the piano roll shows, all 79 keys from 7."
-    },
-    "speed": {
-     "line": "How many columns scroll by a second."
     },
     "noteNames": {
      "line": "The strongest pitch classes top left, the key top right."
@@ -4343,10 +4340,6 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#audioservice:scenario:scenario_Services_audio_drives_the_effects"
       }
      ]
-    },
-    "harmony": {
-     "line": "Measure the notes, for the pitch classes, the harmony's changes and the notes bars.",
-     "more": "Off saves the semitone bank's share of a core where nothing reads the harmony."
     },
     "instrument": {
      "line": "What the input carries: a full mix, or the drums alone, from a drum mic or bus.",

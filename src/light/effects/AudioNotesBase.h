@@ -2,6 +2,7 @@
 
 #include "light/effects/EffectBase.h"
 #include "light/powerfunctions/audioReadout.h"   // NoteHits, draw::noteNames
+#include "core/services/AudioDemand.h"           // the notes, while a note effect is on
 
 #include <cstring>   // memcpy
 
@@ -44,6 +45,12 @@ public:
         std::memcpy(struck_, raw ? f.notesHits : f.notesKeptHits, kHitBytes);
         if (notes == kNotesHands) playedBy(f, struck_, shown_, ms);
         if (chord && f.chordQuality != kChordNone) snapToChord(f, shown_);   // with no chord named, nothing to snap to
+    }
+
+    /// A note effect reads the keys in every `notes` mode, so it needs the notes running while it is on, as Demand.h describes; an effect's own prepare chains this first.
+    void prepare() override {
+        EffectBase::prepare();
+        notesDemand_.set(true);
     }
 
 protected:
@@ -93,6 +100,7 @@ protected:
 
 private:
     uint16_t filteredSeq_ = 0;   ///< the frame `shown_` was kept from
+    AudioDemand notesDemand_{*this, AudioFeature::Notes};   ///< the notes, while the effect is on
 };
 
 }  // namespace mm

@@ -143,9 +143,10 @@ const mm::AudioFrame& analyze(mm::AudioService& audio, std::initializer_list<flo
 
 }  // namespace
 
-TEST_CASE("AudioService: harmony off measures no notes, and on again they come back") {
+TEST_CASE("AudioService: with the notes off it measures none, and on again they come back") {
     static mm::AudioService audio;
     audio.defineControls();
+    audio.setNotesForTest(true);   // as a reader's demand turns them on
     audio.resetAnalysisForTest();
     double t = 0;
     analyze(audio, {}, 1.0f, t);   // the room's floor learned
@@ -154,12 +155,12 @@ TEST_CASE("AudioService: harmony off measures no notes, and on again they come b
     CHECK(on.gateOpen);
     CHECK(on.notesCount == 79);
     CHECK(on.chroma[0] > 200);   // C
-    audio.harmony = false;
+    audio.setNotesForTest(false);
     const mm::AudioFrame& off = analyze(audio, cMajor, 0.2f, t);
     CHECK(off.notesCount == 0);
     for (const uint8_t v : off.chroma) CHECK(v == 0);
     CHECK_FALSE(off.harmonyChange);
-    audio.harmony = true;
+    audio.setNotesForTest(true);
     const mm::AudioFrame& again = analyze(audio, cMajor, 1.5f, t);
     CHECK(again.notesCount == 79);
     CHECK(again.chroma[0] > 200);
@@ -201,6 +202,7 @@ TEST_CASE("AudioService: a chord change in an earlier block of one tick still re
 TEST_CASE("AudioService: music 40 cents sharp retunes the semitone bank toward it") {
     static mm::AudioService audio;
     audio.defineControls();
+    audio.setNotesForTest(true);
     audio.resetAnalysisForTest();
     double t = 0;
     analyze(audio, {}, 1.0f, t);   // the room
@@ -214,6 +216,7 @@ TEST_CASE("AudioService: music 40 cents sharp retunes the semitone bank toward i
 TEST_CASE("AudioService: music 40 cents flat retunes the bank and every note keeps its name") {
     static mm::AudioService audio;
     audio.defineControls();
+    audio.setNotesForTest(true);
     audio.resetAnalysisForTest();
     double t = 0;
     analyze(audio, {}, 1.0f, t);
@@ -299,7 +302,7 @@ TEST_CASE("AudioService: the simulated kick comes once a beat at 60 fps and at 1
     CHECK(slow == fast);
 }
 
-// Memory follows the mode: the analysis is held only while an input is open, the harmony's state only while `harmony` is on, so a receiver or a simulation spends no internal RAM on either.
+// Memory follows the mode: the analysis is held only while an input is open, the harmony's state only while the notes run, so a receiver or a simulation spends no internal RAM on either.
 TEST_CASE("AudioService: simulate and receive hold no analysis and no harmony state") {
     for (const uint8_t mode : {mm::AudioService::kSimMode, mm::AudioService::kReceiveMode}) {
         CAPTURE(int(mode));
@@ -314,18 +317,19 @@ TEST_CASE("AudioService: simulate and receive hold no analysis and no harmony st
     }
 }
 
-TEST_CASE("AudioService: the harmony state goes with harmony off and comes back on, the analysis staying") {
+TEST_CASE("AudioService: the harmony state goes when the notes stop and comes back when they run, the analysis staying") {
     static mm::AudioService audio;
     audio.defineControls();
-    audio.resetAnalysisForTest();   // an input opening, with harmony on by default
+    audio.setNotesForTest(true);   // a reader demanding them
+    audio.resetAnalysisForTest();   // an input opening
     REQUIRE(audio.analysisHeldForTest());
     CHECK(audio.harmonyHeldForTest());
     double t = 0;
-    audio.harmony = false;
+    audio.setNotesForTest(false);
     analyze(audio, {}, 0.1f, t);
     CHECK(audio.analysisHeldForTest());
     CHECK_FALSE(audio.harmonyHeldForTest());
-    audio.harmony = true;
+    audio.setNotesForTest(true);
     analyze(audio, {}, 0.1f, t);
     CHECK(audio.harmonyHeldForTest());
 }

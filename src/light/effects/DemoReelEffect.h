@@ -144,6 +144,9 @@ private:
         refreshStatus();
     }
 
+    /// The effect playing, which a walk over the tree reaches through here, its demands among what it counts.
+    const MoonModule* hosted() const override { return current_; }
+
     /// Release and delete the hosted child, the Scheduler's ownership pattern.
     void destroyCurrent() {
         if (!current_) return;

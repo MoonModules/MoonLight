@@ -21,7 +21,7 @@ struct AudioBars {
     BarScale scale;        ///< the scale they came from, which may be coarser than the one asked for
 };
 
-/// The bars at the scale `asked`, falling back to the next coarser one a frame does not carry: a frame synced in the WLED format has the sixteen alone, a board with `harmony` off has no keys.
+/// The bars at the scale `asked`, falling back to the next coarser one a frame does not carry: a frame synced in the WLED format has the sixteen alone, a board while the notes do not run has no keys.
 inline AudioBars barsOf(const AudioFrame& f, uint8_t asked) MM_NONBLOCKING {
     if (asked == kBandsNotes && f.notesCount > 0) return {f.notes, f.notesHits, f.notesCount, kBandsNotes};
     if (asked != kBands16 && f.thirdsCount > 0) return {f.thirds, f.thirdsHits, f.thirdsCount, kBandsThirds};

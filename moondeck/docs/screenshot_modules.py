@@ -540,30 +540,37 @@ def prepare_pipeline(host: str, drop_modifiers: bool, grid: int | None, ledger: 
         for g in walk(mods, "", "GridLayout"):
             name = g.get("name", "")
             was = controls(g)
+            changed["grids"].append({"name": name, "width": was.get("width"), "height": was.get("height")})
+            save()   # its size goes on record before it changes, so a run cut short between width and height puts both back
             ok_w = set_control(host, name, "width", grid)
             ok_h = set_control(host, name, "height", grid)
             if ok_w and ok_h:
-                changed["grids"].append({"name": name, "width": was.get("width"), "height": was.get("height")})
-                save()
                 print(f"  pipeline: grid {name!r} -> {grid}x{grid}")
     return changed
 
 
-def restore_pipeline(host: str, changed: dict, layer: str | None) -> bool:
-    """Put back what prepare_pipeline changed: each grid's size, and each modifier on the Layer, controls and on-switch and all; true when every step landed."""
+def restore_pipeline(host: str, changed: dict, layer: str | None, save=lambda: None) -> bool:
+    """Put back what prepare_pipeline changed: each grid's size, and each modifier on the Layer, controls and on-switch and all; true when every step landed.
+
+    Each step that lands leaves `changed` and `save` records it, so a retry neither redoes it nor adds a modifier twice.
+    """
     ok = True
-    for g in changed.get("grids", []):
+    for g in list(changed.get("grids", [])):
         if set_control(host, g["name"], "width", g["width"]) and set_control(host, g["name"], "height", g["height"]):
+            changed["grids"].remove(g)
+            save()
             print(f"  pipeline: grid {g['name']!r} back to {g['width']}x{g['height']}")
         else:
             print(f"  restore: grid {g['name']!r} back to {g['width']}x{g['height']} failed")
             ok = False
-    for m in changed.get("modifiers", []):
+    for m in list(changed.get("modifiers", [])):
         name = add_module(host, m["name"][:MAX_NAME], m["type"], layer, {})
         if not name:
             print(f"  restore: re-adding {m['type']} failed")
             ok = False
             continue
+        changed["modifiers"].remove(m)   # it is back: a retry must not add it again
+        save()
         landed = all([set_control(host, name, ctrl, value) for ctrl, value in m["controls"].items()])
         landed = set_control(host, name, "enabled", m["enabled"]) and landed   # a module's on-switch is not among its controls
         print(f"  pipeline: restored modifier {name!r}" if landed else f"  restore: modifier {name!r} is back, but not every control")
@@ -1039,9 +1046,15 @@ def main() -> int:
                 except Exception as e:
                     print(f"  orphan-sweep: delete {n!r} on {args.host} failed: {e}")
                     swept = False
-            swept = restore_pipeline(args.host, left.get("pipeline") or {}, parents.get("Layer")) and swept
+            left.setdefault("pipeline", {})
+            save_left = lambda: Ledger(args.host)._write(left)   # what is put back leaves the record at once
+            swept = restore_pipeline(args.host, left["pipeline"], parents.get("Layer"), save_left) and swept
             if left.get("layout"):
-                swept = restore_default_layout(args.host, left["layout"]) and swept
+                if restore_default_layout(args.host, left["layout"]):
+                    left["layout"] = None
+                    save_left()
+                else:
+                    swept = False
             if not swept:
                 # Capturing on top would replace the record of what is still out of place with a new one.
                 print(f"  ⚠️  orphan-sweep: the last run's changes on {args.host} are not all undone; its record "
@@ -1300,9 +1313,11 @@ def main() -> int:
                     except Exception as e:
                         print(f"  cleanup: delete {mid!r} on {args.host} failed: {e}")
                         cleaned = False
-                cleaned = restore_pipeline(args.host, pipeline_changed, parents.get("Layer")) and cleaned
+                cleaned = restore_pipeline(args.host, pipeline_changed, parents.get("Layer"), added_ids.save) and cleaned
                 if displaced_layout:
                     if restore_default_layout(args.host, displaced_layout):
+                        added_ids.layout = None
+                        added_ids.save()
                         print(f"  pipeline: restored {displaced_layout['type']}")
                     else:
                         cleaned = False

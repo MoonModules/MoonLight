@@ -190,6 +190,8 @@ public:
     const MoonLive& engine() const { return engine_; }
     /// Whether a program is compiled and ready to run.
     bool ok() const { return engine_.ok(); }
+    /// What the compiled program's builtins demand, none without a program.
+    uint8_t demands() const { return engine_.demands(); }
 
 private:
     /// Read what the script says it is, by running the function it wrote; a script declaring neither keeps the binding's defaults.

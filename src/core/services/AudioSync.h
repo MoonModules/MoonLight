@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <cstring>
+#include <memory>   // unique_ptr: the receive buffer, held only while receiving
+#include <new>      // std::nothrow
 
 #include "platform/platform.h"
 #include "core/module/MoonModule.h"     // the owner whose status line the sync reports on
@@ -46,16 +48,19 @@ public:
         hits_ = {};
         rxHits_ = {};
         rxSeqValid_ = false;
+        // The receive buffer is taken here, where allocating is allowed, and only for receiving.
+        if (role == kReceive) rx_.reset(new (std::nothrow) uint8_t[kMlSyncMaxDatagram]);
         // Only when there IS a socket to wait for.
         if (role == kSend)         owner_.setStatus("send: waiting for network");
         else if (role == kReceive) owner_.setStatus("receive: waiting for network");
         else if (isOwnStatus(owner_.status())) owner_.setStatus("");
     }
 
-    /// Close the socket.
+    /// Close the socket and free the receive buffer.
     void close() {
         sock_.close();
         open_ = false;
+        rx_.reset();
     }
 
     /// Open the socket for `role` on `port` once the network stack is up, backing off after a failure; answers whether it is open.
@@ -67,10 +72,10 @@ public:
         const uint32_t now = platform::millis();
         if (lastOpenFailMs_ != 0 && now - lastOpenFailMs_ < kOpenRetryMs) return false;
         // Send → each format's group, or the hosts; receive → bind, then join both groups. A failed join degrades rather than refuses, since unicast still arrives.
-        open_ = sock_.open() && (role == kSend || sock_.bind(port));
+        open_ = (role == kSend || rx_) && sock_.open() && (role == kSend || sock_.bind(port));
         if (!open_) {
             sock_.close();
-            owner_.setStatus(role == kSend ? "send: socket failed" : "receive: bind failed", MoonModule::Severity::Error);
+            owner_.setStatus(role == kSend ? "send: socket failed" : !rx_ ? "receive: no memory for packets" : "receive: bind failed", MoonModule::Severity::Error);
         } else if (role == kSend) {
             reportSending(unicast);
         } else {
@@ -103,14 +108,15 @@ public:
     bool receive(AudioFrame& frame, bool& smoothHere) {
         if constexpr (!platform::hasNetwork) return false;
         if (lastRecvMs_ != 0 && platform::millis() - lastRecvMs_ >= kFallbackMs) rxSeqValid_ = false;   // a silent sender may come back restarted
-        uint8_t pkt[kMlSyncMaxDatagram];     // what the format allows, so a later version's sections arrive whole
+        uint8_t* pkt = rx_.get();            // the whole datagram the format allows, so a later version's sections arrive whole
+        if (!pkt) return false;
         uint8_t srcIp[4] = {};
         bool fresh = false;
         for (int i = 0; i < kMaxRecvPerTick; i++) {
-            const int n = sock_.recvFrom(pkt, sizeof(pkt), srcIp);
+            const int n = sock_.recvFrom(pkt, kMlSyncMaxDatagram, srcIp);
             if (n <= 0) break;                     // -1 = nothing pending
-            const uint16_t sections = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), frame_);
-            const bool ml = sections != 0;
+            uint16_t sections = 0;
+            const bool ml = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), frame_, &sections);
             if (!ml && (mlHeardMs_ != 0 && platform::millis() - mlHeardMs_ < kFallbackMs)) continue;   // the same frame again, from a board sending both
             if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), frame_)) continue;   // a v1 / foreign packet
             if (!take(ml, srcIp)) continue;
@@ -167,6 +173,7 @@ private:
 
     MoonModule& owner_;
     platform::UdpSocket sock_;       // one socket, either format, bound only in send or receive
+    std::unique_ptr<uint8_t[]> rx_;  // the receive buffer, a whole datagram, held only while receiving
     AudioFrame frame_;               // the frame a packet is parsed into or built from, a member since it and the datagram together would pass the stack's budget
     AudioHits hits_;                 // the hits of the frames since the last packet, which a throttled send would drop
     AudioHits rxHits_;               // the hits of the packets since the last frame taken, late ones among them
@@ -220,7 +227,7 @@ private:
 
     /// Whether status line `s` holds one of the sync's own messages, which a mode without a socket clears.
     static bool isOwnStatus(const char* s) {
-        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "from ", "listening", "sending", "set hosts"};
+        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "no memory for packets", "from ", "listening", "sending", "set hosts"};
         if (!s) return false;
         for (const char* k : kOwn) if (std::strstr(s, k)) return true;
         return false;

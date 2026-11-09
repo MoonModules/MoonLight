@@ -1,7 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
-#include "light/powerfunctions/audioReadout.h"   // draw::noteNames
+#include "light/effects/AudioBarsBase.h"
 
 namespace mm {
 
@@ -30,16 +29,16 @@ namespace mm {
 ///
 /// On a grid at least three rows tall a level meter sits under the bars, as tall as a bar is wide rounded up, with a square split in three for the range hits: kick red, snare amber, hats blue. A one-column tick on the meter is where the gate opens on the level's own scale, white while open and red while shut.
 ///
-/// With `harmony` on a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
+/// While the notes run a row of the twelve pitch classes sits over them, C at the left, each in its palette color as bright as it sounds, going dark for an instant as the chord changes.
 ///
 /// ## The instrument
 ///
-/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds. A frame synced in the WLED format carries the sixteen alone, so the third octaves and the keys fall back to them; with `harmony` off the keys fall back to the third octaves.
+/// This effect is the audio test instrument, so it shows the raw level rather than a smoothed one, which lags by tens of milliseconds. A frame synced in the WLED format carries the sixteen alone, so the third octaves and the keys fall back to them; while the notes do not run the keys fall back to the third octaves.
 ///
 /// Of `n` bars, bar `i` spans columns `i*w/n` up to `(i+1)*w/n` and rises `band*h/255` rows, as GEQ PPA computes them for sixteen, so the two compare pixel for pixel.
 ///
 /// The floor needs no line of its own: the window's bottom never sinks under it, so the bars stand on the floor.
-class AudioSpectrumEffect : public EffectBase {
+class AudioSpectrumEffect : public AudioBarsBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }
@@ -53,8 +52,6 @@ public:
     uint8_t colorMode = kColorPerBand;
     /// The level meter, hits, gate and peak, drawn with the bars.
     bool readouts = true;
-    /// The bars: the sixteen, the third octaves or the piano's keys.
-    uint8_t bands = kBandsThirds;
     /// The sweep's swings through the palette a minute.
     uint8_t speed = 60;
     /// The strongest pitch classes top left, the key top right.
@@ -69,8 +66,11 @@ public:
         controls_.setHidden(controls_.count() - 1, colorMode != kColorSweep);
         controls_.addControl("readouts", readouts);
         controls_.addControl("noteNames", noteNames);
-        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
+        addBandsSelect();
     }
+
+    /// The readouts and the note names decide whether the notes run too.
+    bool affectsPrepare(const char* name) const override { return AudioBarsBase::affectsPrepare(name) || std::strcmp(name, "readouts") == 0 || std::strcmp(name, "noteNames") == 0; }
 
     /// Draw the level meter and the pitch classes, one bar per column from its band's magnitude, then the gate and the peak over them.
     void tick() MM_NONBLOCKING override {
@@ -145,6 +145,10 @@ public:
                 return i + (third - kSixteenOfThirds[i]) / static_cast<float>(kSixteenOfThirds[i + 1] - kSixteenOfThirds[i]);
         return 15.0f;
     }
+
+protected:
+    /// The keys as bars, the pitch classes among the readouts, or the note names.
+    bool readsNotes() const override { return AudioBarsBase::readsNotes() || readouts || noteNames; }
 
 private:
     /// How long the square stays red after a hit: an onset lasts one audio block, 21 ms at 24 kHz, too short for the eye.

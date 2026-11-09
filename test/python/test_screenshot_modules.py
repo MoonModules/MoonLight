@@ -81,10 +81,26 @@ def test_each_pipeline_change_is_on_disk_the_moment_it_is_made(ledger, monkeypat
     monkeypatch.setattr(sm, "set_control", cut_short)
     with pytest.raises(KeyboardInterrupt):
         sm.prepare_pipeline("board-a", drop_modifiers=False, grid=64, ledger=record)
-    assert sm.Ledger.left_over("board-a")["pipeline"] == {"modifiers": [], "grids": []}   # nothing landed yet but the record is there
-    monkeypatch.setattr(sm, "set_control", lambda *a: True)
-    sm.prepare_pipeline("board-a", drop_modifiers=False, grid=64, ledger=record)
-    assert sm.Ledger.left_over("board-a")["pipeline"]["grids"] == [{"name": "Grid", "width": 16, "height": 16}]
+    # The width landed and the height did not: the grid's first size is on record, so the next run puts both back.
+    left = sm.Ledger.left_over("board-a")["pipeline"]
+    assert left["grids"] == [{"name": "Grid", "width": 16, "height": 16}]
+    restored = []
+    monkeypatch.setattr(sm, "set_control", lambda host, name, ctrl, value: restored.append((ctrl, value)) or True)
+    assert sm.restore_pipeline("board-a", left, "Layer") is True
+    assert restored == [("width", 16), ("height", 16)]
+
+
+def test_a_restore_records_each_step_that_lands_so_a_retry_adds_no_modifier_twice(monkeypatch):
+    added = []
+    monkeypatch.setattr(sm, "add_module", lambda host, name, type_, parent, controls: added.append(name) or name)
+    monkeypatch.setattr(sm, "set_control", lambda host, name, ctrl, value: ctrl != "speed")   # one control of the modifier fails
+    changed = {"grids": [{"name": "Grid", "width": 16, "height": 16}],
+               "modifiers": [{"name": "Multiply", "type": "MultiplyModifier", "controls": {"speed": 3}, "enabled": True}]}
+    saves = []
+    assert sm.restore_pipeline("host", changed, "Layer", lambda: saves.append(1)) is False
+    assert changed == {"grids": [], "modifiers": []} and saves   # the grid and the re-added modifier left the record
+    assert sm.restore_pipeline("host", changed, "Layer") is True
+    assert added == ["Multiply"]   # the retry adds nothing
 
 
 def test_a_restore_that_does_not_land_says_so(monkeypatch):

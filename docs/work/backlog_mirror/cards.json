@@ -710,6 +710,16 @@
   "number": null
  },
  {
+  "title": "Panel Card drives a ledwall-flashed Colorlight card (2026-11-08)",
+  "area": "Drivers",
+  "module": "PanelCardDriver",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=297868738",
+  "number": null
+ },
+ {
   "title": "Panel cards over a veth or a bridge: list virtual interfaces after the real NICs, and say so on a NAT bridge (2026-11-07, from Discord)",
   "area": "Drivers",
   "module": "PanelCardDriver",

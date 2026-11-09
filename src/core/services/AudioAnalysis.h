@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// The card's `cpu` is the analysis's share of one core over the last second. The third octaves take 3.6% of a P4 core and 7.2% of an S3's at 24 kHz, and 8.2% of a classic ESP32's at 22,050 Hz; at 48 kHz each share doubles, the work per sample being the same at any rate.
 ///
-/// The semitone bank adds about 1.3 times the third octaves' share, and the onsets 5 to 7 points of a core, so with `harmony` on the analysis takes about 14%, 22% and 26%.
+/// The semitone bank adds about 1.3 times the third octaves' share, and the onsets 5 to 7 points of a core, so while the notes run the analysis takes about 14%, 22% and 26%.
 struct AudioAnalysis : platform::InternalRamObject {
     int32_t samples[kAudioBlock] = {};  ///< fixed hot-path scratch, sized once
     size_t filled = 0;                  ///< samples accumulated toward the next full block
@@ -72,7 +72,7 @@ inline bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
     return true;
 }
 
-/// The harmony's state, which AudioService allocates only while `harmony` is on: the semitone bank and what reads it.
+/// The harmony's state, which AudioService allocates only while the notes run: the semitone bank and what reads it.
 struct AudioHarmonyState : platform::InternalRamObject {
     SemitoneBank semitones;             ///< the notes to kSemitoneTopHz
     HarmonyTracker tracker;             ///< the pitch classes and the moment they move

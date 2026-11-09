@@ -12,8 +12,10 @@
 #include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
 #include "core/services/AudioChords.h"     // ChordTracker: the chord named from them
 #include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
-#include "core/services/AudioAnalysis.h"   // the state an open input and `harmony` hold
+#include "core/services/AudioAnalysis.h"   // the state an open input and the notes hold
 #include "core/services/AudioSync.h"      // the audio sync's socket, either format
+#include "core/services/AudioDemand.h"    // what the readers of the notes need
+#include "core/module/Scheduler.h"        // the tree whose demands decide whether the notes run
 #include "platform/platform.h"
 
 #include <atomic>
@@ -68,7 +70,7 @@ namespace mm {
 ///
 /// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
 ///
-/// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
+/// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while something reads the notes, as Demand.h describes. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
 class AudioService : public MoonModule {
 public:
     /// `level` through the bands' peak-meter ballistic into `levelSmoothed`, for a frame this engine measured or synthesized; a synced frame keeps the sender's own.
@@ -152,9 +154,6 @@ public:
     /// What the input carries: a full mix, or the drums alone, from a drum mic or bus.
     /// @guide On a stage with an input per instrument: each hit then lights one drum.
     uint8_t  instrument = kInstrumentMix;
-    /// Measure the notes, for the pitch classes, the harmony's changes and the notes bars.
-    /// @guide Off saves the semitone bank's share of a core where nothing reads the harmony.
-    bool     harmony = true;
     /// The synthesized patterns `simulate` picks from, in its option order.
     enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
     /// The pattern: a plausible song, or a test march.
@@ -247,8 +246,6 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode);
         controls_.addControl("squelch", squelch, 0, 40);
         controls_.setHidden(controls_.count() - 1, !localMode);
-        controls_.addControl("harmony", harmony);
-        controls_.setHidden(controls_.count() - 1, !localMode);
         static constexpr const char* kInstrumentOptions[] = {"mix", "drums"};
         controls_.addSelect("instrument", instrument, kInstrumentOptions, kInstrumentCount);
         controls_.setHidden(controls_.count() - 1, !localMode);
@@ -298,9 +295,9 @@ public:
 
     /// Which changes rebuild the channel, rebind the socket, or re-toggle the rows.
     bool affectsPrepare(const char* name) const override {
-        // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind; `harmony` allocates or frees its state.
+        // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind, and the format decides whether sending needs the notes.
         static constexpr const char* kPrepares[] = {"wsPin", "sdPin", "sckPin", "mclkPin", "micMode", "device", "sampleRate",
-                                                    "mode", "send audio", "syncPort", "addressing", "hosts", "harmony"};
+                                                    "mode", "send audio", "syncFormat", "syncPort", "addressing", "hosts"};
         if (std::strncmp(name, "codec", 5) == 0) return true;   // the codec and its bus, which re-init it
         for (const char* p : kPrepares) if (std::strcmp(name, p) == 0) return true;
         return false;
@@ -309,10 +306,11 @@ public:
     /// Claim the frame seat, then acquire only the hardware the current mode needs.
     void prepare() override {
         micSeat_.claim();       // the first live instance wins the seat, in any mode
+        notesOn_ = notesWanted();
         if (mode == kLocalMode) {
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
             if (!inited_ || reinitPending_ || micConfig() != openedWith_) reinit();
-            else if (harmony != harmonyApplied_) switchHarmony();
+            else if (notesOn_ != harmonyApplied_) switchHarmony();
         } else {
             if (deinit()) clearStatus();   // the others free the channel and its pins; a mic diagnosis would otherwise linger
         }
@@ -324,12 +322,24 @@ public:
         }
         sync_.parseHosts(hosts);
     }
+    /// A reader's demand turned on or off: count them again at the frame boundary, and switch the notes when that changes whether anything reads them.
+    void onDemandChanged() override {
+        notesOn_ = notesWanted();
+        if (mode == kLocalMode && inited_ && notesOn_ != harmonyApplied_) switchHarmony();
+    }
+    /// Whether anything reads the notes: a module's demand, or this board sending the MoonLight format, whose receivers show them.
+    bool notesWanted() const {
+        if (sync() == AudioSync::kSend && syncFormat != kFormatWled) return true;
+        const Scheduler* tree = Scheduler::instance();
+        return tree && (tree->demandsOf(AudioDemand::kProvider) & AudioDemand::bitOf(AudioFeature::Notes));
+    }
     /// One-time wiring only: the acquire and the election live in the build.
     void setup() override {}
     /// Free the peripheral and the socket, and vacate the seat for any survivor.
     void release() override {
         deinit();
         if constexpr (platform::hasNetwork) sync_.close();
+        syncSet_ = false;   // the next prepare sets the socket up again, its receive buffer with it
         micSeat_.vacate();
         MoonModule::release();
     }
@@ -342,15 +352,17 @@ public:
     void resetAnalysisForTest() { if (openAnalysis()) resetAnalysis(); }
     /// The semitone bank's tuning from A440 in cents, which the retune sets.
     float tuningForTest() const { return harmonyState_ ? harmonyState_->tuningCents : 0.0f; }
-    /// How late piano key `key`'s band reports its note, in milliseconds, 0 with `harmony` off: the delay the note harness dates a note back by.
+    /// How late piano key `key`'s band reports its note, in milliseconds, 0 while the notes do not run: the delay the note harness dates a note back by.
     uint16_t noteDelayMsForTest(uint8_t key) const { return harmonyState_ ? static_cast<uint16_t>(harmonyState_->semitones.delaySeconds(static_cast<uint8_t>(kNotesLowBand + key)) * 1000.0f + 0.5f) : 0; }
-    /// Whether the analysis and the harmony's state are held, which only an open input and `harmony` justify.
+    /// Whether the analysis and the harmony's state are held, which only an open input and the notes justify.
     bool analysisHeldForTest() const { return analysis_ != nullptr; }
+    /// Run the notes or not, as a reader's demand would, for a test that drives the analysis without a module tree.
+    void setNotesForTest(bool on) { notesOn_ = on; }
     /// Whether the harmony's state is held.
     bool harmonyHeldForTest() const { return harmonyState_ != nullptr; }
     /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path, after resetAnalysisForTest.
     const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock]) {
-        if (harmony != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
+        if (notesOn_ != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
         std::memcpy(analysis_->samples, block, sizeof(block));
         handSettings();
         analyzeBlock();
@@ -439,7 +451,7 @@ public:
         }
     }
 
-    /// The block's harmony from the semitone bank into the frame, or every harmony field 0 with `harmony` off.
+    /// The block's harmony from the semitone bank into the frame, or every harmony field 0 while the notes do not run.
     void analyzeHarmony() {
         AudioFrame& w = analysis_->work;
         if (!harmonyState_) {
@@ -489,7 +501,7 @@ public:
             a.bank.process(part);
             if (harmonyState_) harmonyState_->semitones.process(part);
             const uint32_t chunkEndMs = static_cast<uint32_t>((blockStart + at + ThirdOctaveBank::kChunk) * 1000u / a.openedRate);
-            // The onsets read the bank between chunks, every 5 ms of the stream's time, as AudioOnsets' notes say.
+            // The onsets read the bank between chunks, at least 5 ms of the stream's time apart, as AudioOnsets' notes say.
             a.onsets.update(a.bank, chunkEndMs);
             if (harmonyState_) harmonyState_->noteOnsets.update(harmonyState_->semitones, chunkEndMs, a.onsets.sinceAttackMs(chunkEndMs));
         }
@@ -615,8 +627,9 @@ private:
     using Analysis = AudioAnalysis;
     using Harmony = AudioHarmonyState;
     std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
-    std::unique_ptr<Harmony> harmonyState_;     // and this only while `harmony` is on
-    bool harmonyApplied_ = false;               // the `harmony` the state was last applied for, held or not for want of RAM
+    bool notesOn_ = false;                      // whether the notes run, the semitone bank and what it feeds: set from what reads them, as Demand.h describes
+    std::unique_ptr<Harmony> harmonyState_;     // and this only while the notes run
+    bool harmonyApplied_ = false;               // whether the notes ran when the state was last applied, held or not for want of RAM
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
@@ -706,10 +719,10 @@ private:
         settleHarmony();
     }
 
-    /// Remember the `harmony` the state was applied for, so a board with no room for it tries once per switch rather than on every prepare, and say so.
+    /// Remember whether the notes ran when the state was applied, so a board with no room for it tries once per switch rather than on every prepare, and say so.
     void settleHarmony() {
-        harmonyApplied_ = harmony;
-        if (harmony && !harmonyState_) setStatus("audio: no internal RAM for the harmony, running without it", Severity::Warning);
+        harmonyApplied_ = notesOn_;
+        if (notesOn_ && !harmonyState_) setStatus("audio: no internal RAM for the notes, running without them", Severity::Warning);
     }
 
     /// What the wiring still lacks before the mic can open, or nullptr when nothing does.
@@ -763,20 +776,20 @@ private:
         if (harmonyState_) resetHarmony();
     }
 
-    /// Allocate the analysis for an opening input, and the harmony's state if `harmony` is on; false, with the card saying so, when internal RAM has no room for the analysis: @xref{memory-follows-the-mode}.
+    /// Allocate the analysis for an opening input, and the harmony's state while the notes run; false, with the card saying so, when internal RAM has no room for the analysis: @xref{memory-follows-the-mode}.
     bool openAnalysis() {
         if (!analysis_) analysis_.reset(new (std::nothrow) Analysis());
         if (!analysis_) {
             setStatus("audio: no internal RAM for the analysis", Severity::Error);
             return false;
         }
-        // Allocated only: resetAnalysis designs it at the opened rate. Without room it runs as harmony off, and openStream says so.
-        if (!harmony) harmonyState_.reset();
+        // Allocated only: resetAnalysis designs it at the opened rate. Without room it runs without the notes, and openStream says so.
+        if (!notesOn_) harmonyState_.reset();
         else if (!harmonyState_) harmonyState_.reset(new (std::nothrow) Harmony());
         return true;
     }
 
-    /// The `harmony` switch alone: the task pauses while the state changes hands, and a task that will not stop leaves it for the retry each second.
+    /// The notes switching alone: the task pauses while the state changes hands, and a task that will not stop leaves it for the retry each second.
     void switchHarmony() {
         if (!stopAudioTask()) {
             setStatus("audio task did not stop: the input stays open until it does", Severity::Error);
@@ -788,9 +801,9 @@ private:
         settleHarmony();
     }
 
-    /// Hold the harmony's state exactly while `harmony` is on, with the analysis's task stopped or absent.
+    /// Hold the harmony's state exactly while the notes run, with the analysis's task stopped or absent.
     void applyHarmony() {
-        if (!harmony) { harmonyState_.reset(); return; }
+        if (!notesOn_) { harmonyState_.reset(); return; }
         if (harmonyState_) return;
         harmonyState_.reset(new (std::nothrow) Harmony());
         if (harmonyState_ && analysis_) resetHarmony();

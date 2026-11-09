@@ -112,6 +112,15 @@ public:
     /// The top-level module of this type, or null: how a container finds a peer main.cpp registers beside it.
     MoonModule* topOfType(const char* typeName) const;
 
+    /// What the tree's modules demand of the module of type `provider`, a bit per feature by its numbering: how a provider learns whether anything needs what it computes.
+    uint8_t demandsOf(const char* provider) const;
+    /// Mark that a demand on the modules of type `provider` changed; they count them again at the next frame boundary, so a release and a prepare in one frame settle once and nothing switches on the render path: Demand.h.
+    void demandChanged(const char* provider);
+    /// Tell every provider a demand changed on since the last frame boundary, which `preparePending` runs.
+    void settleDemands();
+    /// Tell every module of type `provider`, or every module with null, that a demand on it changed.
+    void tellProvidersOf(const char* provider);
+
     /// The single live Scheduler, reachable so a factory-created module can drive a control.
     static Scheduler* instance() MM_NONBLOCKING { return instance_; }
     /// A Scheduler that ends without release() still stops being the live one, so instance() never dangles.
@@ -152,6 +161,10 @@ private:
     static constexpr uint8_t kPendingScopes = 4;
     /// Pending subtree rebuilds, null where free.
     std::array<std::atomic<MoonModule*>, kPendingScopes> preparePending_{};
+    /// The providers a demand changed on since the last frame boundary, null where free; one more than fits tells every provider.
+    std::array<std::atomic<const char*>, kPendingScopes> demandPending_{};
+    /// Set when a demand changed with every slot taken, so the next boundary tells every module.
+    std::atomic<bool> demandOverflow_{false};
     /// A live write is under way, so a write it makes in turn, a slot driving its target, is live too and saves nothing.
     bool liveWrite_ = false;
     /// Live documents waiting for the frame boundary, from the loop's own task only: a show builds a look in one or two.

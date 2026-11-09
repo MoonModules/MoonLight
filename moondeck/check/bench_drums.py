@@ -39,12 +39,12 @@ KIT = {"kick": (0x01, ("KD",)), "snare": (0x02, ("SD",)), "hi-hat": (0x04, ("HH"
 
 # ---------------------------------------------------------------- the generated drum walk
 
-GENERATED_VERSION = "3"   # raise it when generate() changes, so --generated writes the walk again
+GENERATED_VERSION = "6"   # raise it when generate() changes, so --generated writes the walk again
 RATES = (4, 8, 12, 16, 20)   # the speed ramps, hits a second
 KEPT_APART = 0.9             # a rate a drum keeps apart: this share of its hits lit
 RATE = bench_tempo.RATE
 # Each drum's rise per third-octave center, in dB over the room, as MDB Drums' isolated hits rise in their first two frames (2026-11-08): a kick at 40 to 125 Hz,
-# a snare at 160 to 200 Hz, a tom at its own pitch; the snare's wires, the hi-hat and the cymbal are noise above them.
+# a snare at 160 to 200 Hz, a tom at its own pitch; the kick's beater click, the snare's wires, the hi-hat and the cymbal are noise above them.
 KICK = {40: 14, 50: 34, 63: 40, 80: 39, 100: 35, 125: 29, 160: 22, 200: 13, 250: 4}
 SNARE = {100: 2, 125: 5, 160: 13, 200: 16, 250: 6, 315: 4}
 TOM = {80: 4, 100: 13, 125: 19, 160: 26, 200: 22, 250: 12, 315: 8, 400: 3}
@@ -68,7 +68,7 @@ def hit(buf: list[float], at: float, drum: str, rng: random.Random) -> None:
             t = (i - start) / RATE
             env = min(1.0, t / 0.002) * math.exp(-t / decay)
             buf[i] += env * sum(a * math.sin(2 * math.pi * hz * t + ph) for hz, a, ph in parts)
-    noise = {"SD": (0.15, 0.06, 2), "HH": (0.25, 0.03, 3), "CY": (0.2, 0.8, 3)}.get(drum)   # decays as real drums die away: a kick or a snare within 100 ms
+    noise = {"KD": (2.5, 0.003, 2), "SD": (0.15, 0.06, 2), "HH": (0.25, 0.03, 3), "CY": (0.2, 0.8, 3)}.get(drum)   # decays as real drums die away: a kick or a snare within 100 ms, the kick's beater click within 10, 19 dB under its body as MDB Drums' kicks click
     if noise:   # white noise differenced `order` times, rising 6 dB an octave each, so it sounds high and leaves the bass alone
         gain, decay, order = noise
         last = [0.0] * (order + 1)

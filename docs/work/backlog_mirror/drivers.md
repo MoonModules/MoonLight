@@ -287,6 +287,20 @@ The driver itself binds and sends on any interface; the one gate is the Linux in
 
 Do: list those interfaces on Linux after the physical NICs, marked "(virtual)", so the real adapters stay on top and a container's veth or a host bridge can be picked. For the cases that cannot reach a card, Podman's default NAT bridge and rootless networking (pasta, slirp4netns, no Ethernet layer), the driver's status says so instead of sending into nothing. Document the bridge, macvlan and ipvlan setups in the Linux container install page with the Podman and Docker commands.
 
+### Panel Card drives a ledwall-flashed Colorlight card (2026-11-08)
+
+Kind: Feature · Trigger: a user with a ledwall-flashed card · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=297868738)
+
+[ledwall](https://github.com/siegeld/ledwall) (BSD-2) replaces a Colorlight 5A-75E's or E320's stock firmware with its own ECP5 gateware and a RISC-V firmware, and streams pixels over UDP: a 10-byte header and 487 RGB888 pixels a chunk, or one byte a pixel with a palette (`indexed`, about three times the frame rate).
+
+What it brings over the stock card Panel Card drives now: S-PWM panels (ICN1065, DP3264S), which no MoonLight path drives; no LEDVision; an HTTP status API on the card.
+
+What it costs:
+- Panel Card gains ledwall's packet format beside Colorlight's.
+- A flashed card fetches its firmware over TFTP from ledwall's server on every boot, so a wall with MoonLight alone also needs MoonLight to serve TFTP.
+- The gateware is built per panel layout.
+- The protocol is one author's, copied by hand between his server and firmware, not a specification.
+
 ## ParlioPeripheral
 
 ### A '595 expander on Parlio

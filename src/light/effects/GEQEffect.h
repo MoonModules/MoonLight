@@ -1,8 +1,7 @@
 #pragma once
 
 #include "core/util/math16.h"            // map32: the shared, fencepost-safe range map
-#include "light/effects/EffectBase.h"
-#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
+#include "light/effects/AudioBarsBase.h"
 
 namespace mm {
 
@@ -16,7 +15,7 @@ namespace mm {
 /// @technical
 ///
 /// A per-column tracker remembers the tallest the bar reached, drawn as a dot once the bar falls below it.
-class GEQEffect : public EffectBase {
+class GEQEffect : public AudioBarsBase {
 public:
     /// Catalog tags: WLED origin, audio-reactive.
     const char* tags() const override { return "🐙🎶"; }
@@ -31,8 +30,6 @@ public:
     bool    colorBars  = false;
     /// Blend neighboring bands for smoother bar heights.
     bool    smoothBars = false;
-    /// The bars: the sixteen, the third octaves or the piano's keys.
-    uint8_t bands      = kBandsThirds;
 
     /// Publish the trail, the peak fall rate, the two coloring toggles and the bars.
     void defineControls() override {
@@ -40,11 +37,12 @@ public:
         controls_.addControl("ripple", ripple, 0, 255);
         controls_.addControl("colorBars", colorBars);
         controls_.addControl("smoothBars", smoothBars);
-        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
+        addBandsSelect();
     }
 
     /// Size one peak tracker per column, and start every peak at the floor.
     void prepare() override {
+        AudioBarsBase::prepare();
         // Cleared on every rebuild, since resize() zero-fills only on a size change.
         peaks_.resize(static_cast<size_t>(width() > 0 ? width() : 0));
         if (peaks_) std::memset(peaks_.data(), 0, peaks_.bytes());

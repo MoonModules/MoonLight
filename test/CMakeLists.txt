@@ -39,6 +39,7 @@ add_executable(mm_tests
     unit/core/unit_WledAudioSyncPacket.cpp
     unit/core/unit_ThreadSlot.cpp
     unit/core/unit_ButtonService.cpp
+    unit/core/unit_Demand.cpp
     unit/core/unit_GamepadService.cpp
     unit/core/unit_MoonLiveService.cpp
     unit/core/unit_MoonLiveService_json.cpp

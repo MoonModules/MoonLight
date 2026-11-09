@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The notes run while something reads them, and `harmony` is gone
+
+**Action: *none*: a saved `harmony` is ignored.**
+
+The Audio card's `harmony` switch is gone: the notes, the pitch classes, the key and the chord run while something reads them, a note effect, a bar effect showing the keys, AudioSpectrum's pitch classes or note names, an effect script calling a note builtin, or this board sending the MoonLight format. A board showing none of them saves the semitone bank's share of a core, 6 to 15% depending on the chip.
+
 ### Audio sync sends the whole frame, in MoonLight's own format
 
 **Action: *re-set a control*: `syncFormat` to `WLED` on the Audio card of a board whose audio feeds only WLED devices, or to `both` when it feeds MoonLight boards too.**
@@ -41,7 +47,7 @@ A sending board now sends the MoonLight format by default: the whole frame, with
 
 **Action: *re-set a control*: `notes` to `all` on a Keyboard or Strings that should show every note the engine hears.**
 
-Keyboard and Strings gain a `notes` select, `hands` by default: a weak note an octave, a twelfth or two octaves above a louder one is dropped as its overtone, and one a semitone or two beside a louder one as its leak, Keyboard keeps what two hands of five fingers within a tenth could play, its top half following the left hand and its bottom half the right in place of the octaves and the circles, and Strings plays each note at one string and fret within the fretting hand's reach, one note a string, with a strum flashing across the strings by the bridge and a bow line on a bowed violin or cello string. `no overtones` drops the overtones and the leaks without the hands, and both levels drop a weak key heard for a single frame, an attack's burst rather than a note; `all` shows every note as before. A new `chord` checkbox, off by default, keeps only the chord being played: on Keyboard under `hands` for a hand holding three keys or more, a hand playing a line keeping its notes, on Strings under `hands` as the chord's shape; the note names now show the chord beside the key. Keyboard's `auto`, the detected key picking the shown octaves, is on by default.
+Keyboard and Strings gain a `notes` select, `hands` by default: a weak note an octave, a twelfth or two octaves above a louder one is dropped as its overtone, and one a semitone or two beside a louder one as its leak, Keyboard keeps what two hands of five fingers within a tenth could play, its top half following the left hand and its bottom half the right in place of the octaves and the circles, and Strings plays each note at one string and fret within the fretting hand's reach, one note a string, with a strum flashing across the strings by the bridge and a bow line on a bowed violin or cello string. `no overtones` drops the overtones and the leaks without the hands, and both levels drop a weak key heard for a single frame, an attack's burst rather than a note; `all` shows every note as before, unless `chord` is on. A new `chord` checkbox, off by default, keeps only the chord being played: on Keyboard under `hands` for a hand holding three keys or more, a hand playing a line keeping its notes, on Strings under `hands` as the chord's shape; the note names now show the chord beside the key. Keyboard's `auto`, the detected key picking the shown octaves, is on by default.
 
 ### Freq Matrix spreads the pitch over the whole palette
 

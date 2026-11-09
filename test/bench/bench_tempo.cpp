@@ -135,6 +135,7 @@ int main(int argc, char** argv) {
     audio->defineControls();
     audio->sampleRateSel = static_cast<uint8_t>(sel);
     if (drumInput) audio->instrument = mm::AudioService::kInstrumentDrums;
+    audio->setNotesForTest(true);   // the notes run while something reads them, and the harness reads them
     audio->resetAnalysisForTest();
 
 #if defined(_WIN32)

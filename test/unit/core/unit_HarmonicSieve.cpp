@@ -124,6 +124,24 @@ TEST_CASE("a weak key counts from its second frame running, a loud one on its fi
     CHECK_FALSE(set.has(50));                       // a burst that is gone a frame on never counts
 }
 
+// Most of an attack's flashes last two frames, far under the note the attack starts (GuitarSet and URMP, 2026-11-08): a key far under the frame's loudest waits a third frame.
+TEST_CASE("a key far under the frame's loudest key counts from its third frame running, a key near it from its second") {
+    AudioFrame f = keyFrame(30, 200, false);   // a loud note, and a burst key far under it
+    f.notes[60] = 200 - kInstantSpread - 1;
+    f.notes[45] = 200 - kInstantSpread;        // and one near enough by a hair
+    NoteConfirm confirm;
+    NoteSet set;
+    uint8_t struck[kHitBytes] = {};
+    confirm.apply(f, set, struck);
+    CHECK(set.has(30));                        // loud and the loudest: at once
+    CHECK(set.has(45));                        // loud enough and near it: at once
+    CHECK_FALSE(set.has(60));
+    confirm.apply(f, set, struck);
+    CHECK_FALSE(set.has(60));                  // a second frame is not enough far under the loudest
+    confirm.apply(f, set, struck);
+    CHECK(set.has(60));                        // a third is: it outlasts an attack
+}
+
 // The strike lands on a weak note's first frame, before it counts: it carries to the frame that counts it, once.
 TEST_CASE("a strike on a key not counted yet carries to the frame that counts it, and only once") {
     NoteConfirm confirm;

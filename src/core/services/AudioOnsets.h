@@ -7,13 +7,15 @@
 
 namespace mm {
 
-/// The onsets the analysis reads from its banks every 5 ms: one per range, bass, mids and treble, one per third-octave band and one per note, each hit timed within a reading rather than within a block.
+/// The onsets the analysis reads from its banks about every 5 ms: one per range, bass, mids and treble, one per third-octave band and one per note, each hit timed within a reading rather than within a block.
 ///
 /// @technical
 ///
 /// ## The onset signal
 ///
-/// Scheirer's construction (1998): each band's log power, its rise kept and its fall dropped, summed over the range's bands, read from the bank's detectors every 5 ms, 200 readings a second, rather than from the display's bytes once a block. Each range decides by the flux against its own recent mean, as the any-hit onset does, so a hi-hat over a held bass fires the treble alone.
+/// Scheirer's construction (1998): each band's log power, its rise kept and its fall dropped, summed over the range's bands, read from the bank's detectors about every 5 ms rather than from the display's bytes once a block. Each range decides by the flux against its own recent mean, as the any-hit onset does, so a hi-hat over a held bass fires the treble alone.
+///
+/// A reading comes on the first 64-sample chunk boundary 5 ms or more after the last: every 5.3 ms at 24 and 48 kHz, 187.5 a second, and every 5.8 ms at 22,050 and 44,100 Hz.
 ///
 /// A range fires only on a rise of 10 dB in one reading, summed over its bands, over the detector's own margin: a hit rises that much, a bass filter still ringing after one a few.
 ///

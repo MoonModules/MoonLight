@@ -1,8 +1,7 @@
 #pragma once
 
 #include "core/util/math16.h"            // map32: the shared, fencepost-safe range map
-#include "light/effects/EffectBase.h"
-#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
+#include "light/effects/AudioBarsBase.h"
 
 namespace mm {
 
@@ -16,7 +15,7 @@ namespace mm {
 /// @technical
 ///
 /// The converging foreshortening of the lines is the look, so the perspective always points away from the moving vanishing point. The lines are crisp Bresenham, so there is no anti-alias toggle.
-class GEQ3DEffect : public EffectBase {
+class GEQ3DEffect : public AudioBarsBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
     const char* tags() const override { return "🌙🎶"; }
@@ -37,8 +36,6 @@ public:
     uint8_t numBands  = kAudioNoteKeys;
     /// Outline each bar.
     bool    borders   = true;
-    /// The bars: the sixteen, the third octaves or the piano's keys.
-    uint8_t bands     = kBandsThirds;
 
     /// Publish the sweep, the perspective, the bar's faces and the bars' source.
     void defineControls() override {
@@ -50,7 +47,7 @@ public:
         controls_.addControl("depth", depth, 0, 255);
         controls_.addControl("numBands", numBands, 2, kAudioNoteKeys);
         controls_.addControl("borders", borders);
-        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
+        addBandsSelect();
     }
 
     /// The bar of `n` across `cols` columns whose columns hold column `x`, the inverse of the bar edges `i * cols / n`; past the last column, the last bar.

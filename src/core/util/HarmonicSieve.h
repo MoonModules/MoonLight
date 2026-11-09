@@ -31,23 +31,35 @@ inline NoteSet soundingNotes(const AudioFrame& f) MM_NONBLOCKING {
 }
 
 inline constexpr uint8_t kInstantLevel = 32;   ///< a key this loud counts on its first frame; at its start a note reaches it more often than three times as often as an attack's burst (GuitarSet, 2026-11-07)
+inline constexpr uint8_t kInstantSpread = 60;  ///< within this of the frame's loudest key a note is near it: a played note starts a median 17 under it, an attack's burst 102 (GuitarSet and URMP, 2026-11-08)
 
-/// A minimum note duration, as transcription keeps one: a key heard counts from its second frame running, or on its first with a level of kInstantLevel or more, since an attack spreads a burst over the keys for a frame or a few and a note outlasts it. A strike on a key not counted yet carries to the frame that counts it.
+/// A minimum note duration, as transcription keeps one: a key near the frame's loudest counts from its second frame running, or on its first when it is loud, and a key far under it from its third, since an attack spreads a burst over the keys for a frame or a few, far under the note it starts, and a note outlasts it. A strike on a key not counted yet carries to the frame that counts it.
 struct NoteConfirm {
     NoteSet heard;                  ///< last frame's sounding keys
+    NoteSet heardTwice;             ///< the keys the last two frames sounded
     NoteSet counted;                ///< last frame's counted keys
     uint8_t hits[kHitBytes] = {};   ///< last frame's strikes
+
+    /// Whether sounding key `i` at `level` counts, the frame's loudest at `top`: from its third frame running, or near the loudest from its second, or on its first when loud too.
+    bool counts(uint8_t i, uint8_t level, uint8_t top) const MM_NONBLOCKING {
+        if (heardTwice.has(i)) return true;
+        const bool near = level + kInstantSpread >= top;
+        return near && (heard.has(i) || level >= kInstantLevel);
+    }
 
     /// The keys of `f` that count into `set`, and this frame's strikes into `struck`, a strike carried from a key the last frame heard but did not count.
     void apply(const AudioFrame& f, NoteSet& set, uint8_t (&struck)[kHitBytes]) MM_NONBLOCKING {
         const NoteSet now = soundingNotes(f);
+        uint8_t top = 0;
+        for (uint8_t i = 0; i < f.notesCount && i < kAudioNoteKeys; i++) top = f.notes[i] > top ? f.notes[i] : top;
         set = NoteSet{};
         for (uint8_t i = 0; i < kAudioNoteKeys; i++)
-            if (now.has(i) && (heard.has(i) || f.notes[i] >= kInstantLevel)) set.add(i);
+            if (now.has(i) && counts(i, f.notes[i], top)) set.add(i);
         for (uint8_t b = 0; b < kHitBytes; b++) {
             struck[b] = static_cast<uint8_t>(f.notesHits[b] | (hits[b] & ~counted.bits[b]));
             hits[b] = f.notesHits[b];
         }
+        for (uint8_t b = 0; b < kHitBytes; b++) heardTwice.bits[b] = static_cast<uint8_t>(heard.bits[b] & now.bits[b]);
         heard = now;
         counted = set;
     }
