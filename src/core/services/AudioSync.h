@@ -17,6 +17,69 @@
 
 namespace mm {
 
+/// The frame order of each sender, by its address, as RTP numbers per source: a frame its sender already passed is late or repeated, and the senders on one group never judge each other's numbers.
+struct SenderOrder {
+    static constexpr uint8_t kSenders = 4;          ///< the senders tracked at once; a fifth takes the one heard longest ago
+    static constexpr uint16_t kWindow = 64;         ///< how far behind its sender's last frame a frame is late, not a restarted sender
+    /// A frame against its sender's last: new, late, or the last one again.
+    enum class Order : uint8_t { New, Late, Repeat };
+    /// Where frame `seq` from `ip` at `nowMs` stands for its sender, a sender silent for `forgetMs` counting afresh, as a restarted one may come back.
+    Order judge(const uint8_t (&ip)[4], uint16_t seq, uint32_t nowMs, uint32_t forgetMs) {
+        Sender& s = senderOf(ip);
+        const uint16_t behind = static_cast<uint16_t>(s.seq - seq);
+        const bool known = s.heard && nowMs - s.ms < forgetMs;
+        s.ms = nowMs;
+        s.heard = true;
+        if (known && behind == 0) return Order::Repeat;
+        if (known && behind < kWindow) return Order::Late;
+        s.seq = seq;
+        return Order::New;
+    }
+    /// Forget every sender.
+    void clear() { for (Sender& s : senders_) s = Sender{}; }
+
+private:
+    struct Sender { uint8_t ip[4] = {}; uint16_t seq = 0; uint32_t ms = 0; bool heard = false; };
+    Sender senders_[kSenders] = {};
+    /// The entry of `ip`, or the free or longest-silent one, given to it.
+    Sender& senderOf(const uint8_t (&ip)[4]) {
+        Sender* pick = &senders_[0];
+        for (Sender& s : senders_) {
+            if (s.heard && std::memcmp(s.ip, ip, 4) == 0) return s;
+            if (!s.heard || (pick->heard && s.ms < pick->ms)) pick = &s;
+        }
+        *pick = Sender{};
+        std::memcpy(pick->ip, ip, 4);
+        return *pick;
+    }
+};
+
+/// Which sender a receiver follows, as sACN (E1.31) selects a source: the highest priority, the first heard on a tie, held until it falls silent, so two senders on one group never make the lights alternate between their frames.
+struct SourceSelection {
+    static constexpr uint8_t kDefaultPriority = 100;   ///< sACN's default, every sender's until a priority travels in the packet
+    /// Whether a packet from `ip` with `priority` at `nowMs` is the followed sender's: a sender with a higher priority, or any once the followed one is silent for `forgetMs`, takes over.
+    bool follows(const uint8_t (&ip)[4], uint8_t priority, uint32_t nowMs, uint32_t forgetMs) {
+        const bool same = following_ && std::memcmp(ip_, ip, 4) == 0;
+        const bool lapsed = !following_ || nowMs - ms_ >= forgetMs;
+        if (!same && !lapsed && priority <= priority_) { ignoredMs_ = nowMs; ignored_ = true; return false; }
+        std::memcpy(ip_, ip, 4);
+        priority_ = priority;
+        ms_ = nowMs;
+        following_ = true;
+        return true;
+    }
+    /// Whether another sender was passed over within `forgetMs` of `nowMs`, for the status line.
+    bool othersIgnored(uint32_t nowMs, uint32_t forgetMs) const { return ignored_ && nowMs - ignoredMs_ < forgetMs; }
+    /// Follow no one, the next sender heard taken.
+    void clear() { *this = SourceSelection{}; }
+
+private:
+    uint8_t ip_[4] = {};
+    uint8_t priority_ = 0;
+    uint32_t ms_ = 0, ignoredMs_ = 0;
+    bool following_ = false, ignored_ = false;
+};
+
 /// AudioService's audio sync: one socket that sends the frame a packet at a time or receives a peer's, its state on the owner's status line: @xref{audio-sync-one-packet-a-frame}.
 ///
 /// @technical
@@ -47,7 +110,8 @@ public:
         std::memset(peer_, 0, sizeof(peer_));
         hits_ = {};
         rxHits_ = {};
-        rxSeqValid_ = false;
+        order_.clear();
+        selection_.clear();
         // The receive buffer is taken here, where allocating is allowed, and only for receiving.
         if (role == kReceive) rx_.reset(new (std::nothrow) uint8_t[kMlSyncMaxDatagram]);
         // Only when there IS a socket to wait for.
@@ -107,7 +171,6 @@ public:
     /// Drain the socket, bounded and non-blocking, either format, into `frame` with the hits of every packet; answers whether a new frame came, `smoothHere` when it carried no smoothed bands, whose ballistic `frame`'s own bands carry on.
     bool receive(AudioFrame& frame, bool& smoothHere) {
         if constexpr (!platform::hasNetwork) return false;
-        if (lastRecvMs_ != 0 && platform::millis() - lastRecvMs_ >= kFallbackMs) rxSeqValid_ = false;   // a silent sender may come back restarted
         uint8_t* pkt = rx_.get();            // the whole datagram the format allows, so a later version's sections arrive whole
         if (!pkt) return false;
         uint8_t srcIp[4] = {};
@@ -119,6 +182,7 @@ public:
             const bool ml = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), frame_, &sections);
             if (!ml && (mlHeardMs_ != 0 && platform::millis() - mlHeardMs_ < kFallbackMs)) continue;   // the same frame again, from a board sending both
             if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), frame_)) continue;   // a v1 / foreign packet
+            if (!selection_.follows(srcIp, SourceSelection::kDefaultPriority, platform::millis(), kFallbackMs)) continue;   // another sender while the followed one plays
             if (!take(ml, srcIp)) continue;
             smoothHere = !(sections & (1u << kMlSectionSmoothed));   // WLED's packet, or a sender that does not smooth
             if (smoothHere) std::memcpy(frame_.bandsSmoothed, frame.bandsSmoothed, sizeof(frame_.bandsSmoothed));   // the ballistic run here lives across packets
@@ -152,7 +216,8 @@ public:
         // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
         char peer[HostResolver::kPeerChars];
         HostResolver::formatPeer(peer, sizeof(peer), peer_);
-        mm::formatTo(status_, sizeof(status_), "receiving %s from %s", rxWled_ ? "WLED" : "MoonLight", peer);
+        mm::formatTo(status_, sizeof(status_), "receiving %s from %s%s", rxWled_ ? "WLED" : "MoonLight", peer,
+                     selection_.othersIgnored(platform::millis(), kFallbackMs) ? ", ignoring another sender" : "");
         owner_.setStatus(status_);
     }
 
@@ -168,7 +233,6 @@ private:
     static constexpr platform::UdpSocket::MulticastGroup kGroups[] = {{{239, 0, 0, 2}}, {{239, 0, 0, 1}}};
     static constexpr uint8_t kGroupCount = sizeof(kGroups) / sizeof(kGroups[0]);
     static constexpr int kMaxRecvPerTick = 8;         // bounded non-blocking drain (sync is low-rate)
-    static constexpr uint16_t kSeqWindow = 64;        // how far behind the last MoonLight frame number is late, not a restarted sender
     static constexpr uint8_t kMaxHosts = 8;           // how many boards a unicast send reaches
 
     MoonModule& owner_;
@@ -185,24 +249,21 @@ private:
     uint32_t lastOpenFailMs_ = 0;    // the last failed open, 0 for none: the bring-up backoff
     uint32_t lastRecvMs_ = 0;        // the last packet taken
     uint32_t mlHeardMs_ = 0;         // the last MoonLight packet, which outranks WLED's while it arrives
-    uint16_t rxSeq_ = 0;             // the last MoonLight frame number taken, so a late or repeated one is dropped
-    bool     rxSeqValid_ = false;    // whether rxSeq_ holds one, false until the first and after a silence
+    SenderOrder order_;              // each MoonLight sender's last frame number, so a late or repeated one is dropped
+    SourceSelection selection_;      // the one sender followed while it plays
     bool     rxWled_ = false;        // whether the last frame taken came in WLED's format, for the status line
     bool     open_ = false;          // the socket is open for the current role
     uint8_t  peer_[4] = {};          // the last packet's sender, for the status line
-    char     status_[sizeof("receiving MoonLight from ") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)"
+    char     status_[sizeof("receiving MoonLight from , ignoring another sender") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)", and whether another sender is passed over
 
     /// Take the packet just parsed into `frame_` from `srcIp`, its hits kept; false for a late or repeated MoonLight frame, whose hits the next frame carries.
     bool take(bool ml, const uint8_t (&srcIp)[4]) {
         lastRecvMs_ = platform::millis();
         if (ml) mlHeardMs_ = lastRecvMs_;
         std::memcpy(peer_, srcIp, sizeof(peer_));   // whose audio this is
-        const uint16_t behind = static_cast<uint16_t>(rxSeq_ - frame_.seq);
-        const bool late = ml && rxSeqValid_ && behind < kSeqWindow;   // repeated, or late
-        if (!late || behind != 0) rxHits_.add(frame_);   // a late frame's hits went in no other packet, so the next frame carries them
-        if (late) return false;
-        if (ml) { rxSeq_ = frame_.seq; rxSeqValid_ = true; }
-        return true;
+        const SenderOrder::Order o = ml ? order_.judge(srcIp, frame_.seq, lastRecvMs_, kFallbackMs) : SenderOrder::Order::New;   // judged by its own sender's numbers
+        if (o != SenderOrder::Order::Repeat) rxHits_.add(frame_);   // a late frame's hits went in no other packet, so the next frame carries them
+        return o == SenderOrder::Order::New;
     }
 
     /// One packet to its format's `group`, or to the hosts. A steady 40 frames a second is a stream, so no broadcast copy on any network.

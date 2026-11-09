@@ -691,3 +691,33 @@ TEST_CASE("AudioService Receive: after a release and a prepare a packet still la
     CHECK(sendLevel(a, 77));
     a.release();
 }
+
+// Frame numbers count per sender, as RTP's do: two senders on one group never judge each other's frames late, a sender's own late or repeated frame is caught, and a restarted or long-silent one counts afresh.
+TEST_CASE("audio sync judges each sender's frame numbers on their own") {
+    SenderOrder order;
+    const uint8_t a[4] = {192, 168, 1, 10}, b[4] = {192, 168, 1, 11};
+    using O = SenderOrder::Order;
+    CHECK(order.judge(a, 1000, 0, 1000) == O::New);
+    CHECK(order.judge(b, 990, 5, 1000) == O::New);     // another sender, 10 behind a's number, still new
+    CHECK(order.judge(a, 1001, 10, 1000) == O::New);
+    CHECK(order.judge(b, 991, 15, 1000) == O::New);
+    CHECK(order.judge(a, 1001, 20, 1000) == O::Repeat);  // a's last again
+    CHECK(order.judge(a, 995, 25, 1000) == O::Late);     // a's own late frame
+    CHECK(order.judge(a, 3, 30, 1000) == O::New);        // far behind: a restarted
+    CHECK(order.judge(b, 900, 1100, 1000) == O::New);    // b silent past the forget time: afresh
+}
+
+// Two senders on one group made a receiver alternate between their frames; it follows one, as sACN selects a source: the first heard on equal priority, a higher priority at once, and another only once the followed one is silent.
+TEST_CASE("audio sync follows one sender: the first heard, a higher priority, or another once it is silent") {
+    SourceSelection sel;
+    const uint8_t a[4] = {192, 168, 1, 10}, b[4] = {192, 168, 1, 11}, c[4] = {192, 168, 1, 12};
+    constexpr uint8_t kP = SourceSelection::kDefaultPriority;
+    CHECK(sel.follows(a, kP, 0, 1000));
+    CHECK_FALSE(sel.follows(b, kP, 10, 1000));   // a plays: b is passed over
+    CHECK(sel.othersIgnored(20, 1000));
+    CHECK(sel.follows(a, kP, 30, 1000));
+    CHECK(sel.follows(c, kP + 1, 40, 1000));     // a higher priority takes over at once
+    CHECK_FALSE(sel.follows(a, kP, 50, 1000));
+    CHECK(sel.follows(b, kP, 1100, 1000));       // c silent past a second: the next sender heard takes over
+    CHECK_FALSE(sel.othersIgnored(2200, 1000));  // nothing passed over lately
+}

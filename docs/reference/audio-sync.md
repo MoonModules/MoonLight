@@ -102,7 +102,8 @@ A frame with every section is 225 bytes at a 48 kHz sample rate, 93 bytes withou
 - **Refuses** a packet shorter than the header, with another magic or version, with a section running past the datagram, or with a count past its array.
 - **Reads** the fields a section holds: the known start of a longer one, and of a shorter one the fields that are there, the rest read as unknown. A field missing ends its section, since every field after it is missing too.
 - **Skips** a section of a type it does not know, by its length. No section is required: a packet of the beat alone, from a board that measures no audio, is a packet.
-- **Drops** a frame whose `seq` is the last one taken or fewer than 64 behind it: a repeated or duplicated packet, since a sender with no new frame repeats its last, or a late one, whose hits ride in the next frame taken since they went in no other packet. A `seq` further behind is a sender that restarted, and is taken. After a second without packets, any `seq` is taken.
+- **Drops** a frame whose `seq` is its sender's last one taken or fewer than 64 behind it: a repeated or duplicated packet, since a sender with no new frame repeats its last, or a late one, whose hits ride in the next frame taken since they went in no other packet. Each sender, by its address, keeps its own numbers, as RTP counts per source, so senders on one group never judge each other's frames. A `seq` further behind is a sender that restarted, and is taken; after a second without its packets, any `seq` from that sender is taken.
+- **Follows one sender**, as sACN (E1.31) selects a source: the first heard while every sender has the same priority, and another only once the followed one has been silent for a second, so two senders on one group never make the lights alternate between their frames. Its status names the sender and says when another is passed over.
 - **Keeps** the sender's `levelSmoothed`, and its `bandsSmoothed` when the section came, so every board shows the same frame; without the section it smooths the bands itself, as it does for a WLED packet.
 
 ### How the format grows
@@ -229,12 +230,15 @@ WLED's packet has served a large installed base for years, and a WLED device lis
 - **It stays small.** A full frame is 225 bytes, and every packet stays within 508, so it never fragments.
 - **One format for one community.** WLED, WLED-MM and MoonLight all come from the same sound-reactive lineage. One packet lets any of them drive any other with nothing lost.
 
-### The proposal: v2 as it is, and the MoonLight format beside it
+### The proposal: one block format, shared
 
-1. **v2 stays exactly as it is**, on `239.0.0.1`. Every WLED device reads what it reads now, and a sender keeps sending it while such devices listen.
-2. **A sender adds the MoonLight format on `239.0.0.2`**, the same port: a header with a version and a 16-bit frame number, then typed, length-prefixed sections a receiver skips when it does not know them. A WLED sender sends the core, 35 bytes, every field of it one WLED fills or defines as unmeasured, plus the sections it has data for. WLED-MM's 31 bands are the thirds section as it is, its tempo tracker and Pro DJ Link reader fill the beat section, and its `pressure` and `zeroCrossingCount` become a section of their own.
-3. **A receiver that knows the format joins both groups** and prefers the MoonLight packet while it arrives, as MoonLight does. An old device never joins `239.0.0.2`, so it never sees the new packet.
+WLED-MM plans its next audio sync as TLV appendices on block level under a new packet ID, each block a type that maps to a plain struct, which is how the MoonLight format already works. The proposal makes the two one format:
 
-What it brings over v2: a frame number that rolls over every 27 minutes instead of every 6 seconds, the hits of each range, band and key, the third octaves and the keys, the harmony, the beat, the sender's smoothing, bytes instead of floats, and room for the next field without a new version.
+1. **Blocks as above:** a type byte, a 16-bit length, then a struct whose fields come in a fixed order; a receiver reads the fields it knows and skips an unknown block by its length. A block grows only at its end, and a change a field cannot absorb is a new type.
+2. **The header is the packet's ID and the frame number, with no version byte.** Blocks carry every addition, so the ID is the version: a header that ever had to change would take a new ID. MoonLight's `'M' 'L'` and version byte give way to the shared ID.
+3. **The frame number counts per sender,** 16 bits, as RTP counts per source: a sender's own late or repeated frame is dropped, another sender's numbers never judge it, and a number far behind or a second of silence starts that sender afresh. Several senders and a restarted one need no special case, so the number is always there; 16 bits wrap every 27 minutes at 40 frames a second, where a byte wraps every 6.
+4. **Type numbers in ranges,** so both projects add blocks without asking each other first: 0 to 63 shared, 64 to 127 MoonLight, 128 to 191 WLED-MM, 192 to 255 experimental. The blocks above move to their range as the registry is agreed.
+5. **A priority per sender,** as sACN carries one: a receiver follows the highest priority, the first heard on a tie, and falls back when it goes silent. MoonLight receivers already follow the first sender heard, every sender at sACN's default of 100 until the priority travels in a block or the header.
+6. **v2 stays as it is** on `239.0.0.1` for every device that reads only it; a sender sends it beside the shared format while such devices listen.
 
-What it costs: a sender sends two packets a frame while old devices listen, under 10 KB/s at 40 frames a second, and only updated receivers read the new one.
+Every packet stays within 508 bytes, under the 1460 at which ESP-IDF splits a UDP message, and a full frame is 225. The stream stays on UDP: one multicast packet serves every receiver, where TCP needs a connection per receiver and holds every frame back behind a lost one, and a late frame is worth less to the lights than the next one; discovery and configuration can use TCP.
