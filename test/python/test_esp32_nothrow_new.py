@@ -22,20 +22,20 @@ PROGRAM = r'''
 extern "C" void* __wrap___cxa_allocate_exception(std::size_t) { std::abort(); }   // the board's throw: an abort
 int main() {
     volatile std::size_t huge = static_cast<std::size_t>(-1) / 4;                   // more than any address space holds
-    char* one = new (std::nothrow) char[huge];
-    return one ? 1 : 0;
+    char* many = new (std::nothrow) char[huge];                  // the array form
+    void* one = ::operator new(huge, std::nothrow);               // and the scalar form
+    return many || one ? 1 : 0;
 }
 '''
 
 
-def run(tmp_path: Path, name: str, source: str):
+def build(tmp_path: Path, name: str, source: str):
+    """Compile and link `source` the board's way; the result of the compiler, and the program."""
     cpp, exe = tmp_path / f"{name}.cpp", tmp_path / name
     cpp.write_text(source)
     built = subprocess.run([CXX, "-std=c++20", "-fno-exceptions", "-static-libstdc++", "-Wl,--wrap=__cxa_allocate_exception",
                             str(cpp), "-o", str(exe)], capture_output=True, text=True, timeout=120)
-    if built.returncode != 0:
-        pytest.skip(f"this toolchain cannot link the board's way (GNU ld wraps a symbol): {built.stderr.strip()[:200]}")
-    return subprocess.run([str(exe)], capture_output=True, timeout=20).returncode
+    return built, exe
 
 
 @pytest.mark.skipif(CXX is None, reason="no C++ compiler")
@@ -43,5 +43,10 @@ def test_a_failed_nothrow_allocation_returns_null_rather_than_aborting(tmp_path)
     source = (ROOT / "src/platform/esp32/platform_esp32.cpp").read_text()
     replaced = re.findall(r"^void\* operator new(?:\[\])?\(std::size_t size, const std::nothrow_t&\) noexcept \{.*\}$", source, re.M)
     assert len(replaced) == 2, "platform_esp32.cpp replaces both nothrow forms"
-    assert run(tmp_path, "stock", PROGRAM) == -signal.SIGABRT                                   # the board before: abort
-    assert run(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + "\n".join(replaced) + PROGRAM) == 0   # after: null
+    stock, stock_exe = build(tmp_path, "stock", PROGRAM)
+    if stock.returncode != 0:   # only the toolchain decides a skip: GNU ld alone wraps a symbol
+        pytest.skip(f"this toolchain cannot link the board's way: {stock.stderr.strip()[:200]}")
+    assert subprocess.run([str(stock_exe)], capture_output=True, timeout=20).returncode == -signal.SIGABRT   # the board before: abort
+    fixed, fixed_exe = build(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + "\n".join(replaced) + PROGRAM)
+    assert fixed.returncode == 0, fixed.stderr                                                    # the platform's code compiles
+    assert subprocess.run([str(fixed_exe)], capture_output=True, timeout=20).returncode == 0     # after: null, both forms

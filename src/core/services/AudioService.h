@@ -564,7 +564,7 @@ public:
         smoothLevel(w);
         levelDbX10_.store(static_cast<int16_t>(a.dyn.levelDb * 10.0f), std::memory_order_relaxed);
         floorDbX10_.store(static_cast<int16_t>(a.dyn.floorDb * 10.0f), std::memory_order_relaxed);
-        topDbX10_.store(static_cast<int16_t>(a.dyn.levelTopDb * 10.0f), std::memory_order_relaxed);
+        topDbX10_.store(static_cast<int16_t>(a.dyn.topDb * 10.0f), std::memory_order_relaxed);   // the bands' top, held while they rest, as analyzeBlock shows it
         gateOpen_.store(a.dyn.gateOpen, std::memory_order_relaxed);
         if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
     }

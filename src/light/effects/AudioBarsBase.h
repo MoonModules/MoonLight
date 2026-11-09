@@ -14,8 +14,8 @@ public:
     /// The bars: the sixteen, the third octaves or the piano's keys.
     uint8_t bands = kBandsThirds;
 
-    /// `bands` decides whether the notes run, so its change prepares this effect again.
-    bool affectsPrepare(const char* name) const override { return std::strcmp(name, "bands") == 0; }
+    /// `bands` decides whether the notes run, so its change prepares this effect again, as the audio switches do.
+    bool affectsPrepare(const char* name) const override { return AudioEffectBase::affectsPrepare(name) || std::strcmp(name, "bands") == 0; }
     /// Only this effect's demand follows it.
     PrepareScope prepareScope() const override { return PrepareScope::Self; }
     /// Need the notes while what this effect shows reads them; an effect's own prepare chains this first.

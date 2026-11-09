@@ -13,7 +13,7 @@ The data stays where it is, given by ``--dir`` and only read; runs and reports g
 
 - audio beside a MIDI file of the same name (``.mid`` or ``.midi``): MIDI rendered through a sound font, or MAESTRO (Google Magenta, CC BY-NC-SA), whose performances come with their MIDI;
 - GuitarSet (Xi et al. 2018, CC BY 4.0): ``audio_mono-mic/*_mic.wav`` beside ``annotation/*.jams``, each note labeled with its string;
-- URMP (Li et al. 2018, CC BY-NC-SA): each part's ``AuSep_*.wav`` beside its ``Notes_*.txt``, only the parts of the ``--instrument`` when the set has it (``vn``, ``vc``, ``db``);
+- URMP (Li et al. 2018, CC0 on Dryad): each part's ``AuSep_*.wav`` beside its ``Notes_*.txt``, only the parts of the ``--instrument`` when the set has it (``vn``, ``vc``, ``db``);
 - the generated set (``--generated``), tones whose notes are exact by construction, written once to ``build/notes/generated``.
 
 @attribution Raffel, Xi, Li and Hawthorne
@@ -268,7 +268,7 @@ def frame_counts(ref: list, est: list) -> dict:
     def grid(notes: list):
         g = np.zeros((count, 128), dtype=bool)
         for on, off, midi, *_ in notes:
-            a, b = max(0, int(on / FRAME_HOP_S)), min(count, int(off / FRAME_HOP_S) + 1)
+            a, b = max(0, int(on / FRAME_HOP_S)), min(count, math.ceil(off / FRAME_HOP_S - 1e-9))   # the end excluded, so notes that only meet share no frame
             if 0 <= midi < 128 and b > a:
                 g[a:b, midi] = True
         return g
@@ -366,7 +366,7 @@ def report(rows: list[dict], instrument: str) -> str:
     lines = [f"# Notes report", "", f"{len(good)} files scored, Strings as a {instrument}; onset within {ONSET_TOLERANCE * 1000:.0f} ms, "
              f"offset within 50 ms or {OFFSET_RATIO:.0%} of the note, whichever is longer; a note is dated back by its band's delay, "
              "and the latency is the median lag from a found note's start to its key lighting. The lit and played times are the frame measure, every 10 ms: "
-             "the share of the time a key is lit that a played note sounds at its pitch, and the share of the time a note sounds that its key is lit.", "",
+             "the share of the time a key is lit that a played note sounds at its pitch, and the share of the time a note sounds that its key is lit, each lit note dated back by its band's delay as the onset score dates it.", "",
              "| Stage | Precision | Recall | F | F with offsets | Lit time on played notes | Played time lit | Latency | Flashes | Overtones | Leakage | Other |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for stage in STAGES:
         s = [r["scores"][stage] for r in good]

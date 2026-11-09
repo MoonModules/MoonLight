@@ -835,6 +835,7 @@ private:
 
     /// Start, restart or stop the local-name advertisement to match the state.
     void syncMdns() {
+        bool attempted = false;
         bool shouldRun = mdnsEnabled_ && (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
         const char* devName = readDeviceName();
         if (shouldRun && !mdnsRunning_) {
@@ -844,16 +845,18 @@ private:
                 std::strncpy(lastMdnsName_, devName, sizeof(lastMdnsName_) - 1);
                 lastMdnsName_[sizeof(lastMdnsName_) - 1] = 0;
             }
-            updateStatusIP();
+            attempted = true;
         } else if (shouldRun && mdnsRunning_ && std::strcmp(devName, lastMdnsName_) != 0) {
             // A live rename, so re-register and the local name follows at once.
             if (platform::mdnsInit(devName)) {
                 std::strncpy(lastMdnsName_, devName, sizeof(lastMdnsName_) - 1);
                 lastMdnsName_[sizeof(lastMdnsName_) - 1] = 0;
             }
+            attempted = true;
         } else if (!shouldRun && mdnsRunning_) {
             restartMdns();
         }
+        if (attempted) updateStatusIP();   // the card shows the name, or why it failed, after any attempt, a rename's included
     }
 
     /// The plain-language label for the current state, a switch so a new one must be handled.

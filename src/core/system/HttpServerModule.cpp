@@ -52,7 +52,7 @@ void HttpServerModule::defineControls() {
 
 void HttpServerModule::setup() {
     instance_ = this;
-    listenFailed_ = false;
+    failedPort_ = 0;
     ensureListener();
     // A schema change carries hidden flags and option sets the value-patch cannot, so any module's rebuildControls() flips the WS full-resync flag through this hook.
     MoonModule::setSchemaChangedHook(&HttpServerModule::onSchemaChanged);
@@ -90,12 +90,12 @@ void HttpServerModule::ensureListener() {
     if (boundPort_) { server_.close(); boundPort_ = 0; }   // the control moved: the new port opens now
     if (port && server_.open(port)) {
         boundPort_ = port;
-        if (listenFailed_) std::printf("HTTP server listening on port %u again\n", port);
-        listenFailed_ = false;
+        if (failedPort_) std::printf("HTTP server listening on port %u\n", port);
+        failedPort_ = 0;
         return;
     }
-    if (!listenFailed_) std::printf("HTTP server failed to open port %u, trying again each second\n", port);
-    listenFailed_ = true;
+    if (failedPort_ != port) std::printf("HTTP server failed to open port %u, trying again each second\n", port);   // once per refused port, a new one reported afresh
+    failedPort_ = port;
 }
 
 void HttpServerModule::tick20ms() MM_NONBLOCKING {

@@ -78,7 +78,7 @@ public:
     /// Every control reshapes or redraws the picture.
     bool affectsPrepare(const char*) const override { return true; }
 
-    /// Size the pixels for the source and draw a still one into them while a reader shows the picture, and free them while none does; a failed allocation publishes no picture.
+    /// Size the pixels and draw a still picture while a reader shows it, and free them while none does.
     void prepare() override {
         seat_.claim();
         shownApplied_ = shown();
@@ -168,6 +168,7 @@ public:
     /// Vacate the seat for any survivor.
     void release() override {
         stopCapture();
+        shownApplied_ = false;   // a prepare after this counts its readers afresh
         platform::videoCaptureShutdown();
         seat_.vacate();
         MoonModule::release();

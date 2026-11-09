@@ -741,7 +741,7 @@ private:
     /// Free what a client's cut frame left.
     void dropCarry(int client);
     uint16_t boundPort_ = 0;   // the port open() bound; 0 when no server is live
-    bool listenFailed_ = false;    // a refused port was reported, so its recovery is too
+    uint16_t failedPort_ = 0;      // the refused port last reported, so its recovery is too; 0 while listening
     /// Listen on `port`: reopen when it changed, and try a refused one again, once a second from tick1s.
     void ensureListener();
 

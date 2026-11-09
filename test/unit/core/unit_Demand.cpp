@@ -208,3 +208,22 @@ TEST_CASE("a module a host runs outside its children counts through the host") {
     hosted.release();
     scheduler.release();
 }
+
+// Pre-merge review (2026-11-09): a demand change told a disabled provider, which then prepared, allocating and starting what the tree holds disabled. A disabled provider hears nothing; it counts afresh when enabled.
+TEST_CASE("a disabled provider is not told of a demand change") {
+    Scheduler scheduler;
+    auto* provider = new Provider();
+    auto* reader = new Reader("Reader");
+    scheduler.addModule(provider);
+    scheduler.addModule(reader);
+    scheduler.setup();
+    provider->setEnabled(false);
+    reader->applyState();
+    scheduler.preparePending();
+    CHECK(provider->told == 0);
+    provider->setEnabled(true);
+    reader->release();
+    scheduler.preparePending();
+    CHECK(provider->told == 1);   // enabled again, it hears the next change
+    scheduler.release();
+}

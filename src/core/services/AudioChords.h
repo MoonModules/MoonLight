@@ -76,7 +76,7 @@ struct ChordTracker {
         f.chordQuality = quality;
     }
 
-    static constexpr float kColorWeight = 0.95f;   ///< a seventh's, a sus chord's, a diminished or augmented chord's cosine weighed under a major or minor triad's, so a melody's passing tone does not color the chord; on a generated C, G, Am, F 64% to 67% of the time on the right root, on Let It Be about 56% to 66%
+    static constexpr float kColorWeight = 0.95f;   ///< a colored chord's cosine weighed under a major or minor triad's, so a passing tone does not color the chord
 
     /// The cosine of quality `q` on `root` against `chroma`, squared, any but a major or minor triad weighed by kColorWeight.
     static float scoreSquared(const uint8_t* chroma, uint8_t r, uint8_t q) MM_NONBLOCKING {
