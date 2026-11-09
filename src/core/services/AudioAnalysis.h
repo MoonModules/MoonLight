@@ -11,11 +11,20 @@
 #include "core/services/AudioBands.h"     // ThirdOctaveBank, SemitoneBank
 #include "core/services/AudioDynamics.h"
 #include "core/services/AudioHarmony.h"   // the harmony's trackers
+#include "core/util/HarmonicSieve.h"    // keepNotes: the notes the core keeps
 #include "core/services/AudioOnsets.h"    // the onsets per range and per band
 
 namespace mm {
 
-/// The analysis of an open input, which AudioService allocates in internal RAM as the input opens and frees as it closes, so a mode without an input holds none of it.
+/// The analysis of an open input, which AudioService allocates in internal RAM as the input opens and frees as it closes, so a mode without an input holds none of it: @xref{what-the-analysis-costs}.
+///
+/// @technical
+///
+/// ## What the analysis costs
+///
+/// The card's `cpu` is the analysis's share of one core over the last second. The third octaves take 3.6% of a P4 core and 7.2% of an S3's at 24 kHz, and 8.2% of a classic ESP32's at 22,050 Hz; at 48 kHz each share doubles, the work per sample being the same at any rate.
+///
+/// The semitone bank adds about 1.3 times the third octaves' share, and the onsets 5 to 7 points of a core, so while the notes run the analysis takes about 14%, 22% and 26%.
 struct AudioAnalysis : platform::InternalRamObject {
     int32_t samples[kAudioBlock] = {};  ///< fixed hot-path scratch, sized once
     size_t filled = 0;                  ///< samples accumulated toward the next full block
@@ -29,6 +38,7 @@ struct AudioAnalysis : platform::InternalRamObject {
     AudioOnsets onsets;                 ///< the onsets per range and per band, read every 5 ms
     AudioFrame work;                    ///< the frame the analysis writes, on the audio task where there is one
     SpscRing<AudioFrame, 8> frames;     ///< the task's finished frames, which the tick drains to the newest
+    bool resting = false;               ///< the last block ran the level alone, nothing reading the analysis
 
     /// A new stream at `rate`, from silence, field by field since a whole analysis is too large for a stack.
     void reset(uint32_t rate) {
@@ -42,6 +52,7 @@ struct AudioAnalysis : platform::InternalRamObject {
         work = AudioFrame{};
         bank.init(rate);
         onsets.reset();
+        resting = false;
     }
 
 private:
@@ -63,13 +74,14 @@ inline bool takeNewest(SpscRing<AudioFrame, 8>& ring, AudioFrame& out) {
     return true;
 }
 
-/// The harmony's state, which AudioService allocates only while `harmony` is on: the semitone bank and what reads it.
+/// The harmony's state, which AudioService allocates only while the notes run: the semitone bank and what reads it.
 struct AudioHarmonyState : platform::InternalRamObject {
     SemitoneBank semitones;             ///< the notes to kSemitoneTopHz
     HarmonyTracker tracker;             ///< the pitch classes and the moment they move
     KeyTracker key;                     ///< the key over the last 15 s
     TuningEstimator tuning;             ///< how far the music sits from the bank's tuning
     BandOnsets<kAudioNoteKeys, kNotesLowBand, true> noteOnsets;   ///< a new note's start, one per piano key
+    NoteConfirm confirm;                ///< which heard keys outlast an attack, for the notes the core keeps
     float tuningCents = 0.0f;           ///< the bank's tuning from A440, in cents
     float tuningHeldMs = 0.0f;          ///< how long the reading has stayed past the retune threshold
 
@@ -80,6 +92,7 @@ struct AudioHarmonyState : platform::InternalRamObject {
         key.reset();
         tuning.reset();
         noteOnsets.reset();
+        confirm = NoteConfirm{};
         tuningCents = tuningHeldMs = 0.0f;
     }
 

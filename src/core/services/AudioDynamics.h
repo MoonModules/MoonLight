@@ -37,6 +37,8 @@ struct WindowMinimum {
 ///
 /// Otherwise it shuts after 3 s, so a soft passage near a floor that rose into the music keeps its bars, and a room whose noise sits within the window still goes dark.
 ///
+/// The gate decides only whether there is sound and leaves the scaling to the top, and it reads the RMS the level already computes, so it adds no delay.
+///
 /// The **top** follows the loudest band while there is sound over the close threshold and holds still otherwise; the level keeps a top of its own, since a block's RMS sits over its loudest band.
 ///
 /// ## One window, capped by the room
@@ -44,6 +46,14 @@ struct WindowMinimum {
 /// Every band maps through the 30 dB window under the top, a hardware analyzer's scale range and Troy's, so the bars show the top of the music with its contrast.
 ///
 /// The window's bottom never sinks below the room's bands' floor, learned only while the gate is shut, so the noise maps to nothing however long the music pauses, while a song playing longer than the floor's window does not narrow the window from under its bars. The gate's own floor learns from every block, so a soft passage keeps the gate open.
+///
+/// ## The level runs while the bands rest
+///
+/// While nothing reads the bands, the analysis rests and only the level runs, its floor, its top and the gate, so a microphone being wired still shows its level and its gate; the gate, the loudest band unknown, closes on its longer hold. The bands' top is held and, once they run again, starts where the first block puts it.
+///
+/// ## The level starts where the gate opens
+///
+/// The level maps through its own window from where the gate opens to its top, never more than 30 dB: while the music plays the level never sinks far under the gate, so a window starting lower would leave its lower part unused and every effect reading the level dimmer.
 struct AudioDynamics {
     /// How far above the floor the gate opens, in dB.
     float squelchDb = 10.0f;
@@ -71,6 +81,7 @@ struct AudioDynamics {
     void update(float blockLevelDb, float loudestBandDb, float dtMs) {
         levelDb = blockLevelDb;
         if (!primed_) { topDb = loudestBandDb; levelTopDb = blockLevelDb; primed_ = true; }
+        if (bandsRested_) { topDb = loudestBandDb; bandsRested_ = false; }   // the bands back after a rest: their top starts where they are
         // The gate's floor learns from every block, so a song with no pause lifts it and the gate stays open through soft passages.
         floorDb = floor_.update(levelDb, dtMs, kFloorHalfWindowMs);
         bandFloorDb = bandFloor_.update(loudestBandDb, dtMs, kFloorHalfWindowMs);
@@ -85,15 +96,28 @@ struct AudioDynamics {
         }
     }
 
+    /// One block while the bands rest, nothing reading them: the level, its floor, its top and the gate as update() keeps them, the bands' top held until the next update() seeds it afresh: @xref{the-level-runs-while-the-bands-rest}.
+    void updateLevel(float blockLevelDb, float dtMs) {
+        levelDb = blockLevelDb;
+        if (!primed_) { levelTopDb = blockLevelDb; primed_ = true; }
+        floorDb = floor_.update(levelDb, dtMs, kFloorHalfWindowMs);
+        const float openAt = floorDb + squelchDb;
+        updateGate(openAt, topDb, dtMs);   // the loudest band unknown, held at the top: the gate closes on its longer hold
+        if (gateOpen && levelDb >= openAt - kHysteresisDb)
+            levelTopDb += (levelDb - levelTopDb) * follow(dtMs, levelDb > levelTopDb ? kAttackMs : kReleaseMs);
+        bandsRested_ = true;
+    }
+
     /// A band's value in dBFS through the bands' window, 0 while the gate is shut.
     uint8_t toByte(float db) const { return gateOpen ? position(db, topDb, roomBandFloorDb) : 0; }
-    /// The level in dBFS through its own window, 0 while the gate is shut.
-    uint8_t levelToByte(float db) const { return gateOpen ? position(db, levelTopDb, floorDb) : 0; }
+    /// The level in dBFS through its own window, from where the gate opens to the level's top, 0 while the gate is shut: @xref{the-level-starts-where-the-gate-opens}.
+    uint8_t levelToByte(float db) const { return gateOpen ? position(db, levelTopDb, floorDb + squelchDb) : 0; }
     /// Where the gate opens on the bands' scale, the one `toByte` draws on, at least 1 so a frame tells a measured gate from none, whether open or shut.
     uint8_t gateToByte() const { const uint8_t at = position(bandFloorDb + squelchDb, topDb, roomBandFloorDb); return at ? at : 1; }
 
 private:
     bool  primed_ = false;
+    bool  bandsRested_ = false;   ///< the bands rested since the last update(), so its top is seeded afresh
     WindowMinimum floor_, bandFloor_;          ///< the gate's floors, fed every block
     WindowMinimum roomBandFloor_;              ///< the window's bottom, fed only while the gate is shut
     float belowMs_ = 0.0f;   ///< how long the level has been under the close threshold

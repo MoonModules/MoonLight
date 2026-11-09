@@ -24,6 +24,7 @@ void MoonLive::freeCode() {
     hasErrorPos_ = false;
     // The entry table describes code that is gone, so entry() would hand out a freed address.
     entryCount_ = 0;
+    demands_ = 0;
     // The pool stays until the next compile replaces it, so text a control still names is never freed under it.
     controlCount_ = 0;
     stringLen_ = 0;
@@ -118,6 +119,7 @@ bool MoonLive::compile(const char* source, const BuiltinTable& table, const SysV
     stringCap_ = static_cast<uint16_t>(want);
     // Names included, since a result's `name` points into source the caller frees on return.
     entryCount_ = cr.entryCount < kMaxEntryPoints ? cr.entryCount : kMaxEntryPoints;
+    demands_ = cr.demands;
     for (uint8_t i = 0; i < entryCount_; i++) {
         const uint8_t n = cr.entries[i].nameLen < kMaxEntryName ? cr.entries[i].nameLen : kMaxEntryName;
         for (uint8_t j = 0; j < n; j++) entryNames_[i][j] = cr.entries[i].name[j];

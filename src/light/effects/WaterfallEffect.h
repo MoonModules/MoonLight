@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -12,7 +12,7 @@ namespace mm {
 /// @technical
 ///
 /// The grid is the history: each step scrolls every row down one and paints the newest bands into the top row, so no buffer is kept. Of `n` bands, column `x` shows band `x*n/w`.
-class WaterfallEffect : public EffectBase {
+class WaterfallEffect : public AudioEffectBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }

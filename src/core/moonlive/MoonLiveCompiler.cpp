@@ -189,6 +189,7 @@ struct Parser {
     const SysVarTable&  sysvars;  ///< the system variables the host defines
     IrProgram&         ir;        ///< where the emitted ops go
     char*              classNameOut = nullptr;   ///< the caller's buffer, which the parser fills
+    uint8_t            demands = 0;   ///< the `demands` of every builtin called
     // An IR index rather than a byte offset, since the parser runs before lowering.
     /// One function the class defined, and where its body starts.
     struct FnMark { const char* name;    ///< its name, a span into the source
@@ -860,10 +861,17 @@ struct Parser {
         return 0;
     }
 
+    /// The builtin named by `len` characters at `beg`, or null, what it demands taken into the script's.
+    const Builtin* findCalled(const char* beg, size_t len) {
+        const Builtin* fn = table.find(beg, len);
+        if (fn) demands = static_cast<uint8_t>(demands | fn->demands);
+        return fn;
+    }
+
     /// Parse a call; with `resultOut` it is an expression and must return a value.
     void parseCall(VReg* resultOut) {
         if (lex.kind != Tok::Ident) { fail("expected a function name"); return; }
-        const Builtin* fn = table.find(lex.identBeg, lex.identLen);
+        const Builtin* fn = findCalled(lex.identBeg, lex.identLen);
         if (!fn) {
             // Against the class list, and only functions already parsed, though one sees itself.
             for (uint8_t i = 0; i < fnCount; i++) {
@@ -2158,6 +2166,7 @@ CompileResult compileSource(const char* source, const BuiltinTable& table,
     for (uint8_t i = 0; i < parser.memberCount; i++) r.members[i] = parser.members[i];
     // A real symbol table: the parser recorded an IR index and the lowering converted it.
     r.entryCount = parser.fnCount;
+    r.demands = parser.demands;
     for (uint8_t i = 0; i < parser.fnCount; i++)
         // The declared return type travels to the engine, or runValue refuses to answer.
         r.entries[i] = {parser.fns[i].name, parser.fns[i].nameLen, ir.fnOffset[i],

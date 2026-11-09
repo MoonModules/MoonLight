@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/effects/PlayerSeat.h"   // a person takes the paddle, the game plays it again later
 
 namespace mm {
@@ -15,7 +15,7 @@ namespace mm {
 /// @technical
 ///
 /// `player` is the paddle as a control, held through `PlayerSeat`: a person writing it takes the paddle, and idle, the game plays it again.
-class BreakoutEffect : public EffectBase {
+class BreakoutEffect : public AudioEffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
     const char* tags() const override { return "💫🎵👾"; }
@@ -34,6 +34,7 @@ public:
     bool descend = false;
     /// Columns glow with their bands, the palette follows the volume.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
     /// The paddle, for a fader or an input; idle, the game plays it.
     uint8_t player = 128;
 
@@ -56,7 +57,7 @@ public:
     }
 
     /// Start a new game; the wall is dealt on the first frame, once the grid is known.
-    void prepare() override { newGame(); }
+    void prepare() override { AudioEffectBase::prepare(); newGame(); }
 
     /// Advance the ball on its clock, then draw the wall, the paddle and the ball.
     void tick() MM_NONBLOCKING override {

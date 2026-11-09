@@ -2,7 +2,7 @@
 
 #include "core/util/math16.h"      // BeatPhase: the shared tail-beat clock
 #include "core/util/math8.h"       // Random8: fixed-seed spawn variation, golden-reproducible
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/powerfunctions/particles.h"  // Pool: the movable-things kernel the fish ride
 
 namespace mm {
@@ -106,7 +106,7 @@ static_assert(sizeof(kTiny) == static_cast<size_t>(TW) * TH, "tiny: one 6x4 fram
 /// @technical
 ///
 /// Movement is `particles::Pool` and appearance is `draw::sprite`, as FlyingToasters does. A Sprite points at its palette rather than owning one, so each fish is drawn through a palette this effect fills from the active one.
-class FishTankEffect : public EffectBase {
+class FishTankEffect : public AudioEffectBase {
 public:
     /// The pool size: the three count controls at their maxima, summed.
     static constexpr uint8_t kPool = 24;
@@ -128,6 +128,7 @@ public:
     uint8_t spriteSize = 0;
     /// Each sprite follows its own band, so the scene breathes.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
 
     /// Publish the three counts, the speed, the sprite scale and the audio switch.
     void defineControls() override {
@@ -141,6 +142,7 @@ public:
 
     /// Size the pool's storage, wire the view over it, and fill the tank.
     void prepare() override {
+        AudioEffectBase::prepare();
         const bool ok = x_.resize(kPool) && y_.resize(kPool) && vx_.resize(kPool) &&
                         vy_.resize(kPool) && ttl_.resize(kPool) && kind_.resize(kPool) &&
                         entry_.resize(kPool);

@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import test_runs  # noqa: E402
 
 # Named here rather than in a requirements file: each is a test's own dependency (pyserial for the flash tests, wled for the /json shim, markdown for the docs checks, requests for the MoonTube recorder, libclang for the help generator, pyyaml and jsonschema for MoonWalk's generator, jsonschema for the device catalog too), and `uv run --with` is how every other script in MoonDeck reaches one.
-PY_DEPS = ("pytest", "pyserial", "markdown", "wled", "requests", "libclang", "pyyaml", "jsonschema")
+PY_DEPS = ("pytest", "pyserial", "markdown", "wled", "requests", "libclang", "pyyaml", "jsonschema", "mir_eval", "mido")
 
 # The UI suite's own deps. Separate because it is the only lane that drives a browser
 # against a RUNNING device: pytest-playwright is Playwright's documented Python runner

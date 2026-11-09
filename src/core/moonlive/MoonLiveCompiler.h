@@ -66,6 +66,8 @@ struct CompileResult {
     EntryPoint      entries[kMaxEntryPoints];
     /// How many named functions the script defined.
     uint8_t         entryCount = 0;
+    /// What the builtins the script calls demand, their `demands` bits together.
+    uint8_t         demands = 0;
 };
 
 /// A backend's lowering of an IR program into machine code in a buffer, within an optional register budget; it returns the byte count, 0 when the program cannot be encoded.

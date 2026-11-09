@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -20,7 +20,7 @@ namespace mm {
 /// @technical
 ///
 /// The radius is a Euclidean distance over whatever axes the layout has. Travel and shell width are shares of the layout's diagonal, so one set of defaults fits a 16x16 panel and a 300-light strip alike. The shell test runs in squared space, and the root is taken only for a light some shell contains.
-class PulseEffect : public EffectBase {
+class PulseEffect : public AudioEffectBase {
 public:
     /// Catalog tags: a MoonLight original that reacts to sound.
     const char* tags() const override { return "💫🎶"; }

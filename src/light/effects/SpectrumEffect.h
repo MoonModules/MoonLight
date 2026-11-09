@@ -1,8 +1,7 @@
 #pragma once
 
 #include "core/util/math16.h"              // peakHold, smoothFollow, map32
-#include "light/effects/EffectBase.h"
-#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
+#include "light/effects/AudioBarsBase.h"
 
 namespace mm {
 
@@ -16,7 +15,7 @@ namespace mm {
 /// @technical
 ///
 /// The ballistics live in the shared `smoothFollow` and `peakHold`, so any effect wanting a meter gets the same feel, and `draw::bar` draws the columns. The band-to-column mapping follows WLED's GEQ.
-class SpectrumEffect : public EffectBase {
+class SpectrumEffect : public AudioBarsBase {
 public:
     /// Catalog tags: a showcase, and audio-reactive.
     const char* tags() const override { return "💫🎶"; }
@@ -33,8 +32,6 @@ public:
     bool    showPeaks = true;
     /// Color each bar by its column rather than by height.
     bool    colorByColumn = false;
-    /// The bars: the sixteen, the third octaves or the piano's keys.
-    uint8_t bands = kBandsThirds;
 
     /// Publish the ballistics, the peak's decay, the coloring and the bars.
     void defineControls() override {
@@ -43,11 +40,12 @@ public:
         controls_.addControl("peakDecay", peakDecay, 0, 32);
         controls_.addControl("showPeaks", showPeaks);
         controls_.addControl("colorByColumn", colorByColumn);
-        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
+        addBandsSelect();
     }
 
     /// Size one follower and one peak per column.
     void prepare() override {
+        AudioBarsBase::prepare();
         const size_t cols = static_cast<size_t>(width() > 0 ? width() : 0);
         levels_.resize(cols);
         peaks_.resize(cols);

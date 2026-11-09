@@ -18,6 +18,7 @@ struct Picture {
     mm::PictureService svc;
     Picture(uint16_t w, uint16_t h) {
         svc.defineControls();
+        svc.setShownForTest(true);   // shown, as a Picture effect's demand would
         svc.width = w;
         svc.height = h;
         svc.prepare();
@@ -456,4 +457,49 @@ TEST_CASE("a grabber unplugged and plugged back is opened again") {
     sched.tick();   // and the next one opens it again
     CHECK(publishedPast(was));
     p.svc.release();
+}
+
+// The picture is drawn or decoded only while a reader shows it: with none the service holds no picture and says so, and a reader's demand brings the picture back at the frame boundary.
+TEST_CASE("the picture is held only while a reader shows it") {
+    mm::Scheduler scheduler;
+    auto* svc = new mm::PictureService();
+    svc->setTypeName("PictureService");   // as the factory names it, the type a demand addresses
+    svc->setName("Picture");
+    svc->defineControls();
+    svc->width = 16;
+    svc->height = 8;
+    struct Viewer : mm::MoonModule {
+        mm::PictureDemand picture{*this};
+        bool on = true;
+        Viewer() { setTypeName("TestPictureViewer"); setName("Viewer"); }
+        void prepare() override { picture.set(on); }
+    };
+    auto* viewer = new Viewer();
+    viewer->on = false;
+    scheduler.addModule(svc);
+    scheduler.addModule(viewer);
+    scheduler.setup();
+    svc->prepare();
+    CHECK(current().rgb == nullptr);   // idle: nothing shows it
+    viewer->on = true;
+    viewer->applyState();
+    scheduler.preparePending();        // the frame boundary, where the service hears of the demand
+    CHECK(current().rgb != nullptr);   // the test card drawn
+    CHECK(current().width == 16);
+    const uint32_t gen = current().generation;
+    auto* second = new Viewer();         // a second reader joining one already showing it
+    second->setName("Viewer2");
+    scheduler.addModule(second);
+    second->applyState();
+    scheduler.preparePending();
+    CHECK(current().generation == gen);  // the picture left alone, no capture restarted
+    second->on = false;
+    second->applyState();
+    scheduler.preparePending();
+    CHECK(current().rgb != nullptr);     // the first still shows it
+    viewer->on = false;
+    viewer->applyState();
+    scheduler.preparePending();
+    CHECK(current().rgb == nullptr);   // freed again
+    scheduler.release();
 }

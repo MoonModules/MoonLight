@@ -41,12 +41,12 @@ if(NOT rc EQUAL 0)
     message(FATAL_ERROR "bundling the UI failed (PYTHON_CMD=${PYTHON_CMD} rc=${rc})")
 endif()
 
-# Gzip ${STAGE_DIR}/<name> to ${OUT_DIR}/<name>.gz and HEX-read it into OUT_VAR.
+# Gzip ${STAGE_DIR}/<name> to ${STAGE_DIR}/<name>.gz and HEX-read it into OUT_VAR.
 function(gzip_file_hex NAME OUT_VAR)
     set(src "${STAGE_DIR}/${NAME}")
-    # Write the temp .gz next to the generated header (a writable build dir).
-    get_filename_component(out_dir "${OUT}" DIRECTORY)
-    set(gz "${out_dir}/${NAME}.gz")
+    # The temp .gz stays in the stage under build/: beside the generated header in src/ it would make the build id, stamped in
+    # parallel, read a clean checkout as modified (found by Funkelfetisch).
+    set(gz "${STAGE_DIR}/${NAME}.gz")
     execute_process(
         COMMAND ${PYTHON_CMD} -c "import sys,gzip; open(sys.argv[2],'wb').write(gzip.compress(open(sys.argv[1],'rb').read(),9,mtime=0))" "${src}" "${gz}"
         RESULT_VARIABLE rc)

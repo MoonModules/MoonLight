@@ -98,6 +98,8 @@
 #include "light/effects/WaterfallEffect.h"
 #include "light/effects/TrailsEffect.h"
 #include "light/effects/ColorTrailsEffect.h"
+#include "light/effects/SheetMusicEffect.h"
+#include "light/effects/SoapEffect.h"
 #include "light/effects/TunnelEffect.h"
 #include "light/effects/EchoEffect.h"
 #include "light/effects/DissolveEffect.h"
@@ -293,6 +295,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::NebulaEffect>("NebulaEffect", "light/effects.md#nebula");
     mm::ModuleFactory::registerType<mm::TrailsEffect>("TrailsEffect", "light/effects.md#trails");
     mm::ModuleFactory::registerType<mm::ColorTrailsEffect>("ColorTrailsEffect", "light/effects.md#colortrails");
+    mm::ModuleFactory::registerType<mm::SheetMusicEffect>("SheetMusicEffect", "light/effects.md#sheetmusic");
+    mm::ModuleFactory::registerType<mm::SoapEffect>("SoapEffect", "light/effects.md#soap");
     mm::ModuleFactory::registerType<mm::TunnelEffect>("TunnelEffect", "light/effects.md#tunnel");
     mm::ModuleFactory::registerType<mm::EchoEffect>("EchoEffect", "light/effects.md#echo");
     mm::ModuleFactory::registerType<mm::DissolveEffect>("DissolveEffect", "light/effects.md#dissolve");

@@ -5,6 +5,7 @@
 #include "doctest.h"
 #include "audio_effect_test.h"
 #include "light/effects/KeyboardEffect.h"
+#include "../core/conditional_controls.h"   // mm::test::controlIndex
 
 using namespace mm;
 
@@ -12,7 +13,7 @@ namespace {
 
 /// The keyboard on a `w` by `h` grid, showing the whole piano unless a test says otherwise.
 struct Keys : EffectOnGrid<KeyboardEffect> {
-    explicit Keys(int w = 32, int h = 32) : EffectOnGrid(w, h) { e.octave = 0; e.octaves = 7; }
+    explicit Keys(int w = 32, int h = 32) : EffectOnGrid(w, h) { e.octave = 0; e.octaves = 7; e.autoKey = false; e.notes = AudioNotesBase::kNotesAll; }   // the octaves layout from octave 0; the hands and auto cases set theirs
 };
 
 }  // namespace
@@ -86,7 +87,7 @@ TEST_CASE("a sounding key brightens as ivory, and only the strike gives it a col
     f.notesCount = kAudioNoteKeys;
     f.notes[48] = 200;                          // sounds, no hit: ivory, brighter than rest
     play(keys, audio, f, 1000);
-    CHECK(keys.ch(19, 10, 0) == keys.ch(19, 10, 1));   // grey, not a palette hue
+    CHECK(keys.ch(19, 10, 0) == keys.ch(19, 10, 1));   // gray, not a palette hue
     CHECK(keys.ch(19, 10, 1) == keys.ch(19, 10, 2));
     CHECK(keys.at(19, 10) > 3 * 100);
     play(keys, audio, struck(48, 200), 2000);   // struck: the palette color
@@ -105,7 +106,7 @@ TEST_CASE("a frame two ticks read is one hit: the glow fades on instead of start
     keys.e.ivory = 0;
     keys.e.noteNames = false;
     keys.e.decay = 30;   // pin the 300 ms glow this test reads 80 ms into
-    audio.frameForTest() = struck(48);
+    audio.frameForTest() = analyzed(struck(48), keys.confirm);
     audio.frameForTest().seq = 7;
     platform::setTestNowMs(1000);
     keys.layer.tick();
@@ -154,6 +155,7 @@ TEST_CASE("the bottom half draws a small circle per sounding octave on fixed oct
     line.notesCount = kAudioNoteKeys;
     line.notesHits[48 >> 3] = static_cast<uint8_t>(1u << (48 & 7));
     line.notesHits[49 >> 3] = static_cast<uint8_t>(1u << (49 & 7));   // A#4: same octave row, on the ebony key
+    line.notes[48] = line.notes[49] = 200;                             // struck loud enough to count on their first frame
     play(keys, audio, line, 1000);
     const RGB want49 = expectedColor(49, 255);
     CHECK(keys.at(4, 104) == want48.r + want48.g + want48.b);   // one horizontal line per octave
@@ -189,11 +191,14 @@ TEST_CASE("auto picks the shown window from the detected key") {
     play(keys, audio, f, 1000);
     CHECK(keys.maxIn(4, 128, 6, 26) == 0);               // nothing struck yet: top half dark
     f.notesHits[39 >> 3] = static_cast<uint8_t>(1u << (39 & 7));
+    f.notes[39] = 200;                                         // struck loud enough to count on its first frame
     play(keys, audio, f, 1000);
     const RGB want39 = expectedColor(39, 255);
     CHECK(keys.at(4, 10) == want39.r + want39.g + want39.b);   // key 39 is the first shown key, columns 0..7
     f.notesHits[39 >> 3] = 0;
+    f.notes[39] = 0;
     f.notesHits[0] = 1;                                        // A0, not in the window: a circle on the shown A key 48
+    f.notes[0] = 200;
     play(keys, audio, f, 1000);
     const RGB want0 = expectedColor(0, 255);
     CHECK(keys.at(49, 68) == want0.r + want0.g + want0.b);     // key 48: k=5, x0 45, cx 49, octave row 0
@@ -286,4 +291,118 @@ TEST_CASE("a struck note's flash ends on time, polled late or never polled") {
     quiet.seq = 2;   // the next frame, with no hit
     idle.note(quiet, 1010, 1000);
     CHECK(idle.glow(10, 262144 + 500, 1000) == 0);   // 2^16 ticks of 4 ms on: the age would read 500
+}
+
+// The harmonic sieve under no overtones and hands: a weak key an octave above a loud one is its overtone and stays dark, which notes all lights.
+TEST_CASE("under no overtones a weak key an octave above a loud one stays dark, under all it lights") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    auto litOctave = [&](uint8_t shown) {
+        Keys keys;
+        keys.e.ivory = 0;
+        keys.e.noteNames = false;
+        keys.e.notes = shown;
+        AudioFrame f;
+        f.notesCount = kAudioNoteKeys;
+        f.notes[24] = 220;   // A2, loud
+        f.notes[36] = 120;   // A3, much weaker: its overtone
+        play(keys, audio, f, 1000);
+        int lit = 0;
+        for (int x = 0; x < 32; x++) lit += keys.at(x, 10) > 0;
+        return lit;
+    };
+    CHECK(litOctave(AudioNotesBase::kNotesAll) > litOctave(AudioNotesBase::kNotesNoOvertones));
+    audio.release();
+}
+
+// Under hands the halves follow the hands: a low struck key lights in the top half, a high one in the bottom half, each half one hand's reach.
+TEST_CASE("under notes hands the top half shows the left hand's keys and the bottom half the right hand's") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    Keys keys;
+    keys.e.notes = AudioNotesBase::kNotesHands;
+    keys.e.ivory = 0;
+    keys.e.noteNames = false;
+    AudioFrame f;
+    f.notesCount = kAudioNoteKeys;
+    f.notes[15] = 220;   // C2, left hand
+    f.notes[51] = 220;   // C5, right hand
+    f.notesHits[15 >> 3] = static_cast<uint8_t>(1u << (15 & 7));
+    f.notesHits[51 >> 3] = static_cast<uint8_t>(f.notesHits[51 >> 3] | (1u << (51 & 7)));
+    play(keys, audio, f, 1000);
+    CHECK(keys.maxIn(0, 32, 0, 16) > 0);    // the left hand's key in the top half
+    CHECK(keys.maxIn(0, 32, 16, 32) > 0);   // the right hand's key in the bottom half
+    audio.release();
+}
+
+// Under hands the hands place the halves, so the octave controls hide; under all they show again.
+TEST_CASE("under notes hands auto, octave and octaves hide, and notes sits above auto") {
+    Keys keys;
+    keys.e.notes = AudioNotesBase::kNotesHands;
+    keys.e.defineControls();
+    auto hidden = [&](const char* name) { return keys.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(keys.e, name))].hidden; };
+    CHECK(mm::test::controlIndex(keys.e, "notes") < mm::test::controlIndex(keys.e, "auto"));
+    CHECK(hidden("auto"));
+    CHECK(hidden("octave"));
+    CHECK(hidden("octaves"));
+    Keys all;   // notes all, the octaves layout
+    all.e.defineControls();
+    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(all.e, "auto"))].hidden);
+    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(all.e, "octaves"))].hidden);
+}
+
+// Under hands with chord, a hand holding three keys or more plays a chord and snaps to it, a hand holding one or two plays a line and keeps its notes.
+TEST_CASE("under hands with chord a hand holding a chord snaps to it and a hand playing a line keeps its notes") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    auto kept = [&](std::initializer_list<uint8_t> right) {
+        Keys keys;
+        keys.e.notes = AudioNotesBase::kNotesHands;
+        keys.e.chord = true;
+        AudioFrame f;
+        f.notesCount = kAudioNoteKeys;
+        for (uint8_t k : {15, 19, 22}) f.notes[k] = 220;   // C2, E2, G2: the left hand's C major
+        f.notes[17] = 200;                                  // D2, not in the chord
+        for (uint8_t k : right) f.notes[k] = 220;
+        f.chordRoot = 0;
+        f.chordQuality = kChordMajor;
+        play(keys, audio, f, 1000);
+        NoteSet out;
+        for (uint8_t k = 0; k < kAudioNoteKeys; k++) if (keys.e.keepsForTest(k)) out.add(k);
+        return out;
+    };
+    const NoteSet line = kept({53});   // the right hand's melody, D5, outside the chord
+    CHECK(line.has(15));
+    CHECK_FALSE(line.has(17));         // the left hand holds a chord: the D leaves
+    CHECK(line.has(53));               // one key is a line: the melody stays
+    const NoteSet chords = kept({51, 55, 58, 53});   // C5 E5 G5 and D5: the right hand holds a chord too
+    CHECK(chords.has(51));
+    CHECK_FALSE(chords.has(53));
+    audio.release();
+}
+
+// With chord on, the named chord's tones glow dim in their palette hue on keys nobody plays; with it off the resting keys stay ivory.
+TEST_CASE("with chord on the chord's tones glow dim across the keys, and nothing glows with it off") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    auto tinted = [&](bool chord, int y0 = 0, int y1 = 32) {
+        Keys keys;
+        keys.e.notes = AudioNotesBase::kNotesHands;
+        keys.e.chord = chord;
+        keys.e.ivory = 0;
+        keys.e.noteNames = false;
+        AudioFrame f;
+        f.notesCount = kAudioNoteKeys;
+        f.chordRoot = 0;
+        f.chordQuality = kChordMajor;
+        play(keys, audio, f, 1000);
+        int lit = 0;
+        // Colored pixels only: the halves' octave labels are white.
+        for (int y = y0; y < y1; y++) for (int x = 0; x < 32; x++) lit += (keys.ch(x, y, 0) != keys.ch(x, y, 1) || keys.ch(x, y, 1) != keys.ch(x, y, 2)) ? 1 : 0;
+        return lit;
+    };
+    CHECK(tinted(true, 0, 16) > 0);    // the left hand's half
+    CHECK(tinted(true, 16, 32) > 0);   // and the right hand's
+    CHECK(tinted(false) == 0);
+    audio.release();
 }

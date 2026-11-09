@@ -30,7 +30,7 @@ inline constexpr const char* kPalettePick[3] = {kScriptDir, kPaletteExt, kPalett
 
 }  // namespace moonlive
 
-/// A palette authored as code rather than stored as data.
+/// A palette authored as code rather than stored as data: @xref{why-a-palette-is-worth-computing|why}, @xref{why-it-is-cheap-enough-to-run-per-frame|its cost} and @xref{why-a-broken-script-keeps-the-last-good-palette|a broken script}.
 ///
 /// @technical
 ///
@@ -61,6 +61,9 @@ public:
     bool prepare(MoonModule& owner) {
         return script_.sync(moonlive::effectSysVars(), owner, moonlive::lightBuiltins());
     }
+
+    /// The audio features the compiled script reads, a bit each as AudioDemand numbers them.
+    uint8_t demands() const { return script_.demands(); }
 
     /// Publish the script's controls, so a scripted palette is configurable without editing it.
     void publishControls(ControlList& controls) { script_.publishDeclaredControls(controls); }

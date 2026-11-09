@@ -41,7 +41,6 @@ MoonLight differs in being a ready firmware: it is configured from a browser, wi
 **Compute per core.** The Cortex-M7 at 600 MHz scores about 2300 on CoreMark (PJRC's figure), where one ESP32-S3 core at 240 MHz scores about 600.
 It also has a double-precision FPU, which the S3 lacks.
 That pays in effects doing trigonometry or noise per light on large grids, the effects that drop the frame rate on an ESP32 first.
-Stefan Petrick used Teensy boards for his compute-heavy effects for that reason.
 MoonLive scripts compile to native Thumb-2 code, so a script gets the same speed.
 
 **Wired and deterministic.** Ethernet, the board's own or a W5500, with no WiFi stack competing for the core, and LED output by DMA from many pins.

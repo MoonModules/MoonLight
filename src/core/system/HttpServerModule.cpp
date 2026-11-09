@@ -52,12 +52,8 @@ void HttpServerModule::defineControls() {
 
 void HttpServerModule::setup() {
     instance_ = this;
-    if (server_.open(port)) {
-        boundPort_ = port;   // the port actually serving, frozen until release; the `port` control applies at the next open
-    } else {
-        boundPort_ = 0;
-        std::printf("HTTP server failed to open port %u\n", port);
-    }
+    failedPort_ = 0;
+    ensureListener();
     // A schema change carries hidden flags and option sets the value-patch cannot, so any module's rebuildControls() flips the WS full-resync flag through this hook.
     MoonModule::setSchemaChangedHook(&HttpServerModule::onSchemaChanged);
     // A module whose values someone watches move, a desk's motors, asks for them ahead of the second.
@@ -87,6 +83,19 @@ void HttpServerModule::release() {
         instance_ = nullptr;
     }
     MoonModule::release();   // chain: uniform override-and-chain (no buffers or children, but the convention holds)
+}
+
+void HttpServerModule::ensureListener() {
+    if (boundPort_ && boundPort_ == port) return;
+    if (boundPort_) { server_.close(); boundPort_ = 0; }   // the control moved: the new port opens now
+    if (port && server_.open(port)) {
+        boundPort_ = port;
+        if (failedPort_) std::printf("HTTP server listening on port %u\n", port);
+        failedPort_ = 0;
+        return;
+    }
+    if (failedPort_ != port) std::printf("HTTP server failed to open port %u, trying again each second\n", port);   // once per refused port, a new one reported afresh
+    failedPort_ = port;
 }
 
 void HttpServerModule::tick20ms() MM_NONBLOCKING {
@@ -296,6 +305,8 @@ void HttpServerModule::driveTransfers() {
 }
 
 void HttpServerModule::tick1s() MM_NONBLOCKING {
+    // The listener follows `port`, and a port the system refused is tried again, so a busy port at boot does not leave the server dark, as HttpServerModule.h's served port says.
+    ensureListener();
     const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
     pushStateToWebSockets();
 }

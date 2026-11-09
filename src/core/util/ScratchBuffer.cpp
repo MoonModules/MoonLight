@@ -1,21 +1,16 @@
-/// The out-of-line half of ScratchBuffer: the free-list registration and the resize that owns memory.
+/// The out-of-line half of ScratchBuffer: the resize that owns memory.
 
 #include "core/util/ScratchBuffer.h"
 
-#include "core/module/MoonModule.h"    // full definition: register/deregister into the free list
+#include "core/module/MoonModule.h"    // full definition: the dynamic-bytes readout
 #include "platform/platform.h"  // alloc / free
 
 #include <cstring>              // memset
 
 namespace mm {
 
-ScratchBufferBase::ScratchBufferBase(MoonModule& owner) : owner_(owner) {
-    owner_.registerScratchBuffer(this);   // push onto the module's free list
-}
-
 ScratchBufferBase::~ScratchBufferBase() {
-    resizeBytes(0);                        // frees raw_ + subtracts our bytes from owner_
-    owner_.deregisterScratchBuffer(this);  // unlink from the still-alive base's list
+    resizeBytes(0);   // frees raw_ + subtracts our bytes from owner_; ModuleResource's destructor unlinks it
 }
 
 bool ScratchBufferBase::resizeBytes(std::size_t bytes) {

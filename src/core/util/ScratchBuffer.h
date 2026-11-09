@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "core/module/ModuleResource.h"   // the tie to its module, which frees it on release
+
 /// One owned allocation with a typed view, so a module sizes its working memory once rather than per frame.
 ///
 /// A module declares one as a member and calls resize; the destructor, the accounting and the null guard come with it.
@@ -18,33 +20,20 @@
 /// Applied here so a memory-holding effect writes one resize call and nothing else.
 namespace mm {
 
-class MoonModule;  // forward — the full definition is only needed in ScratchBuffer.cpp
-
-/// The type-erased base, which owns the allocation, the tie to its module, and the one heavy body.
-class ScratchBufferBase {
-public:
-    /// Non-copyable, and public though the constructors are protected: a deleted private member reports as inaccessible instead.
-    ScratchBufferBase(const ScratchBufferBase&) = delete;
-    ScratchBufferBase& operator=(const ScratchBufferBase&) = delete;
-    /// Non-movable: a fixed member tied to one module and threaded into its free list, so moving would dangle the owner.
-    ScratchBufferBase(ScratchBufferBase&&) = delete;
-    ScratchBufferBase& operator=(ScratchBufferBase&&) = delete;
-
+/// The type-erased base, which owns the allocation and the one heavy body, a ModuleResource its module frees on release.
+class ScratchBufferBase : public ModuleResource {
 protected:
     /// Registers with the owning module, which frees it on release.
-    explicit ScratchBufferBase(MoonModule& owner);
-    ~ScratchBufferBase();                            // frees + deregisters (.cpp)
+    explicit ScratchBufferBase(MoonModule& owner) : ModuleResource(owner) {}
+    ~ScratchBufferBase() override;                   // frees (.cpp); the base deregisters
+    /// The module's release: free the allocation.
+    void releaseResource() override { resizeBytes(0); }
 
     /// Size to exactly that many bytes, zero meaning free, reallocating only when the count changes; false on an allocation failure.
     bool resizeBytes(std::size_t bytes);
 
     void*       raw_   = nullptr;
     std::size_t bytes_ = 0;
-
-private:
-    friend class MoonModule;             // walks next_ / calls resizeBytes(0) on release
-    MoonModule&        owner_;
-    ScratchBufferBase* next_ = nullptr;  // intrusive singly-linked free-list node
 };
 
 /// The typed face, pure inline sugar: every method folds into its call site, so a new element type adds no flash.

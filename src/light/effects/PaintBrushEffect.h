@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -26,7 +26,7 @@ namespace mm {
 /// The original fades, drifts its hue and jitters once a frame, at the 30 frames a second troyhacks's board runs it at. Here the fade is a rate per 60 Hz reference frame, which the Layer scales by elapsed time, so `fadeRate` 25 is the original's 80; the hue and the jitter step 30 times a second.
 ///
 /// The strokes draw every frame, so a faster render sharpens them and changes nothing else.
-class PaintBrushEffect : public EffectBase {
+class PaintBrushEffect : public AudioEffectBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
     const char* tags() const override { return "🌙🎶"; }

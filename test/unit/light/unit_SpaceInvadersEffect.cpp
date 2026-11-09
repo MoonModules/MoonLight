@@ -60,3 +60,20 @@ TEST_CASE("Space Invaders turned audio-reactive does not march on a kick already
     CHECK(fx.e.formationForTest() == before + fx.e.stepX);
     audio.release();
 }
+
+// An effect whose audio is a switch needs the analysis only while the switch is on, so a Space Invaders marching on its own clock leaves the audio resting.
+TEST_CASE("Space Invaders needs the audio analysis only while audioReactive is on") {
+    mm::EffectOnGrid<mm::SpaceInvadersEffect> fx(32, 32);
+    const auto demanded = [&fx] {
+        uint8_t bits = 0;
+        for (const mm::ModuleResource* r = fx.e.resources(); r; r = r->nextResource()) bits |= r->demandsOf(mm::AudioDemand::kProvider);
+        return (bits & mm::AudioDemand::bitOf(mm::AudioFeature::Bands)) != 0;
+    };
+    fx.e.audioReactive = true;
+    fx.e.prepare();
+    CHECK(demanded());
+    CHECK(fx.e.affectsPrepare("audioReactive"));   // the switch prepares the effect again, so its demand follows
+    fx.e.audioReactive = false;
+    fx.e.prepare();
+    CHECK_FALSE(demanded());
+}

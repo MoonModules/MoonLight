@@ -217,7 +217,7 @@ TEST_CASE("an out-of-range audio band reads zero") {
     CHECK(rig.channel(0, 0) == 0);
 }
 
-// Step 5 of the audio plan: a script reads one band's hit and one key's start, as the drum-kit and the per-key flash do.
+// Step 5 of the audio plan: a script reads one band's hit and one key's start, as the drum-kit and the per-key flash do; a key's start is a note the core keeps, not every attack.
 TEST_CASE("a script reads a third-octave band's hit and a piano key's start, out of range reading zero") {
     static AudioService audio;   // the frame the builtins read
     audio.defineControls();
@@ -225,7 +225,8 @@ TEST_CASE("a script reads a third-octave band's hit and a piano key's start, out
     audio.tick();   // claims the seat latestFrame reads; the frame below is written straight into it
     AudioFrame& f = audio.frameForTest();
     f.thirdsHits[7 >> 3] = static_cast<uint8_t>(1u << (7 & 7));    // band 7, 100 Hz: a floor tom
-    f.notesHits[43 >> 3] = static_cast<uint8_t>(1u << (43 & 7));  // key 43, E4
+    f.notesKeptHits[43 >> 3] = static_cast<uint8_t>(1u << (43 & 7));  // key 43, E4, a note the core keeps
+    f.notesHits[42 >> 3] = static_cast<uint8_t>(1u << (42 & 7));      // key 42 an attack the core does not keep: no note
     HeadRig rig(/*withMotion=*/false);
     rig.run("class A { void tick() { fill(0,0,0);"
             "  setRGB(0, audioBandOnset(7) * 255, audioBandOnset(8) * 255, audioBandOnset(99) * 255);"
@@ -352,7 +353,7 @@ TEST_CASE("a script that declares D1 is extruded across the width") {
     platform::setTestNowMs(1);
     layer.tick();
 
-    // Every column carries the copy, not just the one the script wrote.
+    // Every column carries the copy, not only the one the script wrote.
     const auto& b = layer.buffer();
     for (nrOfLightsType y = 0; y < 3; y++)
         for (nrOfLightsType x = 0; x < 4; x++) {

@@ -88,3 +88,22 @@ TEST_CASE("the audio fountain, heard by the gate at a low level, throws a band f
     CHECK(fx.e.inFlightForTest() > 0);
     audio.release();
 }
+
+TEST_CASE("the audio fountain throws one sprite per drum hit, once however many ticks read the frame") {
+    golden::ScopedTestClock clock(1000);
+    AudioService& audio = seat();
+    AudioFrame& f = audio.frameForTest();
+    f = AudioFrame{};                 // no band loud and no sound heard: only a hit throws
+    EffectOnGrid<SpriteFountainEffect> fx(32, 32);
+    fx.e.audioReactive = true;
+    uint32_t now = 1000;
+    platform::setTestNowMs(now += 20); fx.layer.tick();
+    CHECK(fx.e.inFlightForTest() == 0);
+    f.seq = 1; f.onsetLow = 200; f.onsetMid = 120;   // a kick and a snare on one block
+    for (int i = 0; i < 3; i++) { platform::setTestNowMs(now += 20); fx.layer.tick(); }
+    CHECK(fx.e.inFlightForTest() == 2);
+    f.seq = 2; f.onsetLow = 0; f.onsetMid = 0; f.onsetHigh = 90;   // a hat on the next
+    platform::setTestNowMs(now += 20); fx.layer.tick();
+    CHECK(fx.e.inFlightForTest() == 3);
+    audio.release();
+}

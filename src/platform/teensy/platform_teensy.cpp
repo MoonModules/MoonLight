@@ -539,6 +539,7 @@ void announceExtra(const ExtraService& e) {
 }  // namespace
 
 // Renames the responder when it already runs, so one path serves the first start and a rename.
+const char* mdnsError() { return ""; }   // the Teensy's responder reports no reason
 bool mdnsInit(const char* deviceName) {
     if (!deviceName || !deviceName[0] || !MDNS.begin(deviceName)) return false;
     MDNS.removeService(deviceName, "_http", "_tcp", kHttpPort);

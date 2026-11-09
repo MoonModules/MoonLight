@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/module/Demand.h"     // the picture, while a reader shows it
 #include "core/module/Scheduler.h"   // requestPrepare: a grabber arriving or leaving re-opens the capture
 #include "core/util/ActiveInstance.h"   // the one-active-source election
 #include "core/util/color.h"            // RGB
@@ -16,10 +17,23 @@
 
 namespace mm {
 
+/// A reader's need for the picture, as Demand.h describes: PictureService draws or decodes it only while one is on.
+class PictureDemand : public Demand {
+public:
+    /// The provider's type name, the one the readers address.
+    static constexpr const char* kProvider = "PictureService";
+    /// The one feature, the picture.
+    static constexpr uint8_t kPicture = 1;
+    /// `owner`'s need for the picture, off until the owner turns it on.
+    explicit PictureDemand(MoonModule& owner) : Demand(owner, kProvider, kPicture) {}
+};
+
 /// The picture the Picture effect samples onto the lights, from one source at a time.
 /// @card PictureService.png
 ///
 /// One picture service is active at a time, as with Audio, and any number of effects read its picture.
+///
+/// The picture is drawn or decoded only while a Picture effect shows it, as Demand.h describes: with none the capture closes, the pictures are freed and the card says it is idle.
 class PictureService : public MoonModule {
 public:
     /// A service, the source half of the picture pipeline. It swaps a front and a back picture, or locks the one picture when there is no room for two, so frames skip but never tear.
@@ -64,14 +78,38 @@ public:
     /// Every control reshapes or redraws the picture.
     bool affectsPrepare(const char*) const override { return true; }
 
-    /// Size the pixels for the source and draw a still one into them; a failed allocation publishes no picture.
+    /// Size the pixels and draw a still picture while a reader shows it, and free them while none does.
     void prepare() override {
         seat_.claim();
+        shownApplied_ = shown();
         stopCapture();   // before the pictures move under a decode still writing one
-        if (source != kUsbCapture) platform::videoCaptureShutdown();   // what sees devices goes with the source
+        if (source != kUsbCapture || !shownApplied_) platform::videoCaptureShutdown();   // what sees devices goes with the source, and with the last reader
+        if (!shownApplied_) { freePictures(); return; }
         if (!prepareBuffers(kRunsInTask[source])) return;
         if (source == kUsbCapture) { startCapture(); return; }
         drawTestPattern(front_, width, height);   // the frame prepareBuffers published, filled before any reader ticks
+    }
+
+    /// A reader's demand turned on or off: the picture starts or stops when that changes whether anything shows it, at the frame boundary where prepare runs; a reader joining one already showing it leaves the capture alone.
+    void onDemandChanged() override { if (shown() != shownApplied_) prepare(); }
+
+    /// Whether a reader shows the picture, a Picture effect's demand, as Demand.h describes.
+    bool shown() const {
+        if (shownForTest_) return true;
+        const Scheduler* tree = Scheduler::instance();
+        return tree && (tree->demandsOf(PictureDemand::kProvider) & PictureDemand::kPicture);
+    }
+    /// Show the picture without a reader in the tree, the test seam for a service tested on its own.
+    void setShownForTest(bool on) { shownForTest_ = on; }
+
+    /// Free the pictures while nothing shows them, the frame empty, and say so on the card.
+    void freePictures() {
+        a_.resize(0);
+        b_.resize(0);
+        front_ = back_ = nullptr;
+        bufW_ = bufH_ = 0;
+        frame_ = PictureFrame{nullptr, 0, 0, frame_.generation + 1};
+        setStatus("idle: no Picture effect shows it", Severity::Status);
     }
 
     /// Size one picture, or two for a source writing from its own task, degrading to one when the second does not fit; false when even one does not.
@@ -130,6 +168,7 @@ public:
     /// Vacate the seat for any survivor.
     void release() override {
         stopCapture();
+        shownApplied_ = false;   // a prepare after this counts its readers afresh
         platform::videoCaptureShutdown();
         seat_.vacate();
         MoonModule::release();
@@ -137,7 +176,7 @@ public:
 
     /// Name the capture's health once a second: the size it publishes, the rate it holds and whatever is going wrong.
     void tick1s() MM_NONBLOCKING override {
-        if (source != kUsbCapture) return;
+        if (source != kUsbCapture || !shownApplied_) return;   // idle, nothing showing the picture, has no capture to watch
         dropStalePicture();   // first, so a device that went away puts the lights out on this tick and not the next
         // A grabber arriving or leaving rewrites the device list: an unplug closes the stream, which frees the port for a replug, and a replug opens it again.
         const uint32_t gen = platform::videoCaptureFormatGeneration();
@@ -375,6 +414,8 @@ private:
     std::atomic<uint32_t> lastFrameMs_{0};   ///< when a picture last landed, for the stale drop
     char status_[96] = {};                   ///< the capture's status line, rebuilt once a second
     ActiveInstance<PictureService> seat_{*this};
+    bool shownForTest_ = false;   ///< setShownForTest's override, false outside tests
+    bool shownApplied_ = false;   ///< whether the last prepare found a reader, so a demand change that leaves it so does nothing
 };
 
 }  // namespace mm

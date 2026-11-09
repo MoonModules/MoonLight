@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -12,7 +12,7 @@ namespace mm {
 /// @technical
 ///
 /// Nothing is transported: a short history of band frames holds one entry per ring. A light's angle picks its band and its radius its age, two table reads a light.
-class RadialSpectrumEffect : public EffectBase {
+class RadialSpectrumEffect : public AudioEffectBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶🖌️🎡"; }
@@ -43,6 +43,7 @@ public:
 
     /// Build the polar address table and clear the ring history.
     void prepare() override {
+        AudioEffectBase::prepare();
         lut_.prepareFor(polar, width(), height(), EffectBase::depth());
         std::memset(history_, 0, sizeof(history_));
         std::memset(beats_, 0, sizeof(beats_));

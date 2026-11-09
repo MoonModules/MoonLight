@@ -6,6 +6,7 @@
 #include "core/services/AudioService.h"
 #include "light/util/Palette.h"
 #include "light/powerfunctions/audioReadout.h"
+#include "core/util/HarmonicSieve.h"   // keepNotes: the notes the core keeps of each frame
 
 #include <cstring>
 #include <vector>
@@ -19,6 +20,7 @@ struct EffectOnGrid {
     GridLayout grid;   ///< the grid the effect draws on
     Layer layer;       ///< the layer holding the effect and its pixel buffer
     E e;               ///< the effect under test
+    NoteConfirm confirm;   ///< the core's note state across the frames this test plays, as the analysis keeps it
     /// Put the effect on a `w` by `h` grid and apply the state.
     EffectOnGrid(int w, int h) {
         grid.width = w; grid.height = h; grid.depth = 1;
@@ -84,11 +86,17 @@ inline AudioService& seat() {
     return audio;
 }
 
-/// One frame carrying `f`'s hits at `ms`, then the hits cleared.
+/// Frame `f` as the analysis publishes it, the notes the core keeps filled in from `confirm`'s state.
+inline AudioFrame analyzed(AudioFrame f, NoteConfirm& confirm) {
+    keepNotes(f, confirm);
+    return f;
+}
+
+/// One frame carrying `f`'s hits at `ms`, as the analysis publishes it, then the hits cleared.
 template <typename F>
 void play(F& fx, AudioService& audio, const AudioFrame& f, uint32_t ms) {
     const uint16_t seq = audio.frameForTest().seq;
-    audio.frameForTest() = f;
+    audio.frameForTest() = analyzed(f, fx.confirm);
     audio.frameForTest().seq = static_cast<uint16_t>(seq + 1);   // a new frame, as a source numbers it
     platform::setTestNowMs(ms);
     fx.layer.tick();
@@ -112,7 +120,7 @@ inline AudioFrame noteFrame(uint8_t i, uint8_t mag, bool hit) {
 }
 
 /// A frame whose key `i` is struck at `mag`.
-inline AudioFrame struck(uint8_t i, uint8_t mag = 0) { return noteFrame(i, mag, true); }
+inline AudioFrame struck(uint8_t i, uint8_t mag = 200) { return noteFrame(i, mag, true); }   // loud enough to count on its first frame: NoteConfirm
 
 /// A frame whose note `midi` sounds at `mag`, struck when `hit`.
 inline AudioFrame note(uint8_t midi, uint8_t mag, bool hit = false) { return noteFrame(static_cast<uint8_t>(midi - 21), mag, hit); }

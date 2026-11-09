@@ -1,6 +1,7 @@
 #pragma once
 
 #include "light/effects/AudioNotesBase.h"
+#include "light/powerfunctions/playerHands.h"   // PianoHands: the keys two hands could play
 
 #include <array>
 
@@ -27,6 +28,10 @@ constexpr uint8_t kPianoOctaves = (kAudioNoteKeys + 11) / 12;
 ///
 /// The mic's semitone bands are the piano's keys from A0 up; `octave` and `octaves` pick the octaves the top half shows (`auto` lets the detected key pick the first shown key), ivory letters run along the bottom edge, each circle row on the bottom labeled with its octave at the left, and `noteNames` writes the strongest pitch classes and the key at the top corners.
 ///
+/// With `chord` on, every tone of the named chord glows dim in its palette hue across the keys shown, and the played keys stay bright over it.
+///
+/// `notes` on `hands` shows what two hands could play, at most five keys a hand, each hand within a tenth: the top half follows the left hand's reach and the bottom half the right's, in place of the octaves and the circles, so `auto`, `octave` and `octaves` hide.
+///
 /// @technical
 ///
 /// ## Geometry and hits
@@ -42,19 +47,23 @@ public:
     /// How bright the ivory rests between notes, 0 for dark.
     uint8_t ivory = 128;
     /// The detected key picks the first shown key.
-    bool autoKey = false;
+    bool autoKey = true;
     /// The first octave the keyboard shows.
     uint8_t octave = 2;
     /// How many octaves the keyboard shows, the rest only as circles.
     uint8_t octaves = 2;
 
-    /// Publish the ivory rest, the shown octaves and auto, then the glow and the note names.
+    /// Publish the ivory rest, which notes show, the shown octaves and auto, then the glow and the note names; the hands place the halves themselves, so the octave controls hide under `hands`.
     void defineControls() override {
         controls_.addControl("ivory", ivory, 0, 255);
+        addNotesSelect();
+        const bool byHands = notes == kNotesHands;
         controls_.addControl("auto", autoKey);
+        controls_.setHidden(controls_.count() - 1, byHands);
         controls_.addControl("octave", octave, 0, 6);
-        controls_.setHidden(controls_.count() - 1, autoKey);   // defineControls reruns on every change, so this re-hides live
+        controls_.setHidden(controls_.count() - 1, byHands || autoKey);   // defineControls reruns on every change, so this re-hides live
         controls_.addControl("octaves", octaves, 1, 7);
+        controls_.setHidden(controls_.count() - 1, byHands);
         addNoteControls();
     }
 
@@ -69,13 +78,51 @@ public:
         }
         const lengthType topH = a.h / 2 > 0 ? static_cast<lengthType>(a.h / 2) : 1;
         const lengthType botH = static_cast<lengthType>(a.h - topH);
+        if (notes == kNotesHands) {   // the left hand's reach on top, the right's below
+            const Keys left = handKeys(a, 0), right = handKeys(a, 1);
+            drawKeyboard(a, left, 0, topH, false, true);
+            drawKeyboard(a, right, topH, botH, false, true);
+            drawHandLabels(a, left, 0, topH);
+            drawHandLabels(a, right, topH, botH);
+            endNotes(a);
+            return;
+        }
         drawKeyboard(a, k, 0, topH, false, true);      // pressed keys colored
         drawKeyboard(a, k, topH, botH, true, false);   // the piano picture with circles
         if (a.h > fonts::kFont4x6.height) drawOverlays(a, k, topH, botH);
         endNotes(a);
     }
 
+protected:
+    /// Two hands keep the keys they could play, as playerHands.h models them.
+    void playedBy(const AudioFrame& f, const uint8_t* hits, NoteSet& set, uint32_t ms) MM_NONBLOCKING override { hands_.filter(f.notes, set, ms, hits); }
+
+    /// Under `hands` a hand holding three keys or more plays a chord and snaps to it, while a hand holding one or two plays a line and keeps its notes, whose passing notes are rarely chord tones.
+    void snapToChord(const AudioFrame& f, NoteSet& set) MM_NONBLOCKING override {
+        if (notes != kNotesHands) { AudioNotesBase::snapToChord(f, set); return; }
+        for (uint8_t h = 0; h < 2; h++) {
+            const int16_t w = hands_.window[h];
+            if (w < 0 || keysIn(set, w) < kChordKeys) continue;
+            for (int16_t i = w; i <= w + hands::PianoHands::kSpan && i < kAudioNoteKeys; i++) {
+                const uint8_t k = static_cast<uint8_t>(i);
+                if (set.has(k) && !inChord(static_cast<uint8_t>((21 + k) % 12), f.chordRoot, f.chordQuality)) set.remove(k);
+            }
+        }
+    }
+
+    /// How many keys of `set` lie in the hand window from `w`.
+    static uint8_t keysIn(const NoteSet& set, int16_t w) MM_NONBLOCKING {
+        uint8_t n = 0;
+        for (int16_t i = w; i <= w + hands::PianoHands::kSpan && i < kAudioNoteKeys; i++) n += set.has(static_cast<uint8_t>(i));
+        return n;
+    }
+
 private:
+    hands::PianoHands hands_;   ///< where each hand is
+    static constexpr uint8_t kGuideLevel = 72;   ///< how bright a chord tone glows when nobody plays it
+    static constexpr uint8_t kChordKeys = 3;   ///< the keys a hand holds when it plays a chord rather than a line
+    static constexpr uint8_t kHandRest[2] = {15, 39};   ///< where each hand's half starts before it played: C2 and C4 as keys from A0
+
     /// The shown keys' layout across the width, worked out once a frame.
     struct Keys {
         uint8_t s0, shown;       ///< first shown key, how many
@@ -115,10 +162,32 @@ private:
         } else {
             s0 = static_cast<uint8_t>(std::min<uint32_t>(static_cast<uint32_t>(octave) * 12u, kAudioNoteKeys - shown));
         }
+        return keysFor(a.w, s0, shown);
+    }
+
+    /// `shown` keys from key `s0` across `w` columns.
+    static Keys keysFor(lengthType w, uint8_t s0, uint8_t shown) MM_NONBLOCKING {
         const uint8_t base = detail::kPianoWhiteBefore[s0];
         const uint8_t white = static_cast<uint8_t>(detail::kPianoWhiteBefore[s0 + shown] - base);
-        const lengthType whiteW = static_cast<lengthType>((a.w + white - 1) / white);
-        return Keys{s0, shown, white, base, a.w, whiteW, static_cast<lengthType>(whiteW >= 3 ? 1 : 0)};   // a hairline when keys are wide enough
+        const lengthType whiteW = static_cast<lengthType>((w + white - 1) / white);
+        return Keys{s0, shown, white, base, w, whiteW, static_cast<lengthType>(whiteW >= 3 ? 1 : 0)};   // a hairline when keys are wide enough
+    }
+
+    /// Hand `h`'s reach as a keyboard: its window of a tenth, started on the ivory key at or below it; before the hand played, around C2 for the left and C4 for the right.
+    Keys handKeys(const AudioScene& a, uint8_t h) const MM_NONBLOCKING {
+        uint8_t s0 = hands_.window[h] >= 0 ? static_cast<uint8_t>(hands_.window[h]) : kHandRest[h];
+        if (s0 > 0 && detail::pianoIsBlack(s0)) s0--;
+        const uint8_t shown = static_cast<uint8_t>(std::min<uint32_t>(hands::PianoHands::kSpan + 2u, kAudioNoteKeys - static_cast<uint32_t>(s0)));
+        return keysFor(a.w, s0, shown);
+    }
+
+    /// A hand's half labeled: the ivory letters along its bottom and the standard octave of its first key at its left, middle C being C4.
+    void drawHandLabels(const AudioScene& a, const Keys& k, lengthType y0, lengthType kh) MM_NONBLOCKING {
+        if (kh <= fonts::kFont4x6.height) return;
+        const lengthType ly = static_cast<lengthType>(y0 + kh - fonts::kFont4x6.height);
+        k.forEachIvory([&](uint8_t i, lengthType x0, lengthType kw) MM_NONBLOCKING { drawLetter(a.cv, i, x0, kw, ly, RGB{0, 0, 0}); });
+        const char num[2] = {static_cast<char>('0' + (21 + k.s0) / 12 - 1), 0};   // MIDI note / 12 - 1
+        draw::text(a.cv, fonts::kFont4x6, num, 0, static_cast<lengthType>(y0 + (kh > 6 ? (kh - 6) / 2 : 0)), RGB{255, 255, 255});
     }
 
     /// One row has no halves, ebony over ivory, letters or circles: each shown semitone takes its own span.
@@ -128,7 +197,7 @@ private:
             const lengthType x0 = static_cast<lengthType>(static_cast<uint32_t>(j) * a.w / k.shown);
             const lengthType x1 = static_cast<lengthType>(static_cast<uint32_t>(j + 1) * a.w / k.shown);
             const uint8_t g = hits_.glow(i, a.ms, a.span);
-            const uint8_t lvl = std::max({ivory, magnitude(*a.f, i), g});
+            const uint8_t lvl = std::max({ivory, level(*a.f, i), g});
             if (x1 > x0 && lvl)
                 draw::fillRect(a.cv, x0, 0, static_cast<lengthType>(x1 - x0), 1, keyColor(*a.pal, i, lvl, g, detail::pianoIsBlack(i)));
         }
@@ -138,12 +207,18 @@ private:
     void drawKeyboard(const AudioScene& a, const Keys& k, lengthType y0, lengthType kh, bool circles, bool colorKeys) MM_NONBLOCKING {
         k.forEachIvory([&](uint8_t i, lengthType x0, lengthType kw) MM_NONBLOCKING {
             const uint8_t g = hits_.glow(i, a.ms, a.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*a.f, i), g}) : ivory;
-            if (lvl) draw::fillRect(a.cv, x0, y0, kw, kh, colorKeys ? keyColor(*a.pal, i, lvl, g, false) : scale8(RGB{255, 255, 255}, ivory));
+            const uint8_t lvl = colorKeys ? std::max({ivory, level(*a.f, i), g}) : ivory;
+            const bool guide = colorKeys && chordGuide(*a.f, i, g);
+            if (lvl || guide) draw::fillRect(a.cv, x0, y0, kw, kh, guide ? guideColor(*a.pal, i) : colorKeys ? keyColor(*a.pal, i, lvl, g, false) : scale8(RGB{255, 255, 255}, ivory));
             if (circles) drawCircles(a, i, y0, kh, x0, kw);
         });
+        drawEbony(a, k, y0, kh, circles, colorKeys);
+    }
+
+    /// The ebony keys of one half, over the boundaries before them at three fifths of an ivory key's width and two thirds of its length.
+    void drawEbony(const AudioScene& a, const Keys& k, lengthType y0, lengthType kh, bool circles, bool colorKeys) MM_NONBLOCKING {
         const lengthType blackW = k.whiteW * 3 / 5 > 0 ? static_cast<lengthType>(k.whiteW * 3 / 5) : 1;
-        const lengthType blackH = kh * 2 / 3 > 0 ? static_cast<lengthType>(kh * 2 / 3) : 1;   // ebony keys two thirds as long as ivory
+        const lengthType blackH = kh * 2 / 3 > 0 ? static_cast<lengthType>(kh * 2 / 3) : 1;
         for (uint8_t j = 0; j < k.shown; j++) {
             const uint8_t i = static_cast<uint8_t>(k.s0 + j);
             if (!detail::pianoIsBlack(i)) continue;
@@ -152,9 +227,10 @@ private:
             const int32_t x1 = std::min<int32_t>(a.w, b + (blackW + 1) / 2);
             if (x1 <= x0) continue;
             const uint8_t g = hits_.glow(i, a.ms, a.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, magnitude(*a.f, i), g}) : ivory;
-            if (lvl) draw::fillRect(a.cv, static_cast<lengthType>(x0), y0, static_cast<lengthType>(x1 - x0), blackH,
-                                    colorKeys ? keyColor(*a.pal, i, lvl, g, true) : scale8(RGB{255, 255, 255}, static_cast<uint8_t>(ivory / 4u)));
+            const uint8_t lvl = colorKeys ? std::max({ivory, level(*a.f, i), g}) : ivory;
+            const bool guide = colorKeys && chordGuide(*a.f, i, g);
+            if (lvl || guide) draw::fillRect(a.cv, static_cast<lengthType>(x0), y0, static_cast<lengthType>(x1 - x0), blackH,
+                                             guide ? guideColor(*a.pal, i) : colorKeys ? keyColor(*a.pal, i, lvl, g, true) : scale8(RGB{255, 255, 255}, static_cast<uint8_t>(ivory / 4u)));
             if (circles) drawCircles(a, i, y0, kh, static_cast<lengthType>(x0), static_cast<lengthType>(x1 - x0));
         }
     }
@@ -169,7 +245,7 @@ private:
             const uint16_t hk = static_cast<uint16_t>((i % 12) + 12u * o);   // this pitch in octave o
             if (hk >= kAudioNoteKeys) break;
             const uint8_t g = hits_.glow(static_cast<uint8_t>(hk), a.ms, a.span);
-            const uint8_t lvl = std::max(magnitude(*a.f, static_cast<uint8_t>(hk)), g);
+            const uint8_t lvl = std::max(level(*a.f, static_cast<uint8_t>(hk)), g);
             if (!lvl) continue;
             const lengthType cy = static_cast<lengthType>(y0 + o * slot + slot / 2);
             if (cy + r >= static_cast<lengthType>(y0 + kh)) break;
@@ -206,9 +282,15 @@ private:
         draw::text(cv, fonts::kFont4x6, name, tx, y, c);
     }
 
-    /// A key's measured magnitude, 0 where the frame measured none.
-    static uint8_t magnitude(const AudioFrame& f, uint8_t i) MM_NONBLOCKING {
-        return i < f.notesCount ? f.notes[i] : 0;
+    /// Whether key `i` shows the chord guide: `chord` is on, a chord is named, the key is one of its tones in any octave, and it is neither sounding nor flashing, a played key staying bright over the guide.
+    bool chordGuide(const AudioFrame& f, uint8_t i, uint8_t g) const MM_NONBLOCKING {
+        return chord && f.chordQuality != kChordNone && g == 0 && level(f, i) == 0
+            && inChord(static_cast<uint8_t>((21 + i) % 12), f.chordRoot, f.chordQuality);
+    }
+
+    /// The chord guide's color: the key's palette hue, dim.
+    static RGB guideColor(const Palette& pal, uint8_t i) MM_NONBLOCKING {
+        return colorFromPalette(pal, static_cast<uint8_t>(i * 256u / kAudioNoteKeys), kGuideLevel);
     }
 
     /// A key's color: its palette hue while its strike flashes, else ivory or ebony at its level.

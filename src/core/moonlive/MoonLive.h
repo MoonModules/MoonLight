@@ -75,6 +75,8 @@ public:
     const char* entryName(uint8_t i) const { return i < entryCount_ ? entryNames_[i] : nullptr; }
     /// How many functions the script defined.
     uint8_t entryCount() const { return entryCount_; }
+    /// What the builtins the program calls demand, a bit per feature by the host's numbering; none without a program.
+    uint8_t demands() const { return demands_; }
     /// The diagnostic from the last compile, or an empty string.
     const char* error() const { return error_; }
 
@@ -286,6 +288,7 @@ private:
     EntryPoint entries_[kMaxEntryPoints] = {};
     char       entryNames_[kMaxEntryPoints][kMaxEntryName + 1] = {};
     uint8_t    entryCount_ = 0;
+    uint8_t    demands_ = 0;      // what the program's builtins demand
 
     uint8_t* ctrlArena_ = nullptr;   // live control + system-variable bytes (platform::alloc, kArenaBytes, fixed)
     uint8_t  controlCount_ = 0;      // controls the current program declared

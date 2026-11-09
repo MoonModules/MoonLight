@@ -85,6 +85,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Semi-implicit Euler](https://en.wikipedia.org/wiki/Semi-implicit_Euler_method) | 🧮 | The integration the particle kernel runs on: velocity from the forces, then position from the new velocity. |
 | [Space Invaders](https://en.wikipedia.org/wiki/Space_Invaders) | 🎨 | Taito's 1978 arcade game. |
 | [Stefan Petrick](https://github.com/StefanPetrick) | 🧑 | The shader vocabulary of the LED world. Its generative fields come from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](../moonmodules/light/effects.md#aurora), [PolarNoise](../moonmodules/light/effects.md#polarnoise), [Tunnel](../moonmodules/light/effects.md#tunnel) and [Trails](../moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath. |
+| [Stepko / St3p40](https://github.com/St3p40) | 🧑 | WLED's 2D effects, Soap and Octopus among them. |
 | [Sutaburosu](https://github.com/sutaburosu) | 🧑 | The fixed-point canvas demos. |
 | [Sébastien Truchet / Truchet tiles](https://en.wikipedia.org/wiki/Truchet_tiles) File:Truchet_tiling.svg | 🧑🧮 | The tiling, revived by Cyril Smith in 1987. |
 | [Sören / LostHope](https://github.com/LostHope) | 🧑 | The MoonHub75 board, and the web installer. |

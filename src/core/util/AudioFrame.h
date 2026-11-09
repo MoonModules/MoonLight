@@ -8,7 +8,7 @@ namespace mm {
 
 /// How many semitone notes a frame carries, the piano's keys A0 to D#7: the one count `notes`, `notesHits` and every note reader size by.
 constexpr uint8_t kAudioNoteKeys = 79;
-/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each.
+/// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each; 256 leaves the notes' latency as it is and lets a third more attack flashes through (bench_notes).
 inline constexpr size_t kAudioBlock = 512;
 
 /// The whole contract between the audio analysis and the effects that react to it.
@@ -27,7 +27,7 @@ inline constexpr size_t kAudioBlock = 512;
 ///
 /// | Field | What it carries |
 /// |-------|-----------------|
-/// | `level` | this block's level, 0..255 through its own dynamics window and 0 while the gate is shut, with no smoothing, so it snaps to a transient and a drum hit spikes at once. WLED calls this `volumeRaw` |
+/// | `level` | this block's level, 0..255 from where the gate opens to the level's top and 0 while the gate is shut, with no smoothing, so it snaps to a transient and a drum hit spikes at once. WLED calls this `volumeRaw` |
 /// | `levelSmoothed` | `level` through the same peak-meter ballistic as `bandsSmoothed`, fast on a rise and slow on a fall, so it breathes with the music instead of twitching. WLED calls this `volume` or `volumeSmth` |
 /// | `bands` | this block's 16 band magnitudes with no smoothing, bass at `bands[0]` and treble at `bands[15]`: third-octave bands, 40 Hz to 10 kHz, as WLED-MM's GEQ picks them |
 /// | `bandsSmoothed` | the same bands with a meter's ballistic, fast rise and slow fall, as IEC 60268-10 defines for a PPM. Use it for a spectrum display that should read as bars |
@@ -56,21 +56,25 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  thirdsCount = 0;          ///< how many of `thirds` this frame measured: 0 on a frame synced in the WLED format, fewer than 31 at a rate that cannot reach 20 kHz
     uint8_t  gate = 0;                 ///< where the gate opens on the bands' 0..255 scale, at least 1; 0 on a frame no dynamics measured, from WLED sync or simulated
     bool     gateOpen = false;         ///< whether the gate is open, so a band over zero is sound rather than the room
-    uint8_t  chroma[12] = {};          ///< the twelve pitch classes, C first, 0..255 against the loudest over the last 200 ms; all 0 while gated, with `harmony` off, from WLED sync or simulated
+    uint8_t  chroma[12] = {};          ///< the twelve pitch classes, C first, 0..255 against the loudest over the last 200 ms; all 0 while gated, while the notes do not run, from WLED sync or simulated
     bool     harmonyChange = false;    ///< true on the one block the harmony moved, a chord changing
     uint8_t  notes[kAudioNoteKeys] = {};   ///< the piano's keys from A0 to D#7, one band a semitone, 0..255 on the bands' scale
-    uint8_t  notesCount = 0;           ///< how many of `notes` this frame measured: 0 with `harmony` off, from WLED sync or simulated
+    uint8_t  notesCount = 0;           ///< how many of `notes` this frame measured: 0 while the notes do not run, from WLED sync or simulated
     uint8_t  key = 0;                  ///< the key over the last 15 s: 0 none yet, 1..12 C to B major, 13..24 C to B minor
     int8_t   tuning = 0;               ///< how far the notes are tuned from A440, in cents
     uint8_t  bass = 0;                 ///< the bass, 20 to 125 Hz: its loudest band, 0..255 on the bands' scale
     uint8_t  mid = 0;                  ///< the mids, 160 Hz to 2 kHz, on the same scale
     uint8_t  treble = 0;               ///< the treble, 2.5 kHz up, on the same scale
     uint8_t  bassNote = 0;             ///< the bass line's note as a MIDI number, A4 being 69, or 0 while none stands out
+    uint8_t  chordRoot = 0;            ///< the chord's root, C = 0, which ChordTracker names on every board from `chroma`
+    uint8_t  chordQuality = 0;         ///< the chord's ChordQuality, 0 for none: while gated, while the notes do not run, from WLED sync or simulated
     uint8_t  onsetLow = 0;             ///< 0, or the onset's strength on the block the bass had a hit: the kick
     uint8_t  onsetMid = 0;             ///< the same for the mids: the snare, the toms, a vocal's attack
     uint8_t  onsetHigh = 0;            ///< the same for the treble: the hi-hat, the cymbals
     uint8_t  thirdsHits[4] = {};       ///< a bit per third, set on the block it had a hit: a tom in its own band; read with `hitAt`
     uint8_t  notesHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note of `notes`, set on the block it started: a key's attack, a plucked string
+    uint8_t  notesKept[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note the core keeps: outlasting an attack, neither an overtone nor a neighbor's leakage, the `no overtones` of the note effects
+    uint8_t  notesKeptHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per kept note, set on the block its strike counts: a strike heard a block before its key is kept is carried to that block
     uint16_t seq = 0;                  ///< counts the frames its source produced, so a consumer that reads one frame on two ticks takes its hits once
 
     /// Whether there is sound to show: the gate where one was measured, else, on a synced or simulated frame, a smoothed level over the room's hiss.
@@ -87,6 +91,7 @@ struct AudioHits {
     uint8_t onset = 0, low = 0, mid = 0, high = 0;   ///< the strongest of each onset seen
     uint8_t thirds[sizeof(AudioFrame::thirdsHits)] = {};   ///< every third's hit seen
     uint8_t notes[sizeof(AudioFrame::notesHits)] = {};     ///< every note's hit seen
+    uint8_t kept[sizeof(AudioFrame::notesKeptHits)] = {};  ///< every kept note's hit seen
     bool    change = false;                                ///< whether any frame's harmony moved
 
     /// Merge one frame's hits in.
@@ -95,6 +100,7 @@ struct AudioHits {
         h.onset = f.onset; h.low = f.onsetLow; h.mid = f.onsetMid; h.high = f.onsetHigh;
         std::memcpy(h.thirds, f.thirdsHits, sizeof(h.thirds));
         std::memcpy(h.notes, f.notesHits, sizeof(h.notes));
+        std::memcpy(h.kept, f.notesKeptHits, sizeof(h.kept));
         h.change = f.harmonyChange;
         merge(h);
     }
@@ -106,6 +112,7 @@ struct AudioHits {
         high = o.high > high ? o.high : high;
         for (size_t k = 0; k < sizeof(thirds); k++) thirds[k] |= o.thirds[k];
         for (size_t k = 0; k < sizeof(notes); k++) notes[k] |= o.notes[k];
+        for (size_t k = 0; k < sizeof(kept); k++) kept[k] |= o.kept[k];
         change = change || o.change;
     }
     /// Give a frame every hit merged so far, in place of its own.
@@ -113,6 +120,7 @@ struct AudioHits {
         f.onset = onset; f.onsetLow = low; f.onsetMid = mid; f.onsetHigh = high;
         for (size_t k = 0; k < sizeof(thirds); k++) f.thirdsHits[k] = thirds[k];
         for (size_t k = 0; k < sizeof(notes); k++) f.notesHits[k] = notes[k];
+        for (size_t k = 0; k < sizeof(kept); k++) f.notesKeptHits[k] = kept[k];
         f.harmonyChange = change;
     }
 };

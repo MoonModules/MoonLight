@@ -3,6 +3,8 @@
 #include "light/powerfunctions/draw.h"        // text, Canvas, fonts
 #include "core/util/AudioFrame.h"              // AudioFrame: chroma, key, tuning
 #include "core/services/AudioHarmony.h"        // formatNotes, formatKey
+#include "core/util/HarmonicSieve.h"           // NoteSet: the notes a reader keeps
+#include "core/services/AudioChords.h"          // formatChord, inChord: the chord named
 
 namespace mm {
 
@@ -19,7 +21,7 @@ struct AudioBars {
     BarScale scale;        ///< the scale they came from, which may be coarser than the one asked for
 };
 
-/// The bars at the scale `asked`, falling back to the next coarser one a frame does not carry: a frame synced in the WLED format has the sixteen alone, a board with `harmony` off has no keys.
+/// The bars at the scale `asked`, falling back to the next coarser one a frame does not carry: a frame synced in the WLED format has the sixteen alone, a board while the notes do not run has no keys.
 inline AudioBars barsOf(const AudioFrame& f, uint8_t asked) MM_NONBLOCKING {
     if (asked == kBandsNotes && f.notesCount > 0) return {f.notes, f.notesHits, f.notesCount, kBandsNotes};
     if (asked != kBands16 && f.thirdsCount > 0) return {f.thirds, f.thirdsHits, f.thirdsCount, kBandsThirds};
@@ -29,18 +31,18 @@ inline AudioBars barsOf(const AudioFrame& f, uint8_t asked) MM_NONBLOCKING {
 /// The per-note hit state the audio-reactive effects share: when each note last struck, a tick and a bit a note, so a frame two ticks read is one hit, told by its `seq`.
 struct NoteHits {
     uint16_t tick[kAudioNoteKeys] = {};  ///< when each note last struck, in 4 ms ticks
-    uint8_t lit[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note while its flash shows
+    uint8_t lit[kHitBytes] = {};         ///< a bit per note while its flash shows
     uint16_t lastSeq = 0;                ///< the frame the last hits came from
 
-    /// Each note a new frame carries a hit for starts its flash now, and every flash older than `span` ends, so a note no effect draws cannot flash again when the tick wraps.
-    void note(const AudioFrame& f, uint32_t ms, uint32_t span) MM_NONBLOCKING {
+    /// Each note a new frame carries a hit for, in `hits` when given, else the frame's own, and `keep` holds when given, starts its flash now, and every flash older than `span` ends, so a note no effect draws cannot flash again when the tick wraps.
+    void note(const AudioFrame& f, uint32_t ms, uint32_t span, const NoteSet* keep = nullptr, const uint8_t* hits = nullptr) MM_NONBLOCKING {
         for (uint8_t i = 0; i < kAudioNoteKeys; i++)
             if ((lit[i >> 3] >> (i & 7)) & 1u) glow(i, ms, span);   // glow ends an expired flash
         if (f.seq == lastSeq) return;
         lastSeq = f.seq;
         const uint16_t t = static_cast<uint16_t>(ms >> 2);
         for (uint8_t i = 0; i < kAudioNoteKeys && i < f.notesCount; i++)
-            if (hitAt(f.notesHits, i)) {
+            if (hitAt(hits ? hits : f.notesHits, i) && (!keep || keep->has(i))) {
                 tick[i] = t;
                 lit[i >> 3] = static_cast<uint8_t>(lit[i >> 3] | (1u << (i & 7)));
             }
@@ -64,26 +66,35 @@ struct NoteHits {
 
 namespace mm::draw {
 
-/// The audio readout on row `y`: the strongest pitch classes at the left, "C E G", and the key with its tuning at the right, "Am +12".
+/// The key after `len` characters of `out`, two spaces apart from a chord before it, with the tuning when it is off A440: "C +12"; answers the new length.
+inline lengthType appendKey(const AudioFrame& f, char* out, size_t size, lengthType len) {
+    if (len) { out[len++] = ' '; out[len++] = ' '; }
+    formatKey(f.key, out + len, size - static_cast<size_t>(len), true);
+    while (out[len]) len++;
+    if (f.tuning != 0 && static_cast<size_t>(len) + 5 < size) {
+        const int cents = f.tuning < 0 ? -f.tuning : f.tuning;
+        out[len++] = ' ';
+        out[len++] = f.tuning < 0 ? '-' : '+';
+        if (cents >= 10) out[len++] = static_cast<char>('0' + cents / 10);
+        out[len++] = static_cast<char>('0' + cents % 10);
+        out[len] = 0;
+    }
+    return len;
+}
+
+/// The audio readout on row `y`: the strongest pitch classes at the left, "C E G", and the chord and the key with its tuning at the right, "Am7  C +12".
 inline void noteNames(const Canvas& cv, const AudioFrame& f, lengthType w, lengthType y) {
     char names[12];
     formatNotes(f.chroma, names, sizeof(names));
     text(cv, fonts::kFont4x6, names, 0, y, RGB{255, 255, 255});
-    // The key at the right, short, with the tuning when it is off A440: "Am +12".
-    char key[12];
-    formatKey(f.key, key, sizeof(key), true);
+    // The chord and the key at the right, short, the key with its tuning when it is off A440: "Am7  C +12".
+    char key[20];
+    formatChord(f.chordRoot, f.chordQuality, key, sizeof(key));
     lengthType keyLen = 0;
     while (key[keyLen]) keyLen++;
-    if (f.tuning != 0 && static_cast<size_t>(keyLen) + 5 < sizeof(key)) {
-        const int cents = f.tuning < 0 ? -f.tuning : f.tuning;
-        key[keyLen++] = ' ';
-        key[keyLen++] = f.tuning < 0 ? '-' : '+';
-        if (cents >= 10) key[keyLen++] = static_cast<char>('0' + cents / 10);
-        key[keyLen++] = static_cast<char>('0' + cents % 10);
-        key[keyLen] = 0;
-    }
+    if (f.key) keyLen = appendKey(f, key, sizeof(key), keyLen);
     const lengthType keyW = static_cast<lengthType>(keyLen * fonts::kFont4x6.width);
-    if (f.key && w > keyW)
+    if (keyLen && w > keyW)
         text(cv, fonts::kFont4x6, key, static_cast<lengthType>(w - keyW), y, RGB{255, 255, 255});
 }
 

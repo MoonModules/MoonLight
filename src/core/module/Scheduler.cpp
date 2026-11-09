@@ -151,6 +151,7 @@ void Scheduler::preparePending() {
         if (MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed)) scopes[scopeCount++] = m;
     if (prepareRequested_.exchange(false, std::memory_order_relaxed)) prepareTree();   // the tree covers every scope
     else if (scopeCount) prepareSubtrees(scopes, scopeCount);
+    settleDemands();   // last, so the demands these prepares changed settle in this same frame
 }
 
 bool Scheduler::applyLive(char* text, LiveDone done, uintptr_t tag) {
@@ -241,6 +242,50 @@ MoonModule* Scheduler::topOfType(const char* typeName) const {
     return nullptr;
 }
 
+namespace {
+/// What `m`'s resources and its descendants' demand of `provider`.
+uint8_t demandsIn(const MoonModule& m, const char* provider) {
+    uint8_t d = 0;
+    for (const ModuleResource* r = m.resources(); r; r = r->nextResource()) d = static_cast<uint8_t>(d | r->demandsOf(provider));
+    for (uint8_t i = 0; i < m.childCount(); i++) if (const MoonModule* c = m.child(i)) d = static_cast<uint8_t>(d | demandsIn(*c, provider));
+    if (const MoonModule* h = m.hosted()) d = static_cast<uint8_t>(d | demandsIn(*h, provider));
+    return d;
+}
+/// Tell `m` and its descendants of type `provider`, or every one with no provider named, that a demand on them changed.
+void tellProviders(MoonModule& m, const char* provider) {
+    if (m.respectsEnabled() && !m.enabled()) return;   // a disabled subtree prepares nothing, as applyState's router keeps it; it counts afresh when enabled
+    if (!provider || std::strcmp(m.typeName(), provider) == 0) m.onDemandChanged();
+    for (uint8_t i = 0; i < m.childCount(); i++) if (MoonModule* c = m.child(i)) tellProviders(*c, provider);
+}
+}  // namespace
+
+uint8_t Scheduler::demandsOf(const char* provider) const {
+    uint8_t d = 0;
+    for (uint8_t i = 0; i < moduleCount_; i++) if (modules_[i]) d = static_cast<uint8_t>(d | demandsIn(*modules_[i], provider));
+    return d;
+}
+
+void Scheduler::demandChanged(const char* provider) {
+    for (auto& slot : demandPending_) {
+        const char* expected = nullptr;
+        if (slot.compare_exchange_strong(expected, provider, std::memory_order_relaxed) || (expected && std::strcmp(expected, provider) == 0)) return;
+    }
+    demandOverflow_.store(true, std::memory_order_relaxed);
+}
+
+void Scheduler::settleDemands() {
+    const bool all = demandOverflow_.exchange(false, std::memory_order_relaxed);
+    for (auto& slot : demandPending_) {
+        const char* provider = slot.exchange(nullptr, std::memory_order_relaxed);
+        if (provider && !all) tellProvidersOf(provider);
+    }
+    if (all) tellProvidersOf(nullptr);   // more providers than slots: every module hears
+}
+
+void Scheduler::tellProvidersOf(const char* provider) {
+    for (uint8_t i = 0; i < moduleCount_; i++) if (modules_[i]) tellProviders(*modules_[i], provider);
+}
+
 // The separator is '-' because the name is a URL path segment; a suffix that would not fit is refused rather than truncated.
 bool Scheduler::freeName(const char* base, char* out, size_t cap) {
     if (!base || !base[0] || std::strlen(base) >= MoonModule::kNameLen || cap < MoonModule::kNameLen) return false;
@@ -300,9 +345,11 @@ Scheduler::SetControlResult Scheduler::setControl(const char* moduleName,
             case ApplyResult::Malformed:  return SetControlResult::Malformed;
             case ApplyResult::ReadOnly:   return SetControlResult::ReadOnly;
         }
+        // Read before the reaction: it rebuilds the controls, which may move their array, so `c` is not read after it.
+        const bool liveControl = c.live;
         reactToControlChange(target, controlName);
-        // A live control (ControlDescriptor::live), or a live write such as a service's, is driven rather than configured, so it never marks the tree dirty; `c` is the descriptor just applied.
-        if (!c.live && !liveWrite_) {
+        // A live control (ControlDescriptor::live), or a live write such as a service's, is driven rather than configured, so it never marks the tree dirty.
+        if (!liveControl && !liveWrite_) {
             target->markDirty();
             if (noteDirtyHook_) noteDirtyHook_();
             // Every other page shows a configured write on the next transport tick rather than the next second; a driven one rides the second's walk.

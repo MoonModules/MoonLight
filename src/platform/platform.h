@@ -62,7 +62,7 @@ uint32_t micros() MM_NONBLOCKING;
 /// Drive `millis()` from a test, on a device too so a scenario run on real hardware can freeze time. Zero restores the real clock, which a test must do in release.
 void setTestNowMs(uint32_t ms);
 
-/// Make the next bind fail, so a test reaches that path; false restores. Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
+/// Make the next bind or listen fail, so a test reaches that path; false restores. Hogging the port instead is not portable: Linux permits the overlapping bind under SO_REUSEADDR, and macOS lets a non-root process bind port 80.
 void setTestBindFails(bool fail);
 #ifndef ESP_PLATFORM   // host-test seams, which no ESP32 code calls
 /// How a multicast join behaves in a host test: through the host's network, succeeding without it so the network's traffic stays out of the test, or failing as on a network without multicast.
@@ -764,6 +764,8 @@ void setTestClockStep(uint32_t ms);
 void setTestMdnsAvailable(bool available);
 /// How many times mdnsInit has started advertising since the seam was set.
 uint32_t testMdnsInitCount();
+/// Make mdnsInit fail with this reason, as a board out of memory does; null succeeds again.
+void setTestMdnsFailure(const char* why);
 #endif
 
 /// Why the station's last join attempt failed, so the card can say "incorrect password".
@@ -852,6 +854,8 @@ int8_t testLastTxPower();
 
 /// Advertise this device over mDNS as `_http._tcp` and `_wled._tcp`, which is how the WLED app and Home Assistant find it.
 bool mdnsInit(const char* deviceName);
+/// Why the last mdnsInit failed, the step and its error such as `init ESP_ERR_NO_MEM`; empty after one succeeded.
+const char* mdnsError();
 /// Announce one more service on this board's name, such as `_apple-midi`/`_udp`, now and after every mdnsInit; a second call moves its port.
 void mdnsAdvertise(const char* type, const char* proto, uint16_t port);
 /// Stop announcing a service mdnsAdvertise added.

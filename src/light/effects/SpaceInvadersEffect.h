@@ -3,7 +3,7 @@
 #include "core/services/AudioService.h"   // latestFrame: the beat the march steps on
 #include "core/util/math16.h"
 #include "light/powerfunctions/draw.h"
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 #include "light/effects/PlayerSeat.h"   // a person takes the cannon, the game plays it again later
 
 namespace mm {
@@ -122,7 +122,7 @@ static_assert(sizeof(kCannon) == static_cast<size_t>(GW) * GH * GF, "cannon: one
 /// ## The march is the signature
 ///
 /// The arcade stepped every invader once per frame, so fewer invaders meant a shorter loop and a faster march. Our loop has no such limit, so `stepInterval` reproduces the relationship deliberately.
-class SpaceInvadersEffect : public EffectBase {
+class SpaceInvadersEffect : public AudioEffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
     const char* tags() const override { return "💫🎵👾"; }
@@ -140,6 +140,7 @@ public:
 
     /// The formation steps on the kick, and silence holds it still.
     bool audioReactive = false;
+    bool readsAnalysis() const override { return audioReactive; }   ///< the analysis while the audio drives this effect
     /// The cannon, for a fader or an input; idle, the game plays it.
     uint8_t player = 0;
 
@@ -179,6 +180,7 @@ public:
 
     /// Reset the march clock and deal a fresh formation.
     void prepare() override {
+        AudioEffectBase::prepare();
         formation_ = BeatPhase{};
         reset();
     }

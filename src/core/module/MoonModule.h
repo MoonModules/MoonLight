@@ -91,8 +91,8 @@ public:
     /// Free everything this module holds, buffers and hardware alike, then the children; a released module reports nothing, so its status clears.
     virtual void release() {
         clearStatus();
-        // An override frees its own hardware; this base frees every buffer it registered.
-        for (ScratchBufferBase* b = scratchBuffers_; b; b = b->next_) b->resizeBytes(0);
+        // An override frees its own hardware; this base lets go of every resource it registered, its buffers among them.
+        for (ModuleResource* r = resources_; r; r = r->next_) r->releaseResource();
         // Then the children, in reverse, a module shutting down before those it owns.
         for (uint8_t i = childCount_; i > 0; i--) children_[i-1]->release();
     }
@@ -109,6 +109,11 @@ public:
 
     /// React once to the enabled flag flipping, for a one-shot that is not building state.
     virtual void onEnabled(bool /*newEnabled*/) {}
+
+    /// React to a demand on this module turning on or off, at the frame boundary after it, where allocating is allowed: a provider counts its demands again, as Demand.h describes.
+    virtual void onDemandChanged() {}
+    /// The module this one runs outside its children, such as a reel's current effect, so a walk over the tree reaches it; null for most.
+    virtual const MoonModule* hosted() const { return nullptr; }
 
     /// React cheaply to one control changing, which runs on every change.
     virtual void onControlChanged(const char* /*controlName*/) {}
@@ -137,7 +142,14 @@ public:
         const uint32_t before = schemaSignature();
         clearControlsRecursive();
         defineControls();
+        shrinkControlsRecursive();
         if (schemaChangedHook_ && schemaSignature() != before) schemaChangedHook_();
+    }
+
+    /// Size every control array in the subtree to its controls, once a rebuild has declared them.
+    void shrinkControlsRecursive() {
+        controls_.shrinkToFit();
+        for (uint8_t i = 0; i < childCount_; i++) children_[i]->shrinkControlsRecursive();
     }
 
     /// Hash the schema across this subtree, excluding values, so a resync fires only on a real change.
@@ -432,7 +444,11 @@ public:
     /// Record the heap total, for a module that allocates outside a scratch buffer.
     void setDynamicBytes(size_t b) { dynamicBytes_ = b; }
 
-    // The buffer's own hooks, never a module's surface, so friendship keeps the contract structural.
+    /// The first of the resources this module holds, for a service that counts what they demand.
+    const ModuleResource* resources() const { return resources_; }
+
+    // The resources' and the buffers' own hooks, never a module's surface, so friendship keeps the contract structural.
+    friend class ModuleResource;
     friend class ScratchBufferBase;
 private:
     /// Adjust the heap total by a signed delta, which a buffer does on every resize.
@@ -440,15 +456,15 @@ private:
         dynamicBytes_ = static_cast<size_t>(static_cast<std::ptrdiff_t>(dynamicBytes_) + delta);
     }
 
-    /// Add a buffer to the intrusive list release walks, so a module with none pays one pointer.
-    void registerScratchBuffer(ScratchBufferBase* b) {
-        b->next_ = scratchBuffers_;   // push-front, O(1)
-        scratchBuffers_ = b;
+    /// Add a resource to the intrusive list release walks, so a module with none pays one pointer.
+    void registerResource(ModuleResource* r) {
+        r->next_ = resources_;   // push-front, O(1)
+        resources_ = r;
     }
-    /// Unlink a buffer from that list.
-    void deregisterScratchBuffer(ScratchBufferBase* b) {
-        for (ScratchBufferBase** p = &scratchBuffers_; *p; p = &(*p)->next_) {
-            if (*p == b) { *p = b->next_; return; }   // unlink
+    /// Unlink a resource from that list.
+    void deregisterResource(ModuleResource* r) {
+        for (ModuleResource** p = &resources_; *p; p = &(*p)->next_) {
+            if (*p == r) { *p = r->next_; return; }   // unlink
         }
     }
 public:
@@ -520,7 +536,7 @@ private:
     uint8_t childCapacity_ = 0;
     size_t classSize_ = 0;
     size_t dynamicBytes_ = 0;
-    ScratchBufferBase* scratchBuffers_ = nullptr;  ///< head of the intrusive free-on-disable list
+    ModuleResource* resources_ = nullptr;  ///< head of the intrusive let-go-on-release list
     const char* status_ = nullptr;  ///< the message `status()` reads
     Severity severity_ = Severity::Status;
     uint32_t tickTimeUs_ = 0;

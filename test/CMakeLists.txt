@@ -34,9 +34,12 @@ add_executable(mm_tests
     unit/core/unit_SdCardService.cpp
     unit/core/unit_AudioService_sync.cpp
     unit/core/unit_MoonLightAudioSyncPacket.cpp
+    unit/core/unit_HarmonicSieve.cpp
+    unit/core/unit_AudioChords.cpp
     unit/core/unit_WledAudioSyncPacket.cpp
     unit/core/unit_ThreadSlot.cpp
     unit/core/unit_ButtonService.cpp
+    unit/core/unit_Demand.cpp
     unit/core/unit_GamepadService.cpp
     unit/core/unit_MoonLiveService.cpp
     unit/core/unit_MoonLiveService_json.cpp
@@ -147,7 +150,10 @@ add_executable(mm_tests
     unit/light/unit_DrumKit.cpp
     unit/light/unit_KeyboardEffect.cpp
     unit/light/unit_StringsEffect.cpp
+    unit/light/unit_PlayerHands.cpp
     unit/light/unit_ColorTrailsEffect.cpp
+    unit/light/unit_SheetMusicEffect.cpp
+    unit/light/unit_SoapEffect.cpp
     unit/light/unit_TrailsEffect.cpp
     unit/light/unit_Fluid.cpp
     unit/light/unit_draw.cpp

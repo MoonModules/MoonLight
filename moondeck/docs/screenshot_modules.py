@@ -6,7 +6,8 @@
 """Capture UI screenshots and preview GIFs of every MoonLight module.
 
 Connects to a running MoonLight server, adds each module to a minimal
-pipeline via REST, screenshots its card in the web UI, then removes it.
+pipeline via REST, screenshots its card in the web UI, then removes it,
+leaving the pipeline as it found it.
 For effects and modifiers also captures a 3-second GIF of the preview canvas.
 
 Also captures MoonDeck tab screenshots and the web installer page, and
@@ -21,19 +22,17 @@ Saves to (by domain/type, mirroring src):
   docs/assets/ui/installer.png                    — web installer page
 
 Usage:
-    # one effect, raw (no modifier), good preview size, with its GIF, overwriting:
-    uv run moondeck/docs/screenshot_modules.py --filter Ripples --no-modifier --grid 32 --gif --force
+    # one effect, raw (no modifier), with its GIF, overwriting:
+    uv run moondeck/docs/screenshot_modules.py --filter Ripples --no-modifier --gif --force
     # everything, same look:
-    uv run moondeck/docs/screenshot_modules.py --no-modifier --grid 32 --gif --force
+    uv run moondeck/docs/screenshot_modules.py --no-modifier --gif --force
 
 Preview quality:
     --no-modifier  removes the default MultiplyModifier so effects render RAW, not
                    mirror-folded. Recommended for effect previews.
-    --grid N       resizes the grid before capture. 32 is the sweet spot: bigger
-                   than the 16 boot default (more detail) but still dense in the
-                   preview. NOTE: 128 looks WORSE, not better — the preview index-
-                   downsamples to a fixed send budget, so a huge grid spreads sparse
-                   effects (Ripples, Game of Life) to scattered dots. Use ~32.
+    --grid N       resizes the grid to NxN for the capture, 128 by default: the
+                   standard, the detail a 2D effect's look needs. 0 leaves the grid
+                   as it is. The grid goes back to its size when the run ends.
 
 Prerequisites (one-time, machine-local — NOT in the repo or the venv):
     1. ffmpeg on PATH                       brew install ffmpeg
@@ -58,6 +57,7 @@ match the effect you captured.
 """
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -71,6 +71,63 @@ from playwright.sync_api import sync_playwright, Page
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ASSETS = ROOT / "docs" / "assets"
+# The modules this tool added and has not removed yet, kept on disk so the next run removes what
+# an aborted one left: by this record and nothing else, as a capture's module carries the name the
+# UI gives the type ("Grid", "Strings") and a name match would delete the user's own modules too.
+LEDGER = ROOT / "build" / "moondeck-logs" / "screenshot_added.json"
+
+
+class Ledger(list):
+    """The names of the modules this run added on `host`, with what it changed of the pipeline, saved to LEDGER on every change, so a run cut short is undone by the next one against the same host. LEDGER holds a record per host, so a run against one never overwrites another's."""
+
+    def __init__(self, host: str) -> None:
+        super().__init__()
+        self.host = host
+        self.pipeline: dict = {}          # what prepare_pipeline changed
+        self.layout: dict | None = None   # the layout displace_default_layout took out
+        LEDGER.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def records() -> dict:
+        """Every host's record on disk; an absent or unreadable ledger holds none."""
+        try:
+            rec = json.loads(LEDGER.read_text())
+        except (OSError, ValueError):
+            return {}
+        return rec if isinstance(rec, dict) and all(isinstance(v, dict) for v in rec.values()) else {}
+
+    @staticmethod
+    def left_over(host: str) -> dict | None:
+        """What a previous run against `host` added and changed and never put back; None when there is none."""
+        return Ledger.records().get(host)
+
+    def _write(self, record: dict | None) -> None:
+        recs = Ledger.records()
+        if record is None:
+            recs.pop(self.host, None)
+        else:
+            recs[self.host] = record
+        if recs:
+            LEDGER.write_text(json.dumps(recs))
+        else:
+            LEDGER.unlink(missing_ok=True)
+
+    def save(self) -> None:
+        self._write({"added": list(self), "pipeline": self.pipeline, "layout": self.layout})
+
+    def close(self) -> None:
+        """Everything put back: this host's record goes, the others stay."""
+        self.clear()
+        self.pipeline, self.layout = {}, None
+        self._write(None)
+
+    def append(self, name: str) -> None:
+        super().append(name)
+        self.save()
+
+    def remove(self, name: str) -> None:
+        super().remove(name)
+        self.save()
 UI_DIR = ASSETS / "ui"   # tooling / installer / full-page shots (not per-module)
 
 # Map a module to its asset subfolder (domain/type), mirroring src. Module screenshots live in
@@ -120,6 +177,9 @@ MODULES = [
     # The generative-fields showcases: each is Dim::D3, so the preview shows a volume.
     ("AuroraEffect",        "Layer",    {}, True),
     ("ColorTrailsEffect",   "Layer",    {}, True),
+    ("SoapEffect",          "Layer",    {}, True),
+    # The note effects need music playing into the app while they capture.
+    ("SheetMusicEffect",    "Layer",    {}, True),
     ("TrailsEffect",        "Layer",    {}, True),
     ("NebulaEffect",        "Layer",    {}, True),
     ("FluidEffect",         "Layer",    {}, True),
@@ -160,7 +220,7 @@ MODULES = [
 # removes it again afterwards. Rainbow is the bed because a modifier is only visible as a BREAK in
 # something regular: its smooth gradient fills every light, so a fold, a rotation or a transpose
 # shows as an obvious seam. A noise field fills the panel too but is already irregular, which hides
-# the very transform the card is meant to show.
+# the transform the card is meant to show.
 BED_EFFECT = "RainbowEffect"
 
 # Container types that exist in the pipeline but are not added via REST
@@ -350,6 +410,11 @@ def add_module(host: str, id_: str | None, type_: str, parent_id: str | None,
     before = _get(f"http://{host}/api/state", timeout=5)
     names_before = _collect_names(before.json().get("modules", [])) if before.ok else set()
 
+    if id_ and id_ in names_before:
+        # The name is the user's own module, so the capture takes a name of the device's choosing
+        # rather than claiming theirs and deleting it at the end.
+        print(f"(a module named {id_!r} exists; the card shows the device's name) ", end="", flush=True)
+        id_ = None
     body: dict = {"type": type_}
     if id_:
         body["id"] = id_
@@ -426,23 +491,31 @@ def push_script(host: str, name: str) -> bool:
     return r.ok
 
 
-def prepare_pipeline(host: str, drop_modifiers: bool, grid: int | None) -> None:
-    """Make the capture pipeline match the requested look BEFORE adding effects.
+def prepare_pipeline(host: str, drop_modifiers: bool, grid: int | None, ledger: "Ledger | None" = None) -> dict:
+    """Make the capture pipeline match the requested look BEFORE adding effects, and return what it changed.
 
     The default boot pipeline is Grid(16x16) + Layer(Noise + MultiplyModifier).
     Two knobs improve effect previews:
       - drop_modifiers: delete any Modifier children of the Layer so each effect
         renders RAW, not folded/mirrored by the default MultiplyModifier.
       - grid: resize the GridLayout (e.g. 128) for crisper, higher-res previews.
-    Both are best-effort and logged; a failure here doesn't abort the run.
+    Both are best-effort and logged; a failure here doesn't abort the run. The returned
+    snapshot, the modifiers taken out and each grid's size, is what restore_pipeline puts back,
+    so a capture run leaves the pipeline as it found it. With a `ledger` the snapshot is the
+    ledger's own and is saved after every change, so a run cut short mid-way loses none of it.
     """
+    changed: dict = {"modifiers": [], "grids": []}
+    if ledger is not None:
+        ledger.pipeline = changed
+    save = ledger.save if ledger is not None else (lambda: None)
+    save()   # the empty snapshot first, so the record is on disk before anything changes
     try:
         sr = _get(f"http://{host}/api/state", timeout=5)
         if not sr.ok:
-            return
+            return changed
         mods = sr.json().get("modules", [])
     except Exception:
-        return
+        return changed
 
     def walk(ms, role_wanted, type_contains):
         out = []
@@ -452,18 +525,57 @@ def prepare_pipeline(host: str, drop_modifiers: bool, grid: int | None) -> None:
             out.extend(walk(m.get("children", []), role_wanted, type_contains))
         return out
 
+    def controls(m: dict) -> dict:
+        return {c.get("name"): c.get("value") for c in m.get("controls", [])}
+
     if drop_modifiers:
         for m in walk(mods, "modifier", "Modifier"):
             if delete_module(host, m.get("name", "")):
+                changed["modifiers"].append({"type": m.get("type", ""), "name": m.get("name", ""), "controls": controls(m),
+                                             "enabled": m.get("enabled", True)})
+                save()
                 print(f"  pipeline: removed modifier {m.get('name')!r} (raw effect preview)")
 
     if grid:
         for g in walk(mods, "", "GridLayout"):
             name = g.get("name", "")
+            was = controls(g)
+            changed["grids"].append({"name": name, "width": was.get("width"), "height": was.get("height")})
+            save()   # its size goes on record before it changes, so a run cut short between width and height puts both back
             ok_w = set_control(host, name, "width", grid)
             ok_h = set_control(host, name, "height", grid)
             if ok_w and ok_h:
                 print(f"  pipeline: grid {name!r} -> {grid}x{grid}")
+    return changed
+
+
+def restore_pipeline(host: str, changed: dict, layer: str | None, save=lambda: None) -> bool:
+    """Put back what prepare_pipeline changed: each grid's size, and each modifier on the Layer, controls and on-switch and all; true when every step landed.
+
+    Each step that lands leaves `changed` and `save` records it, so a retry neither redoes it nor adds a modifier twice.
+    """
+    ok = True
+    for g in list(changed.get("grids", [])):
+        if set_control(host, g["name"], "width", g["width"]) and set_control(host, g["name"], "height", g["height"]):
+            changed["grids"].remove(g)
+            save()
+            print(f"  pipeline: grid {g['name']!r} back to {g['width']}x{g['height']}")
+        else:
+            print(f"  restore: grid {g['name']!r} back to {g['width']}x{g['height']} failed")
+            ok = False
+    for m in list(changed.get("modifiers", [])):
+        name = add_module(host, m["name"][:MAX_NAME], m["type"], layer, {})
+        if not name:
+            print(f"  restore: re-adding {m['type']} failed")
+            ok = False
+            continue
+        changed["modifiers"].remove(m)   # it is back: a retry must not add it again
+        save()
+        landed = all([set_control(host, name, ctrl, value) for ctrl, value in m["controls"].items()])
+        landed = set_control(host, name, "enabled", m["enabled"]) and landed   # a module's on-switch is not among its controls
+        print(f"  pipeline: restored modifier {name!r}" if landed else f"  restore: modifier {name!r} is back, but not every control")
+        ok = ok and landed
+    return ok
 
 
 def displace_default_layout(host: str) -> dict | None:
@@ -494,7 +606,7 @@ def displace_default_layout(host: str) -> dict | None:
             return None
         # The NAME as well as the type: the boot pipeline calls its grid "Grid", and coming back
         # as "GridLayout" would leave the pipeline subtly different from the one found.
-        snap = {"type": cur.get("type", ""), "name": cur.get("name", ""),
+        snap = {"type": cur.get("type", ""), "name": cur.get("name", ""), "enabled": cur.get("enabled", True),
                 "controls": {c.get("name"): c.get("value") for c in cur.get("controls", [])}}
         if not delete_module(host, cur.get("name", "")):
             return None
@@ -504,18 +616,19 @@ def displace_default_layout(host: str) -> dict | None:
         return None
 
 
-def restore_default_layout(host: str, snap: dict) -> None:
-    """Put back what displace_default_layout took, controls and all."""
+def restore_default_layout(host: str, snap: dict) -> bool:
+    """Put back what displace_default_layout took, controls and all; true when every step landed."""
     try:
         name = add_module(host, (snap.get("name") or snap["type"])[:MAX_NAME], snap["type"],
                           "Layouts", {})
         if not name:
             print(f"  restore-layout: re-adding {snap['type']} failed ", end="", flush=True)
-            return
-        for ctrl, value in snap.get("controls", {}).items():
-            set_control(host, name, ctrl, value)
+            return False
+        landed = all([set_control(host, name, ctrl, value) for ctrl, value in snap.get("controls", {}).items()])
+        return set_control(host, name, "enabled", snap.get("enabled", True)) and landed
     except Exception as e:
         print(f"  restore-layout failed: {e} ", end="", flush=True)
+        return False
 
 
 def get_types(host: str) -> set[str]:
@@ -846,9 +959,9 @@ def main() -> int:
     parser.add_argument("--no-modifier", action="store_true",
                         help="Remove the default MultiplyModifier from the Layer so effects "
                              "render RAW (not folded/mirrored) in their previews.")
-    parser.add_argument("--grid", type=int, default=0, metavar="N",
-                        help="Resize the GridLayout to NxN before capturing (e.g. 128) for "
-                             "higher-resolution previews. Default: leave the boot grid (16).")
+    parser.add_argument("--grid", type=int, default=128, metavar="N",
+                        help="Resize the GridLayout to NxN for the capture, put back afterwards. "
+                             "Default 128, the capture standard; 0 leaves the grid as it is.")
     parser.add_argument("--all-registered", action="store_true",
                         help="Also capture every registered effect/modifier that has no MODULES "
                              "entry, on a Layer with default controls. Fixes the list going stale "
@@ -871,6 +984,7 @@ def main() -> int:
     # In --extras-only mode we skip the discovery/orphan-sweep so the script
     # can run with only MoonDeck up (recapturing MoonDeck tab screenshots
     # shouldn't require a built+running MoonLight).
+    pipeline_changed: dict = {}   # what prepare_pipeline changed, put back at the end
     parents: dict[str, str] = {}
     nav_roots: dict[str, str] = {}
     container_names: dict[str, str] = {}
@@ -886,7 +1000,7 @@ def main() -> int:
         # effect/modifier with no list entry is silently never captured (how
         # GameOfLife/MultiplyModifier/CheckerboardModifier went imageless).
         listed = {t for t, *_ in MODULES}
-        # Filtered against what the RUNNING server offers, not just what main.cpp registers: a type
+        # Filtered against what the RUNNING server offers, not only what main.cpp registers: a type
         # the server does not have (a capability-gated driver, a different firmware) would be handed
         # to add_module and fail. That is what the three add_module failures in the first full sweep
         # were.
@@ -912,37 +1026,6 @@ def main() -> int:
             print("      Run with --all-registered to capture them, or add an entry to MODULES "
                   "if one needs special props.")
 
-        # Optional pipeline tweaks for nicer effect previews (raw, higher-res).
-        if args.no_modifier or args.grid:
-            prepare_pipeline(args.host, args.no_modifier, args.grid or None)
-
-        # The names this tool gives its modules, so the orphan sweep removes only what a previous run left.
-        known_names = {capture_name(t) for t, _, _, _ in MODULES}
-
-        # Sweep orphans from a previous aborted run. Per-delete try/except
-        # so one failed cleanup doesn't abort the whole recursion; outer
-        # try/except so a state-fetch failure is reported, not silently
-        # swallowed (silent swallow was hiding real network/HTTP issues).
-        try:
-            sr = _get(f"http://{args.host}/api/state", timeout=5)
-            if sr.ok:
-                def _sweep_orphans(modules: list) -> None:
-                    for m in modules:
-                        n = m.get("name", "")
-                        if n in known_names:
-                            try:
-                                # delete_module returns False on HTTP failure
-                                # (4xx/5xx) — log that the same way as a raised
-                                # exception so the orphan stays visible.
-                                if not delete_module(args.host, n):
-                                    print(f"  orphan-sweep: delete {n!r} on {args.host} returned HTTP failure")
-                            except Exception as e:
-                                print(f"  orphan-sweep: delete {n!r} on {args.host} failed: {e}")
-                        _sweep_orphans(m.get("children", []))
-                _sweep_orphans(sr.json().get("modules", []))
-        except Exception as e:
-            print(f"  orphan-sweep on {args.host} failed: {e}")
-
         print("Discovering pipeline containers …")
         parents, nav_roots = find_parent_ids(args.host)
         missing = [r for r in ("Layer", "Drivers", "Layouts") if r not in parents]
@@ -950,6 +1033,40 @@ def main() -> int:
             print(f"Pipeline containers not found: {missing}")
             print("Build and run MoonLight first (Desktop tab → Build → Run).")
             return 1
+
+        # Undo what a run cut short against this host added and changed, by the ledger it kept: @see LEDGER.
+        left = Ledger.left_over(args.host)
+        if left:
+            swept = True
+            for n in left.get("added", []):
+                try:
+                    if not delete_module(args.host, n):
+                        print(f"  orphan-sweep: delete {n!r} on {args.host} returned HTTP failure")
+                        swept = False
+                except Exception as e:
+                    print(f"  orphan-sweep: delete {n!r} on {args.host} failed: {e}")
+                    swept = False
+            left.setdefault("pipeline", {})
+            save_left = lambda: Ledger(args.host)._write(left)   # what is put back leaves the record at once
+            swept = restore_pipeline(args.host, left["pipeline"], parents.get("Layer"), save_left) and swept
+            if left.get("layout"):
+                if restore_default_layout(args.host, left["layout"]):
+                    left["layout"] = None
+                    save_left()
+                else:
+                    swept = False
+            if not swept:
+                # Capturing on top would replace the record of what is still out of place with a new one.
+                print(f"  ⚠️  orphan-sweep: the last run's changes on {args.host} are not all undone; its record "
+                      f"stays in {LEDGER}. Fix the pipeline by hand or rerun.")
+                return 1
+
+        # The fresh record replaces the old one BEFORE the pipeline changes, and prepare_pipeline saves
+        # each change into it, so a run cut short at any point leaves the next run what to undo.
+        added_ids = Ledger(args.host)
+        added_ids.save()
+        if args.no_modifier or args.grid:
+            pipeline_changed = prepare_pipeline(args.host, args.no_modifier, args.grid or None, added_ids)
         print(f"  Layer={parents['Layer']!r} (nav={nav_roots['Layer']!r})")
         print(f"  Drivers={parents['Drivers']!r} (nav={nav_roots['Drivers']!r})")
         print(f"  Layouts={parents['Layouts']!r} (nav={nav_roots['Layouts']!r})")
@@ -969,10 +1086,7 @@ def main() -> int:
         browser = pw.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1280, "height": 900})
 
-        added_ids: list[str] = []
-        # The layout the capture pushed aside, restored once the orphan sweep below has run:
-        # the sweep deletes by TYPE PREFIX, and a restored GridLayout matches one, so putting
-        # it back any earlier only has it removed again as if it were an orphan.
+        # The layout the capture pushed aside, restored at the end.
         displaced_layout: dict | None = None
 
         try:
@@ -1110,6 +1224,8 @@ def main() -> int:
                 # default steps aside for the duration and is restored once the shot is taken.
                 if type_name.endswith("Layout") and displaced_layout is None:
                     displaced_layout = displace_default_layout(args.host)
+                    added_ids.layout = displaced_layout
+                    added_ids.save()
 
                 actual_name = add_module(args.host, req_id, type_name,
                                          parent_id, extra_props)
@@ -1186,36 +1302,30 @@ def main() -> int:
 
         finally:
             if not args.extras_only:
-                for mid in added_ids:
+                cleaned = True
+                for mid in list(added_ids):
                     try:
-                        delete_module(args.host, mid)
+                        if delete_module(args.host, mid):
+                            added_ids.remove(mid)
+                        else:
+                            print(f"  cleanup: delete {mid!r} on {args.host} returned HTTP failure")
+                            cleaned = False
                     except Exception as e:
                         print(f"  cleanup: delete {mid!r} on {args.host} failed: {e}")
-                # Final sweep — same per-delete + outer try/except pattern as the
-                # opening sweep so cleanup errors surface instead of being hidden.
-                try:
-                    sr = _get(f"http://{args.host}/api/state", timeout=5)
-                    if sr.ok:
-                        def _sweep(modules: list) -> None:
-                            for m in modules:
-                                n = m.get("name", "")
-                                if n in known_names:
-                                    try:
-                                        # Same False-return check as the
-                                        # opening sweep — HTTP failure is
-                                        # silent without it.
-                                        if not delete_module(args.host, n):
-                                            print(f"  final-sweep: delete {n!r} on {args.host} returned HTTP failure")
-                                    except Exception as e:
-                                        print(f"  final-sweep: delete {n!r} on {args.host} failed: {e}")
-                                _sweep(m.get("children", []))
-                        _sweep(sr.json().get("modules", []))
-                except Exception as e:
-                    print(f"  final-sweep on {args.host} failed: {e}")
-                # Last, so the sweep above cannot take it straight back out.
+                        cleaned = False
+                cleaned = restore_pipeline(args.host, pipeline_changed, parents.get("Layer"), added_ids.save) and cleaned
                 if displaced_layout:
-                    restore_default_layout(args.host, displaced_layout)
-                    print(f"  pipeline: restored {displaced_layout['type']}")
+                    if restore_default_layout(args.host, displaced_layout):
+                        added_ids.layout = None
+                        added_ids.save()
+                        print(f"  pipeline: restored {displaced_layout['type']}")
+                    else:
+                        cleaned = False
+                if cleaned:
+                    added_ids.close()
+                else:
+                    print(f"  ⚠️  cleanup: not everything went back on {args.host}; the record stays in "
+                          f"{LEDGER} for the next run to undo.")
             browser.close()
 
     print(f"\n{'─'*50}")

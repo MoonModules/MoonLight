@@ -2,9 +2,6 @@
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/fnv.h"      // fnv1a: the sync hosts, compared as one number
-#include "core/util/Addressing.h"   // sendAddressed: the multicast rule every sender shares
-#include "core/util/HostList.h"     // the boards a unicast send goes to
-#include "core/util/HostResolver.h" // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -13,10 +10,12 @@
 #include "core/services/AudioBands.h"
 #include "core/services/AudioDynamics.h"   // the level, floor, gate and window
 #include "core/services/AudioHarmony.h"    // the twelve pitch classes from the notes
+#include "core/services/AudioChords.h"     // ChordTracker: the chord named from them
 #include "core/services/AudioSimulation.h" // the synthesized signal `simulate` plays
-#include "core/services/AudioAnalysis.h"   // the state an open input and `harmony` hold
-#include "core/util/MoonLightAudioSyncPacket.h"   // the MoonLight audio-sync format (send/receive)
-#include "core/util/WLEDAudioSyncPacket.h"   // WLED audio-sync wire format (send/receive)
+#include "core/services/AudioAnalysis.h"   // the state an open input and the notes hold
+#include "core/services/AudioSync.h"      // the audio sync's socket, either format
+#include "core/services/AudioDemand.h"    // what the readers of the notes need
+#include "core/module/Scheduler.h"        // the tree whose demands decide whether the notes run
 #include "platform/platform.h"
 
 #include <atomic>
@@ -71,13 +70,13 @@ namespace mm {
 ///
 /// The analysis, the bank, the sample block, the dynamics and the frame ring, is allocated in internal RAM as an input opens and freed as it closes, so a board receiving audio sync or simulating holds none of it.
 ///
-/// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while `harmony` is on. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
+/// The harmony's state, the semitone bank, its trackers and the note onsets, about 8.5 KB, is a second allocation held only while something reads the notes, as Demand.h describes. Switching it pauses the audio task while the state changes hands, and leaves the input open; a prepare runs on the render loop between ticks, so the tick never meets a state changing.
 ///
-/// ## Audio sync, one packet a frame
+/// ## The analysis runs while something reads it
 ///
-/// A sending board sends its frame in `syncFormat`: MoonLight's whole frame, WLED's packet, or both for an installation that mixes the two. Each format multicasts to its own group, so a WLED device never wakes for a packet it cannot read. The hits of the frames between two packets ride in the next, so the throttle drops none.
+/// The bands, the onsets and what they feed run while a module reads them, an audio effect, an effect or palette script calling an audio builtin, or this board sending audio sync, as Demand.h describes; the notes imply them.
 ///
-/// A receiving board joins both groups and tells the formats by their header. A board sending both sends each frame twice, so MoonLight's packet outranks WLED's while it arrives. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and one without, a WLED frame among them, gets the bands' ballistic here; a late or repeated MoonLight frame number is dropped.
+/// Without a reader the input stays open and read, so the silent-microphone diagnosis keeps working, and only the level, its floor and the gate run: the card's level and dynamics still answer a clap, `cpu` reads paused, and the frame's bands, onsets and notes stay dark.
 class AudioService : public MoonModule {
 public:
     /// `level` through the bands' peak-meter ballistic into `levelSmoothed`, for a frame this engine measured or synthesized; a synced frame keeps the sender's own.
@@ -93,6 +92,7 @@ public:
     }
     /// The flux readout and the ranges, and count its onset and harmony change, which its source set, the analysis, the song or the sender.
     void deriveFromBands(AudioFrame& f) {
+        if (fluxReseed_) { std::memcpy(prevBands_, f.bands, sizeof(prevBands_)); fluxReseed_ = false; }   // the first block after a rest is its own reference
         f.flux = spectralFlux(prevBands_, f.bands);
         std::memcpy(prevBands_, f.bands, sizeof(prevBands_));
         bandsToRanges(f);
@@ -101,6 +101,7 @@ public:
         if (f.flux > fluxPeak_.load(std::memory_order_relaxed)) fluxPeak_.store(f.flux, std::memory_order_relaxed);
     }
     uint8_t       prevBands_[16] = {};   ///< the previous block's bands, the flux's reference
+    bool          fluxReseed_ = false;   ///< the next block reseeds the flux's reference, back from a rest
 
     /// The block an input is read in, kAudioBlock.
     static constexpr size_t kBlock = kAudioBlock;
@@ -156,9 +157,11 @@ public:
     /// How far over the room's learned noise sound must rise before the lights answer, in dB.
     /// @guide Raise it until a quiet room reads dark.
     uint8_t  squelch = 10;
-    /// Measure the notes, for the pitch classes, the harmony's changes and the notes bars.
-    /// @guide Off saves the semitone bank's share of a core where nothing reads the harmony.
-    bool     harmony = true;
+    /// What the input carries, in the `instrument` select's order.
+    enum Instrument : uint8_t { kInstrumentMix, kInstrumentDrums, kInstrumentCount };
+    /// What the input carries: a full mix, or the drums alone, from a drum mic or bus.
+    /// @guide On a stage with an input per instrument: each hit then lights one drum.
+    uint8_t  instrument = kInstrumentMix;
     /// The synthesized patterns `simulate` picks from, in its option order.
     enum Simulate : uint8_t { kSimMusic, kSimSweep, kSimulateCount };
     /// The pattern: a plausible song, or a test march.
@@ -173,11 +176,11 @@ public:
     static constexpr uint8_t kLocalMode = platform::hasNetwork ? 2 : 1;
     /// Send the local analysis as audio-sync packets.
     bool     send = false;
-    /// What the sync machinery does: nothing, broadcast the local analysis, or sink a peer's.
-    enum Sync : uint8_t { kSyncNone, kSyncSend, kSyncReceive };
+    /// What the sync does: nothing, broadcast the local analysis, or sink a peer's.
+    using Sync = AudioSync::Role;
     /// The role the current mode and `send` give the sync socket.
-    Sync     sync() const { return !platform::hasNetwork ? kSyncNone : mode == kReceiveMode ? kSyncReceive
-                                 : (mode == kLocalMode && send ? kSyncSend : kSyncNone); }
+    Sync     sync() const { return !platform::hasNetwork ? AudioSync::kNone : mode == kReceiveMode ? AudioSync::kReceive
+                                 : (mode == kLocalMode && send ? AudioSync::kSend : AudioSync::kNone); }
     /// The UDP port both directions use, matching on both ends.
     /// @guide WLED listens on 11988, so another port is not WLED-compatible.
     uint16_t syncPort = WLED_SYNC_PORT;
@@ -251,7 +254,8 @@ public:
         controls_.setHidden(controls_.count() - 1, !localMode);
         controls_.addControl("squelch", squelch, 0, 40);
         controls_.setHidden(controls_.count() - 1, !localMode);
-        controls_.addControl("harmony", harmony);
+        static constexpr const char* kInstrumentOptions[] = {"mix", "drums"};
+        controls_.addSelect("instrument", instrument, kInstrumentOptions, kInstrumentCount);
         controls_.setHidden(controls_.count() - 1, !localMode);
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
@@ -273,7 +277,7 @@ public:
         controls_.setHidden(controls_.count() - 1, !simMode);
         // Only where a socket is bound, the rows toggling live with the mode.
         if constexpr (platform::hasNetwork) {
-            const bool hasSocket = (sync() != kSyncNone);
+            const bool hasSocket = (sync() != AudioSync::kNone);
             controls_.addControl("syncPort", syncPort, 1, 65535);
             controls_.setHidden(controls_.count() - 1, !hasSocket);
         }
@@ -299,9 +303,9 @@ public:
 
     /// Which changes rebuild the channel, rebind the socket, or re-toggle the rows.
     bool affectsPrepare(const char* name) const override {
-        // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind; `harmony` allocates or frees its state.
+        // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind, and the format decides whether sending needs the notes.
         static constexpr const char* kPrepares[] = {"wsPin", "sdPin", "sckPin", "mclkPin", "micMode", "device", "sampleRate",
-                                                    "mode", "send audio", "syncPort", "addressing", "hosts", "harmony"};
+                                                    "mode", "send audio", "syncFormat", "syncPort", "addressing", "hosts"};
         if (std::strncmp(name, "codec", 5) == 0) return true;   // the codec and its bus, which re-init it
         for (const char* p : kPrepares) if (std::strcmp(name, p) == 0) return true;
         return false;
@@ -310,27 +314,48 @@ public:
     /// Claim the frame seat, then acquire only the hardware the current mode needs.
     void prepare() override {
         micSeat_.claim();       // the first live instance wins the seat, in any mode
+        notesOn_ = notesWanted();
+        analysisOn_ = analysisWanted();
         if (mode == kLocalMode) {
             // Only this mode runs a peripheral, reopened only when a setting it was opened with changed: a rebuild for another module must not cut the audio.
             if (!inited_ || reinitPending_ || micConfig() != openedWith_) reinit();
-            else if (harmony != harmonyApplied_) switchHarmony();
+            else if (notesOn_ != harmonyApplied_) switchHarmony();
         } else {
             if (deinit()) clearStatus();   // the others free the channel and its pins; a mic diagnosis would otherwise linger
         }
         // The socket likewise, rebound only when what it binds to changed.
         if (!syncSet_ || syncConfig() != syncedWith_) {
-            syncReinit();
+            sync_.reset(sync());
             syncedWith_ = syncConfig();
             syncSet_ = true;
         }
-        parseSyncHosts();
+        sync_.parseHosts(hosts);
+    }
+    /// A reader's demand turned on or off: count them again at the frame boundary, and switch the notes when that changes whether anything reads them.
+    void onDemandChanged() override {
+        notesOn_ = notesWanted();
+        analysisOn_ = analysisWanted();
+        if (mode == kLocalMode && inited_ && notesOn_ != harmonyApplied_) switchHarmony();
+    }
+    /// Whether anything reads the notes: a module's demand, or this board sending the MoonLight format, whose receivers show them.
+    bool notesWanted() const {
+        if (sync() == AudioSync::kSend && syncFormat != kFormatWled) return true;
+        const Scheduler* tree = Scheduler::instance();
+        return tree && (tree->demandsOf(AudioDemand::kProvider) & AudioDemand::bitOf(AudioFeature::Notes));
+    }
+    /// Whether anything reads the analysis, the bands, the onsets and what they feed: a module's demand for them or for the notes on top of them, or this board sending audio sync, whose receivers show them; without a reader only the level runs.
+    bool analysisWanted() const {
+        if (notesOn_ || sync() == AudioSync::kSend) return true;
+        const Scheduler* tree = Scheduler::instance();
+        return tree && (tree->demandsOf(AudioDemand::kProvider) & AudioDemand::bitOf(AudioFeature::Bands));
     }
     /// One-time wiring only: the acquire and the election live in the build.
     void setup() override {}
     /// Free the peripheral and the socket, and vacate the seat for any survivor.
     void release() override {
         deinit();
-        if constexpr (platform::hasNetwork) { syncSock_.close(); syncOpen_ = false; }
+        if constexpr (platform::hasNetwork) sync_.close();
+        syncSet_ = false;   // the next prepare sets the socket up again, its receive buffer with it
         micSeat_.vacate();
         MoonModule::release();
     }
@@ -343,21 +368,25 @@ public:
     void resetAnalysisForTest() { if (openAnalysis()) resetAnalysis(); }
     /// The semitone bank's tuning from A440 in cents, which the retune sets.
     float tuningForTest() const { return harmonyState_ ? harmonyState_->tuningCents : 0.0f; }
-    /// Whether the analysis and the harmony's state are held, which only an open input and `harmony` justify.
+    /// How late piano key `key`'s band reports its note, in milliseconds, 0 while the notes do not run: the delay the note harness dates a note back by.
+    uint16_t noteDelayMsForTest(uint8_t key) const { return harmonyState_ ? static_cast<uint16_t>(harmonyState_->semitones.delaySeconds(static_cast<uint8_t>(kNotesLowBand + key)) * 1000.0f + 0.5f) : 0; }
+    /// Whether the analysis and the harmony's state are held, which only an open input and the notes justify.
     bool analysisHeldForTest() const { return analysis_ != nullptr; }
+    /// Run the notes or not, as a reader's demand would, for a test that drives the analysis without a module tree.
+    void setNotesForTest(bool on) { notesOn_ = on; }
     /// Whether the harmony's state is held.
     bool harmonyHeldForTest() const { return harmonyState_ != nullptr; }
     /// One block of input samples, left-justified 24-bit as the input delivers them, through the analysis the input runs: the host's seam for the analysis path, after resetAnalysisForTest.
-    const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock]) {
-        if (harmony != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
+    const AudioFrame& analyzeForTest(const int32_t (&block)[kBlock], bool analyzing = true) {
+        if (notesOn_ != (harmonyState_ != nullptr)) applyHarmony();   // the switch, as prepare applies it
         std::memcpy(analysis_->samples, block, sizeof(block));
-        squelchNow_.store(squelch, std::memory_order_relaxed);
-        analyzeBlock();
+        handSettings();
+        analyzeBlock(analyzing);
         return analysis_->work;
     }
 
     /// Whether the sync socket is open, a read-only view of the socket lifecycle so a test can assert it through the public tick.
-    bool syncOpenForTest() const { return syncOpen_; }
+    bool syncOpenForTest() const { return sync_.isOpen(); }
 
     /// Whether a mic diagnosis is outstanding, which suppresses the sync line while it is.
     bool micStatusStaleForTest() const { return micStatusStale_; }
@@ -366,15 +395,15 @@ public:
     /// The sync state as the card shows it, which is the reported state itself.
     const char* syncStatusForTest() const { return status() ? status() : ""; }
     /// How often a send may go out.
-    static constexpr uint32_t syncSendIntervalMsForTest() { return kSyncSendIntervalMs; }
+    static constexpr uint32_t syncSendIntervalMsForTest() { return AudioSync::kSendIntervalMs; }
     /// How many sends have gone out.
-    uint32_t syncSendCountForTest() const { return syncSendCount_; }
+    uint32_t syncSendCountForTest() const { return sync_.sendCount(); }
     /// How long a peer may be quiet before it is stale.
-    static constexpr uint32_t syncFallbackMsForTest() { return kSyncFallbackMs; }
+    static constexpr uint32_t syncFallbackMsForTest() { return AudioSync::kFallbackMs; }
     /// How long a failed open waits.
-    static constexpr uint32_t syncOpenRetryMsForTest() { return kSyncOpenRetryMs; }
+    static constexpr uint32_t syncOpenRetryMsForTest() { return AudioSync::kOpenRetryMs; }
     /// How many times the receive socket joined the group, for the tests.
-    uint32_t syncJoinCountForTest() const { return syncSock_.joinCountForTest(); }
+    uint32_t syncJoinCountForTest() const { return sync_.joinCount(); }
 
     /// What a consumer reads with no source: a class constant, since a function-local static needs a guard on first use.
     static constexpr AudioFrame kSilence{};
@@ -391,16 +420,14 @@ public:
 
         // Receiving is a pure sink; sending produces the frame first, then sends it with the hits since the last packet.
         const Sync s = sync();
-        const bool open = s != kSyncNone && syncEnsureSocket();   // lazy-open once the network is up
-        if (s == kSyncReceive) {   // with no socket yet, still never runs the local mic
-            if (open) syncReceive();
-            return;
+        const bool unicast = addressing == kAddressUnicast;
+        const bool open = sync_.ensureOpen(s, syncPort, unicast);   // lazy-open once the network is up
+        if (s == AudioSync::kReceive) { if (open) syncReceive(); }   // with no socket yet, still never runs the local mic
+        else if (const bool fresh = produceFrame(); open) {
+            if (fresh) sync_.addHits(frame_);
+            sync_.send(frame_, syncFormat != kFormatWled, syncFormat != kFormatMoonLight, unicast, syncPort);
         }
-        const bool fresh = produceFrame();
-        if (open) {
-            if (fresh) syncHits_.add(frame_);
-            syncSend();
-        }
+        chords_.name(frame_, platform::millis());   // from whichever source made the frame, so a receiving board names the chord too
     }
 
     /// This tick's frame from the synthesizer or the local input, true when one is new.
@@ -413,7 +440,7 @@ public:
 
         // The audio task reads and analyzes; a board without tasks does it here. Either way the tick takes the frames through the ring.
         if (!analysis_) return false;
-        squelchNow_.store(squelch, std::memory_order_relaxed);   // the setting, handed to whichever thread analyzes
+        handSettings();   // the settings, handed to whichever thread analyzes
         // Only once no task loop runs: a stop that timed out leaves the loop reading with the handle already gone.
         if (!audioTask_.impl && audioLoopExited_.load(std::memory_order_acquire)) readAndAnalyze(0);
         return takeNewest(analysis_->frames, frame_);
@@ -431,7 +458,7 @@ public:
             a.filled += n;
             if (a.filled == kBlock) {
                 a.filled = 0;
-                analyzeBlock();
+                analyzeBlock(analysisNow_.load(std::memory_order_relaxed));
                 a.frames.push(&a.work, 1);   // a full ring drops the newest, the tick reading the ones before
                 blocks++;
             }
@@ -440,12 +467,14 @@ public:
         }
     }
 
-    /// The block's harmony from the semitone bank into the frame, or every harmony field 0 with `harmony` off.
+    /// The block's harmony from the semitone bank into the frame, or every harmony field 0 while the notes do not run.
     void analyzeHarmony() {
         AudioFrame& w = analysis_->work;
         if (!harmonyState_) {
             std::memset(w.chroma, 0, sizeof(w.chroma));
             std::memset(w.notesHits, 0, sizeof(w.notesHits));
+            std::memset(w.notesKept, 0, sizeof(w.notesKept));
+            std::memset(w.notesKeptHits, 0, sizeof(w.notesKeptHits));
             w.harmonyChange = false;
             w.notesCount = w.key = w.bassNote = 0;
             w.tuning = 0;
@@ -457,6 +486,7 @@ public:
         w.harmonyChange = h.tracker.update(h.semitones, dyn.gateOpen, dtMs, w.chroma);
         w.notesCount = semitonesToNotes(h.semitones, dyn, w.notes);
         h.noteOnsets.take(w.notesHits, dyn.gateOpen);
+        keepNotes(w, h.confirm);
         w.key = h.key.update(w.chroma, dyn.gateOpen, dtMs);
         w.bassNote = semitonesToBassNote(h.semitones, dyn.gateOpen);
         w.tuning = static_cast<int8_t>(std::lround(h.tuningCents));
@@ -466,17 +496,20 @@ public:
     /// The most blocks one tick analyzes: 48 kHz at 24 frames a second, bounding a slow tick's work.
     static constexpr uint8_t kMaxBlocksPerTick = 4;
 
-    /// One full block through the high-pass, the level and the bank into the analyzed frame, on whichever thread reads.
-    void analyzeBlock() {
+    /// One full block through the high-pass, the level and, while something reads it, the bank into the analyzed frame, on whichever thread reads.
+    void analyzeBlock(bool analyzing) {
         Analysis& a = *analysis_;
         AudioFrame& w = a.work;
         a.dyn.squelchDb = static_cast<float>(squelchNow_.load(std::memory_order_relaxed));
+        a.onsets.drumInput = instrumentNow_.load(std::memory_order_relaxed) == kInstrumentDrums;
         // The block's time is the stream's, its samples counted, so a block analyzed late or faster than real time keeps its own: @xref{the-streams-own-clock}.
         const uint64_t blockStart = a.streamSamples;
         a.streamSamples += kBlock;
         // Removes the offset before any analysis, continuous across blocks.
         a.dc.process(a.samples, kBlock, a.dcPole);
         const float levelDb = blockLevelDbFs(a.samples, kBlock);
+        if (!analyzing) { restBlock(levelDb); return; }
+        if (a.resting) { a.onsets.reset(); a.resting = false; fluxReseed_ = true; }   // back from a rest: the onsets and the flux start from this block, not from the last one before it
 
         // The bands, through the window the level's dynamics set.
         const uint32_t bankStart = platform::micros();
@@ -486,9 +519,9 @@ public:
             a.bank.process(part);
             if (harmonyState_) harmonyState_->semitones.process(part);
             const uint32_t chunkEndMs = static_cast<uint32_t>((blockStart + at + ThirdOctaveBank::kChunk) * 1000u / a.openedRate);
-            // The onsets read the bank between chunks, every 5 ms of the stream's time, as AudioOnsets' notes say.
+            // The onsets read the bank between chunks, at least 5 ms of the stream's time apart, as AudioOnsets' notes say.
             a.onsets.update(a.bank, chunkEndMs);
-            if (harmonyState_) harmonyState_->noteOnsets.update(harmonyState_->semitones, chunkEndMs);
+            if (harmonyState_) harmonyState_->noteOnsets.update(harmonyState_->semitones, chunkEndMs, a.onsets.sinceAttackMs(chunkEndMs));
         }
         bankUs1s_.fetch_add(platform::micros() - bankStart, std::memory_order_relaxed);
         uint16_t peakHz = 0, peakMag = 0;
@@ -510,6 +543,29 @@ public:
         if (peakMag > 8) { w.peakHz = peakHz; w.peakMag = peakMag; }
 
         // The window's peak, since sampling the instantaneous value once a second lands in the gaps.
+        if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
+    }
+
+    /// One block while nothing reads the analysis: the level, its floor and the gate run and fill the frame's level, the bands, the onsets and the notes stay dark: @xref{the-analysis-runs-while-something-reads-it}.
+    void restBlock(float levelDb) {
+        Analysis& a = *analysis_;
+        AudioFrame& w = a.work;
+        a.resting = true;
+        a.dyn.updateLevel(levelDb, a.blockMs);
+        const uint8_t gate = w.gate;
+        const uint16_t seq = w.seq;
+        const uint16_t smoothed = w.levelSmoothed;   // the ballistic's memory, which the reset would zero
+        w = AudioFrame{};
+        w.seq = static_cast<uint16_t>(seq + 1);
+        w.levelSmoothed = smoothed;
+        w.gate = gate ? gate : 1;
+        w.gateOpen = a.dyn.gateOpen;
+        w.level = a.dyn.levelToByte(levelDb);
+        smoothLevel(w);
+        levelDbX10_.store(static_cast<int16_t>(a.dyn.levelDb * 10.0f), std::memory_order_relaxed);
+        floorDbX10_.store(static_cast<int16_t>(a.dyn.floorDb * 10.0f), std::memory_order_relaxed);
+        topDbX10_.store(static_cast<int16_t>(a.dyn.topDb * 10.0f), std::memory_order_relaxed);   // the bands' top, held while they rest, as analyzeBlock shows it
+        gateOpen_.store(a.dyn.gateOpen, std::memory_order_relaxed);
         if (w.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(w.level > 255 ? 255 : w.level), std::memory_order_relaxed);
     }
 
@@ -551,14 +607,20 @@ public:
         mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, static_cast<int>(frame_.tuning));   // the frame's, so a receiver shows the sender's
         mm::formatTo(rangesStr_, sizeof(rangesStr_), "bass %u, mid %u, treble %u", static_cast<unsigned>(frame_.bass),
                      static_cast<unsigned>(frame_.mid), static_cast<unsigned>(frame_.treble));
-        mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
-                     levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
-                     topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
-        // The bands' microseconds this second, ten thousand of them a percent of one core.
-        mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
-                     static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
-                     static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
-        refreshNamedHosts(hosts, syncHosts_, syncHostCount_);
+        if (mode == kLocalMode)
+            mm::formatTo(dynStr_, sizeof(dynStr_), "level %d, floor %d, top %d dB, %s",
+                         levelDbX10_.load(std::memory_order_relaxed) / 10, floorDbX10_.load(std::memory_order_relaxed) / 10,
+                         topDbX10_.load(std::memory_order_relaxed) / 10, gateOpen_.load(std::memory_order_relaxed) ? "open" : "gated");
+        else
+            mm::formatTo(dynStr_, sizeof(dynStr_), "no input analyzed here");   // the level path runs only on a local input, so a receiver's or a simulation's readout names that rather than an idle path's -120 dB
+        // The bands' microseconds this second, ten thousand of them a percent of one core, the shares per chip in AudioAnalysis.h.
+        if (analysisOn_)
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
+                         static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
+                         static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
+        else
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz", static_cast<unsigned>(micSamples));
+        sync_.refreshHosts(hosts);
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
@@ -577,23 +639,7 @@ public:
             // No mic to diagnose on this path (Receive or Simulate), so no diagnosis may be OUTSTANDING.
             micStatusStale_ = false;
         }
-        // Live sync state on the module's OWN status line:
-        if constexpr (platform::hasNetwork) {
-            const Sync s = sync();
-            if (s != kSyncNone && syncOpen_ && !micStatusStale_) {
-                if (s == kSyncSend) setStatus("sending");
-                else if (lastSyncRecv_ != 0
-                         && platform::millis() - lastSyncRecv_ < kSyncFallbackMs) {
-                    // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
-                    char peer[HostResolver::kPeerChars];
-                    HostResolver::formatPeer(peer, sizeof(peer), syncPeer_);
-                    mm::formatTo(syncStr_, sizeof(syncStr_), "receiving %s from %s", syncRxWled_ ? "WLED" : "MoonLight", peer);
-                    setStatus(syncStr_);
-                } else {
-                    reportListening();
-                }
-            }
-        }
+        if (!micStatusStale_) sync_.report(sync());   // the live sync state on the module's own status line, a mic diagnosis first
         MoonModule::tick1s();
     }
 
@@ -627,12 +673,23 @@ private:
     using Analysis = AudioAnalysis;
     using Harmony = AudioHarmonyState;
     std::unique_ptr<Analysis> analysis_;        // held only while an input is open: @xref{memory-follows-the-mode}
-    std::unique_ptr<Harmony> harmonyState_;     // and this only while `harmony` is on
-    bool harmonyApplied_ = false;               // the `harmony` the state was last applied for, held or not for want of RAM
+    bool analysisOn_ = false;                   // whether the analysis runs, the bands, the onsets and what they feed: set from what reads them, as Demand.h describes
+    bool notesOn_ = false;                      // whether the notes run, the semitone bank and what it feeds: set from what reads them, as Demand.h describes
+    std::unique_ptr<Harmony> harmonyState_;     // and this only while the notes run
+    bool harmonyApplied_ = false;               // whether the notes ran when the state was last applied, held or not for want of RAM
     platform::WorkerTask audioTask_;     // reads and analyzes, where the platform runs tasks
     std::atomic<bool> audioStop_{false};
     std::atomic<bool> audioLoopExited_{true};   // the loop's last act, so a stop that timed out never frees the input under it
     std::atomic<uint8_t> squelchNow_{10};   // the setting as the tick last saw it, for the task
+    std::atomic<uint8_t> instrumentNow_{kInstrumentMix};   // the same for `instrument`
+    std::atomic<bool> analysisNow_{false};      // the same for whether the analysis runs
+
+    /// The settings the analysis reads, handed from the tick to whichever thread analyzes.
+    void handSettings() {
+        squelchNow_.store(squelch, std::memory_order_relaxed);
+        instrumentNow_.store(instrument, std::memory_order_relaxed);
+        analysisNow_.store(analysisOn_, std::memory_order_relaxed);
+    }
     std::atomic<uint8_t> harmonyChanges_{0};   // the harmony's changes in the current 1 s window, for the readout
     std::atomic<int16_t> levelDbX10_{-1200}, floorDbX10_{-1200}, topDbX10_{-1200};   // the dynamics in tenths of a dB, for the readout
     std::atomic<bool> gateOpen_{false};
@@ -657,43 +714,9 @@ private:
     std::atomic<uint32_t> micNonzero1s_{0};
     bool     micStatusStale_ = false;
 
-    /// The audio sync socket, either format: one, bound only in Send/Receive.
-    platform::UdpSocket syncSock_;
-    uint32_t lastSyncSend_ = 0;      // millis of the last send (send throttle)
-    uint32_t syncSendCount_ = 0;     // sends made; test-visible so the throttle can be observed
-    AudioHits syncHits_;             // the hits of the frames since the last packet, which a throttled send would drop
-    AudioFrame syncFrame_;           // the frame a packet is parsed into or built from, a member since it and the datagram together would pass the stack's budget
-    AudioHits syncRxHits_;           // the hits of the packets since the last frame taken, late ones among them
-    uint16_t syncRxSeq_ = 0;         // the last MoonLight frame number taken, so a late or repeated one is dropped
-    bool     syncRxSeqValid_ = false;   // whether syncRxSeq_ holds one, false until the first and after a silence
-    bool     syncRxWled_ = false;    // whether the last frame taken came in WLED's format, for the status line
+    ChordTracker chords_;   ///< the chord named from each frame's pitch classes
+    AudioSync sync_{*this};   ///< the audio sync, sending the frame or receiving a peer's in either format, as AudioSync.h describes
     uint32_t simPrevMs_ = 0;             ///< the last simulated frame's time, so the song's kick reads once
-    uint32_t lastSyncRecv_ = 0;      // millis of the last received packet (receive auto-blend)
-    uint32_t syncMlHeardMs_ = 0;     // millis of the last MoonLight packet, which outranks WLED's while it arrives
-    uint8_t  syncPeer_[4] = {};      // source address of that packet, for the status line
-    bool     syncOpen_ = false;      // socket opened for the current mode (lazy-open latch)
-
-    /// Where a send goes, or why a unicast send reaches nobody.
-    void reportSending() {
-        if (addressing == kAddressUnicast && syncHostsError_) setStatus(syncHostsError_, Severity::Error);
-        else if (addressing == kAddressUnicast && syncHostCount_ == 0) setStatus("set hosts to send to", Severity::Warning);
-        else setStatus("sending");
-    }
-
-    /// Report an open receive socket, saying so when only unicast can reach it.
-    void reportListening() {
-        const uint8_t joined = syncSock_.multicastJoined();
-        if (joined == kSyncGroupCount) setStatus("listening");
-        else setStatus(joined ? "listening, one format's multicast group refused" : "listening, unicast only: multicast unavailable", Severity::Warning);
-    }
-    uint32_t lastSyncOpenFailMs_ = 0;  // millis of the last failed open (0 = none); bring-up backoff
-    char     syncStr_[sizeof("receiving MoonLight from ") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)"
-    static constexpr uint32_t kSyncSendIntervalMs = 25;   // ~40/s, WLED-friendly, well under a flood
-    static constexpr uint32_t kSyncFallbackMs = 1000;     // no packet this long → resume local mic
-    static constexpr uint32_t kSyncOpenRetryMs = 1000;    // pause between socket bring-up retries after a failure
-    static constexpr int kSyncMaxRecvPerTick = 8;         // bounded non-blocking drain (sync is low-rate)
-    static constexpr uint16_t kSyncSeqWindow = 64;        // how far behind the last MoonLight frame number is late, not a restarted sender
-
     static constexpr const char* kInitFailMsg = "mic init failed, check pins / rate";
 
     /// (Re)create the I2S channel for the current pins + rate.
@@ -745,10 +768,10 @@ private:
         settleHarmony();
     }
 
-    /// Remember the `harmony` the state was applied for, so a board with no room for it tries once per switch rather than on every prepare, and say so.
+    /// Remember whether the notes ran when the state was applied, so a board with no room for it tries once per switch rather than on every prepare, and say so.
     void settleHarmony() {
-        harmonyApplied_ = harmony;
-        if (harmony && !harmonyState_) setStatus("audio: no internal RAM for the harmony, running without it", Severity::Warning);
+        harmonyApplied_ = notesOn_;
+        if (notesOn_ && !harmonyState_) setStatus("audio: no internal RAM for the notes, running without them", Severity::Warning);
     }
 
     /// What the wiring still lacks before the mic can open, or nullptr when nothing does.
@@ -764,7 +787,7 @@ private:
 
     /// Read and analyze on a task of its own, a blocking read of the input, so the analysis keeps the input's pace whatever the frame rate and leaves the render core its time: @xref{the-audio-task}.
     void startAudioTask() {
-        squelchNow_.store(squelch, std::memory_order_relaxed);
+        handSettings();
         audioStop_.store(false, std::memory_order_release);
         audioLoopExited_.store(false, std::memory_order_release);
         // Priority 6, over the frame encoder's 5 and under the network's 7: a lost sample is lost for good, a late frame only late. Under the encoder a busy core starved it to a third of its samples.
@@ -802,20 +825,20 @@ private:
         if (harmonyState_) resetHarmony();
     }
 
-    /// Allocate the analysis for an opening input, and the harmony's state if `harmony` is on; false, with the card saying so, when internal RAM has no room for the analysis: @xref{memory-follows-the-mode}.
+    /// Allocate the analysis for an opening input, and the harmony's state while the notes run; false, with the card saying so, when internal RAM has no room for the analysis: @xref{memory-follows-the-mode}.
     bool openAnalysis() {
         if (!analysis_) analysis_.reset(new (std::nothrow) Analysis());
         if (!analysis_) {
             setStatus("audio: no internal RAM for the analysis", Severity::Error);
             return false;
         }
-        // Allocated only: resetAnalysis designs it at the opened rate. Without room it runs as harmony off, and openStream says so.
-        if (!harmony) harmonyState_.reset();
+        // Allocated only: resetAnalysis designs it at the opened rate. Without room it runs without the notes, and openStream says so.
+        if (!notesOn_) harmonyState_.reset();
         else if (!harmonyState_) harmonyState_.reset(new (std::nothrow) Harmony());
         return true;
     }
 
-    /// The `harmony` switch alone: the task pauses while the state changes hands, and a task that will not stop leaves it for the retry each second.
+    /// The notes switching alone: the task pauses while the state changes hands, and a task that will not stop leaves it for the retry each second.
     void switchHarmony() {
         if (!stopAudioTask()) {
             setStatus("audio task did not stop: the input stays open until it does", Severity::Error);
@@ -827,9 +850,9 @@ private:
         settleHarmony();
     }
 
-    /// Hold the harmony's state exactly while `harmony` is on, with the analysis's task stopped or absent.
+    /// Hold the harmony's state exactly while the notes run, with the analysis's task stopped or absent.
     void applyHarmony() {
-        if (!harmony) { harmonyState_.reset(); return; }
+        if (!notesOn_) { harmonyState_.reset(); return; }
         if (harmonyState_) return;
         harmonyState_.reset(new (std::nothrow) Harmony());
         if (harmonyState_ && analysis_) resetHarmony();
@@ -862,137 +885,17 @@ private:
         return true;
     }
 
-    // --- WLED audio sync (guarded: only compiled where platform::hasNetwork) ---
-
-    /// Reset the sync socket to the current mode.
-    void syncReinit() {
-        if constexpr (!platform::hasNetwork) return;
-        syncSock_.close();                 // syncEnsureSocket() re-opens per mode when the net is up
-        syncOpen_ = false;
-        lastSyncOpenFailMs_ = 0;           // a mode change retries bring-up immediately (no stale backoff)
-        lastSyncRecv_ = syncMlHeardMs_ = 0;
-        std::memset(syncPeer_, 0, sizeof(syncPeer_));
-        syncHits_ = {};
-        syncRxHits_ = {};
-        syncRxSeqValid_ = false;
-        const Sync s = sync();
-        // Only when there IS a socket to wait for.
-        if (s == kSyncSend)         setStatus("send: waiting for network");
-        else if (s == kSyncReceive) setStatus("receive: waiting for network");
-        else if (isSyncStatus(status())) setStatus("");
-    }
-
-    /// Whether the status line holds one of the sync's own messages, which a mode without a socket clears.
-    static bool isSyncStatus(const char* s) {
-        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "from ", "listening", "sending", "set hosts"};
-        if (!s) return false;
-        for (const char* k : kOwn) if (std::strstr(s, k)) return true;
-        return false;
-    }
-
-    /// Lazily open the sync socket for the current mode, once the network stack is up.
-    bool syncEnsureSocket() {
-        if constexpr (!platform::hasNetwork) return false;
-        const Sync s = sync();
-        if (s == kSyncNone) return false;
-        if (syncOpen_) return true;
-        if (!platform::networkReady()) return false;   // interface not up yet, try again next tick
-        // Back off between failed bring-ups:
-        const uint32_t now = platform::millis();
-        if (lastSyncOpenFailMs_ != 0 && now - lastSyncOpenFailMs_ < kSyncOpenRetryMs) return false;
-        // Send → each format's group, or the hosts; receive → bind, then join both groups. A failed join degrades rather than refuses, since unicast still arrives.
-        syncOpen_ = syncSock_.open() && (s == kSyncSend || syncSock_.bind(syncPort));
-        if (!syncOpen_) {
-            syncSock_.close();
-            setStatus(s == kSyncSend ? "send: socket failed" : "receive: bind failed", Severity::Error);
-        } else if (s == kSyncSend) {
-            reportSending();
-        } else {
-            syncSock_.setMulticastGroups(kSyncGroups_, kSyncGroupCount);
-            reportListening();
-        }
-        // Stamp a failure (or clear the timer on success).
-        lastSyncOpenFailMs_ = syncOpen_ ? 0 : (now == 0 ? 1 : now);
-        return syncOpen_;
-    }
-
-    /// Send the current frame in `syncFormat`, with the hits since the last packet, throttled to ~40/s: @xref{audio-sync-one-packet-a-frame}.
-    void syncSend() {
-        if constexpr (!platform::hasNetwork) return;
-        const uint32_t now = platform::millis();
-        if (now - lastSyncSend_ < kSyncSendIntervalMs) return;
-        lastSyncSend_ = now;
-        syncFrame_ = frame_;
-        syncHits_.applyTo(syncFrame_);
-        syncHits_ = {};
-        uint8_t pkt[kMlSyncMaxPacket];
-        if (syncFormat != kFormatWled) sendSyncPacket(pkt, buildMoonLightAudioSync(pkt, syncFrame_), kSyncGroups_[kFormatMoonLight].ip);
-        if (syncFormat != kFormatMoonLight) sendSyncPacket(pkt, buildWledAudioSync(pkt, syncFrame_), kSyncGroups_[kFormatWled].ip);
-        syncSendCount_++;
-    }
-
-    /// One packet to its format's group, or to the hosts. A steady 40 frames a second is a stream, so no broadcast copy on any network.
-    void sendSyncPacket(const uint8_t* pkt, size_t n, const uint8_t group[4]) {
-        sendAddressed(addressing == kAddressUnicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
-                      syncHosts_, syncHostCount_, group, [&](const uint8_t ip[4]) { syncSock_.sendToAddr(ip, syncPort, pkt, n); });
-    }
-
-    /// Drain the sync socket (bounded, non-blocking) in Receive mode, either format, into one new frame with the hits of every packet.
+    /// A peer's frame, either format, as the effects read it: its bands derived here, numbered by this board, and its level in the readout's peak.
     void syncReceive() {
-        if constexpr (!platform::hasNetwork) return;
-        if (lastSyncRecv_ != 0 && platform::millis() - lastSyncRecv_ >= kSyncFallbackMs) syncRxSeqValid_ = false;   // a silent sender may come back restarted
-        uint8_t pkt[kMlSyncMaxDatagram];     // what the format allows, so a later version's sections arrive whole
-        uint8_t srcIp[4] = {};
         const uint16_t seq = static_cast<uint16_t>(frame_.seq + 1);   // the receiver numbers its frames, so a consumer reading one on two ticks takes its hits once
-        bool fresh = false, smoothHere = false;
-        for (int i = 0; i < kSyncMaxRecvPerTick; i++) {
-            const int n = syncSock_.recvFrom(pkt, sizeof(pkt), srcIp);
-            if (n <= 0) break;                     // -1 = nothing pending
-            const uint16_t sections = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), syncFrame_);
-            const bool ml = sections != 0;
-            if (!ml && (syncMlHeardMs_ != 0 && platform::millis() - syncMlHeardMs_ < kSyncFallbackMs)) continue;   // the same frame again, from a board sending both
-            if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), syncFrame_)) continue;   // a v1 / foreign packet
-            lastSyncRecv_ = platform::millis();
-            if (ml) syncMlHeardMs_ = lastSyncRecv_;
-            std::memcpy(syncPeer_, srcIp, sizeof(syncPeer_));   // whose audio this is
-            const uint16_t behind = static_cast<uint16_t>(syncRxSeq_ - syncFrame_.seq);
-            const bool late = ml && syncRxSeqValid_ && behind < kSyncSeqWindow;   // repeated, or late
-            if (!late || behind != 0) syncRxHits_.add(syncFrame_);   // a late frame's hits went in no other packet, so the next frame carries them
-            if (late) continue;
-            if (ml) { syncRxSeq_ = syncFrame_.seq; syncRxSeqValid_ = true; }
-            smoothHere = !(sections & (1u << kMlSectionSmoothed));   // WLED's packet, or a sender that does not smooth
-            if (smoothHere) std::memcpy(syncFrame_.bandsSmoothed, frame_.bandsSmoothed, sizeof(syncFrame_.bandsSmoothed));   // the ballistic run here lives across packets
-            frame_ = syncFrame_;
-            syncRxWled_ = !ml;
-            fresh = true;
-        }
-        if (!fresh) return;
-        syncRxHits_.applyTo(frame_);
-        syncRxHits_ = {};
+        bool smoothHere = false;
+        if (!sync_.receive(frame_, smoothHere)) return;
         if (smoothHere) finishBands(frame_);
         else deriveFromBands(frame_);              // the sender's smoothed bands kept, so every board shows the same frame
         frame_.seq = seq;
         // Feed the peer level into the same 1 s peak window the local mic uses, so the "level RMS".
         if (frame_.level > levelPeak_.load(std::memory_order_relaxed))
             levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
-    }
-
-    /// Each format's multicast group, in `SyncFormat` order: MoonLight's own, and WLED's, which every WLED device joins.
-    static constexpr platform::UdpSocket::MulticastGroup kSyncGroups_[] = {{{239, 0, 0, 2}}, {{239, 0, 0, 1}}};
-    static constexpr uint8_t kSyncGroupCount = sizeof(kSyncGroups_) / sizeof(kSyncGroups_[0]);
-
-    /// How many boards a unicast audio send reaches.
-    static constexpr uint8_t kMaxSyncHosts = 8;
-    Host     syncHosts_[kMaxSyncHosts] = {};
-    uint8_t  syncHostCount_ = 0;
-    const char* syncHostsError_ = nullptr;   ///< why the host list was refused, shown on the status
-
-    /// Parse the hosts, starting the name lookups here where allocating is allowed.
-    void parseSyncHosts() {
-        syncHostsError_ = parseHostList(hosts, syncHosts_, kMaxSyncHosts, syncHostCount_);
-        if (syncHostsError_) { syncHostCount_ = 0; return; }
-        startResolverForNames(syncHosts_, syncHostCount_);
-        refreshNamedHosts(hosts, syncHosts_, syncHostCount_);
     }
 };
 

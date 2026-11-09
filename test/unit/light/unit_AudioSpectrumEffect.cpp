@@ -237,7 +237,7 @@ TEST_CASE("AudioSpectrumEffect shows its speed only for the sweep") {
     CHECK(s.effect.controls()[static_cast<uint8_t>(mm::test::controlIndex(s.effect, "speed"))].hidden);
 }
 
-// The notes are the piano's keys, one bar a semitone; without them, as with `harmony` off, the third octaves draw instead.
+// The notes are the piano's keys, one bar a semitone; without them, as while the notes do not run, the third octaves draw instead.
 TEST_CASE("AudioSpectrumEffect draws the piano's keys as notes, and the third octaves without them") {
     constexpr int GW = 79, GH = 8;   // one column a key
     Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, false, mm::kBandsNotes);

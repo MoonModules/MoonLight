@@ -36,6 +36,7 @@
 /// The port is a test one rather than 11988, since a running desktop app holds the real sync port.
 
 #include "doctest.h"
+#include "core/services/AudioChords.h"   // kChordMajor
 #include "core/services/AudioService.h"
 #include "core/util/MoonLightAudioSyncPacket.h"
 #include "core/util/WLEDAudioSyncPacket.h"
@@ -431,7 +432,7 @@ TEST_CASE("AudioService Local+send → Simulate: send stops, no socket") {
 }
 
 // Regression: a mic diagnosis is a local-mode read-out, so a mode without a mic must clear it, and one left standing makes a working receive look dead: @xref{leaving-local-clears-the-mic-status}.
-TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis, in every mic-less mode") {
+TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis and reads no level path, in every mic-less mode") {
     FrozenClock clk(1);
     for (const uint8_t micLess : {AudioService::kSimMode, AudioService::kReceiveMode}) {
         if (micLess == AudioService::kReceiveMode && !mm::platform::hasNetwork) continue;
@@ -439,9 +440,15 @@ TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis, in e
         a.syncPort = kTestSyncPort;
         a.mode = micLess;
         a.applyState();
+        a.rebuildControls();
         a.setMicStatusStaleForTest(true);   // what a local-mode diagnosis leaves behind
         a.tick1s();
         CHECK_FALSE(a.micStatusStaleForTest());
+        const char* dyn = nullptr;            // and the level path, which runs on a local input alone, says so
+        for (uint8_t i = 0; i < a.controls().count(); i++)
+            if (std::strcmp(a.controls()[i].name, "dynamics") == 0) dyn = static_cast<const char*>(a.controls()[i].ptr);
+        REQUIRE(dyn != nullptr);
+        CHECK(std::strcmp(dyn, "no input analyzed here") == 0);
         a.release();
     }
 }
@@ -496,6 +503,25 @@ TEST_CASE("AudioService Receive: a MoonLight packet drives the whole frame, the 
     CHECK(f.heard());                  // by the sender's gate
     CHECK(f.bass == 210);              // derived here from the thirds, which is why the ranges do not travel
     CHECK(std::strcmp(status(a), "receiving MoonLight from 127.0.0.1") == 0);   // the format named, so a mixed network says which board sends what
+    a.release();
+}
+
+// The chord is named from whichever source made the frame, so a receiving board names it from the sender's pitch classes.
+TEST_CASE("AudioService Receive: a received frame's chord is named here, from the sender's pitch classes") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    AudioFrame peer;
+    peer.level = 180; peer.gate = 30; peer.gateOpen = true;
+    peer.chroma[0] = 220; peer.chroma[4] = 200; peer.chroma[7] = 210;   // C, E and G: C major
+    peer.notesCount = kAudioNoteKeys;   // the harmony section travels with the keys, as a board with harmony on sends
+    peer.seq = 600;
+    uint8_t pkt[kMlSyncMaxPacket];
+    const size_t n = buildMoonLightAudioSync(pkt, peer);
+    REQUIRE(sendUntil(a, pkt, n, [&] { return a.audioFrame()->level == 180; }));
+    CHECK(a.audioFrame()->chordRoot == 0);
+    CHECK(a.audioFrame()->chordQuality == kChordMajor);
     a.release();
 }
 
@@ -627,8 +653,7 @@ TEST_CASE("AudioService Receive: a MoonLight packet without the smoothed bands i
     for (uint8_t i = 0; i < 16; i++) peer.bands[i] = 200;
     uint8_t pkt[kMlSyncMaxPacket];
     buildMoonLightAudioSync(pkt, peer);
-    pkt[6] = 1u << kMlSectionCore;   // the core alone
-    REQUIRE(sendUntil(a, pkt, kMlSyncHeaderSize + 1 + kMlSyncCoreSize, [&] { return a.audioFrame()->level == 70; }));
+    REQUIRE(sendUntil(a, pkt, kMlSyncHeaderSize + kMlSyncSectionHeader + kMlSyncCoreSize, [&] { return a.audioFrame()->level == 70; }));   // the core alone, the first section
     CHECK(a.audioFrame()->bandsSmoothed[5] > 80);   // one block of the ballistic's rise toward 200
     a.release();
 }
@@ -650,4 +675,49 @@ TEST_CASE("AudioService Receive: a late MoonLight frame's hit rides in the next 
     REQUIRE(sendUntil(a, pkt, buildMoonLightAudioSync(pkt, peer), [&] { return a.audioFrame()->level == 52; }));
     CHECK(a.audioFrame()->onsetLow == 180);
     a.release();
+}
+
+// Pre-commit review (2026-11-09): the receive buffer went with a release and never came back, since the next prepare saw unchanged sync settings and left the socket as it was.
+TEST_CASE("AudioService Receive: after a release and a prepare a packet still lands") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    a.release();
+    CHECK_FALSE(a.syncOpenForTest());
+    a.applyState();
+    a.tick();
+    REQUIRE(a.syncOpenForTest());
+    CHECK(sendLevel(a, 77));
+    a.release();
+}
+
+// Frame numbers count per sender, as RTP's do: two senders on one group never judge each other's frames late, a sender's own late or repeated frame is caught, and a restarted or long-silent one counts afresh.
+TEST_CASE("audio sync judges each sender's frame numbers on their own") {
+    SenderOrder order;
+    const uint8_t a[4] = {192, 168, 1, 10}, b[4] = {192, 168, 1, 11};
+    using O = SenderOrder::Order;
+    CHECK(order.judge(a, 1000, 0, 1000) == O::New);
+    CHECK(order.judge(b, 990, 5, 1000) == O::New);     // another sender, 10 behind a's number, still new
+    CHECK(order.judge(a, 1001, 10, 1000) == O::New);
+    CHECK(order.judge(b, 991, 15, 1000) == O::New);
+    CHECK(order.judge(a, 1001, 20, 1000) == O::Repeat);  // a's last again
+    CHECK(order.judge(a, 995, 25, 1000) == O::Late);     // a's own late frame
+    CHECK(order.judge(a, 3, 30, 1000) == O::New);        // far behind: a restarted
+    CHECK(order.judge(b, 900, 1100, 1000) == O::New);    // b silent past the forget time: afresh
+}
+
+// Two senders on one group made a receiver alternate between their frames; it follows one, as sACN selects a source: the first heard on equal priority, a higher priority at once, and another only once the followed one is silent.
+TEST_CASE("audio sync follows one sender: the first heard, a higher priority, or another once it is silent") {
+    SourceSelection sel;
+    const uint8_t a[4] = {192, 168, 1, 10}, b[4] = {192, 168, 1, 11}, c[4] = {192, 168, 1, 12};
+    constexpr uint8_t kP = SourceSelection::kDefaultPriority;
+    CHECK(sel.follows(a, kP, 0, 1000));
+    CHECK_FALSE(sel.follows(b, kP, 10, 1000));   // a plays: b is passed over
+    CHECK(sel.othersIgnored(20, 1000));
+    CHECK(sel.follows(a, kP, 30, 1000));
+    CHECK(sel.follows(c, kP + 1, 40, 1000));     // a higher priority takes over at once
+    CHECK_FALSE(sel.follows(a, kP, 50, 1000));
+    CHECK(sel.follows(b, kP, 1100, 1000));       // c silent past a second: the next sender heard takes over
+    CHECK_FALSE(sel.othersIgnored(2200, 1000));  // nothing passed over lately
 }

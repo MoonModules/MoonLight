@@ -1,8 +1,7 @@
 #pragma once
 
 #include "core/util/math16.h"            // map32: the shared, fencepost-safe range map
-#include "light/effects/EffectBase.h"
-#include "light/powerfunctions/audioReadout.h"   // barsOf: the bands, the thirds or the keys
+#include "light/effects/AudioBarsBase.h"
 
 namespace mm {
 
@@ -14,7 +13,7 @@ namespace mm {
 /// @technical
 ///
 /// The band loop caches each band's position and the column loop only reads that cache, so a band spanning many columns integrates once a frame.
-class FreqSawsEffect : public EffectBase {
+class FreqSawsEffect : public AudioBarsBase {
 public:
     /// Catalog tags: MoonLight origin, audio-reactive.
     const char* tags() const override { return "💫🎶"; }
@@ -38,8 +37,6 @@ public:
     /// The phase model that places the saw.
     /// @guide `Chaos` reads the position off the beat, so the saw teleports as the rate changes. `Chaos fix` carries a per-band offset, so a rate change continues smoothly. `BandPhases` integrates an accumulator, so the saw never jumps.
     uint8_t method    = kMethodBandPhases;
-    /// The bars: the sixteen, the third octaves or the piano's keys.
-    uint8_t bands     = kBandsThirds;
 
     /// Publish the trail, the band physics, the position method and the bands.
     void defineControls() override {
@@ -51,11 +48,12 @@ public:
         controls_.addControl("keepOn", keepOn);
         static constexpr const char* kMethodOptions[] = {"Chaos", "Chaos fix", "BandPhases"};
         controls_.addSelect("method", method, kMethodOptions, kMethodCount);
-        controls_.addSelect("bands", bands, kBarScaleOptions, kBandsCount);
+        addBandsSelect();
     }
 
     /// Start every band from rest, since the state is per band rather than per light.
     void prepare() override {
+        AudioBarsBase::prepare();
         clearState();
     }
 

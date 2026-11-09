@@ -1,6 +1,6 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
 
 namespace mm {
 
@@ -14,7 +14,7 @@ namespace mm {
 /// @technical
 ///
 /// The effect is a strip in spirit, declared 2D so it spans a panel as a flat run of pixels. The dot and the blur work over the whole pixel count either way.
-class BlurzEffect : public EffectBase {
+class BlurzEffect : public AudioEffectBase {
 public:
     /// Catalog tags: WLED lineage, audio-reactive.
     const char* tags() const override { return "🐙🎶"; }
@@ -40,6 +40,7 @@ public:
 
     /// Arm the one-shot clear and rest both cursors, so a rebuild starts from a known state.
     void prepare() override {
+        AudioEffectBase::prepare();
         firstFrame_ = true;
         freqBand_   = 0;
         scanPos_    = 0;

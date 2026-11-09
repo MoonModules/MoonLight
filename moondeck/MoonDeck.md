@@ -11,16 +11,17 @@ Below: the UI behaviors common to every card, described once, then one section p
 ## UI Features
 
 - **Status dots** on each card: grey (not run), orange (running), green (exit 0), red (exit non-zero).
-- **Last-run log** — the **📄** button replays that script's last run in the log pane. It appears **only on cards that have actually run** (and shows up the moment a first run finishes, no reload needed), so its absence is informative too: a card with no 📄 is one nobody has used yet. Every run is teed to `build/moondeck-logs/<id>.log` as it streams (not buffered to the end, so a run you Stop still leaves what it printed), which answers "what did this do last time" after a page reload or a switch to another card — the case a live-only stream cannot. One file per script, overwritten each run: a last-run record, not a history. Gitignored, being derived state.
-- **Run count** — every run ends `[exit code: 0] [run #7]`, counting that script's runs in `build/moondeck-logs/run-counts.json`. Two identical reports are otherwise indistinguishable, so the number answers "did this actually re-run since the fix, or am I reading the same output again?". Derived like the logs: deleting `build/` resets it, and a missing or corrupt file costs the count, never the run.
+- **Last-run log**: the **📄** button replays that script's last run in the log pane. It appears only on cards that have run, as soon as the first run finishes. Every run streams to `build/moondeck-logs/<id>.log` as it prints, so a Stopped run keeps its output. One file per script, overwritten each run: a last-run record, not a history. Gitignored, being derived state.
+- **Run count**: every run ends `[exit code: 0] [run #7]`, counting that script's runs in `build/moondeck-logs/run-counts.json`, so two identical reports are told apart. Deleting `build/` resets it, and a missing or corrupt file costs the count, never the run.
 - **Run/Stop toggle** for long-running scripts (Run desktop, Monitor ESP32).
-- **Duration**: every card shows how long it takes, measured rather than declared. It is the longest of its recent passing runs on this machine, the last five per call, so a clean build counts among incremental ones. They are kept in `build/moondeck-logs/durations.json` beside the run record, and deleting `build/` resets them.
+- **Duration**: every card shows how long it takes, measured rather than declared: the longest of its last five passing runs per call on this machine, kept in `build/moondeck-logs/durations.json`. Deleting `build/` resets them.
 - **Group headers** in the sidebar (setup, build, flash, run, test, check, scenario).
-- **Destructive-action confirm** — scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
-- **Tab persistence** — selected tab survives page refresh.
-- **Process detection** — on page load, checks if MoonLight or idf.py is already running and shows Stop button.
-- **Network bar** (top of the sidebar): switch between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup, MoonDeck auto-selects the network whose subnet matches the host's current LAN — moving the laptop between networks usually requires no clicks. Manual override (the dropdown) pins the selection until the pinned network's subnet stops matching the host. Add / Rename buttons next to the dropdown manage the catalog. State persisted in `moondeck/moondeck.json` under `networks` + `active_network`.
-- **Device-model picker** on each device row: dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the same catalog the web installer uses. When the device's firmware uniquely identifies one deviceModel (e.g. `esp32-eth` → Olimex Gateway), MoonDeck auto-deduces and mirrors the value to the device's `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. For firmwares with no unique deviceModel (`esp32` runs on multiple), the user picks; MoonDeck pushes that value too. A device-reported deviceModel not in the catalog still shows up as `<key> (unknown)` so the value survives. MoonDeck's picker is a **text dropdown for an already-running device**, distinct from the web installer's flash-time *picture* deviceModel picker; both read the same catalog, but MoonDeck doesn't need the per-deviceModel `image`/`url` fields (those are installer-picker UX). Selecting a deviceModel pushes its full catalog config: each entry carries a `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)), so MoonDeck sends it in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+- **Destructive-action confirm**: scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
+- **Tab persistence**: the selected tab survives page refresh.
+- **Process detection**: on page load, MoonDeck checks whether MoonLight or idf.py is running and shows Stop.
+- **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
+- **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+
 ## Desktop Tab
 
 
@@ -35,7 +36,7 @@ uv run moondeck/build/build_desktop.py
 uv run moondeck/build/build_desktop.py --configure   # configure and generate build_id.h only, what check_code and check_docgen read
 ```
 
-Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary — not the ~130-file test suite — so the "just give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
+Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary, not the ~130-file test suite, so the "give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
 
 ### run_desktop
 
@@ -112,6 +113,39 @@ Every percentage is a share of the labeled tracks in that row. The examples are 
 | Source | Who wrote the label: a bold source measures accuracy, the others agreement with that writer | |
 
 Double, half, triple, third, 3:2 and 4:3 are level errors: the method hears the music's pulse and counts a multiple or a subdivision of the beat, which the tempo prior or a tapped label settles. Wrong is a reading at none of these ratios, which includes the rarer ones such as 5:4. A low score against a `store` or `tag` label can be the label's fault: Drum & Bass is often listed at half its tempo.
+
+### bench_notes
+
+Run music whose notes are known through the note effects on the desktop, and score each stage against the score: the engine's sounding keys, `no overtones`, Keyboard's hands and Strings' fretting hand, each with and without `chord`. The **Notes Report** card shows the latest report in the View pane and starts nothing.
+
+```bash
+uv run moondeck/check/bench_notes.py --generated                       # the exact-note set, written once
+uv run moondeck/check/bench_notes.py --dir <folder> --limit=20         # GuitarSet, URMP, or audio beside its MIDI
+uv run moondeck/check/bench_notes.py --dir <folder> --instrument cello # the Strings instrument the hand plays
+uv run moondeck/check/bench_notes.py --show                            # the latest report, as the card shows it
+```
+
+**The engine as the boards run it.** `mm_tempo --notes` feeds the decoded audio through the shipped analysis and through the Keyboard and Strings effects' own `keep`, and prints each stage's keys a frame. Each stage's frames become notes, a key kept on consecutive frames being one note, bridged over a gap of two frames, 43 ms, and a strike starting the next, each dated where the engine says it began, the frame it lit on less its key's band delay, which `mm_tempo` prints in its header, scored with mir_eval's transcription measure: a note counts when its pitch matches and it starts within 50 ms, and again with its end within 50 ms or a fifth of its length, whichever is longer.
+
+**The sets a folder holds** are told by their files: audio beside a MIDI file of the same name, as MIDI rendered through a sound font or MAESTRO; GuitarSet's `audio_mono-mic/` beside its `annotation/*.jams`, where each note names its string and the report gives the share the hand puts on it; URMP's `AuSep_*.wav` beside its `Notes_*.txt`; and the generated set's `notes.csv`. Licenses: GuitarSet CC BY 4.0, URMP CC0 (on Dryad), MAESTRO CC BY-NC-SA 4.0. The data is only read; runs and reports go to `build/notes/`.
+
+**The report** gives each stage's precision, recall and F-measure over every file; the frame measure of MIREX multiple-F0 estimation every 10 ms, the share of the lit time a played note sounds at the key's pitch and the share of the played time its key is lit, each lit note dated back by its band's delay, which judges as a viewer does, a late note mostly right rather than wrong twice; its latency, the median lag from a found note's start to its key lighting, the delay a viewer sees, and the notes it invents named by kind: a flash, under 70 ms, the burst an attack spreads over the keys; an overtone, an octave, twelfth or two octaves from a played note; leakage, a semitone or two away; and the rest. Then each file's F per stage.
+
+**What a score claims.** The sets are studio or pickup recordings, so a board's MEMS microphone in a room scores lower and line-in sits closer. The values it tunes are compile-time constants on the bank's 0..255 levels, the bank at 24 kHz on every board, so one tuning serves every chip and the microphone and the room stay each device's own. The harness is the guardrail every change to the note path passes, scored before and after, and the values are tuned again when the bank, the level path or the rate changes.
+
+### bench_drums
+
+Run drum recordings whose hits are labeled through the shipped analysis on the desktop, and score each onset the frame carries against the drums it stands for: `onsetLow` the kick, `onsetMid` the snare and the toms, `onsetHigh` the hi-hat and the cymbals, `onset` every drum.
+
+```bash
+uv run moondeck/check/bench_drums.py --dir <MDB Drums folder> --instrument drums   # the drums alone, the Audio card's instrument at drums
+uv run moondeck/check/bench_drums.py --dir <MDB Drums folder> --mix              # the drums inside the band, at mix
+uv run moondeck/check/bench_drums.py                                             # the generated drum walk
+```
+
+Without `--dir` it scores a generated drum walk, written once to `build/drums/generated/` from the rise profiles of MDB Drums' isolated hits: each drum alone, then kick and hi-hat together, then kick, snare and hi-hat at 4 to 20 hits a second, so DrumKit is judged by eye on a pattern that alternates its drums and the fastest rate each drum keeps apart, 90% of its hits lit, is a number. Its kick carries a beater click 19 dB under its body, as MDB Drums' kicks do.
+
+`mm_tempo --drums` prints each frame's four onsets; a frame whose field is above 0 is a hit, scored with mir_eval's onset measure, within 50 ms of a labeled hit. The set is [MDB Drums](https://github.com/CarlSouthall/MDBDrums) (CC BY-NC-SA 4.0), 23 tracks with every hit labeled by drum, the drums alone or the full mix; the data is only read, and runs and reports go to `build/drums/`. **The report** gives each field's labeled hits, the hits it found, precision, recall, F and latency, the median lag from a labeled hit to the frame that found it, then each track's F per field.
 
 ### tempo_compare
 
@@ -242,7 +276,7 @@ Reads the added lines of the branch diff and the working tree, so pre-existing p
 
 Report every break of the shape the standards define, and refuse a new one, in help.json and in the headers' `///` comments.
 
-It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs LLVM, the one [gen_help](#gen_help) uses. Without it the freshness prints as skipped and every other rule still runs, while `docgen.json` keeps its counts: a run that measured fewer rules records no number to beat.
+It also regenerates `docs/help/help.json` to prove the committed one is fresh, which needs the LLVM [gen_help](#gen_help) uses. Without it the freshness prints as skipped, every other rule still runs, and `docgen.json` keeps its counts.
 
 ```bash
 uv run moondeck/check/check_docgen.py
@@ -261,21 +295,17 @@ And per file, over every `.h` and `.cpp` under `src/`, `test/`, `esp32/main`, `m
 - a public function or variable with no `///` at all
 - a `//` note on a declaration, which belongs in its `///` or inside a body
 
-**A finding in a file that generates a page is an error; one in an implementation file is a warning.** A header and a catalog page are published, so a defect there ships and fails the gate. A `.cpp` publishes nothing: its comments are a note to the next reader, worth fixing without stopping a commit. Both are counted and both are reported. The split stages the sweep rather than ranking the two kinds of comment, so it goes and everything blocks once the warning column reaches zero.
+**A finding in a file that generates a page is an error; one in an implementation file is a warning.** A header and a catalog page are published, so a defect there ships and fails the gate. A `.cpp` publishes nothing, so its finding is worth fixing without stopping a commit. Both are counted and reported.
 
-Every run records its findings, and the [test page](../docs/reference/tests.md#check_docgen) shows them: each rule with its count, and every file with its count and its errors in full, since an error blocks a commit and its reader needs to know what to fix. The page is the artifact to read, because stdout scrolls away and truncates.
+Every run records its findings, and the [test page](../docs/reference/tests.md#check_docgen) shows each rule with its count and every file with its errors in full.
 
-**A ratchet, not a snapshot.** The tracked counts, `docs/reference/metrics/docgen.json`, are the baseline: the run rewrites the file, then compares its counts against the copy in `HEAD`, and the file's git history is the trend. Each ratchet keeps its counts this way. An error fails the run, and so does any rule whose warning count ROSE, the total included. Warnings are staged work, and staged work that grows is not a sweep.
+**A ratchet, not a snapshot.** The tracked counts, `docs/reference/metrics/docgen.json`, are the baseline: the run rewrites the file, then compares its counts against the copy in `HEAD`, and the file's git history is the trend. An error fails the run, and so does any rule whose warning count ROSE, the total included. The comparison is per rule as well as on the total, since a total alone hides one rule paying for another. A rule whose limit itself changed is the one case where a rise is right, and the commit message says so.
 
-The comparison is per rule as well as on the total, because each hides a different move. A total alone hides one rule paying for another: splitting an over-wide line lowers the width count and raises the block count, which is the trade the block cap exists to refuse. Per rule alone misses a rule sitting under its own baseline while the total climbs. A rule whose limit itself changed is the one case where a rise is right, and the commit message is where that is said.
+**A touched file leaves the list.** Holding the line is the floor, and the aim is zero: a touched file that still has warnings gets all of them resolved, since a file at zero stays there. What resists keeps its count with one line saying what remains and why.
 
-**A touched file leaves the list.** Holding the line is the floor, and the aim is zero. The counts shrink only when each change spends effort on the warnings in the files it touches, so a touched file that still has warnings gets all of them resolved. Clearing a file beats shaving one finding off each of five, since a file at zero stays there and a file at four drifts back. The effort is reasonable: the findings a reader would agree with, and what resists keeps its count rather than being forced, with one line saying what remains and why.
+**There is no tolerated list.** The limits are the limits, and the check is red until the tree meets them.
 
-Cut first. Move only what neither the code, the test name nor the spec says, and prefer an existing home over a new appendix section. Files the change never opened are a sweep of their own.
-
-**There is no tolerated list.** The limits are the limits, and the check is red until the tree meets them. A grandfather list was tried and removed: while one exists, the cheapest way to make the check green is to add to it, which is how the comment budget eroded in the first place.
-
-The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and `test/python/test_check_docgen.py` pins the check. Every rule is tested firing on input built to break it, because a regex that silently stopped matching would report a clean run.
+The rules are in [documentation-standards.md](../docs/contributing/documentation-standards.md#the-card), and `test/python/test_check_docgen.py` pins the check, every rule tested firing on input built to break it.
 
 ### check_esp32_built
 
@@ -393,7 +423,7 @@ The other tool cards sweep the whole repo, which is the wrong shape when you are
 file and want to know what the tools say about *it*. This runs clang-tidy, clang-query and
 check_code against one module and prints them under one heading. It adds no analysis of its own:
 it invokes the same scripts with `--module`, so this and the repo-wide reports can never
-disagree about a finding. Each tool also accepts `--module` on its own if you want just one.
+disagree about a finding. Each tool also accepts `--module` on its own for one tool.
 
 **Module is not the same as a translation unit.** A TU is one `.cpp` plus everything it
 includes — the unit the compiler processes, and there are 15 under `src/`. A module is one class
@@ -402,7 +432,7 @@ TU of their own: `ParallelLedDriver.h` is analyzed through whichever `.cpp` incl
 why `--module` filters the findings rather than the file list — scoping by TU would analyze
 nothing for a header-only module and report a confident, wrong zero.
 
-It still scopes the *parse*, by resolving which TUs actually reach the module's files —
+It still scopes the *parse*, by resolving which TUs reach the module's files,
 following `#include` edges transitively, so a header-only module is analyzed through the one or
 two `.cpp` files that include it rather than all 15. `BouncingBallsEffect` is reached only by
 `main.cpp`: **8s for all three tools, down from over four minutes**. The run prints which TUs it
@@ -446,21 +476,9 @@ report when more than ten files fail to compile.
 
 ### check_clang_query
 
-Our own AST rules — the checks we invent, that no off-the-shelf tool reports.
+Our own AST rules: the checks we invent, that no off-the-shelf tool reports.
 
-**What clang-query is.** An interactive REPL over Clang's AST, shipped with LLVM. You write a
-matcher in the same domain-specific language clang-tidy checks are built from —
-`cxxRecordDecl(hasName("Foo"))`, `callExpr(hasAncestor(ifStmt()))` — and it prints or dumps every
-node that matches. It has no opinions and no built-in checks: it answers structural questions
-about the code, and what counts as a finding is left to the caller.
-
-**What it does for us.** It is how a project-specific rule gets written without building a
-clang-tidy plugin. A plugin is a compiled C++ target with its own build; a matcher is one line of
-text, editable in minutes. So the rules here are ours by definition — how much RAM the fixed
-arrays cost, where the heap is touched, whether every class carries a `///` — questions no
-off-the-shelf linter asks because they are about *this* codebase's constraints. The matchers
-match broadly and the filtering happens in Python, because the matcher language has no notion of
-"bigger than 64 bytes".
+**What it does for us.** clang-query is an LLVM REPL that prints every AST node a matcher selects (`cxxRecordDecl(hasName("Foo"))`), with no built-in checks. A project-specific rule is one line of matcher text, where a clang-tidy plugin is a compiled target with its own build and LLVM ABI. One script holds a growing list of rules: a new one is a matcher plus a few lines of Python, not another card. The module docstring in `moondeck/check/check_clang_query.py` states the rationale per rule.
 
 ```bash
 uv run moondeck/check/check_clang_query.py               # every rule
@@ -468,242 +486,78 @@ uv run moondeck/check/check_clang_query.py --rule=arrays # one rule
 uv run moondeck/check/check_clang_query.py --min-bytes=256
 ```
 
-One script holding a **growing list** of rules, not one script per rule: a new rule is a matcher
-plus a few lines of Python, so it costs a list entry rather than another card and another help
-page. clang-query rather than a compiled clang-tidy plugin — matchers are plain text, there is no
-plugin to build and no LLVM ABI to track, and clangd cannot load a compiled plugin anyway.
-
-**Rule `arrays` — fixed arrays that cost RAM.** A fixed array is a fixed size, and the
-architecture sizes buffers at runtime from available memory. Reported worst-first, split by where
-the RAM lives, because the fix differs:
+**Rule `arrays`: fixed arrays that cost RAM.** Reported worst-first, split by where the RAM lives, because the fix differs:
 
 | Where | Cost | Why it matters |
 |---|---|---|
-| `local` | Stack | A 2 KB local on a 4 KB task stack is an overflow waiting for the wrong call depth. |
-| `member` | Per instance | Multiplied by how many instances exist — 200 bytes × 90 modules is 18 KB. |
+| `local` | Stack | A 2 KB local on a 4 KB task stack overflows at the wrong call depth. |
+| `member` | Per instance | 200 bytes × 90 modules is 18 KB. |
 
-`constexpr` and static-storage arrays are **excluded**: they live in flash and cost no RAM.
-Including them roughly triples the list with entries nobody should act on. `MoonModule::name_[16]` is the cautionary case: its
-comment records that it was *shrunk* from `char[24]` to save 8 bytes per module, so reporting it
-would flag a past win as a problem.
+`constexpr` arrays are excluded, since they live in flash. Arrays of static storage duration are excluded too: a mutable one costs RAM in `.bss` or `.data`, which [check_footprint](#check_footprint) measures per module as its STATIC column, and `check_code` counts it as a mutable static. Element sizes are an order-of-magnitude guide.
 
-Element sizes come from a table of the types we actually use; anything else (a struct, a class)
-falls back to 4 bytes. The number is an order-of-magnitude guide, not an ABI-exact figure.
+**No size threshold.** Every RAM-costing array is reported, however small. `--max-rows` (default 60, worst-first) caps volume instead and always announces the cut. `--max-rows 0` prints everything and `--min-bytes N` restores a size cutoff, both CLI-only. The per-module card keeps the cap too.
 
-**No size threshold.** Every RAM-costing array is reported, however small — a cutoff hides
-things for the wrong reason (`bool birthNumbers_[9]` is 9 bytes and was invisible under the old
-10-byte default), and it bought little anyway: 362 findings with no threshold against 290 at
->10 bytes. Volume is capped by `--max-rows` (default 60, worst-first) instead, which truncates
-the longest lists rather than silently dropping the smallest entries — and the cut is always
-announced, because a table that quietly stops reads as "that is all there is". `--max-rows 0`
-prints everything, and `--min-bytes N` restores a size cutoff — both CLI-only, since the card is
-one button and the default plus the "N more not shown" line already answer the question from the
-browser.
+**Rule `scratch`: `ScratchBuffer` members.** `ScratchBuffer` is the project's heap manager, so a module using one allocates with no `new` or `malloc` in its own source and the `heap` rule reports zero for it. This rule closes that blind spot.
 
-The per-module card keeps the 60-row cap, on every table including arrays: scoping to one module
-narrows WHICH findings, not how many fit on a screen — `HttpServerModule` alone reports 212
-declarations. Truncation is always announced, so the tail is one `--max-rows 0` away.
+**Rule `heap`: every allocation site in `src/`.** `new`, `delete` and the `malloc` family (including `heap_caps_*` and `ps_malloc`), in two tables, ALLOCATE and FREE. Each row carries the site, what it touches, and the enclosing function. `realloc` counts as acquiring, and member methods named `free()` are excluded.
 
-**Rule `scratch` — `ScratchBuffer` members.** `ScratchBuffer` *is* the project's heap manager,
-so a module that uses one allocates without any `new` or `malloc` appearing in its own source —
-`GameOfLifeEffect` has three (`cells_`, `future_`, `colors_`) and the `heap` rule reports zero
-for it, because the real `platform::alloc` lives once inside `ScratchBuffer.cpp`. This rule
-closes that blind spot: 18 members across 13 files. No size column — a ScratchBuffer is sized at
-runtime from the light count, which is the entire point of it.
-
-**Rule `heap` — every allocation site in `src/`.** `new` / `delete` / the `malloc` family
-(including `heap_caps_*` and `ps_malloc`), in **two tables — ALLOCATE and FREE**. They answer
-different questions: the acquire list is where RAM comes from and what the hot path must not do;
-the release list is what pairs with it. Reading them side by side is how an unpaired allocation
-shows up — and the split is what reveals, for example, that `HttpServerModule` frees five times
-and allocates nothing, or that only **8 places in the whole codebase acquire memory**.
-
-Each row carries what the site is, what it touches, and **the enclosing function** — the column
-that turns a location into a lead ("this file allocates" is weak, "`handleConnection` allocates"
-says where to look). `realloc` counts as acquiring, since it can move and grow. Not violations:
-the driver layer allocates deliberately, but the hot path must not.
-
-Member methods named `free()` are excluded. We have three (`MoonLive`, `Buffer`, `MappingLUT`),
-and matching on the name alone counted every call to them as heap deallocation — 15 false
-positives pointing at the wrong lines.
-
-**Rule `comments` — which declarations are documented, and with which kind.** The project's rule
-is that every class, method and attribute carries a short, readable `///` (that is what moxydoc
-publishes), while `//` developer notes belong in the code lines rather than stacked on a
-declaration. The report gives the matrix:
-
-```
-  DECL            DOC      DEV     NONE   %DOC
-  class            53      116       25    27%
-  method          415      651     1141    18%
-  attribute       133      183      923    10%
-
-  950 declarations carry only a `//` where the rule asks for `///`; 2089 carry no comment at all.
-  Public surface: 503 of 2558 documented (19%), the public API.
-```
-
-Three columns because there are three states, each with a different fix: `///` is documented;
-`//` documents it in the wrong kind (promote it, or move it into the code lines); `NONE` has no
-comment at all (write one). `%DOC` is the share carrying a real doc comment.
-
-Then every declaration, ranked by how far it sits from the ideal:
+**Rule `comments`: which declarations are documented, and with which kind.** Every declaration carries a short `///` (what moxydoc publishes), while `//` notes belong in the code lines. The report counts DOC (`///`), DEV (`//`, the wrong kind: promote it or move it into the code), NONE (write one) and %DOC per class, method and attribute, plus a `Public surface: N of M documented` line, the number the doc site reflects. Then every declaration is ranked by distance from the ideal:
 
 ```
   DOC DEVIATION  DOC WORDS  DEV WORDS  VIS   DECL       NAME               FILE:LINE
          +1135%       1606          0  pub   class      MoonI80Peripheral  MoonI80Peripheral.h:10
-          +797%       1166          0  pub   class      HttpServerModule   HttpServerModule.h:17
-          -100%          0         61  priv  method     driversOn          Scheduler.h:138
 ```
 
-**Sizes are WORDS, not lines.** A line is a formatting accident — the same paragraph is 5 lines at
-100 columns and 9 at 60 — while words are what a reader absorbs. Measured here, a comment line
-carries a median of **13 words** in both kinds, so a line-based yardstick of class 10 / method 3 /
-attribute 3 converts to the ideals below.
+Sizes are WORDS. `DOC DEVIATION` is the signed % difference from the ideal doc size (class 130 words, method and attribute 40): `0%` is ideal, `-100%` is absent. `VIS` is `pub` or `priv`: an undocumented public method is an API gap. Rows sort by |DOC DEVIATION|, so a bloated header and an uncommented declaration surface together.
 
-| Column | Meaning |
-|---|---|
-| `DOC DEVIATION` | Signed % difference from the ideal doc size — **class 130 words, method and attribute 40**. `0%` is ideal, `-100%` is absent, and over-documenting is unbounded. Not a "ratio": a ratio is a bare quotient (2.3×), this is a deviation from a target. |
-| `DOC WORDS` | Raw `///` word count — the number the deviation is derived from, so it sits beside it. |
-| `DEV WORDS` | Raw `//` word count. **No deviation column**, because zero is the ideal: measuring against "one line" made the best case (no note at all) read as `-100%`, i.e. worst. |
-| `VIS` | `pub` or `priv`. The header documents the public API, so an undocumented public method is an **API gap** while a private one is a maintenance note. Both are reported: a bloated comment is bloat either way, and clangd's hover shows both kinds to whoever maintains the code, and the reader can weigh them. |
+Clang's lexer discards `//`, so the rule parses a shadow copy of `src/` under `build/comment-shadow/`, where every leading `//` becomes `/// MMDEV: …`. `src/` is never touched.
 
-The `Public surface: N of M documented` line is the number the doc site reflects. It differs
-sharply from the overall figure: `HueDriver` reads 40% public against 13% overall, because 52 of
-its 77 declarations are private.
+Not reported: forward declarations, lambdas and their closure classes (a real `operator()` on a named functor still is), `invalid` declarations, `= default` and `= delete` members, and function parameters, which `@param` documents inside the method's comment.
 
-Rows sort by **|DOC DEVIATION|**, so both failure modes surface together: a bloated header and a
-declaration with no comment at all are equally wrong in opposite directions, and ranking on the
-signed value would bury one of them.
-
-The ideals are a ruler, not a gate. `MoonI80Peripheral`'s 1606 words may be exactly right — they
-ARE the driver's spec. The ratio says how far from typical something sits; a human decides.
-
-**How `//` becomes visible to the AST.** Clang's lexer discards `//` — only `///` and `/** */`
-become AST nodes, because the compiler consumes those itself. So the rule parses a SHADOW COPY of
-`src/` under `build/comment-shadow/`, where every leading `//` has been rewritten to
-`/// MMDEV: …`. The marker survives into the comment text, which is what keeps the two kinds
-apart; `src/` is never touched and the reported paths are mapped back.
-
-The marker must be plain text — an `@`-prefixed one is parsed as a doc *command* and stripped,
-which silently merges the two kinds again. `-Wdocumentation` would fabricate warnings on
-rewritten dev notes (`// @param wrong` becomes a real diagnostic), but clang-query never enables
-it, so that risk does not apply here.
-
-Not reported, because none of them is a declaration anyone documents: **forward declarations**
-(`class JsonSink;` — no body, and the real class is reported from the header that defines it),
-**lambdas** (`unless(isLambda())` on the record and `unless(ofClass(isLambda()))` on the method
-— a lambda written inside a function body is code, not a documented declaration, and its
-synthesised closure class plus call operator would otherwise report as 53 undocumented
-"methods"), `implicit` closure classes, `invalid` declarations that only parse in the TU that
-owns them, and `= default` / `= delete` members.
-
-A **real** `operator()` on a named functor class is still reported — the exclusion asks the AST
-whether the enclosing record is a lambda, rather than testing the method's name, so writing
-`struct Compare { bool operator()(…) const; }` tomorrow does not silently drop it.
-
-Not reported: function PARAMETERS. C++ cannot attach a doc comment to one — 1054 probed, zero
-with a comment — they are documented via `@param` inside the method's own comment, and this tree
-uses `@param` 8 times, all in a `.js` file. Class ATTRIBUTES are the per-member scope that does
-exist, and they are the `attribute` row above. Declarations clang marks `implicit` (a lambda's
-closure class) or `invalid` (a parse that only succeeds in the TU that owns it) are skipped:
-both are anonymous, so their only "name" is the literal word `definition`.
-
-Takes ~50s cold (a few seconds once the compilation database is warm). clang-query has no
-parallel runner of its own and costs ~44s per translation unit, so this runs the 15 `src/` TUs
-across cores; serial would be ~11 minutes.
+Takes ~50s cold: it runs the 15 `src/` TUs across cores, at ~44s each.
 
 ### check_nonblocking
 
-What the render path calls that can block or allocate — checked by the compiler.
+What the render path calls that can block or allocate, checked by the compiler.
 
-**What `-Wfunction-effects` is.** Not a separate tool: a Clang 20+ warning implementing the C++
-*function effects* proposal (P2698). Annotate a function `[[clang::nonblocking]]` and the compiler
-verifies, **transitively through the whole call graph**, that nothing it reaches allocates, locks,
-throws, or otherwise blocks. It is a compiler feature, so it sees exactly what the compiler sees —
-including through virtual dispatch and member-pointer calls, which is where a hand-written check
-gives up.
+**What `-Wfunction-effects` is.** A Clang 20+ warning implementing the C++ function effects proposal (P2698). A function annotated `[[clang::nonblocking]]` is verified, transitively through the whole call graph, to reach nothing that allocates, locks, throws, or blocks, including through virtual dispatch and member-pointer calls, where a hand-written check gives up.
 
-**What it does for us.** The render tick has a hard real-time budget, and the failure mode is a
-`malloc` four calls deep in something that looks harmless. Nothing else in the stack can answer
-that: clang-tidy checks one statement, lizard counts branches, the Python checks read text. This
-script's own job is deduplication and framing — a raw build prints ~1350 warning lines for ~175
-unique sites, because a header is recompiled once per translation unit that includes it.
+**What it does for us.** The render tick has a hard real-time budget, and the failure mode is a `malloc` four calls deep in something harmless. Nothing else in the stack answers that: clang-tidy checks one statement, lizard counts branches, the Python checks read text.
 
 ```bash
 uv run moondeck/check/check_nonblocking.py                # summary by callee, then every site
 uv run moondeck/check/check_nonblocking.py --module AudioService
 ```
 
-`MoonModule::tick/tick20ms/tick1s` carry `MM_NONBLOCKING` ([platform.h](../src/platform/platform.h)),
-and Clang 20+ verifies under `-Wfunction-effects` that nothing they reach allocates or blocks —
-**transitively**, through the whole call graph ([coding-standards.md § Static checks](../docs/contributing/coding-standards.md#static-checks) owns the rule).
+`MoonModule::tick/tick20ms/tick1s` carry `MM_NONBLOCKING` ([platform.h](../src/platform/platform.h)); [coding-standards.md § Static checks](../docs/contributing/coding-standards.md#static-checks) owns the rule. Overrides inherit the attribute, and `tickChildren`'s member-pointer type carries it, so passing an unannotated method fails to compile.
 
-The attribute is inherited by overrides, so three annotations cover every module's tick. It also
-sits in `tickChildren`'s **member-pointer type** — without that, the indirect call through `fn`
-is a hole the check cannot reason about, and passing an unannotated method now fails to compile.
-
-Reports unique **sites**: a header included by N translation units emits the same warning N
-times, so a raw build prints ~1350 lines for ~180 real findings.
-
-**Split by tick tier**, because the same blocking call costs roughly two orders of magnitude
-more in one than another: `tick()` runs every frame, `tick20ms()` fifty times a second, `tick1s()` once.
-Pooling them hides which findings actually matter. `OTHER` is a site whose enclosing method could
-not be resolved from source.
+The report lists unique sites, since a header included by N translation units emits the same warning N times (~1350 lines for ~175 findings). It is split by tick tier, because the same blocking call costs about two orders of magnitude more in `tick()` (every frame) than in `tick1s()` (once). `OTHER` is a site whose enclosing method could not be resolved.
 
 | Column | |
 |---|---|
-| **COND** | the branch guarding the call: `—` none (runs every time its tick does), `if`, `loop`, `switch`, `?:`, `&&`, and `ret` for a call reached only past an `if (…) return;` above it. `·rate` marks a rate limiter (`if (++n >= kEvery)`, `if (now - last < kIntervalMs) return;`) or a once-only latch (`if (!inited_)`). `?` means the guard analysis did not run — clang-query missing, a matcher it refused, or the query erroring — which is *unknown*, not unguarded |
-| **CALLS** | the function that blocks — or `(static local variable)`, a violation with no callee: a static local needs a guard variable and a one-time lock on first use |
-| **IN** | the method the call sits in, which is what places it in a tier. Clang names the call and the callee but *not* their enclosing function, so this is read back from the source |
-| **WHY IT BLOCKS** | clang's own root cause, e.g. `calls mm::platform::UdpSocket::sendTo`. `—` means a leaf the compiler could not look inside (external or unannotated) |
+| **COND** | the branch guarding the call: `—` none (runs every time its tick does), `if`, `loop`, `switch`, `?:`, `&&`, and `ret` for a call reached only past an `if (…) return;` above it. `·rate` marks a rate limiter or a once-only latch (`if (!inited_)`). `?` means the guard analysis did not run, which is unknown, not unguarded |
+| **CALLS** | the function that blocks, or `(static local variable)`, a violation with no callee: a static local needs a guard variable and a one-time lock on first use |
+| **IN** | the method the call sits in, which places it in a tier, read back from the source |
+| **WHY IT BLOCKS** | clang's own root cause, e.g. `calls mm::platform::UdpSocket::sendTo`. `—` means a leaf the compiler could not look inside |
 | **FILE:LINE** | where to go |
 
-**Sorted unconditional-first** within each tier, then by file and line. A call that runs every
-time its tick does costs more than the same call behind a branch, and ties keep source order so
-findings in one file stay together and the list diffs cleanly between runs.
+Sites sort unconditional-first within each tier, then by file and line. `if (enabled_)` is conditional and true every frame, and `·rate` reads the condition's spelling, so it is a lead rather than a verdict: COND answers "is this reached every tick", never "is this acceptable".
 
-**Two engines, each doing what it is good at.** The compiler finds the blocking calls, because
-`-Wfunction-effects` is transitive and a matcher would have to rebuild the call graph to match it.
-clang-query then annotates each site with its guard — a purely local AST question — joined on
-`file:line`. Measured ~1s per TU.
+The compiler finds the blocking calls, and clang-query annotates each site with its guard, joined on `file:line`.
 
-**No clean rebuild.** The desktop build runs every compile through [`diag_launcher.py`](build/diag_launcher.py), CMake's `CXX_COMPILER_LAUNCHER` hook, which keeps each file's compiler output beside its object as `<object>.diag`. An incremental build brings the tree up to date and the saved findings of every object in `compile_commands.json` give the whole picture, so a run takes seconds. Only a build from before the launcher is rebuilt clean, once; a build running another launcher, such as ccache, is told to reconfigure instead.
+**No clean rebuild.** The desktop build runs every compile through [`diag_launcher.py`](build/diag_launcher.py), CMake's `CXX_COMPILER_LAUNCHER` hook, which keeps each file's compiler output beside its object as `<object>.diag`. An incremental build plus the saved findings of every object give the whole picture in seconds. A build from before the launcher is rebuilt clean once; one running another launcher, such as ccache, is told to reconfigure.
 
-**Guarded is not rare.** `if (enabled_)` is conditional and true every frame; only the `·rate`
-hint separates those, and it reads the condition's *spelling*, so it is a lead rather than a
-verdict. COND answers "is this reached every tick", never "is this acceptable".
+**Desktop-only.** On GCC `MM_NONBLOCKING` expands to `noexcept`. The ESP32 toolchain has neither the attribute nor the warning and builds with `-Werror`, so a bare attribute there breaks the build. Every tick method compiles on desktop, so the render path is covered. The gap: a call into a free function under `src/platform/esp32/` is reported at the call site, while its own body is never analyzed. Closing that needs an xtensa clang: [ESP32 clang/LLVM toolchain](https://github.com/MoonModules/MoonLight/issues/220).
 
-**Desktop-only, and that loses nothing.** On GCC `MM_NONBLOCKING` expands to `noexcept` — the
-exception contract still holds; only the clang attribute and the warning are absent. The ESP32 toolchain
-has neither the attribute nor the warning, and builds with `-Werror`, so a bare attribute there
-is a build break. Every tick method compiles on desktop — modules, effects, and the **LED
-drivers** — so the render path itself is covered.
-
-The gap is real but narrow: `src/platform/esp32/` has no tick methods (it is free functions the
-tick path calls into), and while a call INTO one of them is reported at the call site, the
-function's own body is never analyzed. A platform function that blocks internally without
-carrying `MM_NONBLOCKING` is invisible. Closing that needs an xtensa clang: backlogged as
-[ESP32 clang/LLVM toolchain](https://github.com/MoonModules/MoonLight/issues/220).
-
-The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. This script is the detailed view of those sites, on request. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
+The count lives in the code check: [check_code](#check_code) runs the same build and adds one `blocking call on the render path` row per site, whose committed count may only fall. `-Wno-error=function-effects` keeps the build green, since each finding is a judgment: fix it, annotate the callee, or accept it with a scoped reason.
 
 ### check_codeql
 
-CodeQL's open alerts, read from GitHub — the Security tab as a card.
+CodeQL's open alerts, read from GitHub: the Security tab as a card.
 
-**What CodeQL is.** GitHub's semantic analysis engine. It compiles the codebase into a *relational
-database* of every declaration, expression and control-flow edge, then runs queries written in QL,
-a logic language, against it. Because it is a database rather than a pass over one file, a query
-can follow data **across function and file boundaries** — the standard packs trace values from a
-`source` (something attacker-controlled) to a `sink` (somewhere dangerous) and report the path.
-That is *taint tracking*, and it is what nothing else in this stack can do.
+**What CodeQL is.** GitHub's semantic analysis engine. It compiles the codebase into a relational database of every declaration, expression and control-flow edge, then runs QL queries against it. A query can follow data across function and file boundaries: the standard packs trace values from a `source` (attacker-controlled) to a `sink` (dangerous) and report the path. That taint tracking is what nothing else in this stack does.
 
-**What it does for us.** One question: we parse six network packet formats (ArtNet, DDP, E1.31,
-WLED audio sync, MQTT, WLED) plus HTTP, doing ~22 `memcpy` operations on bytes arriving from the
-LAN, on a device with **no MMU and no process isolation** — a bad length check is not a crash, it
-is arbitrary memory. CodeQL is the only layer that can trace a length field from the wire to the
-copy. It has already paid for itself once (3 thread-unsafe `localtime` findings, fixed), and its
-current answer on the packet parsers is *clean* — which is positive evidence, not silence.
+**What it does for us.** One question: we parse six network packet formats (ArtNet, DDP, E1.31, WLED audio sync, MQTT, WLED) plus HTTP, doing ~22 `memcpy` operations on bytes arriving from the LAN, on a device with no MMU and no process isolation. A bad length check is arbitrary memory, and CodeQL is the only layer that traces a length field from the wire to the copy. A clean answer on the packet parsers is positive evidence, not silence.
 
 ```bash
 uv run moondeck/check/check_codeql.py                  # open alerts, worst first
@@ -712,38 +566,17 @@ uv run moondeck/check/check_codeql.py --all            # every state, including 
 uv run moondeck/check/check_codeql.py --module HueDriver
 ```
 
-CodeQL runs in CI ([codeql.yml](../.github/workflows/codeql.yml)), not locally: it is the one
-layer of the stack that sees whole-program taint, which is what the six network packet parsers
-justify. Its findings then live behind the Security tab — a report nobody opens.
+CodeQL runs in CI ([codeql.yml](../.github/workflows/codeql.yml)), not locally. **This fetches, it does not scan**: the CodeQL CLI needs a ~1 GB install and minutes per run to recompute what CI has, and the alert lifecycle (open, fixed, dismissed, tracked across runs) is the part worth having. Alerts describe the last analyzed pushed commit, so local edits are not in them, and every run's output says so.
 
-**Fetches, does not scan.** The CodeQL CLI would need a ~1 GB install and minutes per run to
-recompute what CI already has, and the alert lifecycle (open / fixed / dismissed, tracked across
-runs) is the valuable part — baselining we would otherwise build. The trade is stated in every
-run's output: alerts describe the last **analyzed pushed commit**, so local edits are not in them.
+Two severity scales merge into one ordering: `security_severity_level` on the security queries (critical/high/medium/low) and `severity` on the quality ones (error/warning/note/recommendation).
 
-Two severity scales are merged into one ordering, because the question is "what matters most", not
-"which query pack found it": `security_severity_level` on the security queries
-(critical/high/medium/low) and `severity` on the quality ones (error/warning/note/recommendation).
+**Split into `src/` and everything else**, because a finding in shipping code reaches a device and one in a test does not. The severity tally prints before either table so the counts survive row truncation.
 
-**Split into `src/` and everything else**, because the two are read differently: a finding in
-shipping code reaches a device, one in a test does not. Measured at 855 open alerts, **783 sat in
-`test/`** — pooling them buried the three `high` findings in `src/` under doctest noise. The
-severity tally prints before either table so the counts survive row truncation.
+**`--all`** adds the `fixed` and `dismissed` alerts to the open ones, answering "did that finding go away, or did someone dismiss it?". The tables gain a STATE column and a per-state tally whenever more than one state is present. Each state is queried explicitly, because the endpoint defaults to `open`.
 
-**All states** (`--all`) adds the `fixed` and `dismissed` alerts to the open ones — the lifecycle
-GitHub tracks and the reason this fetches rather than rescans. It answers "did that finding go
-away, or did someone dismiss it?", so the tables gain a STATE column and a per-state tally
-whenever more than one state is present. On a repo with nothing fixed or dismissed yet it reads
-the same as the default, which is correct, not a broken flag. Each state is queried **explicitly**:
-omitting `state` does not mean "any" — the endpoint defaults to `open`.
+`--module` scopes to one module's files. It is not wired to the tools-group module dropdown: that selector is promoted above the cards once two cards in a group declare `needs_module`, which moves it out of *All Tools on Module*.
 
-`--module` scopes to one module's files from the command line. It is deliberately NOT wired to the
-tools-group module dropdown: that selector is promoted above the cards as soon as two cards in a
-group declare `needs_module`, which moves it out of *All Tools on Module* where it belongs.
-
-**Exit 2 when the answer is unknown** — no `gh`, not authenticated, code scanning disabled — with
-the reason on stderr. An empty list and an unreachable API look identical in a table, and only one
-of them means the code is clean.
+**Exit 2 when the answer is unknown** (no `gh`, not authenticated, code scanning disabled), with the reason on stderr. An empty list and an unreachable API look identical in a table, and only one of them means the code is clean.
 
 ### check_footprint
 
@@ -755,65 +588,25 @@ uv run moondeck/check/check_footprint.py --module HueDriver
 uv run moondeck/check/check_footprint.py --firmware esp32   # another target
 ```
 
-**What the tool is.** No tool of its own — it reads the ESP32 **ELF** the build already produced,
-through the toolchain's `nm` and `objdump`. The linker's accounting is ground truth: it has
-already resolved every inline, template instantiation and dead-stripped symbol, so this measures
-what actually ships rather than what the source suggests.
+**What the tool is.** No tool of its own: it reads the ESP32 ELF the build already produced, through the toolchain's `nm` and `objdump`. The linker's accounting is ground truth, having resolved every inline, template instantiation and dead-stripped symbol.
 
-**What it does for us.** The other size checks answer "how big is the binary"; this answers
-**which module made it that big, and which memory it spends** — because those bytes are not
-interchangeable. Flash is ~1.5 MB and cheap; internal RAM is ~320 KB shared with WiFi, the HTTP
-stack and every task stack. A report that adds them together hides the only distinction that
-matters.
+**What it does for us.** It answers which module made the binary that big, and which memory it spends, because those bytes are not interchangeable. Flash is ~1.5 MB and only read when the code runs; internal RAM is ~320 KB shared with WiFi, the HTTP stack and every task stack. A byte of STATIC costs roughly five times a byte of CODE, so the report never totals the columns, and a module reading STATIC 0 is the healthy case.
 
 | Column | |
 |---|---|
-| **CODE** | `.text` — flash (or IRAM). Costs space, not headroom |
-| **RODATA** | **named** constants only. String literals carry no symbol, so most of the ~427 KB in `.flash.rodata` cannot be credited to a file — the string table below the main table measures that half wholesale |
-| **STATIC** | `.bss` + `.data` — RAM held from boot **whether the module is enabled or not**. This is the "an unused module should cost nothing" check: anything here is a standing tax. Not a synonym for *global*: it counts anything with static STORAGE DURATION, which includes a function-local `static` buffer and a file-local one in an anonymous namespace. Measured here, all 69 are file- or function-local; the codebase has no true globals |
+| **CODE** | `.text`: flash (or IRAM). Costs space, not headroom |
+| **RODATA** | named constants only. String literals carry no symbol, so most of `.flash.rodata` cannot be credited to a file: the string table below the main table measures that half wholesale |
+| **STATIC** | `.bss` + `.data`: RAM held from boot whether the module is enabled or not, so anything here is a standing tax. It counts anything with static storage duration, function-local and file-local `static` buffers included, not only globals |
 
-**Sorted STATIC-first**, then by size within each group: every file holding static RAM appears
-above every file holding none. A pure size sort buried the rows that matter — `platform_esp32_tasks.cpp`
-is 230 B of code against 1440 B of static, so it sat below files with more code and could fall off
-a capped table entirely.
+**Sorted STATIC-first**, then by size within each group, so every file holding static RAM appears above every file holding none and none falls off a capped table.
 
-**The columns are not interchangeable, and the ratio is why.** Flash is ~1.5 MB and only read when
-the code runs; internal RAM is ~320 KB shared with WiFi, the HTTP stack and every task stack. So a
-byte of STATIC costs roughly five times what a byte of CODE does, and a module reading STATIC 0 is
-the healthy case rather than an empty measurement. The report deliberately does not total the
-columns together — a single "size" number would hide the only distinction worth having.
+Attribution comes from DWARF (`nm --line-numbers`), so a symbol is credited to the source file that defines it, free functions and file-statics included.
 
-Attribution comes from **DWARF** (`nm --line-numbers`), so a symbol is credited to the source file
-that defines it — including free functions and file-statics no name-parsing heuristic could place.
+**Strings ride along in the same run**, one report with both halves and no flag. Ours are separated from ESP-IDF's: the string table is read from the per-source object files under `__idf_main.dir`, not the linked image, where the link merges every `.rodata.*.str` input section into one and a literal carries no symbol. Only our sources have objects there, so IDF is excluded by construction. `-ffunction-sections` makes the attribution exact: each function's literals land in `.rodata.<mangled>.str1.N` inside its own object, so the section name is the owning function and the object path is the source file. Both print next to each literal, so a long one can be found and judged.
 
-**Strings ride along in the same run** — one report, both halves, no flag: they answer the same
-question and a separate mode is one you forget to run.
+**Architecture-matched binutils.** `.espressif/tools` also holds `esp32ulp-elf-*` and, on a P4 machine, the RISC-V set. The ULP `nm` reads an Xtensa ELF and silently leaves every `.bss`/`.data` symbol unattributed, so the tool is picked by architecture.
 
-**Ours are separated from ESP-IDF's**, which is the difference between a number you can act on and
-one you cannot. The string table is read from the per-source **object files** under
-`__idf_main.dir`, not from the linked image — the link merges every `.rodata.*.str` input section
-into one `.flash.rodata` and a literal carries no symbol, so from the ELF alone a string cannot be
-traced to who wrote it. Reading the objects also excludes IDF by construction: only our sources
-have objects there.
-
-`-ffunction-sections` is what makes the attribution exact: each function's literals land in
-`.rodata.<mangled>.str1.N` inside its own object, so **the section name is the owning function and
-the object path is the source file**. Both are printed next to each literal, so a long one can be
-found and judged rather than just counted.
-
-Measured: **28 KB of the 106 KB** in `.flash.rodata` is ours; the rest is ESP-IDF, WiFi, lfs and
-FreeRTOS — which is why the whole-image view was misleading (its longest entries are all IDF
-assert expressions). Of our share, prose and identifiers are ~35% each, wire formats 17%, and
-error text 13% — so trimming error messages is the smallest of the four levers.
-
-**Architecture-matched binutils.** `.espressif/tools` also holds `esp32ulp-elf-*` (the ULP
-coprocessor's) and, on a P4 machine, the RISC-V set. The ULP `nm` reads an Xtensa ELF happily and
-returns a plausible symbol list with every `.bss`/`.data` symbol silently unattributed — the
-STATIC column read 0 tree-wide until the tool was picked by architecture. A wrong-tool answer that
-looks right is worse than no answer.
-
-**Needs a built firmware**, and exits 2 when the ELF is missing or carries no DWARF rather than
-printing an empty table — an absent measurement is not a zero.
+**Needs a built firmware**, and exits 2 when the ELF is missing or carries no DWARF rather than printing an empty table, since an absent measurement is not a zero.
 
 ### check_code
 
@@ -825,21 +618,21 @@ uv run moondeck/check/check_code.py --module Control  # one module's findings, n
 uv run moondeck/check/check_code.py --account         # this change's account for its commit message
 ```
 
-Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10: one plus every branch point, the number of paths a reader holds at once and the number of tests that cover it. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow more than 3 levels deep, the part of cognitive complexity that measures what a reader trips on. **Long parameter list** is more than 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. The nesting and file-length limits are SonarQube's defaults. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere. [jscpd](https://github.com/kucherenko/jscpd) finds it among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it, and the counts carry the duplicated lines. jscpd comes through npx, the dependency the docs build already has. Lizard tokenizes rather than parses, so it needs no build and runs in a second. The cost is a mangled name on some template-dense bodies, which counting per file makes harmless.
+Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow over 3 levels deep. **Long parameter list** is over 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere, found by [jscpd](https://github.com/kucherenko/jscpd) (through npx) among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it. Lizard tokenizes rather than parses, so it needs no build.
 
-The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own findings so it leaves the list, with the same reasonable-effort clause CLAUDE.md gives docgen. Findings are listed per file, so a renamed function or a moved file carries its findings along; the ratchet compares rule counts and the total.
+The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own findings, as CLAUDE.md says for docgen.
 
-`repo_health` and `collect_kpi` count the function rules through the same two functions this script uses. The clones and the file sizes are this check's alone, a pass too slow for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
+`repo_health` and `collect_kpi` count the function rules through the same two functions this script uses; the clones and the file sizes are this check's alone, too slow a pass for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 
-**Platform code outside src/platform** is the architecture's platform boundary, counted per line: a vendor header or a platform `#ifdef` outside `src/platform/`. The domain boundary, core without light, is the build's: `mm_core` compiles through an include root without `light/`, and every core header on its own, so a crossing fails the test build. **Relative include path** closes the one route past that root: an `#include` under `src/` stepping through `.` or `..`.
+**Platform code outside src/platform** is a vendor header or a platform `#ifdef` outside `src/platform/`, counted per line. The domain boundary, core without light, is the build's: `mm_core` compiles without `light/` on its include root, so a crossing fails the test build. **Relative include path** closes the route past that root: an `#include` under `src/` stepping through `.` or `..`.
 
-**Module type in the UI** is a registered type's name as a string literal in `src/ui`, one row per literal. The type list is read from `module_types.cpp` as `check_devices` reads it. The four containers `main.cpp` pins as the tree's roots (`Layouts`, `Effects`, `Drivers`, `Services`) are the UI's contract and not findings. **Name spread** is a type named in more than 10 files beyond its own: its header, its implementation and its tests. It is one row on the header that defines it, and it counts change amplification, since a rename of that type edits that many files.
+**Module type in the UI** is a registered type's name as a string literal in `src/ui`, one row per literal. The four root containers `main.cpp` pins are not findings. **Name spread** is a type named in more than 10 files beyond its own header, implementation and tests, one row on its header.
 
-**Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the desktop Release build. It is read from the same saved findings as the render path, so it costs no extra time, and each template instance counts as its own function. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there, and a factory creating an object is not one.
+**Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the desktop Release build. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there.
 
-**Blocking call on the render path** is the last rule, one row per site [check_nonblocking](#check_nonblocking) finds, a float conversion at a `formatTo` site included. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.json` as it is, while every other rule still ratchets.
+**Blocking call on the render path** is one row per site [check_nonblocking](#check_nonblocking) finds. It reads that script's saved findings after an incremental desktop build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.json` as it is.
 
-The account, `--account`, reads `code.json` as the last full run wrote it, so it follows a full run in the same gate pass. A saving shows in the commit that made it, rather than only in a later total.
+`--account` reads `code.json` as the last full run wrote it.
 
 ### scenario_pipeline
 
@@ -943,7 +736,7 @@ Without it, a module missing from that list is silently skipped until someone ed
 
 The **GIF** and **Force** checkboxes in MoonDeck toggle these flags.
 
-Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. Saves:
+Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layouts → Grid, Layer, Drivers), adds each module, screenshots its card, then removes it. The grid is 128×128 for the capture, the standard (`--grid` changes it), and the run leaves the pipeline as it found it: the grid's size and any modifier it takes off go back, and it removes only the modules it added, by a ledger in `build/moondeck-logs/` with a record per host, so a module of yours sharing a capture's name stays. The record is written before the pipeline changes and after each change, and a run cut short is undone by the next run against the same host as far as the record reaches: best effort, so back up the pipeline before a run you care about. A restore that does not land keeps the record and says so. Saves:
 
 - `<TypeName>.png` — module card screenshot for every module in the catalogue
 - `<TypeName>.gif` — 3-second preview animation for effects and modifiers (requires `--gif`)
@@ -1188,7 +981,7 @@ Auto-detects ESP-IDF installation, sets target if needed, builds, and shows flas
 
 An edited `sdkconfig` fragment reaches every build that uses it. IDF seeds `sdkconfig` from the fragments only when the file is absent, so each build dir records a digest of its fragments in `sdkconfig.fragments.sha256`. When they differ, the build deletes that `sdkconfig` and runs `idf.py reconfigure` (`sdkconfig_fragments.py`, shared with the MoonBase build), so only what reads a changed option recompiles. A value set by hand in menuconfig goes with it: the fragments are the config's one source.
 
-The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17 — e.g. the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (e.g. WT32-ETH01: reset on GPIO 16) just needs a different `deviceModels.json` entry — no rebuild.
+The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17, as on the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (WT32-ETH01: reset on GPIO 16) needs a different `deviceModels.json` entry, no rebuild.
 
 Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encodes flash size, partition layout, and PSRAM mode — flashing an `n16r8` binary onto a different module (e.g. N8R2) misaligns the partition table or fails PSRAM init. New SKUs become new keys (e.g. `esp32s3-n8r8`); we don't ship a generic `esp32s3` shortcut.
 
@@ -1228,7 +1021,7 @@ Wipe the entire flash on an ESP32 device, including the LittleFS partition where
 uv run moondeck/build/erase_flash_esp32.py --port /dev/tty.usbserial-0001
 ```
 
-Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device just came out of the factory. After erase, re-run **Build** then **Flash** — the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
+Typical use: forcing a fresh-first-boot after firmware experiments leave the LittleFS partition in a state the new firmware can't migrate from, or before testing the post-flash Improv provisioning flow as if the device came fresh from the factory. After erase, re-run **Build** then **Flash**: the device boots with empty persistence and goes straight to AP-fallback / Improv-awaiting-credentials.
 
 ### release_version
 
@@ -1358,13 +1151,13 @@ for port in /dev/tty.usbserial-*; do
 done
 ```
 
-The host-WiFi reader lives at [moondeck/build/host_wifi.py](build/host_wifi.py) and runs standalone for diagnosis (`uv run moondeck/build/host_wifi.py` prints the resolved SSID + password). It first checks `moondeck/moondeck.json`'s active network's `wifi` block; if empty, falls back to OS auto-detect. The first macOS auto-detect run pops a Keychain access dialog — the OS doing its job; we don't try to bypass it. The retired `moondeck/build/wifi_credentials.json` source is gone — credentials now live per-network in moondeck.json, so moving the laptop between networks is just a dropdown switch.
+The host-WiFi reader lives at [moondeck/build/host_wifi.py](build/host_wifi.py) and runs standalone for diagnosis (`uv run moondeck/build/host_wifi.py` prints the resolved SSID + password). It first checks `moondeck/moondeck.json`'s active network's `wifi` block; if empty, falls back to OS auto-detect. The first macOS auto-detect run pops a Keychain access dialog, the OS doing its job, left as it is. Credentials live per network in moondeck.json, so moving the laptop between networks is a dropdown switch.
 
 Replaces v1's `deploy/wifi.py` + `deploy/flashfs.py --wifi` partition-baking flow — the device stays running, no flash mode required. Full module + protocol details: [docs/moonmodules/core/ImprovProvisioningModule.md](../docs/moonmodules/core/ImprovProvisioningModule.md).
 
 ### improv_probe
 
-Non-destructive Improv health check. Sends `GET_DEVICE_INFO` + `GET_CURRENT_STATE` Improv RPCs and prints whatever the device reports — no credentials are exchanged, no WiFi state changes. Useful when ESP Web Tools shows the minimal popup instead of the rich panel and you want to know whether the device's Improv listener is actually answering on the wire.
+Non-destructive Improv health check. Sends `GET_DEVICE_INFO` + `GET_CURRENT_STATE` Improv RPCs and prints whatever the device reports; no credentials are exchanged, no WiFi state changes. Useful when ESP Web Tools shows the minimal popup instead of the rich panel and you want to know whether the device's Improv listener answers on the wire.
 
 **One-click flow**: pick the device's port in MoonDeck, hit **Improv Probe**. Typical output on a provisioned device:
 
@@ -1389,7 +1182,7 @@ End-to-end Improv test against a USB-connected ESP32. Three sequential checks; P
 
 1. **Probe** — device answers `GET_DEVICE_INFO` + `GET_CURRENT_STATE` (same checks `improv_probe` does standalone).
 2. **Provision** — sends `WIFI_SETTINGS` with the host's resolved SSID + password and waits for the device to reach `PROVISIONED` (same flow `improv_provision` drives standalone).
-3. **Reachable** — HTTP `GET /` on the device's reported URL, confirming the device actually joined the LAN. Skippable with `--no-network` for isolated provisioning networks the host can't route to.
+3. **Reachable**: HTTP `GET /` on the device's reported URL, confirming the device joined the LAN. Skippable with `--no-network` for isolated provisioning networks the host can't route to.
 
 **One-click flow**: pick the device's port in MoonDeck, hit **Improv Smoke Test**. Credentials come from the active network's `wifi` block (same source as Improv WiFi). Typical output:
 

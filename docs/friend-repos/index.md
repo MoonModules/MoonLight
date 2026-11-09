@@ -16,6 +16,24 @@ Monthly logs of what shipped on related open-source LED projects, the live lands
 
 Each month below reads across the digests in up to three parts. **Cross-repo trends**: what the ecosystem converged on. **What these projects do that MoonLight doesn't (yet)**: observational, not commitments; real adoption decisions live on [the Project](https://github.com/users/MoonModules/projects/5), cross-referenced where one already exists. **Candidates for MoonLight**: concrete ideas waiting for a decision, each leaving its list when it is decided. One that asks whether MoonLight has the same defect is checked in the code: found, it is fixed; absent, it is dropped. Any other joins the card, plan or issue that already covers it. With none, it becomes a backlog card when it removes more than it adds, is the textbook answer, fits the architecture and someone wants it; otherwise it is dropped. Study to think, write fresh, never copy.
 
+## November 2026
+
+### Candidates for MoonLight
+
+From [Funkelfetisch](Funkelfetisch-MoonLight.md)'s `nebulite-helio-7`, November 2026, one recommendation each: 🐛 a defect MoonLight shares, ✅ useful to take, 💡 an idea that needs a plan, 🔁 MoonLight solves it another way, ❌ product-only, stays in the fork.
+
+- 💡 **Brightness shown as a percentage** (`737aa344`): a `percent` descriptor flag, the value staying 0 to 255; a UI choice for the product owner.
+- 💡 **The preview shows only what each light's outputs emit** (`7fab5c60`): RGB strips show no white. A correct generic preview rule, redone against our PreviewDriver rather than cherry-picked.
+- 💡 **A connection status LED** (`b84d8501`): an onboard LED blinking reachable, waiting or updating, generic for any board with one; read the header first.
+- 💡 **Moving a WLED S3 to MoonLight without USB** (`0d05bd4f`): an S3 migrator after our C3 one, for every WLED S3 whose two-slot table cannot hold MoonLight; a plan for a product-neutral version.
+- 💡 **The BLE layer under the product protocol** (`963cbd86`, `e9379508`): the NimBLE lifecycle, MTU 517, the retried notify, the peer table and the desktop stub, as the first step of the Bluetooth plan PR #158's review asked for; pairing against his open lighting mode is the question to settle first.
+- 💡 **Publisher-signed firmware images** (`60bd5ee7`): claims of target, size, security version and hash, signed with P-256; MoonLight verifies no signature. Worth a plan once signed releases are wanted.
+- 🔁 **Product firmware leaving out modules** (`dbce2f47`): one more compile flag beside `MM_NO_ETH`, `MM_NO_WIFI` and `MM_PANEL_CARDS`; the shape for both repos is a module list per firmware variant driving the registry, replacing all four.
+- 🔁 **`mdns` pinned to 1.14** (`a05f466d`): MoonLight moved to 1.15.1, which compiles under GCC 15, so the pin can go.
+- 🔁 **The docs gate on shared headers** (`d9fccfd0`): mostly fork-only members, and the shared hunks conflict with headers that moved since.
+- ❌ **Pad hold through resets** (`db9fe35d`): a clean `gpioHold` platform call, kept for the day a MoonLight board needs a pin held.
+- ❌ **The product layer:** NEBULITE and HELIO effects, the branded dashboard, the battery service, the BLE scene and preview protocol, the handset remote, `src/helio/` and the shared-file changes made for them.
+
 ## October 2026
 
 ### Cross-repo trends

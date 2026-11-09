@@ -653,3 +653,25 @@ TEST_CASE("a link-local address counts on a WiFi build only when it is the stati
     CHECK(mm::addressCounts(linkLocal, /*buildHasWiFi=*/true, configured));
     CHECK_FALSE(mm::addressCounts(linkLocal, /*buildHasWiFi=*/true, elsewhere));
 }
+
+// A local name that fails to advertise looks like a device nothing can find; the card says whether it answers, and why not.
+TEST_CASE("the Network card says whether the local name answers, and why when it does not") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestMdnsAvailable(true);
+    mm::platform::setTestMdnsFailure("init ESP_ERR_NO_MEM");
+    {
+        WiFiNetwork w;
+        joinHomeOverWifi(w);
+        REQUIRE(w.net.status() != nullptr);
+        CHECK(std::string(w.net.status()).find("mDNS failed (init ESP_ERR_NO_MEM)") != std::string::npos);
+        mm::platform::setTestMdnsFailure(nullptr);
+        w.net.tick1s();
+        CHECK(std::string(w.net.status()).find(".local") != std::string::npos);
+        CHECK(std::string(w.net.status()).find("failed") == std::string::npos);
+    }
+    mm::platform::setTestMdnsFailure(nullptr);
+    mm::platform::setTestMdnsAvailable(false);
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiStaAvailable(false);
+}
