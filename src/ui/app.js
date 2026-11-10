@@ -5,11 +5,12 @@
 // default; entry-point is the WS init at the bottom: no ordering surprises.
 import { installPicker } from "./install-picker.js";
 import { preview } from "./preview3d.js";
+import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
 import { isNewer, parse } from "./semver.js";
 import { collectFiles, restoreBundle } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
-         emojiTagsFor, emojiChipRow, chipsMatch } from "./help.js";
+         emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName } from "./help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -324,6 +325,7 @@ async function init() {
     connectWs();
     preview.init();
     preview.setupLayout();
+    setupPanel(document.getElementById("main"), (x) => preview.widenCardsTo(x), () => preview.saveLayout());
     // Open the preview channel only while the pane wants frames, and close it the moment it does
     // not, the device then builds nothing at all for a dismissed preview.
     // The pull model's uplink: tiny request messages ([0x51][stride][fps] standing,
@@ -1106,7 +1108,13 @@ function renderCards() {
     // An outline carries no controls: the previous cards stay until the full state the subscription answers with, rather than drawing empty.
     if (root && !Array.isArray(root.controls)) return;
     main.innerHTML = "";
-    if (root) renderModuleTree(root, main, 0);
+    if (root) {
+        renderModuleTree(root, main, 0);
+        // The edges sit on the top-level card's border, the panel as a window.
+        const panel = main.firstElementChild;
+        if (panel) { panel.classList.add("panel-root"); panel.appendChild(panelGrips()); }
+        panelFit(root.name);
+    }
     // Surface demo sweep (REMOVABLE): delete this line and the block above it to remove the feature.
     // `main` is the root of the rendered subtree, so it holds the encoder strips, the pad grid and
     // the fader strips wherever they sit in the card nesting.
@@ -3340,6 +3348,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // value syncs and debounces exactly like a "text" control.
             const input = document.createElement("textarea");
             input.className = "control-textarea";
+            markExpandable(input);   // a script source grows with the panel
             input.value = ctrl.value ?? "";
             input.dataset.mid = moduleName;
             input.dataset.key = ctrl.name;
@@ -4427,12 +4436,22 @@ function buildListPads(container, rows, opts) {
 // step limits each move, and positions are kept on the container, so a new device settles into the
 // picture rather than reshuffling it; this device sits fixed at the center. The nodes without a link
 // sit in a grid beneath, by name, so a swarm of idle devices reads as a list rather than a cloud.
-const GRAPH_W = 600, GRAPH_LINKED_H = 300, GRAPH_CELL_W = 120, GRAPH_CELL_H = 64;
-const GRAPH_MARGIN_X = GRAPH_CELL_W / 2, GRAPH_MARGIN_TOP = 24, GRAPH_MARGIN_BOTTOM = 48;   // a label fits inside
-const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its three label lines inside the cell
+const GRAPH_W = 600, GRAPH_LINKED_H = 300, GRAPH_CELL_W = 120, GRAPH_CELL_H = 76;   // GRAPH_W: the width before the map's box is measured
+const GRAPH_MARGIN_X = GRAPH_CELL_W / 2, GRAPH_MARGIN_TOP = 24, GRAPH_MARGIN_BOTTOM = 60;   // a label fits inside
+const GRAPH_PAD_X = 12;
+const GRAPH_SHOW = [["ip", "IP", false], ["version", "version", false], ["traffic", "traffic", true]];   // what a viewer shows or hides, and its default; a node's lights and services, its emoji, always show
+const GRAPH_SHOW_KEY = "MoonLight.graph.show.v2";   // v2: address and version start hidden
+const GRAPH_ZOOM_MAX = 8;   // the closest the map zooms in, eight times
+const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its four label lines inside the cell
+const GRAPH_LABEL_DY = 20, GRAPH_LINE_H = { "graph-label": 12, "graph-sublabel": 11, "graph-services": 13 };   // a node's first baseline below its dot, and each line's height
+const GRAPH_CHAR_W = { "graph-label": 6.2, "graph-sublabel": 5, "graph-services": 13, "graph-edge-label": 5.4 };   // a character's width, about, at each line's font size
 // Each kind Discovery names its own color (devTypeStr); a kind it does not name takes a hashed one.
-const GRAPH_KIND_COLORS = { MoonLight: "var(--yellow)", WLED: "var(--accent)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg-muted)" };
+const GRAPH_KIND_COLORS = { MoonLight: "var(--accent)", WLED: "var(--yellow)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg-muted)", MoonBase: "var(--red)", ESPHome: "var(--teal)", Tasmota: "var(--blue)" };
 const GRAPH_COLORS = ["var(--accent)", "var(--green)", "var(--yellow)", "var(--red)", "var(--fg-muted)"];
+// Each light output's driver type as the kind of light it drives, which a node shows; a driver it does not name shows its type, and moving heads show 🎯 whatever drives them.
+const GRAPH_OUTPUT_EMOJI = { RmtLedDriver: "\u{1F4A1}", ParallelLedDriver: "\u{1F4A1}", PwmLightDriver: "\u{1F506}", Hub75Driver: "\u{1F532}", HdmiDriver: "\u{1F4FA}", PanelCardDriver: "\u{1F9F1}", HueDriver: "\u{1F3EE}", NetworkSendDriver: "\u{1F4E1}", NdiDriver: "\u{1F3A5}", HlsDriver: "\u{1F3A5}", RtspDriver: "\u{1F3A5}" };
+// Each protocol a module reports, a service it offers (NetworkUse::service) or traffic (NetworkUse::flow), as the emoji its node or line shows; one it does not name shows its name.
+const GRAPH_PROTOCOL_EMOJI = { HTTP: "\u{1F310}", OSC: "\u{1F39B}\uFE0F", "RTP-MIDI": "\u{1F3B9}", "audio sync": "\u{1F50A}", "Art-Net": "\u{1F3AD}", "E1.31": "\u{1F39A}\uFE0F", DDP: "\u{1F4E6}", ColorLight: "\u{1F9F1}", "WLED API": "\u{1F419}", Hue: "\u{1F3EE}" };
 
 function graphHash(text) {
     let h = 2166136261;   // FNV-1a, so a kind keeps its color and a node its seed spot
@@ -4442,29 +4461,74 @@ function graphHash(text) {
 
 // Place the nodes into `pos` and answer the picture's height: the linked ones by force in the top
 // area, the rest in rows of cells beneath it.
-function layoutGraph(nodes, links, pos) {
+function layoutGraph(nodes, links, pos, w = GRAPH_W, minH = 0) {
     const linked = new Set(links.flatMap(([i, j]) => [i, j]));
     nodes.forEach((node, i) => { if (node.self) linked.add(i); });
     const force = [...linked];
-    const areaH = force.length > 1 ? GRAPH_LINKED_H : (force.length ? GRAPH_CELL_H + GRAPH_MARGIN_TOP : 0);
-    layoutForce(nodes, links, force, pos, areaH);
+    // Room for every linked node's cell twice over, so the force layout spreads them rather than pinning them to the edges.
+    let areaH = force.length > 1 ? Math.max(GRAPH_LINKED_H, Math.ceil((force.length * GRAPH_CELL_W * GRAPH_CELL_H * 2) / w))
+                                 : (force.length ? GRAPH_CELL_H + GRAPH_MARGIN_TOP : 0);
     const idle = nodes.map((node, i) => i).filter(i => !linked.has(i))
         .sort((a, b) => String(nodes[a].row.name ?? nodes[a].key).localeCompare(String(nodes[b].row.name ?? nodes[b].key)));
-    const cols = Math.floor(GRAPH_W / GRAPH_CELL_W);
+    const cols = Math.max(1, Math.floor(w / GRAPH_CELL_W)), cellW = w / cols;
+    const gridH = GRAPH_CELL_H * Math.ceil(idle.length / cols);
+    const natural = areaH + gridH;
+    if (force.length > 1) areaH += Math.max(0, minH - natural);   // a taller box gives the linked nodes the room
+    // A resized picture carries its nodes with it, in proportion, so it grows rather than reshuffles.
+    const was = pos.frame;
+    if (was && (was.w !== w || was.areaH !== areaH)) {
+        for (const p of pos.values()) if (!p.idle) { p.x *= w / was.w; p.y *= areaH / was.areaH; }
+    }
+    pos.frame = { w, areaH, natural };
+    layoutForce(nodes, links, force, pos, areaH, w);
+    separateNodes(nodes, force, pos, areaH, w);
     idle.forEach((i, at) => {
-        pos.set(nodes[i].key, { x: GRAPH_CELL_W * (at % cols) + GRAPH_CELL_W / 2,
+        pos.set(nodes[i].key, { x: cellW * (at % cols) + cellW / 2,
                                 y: areaH + GRAPH_CELL_H * Math.floor(at / cols) + GRAPH_CELL_DOT, idle: true });
     });
-    return areaH + GRAPH_CELL_H * Math.ceil(idle.length / cols);
+    return Math.max(areaH + gridH, minH);
 }
 
-function layoutForce(nodes, links, members, pos, areaH) {
+// A linked node kept within the force area, its labels inside the picture.
+function graphInside(p, areaH, w = GRAPH_W) {
+    p.x = Math.min(w - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, p.x));
+    p.y = Math.min(areaH - GRAPH_MARGIN_BOTTOM, Math.max(GRAPH_MARGIN_TOP, p.y));
+}
+
+// Node overlap removal after the force layout: two nodes whose cells, a dot and its labels, overlap are pushed
+// apart along the axis that overlaps least, this device staying put, until none overlaps or the passes run out.
+function separateNodes(nodes, members, pos, areaH, w = GRAPH_W) {
+    const cw = GRAPH_CELL_W, ch = GRAPH_CELL_H - 10;
+    for (let pass = 0; pass < 60; pass++) {
+        let moved = false;
+        for (let a = 0; a < members.length; a++) {
+            for (let b = a + 1; b < members.length; b++) {
+                const na = nodes[members[a]], nb = nodes[members[b]];
+                const pa = pos.get(na.key), pb = pos.get(nb.key);
+                const dx = pb.x - pa.x, dy = pb.y - pa.y;
+                const ox = cw - Math.abs(dx), oy = ch - Math.abs(dy);
+                if (ox <= 0 || oy <= 0) continue;
+                moved = true;
+                const shareA = na.self ? 0 : (nb.self ? 1 : 0.5);
+                if (ox < oy) {
+                    const sx = dx < 0 ? -1 : 1;
+                    pa.x -= sx * ox * shareA; pb.x += sx * ox * (1 - shareA);
+                } else {
+                    const sy = dy < 0 ? -1 : 1;
+                    pa.y -= sy * oy * shareA; pb.y += sy * oy * (1 - shareA);
+                }
+                if (!na.self) graphInside(pa, areaH, w);
+                if (!nb.self) graphInside(pb, areaH, w);
+            }
+        }
+        if (!moved) return;
+    }
+}
+
+function layoutForce(nodes, links, members, pos, areaH, w = GRAPH_W) {
     const n = members.length;
-    const cx = GRAPH_W / 2, cy = areaH / 2;
-    const inside = (p) => {
-        p.x = Math.min(GRAPH_W - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, p.x));
-        p.y = Math.min(areaH - GRAPH_MARGIN_BOTTOM, Math.max(GRAPH_MARGIN_TOP, p.y));
-    };
+    const cx = w / 2, cy = areaH / 2;
+    const inside = (p) => graphInside(p, areaH, w);
     let fresh = 0;
     for (const i of members) {
         const key = nodes[i].key;
@@ -4475,11 +4539,11 @@ function layoutForce(nodes, links, members, pos, areaH) {
         fresh++;
     }
     if (n < 2) { for (const i of members) if (nodes[i].self) pos.set(nodes[i].key, { x: cx, y: cy }); return; }
-    const k = 0.8 * Math.sqrt((GRAPH_W * areaH) / n);   // the ideal distance
+    const k = 0.8 * Math.sqrt((w * areaH) / n);   // the ideal distance
     // A settled picture with a newcomer or two needs few rounds; a fresh one more, fewer as it grows (O(n²) a round).
     const rounds = fresh === 0 ? 0 : Math.max(20, Math.min(200, Math.floor(60000 / (n * n)) + 20));
     const at = new Map(members.map((i, m) => [i, m]));
-    let heat = GRAPH_W / 8;
+    let heat = w / 8;
     for (let r = 0; r < rounds; r++) {
         const disp = members.map(() => ({ x: 0, y: 0 }));
         for (let a = 0; a < n; a++) {
@@ -4548,6 +4612,7 @@ async function fetchPeerGraph(url, opts) {
 }
 
 function redrawGraph(container) {
+    if (container._graphPanning) return;   // the pan's end redraws
     const a = container._graphArgs;
     const old = container.querySelector("svg.list-graph");
     if (a && old) old.replaceWith(buildListGraph(container, a.rows, a.details, a.opts));
@@ -4594,7 +4659,7 @@ function buildListGraph(container, rows, details, opts) {
             if (index.has(key)) {
                 if (row.self) {
                     const node = nodes[index.get(key)];
-                    node.row = Object.assign({}, node.row, { version: row.version, firmware: row.firmware, services: row.services });
+                    node.row = Object.assign({}, node.row, { version: row.version, firmware: row.firmware, services: row.services, outputs: row.outputs });
                 }
                 continue;
             }
@@ -4633,14 +4698,34 @@ function buildListGraph(container, rows, details, opts) {
     refreshPeerGraphs(container);
     const pos = container._graphPos || (container._graphPos = new Map());
     for (const key of [...pos.keys()]) if (!index.has(key)) pos.delete(key);   // a device gone takes its spot with it
-    const height = layoutGraph(nodes, links, pos);
+    // Drawn in real pixels at its box's size: a wider or taller box gives the nodes more room, the text staying its size.
+    const box = container.querySelector(".graph-box");
+    const w = Math.max(2 * GRAPH_CELL_W, box && box.clientWidth ? box.clientWidth - 2 * GRAPH_PAD_X : GRAPH_W);
+    const assigned = box ? parseFloat(box.style.height) || 0 : 0;
+    const height = layoutGraph(nodes, links, pos, w, assigned);
+    const boxH = assigned || height;   // a box shorter than the picture shows it zoomed out to fit
+    container._graphDrawn = { w: box ? box.clientWidth : 0, h: assigned };
+    if (box && box.dataset.base !== String(pos.frame.natural)) {
+        markExpandable(box, pos.frame.natural);
+        panelRefit();   // its natural height moved, so the panel shares its room again
+    }
 
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("class", "list-graph");
-    svg.setAttribute("viewBox", `0 0 ${GRAPH_W} ${height}`);
-    svg.setAttribute("role", "img");
-    svg.setAttribute("aria-label", `${nodes.length} node${nodes.length === 1 ? "" : "s"}`);
-    for (const [i, j, label, broken] of links) {
+    const full = { x: -GRAPH_PAD_X, y: 0, w: w + 2 * GRAPH_PAD_X, h: height };
+    container._graphFull = full;
+    svg.setAttribute("viewBox", graphViewBox(full, container._graphView || {}).join(" "));
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.style.height = `${boxH}px`;
+    wireGraphZoom(container, svg);
+    svg.setAttribute("role", "group");   // its nodes are buttons, each reached on its own
+    svg.setAttribute("aria-label", `${nodes.length} device${nodes.length === 1 ? "" : "s"}`);
+    const show = container._graphShow || {};
+    if (graphShown(show, "version")) fillWledVersions(container, nodes);
+    const boxes = nodes.map(node => graphNodeBox(pos.get(node.key), graphNodeLines(node.row, node.key, show)));
+    const traffic = graphShown(show, "traffic");
+    const labelAt = placeEdgeLabels(links.map(([i, j, label]) => [pos.get(nodes[i].key), pos.get(nodes[j].key), traffic ? graphTrafficLabel(label) : ""]), boxes);
+    links.forEach(([i, j, label, broken], li) => {
         const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
         const line = document.createElementNS(NS, "line");
         line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
@@ -4652,14 +4737,17 @@ function buildListGraph(container, rows, details, opts) {
             line.appendChild(why);
         }
         svg.appendChild(line);
-        if (label) {
+        if (labelAt[li]) {
             const t = document.createElementNS(NS, "text");
-            t.setAttribute("x", (a.x + b.x) / 2); t.setAttribute("y", (a.y + b.y) / 2 - 3);
+            t.setAttribute("x", labelAt[li].x); t.setAttribute("y", labelAt[li].y);
             t.setAttribute("class", "graph-edge-label");
-            t.textContent = label;
+            t.textContent = graphTrafficLabel(label);
+            const whole = document.createElementNS(NS, "title");   // the protocol by name, on hover
+            whole.textContent = label;
+            t.appendChild(whole);
             svg.appendChild(t);
         }
-    }
+    });
     for (const node of nodes) {
         const p = pos.get(node.key);
         const g = document.createElementNS(NS, "g");
@@ -4672,35 +4760,239 @@ function buildListGraph(container, rows, details, opts) {
         dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
         dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_COLORS[graphHash(kind) % GRAPH_COLORS.length]);
         g.appendChild(dot);
-        // Its name, then where it answers and what it runs, then what it offers, each line cut to its cell.
-        const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
-        const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
-        const lines = [[node.row.name ?? node.key, "graph-label"],
-                       [[where !== node.row.name ? where : "", node.row.version].filter(Boolean).join(" · "), "graph-sublabel"],
-                       [services, "graph-sublabel"]];
-        let y = p.y + 20;
-        for (const [line, cls] of lines) {
-            if (!line) continue;
+        let y = p.y + GRAPH_LABEL_DY;
+        for (const [line, cls] of graphNodeLines(node.row, node.key, show)) {
             const text = document.createElementNS(NS, "text");
             text.setAttribute("x", p.x); text.setAttribute("y", y);
             text.setAttribute("class", cls);
-            text.textContent = graphFit(line, cls === "graph-label" ? 18 : 22);
+            text.textContent = line;
             g.appendChild(text);
-            y += cls === "graph-label" ? 12 : 11;
+            y += GRAPH_LINE_H[cls];
         }
+        const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
+        const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
+        const summary = [node.row.name, where, kind, node.row.version, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
         const title = document.createElementNS(NS, "title");
-        title.textContent = [node.row.name, where, kind, node.row.version, node.row.firmware, services].filter(Boolean).join(" · ");
+        title.textContent = summary;
         g.appendChild(title);
+        // A button, reached by Tab and pressed by Enter or Space as by a click.
         g.classList.add("graph-link");
+        g.setAttribute("tabindex", "0");
+        g.setAttribute("role", "button");
+        g.setAttribute("aria-label", summary);
         g.addEventListener("click", () => openGraphNode(node.row, opts));
+        g.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            openGraphNode(node.row, opts);
+        });
         svg.appendChild(g);
     }
     return svg;
 }
 
+// The kind of light an output drives, as its emoji: moving heads, or its driver's kind.
+function graphOutputEmoji(o) {
+    return o.movingHeads ? "\u{1F3AF}" : (GRAPH_OUTPUT_EMOJI[o.driver] ?? "");
+}
+
+// What drives a device's lights, "🔲 Hub75 4096 @ 60/s, 💡 RmtLed 300 @ 60/s": each output's kind, its driver without its role noun, its lights and frames a second;
+// `short` leaves the driver's name out where the kind has an emoji, as a node's label does.
+function graphOutputs(row, short = false) {
+    return (Array.isArray(row.outputs) ? row.outputs : []).map(o => {
+        const kind = graphOutputEmoji(o), name = typeDisplayName(String(o.driver));
+        return [kind, short && kind ? "" : name, o.lights, o.fps ? `@ ${o.fps}/s` : ""].filter(x => x !== "").join(" ");
+    }).join(short ? "  " : ", ");
+}
+
+// A node's label lines under its dot, each cut to its cell: its name, what drives its lights, where it
+// answers and what it runs, and what it offers as emoji, which is never cut so no emoji is halved.
+function graphNodeLines(row, key, show = {}) {
+    const on = (what) => graphShown(show, what);
+    const where = row.port ? `${row.ip}:${row.port}` : row.ip;
+    const offered = Array.isArray(row.services) ? row.services : [];
+    return [[graphFit(String(row.name ?? key), 18), "graph-label"],
+            [row.type === "MoonBase" ? "\u{1F6DF} MoonBase" : graphFit(graphOutputs(row, true), 28), "graph-sublabel"],   // a board MoonLight's installer holds
+            [graphFit([on("ip") && where !== row.name ? where : "", on("version") ? row.version : ""].filter(Boolean).join(" · "), 22), "graph-sublabel"],
+            [offered.map(graphServiceEmoji).join(" "), "graph-services"]].filter(([line]) => line);
+}
+
+// The part of the picture `full` the map shows: all of it at zoom 1, a 1/z part around (cx, cy) zoomed in, kept inside the picture.
+function graphViewBox(full, view) {
+    const z = Math.min(GRAPH_ZOOM_MAX, Math.max(1, view.z || 1)), vw = full.w / z, vh = full.h / z;
+    const within = (c, lo, len, span) => Math.min(lo + len - span / 2, Math.max(lo + span / 2, c ?? lo + len / 2));
+    const cx = within(view.cx, full.x, full.w, vw), cy = within(view.cy, full.y, full.h, vh);
+    return [cx - vw / 2, cy - vh / 2, vw, vh];
+}
+
+// The view zoomed by `factor` around the point at fractions (fx, fy) of what the map shows, which stays where it is: zoom at the pointer.
+function graphZoom(full, view, factor, fx = 0.5, fy = 0.5) {
+    const [x, y, vw, vh] = graphViewBox(full, view);
+    const z = Math.min(GRAPH_ZOOM_MAX, Math.max(1, (view.z || 1) * factor)), nw = full.w / z, nh = full.h / z;
+    const nx = x + fx * vw - fx * nw, ny = y + fy * vh - fy * nh;
+    return { z, cx: nx + nw / 2, cy: ny + nh / 2 };
+}
+
+// Zoom and pan as a map does, and as the preview does: the scroll wheel or a pinch zooms at the pointer,
+// a drag on the background pans and a double-click on it fits the whole picture again.
+function wireGraphZoom(container, svg) {
+    const apply = () => svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView || {}).join(" "));
+    const fraction = (e) => {
+        const ctm = svg.getScreenCTM();
+        if (!ctm) return [0.5, 0.5];
+        const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+        const [x, y, vw, vh] = graphViewBox(container._graphFull, container._graphView || {});
+        return [(p.x - x) / vw, (p.y - y) / vh];
+    };
+    svg.addEventListener("wheel", (e) => {
+        // The map's, as the preview's wheel is, when it zooms; at the whole picture a wheel outward scrolls the page instead. A trackpad pinch arrives as a Ctrl-wheel.
+        if (e.deltaY > 0 && !(((container._graphView || {}).z || 1) > 1)) return;
+        e.preventDefault();
+        const [fx, fy] = fraction(e);
+        const rate = e.ctrlKey ? 0.01 : 0.0015;   // a wheel notch at the preview's rate; a pinch sends smaller steps
+        container._graphView = graphZoom(container._graphFull, container._graphView || {}, Math.exp(-e.deltaY * rate), fx, fy);
+        apply();
+    }, { passive: false });
+    svg.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".graph-node") || !((container._graphView || {}).z > 1)) return;
+        const ctm = svg.getScreenCTM();
+        if (!ctm) return;
+        const start = { x: e.clientX, y: e.clientY, view: graphViewBox(container._graphFull, container._graphView) };
+        container._graphPanning = true;
+        svg.setPointerCapture(e.pointerId);
+        const move = (m) => {
+            const [x, y, vw, vh] = start.view;
+            container._graphView = { z: container._graphView.z, cx: x + vw / 2 - (m.clientX - start.x) / ctm.a, cy: y + vh / 2 - (m.clientY - start.y) / ctm.d };
+            apply();
+        };
+        const end = () => {
+            svg.removeEventListener("pointermove", move);
+            container._graphPanning = false;
+            redrawGraph(container);
+        };
+        svg.addEventListener("pointermove", move);
+        svg.addEventListener("pointerup", end, { once: true });
+        svg.addEventListener("pointercancel", end, { once: true });
+    });
+    svg.addEventListener("dblclick", (e) => {
+        if (e.target.closest(".graph-node")) return;
+        container._graphView = {};
+        apply();
+    });
+}
+
+// Whether the map shows `what`: the viewer's choice, else its default in GRAPH_SHOW.
+function graphShown(show, what) {
+    return what in show ? !!show[what] : !!(GRAPH_SHOW.find(([w]) => w === what) || [])[2];
+}
+
+// A WLED's version for its node, read from its /json/info, which WLED serves cross-origin; its presence packet carries none.
+// Asked once, and again a minute after a WLED that did not answer, as the device asks its added addresses.
+function fillWledVersions(container, nodes, now = Date.now()) {
+    const known = container._wledVersions || (container._wledVersions = new Map());
+    for (const node of nodes) {
+        if (node.row.type !== "WLED" || !node.row.ip) continue;
+        const k = known.get(node.key);
+        if (k && k.ver) { node.row = Object.assign({}, node.row, { version: k.ver }); continue; }
+        if (k && now - k.at < 60000) continue;   // asked within the minute
+        known.set(node.key, { at: now });
+        fetch(`http://${node.row.ip}/json/info`).then(r => r.json()).then(info => {
+            if (info && info.ver) { known.set(node.key, { at: now, ver: String(info.ver) }); redrawGraph(container); }
+        }).catch(() => { /* no answer: asked again in a minute */ });
+    }
+}
+
+// What this viewer chose to show on the map; kept in this browser only.
+function graphShowLoad() {
+    try { return JSON.parse(localStorage.getItem(GRAPH_SHOW_KEY) || "{}") || {}; } catch (_) { return {}; }
+}
+
+// A row of toggles above the map, one per thing a node or a line can show; a toggle redraws the map at once.
+function buildGraphFilters(container) {
+    const bar = document.createElement("div");
+    bar.className = "graph-filters";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "What the map shows");
+    const show = graphShowLoad();
+    for (const [what, label] of GRAPH_SHOW) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "graph-filter";
+        btn.textContent = label;
+        btn.setAttribute("aria-pressed", String(graphShown(show, what)));
+        btn.addEventListener("click", () => {
+            const now = graphShowLoad();
+            now[what] = !graphShown(now, what);
+            try { localStorage.setItem(GRAPH_SHOW_KEY, JSON.stringify(now)); } catch (_) { /* a private window keeps it for this draw only */ }
+            container._graphShow = now;
+            btn.setAttribute("aria-pressed", String(now[what]));
+            redrawGraph(container);
+        });
+        bar.appendChild(btn);
+    }
+    // The whole map again, after the scroll wheel zoomed in.
+    const fit = document.createElement("button");
+    fit.type = "button";
+    fit.className = "graph-filter graph-zoom";
+    fit.textContent = "\u2316";   // ⌖, the preview's reset-view glyph
+    fit.title = "Reset the view: the whole map";
+    fit.setAttribute("aria-label", fit.title);
+    fit.addEventListener("click", () => {
+        const svg = container.querySelector("svg.list-graph");
+        if (!svg || !container._graphFull) return;
+        container._graphView = {};
+        svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView).join(" "));
+    });
+    bar.appendChild(fit);
+    container._graphShow = show;
+    return bar;
+}
+
+// The box a node's dot and labels cover, from the lines' estimated widths, which an edge label keeps clear of.
+function graphNodeBox(p, lines) {
+    const w = Math.max(18, ...lines.map(([line, cls]) => [...line].length * GRAPH_CHAR_W[cls]));
+    const h = GRAPH_LABEL_DY + lines.reduce((sum, [, cls]) => sum + GRAPH_LINE_H[cls], 0);
+    return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - 10, y1: p.y + h - 8 };
+}
+
+// Where each edge's label goes, or null for an edge without one: greedy label placement, each label
+// at the first spot along its edge, from the middle outward, that covers no node and no label placed
+// before it; with none free, the spot covering least, so a crowded map still shows every label.
+function placeEdgeLabels(edges, nodeBoxes) {
+    const placed = [];
+    const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+    return edges.map(([a, b, label]) => {
+        if (!label) return null;
+        const w = label.length * GRAPH_CHAR_W["graph-edge-label"], h = 11;
+        let best = null;
+        for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+            const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - 3;   // its baseline 3 px above the line
+            const box = { x0: x - w / 2, x1: x + w / 2, y0: y - h + 2, y1: y + 2 };
+            const cost = [...nodeBoxes, ...placed].reduce((sum, o) => sum + overlap(box, o), 0);
+            if (!best || cost < best.cost) best = { x, y, box, cost };
+            if (cost === 0) break;
+        }
+        placed.push(best.box);
+        return { x: best.x, y: best.y };
+    });
+}
+
+// A line's label, "audio sync 23 fps", with its protocol as its emoji: "🔊 23 fps"; a protocol without one keeps its name.
+function graphTrafficLabel(label) {
+    const protocol = Object.keys(GRAPH_PROTOCOL_EMOJI).filter(p => label.startsWith(p)).sort((a, b) => b.length - a.length)[0];
+    return protocol ? GRAPH_PROTOCOL_EMOJI[protocol] + label.slice(protocol.length) : label;
+}
+
+// A reported service, "HTTP 80" or "ColorLight", as its emoji: the protocol without its port, looked up.
+function graphServiceEmoji(service) {
+    const protocol = service.replace(/ \d+$/, "");
+    return GRAPH_PROTOCOL_EMOJI[protocol] ?? protocol;
+}
+
 // A label cut to `max` characters with an ellipsis, so it stays within its cell; the tooltip has it whole.
 function graphFit(text, max) {
-    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    const chars = [...text];   // by code point, so no emoji is split into halves
+    return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
 }
 
 // A node's row in a popup: its detail, as the list would have shown it, and for a MoonLight
@@ -4722,7 +5014,8 @@ function openGraphNode(row, opts) {
     detail.className = "list-detail";
     fillListDetail(detail, row, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName));
     dlg.append(head, detail);
-    if (row.type === "MoonLight") dlg.appendChild(buildPeerFirmware(row));
+    if (row.type === "MoonLight") dlg.appendChild(buildPeerSummary(row));
+    if (row.type === "MoonBase") dlg.appendChild(buildMoonBaseInstall(row));
     document.body.appendChild(dlg);
     dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });   // a click on the backdrop closes it
     dlg.addEventListener("close", () => dlg.remove(), { once: true });
@@ -4735,12 +5028,12 @@ function peerBase(row) {
     return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
 }
 
-// A device's version and firmware: /api/system carries them; a device on older firmware has them
-// only in its state, on the Firmware and System cards. Null when it does not answer.
+// A device's version and firmware, and its summary, /api/system, which carries them; a device on older
+// firmware has them only in its state, on the Firmware and System cards. Null when it does not answer.
 async function peerFirmware(base) {
     try {
         const sys = await (await fetch(`${base}/api/system`)).json();
-        if (sys && sys.version) return { version: sys.version, firmware: sys.firmware };
+        if (sys && sys.version) return { version: sys.version, firmware: sys.firmware, summary: sys };
         const st = await (await fetch(`${base}/api/state`)).json();
         const all = [];
         const walk = (mods) => { for (const m of mods || []) { all.push(m); walk(m.children); } };
@@ -4769,17 +5062,127 @@ async function peerUpdate(dev) {
     return { label: `latest (${v})`, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-v${v}.bin`) };
 }
 
-function buildPeerFirmware(row) {
+// The firmware images a release carries for `chip`, by variant: firmware-esp32-v7.1.0.bin and firmware-esp32-eth-v7.1.0.bin for esp32,
+// never esp32c3's, nor the -bootloader.bin and -partition-table.bin a serial flash takes beside each image.
+function chipFirmwares(release, chip) {
+    const re = new RegExp(`^firmware-(${chip}(?:-[a-z0-9]+)*)-v\\d+\\.\\d+\\.\\d+(?:-[a-z]+\\.\\d+)?\\.bin$`);
+    return (release?.assets || []).map(a => ({ m: re.exec(a.name), url: a.browser_download_url })).filter(x => x.m).map(x => ({ variant: x.m[1], url: x.url }));
+}
+
+// A board MoonBase holds: its chip from MoonBase's /api/system, the newest release's firmware for it, the variant the app ran first,
+// and Install MoonLight, which hands MoonBase the file's address as its own page does; then the node turns back into MoonLight.
+function buildMoonBaseInstall(row) {
     const box = document.createElement("div");
     box.className = "graph-popup-firmware";
     const line = document.createElement("div");
-    line.textContent = "Firmware: reading…";
+    line.textContent = "MoonBase: reading…";
     const note = document.createElement("div");
     box.append(line, note);
     const base = peerBase(row);
     (async () => {
+        let sys = null;
+        try { sys = await (await fetch(`${base}/api/system`)).json(); } catch (_) { /* answered below */ }
+        if (!sys || !sys.moonbase) { line.textContent = "MoonBase does not answer."; return; }
+        line.textContent = `MoonBase ${sys.version} on an ${sys.chip}: MoonLight's installer holds this board.`;
+        let releases = [];
+        try { releases = await cachedJson(`${RELEASES_API}?per_page=5`, "MoonLight.moonbase.releases.v1", false); } catch (_) { /* answered below */ }
+        const release = (releases || []).find(r => chipFirmwares(r, sys.chip).length);
+        if (!release) { note.textContent = `No release carries firmware for the ${sys.chip}.`; return; }
+        const files = chipFirmwares(release, sys.chip);
+        const pick = document.createElement("select");
+        for (const f of files) {
+            const o = document.createElement("option");
+            o.value = f.url;
+            o.textContent = `${f.variant} (${release.tag_name})`;
+            o.selected = f.variant === (sys.firmware || sys.chip);
+            pick.appendChild(o);
+        }
+        const btn = document.createElement("button");
+        btn.className = "graph-popup-update";
+        btn.textContent = "Install MoonLight";
+        btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            note.textContent = "Handing MoonBase the firmware…";
+            try {
+                const res = await fetch(`${base}/api/firmware/url`, { method: "POST", body: pick.value });
+                if (!res.ok && res.status !== 202) { note.textContent = `Refused: ${await res.text()}`; btn.disabled = false; return; }
+            } catch (_) { note.textContent = "MoonBase does not answer."; btn.disabled = false; return; }
+            note.textContent = "Installing: the board restarts into MoonLight when it is done…";
+            const deadline = Date.now() + 300000;
+            while (Date.now() < deadline) {
+                await fwSleep(3000);
+                try {
+                    const now = await (await fetch(`${base}/api/system`)).json();
+                    if (now && !now.moonbase && now.version) { box.closest("dialog")?.close(); return; }   // done: the node turns back into MoonLight
+                    if (now && now.moonbase) { const st = await (await fetch(`${base}/moonbase`)).text(); if (st) note.textContent = `Installing: ${st}`; }
+                } catch (_) { /* restarting */ }
+            }
+            note.textContent = "No MoonLight after five minutes: open the board's address to see where MoonBase stands.";
+        });
+        box.append(pick, btn);
+    })();
+    return box;
+}
+
+// A device's summary lines, each only when the device reports it: its board, identity, health, what
+// drives its lights and the effects it runs.
+function peerSummaryLines(sys) {
+    const lines = [];
+    const board = [sys.board, sys.chip].filter(Boolean).join(" · ");
+    if (board) lines.push(`Board: ${board}`);
+    if (sys.mac) lines.push(`MAC: ${sys.mac}`);
+    const health = [sys.uptime !== undefined ? `up ${fmtTime(sys.uptime)}` : "", sys.fps !== undefined ? `${sys.fps} fps` : "",
+                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a desktop, 0 signal off WiFi
+    if (health.length) lines.push(`Health: ${health.join(" · ")}`);
+    const outputs = graphOutputs(sys);
+    if (outputs) lines.push(`Lights: ${outputs}`);
+    if (Array.isArray(sys.effects) && sys.effects.length) lines.push(`Effects: ${sys.effects.join(", ")}`);
+    return lines;
+}
+
+// Blink a device's lights, through its own Drivers card's identify button.
+async function identifyPeer(base, note) {
+    note.textContent = "Blinking for five seconds…";
+    try {
+        const res = await fetch(`${base}/api/control`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ module: "Drivers", control: "identify", value: 1 }) });
+        if (!res.ok) note.textContent = `Refused: ${await errorMessage(res)}`;
+    } catch (_) {
+        note.textContent = "The device does not answer.";
+    }
+}
+
+function buildPeerSummary(row) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    const summary = document.createElement("div");
+    summary.className = "graph-popup-summary";
+    const line = document.createElement("div");
+    line.textContent = "Firmware: reading…";
+    const note = document.createElement("div");
+    box.append(summary, line, note);
+    const base = peerBase(row);
+    (async () => {
         const fw = await peerFirmware(base);
         if (!fw) { line.textContent = "Firmware: the device does not answer."; return; }
+        if (fw.summary) {
+            for (const text of peerSummaryLines(fw.summary)) {
+                const el = document.createElement("div");
+                el.textContent = text;
+                summary.appendChild(el);
+            }
+            // A device that reports its outputs has the identify button: older firmware has neither.
+            if (Array.isArray(fw.summary.outputs)) {
+                const idNote = document.createElement("div");
+                const btn = document.createElement("button");
+                btn.className = "graph-popup-identify";
+                btn.textContent = "Identify";
+                btn.title = "Blink this device's lights for five seconds, at their own brightness";
+                btn.addEventListener("click", () => identifyPeer(base, idNote));
+                summary.append(btn, idNote);
+            }
+        }
         const isDesktop = !fw.firmware || fw.firmware === "unknown";
         line.textContent = `Firmware: ${fw.version} · ${isDesktop ? "desktop" : fw.firmware}`;
         const u = await peerUpdate({ version: fw.version, firmware: isDesktop ? null : fw.firmware, isDesktop });
@@ -4833,9 +5236,29 @@ function buildListEntries(container, rows, details, openSet, opts) {
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
     const fieldHelp = listFieldHelp(moduleName, ctrlName);   // once per list, not per row
+    // A map already drawn redraws its picture in place: its box keeps the height the panel gave it, so an update every second does not make it jump.
+    if (opts && opts.graph && rows.length && container.querySelector(":scope > .graph-box")) {
+        container._graphArgs = { rows, details, opts };
+        redrawGraph(container);
+        return;
+    }
     container.replaceChildren();
     // A graph replaces the rows: a node is a row, and a click opens what the row's detail would have shown.
-    if (opts && opts.graph && rows.length) { container.appendChild(buildListGraph(container, rows, details, opts)); return; }
+    if (opts && opts.graph && rows.length) {
+        container.appendChild(buildGraphFilters(container));
+        // The map's box is an expandable area: the panel's grips give it height, and any change of its size redraws the map to fit.
+        const box = document.createElement("div");
+        box.className = "graph-box";
+        container.appendChild(box);
+        box.appendChild(buildListGraph(container, rows, details, opts));
+        new ResizeObserver(() => {
+            const d = container._graphDrawn, h = parseFloat(box.style.height) || 0;
+            if (d && d.w === box.clientWidth && d.h === h) return;
+            requestAnimationFrame(() => redrawGraph(container));
+        }).observe(box);
+        panelRefit();   // a rebuilt box takes back its share of the panel
+        return;
+    }
     if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
         empty.className = "list-empty";
@@ -5292,8 +5715,8 @@ function fmtDisplayInt(ctrl) {
 // (tickTimeUs / dynamicBytes: shown per card). Module names are unique tree-wide (the device dedups
 // them), so the first path segment identifies the module. Mutates `state` in place; the caller then
 // calls updateValues() to refresh the DOM without a rebuild. An unknown path is skipped (a resync will
-// reconcile). List controls: the value is the full summary array (the device sends a changed list's
-// whole value: see the plan), so we replace it wholesale, which updateModuleControls/renderCards read.
+// reconcile). List controls: the value is the full summary array and `detail` beside it the rows' details,
+// both replaced wholesale, which updateModuleControls/renderCards read.
 function applyStatePatch(patch) {
     const byName = new Map(allModules().map(m => [m.name, m]));
     for (const entry of patch) {
@@ -5308,7 +5731,10 @@ function applyStatePatch(patch) {
             mod[leaf.slice(1)] = entry.value;   // header field, e.g. @tickTimeUs -> mod.tickTimeUs
         } else if (Array.isArray(mod.controls)) {
             const c = mod.controls.find(c => c.name === leaf);
-            if (c) c.value = entry.value;
+            if (c) {
+                c.value = entry.value;
+                if (entry.detail !== undefined) c.detail = entry.detail;   // a list's detail rides beside its rows
+            }
         }
     }
 }

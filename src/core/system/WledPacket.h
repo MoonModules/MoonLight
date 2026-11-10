@@ -38,6 +38,8 @@ namespace mm {
 ///
 /// Its top three bytes are ASCII `MM` and a protocol version; the low byte says which copy this is, multicast or broadcast.
 ///
+/// MoonBase, MoonLight's installer, sends the same packet with `MB` in place of `MM`, so a board keeps its place on a peer's map while MoonBase holds it, and no WLED or MoonLight recognizer claims it.
+///
 /// ## The web page's port
 ///
 /// A device serving its page on another port than 80 appends it, so a peer links it at the right address; absent means 80, as in an http URL.
@@ -47,6 +49,7 @@ namespace mm {
 /// The layout is observed from a live WLED; the fields the native app requires come from Christophe Gagnier's [WLED-Android client](https://github.com/Moustachauve/WLED-Android).
 struct WledPacket {
     static constexpr uint16_t kPort = 65506;   ///< the UDP port presence is broadcast on
+    static constexpr uint8_t  kDiscoveryGroup[4] = {239, 255, 77, 77};   ///< the multicast copy's group, organization-local scope, never routed off the network
     static constexpr size_t   kSize = 44;      ///< the fixed header size: @xref{the-wire-layout}
     static constexpr uint8_t  kToken = 255;    ///< the first magic byte
     static constexpr uint8_t  kId = 1;         ///< the second magic byte
@@ -95,13 +98,14 @@ struct WledPacket {
 
     static constexpr size_t  kMarkerOff = 40;            ///< where the MoonLight sentinel is stamped
     static constexpr uint32_t kMmMarker = 0x014d4d00u;   ///< the sentinel itself: @xref{how-a-moonlight-peer-is-recognized}
+    static constexpr uint32_t kMbMarker = 0x01424d00u;   ///< MoonBase's: `MB` and the same protocol version
 
-    /// Stamp the sentinel that marks this packet as a MoonLight peer's, as the multicast copy.
-    static void stampMmMarker(uint8_t* out) {
-        out[kMarkerOff + 0] = (kMmMarker >> 0) & 0xff;
-        out[kMarkerOff + 1] = (kMmMarker >> 8) & 0xff;
-        out[kMarkerOff + 2] = (kMmMarker >> 16) & 0xff;
-        out[kMarkerOff + 3] = (kMmMarker >> 24) & 0xff;
+    /// Stamp the sentinel that marks this packet as a MoonLight peer's, or with `marker` MoonBase's, as the multicast copy.
+    static void stampMarker(uint8_t* out, uint32_t marker = kMmMarker) {
+        out[kMarkerOff + 0] = (marker >> 0) & 0xff;
+        out[kMarkerOff + 1] = (marker >> 8) & 0xff;
+        out[kMarkerOff + 2] = (marker >> 16) & 0xff;
+        out[kMarkerOff + 3] = (marker >> 24) & 0xff;
     }
 
     /// Mark which copy this is, the one sent to the broadcast address or the one sent to the group.
@@ -125,12 +129,12 @@ struct WledPacket {
     /// Whether a marked packet is the broadcast copy.
     static bool viaBroadcast(const uint8_t* data) { return data[kMarkerOff] == 1; }
 
-    /// Whether this packet carries the MoonLight sentinel, whichever copy it is.
-    static bool hasMmMarker(const uint8_t* data, size_t len) {
+    /// Whether this packet carries the MoonLight sentinel, or with `marker` MoonBase's, whichever copy it is.
+    static bool hasMarker(const uint8_t* data, size_t len, uint32_t marker = kMmMarker) {
         if (len < kSize) return false;
         const uint32_t v = (uint32_t(data[kMarkerOff + 1]) << 8)
                          | (uint32_t(data[kMarkerOff + 2]) << 16) | (uint32_t(data[kMarkerOff + 3]) << 24);
-        return v == (kMmMarker & 0xffffff00u);
+        return v == (marker & 0xffffff00u);
     }
 };
 

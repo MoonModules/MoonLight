@@ -46,19 +46,24 @@ inline const char* skipSpace(const char* p) {
 /// What a request says about its body's length.
 enum class Length : uint8_t { Absent, Valid, Invalid };
 
-/// Read the Content-Length header into `out`: Absent without one, Invalid when its value is not one whole decimal number.
+/// Read the Content-Length header into `out`: Absent without one, Invalid when a value is not one whole decimal number or two lines disagree, which leaves the body's framing ambiguous (RFC 9112 § 6.3).
 inline Length contentLength(const char* head, uint64_t& out) {
     static constexpr char kName[] = "Content-Length:";
-    const char* line = findHeader(head, kName);
-    if (!line) return Length::Absent;
-    const char* value = skipSpace(line + sizeof(kName) - 1);
-    if (!std::isdigit(static_cast<unsigned char>(*value))) return Length::Invalid;   // strtoull would take a sign
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long long parsed = std::strtoull(value, &end, 10);
-    if (!isFieldEnd(*end) || errno == ERANGE) return Length::Invalid;
-    out = parsed;
-    return Length::Valid;
+    Length result = Length::Absent;
+    for (const char* line = findHeader(head, kName); line;) {
+        const char* value = skipSpace(line + sizeof(kName) - 1);
+        if (!std::isdigit(static_cast<unsigned char>(*value))) return Length::Invalid;   // strtoull would take a sign
+        char* end = nullptr;
+        errno = 0;
+        const unsigned long long parsed = std::strtoull(value, &end, 10);
+        if (!isFieldEnd(*end) || errno == ERANGE) return Length::Invalid;
+        if (result == Length::Valid && parsed != out) return Length::Invalid;
+        out = parsed;
+        result = Length::Valid;
+        const char* nl = std::strchr(line, '\n');
+        line = nl ? findHeader(nl + 1, kName) : nullptr;
+    }
+    return result;
 }
 
 /// Whether the client holds its body until it hears kContinue.

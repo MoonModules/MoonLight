@@ -96,7 +96,7 @@ struct Device {
 
     /// The row JSON for a preset by name, which is how the pad grid is inspected.
     std::string rowNamed(const char* name) const {
-        for (uint8_t i = 0; i < control->listRowCount(); i++) {
+        for (mm::ListRow i = 0; i < control->listRowCount(); i++) {
             mm::JsonSink sink;
             control->writeListRow(sink, i);
             std::string row(sink.data(), sink.size());

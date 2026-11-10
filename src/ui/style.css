@@ -18,6 +18,8 @@
     --green:       #30c040;
     --red:         #d04040;
     --yellow:      #d0a040;
+    --teal:        #30b0b0;
+    --blue:        #4a90e2;
 }
 
 body[data-theme="light"] {
@@ -35,6 +37,8 @@ body[data-theme="light"] {
     --green:       #2a9a3a;
     --red:         #c0392b;
     --yellow:      #b58000;
+    --teal:        #1f8a8a;
+    --blue:        #2a6fc0;
 }
 
 * { box-sizing: border-box; }
@@ -291,39 +295,44 @@ a { color: var(--accent); }
 }
 .mode-docked .cards-resize {
     display: block;
-    flex: 0 0 6px;
+    flex: 0 0 8px;
     align-self: stretch;
-    margin: 0 -6px;              /* sit in the flex gap without adding width */
-    cursor: col-resize;
+    margin: 0 -20px 0 6px;       /* straddle the cards' left border, 4 px each side, without adding width (16 px gaps) */
+    cursor: ew-resize;           /* a window edge, as macOS shows it: the cursor, no drawn grip */
     background: transparent;
     position: relative;
     z-index: 2;
     touch-action: none;         /* we handle the drag; don't let the browser scroll/zoom */
 }
-/* A centered rule that is INVISIBLE by default and only appears (accent-colored) while the handle is
-   hovered or being dragged. The 6px hit area still catches the pointer, so the handle stays grabbable
-   even though nothing is drawn until you reach for it. */
-.cards-resize::before {
-    content: "";
-    position: absolute;
-    top: 60px; bottom: 12px;
-    left: 50%;
-    width: 2px;
-    transform: translateX(-50%);
-    border-radius: 2px;
-    background: transparent;
-    transition: background 0.12s ease;
-}
-.cards-resize:hover::before,
-.cards-resize.dragging::before {
-    background: var(--accent, #6c8cff);
-}
 /* While dragging, kill selection + iframe/canvas pointer capture jitter across the page. */
 body.cards-resizing {
-    cursor: col-resize;
+    cursor: ew-resize;
     user-select: none;
 }
-body.cards-resizing.rows { cursor: row-resize; }
+body.cards-resizing.rows { cursor: ns-resize; }
+
+/* The panel's bottom edge and bottom-left corner (panel.js), as a macOS window's: invisible strips on the
+   top-level card's own border, the cursor alone saying what a drag does. */
+.panel-root { position: relative; }
+.panel-grip-bottom {
+    position: absolute;
+    z-index: 2;
+    left: 8px; right: 0;
+    bottom: -5px;
+    height: 10px;
+    cursor: ns-resize;
+    touch-action: none;
+}
+.panel-grip-corner {
+    position: absolute;
+    left: -14px; top: -4px;
+    width: 18px; height: 18px;
+    cursor: nesw-resize;
+}
+.workspace:not(.mode-docked) .panel-grip-corner { display: none; }
+body.panel-resizing { cursor: ns-resize; user-select: none; }
+body.panel-resizing.corner { cursor: nesw-resize; }
+.expandable { box-sizing: border-box; }
 
 #preview {
     display: block;
@@ -444,8 +453,11 @@ body.cards-resizing.rows { cursor: row-resize; }
     position: relative;
     touch-action: none;
 }
-/* A grip drawn always, since a touchscreen has no hover to reveal it. */
+/* A grip drawn always, since a touchscreen has no cursor to show the edge, a sheet's grabber. */
 .mode-under .cards-resize::before {
+    content: "";
+    position: absolute;
+    border-radius: 2px;
     top: 50%; bottom: auto;
     left: 50%;
     width: 40px; height: 4px;
@@ -810,8 +822,9 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
    `.card-control` and `.card-controls-collapse` regions (sliders, inputs).
    The card's grab cursor is the only affordance — buttons and inputs keep
    their own (pointer / text / etc.) so the boundary is felt by the cursor. */
-.card { cursor: grab; }
-.card:active { cursor: grabbing; }
+.card[draggable="true"] { cursor: grab; }
+.card[draggable="true"]:active { cursor: grabbing; }
+.card:not([draggable="true"]) { cursor: auto; }   /* the cursor is inherited: a card that does not move, the top-level one among them, shows no hand */
 .control-row, .control-row * { cursor: auto; }
 .card-controls-collapse > summary { cursor: pointer; }
 .card.dragging { opacity: 0.5; }
@@ -1162,14 +1175,18 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
 .list-graph {
     display: block;
     width: 100%;
-    height: auto;
-    margin-bottom: 6px;
-    border-bottom: 1px solid var(--border);
+    touch-action: none;    /* a pinch and a drag are the map's, as the preview's are */
 }
+.graph-box { overflow: hidden; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+.graph-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.graph-filter { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: none; color: var(--fg-muted); cursor: pointer; }
+.graph-filter[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); }
+.graph-filter:not(.graph-zoom) + .graph-zoom { margin-left: auto; }   /* the zoom buttons at the bar's right end */
 .list-graph .graph-edge { stroke: var(--fg-subtle); stroke-width: 1.5; }
 .list-graph .graph-edge-label { fill: var(--fg-muted); font-size: 10px; text-anchor: middle; }
 .list-graph .graph-label { fill: var(--fg); font-size: 11px; text-anchor: middle; }
 .list-graph .graph-sublabel { fill: var(--fg-muted); font-size: 9px; text-anchor: middle; }
+.list-graph .graph-services { font-size: 11px; text-anchor: middle; }
 .list-graph .graph-self circle { stroke: var(--fg); stroke-width: 3; }
 .list-graph .graph-faded { opacity: 0.35; }
 .list-graph .graph-link { cursor: pointer; }
@@ -1190,8 +1207,11 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 .graph-popup-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
 .graph-popup-head button { background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 1rem; }
 .graph-popup-firmware { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-.graph-popup-update { align-self: flex-start; }
+.graph-popup-update, .graph-popup-identify { align-self: flex-start; }
+.graph-popup-summary { display: flex; flex-direction: column; gap: 0.25rem; }
 .list-graph .graph-link:hover circle { stroke: var(--accent); stroke-width: 2; }
+.list-graph .graph-link:focus { outline: none; }
+.list-graph .graph-link:focus-visible circle { stroke: var(--accent); stroke-width: 3; }
 
 .list-pads {
     display: grid;

@@ -124,6 +124,8 @@ const clampDot = (v) => Math.min(DOT_MAX, Math.max(DOT_MIN, Number.isFinite(v) ?
 // localStorage value (or a manual edit) can't push the dot size to a performance-killing extreme.
 let dotScale_ = clampDot(parseFloat(localStorage.getItem("mm_preview_dot")));
 let resetLayout_ = null;     // set by setupLayout(): restores the layout to its defaults
+let widenCards_ = null;      // set by setupLayout(): the card column's left edge to a pointer's x, as the split handle drags it
+let saveLayout_ = null;      // set by setupLayout(): keeps the layout
 let previewBox_ = null;      // {x,y,z} bounding-box extent for camera auto-fit
 let previewPos_ = null;      // the table's raw (x,y,z) bytes: what the stride test reads
 let previewTableStride_ = 1; // the stride the CACHED table was built at, the finest available
@@ -568,18 +570,23 @@ function setupLayout() {
     // drag returns. Under the cards it sets the preview's share of the height. Window listeners, so
     // the drag survives the handle changing layout under the pointer.
     let splitFrom = null, raf = 0, pending = null;
+    // Beside the preview, the card column's left edge follows the pointer; a column so wide the preview drops under MIN_PREVIEW_W moves the preview to the small layout.
+    const widen = (clientX) => {
+        const r = ws.getBoundingClientRect();
+        const want = Math.round(r.right - clientX);
+        const tooWide = want > r.width - MIN_PREVIEW_W - 16;   // 16: the gap beside the handle
+        if (!tooWide) cardsW = Math.max(MIN_CARDS_W, want);
+        if (forceSmall !== tooWide) { forceSmall = tooWide; applyMode(); }
+        applySizes();
+    };
+    widenCards_ = (clientX) => { if (mode() === "side") widen(clientX); };
+    saveLayout_ = save;
     const onSplitMove = (e) => {
         const r = ws.getBoundingClientRect();
         if (splitFrom === "under") {
             pending = () => { underShare = clamp((r.bottom - e.clientY) / r.height, 0.15, 0.85); applySizes(); refit(); };
         } else {
-            const want = Math.round(r.right - e.clientX);
-            const tooWide = want > r.width - MIN_PREVIEW_W - 16;   // 16: the gap beside the handle
-            pending = () => {
-                if (!tooWide) cardsW = Math.max(MIN_CARDS_W, want);
-                if (forceSmall !== tooWide) { forceSmall = tooWide; applyMode(); }
-                applySizes();
-            };
+            pending = () => widen(e.clientX);
         }
         if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (pending) pending(); });
     };
@@ -1471,6 +1478,10 @@ function adaptTick() {
 
 export const preview = {
     init: initWebGL,
+    /// The card column's left edge to a pointer's x, beside the preview only: what the panel's corner grip drags.
+    widenCardsTo(clientX) { if (widenCards_) widenCards_(clientX); },
+    /// Keep the layout, once a drag ends.
+    saveLayout() { if (saveLayout_) saveLayout_(); },
     /// The adaptation loop follows the preview socket's lifecycle (app.js owns the socket).
     adaptStart() {
         adaptState_ = initialPullState();

@@ -106,6 +106,10 @@
       }
      ]
     },
+    "identify": {
+     "line": "Blink the lights for five seconds, so this device is found by looking.",
+     "more": "Dark and lit twice a second at their own brightness, never brighter. The Devices map presses it from a device's details."
+    },
     "palette": {
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
      "tests": [
@@ -5172,7 +5176,11 @@
    "guide": [
     {
      "title": "The map",
-     "text": "This device sits in the middle, ringed, each kind in its own color. A line is traffic, labeled with its protocol and rate. Devices without traffic sit in rows beneath. A click opens a device's details, and for a MoonLight device an update to a newer release."
+     "text": "This device sits in the middle, ringed. A line is traffic; devices without any sit in rows beneath. Each node shows its lights, address, version and services. The scroll wheel zooms, a drag pans, ⌖ resets; the bar above adds the IP and version or hides traffic. A click or Enter opens its details, Identify among them, which blinks its lights."
+    },
+    {
+     "title": "The emoji",
+     "text": "Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls."
     },
     {
      "title": "As many devices as memory holds",
@@ -5198,6 +5206,9 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
+    },
+    "addedIps": {
+     "line": "Devices that announce nothing, a Tasmota among them, by IP address, comma-separated."
     },
     "devices": {
      "line": "The discovered devices; a row expands to its details.",

@@ -3,9 +3,9 @@
 // It first checks that it can finish, and otherwise boots WLED again with nothing written.
 // Then it runs once, in this order, each step safe to repeat, so a power cut starts it over:
 // 1. Out of the way: running from the slot MoonBase goes to, it copies itself to the other slot and restarts there.
-// 2. The network: WLED's WiFi name and password, read from its filesystem while that still exists.
+// 2. The networks: every WiFi name and password WLED saved, read from its filesystem while that still exists, so the one the device is on is among them.
 // 3. MoonBase, written into the factory slot and read back.
-// 4. The network again, as a NetworkModule.json in the new filesystem, so MoonBase joins it. It overwrites part of WLED's filesystem, so a run after a cut finds no network there and leaves this file as it is.
+// 4. The networks again, as a NetworkModule.json in the new filesystem, so MoonBase joins the first that answers. It overwrites part of WLED's filesystem, so a run after a cut finds no network there and leaves this file as it is.
 // 5. The table, MoonLight's, written at 0x8000 and read back. A power cut during this write is the one that needs a cable.
 // 6. The choice of app, cleared, so the bootloader starts the factory app: MoonBase.
 
@@ -22,6 +22,8 @@
 #include "freertos/task.h"
 #include "lfs.h"
 
+#include "core/util/WledNetworks.h"   // WLED's saved networks, read as a desktop test reads them
+
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -33,6 +35,8 @@ extern const uint8_t table_end[] asm("_binary_partition_table_bin_end");
 
 namespace {
 
+using mm::wlednet::Network;
+constexpr int kMaxNetworks = 4;   // WLED 16 saves three
 constexpr const char* kTag = "migrate";
 constexpr uint32_t kSector = 4096;
 
@@ -132,22 +136,6 @@ void moveAside(const Region& factory) {
     esp_restart();
 }
 
-// The string value after the first `"key":"` in `text`, into `out`; false when absent.
-bool jsonString(const char* text, const char* key, char* out, size_t outLen) {
-    char pattern[24];
-    std::snprintf(pattern, sizeof(pattern), "\"%s\":\"", key);
-    const char* p = std::strstr(text, pattern);
-    if (!p) return false;
-    p += std::strlen(pattern);
-    size_t i = 0;
-    for (; *p && *p != '"' && i + 1 < outLen; p++) {
-        if (*p == '\\' && p[1]) p++;
-        out[i++] = *p;
-    }
-    out[i] = 0;
-    return i > 0;
-}
-
 // Read a whole small file into `buf`; false when it does not open.
 bool readFile(const char* path, char* buf, size_t len) {
     FILE* f = std::fopen(path, "r");
@@ -158,19 +146,18 @@ bool readFile(const char* path, char* buf, size_t len) {
     return true;
 }
 
-// Step 2: WLED's first network, its name in cfg.json and its password in wsec.json, both under nw.ins[0].
-bool readWledNetwork(char* ssid, size_t ssidLen, char* psk, size_t pskLen) {
+// Step 2: every network WLED saved, the names in cfg.json and the passwords in wsec.json; how many have a name.
+int readWledNetworks(Network* nets, int max) {
     esp_vfs_littlefs_conf_t conf = {};
     conf.base_path = "/wled";
     conf.partition_label = "spiffs";
     conf.read_only = true;
-    if (esp_vfs_littlefs_register(&conf) != ESP_OK) return false;
-    static char buf[16384];   // WLED's cfg.json runs to a few KB, its network block near the top
-    const bool ok = readFile("/wled/cfg.json", buf, sizeof(buf)) && jsonString(buf, "ssid", ssid, ssidLen);
-    psk[0] = 0;
-    if (ok && readFile("/wled/wsec.json", buf, sizeof(buf))) jsonString(buf, "psk", psk, pskLen);
+    if (esp_vfs_littlefs_register(&conf) != ESP_OK) return 0;
+    static char cfg[16384], wsec[2048];   // WLED's cfg.json runs to a few KB, its network block near the top
+    const bool haveCfg = readFile("/wled/cfg.json", cfg, sizeof(cfg));
+    const bool haveSec = readFile("/wled/wsec.json", wsec, sizeof(wsec));
     esp_vfs_littlefs_unregister("spiffs");
-    return ok;
+    return mm::wlednet::readNetworks(haveCfg ? cfg : nullptr, haveSec ? wsec : nullptr, nets, max);
 }
 
 // `s` as a JSON string literal into `out`.
@@ -198,8 +185,8 @@ int bdErase(const lfs_config* c, lfs_block_t b) {
 }
 int bdSync(const lfs_config*) { return 0; }
 
-// Step 5: a fresh filesystem holding the network as the state document MoonLight saves it in, which MoonBase also reads.
-bool writeNetwork(const Region& fs, const char* ssid, const char* psk) {
+// Step 4: a fresh filesystem holding the networks as the state document MoonLight saves them in, which MoonBase also reads.
+bool writeNetworks(const Region& fs, const Network* nets, int count) {
     g_fsOffset = fs.offset;
     // The geometry esp_littlefs mounts with, from the same component and settings, so MoonBase and MoonLight read this as their own.
     lfs_config cfg = {};
@@ -216,11 +203,15 @@ bool writeNetwork(const Region& fs, const char* ssid, const char* psk) {
     cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     lfs_t lfs;
     if (lfs_format(&lfs, &cfg) != 0 || lfs_mount(&lfs, &cfg) != 0) return false;
-    char s[72], p[136], doc[320];
-    quoted(ssid, s, sizeof(s));
-    quoted(psk, p, sizeof(p));
-    const int n = std::snprintf(doc, sizeof(doc),
-                                "{\"Network\":{\"WiFi\":{\"type\":\"WiFiModule\",\"known\":[{\"id\":1,\"ssid\":%s,\"password\":%s,\"ipSettings\":0}]}}}", s, p);
+    static char doc[160 + kMaxNetworks * 240];   // each entry's name and password escaped at most twice their length
+    int n = std::snprintf(doc, sizeof(doc), "{\"Network\":{\"WiFi\":{\"type\":\"WiFiModule\",\"known\":[");
+    for (int i = 0; i < count && n > 0 && static_cast<size_t>(n) < sizeof(doc); i++) {
+        char s[72], p[136];
+        quoted(nets[i].ssid, s, sizeof(s));
+        quoted(nets[i].psk, p, sizeof(p));
+        n += std::snprintf(doc + n, sizeof(doc) - n, "%s{\"id\":%d,\"ssid\":%s,\"password\":%s,\"ipSettings\":0}", i ? "," : "", i + 1, s, p);
+    }
+    if (n > 0 && static_cast<size_t>(n) < sizeof(doc)) n += std::snprintf(doc + n, sizeof(doc) - n, "]}}}");
     bool ok = n > 0 && static_cast<size_t>(n) < sizeof(doc) && lfs_mkdir(&lfs, "/.config") == 0;
     lfs_file_t f;
     if (ok && lfs_file_open(&lfs, &f, "/.config/NetworkModule.json", LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) == 0) {
@@ -247,16 +238,16 @@ extern "C" void app_main() {
     esp_ota_mark_app_valid_cancel_rollback();
     moveAside(factory);
 
-    static char ssid[33], psk[65];
-    const bool network = readWledNetwork(ssid, sizeof(ssid), psk, sizeof(psk));
-    if (network) ESP_LOGI(kTag, "WLED's network: %s", ssid);
-    else ESP_LOGW(kTag, "no WLED network found; the new filesystem keeps what an earlier run wrote");
+    static Network nets[kMaxNetworks];
+    const int count = readWledNetworks(nets, kMaxNetworks);
+    for (int i = 0; i < count; i++) ESP_LOGI(kTag, "WLED's network %d: %s", i + 1, nets[i].ssid);
+    if (!count) ESP_LOGW(kTag, "no WLED network found; the new filesystem keeps what an earlier run wrote");
     pause("network read");
 
     if (!writeVerified(factory.offset, moonbase_start, moonbaseLen)) { ESP_LOGE(kTag, "MoonBase did not write; the old table still starts this image"); return; }
     pause("MoonBase written");
 
-    if (network && !writeNetwork(fs, ssid, psk)) ESP_LOGW(kTag, "the network did not write; MoonBase opens its access point");
+    if (count && !writeNetworks(fs, nets, count)) ESP_LOGW(kTag, "the networks did not write; MoonBase opens its access point");
     pause("filesystem written");
 
     if (!writeVerified(ESP_PARTITION_TABLE_OFFSET, table_start, tableLen)) { ESP_LOGE(kTag, "the table did not write"); return; }

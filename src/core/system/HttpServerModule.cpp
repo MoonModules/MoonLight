@@ -12,6 +12,7 @@
 #include "core/util/JsonUtil.h"
 #include "core/util/parse.h"
 #include "core/util/JsonSink.h"
+#include "core/util/LightOutput.h"      // the summary's outputs and effects, read from the light domain
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
@@ -307,8 +308,54 @@ void HttpServerModule::driveTransfers() {
 void HttpServerModule::tick1s() MM_NONBLOCKING {
     // The listener follows `port`, and a port the system refused is tried again, so a busy port at boot does not leave the server dark, as HttpServerModule.h's served port says.
     ensureListener();
+    if (platform::millis() - apiMinuteAt_ >= 60000) closeApiMinute();
     const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
     pushStateToWebSockets();
+}
+
+// The clients a User-Agent names (RFC 9110 § 10.1.5): its product token, as each sends it.
+static const char* clientName(const char* userAgent) {
+    static constexpr struct { const char* product; const char* name; } kClients[] = {{"HomeAssistant/", "Home Assistant"}};
+    if (!userAgent) return nullptr;
+    for (const auto& c : kClients)
+        if (std::strncmp(userAgent, c.product, std::strlen(c.product)) == 0) return c.name;
+    return nullptr;
+}
+
+void HttpServerModule::noteApiClient(const uint8_t peer[4], const char* userAgent) {
+    ApiClient* c = nullptr;
+    for (uint8_t i = 0; i < apiClientCount_ && !c; i++)
+        if (std::memcmp(apiClients_[i].ip, peer, 4) == 0) c = &apiClients_[i];
+    if (!c) {
+        if (apiClientCount_ == UINT8_MAX || !apiClients_.ensure(apiClientCount_ + 1u)) return;   // memory refused: this client goes uncounted
+        c = &apiClients_[apiClientCount_++];
+        *c = ApiClient{{peer[0], peer[1], peer[2], peer[3]}, nullptr, 0, 0, 0};
+    }
+    if (const char* name = clientName(userAgent)) c->name = name;
+    c->lastMs = platform::millis();
+    if (c->count < UINT16_MAX) c->count++;
+}
+
+void HttpServerModule::closeApiMinute() MM_NONBLOCKING {
+    const uint32_t now = platform::millis();
+    apiMinuteAt_ = now;
+    uint8_t kept = 0;
+    for (uint8_t i = 0; i < apiClientCount_; i++) {
+        ApiClient c = apiClients_[i];
+        if (now - c.lastMs >= 5 * 60000u) continue;   // gone quiet: it leaves, and its row ages out of the map
+        c.perMinute = c.count;
+        c.count = 0;
+        apiClients_[kept++] = c;
+    }
+    apiClientCount_ = kept;
+}
+
+void HttpServerModule::reportNetworkUse(NetworkUse& use) const {
+    if (boundPort_) use.service(kHttpService, boundPort_);
+    for (uint8_t i = 0; i < apiClientCount_; i++) {
+        const ApiClient& c = apiClients_[i];
+        use.flow("WLED API", false, c.ip, c.perMinute, "/m", c.name);
+    }
 }
 
 bool HttpServerModule::onAccessPoint(const platform::TcpConnection& conn) {
@@ -508,6 +555,13 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 
     // The body starts after the headers
     char* body = headerEnd ? const_cast<char*>(headerEnd) + 4 : nullptr;
+
+    // A WLED API client, Home Assistant or the WLED app, is traffic into this device the map draws.
+    if (std::strncmp(path, "/json", 5) == 0 || std::strcmp(path, "/win") == 0 || std::strcmp(path, "/presets.json") == 0) {
+        uint8_t peer[4] = {};
+        const char* agent = http::findHeader(req, "User-Agent:");
+        if (conn.peerIPv4(peer)) noteApiClient(peer, agent ? http::skipSpace(agent + 11) : nullptr);
+    }
 
     // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
     if (std::strcmp(method, "GET") == 0) {
@@ -1271,6 +1325,7 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     JsonSink sink(conn);
     // version, build and firmware first, what a peer's map reads; maxBlock is internal-only, since all-memory reports ~8 MB on PSRAM boards.
     sink.appendf("{\"version\":\"%s\",\"build\":\"%s\",\"firmware\":\"%s\",", kVersion, kBuildId, kFirmwareName);
+    writeDeviceSummary(sink);
     sink.appendf(
         "\"fps\":%u,\"tickTimeUs\":%u,\"freeHeap\":%u,\"freeInternal\":%u,\"maxBlock\":%u,\"maxExec\":%u,"
         "\"allocated\":%u,\"allocPeak\":%u,\"allocBlocks\":%u,\"uptime\":%u,\"modules\":[",
@@ -1295,6 +1350,23 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
 
     sink.append("]}");
     sink.flush();
+}
+
+// Who the device is and what it runs, the part of the summary a peer's map shows: its MAC-derived identity, its board, its WiFi signal (0 off WiFi), its light outputs and its effects.
+void HttpServerModule::writeDeviceSummary(JsonSink& sink) {
+    sink.append("\"mac\":");
+    sink.writeJsonString(platform::macString());
+    const MoonModule* sys = findModuleByName("System");
+    sink.append(",\"board\":");
+    sink.writeJsonString(sys ? static_cast<const SystemModule*>(sys)->deviceModel() : "");
+    sink.append(",\"chip\":");
+    sink.writeJsonString(platform::chipModel());
+    sink.appendf(",\"rssi\":%d,\"outputs\":[", platform::wifiStaRssi());
+    const LightOutput* out = LightOutput::active();
+    if (out) out->writeOutputs(sink);
+    sink.append("],\"effects\":[");
+    if (out) out->writeEffects(sink);
+    sink.append("],");
 }
 
 void HttpServerModule::writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first) {

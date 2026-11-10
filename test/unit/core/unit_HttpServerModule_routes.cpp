@@ -93,7 +93,7 @@ void announce(mm::DevicesModule& devices, const char* name, uint8_t last) {
     const uint8_t ip[4] = {192, 168, 1, last};
     uint8_t pkt[mm::WledPacket::kSize];
     mm::WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
-    mm::WledPacket::stampMmMarker(pkt);
+    mm::WledPacket::stampMarker(pkt);
     devices.injectPacketForTest(pkt, sizeof(pkt), ip);
 }
 

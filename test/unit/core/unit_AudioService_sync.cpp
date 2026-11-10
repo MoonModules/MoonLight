@@ -109,6 +109,16 @@ int firstByteSent(AudioService& a, platform::UdpSocket& rx) {
     }
     return -1;
 }
+
+// The next datagram on `rx` within 100 ms, its length, or -1: a loaded machine delivers even loopback a moment late, so one read can find nothing yet.
+int receiveWithin(platform::UdpSocket& rx, uint8_t* buf, size_t cap) {
+    for (int i = 0; i < 100; i++) {
+        const int n = rx.recvFrom(buf, cap);
+        if (n > 0) return n;
+        platform::delayMs(1);
+    }
+    return -1;
+}
 }  // namespace
 
 // Regression: the mic status is a local-mode read-out, so leaving local must clear it: @xref{leaving-local-clears-the-mic-status}.
@@ -576,7 +586,7 @@ TEST_CASE("AudioService Local+send: syncFormat picks the format sent, and both s
     clk.advance(AudioService::syncSendIntervalMsForTest() + 5);
     CHECK(firstByteSent(a, rx) == 'M');
     uint8_t second[kMlSyncMaxPacket];
-    CHECK(rx.recvFrom(second, sizeof(second)) == WLED_SYNC_PACKET_SIZE);   // the same frame, sent right after
+    CHECK(receiveWithin(rx, second, sizeof(second)) == WLED_SYNC_PACKET_SIZE);   // the same frame, sent right after
     CHECK(second[0] == '0');
     a.release();
     rx.close();

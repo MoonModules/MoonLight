@@ -9,6 +9,7 @@
 #include "core/module/MoonModule.h"     // the owner whose status line the sync reports on
 #include "core/util/format.h"           // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/Addressing.h"       // sendAddressed: the multicast rule every sender shares
+#include "core/system/DeviceIdentify.h"  // isGroupAddress: a destination that is a format's group, named for the map
 #include "core/util/HostList.h"         // the boards a unicast send goes to
 #include "core/util/HostResolver.h"     // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
 #include "core/util/AudioFrame.h"
@@ -237,13 +238,16 @@ public:
         if (!open_) return;
         if (role == kReceive) {
             use.service("audio sync", port);
-            if (takesPerS_) use.flow("audio sync", false, peer_, takesPerS_, "fps");
+            if (takesPerS_) use.flow("audio sync", false, peer_, takesPerS_, "/s");
             return;
         }
         if (role != kSend || !sendsPerS_) return;
-        const auto report = [&](const uint8_t ip[4]) { use.flow("audio sync", true, ip, sendsPerS_, "fps"); };
-        if (moonLight) forEachDestination(kGroups[0].ip, unicast, report);
-        if (wled) forEachDestination(kGroups[1].ip, unicast, report);
+        // Each format's group named by its format, which the map shows for the bare address.
+        const auto report = [&](const char* group) {
+            return [&, group](const uint8_t ip[4]) { use.flow("audio sync", true, ip, sendsPerS_, "/s", isGroupAddress(ip) ? group : nullptr); };
+        };
+        if (moonLight) forEachDestination(kGroups[0].ip, unicast, report("MoonLight audio"));
+        if (wled) forEachDestination(kGroups[1].ip, unicast, report("WLED audio"));
     }
     /// How many sends have gone out.
     uint32_t sendCount() const { return sendCount_; }

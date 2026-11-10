@@ -18,6 +18,8 @@ Run before a release that changes moonbase/migrate/; it rewrites the whole flash
 Usage:
   uv run moondeck/build/build_esp32.py --firmware esp32c3 --migrate-pause 10
   uv run moondeck/build/wled_migration_test.py --port /dev/cu.usbmodemXXXX
+  uv run moondeck/build/build_esp32.py --firmware esp32 --migrate-pause 10
+  uv run moondeck/build/wled_migration_test.py --chip esp32 --port /dev/cu.usbserial-XXXX
 
 Exit codes: 0 = every round ends in MoonBase, 1 = a round did not, 2 = environment failure.
 """
@@ -38,11 +40,22 @@ from build_esp32 import find_idf, idf_env   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
-# What a WLED device of each chip ships with: the release app and the bootloader of the Arduino core WLED 0.15.0 builds on.
+# What a WLED device of each chip ships with: the release app, the bootloader of the Arduino core WLED 0.15.0 builds that chip on, where the
+# chip's ROM looks for that bootloader, and the flash speed it runs at. The classic ESP32 builds on core 1.0.6.4 (ESP-IDF 3.3), the C3 on 2.0.9.
 WLED = {
+    "esp32": {
+        "app": "https://github.com/wled/WLED/releases/download/v0.15.0/WLED_0.15.0_ESP32.bin",
+        "bootloader_bin": "https://raw.githubusercontent.com/Aircoookie/arduino-esp32/1.0.6.4/tools/sdk/bin/bootloader_dio_40m.bin",
+        "bootloader_at": "0x1000",
+        "flash_freq": "40m",
+        "baud": "460800",   # a USB-serial bridge, which does not hold 921600 as the C3's own USB does
+    },
     "esp32c3": {
         "app": "https://github.com/wled/WLED/releases/download/v0.15.0/WLED_0.15.0_ESP32-C3.bin",
         "bootloader_elf": "https://raw.githubusercontent.com/espressif/arduino-esp32/2.0.9/tools/sdk/esp32c3/bin/bootloader_dio_80m.elf",
+        "bootloader_at": "0x0",
+        "flash_freq": "80m",
+        "baud": "921600",
     },
 }
 WLED_TABLE = ROOT / "esp32" / "partitions" / "wled_4mb_1mb_fs.csv"
@@ -77,14 +90,17 @@ class Bench:
     # WLED's three images, downloaded and converted once into build/wled-migration-test/<chip>/.
     def wled_files(self) -> tuple[Path, Path, Path]:
         self.cache.mkdir(parents=True, exist_ok=True)
+        spec = WLED[self.chip]
         app, elf = self.cache / "wled.bin", self.cache / "bootloader.elf"
         boot, table = self.cache / "bootloader.bin", self.cache / "partitions.bin"
-        for path, url in ((app, WLED[self.chip]["app"]), (elf, WLED[self.chip]["bootloader_elf"])):
+        # A core that publishes its bootloader as an image is taken as it is; one that publishes the ELF is converted.
+        sources = [(app, spec["app"]), (boot, spec["bootloader_bin"]) if "bootloader_bin" in spec else (elf, spec["bootloader_elf"])]
+        for path, url in sources:
             if not path.exists():
                 print(f"==> downloading {url}")
                 urllib.request.urlretrieve(url, path)
         if not boot.exists():
-            self.esptool("elf2image", "--flash-mode", "dio", "--flash-freq", "80m",
+            self.esptool("elf2image", "--flash-mode", "dio", "--flash-freq", spec["flash_freq"],
                          "--flash-size", "4MB", "-o", str(boot), str(elf))
         if not table.exists():
             gen = self.idf / "components" / "partition_table" / "gen_esp32part.py"
@@ -124,11 +140,12 @@ class Bench:
     # The board as a WLED device ships: WLED's images, an empty app choice and an empty filesystem, joined to the WiFi.
     def as_wled(self, files: tuple[Path, Path, Path], self_update: bool) -> None:
         app, boot, table = files
-        self.esptool("--port", self.port, "-b", "921600", "erase-region", "0xe000", "0x2000")
-        self.esptool("--port", self.port, "-b", "921600", "erase-region", "0x310000", "0xf0000")
-        self.esptool("--port", self.port, "-b", "921600", "write-flash", "--flash-mode", "dio",
-                     "--flash-freq", "80m", "--flash-size", "4MB",
-                     "0x0", str(boot), "0x8000", str(table), "0x10000", str(app))
+        spec = WLED[self.chip]
+        self.esptool("--port", self.port, "-b", spec["baud"], "erase-region", "0xe000", "0x2000")
+        self.esptool("--port", self.port, "-b", spec["baud"], "erase-region", "0x310000", "0xf0000")
+        self.esptool("--port", self.port, "-b", spec["baud"], "write-flash", "--flash-mode", "dio",
+                     "--flash-freq", spec["flash_freq"], "--flash-size", "4MB",
+                     spec["bootloader_at"], str(boot), "0x8000", str(table), "0x10000", str(app))
         time.sleep(3)
         r = subprocess.run(["uv", "run", str(ROOT / "moondeck" / "build" / "improv_provision.py"),
                             "--port", self.port], cwd=ROOT, capture_output=True, text=True)

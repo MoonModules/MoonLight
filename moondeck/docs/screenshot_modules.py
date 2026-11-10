@@ -742,9 +742,9 @@ def find_container_nav_names(host: str) -> dict[str, str]:
 
 
 def find_core_module_names(host: str) -> dict[str, str]:
-    """Return a map of type → live module name for core (always-present) modules.
-    Recurses the tree: some core modules (Mqtt, Devices, Improv) are children of
-    NetworkModule, not top-level, so a flat scan would miss them."""
+    """Return a map of type → live module name for core (always-present) modules and their nav roots.
+    Recurses the tree: some core modules are children (Mqtt and Improv under Network,
+    Discovery under Devices), so a flat scan would miss them."""
     r = _get(f"http://{host}/api/state", timeout=5)
     if not r.ok:
         return {}
@@ -753,7 +753,7 @@ def find_core_module_names(host: str) -> dict[str, str]:
     def walk(mods):
         for m in mods:
             t = m.get("type", "")
-            if t in CORE_MODULES and t not in result:
+            if (t in CORE_MODULES or t in CORE_NAV_ROOT.values()) and t not in result:
                 result[t] = m.get("name", "")
             walk(m.get("children", []))
 

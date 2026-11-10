@@ -13,7 +13,7 @@
 namespace mm {
 
 /// What a discovered device is; Group is a multicast group or the broadcast address a stream goes to, a destination rather than a device.
-enum class DevType : uint8_t { Generic = 0, MoonLight = 1, Wled = 2, Hue = 3, Group = 4 };
+enum class DevType : uint8_t { Generic = 0, MoonLight = 1, Wled = 2, Hue = 3, Group = 4, MoonBase = 5, Esphome = 6, Tasmota = 7 };
 
 inline const char* devTypeStr(DevType t) {
     switch (t) {
@@ -21,6 +21,9 @@ inline const char* devTypeStr(DevType t) {
         case DevType::Wled:      return "WLED";
         case DevType::Hue:       return "Hue bridge";
         case DevType::Group:     return "group";
+        case DevType::MoonBase:  return "MoonBase";
+        case DevType::Esphome:   return "ESPHome";
+        case DevType::Tasmota:   return "Tasmota";
         case DevType::Generic:   return "generic";
     }
     return "generic";
@@ -28,7 +31,7 @@ inline const char* devTypeStr(DevType t) {
 
 /// The kind a label names, the inverse of devTypeStr; an unknown label is Generic.
 inline DevType devTypeFromStr(const char* s) {
-    for (DevType t : {DevType::MoonLight, DevType::Wled, DevType::Hue, DevType::Group})
+    for (DevType t : {DevType::MoonLight, DevType::Wled, DevType::Hue, DevType::Group, DevType::MoonBase, DevType::Esphome, DevType::Tasmota})
         if (std::strcmp(s, devTypeStr(t)) == 0) return t;
     return DevType::Generic;
 }

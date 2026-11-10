@@ -84,9 +84,21 @@ public:
     const char* label() const override { return "MoonLight"; }
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
-        if (!WledPacket::isValid(data, len) || !WledPacket::hasMmMarker(data, len)) return false;
+        if (!WledPacket::isValid(data, len) || !WledPacket::hasMarker(data, len)) return false;
         out.httpPort = WledPacket::httpPort(data, len);
         return claim(data, DevType::MoonLight, out);
+    }
+};
+
+/// Claims a presence packet that carries MoonBase's marker: a board MoonLight's installer holds, during an update or after a migration.
+class MbPlugin : public PresencePlugin {
+public:
+    /// Names this plugin in logs and the UI.
+    const char* label() const override { return "MoonBase"; }
+    bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
+                        DiscoveredDevice& out) const override {
+        if (!WledPacket::isValid(data, len) || !WledPacket::hasMarker(data, len, WledPacket::kMbMarker)) return false;
+        return claim(data, DevType::MoonBase, out);
     }
 };
 
@@ -97,7 +109,8 @@ public:
     const char* label() const override { return "WLED"; }
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
-        if (!WledPacket::isValid(data, len) || WledPacket::hasMmMarker(data, len)) return false;   // a marked one is a MoonLight peer
+        if (!WledPacket::isValid(data, len) || WledPacket::hasMarker(data, len) ||
+            WledPacket::hasMarker(data, len, WledPacket::kMbMarker)) return false;   // a marked one is a MoonLight peer or MoonBase
         return claim(data, DevType::Wled, out);
     }
 };

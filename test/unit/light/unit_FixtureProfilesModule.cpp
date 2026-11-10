@@ -537,7 +537,7 @@ TEST_CASE("The built-in profiles read in the shipped order, whatever order they 
                               R"({"id":3,"name":"RGB 16-bit","channels":6,"roles":[1,14,2,15,3,16],"locked":true},)"
                               R"({"id":1,"name":"WRGB","channels":4,"roles":[4,1,2,3],"locked":true}]})", "profiles"));
     // Every missing built-in takes its shipped place around the two saved ones, so the list reads as on a fresh device.
-    for (uint8_t i = 0; i < fresh.listRowCount(); i++) CHECK(std::strcmp(saved.nameAt(i), fresh.nameAt(i)) == 0);
+    for (mm::ListRow i = 0; i < fresh.listRowCount(); i++) CHECK(std::strcmp(saved.nameAt(i), fresh.nameAt(i)) == 0);
     CHECK(saved.idAt(8) == 1);   // the saved WRGB keeps its id
     Correction c;
     REQUIRE(saved.deriveCorrection(3, 255, c));   // and each row its own wiring, through the reorder

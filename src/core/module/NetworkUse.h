@@ -13,15 +13,17 @@ inline constexpr const char* kHttpService = "HTTP";
 ///
 /// A module already counts its traffic for its status line, so a report reads those counters once a second and adds nothing per packet.
 ///
-/// The protocol and unit names are string literals: the collector keeps the pointers until the next report.
+/// The protocol, unit and peer names are string literals: the collector keeps the pointers until the next report.
 class NetworkUse {
 public:
     /// A reporter outlives the report it is handed to, and is destroyed through this base.
     virtual ~NetworkUse() = default;
     /// A service this module offers: a protocol's name and the port it listens on, 0 for one outside IP such as raw Ethernet.
     virtual void service(const char* protocol, uint16_t port) = 0;
-    /// Traffic with one peer: the protocol's name, which way, the peer's address, a multicast group or the broadcast address included, and how many `unit` a second, 0 where the module keeps no rate.
-    virtual void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t perSecond, const char* unit) = 0;
+    /// Traffic with one peer: the protocol's name, which way, the peer's address, a multicast group or the broadcast address included, its rate in `unit`, "/s" or "/m" (0 where the module keeps none), and the peer's name where the module learned one.
+    virtual void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t rate, const char* unit, const char* peerName) = 0;
+    /// Traffic with a peer whose name the module does not know, the common case.
+    void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t rate, const char* unit) { flow(protocol, outbound, peer, rate, unit, nullptr); }
 };
 
 }  // namespace mm

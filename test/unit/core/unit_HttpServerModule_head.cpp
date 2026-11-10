@@ -66,6 +66,16 @@ TEST_CASE("Content-Length is one whole decimal number, or the request is refused
     }
 }
 
+TEST_CASE("two Content-Length lines that disagree refuse the request, two that agree frame it") {
+    uint64_t n = 0;
+    // Two values leave the body's framing to whoever reads which line: the request-smuggling ambiguity RFC 9112 § 6.3 refuses.
+    CHECK(mm::http::contentLength("POST / HTTP/1.1\r\nContent-Length: 4\r\nHost: x\r\ncontent-length: 40\r\n\r\n", n) ==
+          mm::http::Length::Invalid);
+    CHECK(mm::http::contentLength("POST / HTTP/1.1\r\nContent-Length: 4\r\nContent-Length: 4\r\n\r\n", n) == mm::http::Length::Valid);
+    CHECK(n == 4);
+    CHECK(mm::http::contentLength("POST / HTTP/1.1\r\nContent-Length: 4\r\nContent-Length: x\r\n\r\n", n) == mm::http::Length::Invalid);
+}
+
 TEST_CASE("a client holding its body for 100 Continue is recognized, and only that one") {
     // curl sends `Expect: 100-continue` for any body over 1 MB and holds the body until the interim response or a 1 s timeout.
     CHECK(mm::http::expectsContinue("POST /api/firmware/upload HTTP/1.1\r\nExpect: 100-continue\r\n\r\n"));

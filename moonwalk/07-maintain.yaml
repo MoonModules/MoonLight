@@ -48,7 +48,7 @@ processes:
   - id: migrate-wled
     title: Move a WLED device to MoonLight, without a cable
     actor: user
-    goal: A bulb moves to MoonLight without a cable.
+    goal: A WLED device moves to MoonLight without a cable.
     systems: [MoonBase]
     page: reference/migrating-over-the-air.md
     intro: |
@@ -58,12 +58,12 @@ processes:
         say: Check the chip on WLED's Info page.
         when: { manual: "A migration image is built for one chip." }
         detail: |
-          An ESP32-C3 with 4 MB of flash is verified from WLED 0.15.0: [What can move](reference/migrating-over-the-air.md#what-can-move).
+          One image per chip family, the classic ESP32 and the ESP32-C3 verified from WLED 0.15.0: [What can move](reference/migrating-over-the-air.md#what-can-move).
       - id: download
         say: Download the migration image for that chip.
         when: { open: { url: "https://github.com/MoonModules/MoonLight/releases" } }
         detail: |
-          From the latest release: `shared-migrate-esp32c3.bin` for an ESP32-C3.
+          From the latest release: `shared-migrate-esp32.bin` for a classic ESP32, `shared-migrate-esp32c3.bin` for an ESP32-C3.
       - id: upload
         say: Upload it through WLED's update page.
         when: { manual: "Config, Security & Updates, Manual OTA Update, then Update." }
@@ -78,7 +78,7 @@ processes:
         say: Install MoonLight from MoonBase.
         when: { manual: "Pick the release's firmware for the chip and press Install." }
         detail: |
-          MoonLight starts on the same WiFi.
+          On a classic ESP32 that is `esp32`, or `esp32-eth` for a board with Ethernet: the migration writes the 4 MB layout they share. MoonLight starts on the same WiFi.
       - id: setup
         say: Set the light up as on any device.
         when: { process: first-light-show }

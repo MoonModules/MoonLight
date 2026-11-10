@@ -486,7 +486,7 @@ public:
         if (!proto || !framesPerS_) return;
         const uint32_t v = senderIp_.load(std::memory_order_relaxed);
         const uint8_t ip[4] = {static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v)};
-        use.flow(proto, false, ip, framesPerS_, "fps");
+        use.flow(proto, false, ip, framesPerS_, "/s");
     }
 
     /// The name an ArtPoll reply gives this node: the device's own, so a controller polling several boards tells them apart; "MoonLight" before a tree holds one.

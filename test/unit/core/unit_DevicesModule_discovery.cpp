@@ -19,6 +19,7 @@
 
 #include "doctest.h"
 #include "discovery_rows.h"
+#include "mdns_replies.h"   // an ESPHome board's real reply to the browse
 #include "core/system/DevicesModule.h"
 #include "core/system/WledPacket.h"
 #include "core/util/JsonSink.h"
@@ -127,7 +128,7 @@ void injectCopy(DevicesModule& dev, uint8_t d, bool broadcast) {
     const uint8_t ip[4] = {192, 0, 2, d};
     uint8_t pkt[WledPacket::kSize];
     WledPacket::build(pkt, ip, "peer", /*boardType=*/34, /*lightsOn=*/true);
-    WledPacket::stampMmMarker(pkt);
+    WledPacket::stampMarker(pkt);
     WledPacket::stampVia(pkt, broadcast);
     dev.injectPacketForTest(pkt, sizeof(pkt), ip);
 }
@@ -216,12 +217,12 @@ TEST_CASE("WledPacket: either copy of a MoonLight packet carries the marker") {
     const uint8_t ip[4] = {192, 0, 2, 64};
     uint8_t pkt[WledPacket::kSize];
     WledPacket::build(pkt, ip, "peer", 34, true);
-    WledPacket::stampMmMarker(pkt);
+    WledPacket::stampMarker(pkt);
     WledPacket::stampVia(pkt, true);
-    CHECK(WledPacket::hasMmMarker(pkt, sizeof(pkt)));
+    CHECK(WledPacket::hasMarker(pkt, sizeof(pkt)));
     CHECK(WledPacket::viaBroadcast(pkt));
     WledPacket::stampVia(pkt, false);
-    CHECK(WledPacket::hasMmMarker(pkt, sizeof(pkt)));
+    CHECK(WledPacket::hasMarker(pkt, sizeof(pkt)));
     CHECK_FALSE(WledPacket::viaBroadcast(pkt));
 }
 
@@ -288,7 +289,7 @@ TEST_CASE("DevicesModule: a peer serving on another port is linked and read at t
     const uint8_t ip[4] = {192, 0, 2, 61};
     uint8_t pkt[WledPacket::kSizeWithPort];
     WledPacket::build(pkt, ip, "MM-Pi", 32, true);
-    WledPacket::stampMmMarker(pkt);
+    WledPacket::stampMarker(pkt);
     dev.injectPacketForTest(pkt, WledPacket::stampHttpPort(pkt, 8080), ip);
     REQUIRE(dev.listRowCount() >= 1);
     CHECK(std::strstr(rowFor(dev, "192.0.2.61").c_str(), "\"port\":8080") != nullptr);
@@ -312,4 +313,89 @@ TEST_CASE("DevicesModule: a link-local address gets no row") {
 
 TEST_CASE("DevicesModule: the device list is not persisted") {
     CHECK_FALSE(DevicesModule{}.persistsList());
+}
+
+// MoonBase, MoonLight's installer, holds a board during an update or after a migration: its own sentinel keeps the board's node, and the latest marked packet says which image runs.
+TEST_CASE("DevicesModule: a board MoonBase holds is listed as MoonBase, and turns back into MoonLight when MoonLight announces again") {
+    DevicesModule dev;
+    const uint8_t ip[4] = {192, 0, 2, 120};
+    discovery_rows::hearPresence(dev, ip, "MM-Olimex", true);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.120").c_str(), "\"type\":\"MoonLight\"") != nullptr);
+    discovery_rows::hearPresence(dev, ip, "MM-Olimex", true, WledPacket::kMbMarker);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.120").c_str(), "\"type\":\"MoonBase\"") != nullptr);
+    CHECK(dev.listRowCount() == 1);   // the same board's row, not a second one
+    discovery_rows::hearPresence(dev, ip, "MM-Olimex", false);   // a plain WLED packet never downgrades one of ours
+    CHECK(std::strstr(rowFor(dev, "192.0.2.120").c_str(), "\"type\":\"MoonBase\"") != nullptr);
+    discovery_rows::hearPresence(dev, ip, "MM-Olimex", true);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.120").c_str(), "\"type\":\"MoonLight\"") != nullptr);
+}
+
+// ESPHome announces nothing on the presence port, only over mDNS: the browse's reply gives it a row, named and versioned as it announces itself.
+TEST_CASE("DevicesModule: an ESPHome board answering the mDNS browse is listed as ESPHome, with its friendly name and version") {
+    DevicesModule dev;
+    const std::vector<uint8_t> reply = mdns_replies::bytes(mdns_replies::kEsphomeReply);
+    const uint8_t ip[4] = {192, 0, 2, 227};
+    dev.injectMdnsReplyForTest(reply.data(), reply.size(), ip);
+    const std::string row = rowFor(dev, "192.0.2.227");
+    CHECK(std::strstr(row.c_str(), "\"type\":\"ESPHome\"") != nullptr);
+    CHECK(std::strstr(row.c_str(), "ESPHome Web 7388c8") != nullptr);
+    CHECK(std::strstr(discovery_rows::rowAt(dev, "192.0.2.227", true).c_str(), "\"version\":\"2026.9.1\"") != nullptr);
+    dev.injectMdnsReplyForTest(reply.data(), reply.size(), ip);   // the next minute's answer
+    CHECK(dev.listRowCount() == 1);
+}
+
+// A Tasmota announces nothing, so the user adds its address; its page's Server header names firmware and version, its first <h2> the name it was given.
+TEST_CASE("DevicesModule: an added address whose page says Tasmota is listed as Tasmota, named and versioned by its page, read in any pieces") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.103");
+    dev.onControlChanged("addedIps");
+    const char* page = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nServer: Tasmota/16.0.0 (ESP32-D0WD-V3)\r\n\r\n"
+                       "<!DOCTYPE html><html><head><title>Tasmota Main Menu</title></head><body><h3>ESP32-DevKit</h3><h2>Kitchen</h2></body></html>";
+    for (size_t piece : {size_t(1), size_t(7), size_t(256)}) {
+        dev.injectPageForTest(page, piece);
+        const std::string row = rowFor(dev, "192.0.2.103");
+        CHECK(std::strstr(row.c_str(), "\"type\":\"Tasmota\"") != nullptr);
+        CHECK(std::strstr(row.c_str(), "Kitchen") != nullptr);
+        CHECK(std::strstr(discovery_rows::rowAt(dev, "192.0.2.103", true).c_str(), "\"version\":\"16.0.0\"") != nullptr);
+    }
+    CHECK(dev.listRowCount() == 1);
+}
+
+TEST_CASE("DevicesModule: an added address that is not a Tasmota is listed as generic, and a name is refused") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.104");
+    dev.onControlChanged("addedIps");
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: lighttpd/1.4\r\n\r\n<html><body>router</body></html>", 64);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.104").c_str(), "\"type\":\"generic\"") != nullptr);
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "kitchen-tasmota");
+    dev.onControlChanged("addedIps");
+    CHECK(std::strstr(dev.status() ? dev.status() : "", "IP addresses only") != nullptr);
+    const uint8_t wled[4] = {192, 0, 2, 50};
+    discovery_rows::hearPresence(dev, wled, "wled", false);   // a sighting rewrites the status: the refusal stays in it
+    CHECK(std::strstr(dev.status() ? dev.status() : "", "IP addresses only") != nullptr);
+}
+
+// A typed address may never answer: the probe leaves it after its wait, closing its socket, and moves on, never holding the tick.
+TEST_CASE("DevicesModule: a silent added address is left after the probe's wait, its socket closed, and the next one asked") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.1, 192.0.2.2");   // RFC 5737 test addresses, which nothing answers
+    dev.onControlChanged("addedIps");
+    bool moved = false;
+    for (int i = 0; i < 10 && !moved; i++) {
+        dev.stepProbeForTest();
+        moved = dev.probeHostForTest() != 0;
+    }
+    CHECK(moved);
+    CHECK_FALSE(dev.probeOpenForTest());   // the silent one's connection is closed, not left open
+    dev.release();
+}
+
+// Regression: a saved list was restored without the change hook, so after a restart no added address was asked.
+TEST_CASE("DevicesModule: added addresses restored at boot are asked, as a changed list is") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.105");   // as the saved file puts it back, no change hook
+    dev.setup();
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: Tasmota/16.0.0 (ESP32-D0WD-V3)\r\n\r\n<h2>Garage</h2>", 32);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.105").c_str(), "Garage") != nullptr);
+    dev.release();
 }

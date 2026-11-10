@@ -9,7 +9,7 @@
 
 #include <cstring>
 
-// These tests pin the MULTI-PIN surface: the `pins` / `ledsPerPin` text-control parsing (shared free functions in PinList.h, used by RmtLedDriver and I80Peripheral precedent) and the slice arithmetic down to per-pin symbol offsets. All pure host logic, the RMT peripheral is never touched; on desktop the channel init is inert but parsing and slicing must behave identically, which is exactly what lets CI guard them.
+// These tests pin the MULTI-PIN surface: `pins` / `ledsPerPin` parsing (shared free functions in PinList.h) and the slice arithmetic down to per-pin symbol offsets. Pure host logic, so CI guards it; the RMT peripheral is never touched.
 
 namespace {
 
@@ -109,7 +109,7 @@ TEST_CASE("parsePinList rejects duplicate pins") {
     CHECK(mm::parsePinList("18,17,18", pins, 8, n) != nullptr);
 }
 
-// The crash guard (WROVER bench 2026-07-13): a value like 999 parses as a valid integer but is not a GPIO, handing it to IDF's gpio_func_sel() faults ("GPIO number error" → reset). parsePinList rejects the WHOLE list when any entry exceeds the chip's MM_MAX_GPIO ceiling, so a garbage pin never reaches hardware; the driver idles with "pin out of range for this chip" in its status. On the host, MM_MAX_GPIO defaults to 63, so 999 (and 64) are out of range, 63 is the last accepted pin.
+// The crash guard (WROVER bench): 999 parses as an integer but is not a GPIO, and IDF's gpio_func_sel() faults on it. parsePinList rejects the WHOLE list past MM_MAX_GPIO, so the driver idles with "pin out of range for this chip".
 TEST_CASE("parsePinList rejects an out-of-range pin (the gpio_func_sel crash guard)") {
     uint16_t pins[8] = {};
     uint8_t n = 0;
@@ -178,7 +178,7 @@ TEST_CASE("assignCounts clamps so the sum never exceeds the buffer") {
 }
 
 TEST_CASE("assignCounts clamps a pin to the WS2812 ceiling and warns (drives 2048, not zero)") {
-    // A 128×128 grid (16384 lights) all on one pin is ~490 ms/frame (FPS 1) on a WS2812 line. The driver drives the first kMaxWs2812LedsPerPin (output stays lit), count clamped, not zeroed, and `warn` is set (not nullptr) so the driver shows a Warning while still running. The return stays nullptr (a clamp is not an idling error).
+    // A 128x128 grid on one pin is ~490 ms/frame on a WS2812 line. The driver drives the first kMaxWs2812LedsPerPin (count clamped, not zeroed) and sets `warn` while running. The return stays nullptr, a clamp is not an idling error.
     mm::nrOfLightsType counts[8] = {};
     const char* warn = nullptr;
     CHECK(mm::assignCounts("", 1, 16384, counts, mm::kMaxWs2812LedsPerPin, &warn) == nullptr);
@@ -204,7 +204,7 @@ TEST_CASE("assignCounts clamps a pin to the WS2812 ceiling and warns (drives 204
     CHECK(counts[0] == 100);
     CHECK(warn == nullptr);
 
-    // An oversized SINGLE value broadcasts then clamps: "5000" wants 5000 on every pin over a 6000-light buffer. Broadcast walks the buffer, pin0 takes 5000, pin1 the remaining 1000, pin2 gets 0, then each is clamped to the WS2812 ceiling. So pin0 → 2048 (clamped from 5000, warn), pin1 → 1000 (under the ceiling), pin2 → 0.
+    // An oversized SINGLE value broadcasts then clamps: "5000" over a 6000-light buffer gives pin0 5000, pin1 the remaining 1000, pin2 0, then the WS2812 ceiling clamps pin0 to 2048 (warn).
     CHECK(mm::assignCounts("5000", 3, 6000, counts, mm::kMaxWs2812LedsPerPin, &warn) == nullptr);
     CHECK(counts[0] == mm::kMaxWs2812LedsPerPin);   // 5000 → clamped to 2048
     CHECK(counts[1] == 1000);                       // remaining buffer after pin0's 5000
@@ -325,7 +325,7 @@ TEST_CASE("RmtLedDriver re-slices when the source buffer changes") {
 
 // --- source-buffer window (start / count) ------------------------------------
 //
-// Every driver reads the SAME shared buffer and outputs a contiguous slice [start, start+count) of it (count 0 = to the end). Two drivers on disjoint windows is how the onboard status LED (window [0,1)) coexists with the main strip (window [1, N)) without either stealing the other's lights. The slice arithmetic lives on DriverBase (windowSlice/setWindow), pinned here through RmtLedDriver because it is the host-runnable concrete driver.
+// Every driver reads the SAME shared buffer and outputs a contiguous slice [start, start+count) of it (count 0 = to the end), so the status LED (window [0,1)) coexists with the main strip (window [1, N)). Pinned through RmtLedDriver.
 
 TEST_CASE("RmtLedDriver window: ledsPerPin distributes over the window, not the whole buffer") {
     mm::RmtLedDriver d;
@@ -358,12 +358,12 @@ TEST_CASE("RmtLedDriver window: count 0 means the rest of the buffer from start"
 TEST_CASE("window: the default reads all of a buffer past 65535 lights, and a window starts and counts past it") {
     mm::RmtLedDriver d;   // any concrete DriverBase: the window math lives on the base
     CHECK(d.windowCount() == 0);                         // the default is 0, all lights
-    CHECK(d.resolveWindowLenForTest(294912) == 294912);   // a 768x384 wall, whole
+    CHECK(d.windowLength(294912) == 294912);   // a 768x384 wall, whole
     // Two panel cards splitting that wall: the second half starts at light 147456.
     d.setWindow(/*start=*/147456, /*count=*/0);
-    CHECK(d.resolveWindowLenForTest(294912) == 147456);
+    CHECK(d.windowLength(294912) == 147456);
     d.setWindow(/*start=*/0, /*count=*/100000);
-    CHECK(d.resolveWindowLenForTest(294912) == 100000);   // a count past 65535 is a count, not "all"
+    CHECK(d.windowLength(294912) == 100000);   // a count past 65535 is a count, not "all"
 }
 
 TEST_CASE("window: start and count are typed numbers, never a slider over two billion lights") {
@@ -409,7 +409,7 @@ TEST_CASE("RmtLedDriver window: a start past the buffer end yields an empty slic
 
 // --- tick() robustness -------------------------------------------------------
 //
-// tick()'s transmit-all/wait-all concurrency body is gated out on the desktop (platform::rmtTxChannels == 0 → it returns at the top), exactly as I80Peripheral::tick() is. So the host can pin only the reachable contract: tick() must never crash or overrun for any pin configuration, grid size, or uninitialized state. The concurrency path itself (parallel transmit, longest-strand cost) is proven on hardware by the real-frame loopback self-test, the platform boundary keeps it out of CI, which is by design.
+// tick()'s transmit-all/wait-all body is gated out on the desktop (rmtTxChannels == 0), so the host pins only the reachable contract: tick() never crashes or overruns for any pin configuration, grid size or uninitialized state.
 
 // tick() is a safe no-op across single-pin, multi-pin and zero-grid configs.
 TEST_CASE("RmtLedDriver tick is crash-safe for every pin configuration") {
@@ -450,7 +450,7 @@ TEST_CASE("RmtLedDriver tick is crash-safe for every pin configuration") {
 
 // --- wire timing ------------------------------------------------------------
 //
-// A strip's bit rate is not universal: the shipped default satisfies WS2812, WS2812B and SK6812 together, but a 12V WS2811 in its low-speed mode wants twice the bit cell and reads the default as noise past the first few lights (issue #94). The `timing` control is what lets a user say so.
+// A strip's bit rate is not universal: the default satisfies WS2812, WS2812B and SK6812, but a 12V WS2811 in low-speed mode wants twice the bit cell and reads the default as noise (issue #94). The `timing` control lets a user say so.
 
 TEST_CASE("the default timing is the one that drives WS2812B and SK6812 alike") {
     mm::RmtLedDriver d;

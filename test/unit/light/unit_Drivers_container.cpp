@@ -10,6 +10,9 @@
 #include "light/drivers/ParallelLedDriver.h"     // its installer and bench controls, for the mode case
 #include "light/drivers/RmtLedDriver.h"
 #include "light/drivers/PreviewDriver.h"     // the one driver safe mode keeps
+#include "light/effects/SolidEffect.h"        // a running effect, for the summary's effects
+#include "light/layers/Effects.h"
+#include "core/util/JsonSink.h"
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
@@ -559,4 +562,100 @@ TEST_CASE("the running palette script compiles again when its file changes") {
     CHECK(std::strstr(drivers.status(), "unknown function") != nullptr);
     CHECK(drivers.severity() == mm::MoonModule::Severity::Error);
     mm::platform::fsRemove("/moonlive/unit-live.mlp");
+}
+
+// Identify blinks the lights through the brightness tables: dark and lit by turns, never brighter than they are, and back as they were after five seconds.
+TEST_CASE("identify blinks the lights twice a second for five seconds at their own brightness, then leaves them as they were") {
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
+    mm::Drivers drivers;
+    CorrectionCapturingDriver drv;
+    drivers.addChild(&drv);
+    drv.defineControls();
+    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
+    drivers.setup();
+    drivers.brightness = 200;
+    drivers.onControlChanged("brightness");
+
+    drivers.onControlChanged("identify");
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 200);   // the lit half first
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kIdentifyHalfMs);
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 0);     // the dark half
+    CHECK(drivers.brightness == 200);                    // the set level untouched
+    mm::platform::setTestNowMs(1000 + 2 * mm::Drivers::kIdentifyHalfMs);
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 200);
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kIdentifyMs - 1);
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 0);     // the last half is dark
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kIdentifyMs);
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 200);   // over, at the set level
+    mm::platform::setTestNowMs(1000 + mm::Drivers::kIdentifyMs + mm::Drivers::kIdentifyHalfMs);
+    drivers.tick20ms();
+    CHECK(drv.correctionForTest().briLut[255] == 200);   // and it stays there
+    drivers.removeChild(&drv);
+}
+
+// The summary a peer's map shows: what drives the lights, each output with the lights its window sends, and the effects running on them.
+TEST_CASE("Drivers names each enabled output with its lights and moving heads, leaving out the preview, and each running effect") {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    mm::Effects layers;
+    mm::Layer layer, hidden;
+    mm::SolidEffect solid, paused, onHidden;
+    mm::Drivers drivers;
+    CountingDriver whole, window, off;
+    mm::PreviewDriver preview;
+    grid.width = 64; grid.height = 1; grid.depth = 1;
+    layouts.addChild(&grid);
+    solid.setName("Solid");
+    paused.setName("Paused");
+    paused.setEnabled(false);
+    onHidden.setName("Hidden");
+    layer.addChild(&solid);
+    layer.addChild(&paused);
+    hidden.addChild(&onHidden);
+    hidden.setEnabled(false);
+    for (auto* l : {&layer, &hidden}) { l->setChannelsPerLight(3); layers.addChild(l); }
+    layers.setLayouts(&layouts);
+    layers.applyState();
+    whole.setTypeName("RmtLedDriver");
+    window.setTypeName("PanelCardDriver");
+    window.setWindow(0, 10);
+    off.setTypeName("HueDriver");
+    off.setEnabled(false);
+    for (mm::MoonModule* d : {static_cast<mm::MoonModule*>(&whole), static_cast<mm::MoonModule*>(&window),
+                              static_cast<mm::MoonModule*>(&off), static_cast<mm::MoonModule*>(&preview)}) drivers.addChild(d);
+    drivers.setEffects(&layers);
+    drivers.setup();
+
+    char buf[256] = {};
+    {
+        mm::JsonSink sink(buf, sizeof(buf));
+        drivers.writeOutputs(sink);
+    }
+    CHECK(std::string(buf) == "{\"driver\":\"RmtLedDriver\",\"lights\":64,\"fps\":0},{\"driver\":\"PanelCardDriver\",\"lights\":10,\"fps\":0}");   // no scheduler runs: no frame rate
+    window.correctionForTest().hasMotion = true;   // its fixture profile aims: moving heads
+    char heads[256] = {};
+    {
+        mm::JsonSink sink(heads, sizeof(heads));
+        drivers.writeOutputs(sink);
+    }
+    CHECK(std::strstr(heads, "{\"driver\":\"PanelCardDriver\",\"lights\":10,\"fps\":0,\"movingHeads\":true}") != nullptr);
+    char effects[128] = {};
+    {
+        mm::JsonSink sink(effects, sizeof(effects));
+        drivers.writeEffects(sink);
+    }
+    CHECK(std::string(effects) == "\"Solid\"");   // not the disabled effect, nor one on a disabled layer
+    for (mm::MoonModule* d : {static_cast<mm::MoonModule*>(&preview), static_cast<mm::MoonModule*>(&off),
+                              static_cast<mm::MoonModule*>(&window), static_cast<mm::MoonModule*>(&whole)}) drivers.removeChild(d);
+    for (auto* l : {&hidden, &layer}) layers.removeChild(l);
+    layer.removeChild(&paused);
+    layer.removeChild(&solid);
+    hidden.removeChild(&onHidden);
+    layouts.removeChild(&grid);
 }

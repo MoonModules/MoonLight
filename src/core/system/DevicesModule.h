@@ -15,6 +15,10 @@
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
 #include "core/util/HostResolver.h"       // setNameSource: a host setting naming a board resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
+#include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
+#include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
+#include "core/util/HostList.h"           // parseHostList: the added addresses, as every host list is read
+#include "core/util/HttpHead.h"           // findHeader: the probe reads a page's Server header as the server reads a request's
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -32,7 +36,11 @@ namespace mm {
 ///
 /// ## The map
 ///
-/// This device sits in the middle, ringed, each kind in its own color. A line is traffic, labeled with its protocol and rate. Devices without traffic sit in rows beneath. A click opens a device's details, and for a MoonLight device an update to a newer release.
+/// This device sits in the middle, ringed. A line is traffic; devices without any sit in rows beneath. Each node shows its lights, address, version and services. The scroll wheel zooms, a drag pans, ⌖ resets; the bar above adds the IP and version or hides traffic. A click or Enter opens its details, Identify among them, which blinks its lights.
+///
+/// ## The emoji
+///
+/// Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.
 ///
 /// ## As many devices as memory holds
 ///
@@ -50,13 +58,17 @@ namespace mm {
 ///
 /// @technical
 ///
-/// **Discovery is passive.** Each device announces a presence packet on the multicast group and the broadcast address WLED listens on, and this listens for both. A device appears when heard and ages out when it stops.
+/// **Discovery is passive, but for one question.** Each device announces a presence packet on the multicast group and the broadcast address WLED listens on, and this listens for both. A device appears when heard and ages out when it stops.
+///
+/// ESPHome announces only over mDNS, so once a minute one browse for `_esphomelib._tcp` goes out from an ordinary port and the answers come back to it (`Mdns.h`), naming the device and its version.
 ///
 /// **Ports and addresses.** A device whose page is not on port 80 adds its port to the packet. A link-local address (169.254.0.0/16) gets no row: no peer reaches it, and a board's second interface would list the board twice.
 ///
 /// **Plugins are the interop seam.** A foreign ecosystem hooks in as a plugin, not a branch. Each declares its port and turns a datagram into a device kind, ours offered first; a new system is one new file.
 ///
 /// **Aging out.** Each sighting is stamped, and a device unheard for a day leaves the list. The list is runtime state, never saved: every device announces itself again within seconds. Discovery only, never device commands.
+///
+/// **The summary is `/api/system`.** A node's details read the device's own health endpoint, which leads with who it is and what it runs, the light outputs and effects through `LightOutput`. This device's row carries its outputs too, so a peer's map labels its node without a request per node. Identify presses the device's own Drivers `identify` button through `/api/control`.
 ///
 /// **The map's edges come from the modules.** Once a second every enabled module reports its services and traffic (NetworkUse). A peer gets a row, a group address one of kind group. This device's row carries its outbound flows and services, a peer's row its inbound flow. A flow from a peer is a sighting; one to a silent receiver is not, so a dead receiver ages out.
 ///
@@ -106,6 +118,15 @@ public:
             sink.append(",\"firmware\":");
             sink.writeJsonString(kFirmwareName);
             writeServices(sink);
+            // What drives its lights, which a peer's map shows under this device's name.
+            if (const LightOutput* out = LightOutput::active()) {
+                sink.append(",\"outputs\":[");
+                out->writeOutputs(sink);
+                sink.append("]");
+            }
+        } else if (d.version[0]) {
+            sink.append(",\"version\":");   // what another ecosystem's device announced it runs
+            sink.writeJsonString(d.version);
         }
         sink.append("}");
     }
@@ -118,11 +139,14 @@ public:
     /// How presence travels: multicast, or multicast and broadcast.
     /// @guide Broadcast is the default, since WLED devices hear it too.
     uint8_t addressing = kDevMulticastBroadcast;
+    /// Devices that announce nothing, a Tasmota among them, by IP address, comma-separated.
+    char addedIps[96] = "";
 
     /// Declare the addressing and the list of discovered devices.
     void defineControls() override {
         MoonModule::defineControls();
         controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
+        controls_.addText("addedIps", addedIps, sizeof(addedIps));
         /// The discovered devices; a row expands to its details.
         /// @field name The device's name, else its address.
         /// @field ip Its address on the network.
@@ -131,6 +155,25 @@ public:
         /// @field color How many color lights a Hue bridge has.
         /// @field ageSec When it was last heard.
         controls_.addList("devices", *this);   // this module is the ListSource
+    }
+
+    /// Take a changed list of added addresses, which a probe asks in turn.
+    void onControlChanged(const char* name) override {
+        if (std::strcmp(name, "addedIps") == 0) parseAdded();
+    }
+
+    /// Parse `addedIps` into the addresses the probe asks, starting with the first now; an entry that is not an address is refused on the status.
+    void parseAdded() {
+        uint8_t n = 0;
+        const char* err = parseHostList(addedIps, addedHosts_, kMaxAdded, n);
+        for (uint8_t i = 0; !err && i < n; i++)
+            if (addedHosts_[i].isName()) err = "addedIps: IP addresses only";
+        addedCount_ = err ? 0 : n;
+        addedError_ = err;
+        probe_.conn.close();
+        probe_ = Probe{};
+        probeTick_ = kProbeEverySec;   // ask the new list now
+        refreshStatus();
     }
 
     /// The one live instance, through which a light-domain driver registers what it found.
@@ -186,6 +229,7 @@ public:
         MoonModule::setup();
         HostResolver::setNameSource(&resolveBoard, &boardNameAt);
         setStatus(statusBuf_);
+        parseAdded();   // a saved list is restored without a change hook
     }
 
     /// Claim the seat that makes this the instance a driver registers through.
@@ -198,6 +242,10 @@ public:
         seat_.vacate();
         listener_.close();
         listenerBound_ = false;
+        mdns_.close();
+        mdnsOpen_ = false;
+        probe_.conn.close();
+        probe_ = Probe{};
         deviceCount_ = flowCount_ = serviceCount_ = 0;   // the base frees their blocks
         MoonModule::release();
     }
@@ -223,6 +271,9 @@ public:
             mergePacket(buf, static_cast<size_t>(n), srcIp);
         }
 
+        browseMdns();
+        probeAdded();
+
         // Broadcast our own presence every kBroadcastEverySec ticks so peers discover us.
         if (++broadcastTick_ >= kBroadcastEverySec) {
             broadcastTick_ = 0;
@@ -235,6 +286,23 @@ public:
     /// Feed one packet through the real pipeline, so a test needs no network.
     void injectPacketForTest(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {
         mergePacket(data, len, srcIp);
+    }
+    /// Test-only: one tick of the probe, and where it stands: which address, and whether it holds a connection.
+    void stepProbeForTest() { probeAdded(); }
+    uint8_t probeHostForTest() const { return probe_.host; }
+    bool probeOpenForTest() const { return probe_.conn.valid(); }
+    /// Test-only: the first added address's page arriving in pieces of `piece` bytes, as the probe's reads take it.
+    void injectPageForTest(const char* page, size_t piece) {
+        probe_ = Probe{};
+        const size_t len = std::strlen(page);
+        for (size_t at = 0; at < len; at += piece)
+            if (scanPage(reinterpret_cast<const uint8_t*>(page) + at, len - at < piece ? len - at : piece)) break;
+        finishProbe();
+    }
+    /// Test-only: an mDNS reply arriving from `srcIp`, as the browse's read takes it.
+    void injectMdnsReplyForTest(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {
+        mdns::Service s;
+        if (mdns::parseReply(data, len, kEsphomeService, s)) noteMdnsDevice(srcIp, s);
     }
 
 private:
@@ -250,6 +318,7 @@ private:
                                     ///< (the figure for sizing a layout). 0 for non-bridge rows.
         uint8_t  broadcastRun = 0;   ///< broadcast copies since this peer's last multicast one, saturating
         uint16_t httpPort = WledPacket::kDefaultHttpPort;   ///< the port its web page answers on, from its presence
+        char     version[16] = {};   ///< the firmware version a device of another ecosystem announces, ESPHome's in its mDNS TXT
     };
 
     /// The seat behind `active()`, claimed on build and vacated on release.
@@ -272,11 +341,46 @@ private:
 
     /// The device plugins in claim order: ours is first, so a peer's marked packet is typed before the fallback.
     MmPlugin   mmPlugin_;
+    MbPlugin   mbPlugin_;
     WledPlugin wledPlugin_;
-    static constexpr uint8_t kPluginCount = 2;
-    const DevicePlugin* plugins_[kPluginCount] = { &mmPlugin_, &wledPlugin_ };
+    static constexpr uint8_t kPluginCount = 3;
+    const DevicePlugin* plugins_[kPluginCount] = { &mmPlugin_, &mbPlugin_, &wledPlugin_ };
 
     platform::UdpSocket listener_;       // bound to the presence port; drained each tick
+    platform::UdpSocket mdns_;           // an ordinary port the mDNS browse goes out from and its replies come back to (Mdns.h)
+    bool     mdnsOpen_ = false;
+    uint32_t mdnsTick_ = kMdnsEverySec - 5;   // the first browse a few seconds after the socket opens
+    ScratchBuffer<uint8_t> mdnsBuf_{*this};   // one reply, taken when the socket opens
+    /// How often the mDNS browse goes out, in ticks: one small packet a minute.
+    static constexpr uint32_t kMdnsEverySec = 60;
+    static constexpr size_t   kMdnsReplyMax = 768;   ///< a responder's whole reply, an ESPHome board's runs to about 400 bytes
+    static constexpr const char* kEsphomeService = "_esphomelib._tcp.local";
+
+    /// The added addresses, parsed from `addedIps`, and the one probe asking them in turn.
+    static constexpr uint8_t kMaxAdded = 8;
+    Host    addedHosts_[kMaxAdded] = {};
+    uint8_t addedCount_ = 0;
+    const char* addedError_ = nullptr;   // why `addedIps` was refused, kept in the status until it is fixed
+    /// One HTTP request for an added address's page: its Server header names the firmware, its first <h2> the name a Tasmota was given.
+    struct Probe {
+        platform::TcpConnection conn;   ///< the request's connection
+        uint8_t host = 0;      ///< which added address
+        uint8_t state = 0;     ///< 0 idle, 1 connecting, 2 sending, 3 reading
+        uint8_t sent = 0;      ///< how much of the request the socket took
+        uint8_t ticks = 0;     ///< ticks in this state, which bounds a silent address
+        uint8_t h2At = 0;      ///< how much of "<h2>" the page has matched across reads
+        bool    inH2 = false;  ///< inside the first <h2>, whose text is the name
+        char    server[40] = {};   ///< the Server header's value
+        char    h2[24] = {};       ///< the first <h2>'s text
+        uint8_t h2Len = 0;     ///< its length so far
+        char    line[48] = {}; ///< the header line being read, for the Server one
+        uint8_t lineLen = 0;   ///< its length so far
+        bool    body = false;  ///< past the headers
+    } probe_;
+    uint32_t probeTick_ = 0;
+    /// How often each added address is asked, in ticks, and how many ticks a probe waits for it.
+    static constexpr uint32_t kProbeEverySec = 60;
+    static constexpr uint8_t  kProbeWaitSec = 4;
     bool     listenerBound_ = false;
     uint32_t boundMs_ = 0;               // when the listener opened, which starts the both-ways window
     uint32_t broadcastTick_ = 0;         // counts tick1s ticks toward the next presence broadcast
@@ -285,7 +389,7 @@ private:
     ListRow deviceCount_ = 0;
     bool    memoryFull_ = false;   // a growth was refused since the last one that succeeded
     const char* selfName_ = nullptr;   // this device's name (wired via setSelfName)
-    char    statusBuf_[72] = "idle";   // "65535 devices, multicast blocked: broadcasting too, memory full"
+    char    statusBuf_[104] = "idle";   // "65535 devices, multicast blocked: broadcasting too, memory full, addedIps: IP addresses only"
 
     /// Open a row's object with what the summary and the detail share, its name, address and kind, leaving the address text in `ip`.
     void openRow(JsonSink& sink, const Device& d, char (&ip)[16]) const {
@@ -296,9 +400,12 @@ private:
         if (d.type == DevType::Hue) sink.appendf(",\"color\":%u", d.colorCount);
     }
 
+    /// Whether a kind is one of ours, a board MoonLight or MoonBase holds, each marked by its own sentinel.
+    static bool ours(DevType t) { return t == DevType::MoonLight || t == DevType::MoonBase; }
+
     /// What this row is worth keeping when memory is full.
     static uint8_t worth(const Device& d) {
-        return d.self ? kWorthSelf : (d.type == DevType::MoonLight ? kWorthMoonLight : kWorthOther);
+        return d.self ? kWorthSelf : (ours(d.type) ? kWorthMoonLight : kWorthOther);
     }
 
     /// A fresh row at `ip` for a newcomer worth `newcomerWorth`: a grown one, or, when memory refuses, the least recently heard row of the lowest worth not above the newcomer's; null when every row is worth more.
@@ -319,7 +426,7 @@ private:
     }
 
     /// One flow a module reported this second; protocol and unit point at the reporter's literals.
-    struct Flow { const char* protocol; const char* unit; uint8_t peer[4]; uint32_t perSecond; bool outbound; };
+    struct Flow { const char* protocol; const char* unit; const char* peerName; uint8_t peer[4]; uint32_t rate; bool outbound; };
     /// One service this device offers, as a module reported it.
     struct Service { const char* protocol; uint16_t port; };
     ScratchBuffer<Flow>    flows_{*this};      // this second's flows, refilled each second
@@ -338,10 +445,11 @@ private:
             d_.services_[d_.serviceCount_++] = Service{protocol, port};
         }
         /// Add one flow, or mark memory full when it refuses.
-        void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t perSecond, const char* unit) override {
+        using NetworkUse::flow;   // the nameless form, beside the override
+        void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t rate, const char* unit, const char* peerName) override {
             if (d_.flowCount_ == kMaxRows || !d_.flows_.ensure(d_.flowCount_ + 1u)) { d_.memoryFull_ = true; return; }
             Flow& f = d_.flows_[d_.flowCount_++];
-            f = Flow{protocol, unit, {peer[0], peer[1], peer[2], peer[3]}, perSecond, outbound};
+            f = Flow{protocol, unit, peerName, {peer[0], peer[1], peer[2], peer[3]}, rate, outbound};
         }
     private:
         DevicesModule& d_;
@@ -387,6 +495,11 @@ private:
             d->lastSeenMs = platform::millis();
             added = true;
         }
+        // A name the reporting module learned, a client's User-Agent or a multicast group's format, names a row nothing else named: never a MoonLight board's or a WLED's own.
+        if (f.peerName && (d->type == DevType::Generic || d->type == DevType::Group) && std::strcmp(d->name, f.peerName) != 0) {
+            mm::formatTo(d->name, sizeof(d->name), "%s", f.peerName);
+            added = true;   // re-sorted by its new name
+        }
         if (!f.outbound || d->type == DevType::Group) {
             d->lastSeenMs = platform::millis();
         }
@@ -404,7 +517,7 @@ private:
             sink.append(first ? ",\"edges\":[" : ",");
             first = false;
             sink.appendf("{\"to\":\"%s\",\"label\":\"%s", to, f.protocol);
-            if (f.perSecond) sink.appendf(" %u %s", static_cast<unsigned>(f.perSecond), f.unit);
+            if (f.rate) sink.appendf(" %u%s", static_cast<unsigned>(f.rate), f.unit);   // "46/s"
             sink.append("\"}");
         }
         if (!first) sink.append("]");
@@ -445,15 +558,15 @@ private:
             DiscoveredDevice found;
             if (p->classifyPacket(data, len, srcIp, found)) {
                 upsertDevice(srcIp, found);
-                if (WledPacket::hasMmMarker(data, len)) noteCopy(srcIp, WledPacket::viaBroadcast(data));
+                if (WledPacket::hasMarker(data, len)) noteCopy(srcIp, WledPacket::viaBroadcast(data));
                 return;
             }
         }
         // No plugin claimed it: an unrecognized packet on a port we listen on; ignore.
     }
 
-    /// The discovery group, in the organization-local scope that is never routed off the network.
-    static constexpr uint8_t kDiscoveryGroup[4] = {239, 255, 77, 77};
+    /// The discovery group, shared with MoonBase's announcement.
+    static constexpr const uint8_t* kDiscoveryGroup = WledPacket::kDiscoveryGroup;
 
     /// Bind the listener once the network is up, which the plugins' shared port names.
     void ensureListener() {
@@ -472,12 +585,139 @@ private:
         }
     }
 
+    /// Ask once a minute who offers the ESPHome service, and read the replies that came back, a few a tick: devices that announce nothing on the presence port.
+    void browseMdns() {
+        if (!mdnsOpen_) {
+            if (!mdns_.open()) return;
+            if (!mdns_.bind(0) || !mdnsBuf_.resize(kMdnsReplyMax)) { mdns_.close(); return; }   // an ordinary port: the platform's own responder keeps 5353
+            mdnsOpen_ = true;
+        }
+        if (++mdnsTick_ >= kMdnsEverySec) {
+            mdnsTick_ = 0;
+            uint8_t q[48];
+            const size_t n = mdns::buildQuery(kEsphomeService, q, sizeof(q));
+            if (n) mdns_.sendToAddr(mdns::kGroup, mdns::kPort, q, n);
+        }
+        uint8_t src[4];
+        for (int i = 0; i < kMaxDrainPerTick; i++) {
+            const int n = mdns_.recvFrom(mdnsBuf_.data(), mdnsBuf_.count(), src);
+            if (n <= 0) break;
+            mdns::Service s;
+            if (mdns::parseReply(mdnsBuf_.data(), static_cast<size_t>(n), kEsphomeService, s)) noteMdnsDevice(src, s);
+        }
+    }
+
+    /// A device that answered the browse: its row by the reply's source address, named and versioned as it announces itself.
+    void noteMdnsDevice(const uint8_t ip[4], const mdns::Service& s) {
+        DiscoveredDevice found;
+        found.type = DevType::Esphome;
+        setDeviceName(found, s.name);
+        upsertDevice(ip, found);
+        Device* d = findByIp(ip);
+        if (d && std::strcmp(d->version, s.version) != 0) mm::formatTo(d->version, sizeof(d->version), "%s", s.version);
+    }
+
+    /// Ask each added address for its page, one at a time and once a minute, never waiting: a connect and a read move one step a tick.
+    void probeAdded() {
+        if (!addedCount_) return;
+        Probe& p = probe_;
+        if (p.state == 0) {
+            if (p.host == 0 && ++probeTick_ < kProbeEverySec) return;
+            probeTick_ = 0;
+            char ip[16];
+            formatDottedQuad(ip, addedHosts_[p.host].ip);
+            p.ticks = 0;
+            p.state = p.conn.connectStart(ip, WledPacket::kDefaultHttpPort) ? 1 : 0;
+            if (!p.state) nextAdded();
+            return;
+        }
+        if (++p.ticks > kProbeWaitSec) { finishProbe(); return; }   // silent: the next one
+        if (p.state == 1) {
+            const auto r = p.conn.connectPoll();
+            if (r == platform::TcpConnection::ConnectResult::Failed) { finishProbe(); return; }
+            if (r == platform::TcpConnection::ConnectResult::Pending) return;
+            p.state = 2;   // connected: send the request
+        }
+        if (p.state == 2) {
+            // What the socket takes now, the rest on the next tick: a peer that never reads must not hold the tick.
+            static constexpr char kGet[] = "GET / HTTP/1.0\r\nConnection: close\r\n\r\n";
+            const int n = p.conn.writeSome(reinterpret_cast<const uint8_t*>(kGet) + p.sent, sizeof(kGet) - 1 - p.sent);
+            if (n < 0) { finishProbe(); return; }
+            p.sent = static_cast<uint8_t>(p.sent + n);
+            if (p.sent < sizeof(kGet) - 1) return;
+            p.state = 3;
+            p.ticks = 0;
+        }
+        uint8_t buf[256];
+        for (int i = 0; i < 24; i++) {   // a few KB a tick at most
+            const int n = p.conn.read(buf, sizeof(buf));
+            if (n < 0) return;                       // nothing yet: next tick
+            if (n == 0) { finishProbe(); return; }  // the page ended
+            if (scanPage(buf, static_cast<size_t>(n))) { finishProbe(); return; }
+        }
+    }
+
+    /// Read a piece of the page: the Server header among the headers, then the first <h2>'s text; true once that text is complete.
+    bool scanPage(const uint8_t* b, size_t n) {
+        Probe& p = probe_;
+        static constexpr char kH2[] = "<h2>";
+        for (size_t i = 0; i < n; i++) {
+            const char c = static_cast<char>(b[i]);
+            if (!p.body) {
+                if (c == '\n') {
+                    p.line[p.lineLen] = 0;
+                    if (p.lineLen == 0) p.body = true;   // the blank line ends the headers
+                    else if (const char* h = http::findHeader(p.line, "Server:")) mm::formatTo(p.server, sizeof(p.server), "%s", http::skipSpace(h + 7));
+                    p.lineLen = 0;
+                } else if (c != '\r' && p.lineLen + 1 < sizeof(p.line)) {
+                    p.line[p.lineLen++] = c;
+                }
+            } else if (p.inH2) {
+                if (c == '<') return true;
+                if (p.h2Len + 1 < sizeof(p.h2)) { p.h2[p.h2Len++] = c; p.h2[p.h2Len] = 0; }
+            } else {
+                p.h2At = (c == kH2[p.h2At]) ? p.h2At + 1 : (c == kH2[0] ? 1 : 0);
+                if (p.h2At == sizeof(kH2) - 1) p.inH2 = true;
+            }
+        }
+        return false;
+    }
+
+    /// What the page said about the device, its row named and versioned by it, and the next address.
+    void finishProbe() {
+        Probe& p = probe_;
+        if (p.server[0]) {
+            DiscoveredDevice found;
+            const char* slash = std::strchr(p.server, '/');
+            const bool tasmota = std::strncmp(p.server, "Tasmota/", 8) == 0;
+            found.type = tasmota ? DevType::Tasmota : DevType::Generic;
+            setDeviceName(found, p.h2[0] ? p.h2 : "");
+            const uint8_t* ip = addedHosts_[p.host].ip;
+            upsertDevice(ip, found);
+            if (Device* d = findByIp(ip); d && tasmota && slash) {
+                char v[16] = {};
+                size_t k = 0;
+                for (const char* q = slash + 1; *q && *q != ' ' && k + 1 < sizeof(v); q++) v[k++] = *q;   // "16.0.0" from "Tasmota/16.0.0 (ESP32-D0WD-V3)"
+                mm::formatTo(d->version, sizeof(d->version), "%s", v);
+            }
+        }
+        nextAdded();
+    }
+
+    /// Close this probe and move to the next added address, back to the first after the last.
+    void nextAdded() {
+        const uint8_t next = static_cast<uint8_t>((probe_.host + 1) % (addedCount_ ? addedCount_ : 1));
+        probe_.conn.close();
+        probe_ = Probe{};
+        probe_.host = next;
+    }
+
     /// Announce ourselves: a compatible packet, stamped so a peer types us correctly.
     void broadcastPresence(const uint8_t ip[4]) {
         uint8_t pkt[WledPacket::kSizeWithPort];
         const char* n = (selfName_ && selfName_[0]) ? selfName_ : "MoonLight";
         WledPacket::build(pkt, ip, n, boardTypeByte(), /*lightsOn=*/true);
-        WledPacket::stampMmMarker(pkt);
+        WledPacket::stampMarker(pkt);
         const size_t len = WledPacket::stampHttpPort(pkt, selfHttpPort());
         // Both ways during the bootstrap window, so a peer can tell which way reaches it.
         const bool bothWays = addressing == kDevMulticastBroadcast || platform::millis() - boundMs_ < kBothWaysMs;
@@ -533,23 +773,22 @@ private:
         bool changed = false;
         if (!d) {
             const uint8_t newcomerWorth = isSelf ? kWorthSelf
-                                        : (found.type == DevType::MoonLight ? kWorthMoonLight : kWorthOther);
+                                        : (ours(found.type) ? kWorthMoonLight : kWorthOther);
             d = addRow(ip, newcomerWorth);
             if (!d) { refreshStatus(); return; }   // memory full and every row worth more
             d->type = found.type;          // first sighting: take the plugin's type
             changed = true;
         }
-        // The marker is definitive, so an established identity is raised toward, never downgraded.
-        const bool isMm = isSelf || found.type == DevType::MoonLight;
-        const DevType newType = isMm ? DevType::MoonLight
-                              : (d->type != DevType::MoonLight ? found.type : d->type);
+        // A marker is definitive, so the latest marked packet says whether MoonLight or MoonBase holds the board, and an unmarked one never downgrades either.
+        const DevType newType = isSelf ? DevType::MoonLight
+                              : (ours(found.type) ? found.type : (ours(d->type) ? d->type : found.type));
         if (d->type != newType) { d->type = newType; changed = true; }
         if (d->self != isSelf) { d->self = isSelf; changed = true; }
         if (d->httpPort != found.httpPort) { d->httpPort = found.httpPort; changed = true; }
         d->lastSeenMs = platform::millis();
         // Only an authoritative packet renames a row, though an empty name is always filled.
         const bool authoritative =
-            (found.type == DevType::MoonLight && d->type == DevType::MoonLight) ||
+            (ours(found.type) && d->type == found.type) || found.type == DevType::Esphome || found.type == DevType::Tasmota ||
             (found.type == DevType::Wled);
         if (found.name[0] && (!d->name[0] || isIpPlaceholder(d->name, ip) || authoritative)
             && std::strcmp(d->name, found.name) != 0) {
@@ -646,11 +885,11 @@ private:
 
     /// Report how many devices are listed, whether multicast arrives and whether memory is full.
     void refreshStatus() {
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s%s%s",
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u device%s%s%s%s%s",
                       deviceCount_, deviceCount_ == 1 ? "" : "s",
                       NetworkPath::multicastDropped ? ", multicast blocked: broadcasting too" : "",
-                      memoryFull_ ? ", memory full" : "");
-        setStatus(statusBuf_);
+                      memoryFull_ ? ", memory full" : "", addedError_ ? ", " : "", addedError_ ? addedError_ : "");
+        setStatus(statusBuf_, addedError_ ? Severity::Warning : Severity::Status);
     }
 
     /// Order the list by name, which core's sort does from the comparator below.

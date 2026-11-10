@@ -1,7 +1,6 @@
 /// @module PinsModule
 
-/// Pins PinsModule's one job: walk the live module tree, collect every claimed GPIO (a ControlType::Pin control set >= 0, plus the LED-driver "pins" CSV), and expose them as a GPIO-keyed read-only list, owner + name-derived role + a severity flag when the claim lands on an unsafe pin. A `-1` pin is unused and skipped; a GPIO claimed twice stays visible (both owners in the row detail), which is the read-only surfacing this phase does instead of enforcing.
-/// Severity reads platform::gpioCapability, which desktop stubs to "all safe", so the severity cases inject a fake capability via setTestGpioCapability (as unit_TasksModule injects a snapshot).
+/// Pins PinsModule's one job: walk the live module tree, collect every claimed GPIO (a ControlType::Pin control >= 0, plus the LED-driver "pins" CSV) and expose them as a read-only GPIO-keyed list with owner, role and an unsafe-pin severity.
 
 #include "doctest.h"
 #include "core/system/PinsModule.h"
@@ -45,7 +44,7 @@ const ListSource* pinsSource(const MoonModule& m) {
 // The whole list serialized, row by row, a cheap way to assert presence/absence of a GPIO.
 std::string allRows(const ListSource& src) {
     std::string out;
-    for (uint8_t i = 0; i < src.listRowCount(); i++) {
+    for (ListRow i = 0; i < src.listRowCount(); i++) {
         JsonSink r; src.writeListRow(r, i);
         out += r.data();
     }
@@ -225,7 +224,7 @@ TEST_CASE("PinsModule: a child module's pins are walked (depth-first), not just 
 }
 
 TEST_CASE("PinsModule: disabling a PARENT frees its children's pins (effectivelyEnabled cascade)") {
-    // Hardware-found (P4 .133): disabling the Drivers container stopped ParlioLed but the map still showed it owning GPIO 20, the map read the child's own enabled() flag, not its effective state. The applyState() cascade tears a disabled parent's whole subtree down (child peripheral released), so the map must match: a child of a disabled parent shows its pins FREED, not falsely claimed.
+    // Hardware-found (P4): disabling the Drivers container stopped ParlioLed but the map still showed it owning GPIO 20, because it read the child's own enabled() flag. A child of a disabled parent shows its pins FREED.
     Scheduler scheduler;
     FakePinModule container("Drivers");
     FakePinModule child("ParlioLed");
@@ -253,7 +252,7 @@ TEST_CASE("PinsModule: disabling a PARENT frees its children's pins (effectively
 }
 
 TEST_CASE("PinsModule: a claim survives its owning module being destroyed (no use-after-free)") {
-    // The map refreshes on tick1s but the UI serializes state right after a delete op, so a claim must NOT borrow a pointer into the (now-freed) module's name storage. Refresh with the module alive, destroy it, then serialize: the snapshot must still render its owner from its own copy.
+    // A claim must NOT borrow a pointer into a module's name storage: the UI serializes state right after a delete op. Refresh with the module alive, destroy it, serialize: the snapshot renders the owner from its own copy.
     Scheduler scheduler;
     PinsModule pins;
     {
@@ -279,7 +278,7 @@ TEST_CASE("PinsModule: a claim survives its owning module being destroyed (no us
 }
 
 TEST_CASE("PinsModule: a CSV with an out-of-range pin claims nothing, and never a false GPIO") {
-    // parsePinList rejects any entry past the chip's MM_MAX_GPIO ceiling (the crash guard, a value like 300 parses as an integer but is not a GPIO, and handing it to IDF faults). So a lane list containing one bad pin is malformed as a whole: the map shows no lane claims for it, and, the point of this test, 300 never truncates to a real GPIO (300 & 0xFF = 44) in the pin map.
+    // parsePinList rejects any entry past MM_MAX_GPIO, so a lane list with one bad pin is malformed as a whole: the map shows no lane claims for it, and 300 never truncates to a real GPIO (300 & 0xFF = 44).
     Scheduler scheduler;
     FakePinModule driver("RmtLed");
     driver.withPinsCsv = true;
@@ -474,7 +473,7 @@ TEST_CASE("PinsModule: dir column reflects the live pad direction (out/in/both/o
 }
 
 TEST_CASE("PinsModule: dir is shown as info, NOT a warning — a driven role with output off is unflagged") {
-    // The live direction is informational only: too many pins are legitimately not-driving-when-idle (I²C is bidirectional, a loopback Tx is off until the self-test runs, an RMII clock can be an input), so `dir` reading in/off must NOT auto-warn, that would be noise. Only the static capability flags (reserved / strap / input-only) drive severity.
+    // The live direction is informational only: I²C, a loopback Tx and an RMII clock are legitimately not driving when idle, so `dir` reading in/off must NOT auto-warn. Only the static capability flags drive severity.
     platform::clearTestGpioLiveState();
     platform::GpioLiveState notDriving;   // a driven role's pin reads output-off — but this is NOT flagged
     notDriving.valid = true; notDriving.output = false; notDriving.input = true;
@@ -497,7 +496,7 @@ TEST_CASE("PinsModule: dir is shown as info, NOT a warning — a driven role wit
     platform::clearTestGpioLiveState();
 }
 
-// A peripheral can hold GPIOs that no control names: an EMAC's data bus is fixed IO_MUX pads the silicon chose, so there is nothing to set and nothing for the control scan to find. Those pads reach the map through MoonModule::fixedPins(). Without it the map showed twelve S31 pins free while the MAC drove them, and an LED driver that took one corrupted every frame the MAC sent while the link still reported 1000 Mbit with zero drops.
+// A peripheral can hold GPIOs no control names: an EMAC bus is fixed IO_MUX pads, reaching the map through fixedPins(). Without it the map showed twelve S31 pins free while the MAC drove them, and an LED driver taking one corrupted every frame.
 namespace {
 struct FixedPinModule : MoonModule {
     bool holding = true;                 // stands in for "this interface is running"

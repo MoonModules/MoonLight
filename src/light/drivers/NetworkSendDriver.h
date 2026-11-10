@@ -146,6 +146,9 @@ public:
         return kModes[p][addressing < kModeCount[p] ? addressing : 0];
     }
 
+    /// Frames it sent last second, which a peer's map shows beside its lights.
+    std::optional<uint32_t> framesPerSecond() const override { return framesLastSecond_; }
+
     /// What went out last second, frames a second to each receiver, to the group, or to the broadcast address, as the addressing sends it.
     void reportNetworkUse(NetworkUse& use) const override {
         if (!framesLastSecond_) return;
@@ -154,7 +157,7 @@ public:
         e131MulticastAddr(e131FirstUniverse(universeStart), grp);   // the first universe's group stands for the window's
         // The rule the send follows, so the map shows where the frames go.
         sendAddressed(mode(), Traffic::FrameRate, dest_, nDest_, grp,
-                      [&](const uint8_t ip[4]) { use.flow(name, true, ip, framesLastSecond_, "fps"); });
+                      [&](const uint8_t ip[4]) { use.flow(name, true, ip, framesLastSecond_, "/s"); });
     }
 
     /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status: a warning, or what went out this second.

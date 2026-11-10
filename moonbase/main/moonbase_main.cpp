@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>   // the presence packet's two destinations
 
 #include "esp_event.h"
 #include "esp_http_client.h"
@@ -32,6 +33,7 @@
 #include "core/util/CaptivePortal.h"  // the access point's address, DNS answer and redirect rule, shared with the app's portal
 #include "core/util/DeviceName.h"     // defaultDeviceName: the name the app gives a board that never saved one
 #include "core/util/HttpHead.h"       // the request head reads, shared with the app's server
+#include "core/system/WledPacket.h"   // the presence packet the app's Devices map lists a board by, marked as MoonBase
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
 #include "esp_https_ota.h"
 #include "esp_littlefs.h"
@@ -108,6 +110,10 @@ int txPowerDbm_ = 0;
 
 // The app's build variant ("esp32s3-zero"), or empty before the app has run, when the page offers every firmware for the chip.
 char g_appVariant[24] = {};
+// The name the app gives the board, or its anonymous `MM-XXXX` before the app has saved one: what the map shows on its node.
+char g_deviceName[33] = {};
+// The address this image answers at once a network gave it one, which the presence packet carries.
+uint8_t g_ip[4] = {};
 
 // A config file whole, on the heap (caller frees), since a key sits wherever the app's module order and list lengths put it.
 char* readConfig(const char* path) {
@@ -127,6 +133,7 @@ void loadIdentity() {
     char* buf = readConfig(kSystemConfig);
     if (!buf) return;
     mm::configscrape::findString(buf, "firmware", g_appVariant, sizeof(g_appVariant));
+    mm::configscrape::findString(buf, "deviceName", g_deviceName, sizeof(g_deviceName));
     std::free(buf);
 }
 
@@ -195,10 +202,36 @@ esp_netif_t* staNetif_ = nullptr;
 volatile int staCurrent_ = -1;
 volatile bool staPinned_ = false;
 
-void onGotIp(void*, esp_event_base_t, int32_t id, void*) {
+void onGotIp(void*, esp_event_base_t, int32_t id, void* data) {
     // Registered for every IP event; only an acquired STA address means online (IP_EVENT_STA_LOST_IP arrives on the same base and must not set the bit).
-    if (id == IP_EVENT_STA_GOT_IP || id == IP_EVENT_ETH_GOT_IP)
+    if (id == IP_EVENT_STA_GOT_IP || id == IP_EVENT_ETH_GOT_IP) {
+        const uint32_t a = static_cast<const ip_event_got_ip_t*>(data)->ip_info.ip.addr;   // network order: the first octet in the low byte
+        g_ip[0] = a & 0xff; g_ip[1] = (a >> 8) & 0xff; g_ip[2] = (a >> 16) & 0xff; g_ip[3] = (a >> 24) & 0xff;
         xEventGroupSetBits(netEvents_, kNetGotIp);
+    }
+}
+
+// The app's presence packet, marked as MoonBase, every two seconds to the broadcast address and the discovery group, so a peer's map keeps this board's node while MoonBase holds it.
+void presenceTask(void*) {
+    const int sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) { vTaskDelete(nullptr); return; }
+    int yes = 1;
+    ::setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
+    static constexpr uint8_t kBroadcast[4] = {255, 255, 255, 255};
+    while (true) {
+        uint8_t pkt[mm::WledPacket::kSize];
+        mm::WledPacket::build(pkt, g_ip, g_deviceName, 0, false);
+        mm::WledPacket::stampMarker(pkt, mm::WledPacket::kMbMarker);
+        for (const uint8_t* to : {kBroadcast, mm::WledPacket::kDiscoveryGroup}) {
+            mm::WledPacket::stampVia(pkt, to == kBroadcast);
+            sockaddr_in dst = {};
+            dst.sin_family = AF_INET;
+            dst.sin_port = htons(mm::WledPacket::kPort);
+            std::memcpy(&dst.sin_addr.s_addr, to, 4);
+            ::sendto(sock, pkt, sizeof(pkt), 0, reinterpret_cast<const sockaddr*>(&dst), sizeof(dst));
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
 }
 
 void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
@@ -637,7 +670,7 @@ void sendResponse(int sock, const char* status, const char* type, const char* bo
     char head[192];
     const int n = std::snprintf(head, sizeof(head),
                                 "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\n"
-                                "Cache-Control: no-store\r\nConnection: close\r\n\r\n",
+                                "Cache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                                 status, type, static_cast<unsigned>(std::strlen(body)));
     if (n > 0) sendAll(sock, head, static_cast<size_t>(n));
     sendAll(sock, body, std::strlen(body));
@@ -885,6 +918,13 @@ void serveOne(int sock) {
     } else if (std::strncmp(head, "GET /api/variant", 16) == 0) {
         // The application's build variant, read from its config at boot. Empty when the app has never run here, which the page treats as "offer every firmware for the chip".
         sendResponse(sock, "200 OK", "text/plain", g_appVariant);
+    } else if (std::strncmp(head, "GET /api/system", 15) == 0) {
+        // The app's health endpoint by the same name and fields, so a peer's map reads which image answers, its chip and the variant the app ran: the firmware Install MoonLight offers.
+        const esp_app_desc_t* d = esp_app_get_description();
+        char body[160];
+        std::snprintf(body, sizeof(body), "{\"moonbase\":true,\"version\":\"%s\",\"chip\":\"%s\",\"firmware\":\"%s\"}",
+                      d ? d->version : "unknown", MOONBASE_CHIP, g_appVariant);
+        sendResponse(sock, "200 OK", "application/json", body);
     } else if (std::strncmp(head, "GET /api/version", 16) == 0) {
         // This image's version from its descriptor, on its own route, since the app parses the status route's body.
         const esp_app_desc_t* d = esp_app_get_description();
@@ -1014,6 +1054,15 @@ extern "C" void app_main() {
         }
     }
 
+    // Announced on a network it joined, never on its own access point, where no peer's map can reach it.
+    if (online) {
+        if (!g_deviceName[0]) {
+            uint8_t mac[6];
+            esp_efuse_mac_get_default(mac);
+            mm::defaultDeviceName(mac, g_deviceName, sizeof(g_deviceName));
+        }
+        xTaskCreate(presenceTask, "mb_presence", 3072, nullptr, 3, nullptr);
+    }
     if (!online) online = wifiAccessPoint();
 
     // With no network there is nothing MoonBase can do but wait. A user who cannot reach it will reflash over USB, and restarting into an application slot that may be empty helps nobody.

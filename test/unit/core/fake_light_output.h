@@ -7,8 +7,7 @@
 
 namespace mm::test {
 
-/// A light output with twelve palettes thirty degrees of hue apart, so a core test's color mapping is exact.
-/// A fake Drivers derives from it beside MoonModule and claims the seat, as the real one does from prepare.
+/// A light output with twelve palettes thirty degrees of hue apart, so a core test's color mapping is exact; a fake Drivers derives from it and claims the seat.
 struct FakeLightOutput : public LightOutput {
     /// The summary a test sets directly.
     const LightSummary& summary() const override { return summary_; }
@@ -20,10 +19,18 @@ struct FakeLightOutput : public LightOutput {
     uint8_t paletteCount() const override { return 12; }
     /// One name, which is all a shape test reads.
     void writePaletteNames(JsonSink& sink) const override { sink.append("\"P0\""); }
+    /// The outputs a test sets, as the JSON the real Drivers writes.
+    void writeOutputs(JsonSink& sink) const override { sink.append(outputs_); }
+    /// The effects a test sets, as the JSON the real Drivers writes.
+    void writeEffects(JsonSink& sink) const override { sink.append(effects_); }
     using LightOutput::nearestPalette;
 
     /// What summary() answers.
     LightSummary summary_;
+    /// What writeOutputs() writes.
+    const char* outputs_ = "";
+    /// What writeEffects() writes.
+    const char* effects_ = "";
     /// The seat a test claims, as the real Drivers does from prepare.
     ActiveInstance<LightOutput> outputSeat_{*this};
 

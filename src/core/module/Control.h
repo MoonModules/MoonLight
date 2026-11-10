@@ -515,6 +515,9 @@ private:
 /// Append the per-type extras that ride beside the value, such as bounds or options.
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c);
 
+/// A list's `,"detail":[...]`, each row's detail parallel to the summary `value`: written with the full state's metadata, and beside a list's value in the state patch, so a changed detail goes out as a changed row does.
+void writeListDetail(JsonSink& sink, const ControlDescriptor& c);
+
 /// Where a control written a piece at a time stands: the part, and the row or option within it.
 struct ControlCursor {
     uint8_t part = 0;    ///< the part being written: the head, then the rows or options, then a list's detail

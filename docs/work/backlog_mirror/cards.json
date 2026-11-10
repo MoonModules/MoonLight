@@ -1,5 +1,25 @@
 [
  {
+  "title": "Coding standards: an extracted hot-path function stays inline",
+  "area": "",
+  "module": "",
+  "kind": "",
+  "status": "",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=300204509",
+  "number": null
+ },
+ {
+  "title": "Render-path sweep: blocking-call findings (198) down",
+  "area": "",
+  "module": "",
+  "kind": "",
+  "status": "",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=300209744",
+  "number": null
+ },
+ {
   "title": "`applyControlValue` should say whether the value changed (2026-10-03)",
   "area": "Core",
   "module": "",

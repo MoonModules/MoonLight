@@ -148,6 +148,8 @@ FIRMWARES: dict[str, dict] = {
         "eth_only": False,
         "description": "ESP32 classic: WiFi + Ethernet (RMII; per-board pins/PHY "
                        "from deviceModels.json, default LAN8720 pins).",
+        # Most WLED devices run on the classic ESP32, and move to this variant over WiFi through the migration image.
+        "migrate": True,
         "ships": True,
     },
     # The EMULATED board. Not silicon: QEMU has no radio and no Ethernet PHY, so this variant swaps

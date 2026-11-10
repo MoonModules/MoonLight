@@ -13,10 +13,10 @@
 namespace discovery_rows {
 
 /// A presence packet from `ip` naming `name`, marked a MoonLight peer when `mm`.
-inline void hearPresence(mm::DevicesModule& dev, const uint8_t ip[4], const char* name, bool mm) {
+inline void hearPresence(mm::DevicesModule& dev, const uint8_t ip[4], const char* name, bool mm, uint32_t marker = mm::WledPacket::kMmMarker) {
     uint8_t pkt[mm::WledPacket::kSize];
     mm::WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
-    if (mm) mm::WledPacket::stampMmMarker(pkt);
+    if (mm) mm::WledPacket::stampMarker(pkt, marker);
     dev.injectPacketForTest(pkt, sizeof(pkt), ip);
 }
 

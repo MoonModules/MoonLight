@@ -182,6 +182,19 @@ static void writeDefault(JsonSink& sink, const ControlDescriptor& c) {
     if (c.def != ControlDescriptor::kNoDefault) sink.appendf(",\"default\":%d", static_cast<int>(c.def));
 }
 
+void writeListDetail(JsonSink& sink, const ControlDescriptor& c) {
+    const auto* src = static_cast<const ListSource*>(c.ptr);
+    sink.append(",\"detail\":[");
+    if (src) {
+        const ListRow n = src->listRowCount();
+        for (ListRow r = 0; r < n; r++) {
+            if (r > 0) sink.append(",");
+            src->writeListRowDetail(sink, r);
+        }
+    }
+    sink.append("]");
+}
+
 void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
     // Before the switch: every branch below returns, and a declared default belongs to the control whatever its type is.
     writeDefault(sink, c);
@@ -234,15 +247,7 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
             sink.append(",\"optionSets\":{");
             if (src) src->writeListOptionSets(sink);
             sink.append("}");
-            sink.append(",\"detail\":[");
-            if (src) {
-                const ListRow n = src->listRowCount();
-                for (ListRow r = 0; r < n; r++) {
-                    if (r > 0) sink.append(",");
-                    src->writeListRowDetail(sink, r);
-                }
-            }
-            sink.append("]");
+            writeListDetail(sink, c);
             return;
         }
         // Everything else: no extras.

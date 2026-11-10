@@ -53,5 +53,9 @@ Each image reports its version from the app descriptor IDF puts in every binary,
 
 MoonBase is a standalone ESP-IDF project (`moonbase/`, ~750 KB against an 896 KB slot) sharing no source files with the app.
 That is the deliberate trade for an image that must stay small and, once working, hardly change.
-Three headers that need only the C library are shared on purpose, `FirmwareImage.h`, `ConfigScrape.h` and `CaptivePortal.h`, so a rule both images follow has one copy.
+Headers that need only the C library are shared on purpose, so a rule both images follow has one copy: `FirmwareImage.h`, `ConfigScrape.h` (with `Ipv4.h`), `CaptivePortal.h`, `DeviceName.h`, `HttpHead.h` and `WledPacket.h`.
 `moondeck/build/build_esp32.py` builds it alongside every variant that opts in, and owns the flash-layout helpers every consumer uses: serial flash, mooninstaller manifests, release preview and the QEMU image. IDF's own `flasher_args.json` knows nothing of the two-image scheme and stages the app at the factory offset, so each of those paths applies the same correction from one place. Prior art: Tasmota's safeboot scheme and [MycilaSafeBoot](https://github.com/mathieucarbou/MycilaSafeBoot) proved the single-slot + recovery-image pattern; MoonBase is our from-scratch, minimal take on it.
+
+## On the Devices map
+
+A board MoonBase holds keeps its node on a peer's map. MoonBase sends the presence packet the app sends, every two seconds once it has joined a network, with the sentinel `MB` where the app's says `MM`, so neither the app's recognizer nor WLED's claims it and the node shows a MoonBase badge. Its `GET /api/system` answers by the app's endpoint name and fields: `moonbase`, its version, its chip and the variant the app ran, which the node's **Install MoonLight** offers from the newest release. Every reply carries `Access-Control-Allow-Origin: *`, the app's own policy, so a page served by another device reads it and hands it a firmware URL. The trust is the app's: anything on the network may install a firmware URL, as anything on the network may reach the app's own update, and a page from elsewhere could too through a browser on that network.

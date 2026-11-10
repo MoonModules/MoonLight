@@ -4,7 +4,7 @@ A device running another firmware moves to MoonLight over WiFi, through that fir
 It keeps its WiFi network, and usually its address.
 
 The file you upload is the migration image, a small program that runs once.
-It writes MoonBase (MoonLight's installer) and MoonLight's partition table and restarts into MoonBase, all in about ten seconds, and from WLED it carries the WiFi network over.
+It writes MoonBase (MoonLight's installer) and MoonLight's partition table and restarts into MoonBase, all in about ten seconds, and from WLED it carries every saved WiFi network over, so MoonBase joins the one the device was on.
 MoonBase then installs MoonLight from the release.
 
 <img src="../assets/deviceModels/esp32-c3-rgbww-pwm-bulb.png" width="140" alt="An RGBWW PWM bulb with an ESP32-C3 inside, such as the Athom 12W: a WLED bulb that moves to MoonLight this way">
@@ -13,6 +13,7 @@ MoonBase then installs MoonLight from the release.
 
 | From | Chip | Status |
 |---|---|---|
+| WLED | ESP32 classic with 4 MB of flash or more | verified on WLED 0.15.0, a power cut at every step included, on its ESP-IDF 3.3 bootloader, which the image keeps; WLED 16 builds on a newer one; the WiFi comes along |
 | WLED | ESP32-C3 with 4 MB of flash | verified on WLED 0.15.0, other versions should work; the WiFi comes along |
 | Another firmware, such as ESPHome or Tasmota | ESP32-C3 with 4 MB of flash | untested. It needs the old firmware to accept the upload, and the image to land clear of where MoonBase goes or find a second app slot to move into. MoonBase starts on its access point |
 

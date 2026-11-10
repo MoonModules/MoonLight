@@ -82,7 +82,7 @@ paths:
     get:
       tags: [System]
       operationId: getSystem
-      summary: Frame rate, tick time, memory, uptime and per-module timing.
+      summary: The device summary, who it is and what it runs, then frame rate, tick time, memory, uptime and per-module timing.
       responses:
         "200":
           description: The device's live metrics.
@@ -729,6 +729,27 @@ components:
     System:
       type: object
       properties:
+        version: { type: string, description: The firmware version. }
+        build: { type: string, description: The build id. }
+        firmware: { type: string, description: "The firmware variant, unknown on a desktop." }
+        mac: { type: string, description: "The MAC address, the device identity." }
+        board: { type: string, description: "The board model tooling set, empty until set." }
+        chip: { type: string }
+        rssi: { type: integer, description: "The WiFi signal in dBm, 0 off WiFi." }
+        outputs:
+          type: array
+          description: Each enabled driver that lights something.
+          items:
+            type: object
+            properties:
+              driver: { type: string, description: The driver's type. }
+              lights: { type: integer, description: The lights its window sends. }
+              fps: { type: integer, description: "Frames it sends a second: its own count, or the device's frame rate." }
+              movingHeads: { type: boolean, description: Present and true when its fixtures aim. }
+        effects:
+          type: array
+          description: Each enabled effect on an enabled layer, by name.
+          items: { type: string }
         fps: { type: integer }
         tickTimeUs: { type: integer }
         freeHeap: { type: integer }

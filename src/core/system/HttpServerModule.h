@@ -53,7 +53,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// Snapshot then patch, the shape Redux and Firestore sync use and RFC 6902 formalises. Re-serializing the mostly static tree every second on the render thread stuttered the LEDs at 1 Hz.
 ///
-/// A client gets a full state when it subscribes, then each second a patch of the values that changed. Each leaf's serialized value is hashed with FNV-1a and compared with the cached hash.
+/// A client gets a full state when it subscribes, then each second a patch of the values that changed. Each leaf's serialized value is hashed with FNV-1a and compared with the cached hash. A list's leaf is its rows and, beside them in the entry, their `detail`, so a detail that changes alone is sent too.
 ///
 /// The second's walk moves about 1 ms per 20 ms tick and sends its patch when it ends, so no frame pays for every value. It visits the leaves in the baseline's order, so the cached hash it compares with is the entry after the last match, found without a search.
 ///
@@ -134,6 +134,8 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 /// Live state goes over `/ws` as a state-and-info frame: Drivers brightness, and the active palette's color from `LightOutput::paletteRgb()`, or black without a light output.
 ///
 /// The app's slider and toggle send a frame on the same socket, applied to Drivers brightness through the apply core that REST and Improv share.
+///
+/// Each client of the WLED API is reported as traffic into this device, requests a minute over the last whole minute, so the map draws a line from it. Its User-Agent's product token names it: `HomeAssistant/` is Home Assistant. A client quiet for five minutes is dropped.
 ///
 /// ## Reading an uplink frame, and taking the lease
 ///
@@ -342,6 +344,8 @@ public:
 
     /// Test seams for the wire diff, so a unit test proves it without a socket.
     uint16_t buildStatePatchForTest(JsonSink& sink) { return buildStatePatch(sink); }
+    /// Test-only: the summary members /api/system leads with after the firmware.
+    void writeDeviceSummaryForTest(JsonSink& sink) { writeDeviceSummary(sink); }
     /// Re-baseline the leaf hashes, for a test.
     void baselineLeafHashesForTest() { baselineLeafHashes(true); }
     /// Ask for a full resync, for a test.
@@ -354,8 +358,12 @@ public:
     bool clientResyncPendingForTest(int client) const { return resyncClient_[client]; }
     /// The port the live server is bound to, or 0 when none is up.
     static uint16_t servedPort() { return instance_ ? instance_->boundPort_ : 0; }
-    /// The web page and API, on the port the listener bound.
-    void reportNetworkUse(NetworkUse& use) const override { if (boundPort_) use.service(kHttpService, boundPort_); }
+    /// The web page and API, on the port the listener bound, and each client of the WLED API, Home Assistant named by its User-Agent.
+    void reportNetworkUse(NetworkUse& use) const override;
+    /// Count one WLED API request from `peer`, whose `userAgent` may name it, as a request does; for a test.
+    void noteApiClientForTest(const uint8_t peer[4], const char* userAgent) { noteApiClient(peer, userAgent); }
+    /// Close the minute that turns each client's count into its rate and drops one unheard for five; tick1s does it each minute.
+    void closeApiMinute() MM_NONBLOCKING;
 
     /// Build the early patch of the modules that asked for one, for a test.
     uint16_t buildSoonPatchForTest(JsonSink& sink) { return buildSoonPatch(sink); }
@@ -654,6 +662,15 @@ private:
     /// Derived from free contiguous memory, so a tight board takes small bites and a roomy one drains fast.
     size_t drainChunkBytes() const;
 
+    /// A client of the WLED API, such as Home Assistant: who, the requests this minute and the last whole minute, and when it was last heard.
+    struct ApiClient { uint8_t ip[4]; const char* name; uint32_t lastMs; uint16_t count; uint16_t perMinute; };
+    /// Grown as a client first asks, so a device nobody polls holds none.
+    ScratchBuffer<ApiClient> apiClients_{*this};
+    uint8_t apiClientCount_ = 0;
+    uint32_t apiMinuteAt_ = 0;   // when the current minute began
+    /// Count a request to the WLED API from `peer`, named by its User-Agent where one is known.
+    void noteApiClient(const uint8_t peer[4], const char* userAgent);
+
     /// The wire diff's cache: one path hash and one value hash per leaf, eight bytes each. @xref{how-a-leaf-is-named}
     struct LeafHash { uint32_t path = 0; uint32_t value = 0; };
     /// Growable rather than fixed: sized to the exact leaf count each baseline, so no leaf is dropped.
@@ -837,6 +854,8 @@ private:
     /// The device's name, MAC and, when `ip` is given, live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
                              const char* nameFallback = "MoonLight");
+    /// The summary's identity, board, signal, light outputs and effects, members of /api/system's object, each followed by a comma.
+    void writeDeviceSummary(JsonSink& sink);
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);
 
     // Module CRUD

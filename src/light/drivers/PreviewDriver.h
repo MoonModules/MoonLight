@@ -132,6 +132,8 @@ public:
 
     /// Preview shows the raw logical buffer, no correction.
     bool hasCorrectionControls() const override { return false; }
+    /// A picture of the output for the browser, not an output of its own.
+    bool drivesLights() const override { return false; }
 
     /// Bind the target frame rate, which is the ceiling the browser trades resolution toward.
     void defineDriverControls() override {
