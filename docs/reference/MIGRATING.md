@@ -31,6 +31,14 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### Discovery moves from Network to Devices
+
+**Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*.**
+
+The device list is the Discovery card in a top-level Devices container, where it was a card under Network. The device reads Discovery's settings from the Devices file, so `addressing` starts at its default, multicast and broadcast. The list itself is not saved: it fills within seconds of boot as devices announce themselves, and a saved `devices` entry is ignored. It has no fixed size: it holds as many devices as memory allows, where it stopped at 32.
+
+A device serving its page on a port other than 80, a desktop or a Pi on 8080, adds that port to its presence packet. A board on older firmware ignores the longer packet and stops listing such a device until it is updated too; WLED keeps listing it.
+
 ### The level spans from where the gate opens to its top
 
 **Action: *nothing*, or *re-set a control* on an effect whose look you tuned to the level.**

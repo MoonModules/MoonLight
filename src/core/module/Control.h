@@ -80,6 +80,9 @@ class JsonSink;   // forward-declared so the descriptor can hold a pointer
 /// Emits a palette control's options, which the light domain owns and core calls.
 using PaletteOptionsFn = void (*)(JsonSink& sink);
 
+/// A list's row index, as wide as the streaming cursor's, so memory rather than the index bounds a list.
+using ListRow = uint16_t;
+
 /// The backing for a list control, which the module owning the data implements.
 ///
 /// Rows come straight from that module's own storage rather than being copied here. An editable source addresses its rows by a stable id, so a reference survives a reorder.
@@ -87,13 +90,13 @@ struct ListSource {
     /// A source outlives its control, and is destroyed through this base.
     virtual ~ListSource() = default;
     /// How many rows the list holds, which may change between calls.
-    virtual uint8_t listRowCount() const = 0;
+    virtual ListRow listRowCount() const = 0;
     /// Append one row's summary, the fields a collapsed row shows.
-    virtual void writeListRow(JsonSink& sink, uint8_t row) const = 0;
+    virtual void writeListRow(JsonSink& sink, ListRow row) const = 0;
     /// Append one row as the saved file keeps it, which by default is the summary; a source whose collapsed row shows less saves more here.
-    virtual void writeListRowSaved(JsonSink& sink, uint8_t row) const { writeListRow(sink, row); }
+    virtual void writeListRowSaved(JsonSink& sink, ListRow row) const { writeListRow(sink, row); }
     /// Append one row's detail, which by default repeats the summary.
-    virtual void writeListRowDetail(JsonSink& sink, uint8_t row) const {
+    virtual void writeListRowDetail(JsonSink& sink, ListRow row) const {
         writeListRow(sink, row);
     }
     /// Append option sets shared across rows, so a repeated select is serialized once.
@@ -115,6 +118,9 @@ struct ListSource {
 
     /// Render the rows as a grid of pads, for rows triggered far more often than edited.
     virtual bool listAsPads() const { return false; }
+
+    /// Draw the rows as a graph: a row is a node keyed by `ip` or else `name`, colored by `type`, marked by `self`; its `edges` array of `{to, label}` is the adjacency list.
+    virtual bool listAsGraph() const { return false; }
 
     /// The pad grid's columns, a non-zero value making it a fixed surface with real empty cells.
     virtual uint8_t listGridCols() const { return 0; }

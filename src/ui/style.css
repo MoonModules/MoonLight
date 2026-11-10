@@ -1158,6 +1158,41 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
     accent-color: var(--accent);
 }
 
+/* A list drawn as a graph above its rows (listAsGraph): nodes and edges in the theme's own colors. */
+.list-graph {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.list-graph .graph-edge { stroke: var(--fg-subtle); stroke-width: 1.5; }
+.list-graph .graph-edge-label { fill: var(--fg-muted); font-size: 10px; text-anchor: middle; }
+.list-graph .graph-label { fill: var(--fg); font-size: 11px; text-anchor: middle; }
+.list-graph .graph-sublabel { fill: var(--fg-muted); font-size: 9px; text-anchor: middle; }
+.list-graph .graph-self circle { stroke: var(--fg); stroke-width: 3; }
+.list-graph .graph-faded { opacity: 0.35; }
+.list-graph .graph-link { cursor: pointer; }
+.list-graph .graph-edge-broken { stroke: var(--red); stroke-dasharray: 5 3; }
+.list-graph .graph-unreachable circle { stroke: var(--red); stroke-width: 2; stroke-dasharray: 2 2; }
+
+/* A node's row in a popup: its detail, and for a MoonLight device its firmware and update. */
+dialog.graph-popup {
+    color: var(--fg);
+    background: var(--card-bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem 1rem;
+    min-width: 18rem;
+    max-width: min(28rem, calc(100vw - 32px));
+}
+dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
+.graph-popup-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
+.graph-popup-head button { background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 1rem; }
+.graph-popup-firmware { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.graph-popup-update { align-self: flex-start; }
+.list-graph .graph-link:hover circle { stroke: var(--accent); stroke-width: 2; }
+
 .list-pads {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));

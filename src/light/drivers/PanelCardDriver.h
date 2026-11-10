@@ -167,6 +167,11 @@ public:
     /// A fixture change changes correction_.outChannels without a structural rebuild.
     void onCorrectionChanged() override { resizeCorrected(); }
 
+    /// The cards it drives, a service rather than an edge: ColorLight frames go out as raw Ethernet, with no IP peer to draw a line to.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (claimed_) use.service("ColorLight", 0);
+    }
+
     /// Correct the window, emit it row by row, and latch it with one sync frame.
     void tick() MM_NONBLOCKING override {
         if (!sourceBuffer_ || !sourceBuffer_->data()) return;

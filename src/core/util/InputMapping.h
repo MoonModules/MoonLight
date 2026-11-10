@@ -147,7 +147,7 @@ inline bool firePadRow(MoonModule& mod, uint8_t slot, const char* label,
         if (cs[i].type != ControlType::List) continue;
         auto* src = static_cast<ListSource*>(cs[i].ptr);
         if (!src || !src->listAsPads()) continue;
-        for (uint8_t row = 0; row < src->listRowCount(); row++) {
+        for (ListRow row = 0; row < src->listRowCount(); row++) {
             // The row's summary is the only place a slot is published, and a press is a human-rate event, so serializing one row per candidate costs nothing that matters.
             char buf[256];
             JsonSink sink(buf, sizeof(buf));

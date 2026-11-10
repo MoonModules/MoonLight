@@ -240,6 +240,13 @@ size_t totalInternalHeap();
 
 /// Heap to keep free for stack, HTTP, WiFi and overhead; any allocator checks against this before committing.
 constexpr size_t HEAP_RESERVE = 32768;
+/// Whether `bytes` fits one free block with the reserve left intact, the check every growing allocation makes first; a platform reporting 0 for a figure sets no limit there.
+inline bool fitsWithReserve(size_t bytes) {
+    const size_t block = maxAllocBlock();
+    if (block != 0 && block < bytes) return false;
+    const size_t free = freeHeap();
+    return free == 0 || (free > HEAP_RESERVE && free - HEAP_RESERVE >= bytes);
+}
 /// The internal RAM a board keeps free, which an allocator that takes what is left stops at: WiFi, HTTP and the UI need it.
 constexpr size_t kInternalFreeFloor = 100 * 1024;
 

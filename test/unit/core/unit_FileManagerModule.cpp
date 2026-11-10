@@ -267,25 +267,6 @@ TEST_CASE("FileManager: fsWriteStream discards on abort (incomplete upload)") {
     CHECK(!std::filesystem::exists(std::string(r.root) + "/partial.bin.tmp"));   // temp discarded
 }
 
-TEST_CASE("HTTP header names match case-insensitively, so any client's Content-Length counts") {
-    // RFC 9112 makes field names case-insensitive; a case-sensitive finder reads a lowercase `content-length:` as no length and commits an empty file with a 200.
-    const char* req = "POST /api/file?path=/x HTTP/1.1\r\ncontent-length: 831\r\n\r\nbody";
-    const char* hit = mm::HttpServerModule::findHeaderCI(req, "Content-Length:");
-    REQUIRE(hit != nullptr);
-    CHECK(std::strncmp(hit, "content-length:", 15) == 0);
-
-    // Canonical and mixed casings resolve to the same header.
-    CHECK(mm::HttpServerModule::findHeaderCI("Content-Length: 5\r\n", "content-length:") != nullptr);
-    CHECK(mm::HttpServerModule::findHeaderCI("CONTENT-LENGTH: 5\r\n", "Content-Length:") != nullptr);
-    // And a request without the header still reads as absent.
-    CHECK(mm::HttpServerModule::findHeaderCI("GET / HTTP/1.1\r\nHost: x\r\n", "Content-Length:") == nullptr);
-
-    // Anchored at line starts: an X-prefixed lookalike is NOT the header.
-    CHECK(mm::HttpServerModule::findHeaderCI("POST / HTTP/1.1\r\nX-Content-Length: 9\r\n\r\n", "Content-Length:") == nullptr);
-    // Bounded by the blank line: a header name inside the BODY is data, not a header.
-    CHECK(mm::HttpServerModule::findHeaderCI("POST / HTTP/1.1\r\nHost: x\r\n\r\nContent-Length: 4", "Content-Length:") == nullptr);
-}
-
 // removeTree: the DELETE /api/dir path and the factory reset, exercised directly rather than through a socket: the behaviors a user reaches by deleting a folder from the File Manager.
 TEST_CASE("removeTree deletes a folder and everything under it") {
     Rig r;

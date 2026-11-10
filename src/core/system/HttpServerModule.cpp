@@ -7,6 +7,7 @@
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"   // PATCH /api/state applies a document through it
 #include "core/util/hex.h"
+#include "core/util/HttpHead.h"
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/parse.h"
@@ -30,8 +31,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>   // strtol: bounded Content-Length parse
-#include <cctype>    // tolower, case-insensitive header names (findHeaderCI)
-#include <cerrno>    // errno / ERANGE: Content-Length overflow check
+#include <cerrno>    // errno / ERANGE: the id overflow check
 #include <cstring>
 #include <cstdint>
 #include <new>       // placement new: a send's source built in its heap block
@@ -411,39 +411,35 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     auto* req = reinterpret_cast<char*>(buf);
 
     auto* headerEnd = std::strstr(req, "\r\n\r\n");
-    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
-    if (clh) {
-        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
+    uint64_t parsed = 0;
+    const http::Length length = headerEnd ? http::contentLength(req, parsed) : http::Length::Absent;
+    if (length == http::Length::Invalid) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"invalid content-length\"}");
+        return true;
+    }
+    if (length == http::Length::Valid) {
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX).
         const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
-        const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
-        const char* valStart = clh + 15;
-        while (*valStart == ' ' || *valStart == '\t') valStart++;   // skip OWS after the colon
-        char* valEnd = nullptr;
-        errno = 0;
-        const unsigned long long parsed = std::strtoull(valStart, &valEnd, 10);
-        const bool consumedDigits = valEnd != valStart;
-        const bool endsCleanly = *valEnd == '\r' || *valEnd == '\n' || *valEnd == ' ' ||
-                                 *valEnd == '\t' || *valEnd == '\0';
-        if (!consumedDigits || !endsCleanly || errno == ERANGE) {
-            sendResponse(conn, 400, "application/json",
-                         "{\"error\":\"invalid content-length\"}");
-            return true;
-        }
+        const uint64_t kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
         // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
         if (parsed > kContentLenMax) {
             sendResponse(conn, 413, "application/json",
                          "{\"error\":\"request body too large\"}");
             return true;
         }
-        if (!isStreamingUpload(req)) {
-            const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
-            const size_t whole = headerSize + static_cast<size_t>(parsed);
-            // A state document holds an effects stack and outgrows the request buffer; every other body is read whole within it, so an oversized one is 413, never a truncated parse.
-            const bool state = isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
-            if (whole > (state ? headerSize + kStateDocumentMax : sizeof(buf) - 1)) {
-                sendResponse(conn, 413, "application/json", state ? "{\"error\":\"document too large\"}" : "{\"error\":\"request body too large\"}");
-                return true;
-            }
+        const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
+        const size_t whole = headerSize + static_cast<size_t>(parsed);
+        const bool streaming = isStreamingUpload(req);
+        // A state document holds an effects stack and outgrows the request buffer; every other body is read whole within it, so an oversized one is 413, never a truncated parse.
+        const bool state = isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
+        if (!streaming && whole > (state ? headerSize + kStateDocumentMax : sizeof(buf) - 1)) {
+            sendResponse(conn, 413, "application/json", state ? "{\"error\":\"document too large\"}" : "{\"error\":\"request body too large\"}");
+            return true;
+        }
+        // A body this server accepts and has not all in, from a client holding it for the interim response.
+        if (static_cast<size_t>(totalRead) < whole && http::expectsContinue(req))
+            conn.write(reinterpret_cast<const uint8_t*>(http::kContinue), sizeof(http::kContinue) - 1);
+        if (!streaming) {
             // A body not all in yet, held back by a delayed ACK or a resend, waits in a slot rather than in the frame, and is routed once whole.
             if (static_cast<size_t>(totalRead) < whole) {
                 deferRequest(conn, req, static_cast<size_t>(totalRead), whole);
@@ -486,9 +482,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     uint8_t local[4] = {};
     conn.localIPv4(local);   // the address it reached, which the captive redirect decides by
     auto* headerEnd = std::strstr(req, "\r\n\r\n");
-    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
-    const bool hasContentLen = clh != nullptr;   // header PRESENT: an explicit 0 is a legitimate empty write
-    const size_t contentLen = clh ? static_cast<size_t>(std::strtoull(clh + 15, nullptr, 10)) : 0;   // validated by handleConnection
+    uint64_t declared = 0;   // validated by handleConnection
+    const bool hasContentLen = headerEnd && http::contentLength(req, declared) == http::Length::Valid;   // header PRESENT: an explicit 0 is a legitimate empty write
+    const size_t contentLen = static_cast<size_t>(declared);
     const int totalRead = static_cast<int>(len);   // a byte count, never strlen: an uploaded image holds zero bytes
 
     // Parse method and path, into members rather than locals: one request routes at a time, and on the stack they pushed this frame past 512 bytes.
@@ -505,7 +501,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     const bool isWs  = std::strcmp(path, "/ws") == 0;
     const bool isWsp = std::strcmp(path, "/wsp") == 0;
     if (std::strcmp(method, "GET") == 0 && (isWs || isWsp) &&
-        findHeaderCI(req, "Upgrade: websocket")) {
+        http::findHeader(req, "Upgrade: websocket")) {
         handleWebSocketUpgrade(conn, req, isWsp);
         return; // don't close: connection is now a WebSocket
     }
@@ -515,7 +511,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 
     // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
     if (std::strcmp(method, "GET") == 0) {
-        const char* host = findHeaderCI(req, "Host:");
+        const char* host = http::findHeader(req, "Host:");
         if (host) { host += 5; while (*host == ' ') host++; }
         if (captive::redirects(local, host, path)) {   // `local` was read when the connection came in
             conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
@@ -525,7 +521,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 
     // Route
     if (std::strcmp(method, "GET") == 0) {
-        const char* ifNoneMatch = findHeaderCI(req, "If-None-Match:");
+        const char* ifNoneMatch = http::findHeader(req, "If-None-Match:");
         if (std::strcmp(path, "/") == 0) serveFile(conn, *embeddedFile("index.html"), ifNoneMatch);
         // Every UI file at `/<name>`, from the one list embed_ui.cmake generates.
         else if (const ui::EmbeddedFile* file = embeddedFile(path + 1)) serveFile(conn, *file, ifNoneMatch);
@@ -701,22 +697,6 @@ void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, c
 }
 
 // The /api/file endpoints: a file body is not a control value; parseFilePath vets the `path=<rel>` query (rejects "..", roots at the mount), the one traversal guard every filesystem entry shares.
-
-// Case-insensitive header lookup (MSVC has no strcasestr), matching only at the start of a header line and stopping at the blank line, so lookalikes and body bytes never match.
-const char* HttpServerModule::findHeaderCI(const char* hay, const char* needle) {
-    const size_t n = std::strlen(needle);
-    const char* line = hay;
-    while (line && *line) {
-        if (line[0] == '\r' && line[1] == '\n') break;   // blank line: end of the header section
-        size_t i = 0;
-        while (i < n && std::tolower(static_cast<unsigned char>(line[i])) ==
-                        std::tolower(static_cast<unsigned char>(needle[i]))) i++;
-        if (i == n) return line;
-        const char* nl = std::strchr(line, '\n');
-        line = nl ? nl + 1 : nullptr;
-    }
-    return nullptr;
-}
 
 // Copy the `path=` query value into `out` (decoding %XX and '+'), rooted at the mount; false on a missing path or a ".." traversal.
 bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
@@ -1289,9 +1269,10 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
     JsonSink sink(conn);
-    // maxBlock is internal-only, since all-memory reports ~8 MB on PSRAM boards; `allocated`/`allocPeak` mean the same on a board and a laptop, where free heap does not.
+    // version, build and firmware first, what a peer's map reads; maxBlock is internal-only, since all-memory reports ~8 MB on PSRAM boards.
+    sink.appendf("{\"version\":\"%s\",\"build\":\"%s\",\"firmware\":\"%s\",", kVersion, kBuildId, kFirmwareName);
     sink.appendf(
-        "{\"fps\":%u,\"tickTimeUs\":%u,\"freeHeap\":%u,\"freeInternal\":%u,\"maxBlock\":%u,\"maxExec\":%u,"
+        "\"fps\":%u,\"tickTimeUs\":%u,\"freeHeap\":%u,\"freeInternal\":%u,\"maxBlock\":%u,\"maxExec\":%u,"
         "\"allocated\":%u,\"allocPeak\":%u,\"allocBlocks\":%u,\"uptime\":%u,\"modules\":[",
         static_cast<unsigned>(scheduler_ ? scheduler_->fps() : 0),
         static_cast<unsigned>(scheduler_ ? scheduler_->tickTimeUs() : 0),
@@ -1979,7 +1960,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
 void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, const char* req,
                                               bool previewChannel) {
     // Extract Sec-WebSocket-Key
-    const char* keyHeader = findHeaderCI(req, "Sec-WebSocket-Key: ");
+    const char* keyHeader = http::findHeader(req, "Sec-WebSocket-Key: ");
     if (!keyHeader) { conn.close(); return; }
     keyHeader += 19;
     char wsKey[32] = {};

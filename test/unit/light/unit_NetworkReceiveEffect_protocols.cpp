@@ -199,6 +199,26 @@ TEST_CASE("buildArtPollReply lays out the reply controllers parse") {
     CHECK(std::memcmp(reply + 201, mac, 6) == 0);
 }
 
+// A controller polling several boards tells them apart by name, so a reply carries the device's own name, read where every module reads it (ControlModule::deviceName), and "MoonLight" before a tree holds one.
+TEST_CASE("an ArtPoll reply names the node after the device, MoonLight before there is one") {
+    CHECK(std::strcmp(mm::NetworkReceiveEffect::nodeName(), "MoonLight") == 0);   // no tree running
+    // Stands in for SystemModule: a module named System with its deviceName text control.
+    struct System : mm::MoonModule {
+        char deviceName[24] = "MM-Wall";
+        void defineControls() override { MoonModule::defineControls(); controls_.addText("deviceName", deviceName, sizeof(deviceName)); }
+    };
+    mm::Scheduler scheduler;
+    auto* system = new System();
+    system->setName("System");
+    scheduler.addModule(system);
+    scheduler.setup();
+    CHECK(std::strcmp(mm::NetworkReceiveEffect::nodeName(), "MM-Wall") == 0);
+    std::strcpy(system->deviceName, "MM-Desk");   // a rename is followed, the name read where SystemModule keeps it
+    CHECK(std::strcmp(mm::NetworkReceiveEffect::nodeName(), "MM-Desk") == 0);
+    scheduler.release();                          // deletes the tree
+    CHECK(std::strcmp(mm::NetworkReceiveEffect::nodeName(), "MoonLight") == 0);
+}
+
 // --- placement (applyBytes / per-protocol applyDmx) ---------------------------------
 
 // DDP's byte addressing lands payloads at the exact offset; out-of-range and overflowing offsets are clamped or dropped.

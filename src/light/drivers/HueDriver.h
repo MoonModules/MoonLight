@@ -80,6 +80,11 @@ public:
         DriverBase::onControlChanged(controlName);
     }
 
+    /// The bridge, once paired with lights to drive; a PUT goes only for a light that changed, so no rate.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (appKey[0] && haveBridge() && lightCount_) use.flow("Hue", true, bridgeIp, 0, "");
+    }
+
     /// Do at most one bounded PUT, and only once the rate-limit interval has elapsed, since a synchronous round trip every tick would stall the render loop.
     void tick() MM_NONBLOCKING override {
         if (pairTicksLeft_ > 0) return;            // pairing owns the bridge during its window

@@ -582,8 +582,15 @@ public:
         if (frame_.level > levelPeak_.load(std::memory_order_relaxed)) levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
     }
 
+    /// The audio sync's port, sender or destinations, as AudioSync reports them.
+    void reportNetworkUse(NetworkUse& use) const override {
+        sync_.reportNetworkUse(use, sync(), syncFormat != kFormatWled, syncFormat != kFormatMoonLight,
+                               addressing == kAddressUnicast, syncPort);
+    }
+
     /// Reopen the mic when its bus frees or moves, publish the second's level, onset and peak readouts, and diagnose a silent mic.
     void tick1s() MM_NONBLOCKING override {
+        sync_.secondPassed();
         // Re-init when the shared I2S bus came free, as the LED driver retries, or when the I2C bus moved under the codec.
         const bool micFreed = !inited_ && platform::audioMicSharedBusFree(micMode == kMicPdm ? platform::MicMode::Pdm
                                                                                        : platform::MicMode::I2sStd);

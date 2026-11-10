@@ -38,7 +38,7 @@ HELP = ROOT / "docs" / "help" / "help.json"
 CATALOGS = {"light/modifiers.md": ("Modifiers", "ModifierBase"), "light/layouts.md": ("Layouts", "LayoutBase"),
             "light/effects.md": ("Effects", "EffectBase"), "light/drivers.md": ("Drivers", "DriverBase"),
             "light/supporting.md": ("Supporting", None), "core/system.md": ("System", None),
-            "core/services.md": ("Services", "Services")}
+            "core/services.md": ("Services", "Services"), "core/devices.md": ("Devices", "Devices")}
 
 _MARKER_RE = re.compile(r"^(@guide|@technical)\s*$", re.MULTILINE)
 _XREF_RE = re.compile(r"@xref\{([a-z0-9-]+)(?:\|([^}]+))?\}")

@@ -57,6 +57,8 @@ add_executable(mm_tests
     unit/core/unit_DeviceIdentify.cpp
     unit/core/unit_DevicesModule_ageout.cpp
     unit/core/unit_DevicesModule_discovery.cpp
+    unit/core/unit_DevicesModule_flows.cpp
+    unit/core/unit_DevicesModule_growth.cpp
     unit/core/unit_DevicesModule_hue.cpp
     unit/core/unit_TasksModule.cpp
     unit/core/unit_PinsModule.cpp
@@ -71,6 +73,7 @@ add_executable(mm_tests
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
     unit/core/unit_HttpServerModule_connections.cpp
+    unit/core/unit_HttpServerModule_head.cpp
     unit/core/unit_HttpServerModule_sdcard.cpp
     unit/core/unit_HttpServerModule_subscribe.cpp
     unit/core/unit_HttpServerModule_upload.cpp

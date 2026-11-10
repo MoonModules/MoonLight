@@ -277,7 +277,8 @@ CORE_NAV_ROOT = {
     # Stats and Talk are MoonCloud children, each carrying its own consent.
     "MoonStatsModule": "MoonCloudModule",
     "MoonTalkModule": "MoonCloudModule",
-    "DevicesModule": "NetworkModule",
+    # Discovery is the fixed Devices child (wired-by-code).
+    "DevicesModule": "Devices",
     "ImprovProvisioningModule": "NetworkModule",
     # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in
@@ -1173,7 +1174,7 @@ def main() -> int:
                     continue
                 print(f"  {type_name} …", end=" ", flush=True)
                 # A top-level module is its own nav root (screenshot_container navs + cards by the
-                # same name). A CHILD module (Mqtt/Devices/Improv under Network) has no nav entry of
+                # same name). A CHILD module (Mqtt/Improv under Network, Discovery under Devices) has no nav entry of
                 # its own — nav to its parent root, then screenshot the child's own card by name.
                 parent_type = CORE_NAV_ROOT.get(type_name)
                 if parent_type:

@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "core/module/MoonModule.h"
 #include "core/util/ScratchBuffer.h"
+#include "platform/platform.h"   // setTestMaxAllocBlock: refuse a growth
 
 #include <cstdint>
 
@@ -128,4 +129,37 @@ TEST_CASE("ScratchBuffer destructor frees and deregisters") {
     // The owner's own buffer still works after a sibling deregistered.
     CHECK(o.buf.resize(15));
     CHECK(o.dynamicBytes() == 15);
+}
+
+// ensure() grows a list in place: what is held stays, the block doubles, and the owner's total follows.
+TEST_CASE("ScratchBuffer ensure keeps the held elements and doubles the block") {
+    Owner o;
+    CHECK(o.buf.ensure(1));
+    CHECK(o.buf.count() == 4);         // the smallest block, so the next appends allocate nothing
+    o.buf[0] = 7; o.buf[3] = 9;
+    CHECK(o.buf.ensure(4));
+    CHECK(o.buf.count() == 4);         // already held: no allocation
+    CHECK(o.buf.ensure(5));
+    CHECK(o.buf.count() == 8);         // doubled
+    CHECK(o.buf[0] == 7);
+    CHECK(o.buf[3] == 9);
+    CHECK(o.buf[4] == 0);              // the new half is zeroed
+    CHECK(o.dynamicBytes() == 8);
+}
+
+// A growth the reserve refuses leaves the held block as it was, and the exact size is tried before giving up.
+TEST_CASE("ScratchBuffer ensure refused by memory keeps the held block, trying the exact size first") {
+    struct CapGuard { ~CapGuard() { platform::setTestMaxAllocBlock(0); } } guard;
+    Owner o;
+    REQUIRE(o.buf.ensure(8));
+    o.buf[7] = 5;
+    platform::setTestMaxAllocBlock(12);   // 16 (doubled) does not fit, 12 (exact) does
+    CHECK(o.buf.ensure(12));
+    CHECK(o.buf.count() == 12);
+    CHECK(o.buf[7] == 5);
+    platform::setTestMaxAllocBlock(1);    // nothing more fits
+    CHECK_FALSE(o.buf.ensure(13));
+    CHECK(o.buf.count() == 12);
+    CHECK(o.buf[7] == 5);
+    CHECK(o.dynamicBytes() == 12);
 }

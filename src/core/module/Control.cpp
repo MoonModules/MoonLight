@@ -159,8 +159,8 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving) 
             const auto* src = static_cast<const ListSource*>(c.ptr);
             sink.append("[");
             if (src) {
-                const uint8_t n = src->listRowCount();
-                for (uint8_t r = 0; r < n; r++) {
+                const ListRow n = src->listRowCount();
+                for (ListRow r = 0; r < n; r++) {
                     if (r > 0) sink.append(",");
                     // Saving writes what the file keeps, which may be more than the collapsed row shows.
                     if (saving) src->writeListRowSaved(sink, r);
@@ -236,8 +236,8 @@ void writeControlMetadata(JsonSink& sink, const ControlDescriptor& c) {
             sink.append("}");
             sink.append(",\"detail\":[");
             if (src) {
-                const uint8_t n = src->listRowCount();
-                for (uint8_t r = 0; r < n; r++) {
+                const ListRow n = src->listRowCount();
+                for (ListRow r = 0; r < n; r++) {
                     if (r > 0) sink.append(",");
                     src->writeListRowDetail(sink, r);
                 }
@@ -282,7 +282,7 @@ namespace {
 bool writeRow(JsonSink& sink, const ListSource& src, ControlCursor& at, bool detail) {
     if (at.item >= src.listRowCount()) return false;
     if (at.item > 0) sink.append(",");
-    const uint8_t row = static_cast<uint8_t>(at.item++);
+    const ListRow row = at.item++;
     if (detail) src.writeListRowDetail(sink, row);
     else src.writeListRow(sink, row);
     return true;

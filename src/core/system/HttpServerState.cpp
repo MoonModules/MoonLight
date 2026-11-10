@@ -599,6 +599,7 @@ void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor&
         const auto* ls = static_cast<const ListSource*>(c.ptr);
         if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
         if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
+        if (ls && ls->listAsGraph()) sink.append(",\"graph\":true");
         if (ls && ls->listAsPads()) {
             sink.append(",\"pads\":true");
             const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();

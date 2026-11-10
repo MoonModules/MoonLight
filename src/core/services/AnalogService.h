@@ -62,10 +62,10 @@ public:
     /// Editable, since the rows are the whole point of this module.
     bool isEditableList() const override { return true; }
     /// How many rows are configured.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// Append one row's summary, ending with the live reading a calibration is set from.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.appendf("{\"id\":%u,\"pin\":%d,\"inMin\":%u,\"inMax\":%u,\"invert\":%s",
@@ -78,7 +78,7 @@ public:
     }
 
     /// The row's editable fields: its pin, its travel, and its target.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         openInputPinFields(sink, r.pin);

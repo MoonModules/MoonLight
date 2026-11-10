@@ -4,113 +4,63 @@
 ///
 /// ## How the boot tree is created
 ///
-/// All modules are created via the factory: heap-allocated, PSRAM when available, `classSize` set.
-/// Names come from the factory, which strips the role suffix, keeping the direction on a network module so send and receive stay distinguishable.
-/// An explicit name is needed only for a genuine rename.
-/// Creation can return null in principle, and these results are deliberately not checked.
-/// At startup the right behavior is a crash with a usable backtrace, which both targets already give, rather than boilerplate that reports the same failure with less to go on.
+/// All modules come from the factory, heap-allocated and in PSRAM when available, named by stripping the role suffix (a network module keeps its direction). Null results go unchecked: a startup crash gives a usable backtrace.
 ///
 /// ## Why markWiredByCode matters
 ///
-/// A boot-wired module is wiring rather than a user choice, so the persisted tree must not decide whether it exists.
-/// Without the mark, a config written before a child was added drops that child on load, which is exactly what happened when Talk was introduced beside Stats.
-/// The file listed one child, so the tree came back with one.
-/// It also stops a persistence load replacing a wired instance with a fresh factory one that lost an injected pointer, which is what protects PreviewDriver's broadcaster.
-/// Devices is the same case: the mark preserves it on a device whose saved Network.json predates the child.
+/// A boot-wired module is wiring, not a user choice: a config saved before a child was added would drop it, and a load would swap a wired instance for a fresh one that lost its injected pointer (PreviewDriver's broadcaster).
 ///
 /// ## Why the audio service is boot-wired
 ///
-/// Auto-wiring once forced an I2S init on boards with no microphone, which hung setup and boot-looped a classic ESP32.
-/// Its pins now default to empty so it idles until real ones are entered, and the effects read a silent frame when no microphone exists.
-/// `mode` is synthesized by default, so a board with a microphone names it in its catalog entry the way it already names its pins.
+/// Auto-wiring forced an I2S init on boards with no microphone and boot-looped a classic ESP32, so its pins default to empty and the effects read a silent frame until a catalog entry names real ones.
 ///
 /// ## Why the device-wide tools are boot-wired
 ///
-/// ControlModule holds the presets, which are a device capability rather than something a user adds, so it exists whatever the persisted tree says.
-/// File Manager is the same kind of thing: a device-wide tool rather than a per-board one, so no catalog entry adds it.
-/// Its setName only changes the card's label, and the type stays FileManagerModule, which is what a persisted tree and a type lookup both key on.
+/// ControlModule holds the presets and File Manager is a device-wide tool: both are device capabilities rather than catalog additions, so they exist whatever the persisted tree says.
 ///
 /// ## Why MoonCloud is not a Firmware child
 ///
-/// Parenting it under Firmware was tried: that module does not chain to its children, so anything parented there showed an empty card.
-/// Each MoonCloud child carries its own consent, because wanting a joint lightshow is not agreeing to usage reporting.
-/// Talk is a SECOND child with its own consent, because publishing a message and sharing a chip model are different decisions.
+/// Parenting under Firmware showed an empty card, since that module does not chain to its children. Each MoonCloud child has its own consent: a joint lightshow, a message and a chip model are different decisions.
 ///
 /// ## Why Improv is compile-time gated
 ///
-/// Improv is the one exception to registering everything and letting modules guard themselves.
-/// Its only purpose is pushing credentials, so on a build without WiFi there is no surface to push to.
-/// It is created after the network module so its setter has a valid pointer, and one module answers the device-info request while the other takes the credentials.
-/// The APPLY_OP vendor RPC (0xFC) carries the device model's state document over serial during provisioning.
-/// ImprovProvisioningModule applies it with the engine `PATCH /api/state` uses: "Improv = REST over serial".
+/// Improv only pushes credentials, so a build without WiFi has no surface for it. It is created after the network module so its setter has a valid pointer; APPLY_OP (0xFC) carries the state document over serial.
 ///
 /// ## Why MQTT is built on every networked target
 ///
-/// MQTT bridges the light controls to a broker for Homebridge and Home Assistant.
-/// It is built on every networked target because it uses TCP, so it works over WiFi or Ethernet alike, and it stays disabled until the user sets a broker.
-/// systemModule is injected for the default topic prefix, which is the device name.
-/// controlModule is injected so the look-only presets become the Home Assistant effect list.
+/// MQTT bridges the light controls to a broker for Homebridge and Home Assistant. It uses TCP, so it runs over WiFi or Ethernet and stays disabled until a broker is set; systemModule gives the topic prefix, controlModule the effect list.
 ///
 /// ## Why the boot layer is one Pulse effect
 ///
-/// One default effect so a bare device with no catalog inject still shows lights out of the box, but NO default modifier. The boot Layer is one effect on a 16x16 grid.
-/// A device-model catalog entry can REPLACE it through `"$patch":"replace"` on the Layer, with its own effects and modifiers, the way the testbench swaps in AudioSpectrum plus RandomMap.
-/// Pulse is the one because a first boot has to answer three questions at once: the lights work, the device runs, and it hears the room.
-/// A sparse shell answers all three, where a dense field answers only the first since every light is already lit.
+/// One default Pulse effect on a 16x16 grid, no modifier: a sparse shell shows that the lights work, the device runs and it hears the room. A catalog entry can replace it through `"$patch":"replace"` on the Layer.
 ///
 /// ## Why output drivers are not boot-wired
 ///
-/// Output drivers are added per board through the catalog, so a device carries only what its board has.
-/// The container wires any child generically, so one added at runtime is wired exactly like one added at boot and persists across a reboot.
-/// A bare flash therefore has no output until a board is selected, which is the deliberate model.
-/// The preview is the one exception: it needs the broadcaster only this file holds, which the catalog cannot supply.
-/// PreviewDriver pushes the coordinate table plus per-frame RGB to the HTTP server's WS broadcaster, HttpServerModule being a BinaryBroadcaster.
-/// Light owns the preview wire format end to end; core writes the bytes.
+/// Output drivers come per board through the catalog, so a bare flash has no output. The preview is the exception: it needs the HTTP server's WS broadcaster, which only this file holds and the catalog cannot supply.
 ///
 /// ## Why registration order matters
 ///
-/// The scheduler walks the roots in registration order each tick.
-/// The filesystem comes first so its load hook runs before any setup, overlaying persisted values into other modules' bound variables.
-/// Then the identity and status surfaces, then network with its credential and bridge children, then the services a later stage may consume, then the light pipeline, and the server last.
-/// The server is added only where an IP stack exists. Setup binds a socket, and with no interface compiled in nothing initializes the stack, so its thread never exists and the board goes down before the light pipeline runs.
-/// That gate is what makes a network-less build supported.
+/// The scheduler walks roots in registration order: filesystem first (its load hook overlays persisted values before setup), then identity, network, services, the light pipeline, and the server last, only where an IP stack exists.
 ///
 /// ## What the boot banner prints
 ///
-/// The server binds every interface, so it is reachable across the LAN, and a loopback name only means anything where the browser runs on the host.
-/// A device prints its interface address instead, and the network module logs the real one as each interface comes up.
-/// With no address yet the line states exactly that, which covers two different reasons.
-/// On a device it is normal this early, an interface not being up, and NetworkModule logs the address when it comes up.
-/// On a desktop it means `hostIp()` found no route at all, and stating what is true promises no follow-up message an offline desktop never prints.
+/// The server binds every interface, so a loopback name only means something on the host; a device prints its interface address, which NetworkModule logs as each interface comes up, and with no address yet the line says so.
 ///
 /// ## Why the render loop subscribes to the task watchdog
 ///
-/// A genuine wedge in the render loop now panics and reboots, the self-heal, with a backtrace, instead of hanging silently.
-/// The sdkconfig runs the TWDT with idle-task checking OFF, a saturated core being healthy rather than a bug, so this explicit subscription is what the watchdog watches.
-/// It is reset each tick, so a heavy-but-live frame keeps feeding it.
+/// A wedge in the render loop panics and reboots with a backtrace instead of hanging silently. The sdkconfig runs the TWDT with idle-task checking off, so this explicit subscription, reset each tick, is what the watchdog watches.
 ///
 /// ## Why the periodic line is a plain write
 ///
-/// A plain write rather than a log call, so the platform level cannot suppress it, and this gates on the same level by hand.
-/// Silenced above a warning, so a resting device makes no periodic serial write and a transmit-blinking LED stops flickering.
-/// The first minute always prints, because the installer reads the address off this line.
-/// `maxInternalAllocBlock` reports internal RAM only: the all-memory variant reports about 8 MB on S3/S2 PSRAM boards and is useless as a memory-pressure KPI, and platform.h holds the split.
-/// renderWait is the worst wait at a frame boundary in the last second rather than a single frame's, which would land wherever this once-a-second line falls and read as nothing.
-/// It is what says whether a second buffer would recover idle time or gain nothing.
+/// A plain write the platform level cannot suppress, gated by hand: silent above a warning, printed in the first minute for the installer. `maxInternalAllocBlock` is internal RAM only; renderWait is the worst frame-boundary wait in the last second.
 ///
 /// ## Why the address token rides the periodic line
 ///
-/// MM_IP is a stable address token for the installer's post-flash serial read, riding an already-periodic line so it costs no extra write and repeats until the port is reopened.
-/// It is gated to the first minute, after which the address comes from the API, and the window latches off for good so a counter wrap cannot reopen it.
-/// MM_DEVICE carries the discovery name alongside the address, so the installer's link survives a lease change.
-/// It is the one network identity, and it rides serial because the installer's fallback is blocked by mixed content.
+/// MM_IP is the installer's post-flash serial address token, gated to the first minute and latched off so a counter wrap cannot reopen it. MM_DEVICE carries the discovery name beside it so the link survives a lease change.
 ///
 /// ## Why the loop pacing uses goto and a sleep
 ///
-/// The loop's pacing lives at its TAIL, so a `continue` in the logging block would skip the yield and spin the core for that pass.
-/// Jumping to the pacing point keeps "skip the logging" from meaning "skip the sleep".
-/// Yielding only offers the CPU to another runnable thread, so with nothing else to run it returns at once and this burns a whole core, as a bench reported.
-/// A sub-millisecond sleep parks the thread at no cost to the frame rate, and the yield stays for the split's frame boundary, which must not sleep.
+/// Pacing lives at the loop's tail, so a goto keeps skipping the logging from skipping the sleep. A sub-millisecond sleep parks the thread where a yield would burn a core; the yield stays for the split's frame boundary, which must not sleep.
 ///
 #include "module_types.h"
 
@@ -184,8 +134,7 @@ void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
     mm::registerModuleTypes();
     mm::Scheduler scheduler;
 
-    // Every container is created as the device boots it, from the one table the scenario runner builds its trees from too: @xref{how-the-boot-tree-is-created}.
-    // Each carries the apparatus wired into it, marked wired so a saved tree that predates a child keeps it: @xref{why-markwiredbycode-matters}.
+    // Every container is created from the one table the scenario runner shares, wired by code so a saved tree that predates a child keeps it: @xref{how-the-boot-tree-is-created}, @xref{why-markwiredbycode-matters}.
     const auto top = [](const char* typeName) {
         mm::MoonModule* m = mm::createTopLevel(typeName);
         if (!m) {
@@ -226,7 +175,7 @@ void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
     // The container for everything talking to a server we run, Stats and Talk wired in, each with its own consent: @xref{why-mooncloud-is-not-a-firmware-child}.
     auto* moonCloudModule = top("MoonCloudModule");
 
-    // Network, its interfaces first in the order the cascade tries them, then Improv (compile-time gated: @xref{why-improv-is-compile-time-gated}), MQTT (@xref{why-mqtt-is-built-on-every-networked-target}) and device discovery.
+    // Network, its interfaces first in the order the cascade tries them, then Improv (compile-time gated: @xref{why-improv-is-compile-time-gated}) and MQTT (@xref{why-mqtt-is-built-on-every-networked-target}).
     auto* networkModule = static_cast<mm::NetworkModule*>(top("NetworkModule"));
     networkModule->setScheduler(&scheduler);
     networkModule->setSystemModule(systemModule);
@@ -242,8 +191,9 @@ void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
         mqtt->setSystemModule(systemModule);
         mqtt->setControlModule(controlModule);   // look-only presets as the HA effect list
     }
-    // Our own name, so the self row in the device list matches the device's identity elsewhere; deviceName has static lifetime as SystemModule's member.
-    if (auto* devices = static_cast<mm::DevicesModule*>(wired(networkModule, "DevicesModule"))) devices->setSelfName(systemModule->deviceName());
+    // Devices, what reaches past this device to the others, with Discovery wired in; setSelfName matches the self row to the device identity (static lifetime as SystemModule's member).
+    auto* devicesContainer = top("Devices");
+    if (auto* devices = static_cast<mm::DevicesModule*>(wired(devicesContainer, "DevicesModule"))) devices->setSelfName(systemModule->deviceName());
 
     // Layouts, the top-level container for one or more layouts, today one GridLayout that self-initializes to defaultGridSize with no boot-time dimensions threaded in.
     auto* layouts = static_cast<mm::Layouts*>(top("Layouts"));
@@ -275,6 +225,7 @@ void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
     scheduler.addModule(firmwareUpdateModule);
     scheduler.addModule(moonCloudModule);
     scheduler.addModule(networkModule);
+    scheduler.addModule(devicesContainer);
     scheduler.addModule(servicesModule);
     scheduler.addModule(controlModule);
     scheduler.addModule(layouts);

@@ -82,10 +82,10 @@ public:
     bool isEditableList() const override { return true; }
 
     /// How many rows are configured.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// Append one row's summary: the input's name and what it drives.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.appendf("{\"id\":%u,\"input\":", static_cast<unsigned>(r.id));
@@ -95,7 +95,7 @@ public:
     }
 
     /// The row's editable fields: the input, the learn button, and the action, a stick taking a target alone.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         // The last option is "(none)", which is what a row with an unknown input name binds.

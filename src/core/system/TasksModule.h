@@ -79,9 +79,9 @@ private:
             return (render[0] && std::strcmp(name, render) == 0) || std::strncmp(name, "mm", 2) == 0;
         }
         /// How many tasks the snapshot holds.
-        uint8_t listRowCount() const override { return count_; }
+        ListRow listRowCount() const override { return count_; }
         /// Append one task's summary: its name, state, core, priority and stack, then its CPU share where the build measures it.
-        void writeListRow(JsonSink& sink, uint8_t row) const override {
+        void writeListRow(JsonSink& sink, ListRow row) const override {
             if (row >= count_) { sink.append("{}"); return; }
             const platform::TaskInfo& t = rows_[row];
             sink.append("{\"name\":");
@@ -98,7 +98,7 @@ private:
         }
 
         /// Append the modules in this task, each one string so the detail view renders chips.
-        void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+        void writeListRowDetail(JsonSink& sink, ListRow row) const override {
             if (row >= count_) { sink.append("{}"); return; }
             const bool isRenderTask = platform::renderTaskName()[0] &&
                                       std::strcmp(rows_[row].name, platform::renderTaskName()) == 0;

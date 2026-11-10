@@ -64,3 +64,28 @@ TEST_CASE("WledPacket::readName truncates a long name to the buffer, never overr
     WledPacket::readName(pkt, small, sizeof(small));
     CHECK(std::strlen(small) == 7);   // truncated to cap-1, NUL-terminated
 }
+
+TEST_CASE("WledPacket: a MoonLight device on another port appends it, and one on port 80 sends the plain header") {
+    const uint8_t ip[4] = {192, 168, 1, 147};
+    uint8_t pkt[WledPacket::kSizeWithPort];
+    WledPacket::build(pkt, ip, "MM-Desktop", 32, true);
+    WledPacket::stampMmMarker(pkt);
+    CHECK(WledPacket::stampHttpPort(pkt, 80) == WledPacket::kSize);
+    CHECK(WledPacket::httpPort(pkt, WledPacket::kSize) == 80);   // absent means 80, as in an http URL
+
+    const size_t len = WledPacket::stampHttpPort(pkt, 8080);
+    CHECK(len == WledPacket::kSizeWithPort);
+    CHECK(WledPacket::isValid(pkt, len));            // WLED reads 40 bytes or more and ignores the rest
+    CHECK(WledPacket::hasMmMarker(pkt, len));
+    CHECK(WledPacket::httpPort(pkt, len) == 8080);
+    CHECK(pkt[WledPacket::kPortOff] == 0x90);        // little-endian, like the header's other fields
+    CHECK(pkt[WledPacket::kPortOff + 1] == 0x1f);
+}
+
+TEST_CASE("WledPacket: only the header, or the header and a port, is presence") {
+    uint8_t pkt[WledPacket::kSizeWithPort + 1] = {255, 1};
+    CHECK(WledPacket::isValid(pkt, WledPacket::kSize));
+    CHECK(WledPacket::isValid(pkt, WledPacket::kSizeWithPort));
+    CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSize + 1));
+    CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSizeWithPort + 1));
+}

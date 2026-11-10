@@ -155,10 +155,10 @@ public:
     // --- ListSource (editable) ---------------------------------------------------------
 
     /// How many profile rows the list holds.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// Write one row, which is also the persisted form, so it carries the full wiring.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         const Profile& p = profiles_[row];
         const uint8_t* roles = roleAt(p);
         // Escaped, not raw: a quote in a name would produce JSON that wipes every custom profile.
@@ -186,7 +186,7 @@ public:
     }
 
     /// Write one row's editable fields: the name, the channel count, and a role per channel.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         const Profile& p = profiles_[row];
         const uint8_t* roles = roleAt(p);
         sink.append("{\"fields\":[");

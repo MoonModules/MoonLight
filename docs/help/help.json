@@ -5158,17 +5158,33 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MqttModule.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mqttmodule"
   },
+  "Devices": {
+   "line": "The container for what reaches past this device to the others on the network: the Discovery list, and the groups that join it.",
+   "summary": "Fleet-scope rather than this-device, so neither System nor Network: a device's own interfaces live under Network, the devices it finds live here.",
+   "role": "generic",
+   "dim": 0,
+   "doc": "core/devices.md",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/Devices.h"
+  },
   "DevicesModule": {
    "line": "Discovers other devices on the LAN, MoonLight and WLED among them, and lists them, this one included and marked as such.",
-   "summary": "The last-known list survives a reboot. A child of Network, discovery depending on the network being up.",
+   "summary": "The Discovery card under Devices, listening once the network is up; the list is rebuilt within seconds of boot.",
    "guide": [
+    {
+     "title": "The map",
+     "text": "This device sits in the middle, ringed, each kind in its own color. A line is traffic, labeled with its protocol and rate. Devices without traffic sit in rows beneath. A click opens a device's details, and for a MoonLight device an update to a newer release."
+    },
+    {
+     "title": "As many devices as memory holds",
+     "text": "When memory runs short the card says \"memory full\", and a new device replaces the one heard longest ago, MoonLight boards kept longest."
+    },
     {
      "title": "Finding WLED devices",
      "text": "WLED lists a device only from the broadcast copy, and the copy costs the rest of the LAN next to nothing.\n\nA network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping))."
     },
     {
      "title": "Boards by name",
-     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer, and a host setting, show a board heard this session by its name beside its address. A host setting shows them as of the page's last load."
+     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DevicesModule.png",
@@ -5202,14 +5218,14 @@
        "line": "How many color lights a Hue bridge has."
       },
       "ageSec": {
-       "line": "When it was last heard, or cached for one restored from flash and not heard since."
+       "line": "When it was last heard."
       }
      }
     }
    },
    "role": "generic",
    "dim": 0,
-   "doc": "core/system.md#devices",
+   "doc": "core/devices.md#discovery",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DevicesModule.h"
   },
   "NetworkModule": {
@@ -5541,6 +5557,12 @@
      "caption": "Every service in turn: audio, button, analog, infrared, and a scripted one."
     }
    ]
+  },
+  "core/devices.md": {
+   "title": "Devices",
+   "base": "Devices",
+   "line": "The container for what reaches past this device to the others on the network: the Discovery list, and the groups that join it.",
+   "summary": "Fleet-scope rather than this-device, so neither System nor Network: a device's own interfaces live under Network, the devices it finds live here."
   }
  }
 }

@@ -333,8 +333,6 @@ public:
     /// Decode a `path=` query value into `out`, rooted at the mount, false when it is unsafe. @xref{two-guards-that-are-static-on-purpose}
     static bool parseFilePath(const char* query, char* out, size_t cap);
 
-    /// Find a header by name, case-insensitively, as RFC 9112 requires.
-    static const char* findHeaderCI(const char* hay, const char* needle);
     /// What a replaced module is called: the requested name, else a custom one, else its own default.
     static const char* replacementName(const char* requested, const char* current,
                                        const char* oldDefault);
@@ -356,6 +354,8 @@ public:
     bool clientResyncPendingForTest(int client) const { return resyncClient_[client]; }
     /// The port the live server is bound to, or 0 when none is up.
     static uint16_t servedPort() { return instance_ ? instance_->boundPort_ : 0; }
+    /// The web page and API, on the port the listener bound.
+    void reportNetworkUse(NetworkUse& use) const override { if (boundPort_) use.service(kHttpService, boundPort_); }
 
     /// Build the early patch of the modules that asked for one, for a test.
     uint16_t buildSoonPatchForTest(JsonSink& sink) { return buildSoonPatch(sink); }

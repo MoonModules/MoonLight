@@ -404,10 +404,10 @@ public:
     // ---- ListSource: one row per preset file ----
 
     /// How many presets the folder holds.
-    uint8_t listRowCount() const override { return presetCount_; }
+    ListRow listRowCount() const override { return presetCount_; }
 
     /// Append one preset's row: its name, what it carries, and which roles it holds now.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= presetCount_) return;
         const Preset& p = presets_[row];
         // The name is written through writeJsonString, not raw:
@@ -439,7 +439,7 @@ public:
     }
 
     /// The expanded row:
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= presetCount_) return;
         const Preset& p = presets_[row];
         sink.append("{\"fields\":[{\"name\":\"name\",\"type\":\"text\",\"value\":");

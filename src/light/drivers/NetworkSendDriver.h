@@ -146,6 +146,17 @@ public:
         return kModes[p][addressing < kModeCount[p] ? addressing : 0];
     }
 
+    /// What went out last second, frames a second to each receiver, to the group, or to the broadcast address, as the addressing sends it.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (!framesLastSecond_) return;
+        const char* name = kProtocolOptions[protocol < kProtocolCount ? protocol : 0];
+        uint8_t grp[4];
+        e131MulticastAddr(e131FirstUniverse(universeStart), grp);   // the first universe's group stands for the window's
+        // The rule the send follows, so the map shows where the frames go.
+        sendAddressed(mode(), Traffic::FrameRate, dest_, nDest_, grp,
+                      [&](const uint8_t ip[4]) { use.flow(name, true, ip, framesLastSecond_, "fps"); });
+    }
+
     /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status: a warning, or what went out this second.
     void tick1s() MM_NONBLOCKING override {
         DriverBase::tick1s();

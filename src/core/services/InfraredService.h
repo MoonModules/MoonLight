@@ -82,10 +82,10 @@ public:
     bool isEditableList() const override { return true; }
 
     /// How many rows are configured.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// Append one row's summary, its code as hex, the way a frame is read everywhere else.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         // The arm flag is transient intent rather than state, so the detail carries it instead.
@@ -96,7 +96,7 @@ public:
     }
 
     /// The row's editable fields, arming being a button since it is an action rather than a setting.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.append("{\"fields\":[{\"name\":\"code\",\"type\":\"text\",\"value\":");

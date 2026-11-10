@@ -18,6 +18,7 @@
 /// Packets go in through injectPacketForTest(), the same entry the live recvFrom loop uses, so the private upsert path is reachable with no network.
 
 #include "doctest.h"
+#include "discovery_rows.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/WledPacket.h"
 #include "core/util/JsonSink.h"
@@ -31,24 +32,13 @@ using namespace mm;
 namespace {
 
 // Inject a presence packet from `a.b.c.d` with `name`; `mm` marks it a MoonLight peer. Addresses are RFC 5737's 192.0.2.0/24, since one the test machine holds lists as itself.
-void inject(DevicesModule& dev, const char* name, bool mm,
-            uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
+void inject(DevicesModule& dev, const char* name, bool mm, uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
     const uint8_t ip[4] = {a, b, c, d};
-    uint8_t pkt[WledPacket::kSize];
-    WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
-    if (mm) WledPacket::stampMmMarker(pkt);
-    dev.injectPacketForTest(pkt, sizeof(pkt), ip);
+    discovery_rows::hearPresence(dev, ip, name, mm);
 }
 
-// Find the serialized row for an IP; return its full JSON (or "" if absent).
-std::string rowFor(DevicesModule& dev, const char* ip) {
-    for (uint8_t i = 0; i < dev.listRowCount(); i++) {
-        mm::JsonSink sink;
-        dev.writeListRow(sink, i);
-        if (std::strstr(sink.data(), ip)) return sink.data();
-    }
-    return "";
-}
+// The serialized row for an IP, or "" if absent.
+std::string rowFor(DevicesModule& dev, const char* ip) { return discovery_rows::rowAt(dev, ip); }
 
 }  // namespace
 
@@ -157,20 +147,19 @@ TEST_CASE("DevicesModule: a peer heard only over broadcast proves the network dr
     CHECK(cleared);
 }
 
-// The verdict lives in the status, which is not saved: flipping it once wrote the config file to flash on every flip.
-TEST_CASE("DevicesModule: the multicast verdict changing arms no save, a new device does") {
+// The device list is not saved, so neither a new device nor a verdict flip arms a save.
+TEST_CASE("DevicesModule: neither a new device nor the multicast verdict changing arms a save") {
     NetworkPath::multicastDropped = false;
     DevicesModule dev;
     injectCopy(dev, 62, /*broadcast=*/true);
     const bool newRowSaves = dev.dirty();
-    dev.clearDirty();
     for (int i = 0; i < 2; i++) injectCopy(dev, 62, /*broadcast=*/true);   // the third copy proves the drop
     const bool proven = NetworkPath::multicastDropped;
     const bool dirtyAfterProof = dev.dirty();
     injectCopy(dev, 62, /*broadcast=*/false);                              // and a multicast copy clears it
     const bool dirtyAfterClear = dev.dirty();
     NetworkPath::multicastDropped = false;
-    CHECK(newRowSaves);
+    CHECK_FALSE(newRowSaves);
     CHECK(proven);
     CHECK_FALSE(dirtyAfterProof);
     CHECK_FALSE(dirtyAfterClear);
@@ -251,18 +240,6 @@ TEST_CASE("DevicesModule: a board heard announcing itself answers its name for i
     CHECK_FALSE(dev.addressOf("desk.local", ip));
 }
 
-// A restored row carries the address of the network it was saved on, which a new router may have handed to another board.
-TEST_CASE("DevicesModule: a board restored from the last boot is not looked up until it is heard again") {
-    DevicesModule dev;
-    REQUIRE(dev.restoreList("{\"devices\":[{\"name\":\"MM-Eye\",\"ip\":\"192.0.2.30\",\"type\":\"MoonLight\"}]}", "devices"));
-    uint8_t ip[4] = {};
-    const uint8_t at[4] = {192, 0, 2, 30};
-    CHECK_FALSE(dev.addressOf("MM-Eye", ip));
-    CHECK(dev.nameOf(at) == nullptr);
-    inject(dev, "MM-Eye", /*mm=*/true, 192, 0, 2, 30);
-    CHECK(dev.addressOf("MM-Eye", ip));
-}
-
 // A board that changed its address leaves its old row listed until it ages out, so a host setting naming it must reach where it is now.
 TEST_CASE("DevicesModule: a board heard at a new address is looked up there, not at the address it left") {
     DevicesModule dev;
@@ -304,4 +281,35 @@ TEST_CASE("DevicesModule: a host setting naming a board resolves from the device
     CHECK(ip[3] == 101);
     dev.release();
     CHECK(HostResolver::lookup("MM-Bridge.local", ip) != HostResolver::State::Resolved);   // gone with the module
+}
+
+TEST_CASE("DevicesModule: a peer serving on another port is linked and read at that port") {
+    DevicesModule dev;
+    const uint8_t ip[4] = {192, 0, 2, 61};
+    uint8_t pkt[WledPacket::kSizeWithPort];
+    WledPacket::build(pkt, ip, "MM-Pi", 32, true);
+    WledPacket::stampMmMarker(pkt);
+    dev.injectPacketForTest(pkt, WledPacket::stampHttpPort(pkt, 8080), ip);
+    REQUIRE(dev.listRowCount() >= 1);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.61").c_str(), "\"port\":8080") != nullptr);
+    const std::string detail = discovery_rows::rowAt(dev, "192.0.2.61", true);
+    CHECK(std::strstr(detail.c_str(), "\"url\":\"http://192.0.2.61:8080/\"") != nullptr);
+
+    // A peer on port 80 shows no port and links at the bare address.
+    inject(dev, "MM-Board", /*mm=*/true, 192, 0, 2, 62);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.62").c_str(), "\"port\"") == nullptr);
+}
+
+TEST_CASE("DevicesModule: a link-local address gets no row") {
+    // A board's second interface without DHCP takes 169.254.x.x (RFC 3927), which no peer off that link reaches: listed, it shows the board twice.
+    DevicesModule dev;
+    inject(dev, "MM-P4", /*mm=*/true, 169, 254, 248, 172);
+    CHECK(rowFor(dev, "169.254.248.172").empty());
+    inject(dev, "MM-P4", /*mm=*/true, 192, 0, 2, 32);
+    CHECK(rowFor(dev, "169.254.248.172").empty());
+    CHECK_FALSE(rowFor(dev, "192.0.2.32").empty());
+}
+
+TEST_CASE("DevicesModule: the device list is not persisted") {
+    CHECK_FALSE(DevicesModule{}.persistsList());
 }

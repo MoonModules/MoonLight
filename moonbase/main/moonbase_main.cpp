@@ -31,6 +31,7 @@
 #include "core/util/ConfigScrape.h"   // the keys this image reads out of the app's config, shared so the app's test runs the same scraper
 #include "core/util/CaptivePortal.h"  // the access point's address, DNS answer and redirect rule, shared with the app's portal
 #include "core/util/DeviceName.h"     // defaultDeviceName: the name the app gives a board that never saved one
+#include "core/util/HttpHead.h"       // the request head reads, shared with the app's server
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
 #include "esp_https_ota.h"
 #include "esp_littlefs.h"
@@ -602,6 +603,12 @@ bool installFromUrl(const char* url) {
 
 constexpr size_t kRecvChunk = 4096;
 
+// The socket as the `recv` the shared head reads take.
+struct SocketRecv {
+    int sock;
+    int operator()(char* buf, size_t cap) const { return static_cast<int>(::recv(sock, buf, cap, 0)); }
+};
+
 void sendAll(int sock, const char* data, size_t len) {
     size_t sent = 0;
     while (sent < len) {
@@ -657,23 +664,41 @@ bool installFromSocketLocked(int sock, const char* prefix, size_t prefixLen, siz
         return false;
     }
 
-    size_t written = 0;
+    char* buf = static_cast<char*>(std::malloc(kRecvChunk));
+    if (!buf) { esp_ota_abort(handle); std::snprintf(status_, sizeof(status_), "error: out of memory"); return false; }
+
+    // The body's first bytes may arrive with the headers, in later segments, or after a 100 Continue, so read until the descriptor is in hand.
     if (prefixLen > contentLen) prefixLen = contentLen;   // never store bytes past the declared body
-    // The URL path's refusal, from the bytes in hand, refusing a prefix too short to identify rather than passing it.
-    if (prefixLen < mm::firmware::kIdentifyBytes) {
+    static_assert(mm::firmware::kIdentifyBytes <= kRecvChunk, "the descriptor fits one chunk");
+    const size_t identifyLen = contentLen < mm::firmware::kIdentifyBytes ? contentLen : mm::firmware::kIdentifyBytes;
+    size_t have = prefixLen < kRecvChunk ? prefixLen : kRecvChunk;
+    std::memcpy(buf, prefix, have);
+    have = mm::http::fillTo(buf, have, identifyLen, SocketRecv{sock});
+    // The URL path's refusal: an image too short to identify is refused rather than passed.
+    if (have < mm::firmware::kIdentifyBytes) {
+        std::free(buf);
         esp_ota_abort(handle);
         std::snprintf(status_, sizeof(status_), "error: could not identify the image");
         return false;
     }
-    const auto incomingUp = mm::firmware::identify(
-        reinterpret_cast<const uint8_t*>(prefix), prefixLen);
+    const auto incomingUp = mm::firmware::identify(reinterpret_cast<const uint8_t*>(buf), have);
     if (incomingUp.described && mm::firmware::isMoonBaseImage(incomingUp.project)) {
+        std::free(buf);
         esp_ota_abort(handle);
         std::snprintf(status_, sizeof(status_), "error: that is a MoonBase image, not an app");
         return false;
     }
-    if (prefixLen) {
-        if (esp_ota_write(handle, prefix, prefixLen) != ESP_OK) {
+    if (esp_ota_write(handle, buf, have) != ESP_OK) {
+        std::free(buf);
+        esp_ota_abort(handle);
+        std::snprintf(status_, sizeof(status_), "error: write failed");
+        return false;
+    }
+    size_t written = have;
+    // A prefix longer than one chunk (headers under 1 KB leave at most that much) writes its remainder straight from the head buffer.
+    if (prefixLen > have) {
+        if (esp_ota_write(handle, prefix + have, prefixLen - have) != ESP_OK) {
+            std::free(buf);
             esp_ota_abort(handle);
             std::snprintf(status_, sizeof(status_), "error: write failed");
             return false;
@@ -681,8 +706,6 @@ bool installFromSocketLocked(int sock, const char* prefix, size_t prefixLen, siz
         written = prefixLen;
     }
 
-    char* buf = static_cast<char*>(std::malloc(kRecvChunk));
-    if (!buf) { esp_ota_abort(handle); std::snprintf(status_, sizeof(status_), "error: out of memory"); return false; }
     while (written < contentLen) {
         const size_t want = (contentLen - written) < kRecvChunk ? (contentLen - written) : kRecvChunk;
         const int n = ::recv(sock, buf, want, 0);
@@ -756,34 +779,34 @@ void unattendedInstallTask(void*) {
 }
 
 void serveOne(int sock) {
-    // TCP does not coalesce: the header block (or a small body) can arrive in several segments, so read until the blank line is seen, bounded by the buffer. A request whose headers do not fit 1023 bytes is not one of ours and falls out as 404.
+    // A request whose headers do not fit 1023 bytes is not one of ours and falls out as 404.
     char head[1024];
-    size_t got = 0;
-    const char* bodyStart = nullptr;
-    while (got < sizeof(head) - 1) {
-        const int n = ::recv(sock, head + got, sizeof(head) - 1 - got, 0);
-        if (n <= 0) break;
-        got += static_cast<size_t>(n);
-        head[got] = '\0';
-        if ((bodyStart = std::strstr(head, "\r\n\r\n"))) break;
-    }
+    size_t headLen = 0;
+    const size_t got = mm::http::readHead(head, sizeof(head), SocketRecv{sock}, headLen);
     if (got == 0) { ::close(sock); return; }   // serveOne owns the fd; a bare return leaks it
-    head[got] = '\0';
-    const size_t headLen = bodyStart ? static_cast<size_t>(bodyStart + 4 - head) : got;
     size_t prefixLen = got - headLen;
 
-    // HTTP header names are case-insensitive; strcasestr is not in the std namespace but is provided by newlib, and the probe is bounded by the header buffer.
-    size_t contentLen = 0;
-    if (const char* cl = strcasestr(head, "Content-Length:")) {
-        contentLen = static_cast<size_t>(std::strtoul(cl + 15, nullptr, 10));
+    uint64_t declared = 0;
+    if (mm::http::contentLength(head, declared) == mm::http::Length::Invalid) {
+        sendResponse(sock, "400 Bad Request", "text/plain", "error: invalid Content-Length");
+        ::close(sock);
+        return;
     }
+    if (declared > SIZE_MAX) {   // past what this chip addresses, which a narrowing cast would wrap into a small body
+        sendResponse(sock, "413 Content Too Large", "text/plain", "error: request body too large");
+        ::close(sock);
+        return;
+    }
+    const size_t contentLen = static_cast<size_t>(declared);
+    if (contentLen > prefixLen && mm::http::expectsContinue(head))
+        sendAll(sock, mm::http::kContinue, sizeof(mm::http::kContinue) - 1);
 
     // A phone on the access point asking for its own captive-check page gets this one, which is what shows it the sign-in screen.
     if (std::strncmp(head, "GET ", 4) == 0) {
         sockaddr_in local = {};
         socklen_t localLen = sizeof(local);
-        const char* host = strcasestr(head, "\r\nHost:");
-        if (host) { host += 7; while (*host == ' ') host++; }
+        const char* host = mm::http::findHeader(head, "Host:");
+        if (host) { host += 5; while (*host == ' ') host++; }
         if (host && ::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &localLen) == 0 &&
             mm::captive::redirects(reinterpret_cast<const uint8_t*>(&local.sin_addr.s_addr), host, head + 4)) {
             ::send(sock, mm::captive::kRedirect, std::strlen(mm::captive::kRedirect), 0);
@@ -798,18 +821,16 @@ void serveOne(int sock) {
         sendResponse(sock, "409 Conflict", "text/plain", "error: an install is already running");
     } else if (std::strncmp(head, "POST /api/firmware/url", 22) == 0) {
         // The body is the URL itself; small enough to finish reading into the same buffer.
-        while (prefixLen < contentLen && headLen + prefixLen < sizeof(head) - 1) {
-            const int n = ::recv(sock, head + headLen + prefixLen,
-                                 sizeof(head) - 1 - headLen - prefixLen, 0);
-            if (n <= 0) break;
-            prefixLen += static_cast<size_t>(n);
-        }
+        const size_t room = sizeof(head) - 1 - headLen;
+        prefixLen = mm::http::fillTo(head + headLen, prefixLen, contentLen < room ? contentLen : room, SocketRecv{sock});
         if (contentLen >= sizeof(stagedUrlTask_)) {
             // Same 255-byte contract the app's route enforces (platform.h): refusing beats truncating into a URL that fails later as a misleading download error.
             sendResponse(sock, "400 Bad Request", "text/plain", "error: url too long (max 255)");
         } else {
-            std::memcpy(stagedUrlTask_, head + headLen, prefixLen);
-            stagedUrlTask_[prefixLen] = '\0';
+            // At most the declared body: bytes past it are not the URL, and the check above sized the buffer by it.
+            const size_t urlLen = prefixLen < contentLen ? prefixLen : contentLen;
+            std::memcpy(stagedUrlTask_, head + headLen, urlLen);
+            stagedUrlTask_[urlLen] = '\0';
             std::snprintf(status_, sizeof(status_), "starting the install");
             cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch
             installing_ = true;   // cleared by the task after its final attempt

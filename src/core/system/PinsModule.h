@@ -95,9 +95,9 @@ private:
             }
         }
 
-        uint8_t listRowCount() const override { return count_; }
+        ListRow listRowCount() const override { return count_; }
 
-        void writeListRow(JsonSink& sink, uint8_t row) const override {
+        void writeListRow(JsonSink& sink, ListRow row) const override {
             if (row >= count_) { sink.append("{}"); return; }
             const Claim& c = claims_[row];
             sink.appendf("{\"gpio\":%u,\"owner\":", static_cast<unsigned>(c.gpio));
@@ -140,7 +140,7 @@ private:
         }
 
         /// Append every claim on this GPIO, and why the row is flagged when it is.
-        void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+        void writeListRowDetail(JsonSink& sink, ListRow row) const override {
             if (row >= count_) { sink.append("{}"); return; }
             const uint8_t gpio = claims_[row].gpio;
             sink.append("{\"claims\":[");

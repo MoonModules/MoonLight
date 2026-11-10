@@ -147,10 +147,10 @@ public:
     // --- ListSource (editable): the playlist -------------------------------------------
 
     /// How many rows the playlist holds.
-    uint8_t listRowCount() const override { return playlistCount_; }
+    ListRow listRowCount() const override { return playlistCount_; }
 
     /// Write one row, which is also the persisted form: the stable id and the chosen file.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         sink.appendf("{\"id\":%lu,\"file\":", static_cast<unsigned long>(tracks_[row].id));
         sink.writeJsonString(trackFile(row));
         sink.append("}");
@@ -167,7 +167,7 @@ public:
     }
 
     /// One row's editable fields: the file picker and a "play this row now" button.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         sink.append("{\"fields\":[");
         sink.appendf("{\"name\":\"file\",\"type\":\"select\",\"value\":%d,\"optionsRef\":\"files\"},",
                      fileIndexOf(trackFile(row)));

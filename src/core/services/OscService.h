@@ -186,6 +186,14 @@ public:
         received_++;
     }
 
+    /// The port it listens on, the client talking to it, and where feedback goes; OSC is occasional traffic, so no rate.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (!open_) return;
+        if (enabledOsc) use.service("OSC", port);
+        if (enabledOsc && peerFresh()) use.flow("OSC", false, peer_, 0, "");
+        if (feedback) forEachFeedbackDestination([&](const uint8_t ip[4]) { use.flow("OSC feedback", true, ip, 0, ""); });
+    }
+
 protected:
     /// Send one datagram to a feedback destination, the seam a test captures.
     virtual void transmit(const uint8_t ip[4], const uint8_t* pkt, size_t len) {
@@ -202,18 +210,22 @@ private:
     void sendFeedback(const uint8_t* pkt, size_t len, const uint8_t* skip) {
         if (len == 0) return;
         if (!hostsParsed_) parseHosts(/*mayStart=*/false);
-        const auto send = [&](const uint8_t ip[4]) {
+        forEachFeedbackDestination([&](const uint8_t ip[4]) {
             if (skip && std::memcmp(ip, skip, 4) == 0) return;
             transmit(ip, pkt, len);
-        };
+        });
+    }
+
+    /// Where feedback goes, which the send and the network report share: the hosts, whoever wrote last when there are none, or the group.
+    template <class Fn>
+    void forEachFeedbackDestination(Fn&& fn) const {
         const Addressing mode = static_cast<Addressing>(addressing < kModeCount ? addressing : 0);
         if (mode == Addressing::Unicast && hostCount_ == 0) {
-            // No hosts: answer whoever wrote last.
-            if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) send(peer_);
+            if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) fn(peer_);
             return;
         }
         if (mode != Addressing::Unicast && !groupValid_) return;   // no group, nowhere to send; the status says so
-        sendAddressed(mode, Traffic::Occasional, hostList_, hostCount_, groupIp_, send);
+        sendAddressed(mode, Traffic::Occasional, hostList_, hostCount_, groupIp_, fn);
     }
 
     /// The last value a host sent for one slot, so it is not sent straight back to it.

@@ -15,12 +15,12 @@ namespace {
 // A tiny fixed-data ListSource standing in for a real module (e.g. DevicesModule). Two rows; row 0 is the "self" device. Summary is a compact object; detail adds a field, exercising the separate summary/detail paths.
 struct StubDevices : mm::ListSource {
     uint8_t n = 2;
-    uint8_t listRowCount() const override { return n; }
-    void writeListRow(mm::JsonSink& s, uint8_t row) const override {
+    mm::ListRow listRowCount() const override { return n; }
+    void writeListRow(mm::JsonSink& s, mm::ListRow row) const override {
         if (row == 0) s.append("{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"self\":true}");
         else          s.append("{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\"}");
     }
-    void writeListRowDetail(mm::JsonSink& s, uint8_t row) const override {
+    void writeListRowDetail(mm::JsonSink& s, mm::ListRow row) const override {
         if (row == 0) s.append("{\"name\":\"self\",\"ip\":\"192.168.1.10\",\"type\":\"MoonLight\",\"self\":true}");
         else          s.append("{\"name\":\"WLED-1\",\"ip\":\"192.168.1.50\",\"type\":\"WLED\"}");
     }
@@ -48,8 +48,8 @@ struct StubLibrary : mm::ListSource {
     uint8_t n = 0;
     uint32_t nextId = 1;
 
-    uint8_t listRowCount() const override { return n; }
-    void writeListRow(mm::JsonSink& s, uint8_t row) const override {
+    mm::ListRow listRowCount() const override { return n; }
+    void writeListRow(mm::JsonSink& s, mm::ListRow row) const override {
         s.append("{\"id\":");
         char b[16]; std::snprintf(b, sizeof(b), "%lu", (unsigned long)rows[row].id); s.append(b);
         s.append(",\"name\":\""); s.append(rows[row].name); s.append("\"}");
@@ -199,8 +199,8 @@ TEST_CASE("ControlType::List type identity + persistable + restore round-trip") 
 // A list persists unless its source declines, as a derived list such as a task snapshot does: forgetting to decline writes junk, where forgetting to opt in would lose a user's rows.
 TEST_CASE("a list is written to flash unless its source is derived") {
     struct Derived : mm::ListSource {
-        uint8_t listRowCount() const override { return 1; }
-        void writeListRow(mm::JsonSink& s, uint8_t) const override { s.append("{\"name\":\"loopTask\"}"); }
+        mm::ListRow listRowCount() const override { return 1; }
+        void writeListRow(mm::JsonSink& s, mm::ListRow) const override { s.append("{\"name\":\"loopTask\"}"); }
         bool persistsList() const override { return false; }
     } derived;
     StubDevices restoring;

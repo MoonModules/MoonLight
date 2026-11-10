@@ -61,6 +61,12 @@ public:
     /// How many bytes that capture holds.
     size_t sentCaptureLenForTest() const { return sendCaptureLen_; }
 
+    /// The broker while connected, an edge when the broker is set as an address; a name is resolved inside the connection, which keeps no address to report.
+    void reportNetworkUse(NetworkUse& use) const override {
+        uint8_t ip[4];
+        if (state_ == Conn::Connected && parseDottedQuad(broker_, ip)) use.flow("MQTT", true, ip, 0, "");
+    }
+
     /// The heap floor while discovery announces, so a test asserts against this not a literal.
     static constexpr size_t kDiscoveryDynamicBytes = 320 + 448;
 

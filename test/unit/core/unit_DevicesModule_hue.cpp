@@ -1,12 +1,11 @@
 /// @module DevicesModule
 
-/// Pins the Hue-bridge listing: a HueDriver registers a bridge through upsertHueBridge() (the explicit, out-of-band entry, a bridge isn't a UDP-presence device), and DevicesModule lists it like any peer, carrying its color-light count for layout sizing. Also pins the round trip through writeListRow / restoreList so a persisted bridge comes back as a Hue row.
+/// Pins the Hue-bridge listing: a HueDriver registers a bridge through upsertHueBridge() (the explicit, out-of-band entry, a bridge isn't a UDP-presence device), and DevicesModule lists it like any peer, carrying its color-light count for layout sizing.
 
 #include "doctest.h"
 #include "core/system/DevicesModule.h"
 #include "core/util/JsonSink.h"
 
-#include <cstdio>
 #include <cstring>
 
 TEST_CASE("DevicesModule: a Hue bridge is listed with its color count") {
@@ -34,39 +33,3 @@ TEST_CASE("DevicesModule: upsertHueBridge is idempotent, updates count in place"
     dev.writeListRow(sink, 0);
     CHECK(std::strstr(sink.data(), "\"color\":9") != nullptr);
 }
-
-TEST_CASE("DevicesModule: a persisted Hue bridge restores as a Hue row with its count") {
-    mm::DevicesModule dev;
-    // The shape writeListRow emits (the same JSON the List control persists).
-    const char* saved =
-        "{\"devices\":[{\"name\":\"Hue Ewoud\",\"ip\":\"192.168.1.143\",\"type\":\"Hue bridge\",\"color\":7}]}";
-    REQUIRE(dev.restoreList(saved, "devices"));
-    REQUIRE(dev.listRowCount() == 1);
-    mm::JsonSink sink;
-    dev.writeListRow(sink, 0);
-    CHECK(std::strstr(sink.data(), "\"type\":\"Hue bridge\"") != nullptr);
-    CHECK(std::strstr(sink.data(), "\"color\":7") != nullptr);
-}
-
-TEST_CASE("DevicesModule: a corrupt persisted color clamps to the valid range, row still restores") {
-    // A negative count and an over-127 count (corrupt / hand-edited file) must clamp to 0..127 before narrowing to uint8_t, never wrap into a bogus value. The row otherwise restores.
-    struct Case { const char* color; const char* want; };
-    const Case cases[] = {
-        {"-5",    "\"color\":0"},     // negative → 0
-        {"99999", "\"color\":127"},   // overflow → 127 (the HueDriver colorCount_ ceiling)
-    };
-    for (const auto& c : cases) {
-        mm::DevicesModule dev;
-        char saved[160];
-        std::snprintf(saved, sizeof(saved),
-            "{\"devices\":[{\"name\":\"Hue Ewoud\",\"ip\":\"192.168.1.143\",\"type\":\"Hue bridge\",\"color\":%s}]}",
-            c.color);
-        REQUIRE(dev.restoreList(saved, "devices"));
-        REQUIRE(dev.listRowCount() == 1);
-        mm::JsonSink sink;
-        dev.writeListRow(sink, 0);
-        CHECK(std::strstr(sink.data(), "\"type\":\"Hue bridge\"") != nullptr);
-        CHECK(std::strstr(sink.data(), c.want) != nullptr);
-    }
-}
-

@@ -223,6 +223,28 @@ public:
 
     /// Whether the socket is open.
     bool isOpen() const { return open_; }
+
+    /// Turn the second's sends and taken packets into rates, once a second.
+    void secondPassed() MM_NONBLOCKING {
+        sendsPerS_ = sendCount_ - sendsAtSecond_;
+        sendsAtSecond_ = sendCount_;
+        takesPerS_ = takeCount_ - takesAtSecond_;
+        takesAtSecond_ = takeCount_;
+    }
+
+    /// What the sync offers and exchanges: the port it receives on and the sender it follows, or each format's group or each host it sends to.
+    void reportNetworkUse(NetworkUse& use, Role role, bool moonLight, bool wled, bool unicast, uint16_t port) const {
+        if (!open_) return;
+        if (role == kReceive) {
+            use.service("audio sync", port);
+            if (takesPerS_) use.flow("audio sync", false, peer_, takesPerS_, "fps");
+            return;
+        }
+        if (role != kSend || !sendsPerS_) return;
+        const auto report = [&](const uint8_t ip[4]) { use.flow("audio sync", true, ip, sendsPerS_, "fps"); };
+        if (moonLight) forEachDestination(kGroups[0].ip, unicast, report);
+        if (wled) forEachDestination(kGroups[1].ip, unicast, report);
+    }
     /// How many sends have gone out.
     uint32_t sendCount() const { return sendCount_; }
     /// How many times the receive socket joined a group.
@@ -246,6 +268,9 @@ private:
     const char* hostsError_ = nullptr;   // why the host list was refused, shown on the status
     uint32_t lastSendMs_ = 0;        // the send throttle
     uint32_t sendCount_ = 0;
+    uint32_t takeCount_ = 0;         // packets taken from the followed sender
+    uint32_t sendsAtSecond_ = 0, takesAtSecond_ = 0;   // the counts at the last secondPassed
+    uint32_t sendsPerS_ = 0, takesPerS_ = 0;           // the rates it found
     uint32_t lastOpenFailMs_ = 0;    // the last failed open, 0 for none: the bring-up backoff
     uint32_t lastRecvMs_ = 0;        // the last packet taken
     uint32_t mlHeardMs_ = 0;         // the last MoonLight packet, which outranks WLED's while it arrives
@@ -263,13 +288,19 @@ private:
         std::memcpy(peer_, srcIp, sizeof(peer_));   // whose audio this is
         const SenderOrder::Order o = ml ? order_.judge(srcIp, frame_.seq, lastRecvMs_, kFallbackMs) : SenderOrder::Order::New;   // judged by its own sender's numbers
         if (o != SenderOrder::Order::Repeat) rxHits_.add(frame_);   // a late frame's hits went in no other packet, so the next frame carries them
+        if (o == SenderOrder::Order::New) takeCount_++;
         return o == SenderOrder::Order::New;
     }
 
-    /// One packet to its format's `group`, or to the hosts. A steady 40 frames a second is a stream, so no broadcast copy on any network.
+    /// One packet to its format's `group`, or to the hosts.
     void sendPacket(const uint8_t* pkt, size_t n, const uint8_t group[4], bool unicast, uint16_t port) {
-        sendAddressed(unicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate,
-                      hosts_, hostCount_, group, [&](const uint8_t ip[4]) { sock_.sendToAddr(ip, port, pkt, n); });
+        forEachDestination(group, unicast, [&](const uint8_t ip[4]) { sock_.sendToAddr(ip, port, pkt, n); });
+    }
+
+    /// Where one format's packet goes, which the send and the network report share. A steady 40 frames a second is a stream, so no broadcast copy on any network.
+    template <class Fn>
+    void forEachDestination(const uint8_t group[4], bool unicast, Fn&& fn) const {
+        sendAddressed(unicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate, hosts_, hostCount_, group, fn);
     }
 
     /// Where a send goes, or why a unicast send reaches nobody.

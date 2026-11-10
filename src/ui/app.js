@@ -919,7 +919,7 @@ async function rebootDevice() {
 const NAV_GROUPS = [
     ["Control"],
     ["Layouts", "Effects", "Drivers"],                          // the light pipeline, in pipeline order
-    ["System", "File Manager", "Network", "Services", "Firmware"],
+    ["System", "File Manager", "Network", "Devices", "Services", "Firmware"],
 ];
 const NAV_ORDER = NAV_GROUPS.flat();
 
@@ -3548,7 +3548,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // to before). The flag flows through to both render paths via the opts object.
             if (ctrl.editable) list.dataset.editable = "true";
             buildListEntries(list, rows, details, new Set(),   // initial: nothing expanded
-                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                  moduleName: moduleName, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
             row.appendChild(list);
             break;
@@ -4420,6 +4420,410 @@ function buildListPads(container, rows, opts) {
     });
 }
 
+// A list drawn as a graph (ListSource::listAsGraph): each row a node, keyed by `ip` or else `name`,
+// colored by `type`, ringed when `self`, faded by its detail's age, and linked by an `edges` array of
+// {to, label}, the adjacency list. The linked nodes, this device among them, are placed by
+// Fruchterman-Reingold force-directed layout, hand-written: nodes repel, edges attract, a cooling
+// step limits each move, and positions are kept on the container, so a new device settles into the
+// picture rather than reshuffling it; this device sits fixed at the center. The nodes without a link
+// sit in a grid beneath, by name, so a swarm of idle devices reads as a list rather than a cloud.
+const GRAPH_W = 600, GRAPH_LINKED_H = 300, GRAPH_CELL_W = 120, GRAPH_CELL_H = 64;
+const GRAPH_MARGIN_X = GRAPH_CELL_W / 2, GRAPH_MARGIN_TOP = 24, GRAPH_MARGIN_BOTTOM = 48;   // a label fits inside
+const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its three label lines inside the cell
+// Each kind Discovery names its own color (devTypeStr); a kind it does not name takes a hashed one.
+const GRAPH_KIND_COLORS = { MoonLight: "var(--yellow)", WLED: "var(--accent)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg-muted)" };
+const GRAPH_COLORS = ["var(--accent)", "var(--green)", "var(--yellow)", "var(--red)", "var(--fg-muted)"];
+
+function graphHash(text) {
+    let h = 2166136261;   // FNV-1a, so a kind keeps its color and a node its seed spot
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    return h >>> 0;
+}
+
+// Place the nodes into `pos` and answer the picture's height: the linked ones by force in the top
+// area, the rest in rows of cells beneath it.
+function layoutGraph(nodes, links, pos) {
+    const linked = new Set(links.flatMap(([i, j]) => [i, j]));
+    nodes.forEach((node, i) => { if (node.self) linked.add(i); });
+    const force = [...linked];
+    const areaH = force.length > 1 ? GRAPH_LINKED_H : (force.length ? GRAPH_CELL_H + GRAPH_MARGIN_TOP : 0);
+    layoutForce(nodes, links, force, pos, areaH);
+    const idle = nodes.map((node, i) => i).filter(i => !linked.has(i))
+        .sort((a, b) => String(nodes[a].row.name ?? nodes[a].key).localeCompare(String(nodes[b].row.name ?? nodes[b].key)));
+    const cols = Math.floor(GRAPH_W / GRAPH_CELL_W);
+    idle.forEach((i, at) => {
+        pos.set(nodes[i].key, { x: GRAPH_CELL_W * (at % cols) + GRAPH_CELL_W / 2,
+                                y: areaH + GRAPH_CELL_H * Math.floor(at / cols) + GRAPH_CELL_DOT, idle: true });
+    });
+    return areaH + GRAPH_CELL_H * Math.ceil(idle.length / cols);
+}
+
+function layoutForce(nodes, links, members, pos, areaH) {
+    const n = members.length;
+    const cx = GRAPH_W / 2, cy = areaH / 2;
+    const inside = (p) => {
+        p.x = Math.min(GRAPH_W - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, p.x));
+        p.y = Math.min(areaH - GRAPH_MARGIN_BOTTOM, Math.max(GRAPH_MARGIN_TOP, p.y));
+    };
+    let fresh = 0;
+    for (const i of members) {
+        const key = nodes[i].key;
+        const p = pos.get(key);
+        if (p && !p.idle) { inside(p); continue; }
+        const h = graphHash(key);
+        pos.set(key, { x: cx + (h % 200) - 100, y: cy + ((h >>> 8) % 120) - 60 });
+        fresh++;
+    }
+    if (n < 2) { for (const i of members) if (nodes[i].self) pos.set(nodes[i].key, { x: cx, y: cy }); return; }
+    const k = 0.8 * Math.sqrt((GRAPH_W * areaH) / n);   // the ideal distance
+    // A settled picture with a newcomer or two needs few rounds; a fresh one more, fewer as it grows (O(n²) a round).
+    const rounds = fresh === 0 ? 0 : Math.max(20, Math.min(200, Math.floor(60000 / (n * n)) + 20));
+    const at = new Map(members.map((i, m) => [i, m]));
+    let heat = GRAPH_W / 8;
+    for (let r = 0; r < rounds; r++) {
+        const disp = members.map(() => ({ x: 0, y: 0 }));
+        for (let a = 0; a < n; a++) {
+            const pa = pos.get(nodes[members[a]].key);
+            for (let b = a + 1; b < n; b++) {
+                const pb = pos.get(nodes[members[b]].key);
+                let dx = pa.x - pb.x, dy = pa.y - pb.y;
+                const d = Math.max(0.5, Math.hypot(dx, dy));
+                const f = (k * k) / d;
+                dx /= d; dy /= d;
+                disp[a].x += dx * f; disp[a].y += dy * f;
+                disp[b].x -= dx * f; disp[b].y -= dy * f;
+            }
+        }
+        for (const [i, j] of links) {
+            const a = at.get(i), b = at.get(j);
+            const pa = pos.get(nodes[i].key), pb = pos.get(nodes[j].key);
+            let dx = pa.x - pb.x, dy = pa.y - pb.y;
+            const d = Math.max(0.5, Math.hypot(dx, dy));
+            const f = (d * d) / k;
+            dx /= d; dy /= d;
+            disp[a].x -= dx * f; disp[a].y -= dy * f;
+            disp[b].x += dx * f; disp[b].y += dy * f;
+        }
+        for (let a = 0; a < n; a++) {
+            const node = nodes[members[a]];
+            const p = pos.get(node.key);
+            if (node.self) { p.x = cx; p.y = cy; continue; }
+            disp[a].x += (cx - p.x) * 0.05;   // a little gravity, so a group not linked to this device stays in view
+            disp[a].y += (cy - p.y) * 0.05;
+            const d = Math.max(0.5, Math.hypot(disp[a].x, disp[a].y));
+            const step = Math.min(d, heat);
+            p.x += (disp[a].x / d) * step;
+            p.y += (disp[a].y / d) * step;
+            inside(p);
+        }
+        heat *= 0.95;
+    }
+}
+
+// The peers' own graphs, merged into this one: every node of the same kind as this device's own
+// node serves the same list at its `url`, so the page reads it from there, a few at a time, while
+// the map is on screen, again five seconds after the last round. A link one end reports and the
+// other, a peer that answered, does not, is drawn broken; a peer that does not answer, unreachable.
+const PEER_REFRESH_MS = 5000, PEER_TIMEOUT_MS = 3000, PEER_PARALLEL = 4;
+
+const graphKey = (row) => String(row.ip ?? row.name);
+
+async function fetchPeerGraph(url, opts) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), PEER_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${url.replace(/\/$/, "")}/api/modules/${encodeURIComponent(opts.moduleName)}`, { signal: ctl.signal });
+        if (!res.ok) return { state: "absent", rows: [] };   // it answers, but serves no such list: older firmware
+        const mod = await res.json();
+        const c = (mod.controls || []).find(x => x.name === opts.ctrlName);
+        if (!c) return { state: "absent", rows: [] };
+        const value = Array.isArray(c.value) ? c.value : [];
+        const detail = Array.isArray(c.detail) ? c.detail : [];
+        return { state: "ok", rows: value.map((r, i) => Object.assign({}, r, detail[i] || {})) };
+    } catch (_) {
+        return { state: "silent", rows: [] };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+function redrawGraph(container) {
+    const a = container._graphArgs;
+    const old = container.querySelector("svg.list-graph");
+    if (a && old) old.replaceWith(buildListGraph(container, a.rows, a.details, a.opts));
+}
+
+function refreshPeerGraphs(container) {
+    const a = container._graphArgs;
+    if (!a || !a.opts || container._peerFetching) return;
+    if (Date.now() - (container._peerAt || 0) < PEER_REFRESH_MS) return;
+    if (!container.isConnected || container.offsetParent === null) return;   // asked only while the map shows
+    const own = a.rows.map((r, i) => Object.assign({}, r, a.details[i] || {}));
+    const self = own.find(r => r.self);
+    if (!self) return;
+    const queue = own.filter(r => !r.self && r.type === self.type && r.url);
+    const peers = container._peerGraphs || (container._peerGraphs = new Map());
+    // A peer gone from this device's list takes its graph, and what only it saw, off the map.
+    const asked = new Set(queue.map(graphKey));
+    for (const key of [...peers.keys()]) if (!asked.has(key)) peers.delete(key);
+    container._peerFetching = true;
+    const worker = async () => {
+        for (let r = queue.shift(); r; r = queue.shift()) peers.set(graphKey(r), await fetchPeerGraph(r.url, a.opts));
+    };
+    Promise.all(Array.from({ length: Math.min(PEER_PARALLEL, queue.length) }, worker)).then(() => {
+        container._peerFetching = false;
+        container._peerAt = Date.now();
+        redrawGraph(container);
+        setTimeout(() => redrawGraph(container), PEER_REFRESH_MS);   // which asks again while the map still shows
+    });
+}
+
+function buildListGraph(container, rows, details, opts) {
+    const NS = "http://www.w3.org/2000/svg";
+    container._graphArgs = { rows, details, opts };   // what a peer round redraws from
+    const nodes = rows.map((item, i) => {
+        const row = Object.assign({}, item, details[i] || {});
+        return { row, key: graphKey(row), self: !!row.self };
+    });
+    const index = new Map(nodes.map((node, i) => [node.key, i]));
+    const peers = container._peerGraphs || new Map();
+    // A device a peer sees and this one does not joins the map, and a peer's own row adds what it runs and offers to its node.
+    for (const [, pg] of peers) {
+        for (const row of pg.rows) {
+            const key = graphKey(row);
+            if (index.has(key)) {
+                if (row.self) {
+                    const node = nodes[index.get(key)];
+                    node.row = Object.assign({}, node.row, { version: row.version, firmware: row.firmware, services: row.services });
+                }
+                continue;
+            }
+            index.set(key, nodes.length);
+            nodes.push({ row: Object.assign({}, row, { self: false }), key, self: false });
+        }
+    }
+    // Every graph's rows: this device's own, and each peer's, its own row among them.
+    const graphs = [nodes.map(n => n.row)];
+    for (const [, pg] of peers) if (pg.state === "ok") graphs.push(pg.rows);
+    // In a graph its own row's edges are what it sends, another row's what it receives from that row.
+    const owners = new Set(), received = new Set();
+    for (const g of graphs) {
+        const owner = g.find(r => r.self);
+        if (owner) owners.add(graphKey(owner));
+        for (const row of g) if (!row.self) for (const e of row.edges || []) received.add(`${graphKey(row)}|${e.to}|${String(e.label || "").split(" ")[0]}`);
+    }
+    const links = [];   // [from, to, label, broken]
+    const seen = new Set();
+    for (const senders of [true, false]) {   // a sender's report first, so its label wins
+        for (const g of graphs) {
+            for (const row of g) {
+                if (!!row.self !== senders) continue;
+                const i = index.get(graphKey(row));
+                for (const e of row.edges || []) {
+                    const j = index.get(String(e && e.to));
+                    if (i === undefined || j === undefined || i === j) continue;
+                    const id = `${graphKey(row)}|${e.to}|${String(e.label || "").split(" ")[0]}`;
+                    if (seen.has(id)) continue;
+                    seen.add(id);
+                    links.push([i, j, e.label || "", senders && owners.has(String(e.to)) && !received.has(id)]);
+                }
+            }
+        }
+    }
+    refreshPeerGraphs(container);
+    const pos = container._graphPos || (container._graphPos = new Map());
+    for (const key of [...pos.keys()]) if (!index.has(key)) pos.delete(key);   // a device gone takes its spot with it
+    const height = layoutGraph(nodes, links, pos);
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "list-graph");
+    svg.setAttribute("viewBox", `0 0 ${GRAPH_W} ${height}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", `${nodes.length} node${nodes.length === 1 ? "" : "s"}`);
+    for (const [i, j, label, broken] of links) {
+        const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
+        const line = document.createElementNS(NS, "line");
+        line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
+        line.setAttribute("x2", b.x); line.setAttribute("y2", b.y);
+        line.setAttribute("class", "graph-edge" + (broken ? " graph-edge-broken" : ""));
+        if (broken) {
+            const why = document.createElementNS(NS, "title");
+            why.textContent = "sent, but the receiver reports nothing arriving";
+            line.appendChild(why);
+        }
+        svg.appendChild(line);
+        if (label) {
+            const t = document.createElementNS(NS, "text");
+            t.setAttribute("x", (a.x + b.x) / 2); t.setAttribute("y", (a.y + b.y) / 2 - 3);
+            t.setAttribute("class", "graph-edge-label");
+            t.textContent = label;
+            svg.appendChild(t);
+        }
+    }
+    for (const node of nodes) {
+        const p = pos.get(node.key);
+        const g = document.createElementNS(NS, "g");
+        const age = rowAgeClass(node.row);
+        g.setAttribute("class", "graph-node" + (node.self ? " graph-self" : "") +
+                                (age === "age-stale" ? " graph-faded" : "") +
+                                (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
+        const kind = String(node.row.type ?? "");
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
+        dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_COLORS[graphHash(kind) % GRAPH_COLORS.length]);
+        g.appendChild(dot);
+        // Its name, then where it answers and what it runs, then what it offers, each line cut to its cell.
+        const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
+        const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
+        const lines = [[node.row.name ?? node.key, "graph-label"],
+                       [[where !== node.row.name ? where : "", node.row.version].filter(Boolean).join(" · "), "graph-sublabel"],
+                       [services, "graph-sublabel"]];
+        let y = p.y + 20;
+        for (const [line, cls] of lines) {
+            if (!line) continue;
+            const text = document.createElementNS(NS, "text");
+            text.setAttribute("x", p.x); text.setAttribute("y", y);
+            text.setAttribute("class", cls);
+            text.textContent = graphFit(line, cls === "graph-label" ? 18 : 22);
+            g.appendChild(text);
+            y += cls === "graph-label" ? 12 : 11;
+        }
+        const title = document.createElementNS(NS, "title");
+        title.textContent = [node.row.name, where, kind, node.row.version, node.row.firmware, services].filter(Boolean).join(" · ");
+        g.appendChild(title);
+        g.classList.add("graph-link");
+        g.addEventListener("click", () => openGraphNode(node.row, opts));
+        svg.appendChild(g);
+    }
+    return svg;
+}
+
+// A label cut to `max` characters with an ellipsis, so it stays within its cell; the tooltip has it whole.
+function graphFit(text, max) {
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+// A node's row in a popup: its detail, as the list would have shown it, and for a MoonLight
+// device the firmware it runs, the release it could run, and a button that installs it.
+function openGraphNode(row, opts) {
+    const dlg = document.createElement("dialog");
+    dlg.className = "graph-popup";
+    const head = document.createElement("form");
+    head.method = "dialog";
+    head.className = "graph-popup-head";
+    const title = document.createElement("span");
+    title.textContent = row.name ?? row.ip ?? "";
+    const close = document.createElement("button");
+    close.value = "close";
+    close.title = "close";
+    close.textContent = "✕";
+    head.append(title, close);
+    const detail = document.createElement("div");
+    detail.className = "list-detail";
+    fillListDetail(detail, row, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName));
+    dlg.append(head, detail);
+    if (row.type === "MoonLight") dlg.appendChild(buildPeerFirmware(row));
+    document.body.appendChild(dlg);
+    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });   // a click on the backdrop closes it
+    dlg.addEventListener("close", () => dlg.remove(), { once: true });
+    dlg.showModal();
+}
+
+// Where a device's API answers: the UI's own origin for the device serving it, its address for another.
+function peerBase(row) {
+    if (row.self) return location.origin;
+    return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
+}
+
+// A device's version and firmware: /api/system carries them; a device on older firmware has them
+// only in its state, on the Firmware and System cards. Null when it does not answer.
+async function peerFirmware(base) {
+    try {
+        const sys = await (await fetch(`${base}/api/system`)).json();
+        if (sys && sys.version) return { version: sys.version, firmware: sys.firmware };
+        const st = await (await fetch(`${base}/api/state`)).json();
+        const all = [];
+        const walk = (mods) => { for (const m of mods || []) { all.push(m); walk(m.children); } };
+        walk(st.modules);
+        const value = (type, name) => (all.find(m => m.type === type)?.controls || []).find(c => c.name === name)?.value;
+        const version = value("FirmwareUpdateModule", "appVersion");
+        return version ? { version, firmware: value("SystemModule", "firmware") } : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+// The release a device could move to and the image that installs it, by the same checks the
+// update badge makes for this device; url is null for a desktop, which installs from the release page.
+async function peerUpdate(dev) {
+    const asset = (rel, name) => (rel?.assets || []).find(a => a.name === name)?.browser_download_url ?? null;
+    const stable = await stableUpdate(dev, false);
+    if (stable) {
+        const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", false);
+        return { label: stable, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-${stable}.bin`) };
+    }
+    if ((parse(dev.version)?.prerelease.length || 0) === 0) return null;   // a stable device is not nudged toward a -dev build
+    const v = await devUpdate(dev, false);
+    if (!v) return null;
+    const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", false);
+    return { label: `latest (${v})`, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-v${v}.bin`) };
+}
+
+function buildPeerFirmware(row) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    const line = document.createElement("div");
+    line.textContent = "Firmware: reading…";
+    const note = document.createElement("div");
+    box.append(line, note);
+    const base = peerBase(row);
+    (async () => {
+        const fw = await peerFirmware(base);
+        if (!fw) { line.textContent = "Firmware: the device does not answer."; return; }
+        const isDesktop = !fw.firmware || fw.firmware === "unknown";
+        line.textContent = `Firmware: ${fw.version} · ${isDesktop ? "desktop" : fw.firmware}`;
+        const u = await peerUpdate({ version: fw.version, firmware: isDesktop ? null : fw.firmware, isDesktop });
+        if (!u) { note.textContent = "Up to date."; return; }
+        if (!u.url) { note.textContent = `${u.label} is available: a desktop installs it from the release page.`; return; }
+        note.textContent = `${u.label} is available.`;
+        const btn = document.createElement("button");
+        btn.className = "graph-popup-update";
+        btn.textContent = `Update to ${u.label}`;
+        armPressTwice(btn, () => startPeerUpdate(base, u, fw.version, note, btn), { armedText: "✓ " + btn.textContent });
+        box.appendChild(btn);
+    })();
+    return box;
+}
+
+// Hand the device the image's address, as its own Firmware card does, and watch it come back on a
+// new version. A device without TLS answers 501 and installs from its own Firmware card instead.
+async function startPeerUpdate(base, u, oldVersion, note, btn) {
+    btn.disabled = true;
+    note.textContent = `Starting the update to ${u.label}…`;
+    let res = null;
+    try {
+        res = await fetch(`${base}/api/firmware/url`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u.url }) });
+    } catch (_) { /* a reboot can cut the reply off; the watch below sees the outcome */ }
+    if (res && res.status === 501) {
+        note.textContent = "This device has no TLS: open its page and install from its Firmware card.";
+        return;
+    }
+    if (res && !res.ok && res.status !== 202) {
+        note.textContent = `Refused: ${await errorMessage(res)}`;
+        btn.disabled = false;
+        return;
+    }
+    note.textContent = "Installing: the device restarts when it is done…";
+    const deadline = Date.now() + 300000;
+    while (Date.now() < deadline) {
+        await fwSleep(3000);
+        const fw = await peerFirmware(base);
+        if (fw && fw.version !== oldVersion) { note.textContent = `Updated to ${fw.version}.`; return; }
+    }
+    note.textContent = "No new version after five minutes: open the device's page to see where it stands.";
+}
+
 function buildListEntries(container, rows, details, openSet, opts) {
     if (opts && opts.pads) { buildListPads(container, rows, opts); return; }
     const editable = !!(opts && opts.editable);
@@ -4430,6 +4834,8 @@ function buildListEntries(container, rows, details, openSet, opts) {
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
     const fieldHelp = listFieldHelp(moduleName, ctrlName);   // once per list, not per row
     container.replaceChildren();
+    // A graph replaces the rows: a node is a row, and a click opens what the row's detail would have shown.
+    if (opts && opts.graph && rows.length) { container.appendChild(buildListGraph(container, rows, details, opts)); return; }
     if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
         empty.className = "list-empty";
@@ -4690,10 +5096,8 @@ function fillListDetail(panel, detail, fieldHelp = {}, optionSets = {}) {
     for (const [k, v] of Object.entries(detail)) {
         const isScalarArray = Array.isArray(v) && v.every(e => typeof e !== "object");
         if (typeof v === "object" && !isScalarArray) continue;
-        if (k === "ageSec" && "cached" in detail) continue;   // present, whatever its value: one "last seen" row
-        const lastSeen = k === "ageSec" || k === "cached";
-        const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: k === "cached" ? "cached" : v,
-                       age: k.endsWith("Sec") };
+        const lastSeen = k === "ageSec";
+        const ctrl = { name: lastSeen ? "last seen" : k, type: "display", value: v, age: k.endsWith("Sec") };
         const el = createControl("", null, ctrl);
         controlHelp(el, rowFieldHelp(fieldHelp, lastSeen ? "ageSec" : k));
         panel.appendChild(el);
@@ -4712,12 +5116,10 @@ function ageBucketClass(sec) {
 }
 
 // Find a row's freshness CSS class from its first `*Sec` scalar field, or "" if it has
-// none. `self` is always "now" → fresh; a `cached` row (restored, not re-seen) is
-// unknown-age → no dot (the detail says "cached"). Generic over field names.
+// none; `self` is always "now", so fresh. Generic over field names.
 function rowAgeClass(item) {
     if (!item || typeof item !== "object") return "";
     if (item.self) return "age-fresh";
-    if (item.cached) return "";
     for (const [k, v] of Object.entries(item)) {
         if (k.endsWith("Sec") && typeof v === "number") return ageBucketClass(v);
     }
@@ -5345,7 +5747,7 @@ function updateModuleControls(mod) {
                 // would jump a long list back to the top mid-edit of a row further down.
                 const prevScroll = list.querySelector(".list-scroll")?.scrollTop ?? 0;
                 buildListEntries(list, rows, details, open,
-                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                      moduleName: mod.name, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
                 const newScroll = list.querySelector(".list-scroll");
                 if (newScroll) newScroll.scrollTop = prevScroll;
@@ -6896,7 +7298,7 @@ function renderMoonCloudStats(host, mod) {
 //
 // Polled on card build rather than streamed. A chat wants to feel live, but a device UI rebuilds
 // this card on every unrelated state push, so a socket per card would be a connection per render.
-// The refresh button is the honest version until MoonCloud Sync brings a real transport.
+// The refresh button is the honest version until MoonOrbit brings a real transport.
 // ---------------------------------------------------------------------------------------------
 // The gallery: presets and scripts people shared in MoonLight-Gallery, installed with a click.
 // The BROWSER fetches, as the script downloads do: raw.githubusercontent.com answers any page, so the device needs no internet of its own.
