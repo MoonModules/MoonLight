@@ -348,6 +348,8 @@ void getMacAddress(uint8_t mac[6]) {
     mac[2] = lo >> 24; mac[3] = lo >> 16; mac[4] = lo >> 8; mac[5] = lo;
 }
 
+bool arpLookup(const uint8_t[4], uint8_t[6]) { return false; }   // QNEthernet keeps its lwIP table private
+
 const char* macString() {
     static char buf[18] = {};
     if (!buf[0]) {

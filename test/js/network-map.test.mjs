@@ -57,6 +57,15 @@ test("every kind Discovery names has a color of its own", () => {
     assert.equal(new Set(labels.map(l => GRAPH_KIND_COLORS[l])).size, labels.length, "no two kinds share one");
 });
 
+test("a WLED takes its flavor's color once its info says which, and the generic one until then", () => {
+    const { graphKind } = load(["graphKind"]);
+    assert.equal(graphKind({ type: "WLED", flavor: "WLED-MM" }), "WLED-MM");
+    assert.equal(graphKind({ type: "WLED", flavor: "WLED" }), "WLED");
+    assert.equal(graphKind({ type: "WLED" }), "generic", "a WLED-MM that does not answer never shows as a plain WLED");
+    assert.equal(graphKind({ type: "Tasmota" }), "Tasmota");
+    assert.equal(graphKind({}), "generic");
+});
+
 test("a peer gone from this device's list takes its merged graph off the map", () => {
     const fetched = [];
     const { refreshPeerGraphs } = load(["refreshPeerGraphs"],
@@ -176,38 +185,64 @@ test("a line shows its protocol as an emoji, the longest protocol name matched, 
     assert.equal(graphTrafficLabel("Zigbee 3/s"), "Zigbee 3/s");
 });
 
-test("a board MoonBase holds shows a lifebuoy for its lights, and Install MoonLight offers only its chip's firmware", () => {
-    const { graphNodeLines, chipFirmwares } = load([...LINE_FNS, "chipFirmwares"]);
+test("a board MoonBase holds shows a lifebuoy for its lights", () => {
+    const { graphNodeLines } = load(LINE_FNS);
     assert.deepEqual(graphNodeLines({ name: "MM-Olimex", ip: "192.168.1.207", type: "MoonBase" }, "k").map(([t]) => t),
                      ["MM-Olimex", "\u{1F6DF} MoonBase"]);
-    const release = { assets: ["firmware-esp32-v7.1.0-dev.81.bin", "firmware-esp32-v7.1.0-dev.81-bootloader.bin", "firmware-esp32-v7.1.0-dev.81-partition-table.bin",
-                               "firmware-esp32-eth-v7.1.0-dev.81.bin", "firmware-esp32c3-v7.1.0-dev.81.bin", "firmware-esp32s3-n16r8-v7.0.0.bin",
-                               "shared-migrate-esp32.bin"].map(name => ({ name, browser_download_url: `u/${name}` })) };
-    assert.deepEqual(chipFirmwares(release, "esp32").map(f => f.variant), ["esp32", "esp32-eth"],
-                     "each variant once: not the C3's or the S3's, nor the bootloader and table a serial flash takes");
-    assert.deepEqual(chipFirmwares(release, "esp32s3").map(f => f.variant), ["esp32s3-n16r8"]);
-    assert.equal(chipFirmwares(release, "esp32")[0].url, "u/firmware-esp32-v7.1.0-dev.81.bin");
 });
 
-test("a WLED node's version is read once from its /json/info, and shows once it answers", async () => {
-    const asked = [];
-    const { fillWledVersions } = load(["fillWledVersions"],
-        "const fetch = (u) => { globalThis.__asked.push(u); return Promise.resolve({ json: () => Promise.resolve({ ver: '0.15.0' }) }); };\n" +
-        "function redrawGraph() { globalThis.__redrawn = true; }");
-    globalThis.__asked = asked;
-    const container = {};
-    const nodes = [{ key: "10.0.0.5", row: { type: "WLED", ip: "10.0.0.5" } }, { key: "10.0.0.6", row: { type: "MoonLight", ip: "10.0.0.6" } }];
-    fillWledVersions(container, nodes, 1000);
-    fillWledVersions(container, nodes, 2000);   // the next draw within the minute does not ask again
-    await new Promise(r => setTimeout(r, 0));
-    assert.deepEqual(asked, ["http://10.0.0.5/json/info"], "only the WLED, and once");
-    assert.equal(globalThis.__redrawn, true);
-    fillWledVersions(container, nodes, 3000);
-    assert.equal(nodes[0].row.version, "0.15.0");
-    // A WLED that did not answer is asked again after a minute.
-    const silent = { _wledVersions: new Map([["10.0.0.7", { at: 0 }]]) };
-    fillWledVersions(silent, [{ key: "10.0.0.7", row: { type: "WLED", ip: "10.0.0.7" } }], 30000);
-    assert.equal(asked.length, 1, "not within the minute");
-    fillWledVersions(silent, [{ key: "10.0.0.7", row: { type: "WLED", ip: "10.0.0.7" } }], 61000);
-    assert.equal(asked.at(-1), "http://10.0.0.7/json/info", "again after it");
+test("a WLED offers Update to MoonLight for a chip MoonLight builds for, its migration image from the installer's mirror", () => {
+    const installerUrl = src.split("\n").find(l => l.startsWith("const INSTALLER_URL"));
+    const { wledChip, migrateImageUrl, wledFamily } = load(["wledChip", "migrateImageUrl", "wledFamily"], installerUrl);
+    assert.equal(wledChip({ arch: "esp32-c3" }), "esp32c3");
+    assert.equal(wledChip({ arch: "esp32" }), "esp32");
+    assert.equal(wledChip({ arch: "esp32-p4" }), "esp32p4");
+    assert.equal(wledChip({ arch: "esp8266" }), null, "a chip MoonLight does not build for");
+    assert.equal(wledChip({}), null);
+    assert.equal(migrateImageUrl("latest", "esp32"), "https://moonmodules.org/MoonLight/install/releases/latest/shared-migrate-esp32.bin");
+    assert.equal(wledFamily({ e32model: "ESP32-P4 rev.301" }, "esp32p4"), "esp32p4rev3", "a P4 from revision 3 takes its own image");
+    assert.equal(wledFamily({ e32model: "ESP32-P4 rev.103" }, "esp32p4"), "esp32p4", "a revision-1 P4 takes the chip's");
+    assert.equal(wledFamily({}, "esp32p4"), "esp32p4", "no chip model: the chip's image, which a revision-3 P4 refuses unwritten");
+    assert.equal(wledFamily({ e32model: "ESP32-S3 rev.2" }, "esp32s3"), "esp32s3");
 });
+
+test("a node's popup lists its flavor as its type, and as its url the .local address a MoonLight board answers on", () => {
+    const { popupFields } = load(["popupFields"]);
+    assert.deepEqual(popupFields({ name: "WLED-Troy", ip: "192.168.1.223", type: "WLED", url: "http://192.168.1.223/", flavor: "WLED-MM" }),
+                     { name: "WLED-Troy", ip: "192.168.1.223", type: "WLED-MM" }, "the ip links to the device, so the same url goes");
+    assert.equal(popupFields({ name: "ML-olimex", ip: "192.168.1.207", type: "MoonLight", url: "http://192.168.1.207/" }).url, "http://ML-olimex.local/");
+    assert.equal(popupFields({ name: "m4-pc", ip: "192.168.1.147", type: "MoonLight", port: 8080, url: "http://192.168.1.147:8080/" }).url, undefined,
+                 "a desktop serves on a port and answers no mDNS");
+    assert.equal(popupFields({ name: "my lights", ip: "192.168.1.9", type: "MoonLight" }).url, undefined, "a name that is no hostname");
+});
+
+test("a WLED on Ethernet hears whether the move carries its wiring over or brings it back on WiFi", () => {
+    const mapped = src.split("\n").find(l => l.startsWith("const WLED_ETHERNET_MAPPED"));
+    const { wledEthernetNote } = load(["wledEthernetNote"], mapped);
+    assert.equal(wledEthernetNote(0), "", "a WLED on WiFi");
+    assert.equal(wledEthernetNote(undefined), "", "a WLED that did not answer /json/cfg");
+    assert.match(wledEthernetNote(4), /comes back on the cable/, "the QuinLED wiring, the Olimex Gateway's");
+    assert.match(wledEthernetNote(7), /saved WiFi/, "the Ethernet Kit's IP101");
+    assert.match(wledEthernetNote(11), /saved WiFi/, "a board WLED and WLED-MM number differently");
+});
+
+test("the map's list of carried WLED Ethernet boards is the migration's table: the rows of kWledEthernet with a PHY", () => {
+    const header = readFileSync(new URL("../../src/core/util/WledNetworks.h", import.meta.url), "utf8");
+    const table = header.slice(header.indexOf("kWledEthernet[] = {"), header.indexOf("};", header.indexOf("kWledEthernet[] = {")));
+    const carried = [...table.matchAll(/\{(\d+),[^}]*\},\s*\/\/ (\d+) /g)].filter(m => m[1] !== "0").map(m => Number(m[2]));
+    const listed = JSON.parse(src.split("\n").find(l => l.startsWith("const WLED_ETHERNET_MAPPED")).replace(/^[^[]*/, "").replace(/;\s*$/, ""));
+    assert.deepEqual(listed, carried);
+});
+
+test("the MD5 ESPHome asks for before its update matches RFC 1321's own vectors and Node's on a megabyte", async () => {
+    const { md5Hex } = load(["md5Hex"]);
+    const enc = (t) => new TextEncoder().encode(t);
+    assert.equal(md5Hex(enc("")), "d41d8cd98f00b204e9800998ecf8427e");
+    assert.equal(md5Hex(enc("abc")), "900150983cd24fb0d6963f7d28e17f72");
+    assert.equal(md5Hex(enc("message digest")), "f96b697d7cb7938d525a2f31aaf161d0");
+    assert.equal(md5Hex(enc("12345678901234567890123456789012345678901234567890123456789012345678901234567890")), "57edf4a22be3c955ac49da2e2107b67a");
+    const { createHash } = await import("node:crypto");
+    const big = new Uint8Array(1037584).map((_, i) => (i * 2654435761) >>> 24);   // a migration image's size, any bytes
+    assert.equal(md5Hex(big), createHash("md5").update(big).digest("hex"));
+});
+

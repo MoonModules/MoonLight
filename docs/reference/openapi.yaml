@@ -445,6 +445,23 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
 
+  /api/relay/esphome:
+    post:
+      tags: [Firmware]
+      operationId: relayEsphome
+      summary: Hands the uploaded image on to an ESPHome device through ESPHome's own update protocol (TCP 3232), the body passed through as it arrives.
+      parameters:
+        - { name: host, in: query, required: true, description: "The ESPHome device's IPv4 address.", schema: { type: string, format: ipv4 } }
+        - { name: md5, in: query, required: true, description: "The image's MD5, which ESPHome asks for before the image.", schema: { type: string, pattern: "^[0-9a-f]{32}$" } }
+      requestBody: { $ref: "#/components/requestBodies/Image" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+
   /api/firmware/moonbase:
     post:
       tags: [Firmware]

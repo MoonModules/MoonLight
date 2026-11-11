@@ -203,9 +203,10 @@ def main():
             print(f"  build it: {build_cmd}")
             return 1
         mb_built = mb_bin.stat().st_mtime
+        # moonbase/migrate/ is the migration image's own project, which MoonBase does not compile.
         mb_newest = max((f.stat().st_mtime for f in (ROOT / "moonbase").rglob("*")
                          if f.is_file() and f.suffix in SOURCE_SUFFIXES
-                         and not SKIP_PARTS.intersection(f.parts)), default=0)
+                         and not SKIP_PARTS.intersection(f.parts) and not f.is_relative_to(ROOT / "moonbase" / "migrate")), default=0)
         if mb_newest > mb_built:
             record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a moonbase/ source is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
             print(f"MoonBase image for {args.firmware} is STALE: a moonbase/ source is newer.")

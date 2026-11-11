@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# dependencies = ["pyserial"]
+# dependencies = ["pyserial", "littlefs-python"]
 # ///
 """Test the over-the-air migration from WLED to MoonLight on a USB-connected bench board, a power cut at every step.
 
@@ -33,6 +33,9 @@ import time
 import urllib.request
 from pathlib import Path
 
+import json
+
+import littlefs
 import serial
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -41,7 +44,11 @@ from build_esp32 import find_idf, idf_env   # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 # What a WLED device of each chip ships with: the release app, the bootloader of the Arduino core WLED 0.15.0 builds that chip on, where the
-# chip's ROM looks for that bootloader, and the flash speed it runs at. The classic ESP32 builds on core 1.0.6.4 (ESP-IDF 3.3), the C3 on 2.0.9.
+# chip's ROM looks for that bootloader, the flash it runs (speed and size), WLED's table and its filesystem's span, erased so WLED starts afresh.
+# The classic ESP32 builds on core 1.0.6.4 (ESP-IDF 3.3), the C3 and the S3 on 2.0.9; the S3's bootloader comes from WLED's web installer.
+WLED_4MB = {"table": ROOT / "esp32" / "partitions" / "wled_4mb_1mb_fs.csv", "fs": ("0x310000", "0xf0000"), "flash_size": "4MB"}
+# The bootloader's header always says DIO, as ESP-IDF writes it: the boot ROM reads the bootloader before anything sets the flash chip's quad-enable bit, and the bootloader switches to QIO itself.
+BOOTLOADER_MODE = "dio"
 WLED = {
     "esp32": {
         "app": "https://github.com/wled/WLED/releases/download/v0.15.0/WLED_0.15.0_ESP32.bin",
@@ -49,6 +56,7 @@ WLED = {
         "bootloader_at": "0x1000",
         "flash_freq": "40m",
         "baud": "460800",   # a USB-serial bridge, which does not hold 921600 as the C3's own USB does
+        **WLED_4MB,
     },
     "esp32c3": {
         "app": "https://github.com/wled/WLED/releases/download/v0.15.0/WLED_0.15.0_ESP32-C3.bin",
@@ -56,9 +64,23 @@ WLED = {
         "bootloader_at": "0x0",
         "flash_freq": "80m",
         "baud": "921600",
+        **WLED_4MB,
+    },
+    # The 16 MB build with octal PSRAM, an N16R8 board's: its 16 MB table.
+    "esp32s3": {
+        "app": "https://github.com/wled/WLED/releases/download/v0.15.0/WLED_0.15.0_ESP32-S3_16MB_opi.bin",
+        # WLED's web installer's own S3 bootloader for quad flash, whose flash size the write sets.
+        "bootloader_bin": "https://install.wled.me/bin/boot/bootloaders/esp32-s3/bootloader_s3.bin",
+        "bootloader_at": "0x0",
+        "flash_freq": "80m",
+        "baud": "921600",
+        "table": ROOT / "esp32" / "partitions" / "wled_16mb_9mb_fs.csv",
+        "fs": ("0x610000", "0x9e0000"),
+        "flash_size": "16MB",
+        # This board's radio browns out at full power, so WLED boots with its own TX power setting at 8.5 dBm (wifi_power_t 34), written into its config.
+        "txpwr": 34,
     },
 }
-WLED_TABLE = ROOT / "esp32" / "partitions" / "wled_4mb_1mb_fs.csv"
 PAUSES = 5
 
 
@@ -100,11 +122,11 @@ class Bench:
                 print(f"==> downloading {url}")
                 urllib.request.urlretrieve(url, path)
         if not boot.exists():
-            self.esptool("elf2image", "--flash-mode", "dio", "--flash-freq", spec["flash_freq"],
-                         "--flash-size", "4MB", "-o", str(boot), str(elf))
+            self.esptool("elf2image", "--flash-mode", BOOTLOADER_MODE, "--flash-freq", spec["flash_freq"],
+                         "--flash-size", spec["flash_size"], "-o", str(boot), str(elf))
         if not table.exists():
             gen = self.idf / "components" / "partition_table" / "gen_esp32part.py"
-            if subprocess.run([self.py, str(gen), str(WLED_TABLE), str(table)], env=self.env).returncode:
+            if subprocess.run([self.py, str(gen), "--flash-size", spec["flash_size"], str(spec["table"]), str(table)], env=self.env).returncode:
                 fail("the WLED partition table did not generate")
         return app, boot, table
 
@@ -138,17 +160,38 @@ class Bench:
                         f"http://{self.ip}/update"])
 
     # The board as a WLED device ships: WLED's images, an empty app choice and an empty filesystem, joined to the WiFi.
+    # WLED's filesystem holding its own config, cfg.json and wsec.json: our network, and the TX power the board needs, so WLED boots on the network at that power.
+    # The LittleFS settings are those of the Arduino core WLED's S3 build runs (2.0.9): 4 KB blocks, 128-byte reads and writes, 64-character names, on-disk version 2.0.
+    def wled_config_image(self, txpwr: int) -> Path:
+        from host_wifi import get_host_wifi
+        ssid, password = get_host_wifi()
+        if not ssid or not password:
+            fail("no host WiFi credentials: run moondeck/build/host_wifi.py first")
+        spec = WLED[self.chip]
+        fs = littlefs.LittleFS(block_size=4096, block_count=int(spec["fs"][1], 16) // 4096, read_size=128, prog_size=128,
+                               lookahead_size=128, cache_size=512, block_cycles=512, name_max=64, disk_version=0x00020000)
+        network = {"ssid": ssid, "pskl": len(password), "psk": password, "ip": [0, 0, 0, 0], "gw": [0, 0, 0, 0], "sn": [255, 255, 255, 0]}
+        with fs.open("/cfg.json", "w") as f:
+            f.write(json.dumps({"rev": [1, 0], "nw": {"ins": [network]}, "wifi": {"txpwr": txpwr}}, separators=(",", ":")))   # compact, as WLED writes it
+        with fs.open("/wsec.json", "w") as f:
+            f.write(json.dumps({"nw": {"ins": [{"psk": password}]}}, separators=(",", ":")))
+        image = self.cache / "wled-fs.bin"   # holds the WiFi password: build/ is ignored by git, and the next run overwrites it
+        image.write_bytes(fs.context.buffer)
+        return image
+
     def as_wled(self, files: tuple[Path, Path, Path], self_update: bool) -> None:
         app, boot, table = files
         spec = WLED[self.chip]
+        config = [spec["fs"][0], str(self.wled_config_image(spec["txpwr"]))] if "txpwr" in spec else []
         self.esptool("--port", self.port, "-b", spec["baud"], "erase-region", "0xe000", "0x2000")
-        self.esptool("--port", self.port, "-b", spec["baud"], "erase-region", "0x310000", "0xf0000")
-        self.esptool("--port", self.port, "-b", spec["baud"], "write-flash", "--flash-mode", "dio",
-                     "--flash-freq", spec["flash_freq"], "--flash-size", "4MB",
-                     spec["bootloader_at"], str(boot), "0x8000", str(table), "0x10000", str(app))
+        self.esptool("--port", self.port, "-b", spec["baud"], "erase-region", *spec["fs"])
+        self.esptool("--port", self.port, "-b", spec["baud"], "write-flash", "--flash-mode", BOOTLOADER_MODE,
+                     "--flash-freq", spec["flash_freq"], "--flash-size", spec["flash_size"],
+                     spec["bootloader_at"], str(boot), "0x8000", str(table), "0x10000", str(app), *config)
         time.sleep(3)
+        wait = ["--wait-provisioned", "30"] if config else []   # WLED joins from the config written into it
         r = subprocess.run(["uv", "run", str(ROOT / "moondeck" / "build" / "improv_provision.py"),
-                            "--port", self.port], cwd=ROOT, capture_output=True, text=True)
+                            "--port", self.port, *wait], cwd=ROOT, capture_output=True, text=True)
         url = next((line.split("provisioned:", 1)[1].strip() for line in r.stdout.splitlines()
                     if "provisioned:" in line), "")
         self.ip = url.removeprefix("http://").strip("/")
@@ -157,6 +200,11 @@ class Bench:
             fail("WLED did not report an address over Improv")
         if self.wait_for("WLED", 40) != "WLED":
             fail(f"WLED is not answering at {self.ip}")
+        try:   # what WLED runs with, as it saved it: its TX power among it
+            with urllib.request.urlopen(f"http://{self.ip}/json/cfg", timeout=5) as r:
+                print(f"==> WLED's TX power setting: {json.loads(r.read()).get('wifi', {}).get('txpwr')}")
+        except Exception as e:
+            print(f"==> WLED's config did not read: {e}")
         if self_update:   # WLED then runs from app1, so the image lands in app0, where MoonBase goes
             self.upload(app)
             time.sleep(5)

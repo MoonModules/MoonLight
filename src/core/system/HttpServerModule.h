@@ -5,6 +5,7 @@
 #include "core/util/ScratchBuffer.h"   // leafHashes_: the growable diff-on-the-wire value-hash cache
 #include "core/util/BinaryBroadcaster.h"
 #include "core/util/JsonSink.h"   // walkPatch_ holds the second's gathered patch between ticks
+#include "core/util/EsphomeOta.h"   // a relay slot speaks ESPHome's update protocol to the device it hands an image
 #include "platform/platform.h"
 
 #include <array>
@@ -404,10 +405,10 @@ private:
 
     /// Every upload, a firmware image among them, and every request whose body comes after its headers is read here across ticks, a bounded slice at a time. Neither a large file nor a slow or lossy client holds the render loop.
     struct FileTransfer {
-        enum class Kind : uint8_t { Upload, Firmware, Request };
+        enum class Kind : uint8_t { Upload, Firmware, Request, Relay };
         bool active = false;
         Kind kind = Kind::Upload;
-        bool refused = false;              // firmware: the writer refused the image, so the rest of the body is read and dropped before the answer
+        bool refused = false;              // firmware or relay: the writer or the device refused the image, so the rest of the body is read and dropped before the answer
         platform::OtaTarget target = platform::OtaTarget::App;
         platform::TcpConnection conn;
         platform::FsWriteStream wstream;   // valid for an upload
@@ -419,6 +420,11 @@ private:
         size_t windowBytes = 0;            // body bytes moved in it
         bool waiting = false;              // an upload's whole body is in and waits for a reader of its file
         uint32_t waitSinceMs = 0;          // since then
+        platform::TcpConnection peer;      // relay: the ESPHome device the body goes on to
+        esphomeota::Client esp;            // relay: its update protocol
+        bool peerUp = false;               // relay: connected
+        size_t bufAt = 0;                  // relay: how much of buf's bufLen bytes went on
+        uint32_t lastMoveMs = 0;           // relay: the last byte moved either way, which the stall guard reads
     };
     static constexpr int kTransferSlots = 2;
     static constexpr size_t kTransferBufBytes = 4096;
@@ -441,6 +447,24 @@ private:
     void driveTransfers();
     /// One upload slot's bounded chunk: socket to storage or to the firmware writer, then the rate guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
+    /// A relay slot's step: the ESPHome device's answers in, the handshake out, then the browser's body on to the device, a buffer at a time.
+    bool driveRelay(FileTransfer& t, uint32_t now);
+    /// End a relay the device refused or closed with the device's reason and error byte as a 502, once the browser's body is in.
+    bool endRelayFailed(FileTransfer& t, uint32_t now);
+    /// A refused relay's step: the rest of the browser's body read and dropped, then the answer endRelayFailed kept.
+    bool drainRelay(FileTransfer& t, uint32_t now);
+    /// Whether the relay's connection to the ESPHome device is up; false while it is pending, and false once a refusal or a timeout ended the relay.
+    bool relayConnected(FileTransfer& t, uint32_t now);
+    /// The device's answers in and the handshake bytes due out; false once the device closed its connection.
+    bool relayHandshake(FileTransfer& t, bool& progressed);
+    /// The next piece of the browser's body on to the device; false once the browser left, the relay ended.
+    bool relayImage(FileTransfer& t, bool& progressed);
+    /// How a relay step ends: the device's verdict, its refusal or closing, a stall, or on to the next tick.
+    bool relayVerdict(FileTransfer& t, uint32_t now, bool peerOpen, bool progressed);
+    /// End a relay with `status` and `body` to the browser.
+    bool endRelay(FileTransfer& t, int status, const char* body);
+    /// Hand the uploaded image on to the ESPHome device at `host` (`POST /api/relay/esphome?host=&md5=`): its update protocol, the body passed through as it comes.
+    void handleRelay(platform::TcpConnection& conn, const char* query, const char* initialBody, size_t initialLen, size_t contentLen);
     /// Whether a send holds `path` open: LittleFS refuses to replace an open file, so an upload of it commits once this is false.
     bool sendingFile(const char* path) const;
     /// Whether an upload of `path` waits to commit, during which a new read of it answers 503 so readers cannot starve the write.

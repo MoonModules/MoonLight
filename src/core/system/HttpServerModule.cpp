@@ -8,6 +8,7 @@
 #include "core/module/StateDocument.h"   // PATCH /api/state applies a document through it
 #include "core/util/hex.h"
 #include "core/util/HttpHead.h"
+#include "core/util/Ipv4.h"   // the relay's target address
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/parse.h"
@@ -169,6 +170,7 @@ HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpCon
 
 void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
     if (closeConn) t.conn.close();
+    t.peer.close();   // a relay's ESPHome device, however the relay ended
     t.active = false;
     t.waiting = false;
     t.wstream = platform::FsWriteStream{};
@@ -297,7 +299,8 @@ void HttpServerModule::driveTransfers() {
         if (!t.active) continue;
         for (;;) {
             const uint32_t now = platform::millis();
-            const bool progressed = t.kind == FileTransfer::Kind::Request ? driveRequest(t, now) : driveUpload(t, now);
+            const bool progressed = t.kind == FileTransfer::Kind::Request ? driveRequest(t, now)
+                                  : t.kind == FileTransfer::Kind::Relay ? driveRelay(t, now) : driveUpload(t, now);
             if (!t.active) break;           // finished or failed this chunk
             if (!progressed) break;         // no data moved: nothing more to do until next tick
             if (now - budgetStart >= kTransferTickBudgetMs) break;
@@ -428,6 +431,7 @@ static bool routeModuleName(const char* segment, char (&out)[MoonModule::kNameLe
 static bool isStreamingUpload(const char* req) {
     return std::strncmp(req, "POST /api/file", 14) == 0 ||
            std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
+           std::strncmp(req, "POST /api/relay/esphome", 23) == 0 ||
            // The trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
            std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
 }
@@ -669,6 +673,11 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
                 return;
             }
             handleFirmwareUpload(conn, platform::OtaTarget::MoonBase, body, initialLen, static_cast<size_t>(contentLen));
+        } else if (std::strcmp(path, "/api/relay/esphome") == 0 && body) {
+            // The map moving an ESPHome device to MoonLight: the browser cannot speak ESPHome's update protocol, so this device does, passing the image through.
+            const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleRelay(conn, queryStart ? queryStart + 1 : "", body, initialLen, static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/firmware/upload") == 0 && body) {
             // OTA from an uploaded .bin body: the browser POSTs the image to the device, which streams it into the OTA partition like /api/file.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -1076,6 +1085,125 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platf
     t->windowBytes = 0;
     t->active = true;
     t->conn = std::move(conn);
+}
+
+namespace {
+// The relay's query, `host=<dotted quad>&md5=<32 hex digits>`, into `host`, `ip` and `md5`; false when either is missing or malformed.
+bool parseRelayQuery(const char* query, char (&host)[16], uint8_t (&ip)[4], char (&md5)[33]) {
+    const char* h = std::strstr(query, "host=");
+    const char* m = std::strstr(query, "md5=");
+    if (!h || !m) return false;
+    std::sscanf(h + 5, "%15[0-9.]", host);
+    std::sscanf(m + 4, "%32[0-9a-f]", md5);
+    return parseDottedQuad(host, ip) && std::strlen(md5) == 32;
+}
+}  // namespace
+
+void HttpServerModule::handleRelay(platform::TcpConnection& conn, const char* query, const char* initialBody, size_t initialLen, size_t contentLen) {
+    char host[16] = {}, md5[33] = {};
+    uint8_t ip[4];
+    if (!query || !parseRelayQuery(query, host, ip, md5) || contentLen == 0) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"a host address and the image's 32-digit MD5 are needed\"}");
+        return;
+    }
+    FileTransfer* t = claimTransfer(conn);
+    if (!t) return;
+    t->kind = FileTransfer::Kind::Relay;
+    t->peerUp = false;
+    t->refused = false;
+    if (!t->peer.connectStart(host, esphomeota::kPort)) {
+        sendResponse(conn, 502, "application/json", "{\"error\":\"the ESPHome device is not reachable\"}");
+        finishTransfer(*t, true);
+        return;
+    }
+    t->esp.begin(static_cast<uint32_t>(contentLen), md5);
+    const size_t initial = initialLen < contentLen ? initialLen : contentLen;   // the bytes that came with the request go on first
+    std::memcpy(t->buf, initialBody, initial);
+    t->bufLen = initial;
+    t->bufAt = 0;
+    t->remaining = contentLen - initial;
+    t->lastMoveMs = platform::millis();
+    t->windowStartMs = t->lastMoveMs;
+    t->windowBytes = 0;
+    t->active = true;
+    t->conn = std::move(conn);
+}
+
+bool HttpServerModule::endRelay(FileTransfer& t, int status, const char* body) {
+    sendResponse(t.conn, status, "application/json", body);
+    finishTransfer(t, true);
+    return false;
+}
+
+bool HttpServerModule::endRelayFailed(FileTransfer& t, uint32_t now) {
+    const bool refused = t.esp.state() == esphomeota::Client::State::Failed;
+    // The answer waits in the slot's path area while the rest of the body is read and dropped, so it reaches a browser still sending rather than a reset.
+    char* msg = uploadPath(t);
+    std::snprintf(msg, kUploadPathBytes, "{\"error\":\"%s (0x%02x)\"}", refused ? t.esp.error() : "the ESPHome device closed the connection", t.esp.errorCode());
+    if (t.remaining == 0) return endRelay(t, 502, msg);
+    t.peer.close();
+    t.refused = true;
+    t.lastMoveMs = now;
+    return false;
+}
+
+bool HttpServerModule::drainRelay(FileTransfer& t, uint32_t now) {
+    const int r = t.remaining ? t.conn.read(reinterpret_cast<uint8_t*>(t.buf), t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes) : 0;
+    if (r > 0) { t.remaining -= static_cast<size_t>(r); t.lastMoveMs = now; }
+    if (t.remaining == 0) return endRelay(t, 502, uploadPath(t));
+    if (r == 0 || now - t.lastMoveMs > kTransferStallMs) finishTransfer(t, true);   // the browser left, or stopped sending
+    return r > 0;
+}
+
+bool HttpServerModule::relayConnected(FileTransfer& t, uint32_t now) {
+    const auto r = t.peer.connectPoll();
+    if (r == platform::TcpConnection::ConnectResult::Failed) return endRelay(t, 502, "{\"error\":\"the ESPHome device refused its update port\"}");
+    if (r == platform::TcpConnection::ConnectResult::Pending) return now - t.lastMoveMs > kTransferStallMs ? endRelay(t, 504, "{\"error\":\"the ESPHome device did not answer\"}") : false;
+    t.peerUp = true;
+    return true;
+}
+
+bool HttpServerModule::relayHandshake(FileTransfer& t, bool& progressed) {
+    uint8_t in[16];
+    int n;
+    while ((n = t.peer.read(in, sizeof(in))) > 0) {   // its answers, a byte each
+        for (int i = 0; i < n; i++) t.esp.received(in[i]);
+        progressed = true;
+    }
+    size_t want = 0;
+    const uint8_t* out = t.esp.pending(want);
+    const int w = want ? t.peer.writeSome(out, want) : 0;
+    if (w > 0) { t.esp.sent(static_cast<size_t>(w)); progressed = true; }
+    return n != 0;
+}
+
+bool HttpServerModule::relayImage(FileTransfer& t, bool& progressed) {
+    if (t.bufAt == t.bufLen && t.remaining > 0) {   // the next piece of the browser's body
+        const int r = t.conn.read(reinterpret_cast<uint8_t*>(t.buf), t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes);
+        if (r == 0) { finishTransfer(t, true); return false; }   // the browser left mid-image
+        if (r > 0) { t.bufLen = static_cast<size_t>(r); t.bufAt = 0; t.remaining -= static_cast<size_t>(r); moved(t, static_cast<size_t>(r)); }
+    }
+    const int w = t.bufAt < t.bufLen ? t.peer.writeSome(reinterpret_cast<const uint8_t*>(t.buf) + t.bufAt, t.bufLen - t.bufAt) : 0;
+    if (w > 0) { t.bufAt += static_cast<size_t>(w); t.esp.dataSent(static_cast<size_t>(w)); progressed = true; }
+    return true;
+}
+
+bool HttpServerModule::driveRelay(FileTransfer& t, uint32_t now) {
+    if (t.refused) return drainRelay(t, now);
+    if (!t.peerUp && !relayConnected(t, now)) return false;
+    bool progressed = false;
+    const bool peerOpen = relayHandshake(t, progressed);
+    if (t.esp.wantsData() && !relayImage(t, progressed)) return false;
+    return relayVerdict(t, now, peerOpen, progressed);
+}
+
+bool HttpServerModule::relayVerdict(FileTransfer& t, uint32_t now, bool peerOpen, bool progressed) {
+    using esphomeota::Client;
+    if (t.esp.state() == Client::State::Done) return endRelay(t, 200, "{\"ok\":true}");
+    if (t.esp.state() == Client::State::Failed || !peerOpen) return endRelayFailed(t, now);
+    if (progressed) t.lastMoveMs = now;
+    else if (now - t.lastMoveMs > kTransferStallMs) return endRelay(t, 504, "{\"error\":\"the update stalled\"}");
+    return progressed;
 }
 
 void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, platform::OtaTarget target) {

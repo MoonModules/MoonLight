@@ -10,8 +10,11 @@
 ///
 /// Pure functions on byte buffers, so a desktop test reads a captured reply; nothing here allocates.
 
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstdio>
 #include <cstring>
 
 namespace mm::mdns {
@@ -26,7 +29,42 @@ struct Service {
     char name[33] = {};       ///< its TXT friendly_name, or else the instance label
     char version[16] = {};    ///< its TXT version
     char board[24] = {};      ///< its TXT board, the chip's board ("esp32dev")
+    uint8_t mac[6] = {};      ///< its TXT mac, which ESPHome and WLED announce, all zero when absent
+    char chip[10] = {};       ///< the chip as MoonLight's files spell it ("esp32s3"), from ESPHome's TXT variant, else its board's name: "" for a non-ESP32
 };
+
+/// The ESP32 family the first `n` characters of a chip or board name hold ("C3FH4", "esp32-s3-devkitc-1"), as MoonLight's files spell it; the classic when they name none.
+inline void chipFamily(const char* name, size_t n, char* out, size_t cap) {
+    static constexpr const char* kFamilies[] = {"s3", "s2", "c3", "c5", "c6", "h2", "p4"};
+    for (const char* family : kFamilies)
+        for (size_t i = 0; i + 1 < n; i++)
+            if ((name[i] | 0x20) == family[0] && name[i + 1] == family[1]) { std::snprintf(out, cap, "esp32%s", family); return; }
+    std::snprintf(out, cap, "esp32");
+}
+
+/// The chip an ESPHome record names, as MoonLight spells it: its `variant` ("ESP32S3"), else the family its board names ("esp32-s3-devkitc-1") or the classic; none off the ESP32 platform.
+inline void esphomeChip(const char* platform, const char* variant, const char* board, char* out, size_t cap) {
+    if (!variant[0] && std::strcmp(platform, "ESP32") != 0) return;   // an ESP8266 or an RP2040 MoonLight does not run on
+    const char* from = variant[0] ? variant : board;
+    chipFamily(from, std::strlen(from), out, cap);
+}
+
+/// Read a MAC written as twelve hex digits, with or without a separator between the bytes ("08b61f6fbd3c", "08:B6:1F:6F:BD:3C"); false otherwise.
+inline bool parseMac(const char* text, uint8_t out[6]) {
+    char hex[12];
+    size_t n = 0;
+    for (; *text; text++) {
+        if (*text == ':' || *text == '-') continue;
+        if (n == sizeof(hex) || !std::isxdigit(static_cast<unsigned char>(*text))) return false;
+        hex[n++] = *text;
+    }
+    if (n != sizeof(hex)) return false;
+    for (int i = 0; i < 6; i++) {
+        const char pair[3] = {hex[2 * i], hex[2 * i + 1], 0};
+        out[i] = static_cast<uint8_t>(std::strtoul(pair, nullptr, 16));
+    }
+    return true;
+}
 
 /// Write a query for PTR `service` ("_esphomelib._tcp.local") into `out`; its length, or 0 when it does not fit.
 inline size_t buildQuery(const char* service, uint8_t* out, size_t cap) {
@@ -145,13 +183,19 @@ inline bool findInstance(const uint8_t* msg, size_t len, size_t off, size_t rr, 
     return ok && instance[0];
 }
 
-/// The `instance`'s TXT pairs into `out`: its friendly name, version and board.
+/// The `instance`'s TXT pairs into `out`: its friendly name, version, board and MAC.
 inline void readTxt(const uint8_t* msg, size_t len, size_t off, size_t rr, const char* instance, Service& out) {
     forEachRecord(msg, len, off, rr, [&](const char* name, uint16_t type, size_t rdata, size_t rdlen) {
         if (type != kTypeTxt || std::strcmp(name, instance) != 0) return true;
         txtValue(msg + rdata, rdlen, "friendly_name", out.name, sizeof(out.name));
         txtValue(msg + rdata, rdlen, "version", out.version, sizeof(out.version));
         txtValue(msg + rdata, rdlen, "board", out.board, sizeof(out.board));
+        char mac[18] = {};
+        if (txtValue(msg + rdata, rdlen, "mac", mac, sizeof(mac)) && !parseMac(mac, out.mac)) std::memset(out.mac, 0, sizeof(out.mac));
+        char platform[12] = {}, variant[12] = {};
+        txtValue(msg + rdata, rdlen, "platform", platform, sizeof(platform));
+        txtValue(msg + rdata, rdlen, "variant", variant, sizeof(variant));
+        if (platform[0] || variant[0]) esphomeChip(platform, variant, out.board, out.chip, sizeof(out.chip));
         return true;
     });
 }

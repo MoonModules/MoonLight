@@ -95,6 +95,8 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 
 **A host benchmark ranks nothing for Xtensa.** Compile a probe with the target compiler (`-O2 -S`), count its instructions, branches, calls and stack traffic, then flash the one winner. An arity is a template parameter, never a runtime argument.
 
+**A function split out of a per-light loop stays a step, not a call.** Splitting one to satisfy the complex-function rule keeps it inline in the same header, and the target's `-O2 -S` shows no call left; where one is, `[[gnu::always_inline]]` on that helper.
+
 **A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 100, so `pdMS_TO_TICKS` below 10 ms is 0 and a wait with it spins the task.
 
 ## Shaping a module

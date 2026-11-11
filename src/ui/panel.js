@@ -30,6 +30,12 @@ export function shareExtra(bases, extra) {
     return bases.map(b => (total > 0 ? b + (extra * b) / total : b));
 }
 
+// The panel's content height: the top-level card's bottom edge within `main`, where `main`'s own scrollHeight is the window's height while the cards are shorter.
+function contentHeight() {
+    const root = main_.querySelector(".panel-root");
+    return root ? root.getBoundingClientRect().bottom - main_.getBoundingClientRect().top + main_.scrollTop : main_.scrollHeight;
+}
+
 // Size the page's expandable areas so the panel's content is `height` px: they grow past their natural heights, or give height up down to MIN_AREA.
 function fit(height) {
     if (!main_) return;
@@ -38,7 +44,7 @@ function fit(height) {
     if (!height || !areas.length) return;
     const bases = areas.map(el => (el.dataset.base ? Number(el.dataset.base) : el.offsetHeight));
     areas.forEach((el, i) => { el.style.height = `${bases[i]}px`; });
-    shareExtra(bases, height - main_.scrollHeight).forEach((h, i) => {
+    shareExtra(bases, height - contentHeight()).forEach((h, i) => {
         areas[i].style.height = `${Math.round(Math.max(Math.min(MIN_AREA, bases[i]), h))}px`;
     });
 }
@@ -98,7 +104,8 @@ export function setupPanel(main, widen, done) {
         const grip = e.target.closest(".panel-grip");
         if (!grip) return;
         e.preventDefault();
-        drag = { corner: grip.classList.contains("panel-grip-corner"), y: e.clientY, from: main_.scrollHeight, height: main_.scrollHeight };
+        const from = contentHeight();
+        drag = { corner: grip.classList.contains("panel-grip-corner"), y: e.clientY, from, height: from };
         document.body.classList.add("panel-resizing");
         document.body.classList.toggle("corner", drag.corner);
         window.addEventListener("pointermove", move);

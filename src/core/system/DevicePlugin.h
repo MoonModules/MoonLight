@@ -33,6 +33,7 @@ struct DiscoveredDevice {
     DevType type = DevType::Generic;   ///< which ecosystem it belongs to
     char    name[24] = {};             ///< its display name, truncated to fit
     uint16_t httpPort = WledPacket::kDefaultHttpPort;   ///< the port its web page answers on
+    uint8_t mac[6] = {};               ///< its MAC where the source names one, all zero where it does not
 };
 
 /// Copy a name in, truncating explicitly so the read is bounded.
@@ -67,9 +68,11 @@ public:
     uint16_t discoveryPort() const override { return WledPacket::kPort; }
 
 protected:
-    /// Claim a valid packet as `type`, with the name it carries.
-    static bool claim(const uint8_t* data, DevType type, DiscoveredDevice& out) {
+    /// Claim a valid packet as `type`, with the name, page port and MAC it carries.
+    static bool claim(const uint8_t* data, size_t len, DevType type, DiscoveredDevice& out) {
         out.type = type;
+        out.httpPort = WledPacket::httpPort(data, len);
+        WledPacket::readMac(data, len, out.mac);
         char name[24];
         WledPacket::readName(data, name, sizeof(name));
         setDeviceName(out, name);
@@ -85,8 +88,7 @@ public:
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
         if (!WledPacket::isValid(data, len) || !WledPacket::hasMarker(data, len)) return false;
-        out.httpPort = WledPacket::httpPort(data, len);
-        return claim(data, DevType::MoonLight, out);
+        return claim(data, len, DevType::MoonLight, out);
     }
 };
 
@@ -98,7 +100,7 @@ public:
     bool classifyPacket(const uint8_t* data, size_t len, const uint8_t /*srcIp*/[4],
                         DiscoveredDevice& out) const override {
         if (!WledPacket::isValid(data, len) || !WledPacket::hasMarker(data, len, WledPacket::kMbMarker)) return false;
-        return claim(data, DevType::MoonBase, out);
+        return claim(data, len, DevType::MoonBase, out);
     }
 };
 
@@ -111,7 +113,7 @@ public:
                         DiscoveredDevice& out) const override {
         if (!WledPacket::isValid(data, len) || WledPacket::hasMarker(data, len) ||
             WledPacket::hasMarker(data, len, WledPacket::kMbMarker)) return false;   // a marked one is a MoonLight peer or MoonBase
-        return claim(data, DevType::Wled, out);
+        return claim(data, len, DevType::Wled, out);
     }
 };
 

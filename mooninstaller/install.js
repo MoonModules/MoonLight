@@ -901,7 +901,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function syncPortState() {
       rebuildPortSelect();
       installPicker.setDesktopMode(desktopMode);
-      installPicker.notifyPortChanged();
+      installPicker.notifyReadyChanged();
       // The serial-only controls have no meaning when the target is this computer: there is
       // no chip to erase and no port to monitor. Hidden rather than disabled, because a
       // greyed "Erase chip first" next to a Mac download invites the wrong question.
@@ -1141,11 +1141,11 @@ document.addEventListener('DOMContentLoaded', () => {
       deviceSupport,  // device catalog + chip detection (mooninstaller-only module)
       extraFirmwaresByTag,
       // Gate Install on a picked USB port — the web installer requires the user
-      // to choose the port in the dropdown before flashing. (notifyPortChanged()
-      // below re-evaluates the button whenever pickedPort changes.)
+      // to choose the port in the dropdown before flashing. (notifyReadyChanged()
+      // re-evaluates the button whenever pickedPort changes.)
       // Desktop mode has nothing to open, so the port gate does not apply: the button is a
       // download and is enabled as soon as an archive for this OS exists.
-      hasPort: () => desktopMode || teensyBootMode || !!pickedPort,
+      blocker: () => (desktopMode || teensyBootMode || pickedPort) ? "" : "Select a USB port first",
       onDetect: async () => {
         if (teensyBootMode) return TEENSY_FAMILY;
         // The monitor (if open) holds the port — release it before esptool

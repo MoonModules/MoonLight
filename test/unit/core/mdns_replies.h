@@ -1,6 +1,6 @@
 #pragma once
 
-/// A real mDNS reply for the tests that read one: an ESPHome Web 26.9.2 board on the bench answering the legacy unicast browse for _esphomelib._tcp.local, captured 2026-11-10.
+/// Real mDNS replies for the tests that read one, captured on the bench 2026-11-10: an ESPHome Web 26.9.2 board answering the legacy unicast browse for _esphomelib._tcp.local, and a WLED-MM board answering the one for _wled._tcp.local.
 
 #include <cstdint>
 #include <string>
@@ -19,6 +19,12 @@ inline const char* kEsphomeReply =
     "503332106d61633d63386630396537333838633814636f6e6669675f686173683d32626666353436641076657273696f"
     "6e3d323032362e392e3120667269656e646c795f6e616d653d455350486f6d652057656220373338386338c055000100"
     "01000000780004c0a801e3";
+
+/// A real reply to the legacy unicast browse for _wled._tcp.local, captured 2026-11-10 from a bench board running WLED-MM 14.5.1-dev: its TXT holds only `mac`.
+inline const char* kWledReply =
+    "4d4d84000000000100000003055f776c6564045f746370056c6f63616c00000c000100001194000e0b776c65642d6531"
+    "35636562c00cc028002100010000007800140000000000500b776c65642d653135636562c017c0280010000100001194"
+    "0011106d61633d333065646130653135636562c04800010001000000780004c0a801df";
 
 /// The bytes a hex string spells.
 inline std::vector<uint8_t> bytes(const char* hex) {

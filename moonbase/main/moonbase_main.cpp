@@ -32,6 +32,7 @@
 #include "core/util/ConfigScrape.h"   // the keys this image reads out of the app's config, shared so the app's test runs the same scraper
 #include "core/util/CaptivePortal.h"  // the access point's address, DNS answer and redirect rule, shared with the app's portal
 #include "core/util/DeviceName.h"     // defaultDeviceName: the name the app gives a board that never saved one
+#include "core/util/EthPresets.h"     // the P4's wiring, which the app's Ethernet card defaults a P4 to
 #include "core/util/HttpHead.h"       // the request head reads, shared with the app's server
 #include "core/system/WledPacket.h"   // the presence packet the app's Devices map lists a board by, marked as MoonBase
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
@@ -91,15 +92,20 @@ volatile bool switchingNetwork_ = false;
 // Credentials
 // ---------------------------------------------------------------------------------------------
 
-// The board's Ethernet wiring from the app's config: type 0 or absent is none, and an absent pin keeps the silicon default, as in the app.
+// The board's Ethernet wiring from the app's config, type 0 none and an absent pin the silicon default; absent altogether, a P4 takes the wiring the app defaults it to, so a migrated P4 answers on its cable.
+#if CONFIG_IDF_TARGET_ESP32P4
+constexpr mm::eth::Preset kEthDefault = mm::eth::kPresets[mm::eth::kP4Rmii];
+#else
+constexpr mm::eth::Preset kEthDefault = {"none", 0, -1, -1, -1, -1, 0, true, -1, -1, -1, -1, -1, true};
+#endif
 struct {
-    int  type       = 0;
-    int  phyAddr    = -1;      // -1: scan the MDIO bus
-    int  rstGpio    = -1;
-    int  mdcGpio    = -1;      // <0: leave the EMAC default
-    int  mdioGpio   = -1;
-    int  clockGpio  = 0;
-    bool clockExtIn = true;
+    int  type       = kEthDefault.type;
+    int  phyAddr    = kEthDefault.phyAddr;      // -1: scan the MDIO bus
+    int  rstGpio    = kEthDefault.rst;
+    int  mdcGpio    = kEthDefault.mdc;          // <0: leave the EMAC default
+    int  mdioGpio   = kEthDefault.mdio;
+    int  clockGpio  = kEthDefault.rmiiClock;
+    bool clockExtIn = kEthDefault.rmiiClockExtIn;
 } ethCfg_;
 
 // The Ethernet card's addressing, so a board the app pins to a static address answers there in recovery too.
@@ -218,10 +224,13 @@ void presenceTask(void*) {
     int yes = 1;
     ::setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
     static constexpr uint8_t kBroadcast[4] = {255, 255, 255, 255};
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);   // the base MAC the app sends too, so a peer's row follows the board between the two
     while (true) {
-        uint8_t pkt[mm::WledPacket::kSize];
+        uint8_t pkt[mm::WledPacket::kSizeWithMac];
         mm::WledPacket::build(pkt, g_ip, g_deviceName, 0, false);
         mm::WledPacket::stampMarker(pkt, mm::WledPacket::kMbMarker);
+        mm::WledPacket::stampTail(pkt, 80, mac);
         for (const uint8_t* to : {kBroadcast, mm::WledPacket::kDiscoveryGroup}) {
             mm::WledPacket::stampVia(pkt, to == kBroadcast);
             sockaddr_in dst = {};
@@ -260,7 +269,8 @@ bool ethStart() {
     // No internal EMAC on this chip, so its recovery network is WiFi.
     return false;
 #else
-    if (ethCfg_.type != 1) return false;   // 1 = LAN8720/RMII in the app's ethType vocabulary
+    // 1 LAN8720 and 2 IP101 in the app's ethType vocabulary, both RMII on the on-chip MAC; both keep the IEEE 802.3 registers the generic PHY driver reads.
+    if (ethCfg_.type != 1 && ethCfg_.type != 2) return false;
 
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t* netif = esp_netif_new(&netif_cfg);
@@ -447,13 +457,15 @@ const char kPage[] =
     "background:#1a1a2e;color:#e0e0e0}"
     "h1{font-size:1.3rem;margin:0}.sub{color:#a0a0b0;margin-top:0}"
     "a{color:#a78bfa}"
-    "input,button{font:inherit;padding:.5rem;background:#283661;color:#e0e0e0;"
+    "input,button,select{font:inherit;padding:.5rem;background:#283661;color:#e0e0e0;"
     "border:1px solid #2a3a6a;border-radius:.35rem}button{cursor:pointer}"
     "section{margin:1.5rem 0;padding:1rem;border:1px solid #2a3a6a;border-radius:.5rem;"
     "background:#1f2c4f}"
     "#hdr{display:flex;align-items:center;gap:.7rem}#hdr img{width:40px;height:40px}"
     "#hlp{margin-left:auto;text-decoration:none;border:1px solid #2a3a6a;border-radius:.35rem;"
     "padding:.15rem .55rem}"
+    // The shared picker's rows, the label beside its field as the app lays them out.
+    ".control-row{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}.control-label{min-width:5rem;color:#a0a0b0}"
     "#s{margin-top:1rem;font-variant-numeric:tabular-nums}</style>"
     "<div id=hdr><img src=/logo.png alt=''><h1>MoonBase</h1>"
     // The (?) module cards carry, pointing at the published MoonBase doc.
@@ -468,10 +480,8 @@ const char kPage[] =
     "<br><small>Firmware files: <a href='https://github.com/MoonModules/MoonLight/releases' "
     "target=_blank rel=noopener>github.com/MoonModules/MoonLight/releases</a> "
     "(the firmware-...bin matching this board)</small></section>"
-    // Installing from a release without typing a URL: the browser fetches the list, and this image only receives the URL.
-    "<section><b>From a release</b><br>"
-    "<select id=rel></select> <select id=fw></select> <button onclick=rl()>Install</button>"
-    "<br><small id=rs></small></section>"
+    // Installing from a release without typing a URL: the web installer's own picker, loaded from its site, and this image only receives the URL.
+    "<section><b>From a release</b><div id=pick></div><small id=rs></small></section>"
     "<section><b>From a URL</b><br><input id=u size=34 placeholder=https://...>"
     "<button onclick=url()>Install</button></section>"
     "<section><b>Back to the app</b><br>Boot the installed firmware without changing it."
@@ -504,35 +514,23 @@ const char kPage[] =
     // The install runs on its own task (202); W() watches its status until the app answers (404 on /moonbase means the new firmware is up, at this same address).
     "function W(){const t=setInterval(async()=>{try{const p=await fetch('/moonbase');"
     "if(p.status==404){clearInterval(t);S('done, the app is starting...');"
+    // The device picked in the picker brings its defaults, sent to the app once it answers, as the web installer and the map apply them.
+    "if(DEV&&DEV.state)await fetch('/api/state',{method:'PATCH',headers:{'Content-Type':'application/json'},"
+    "body:JSON.stringify(DEV.state)}).catch(()=>{});"
     "setTimeout(()=>location.reload(),3000);}else{S(await p.text());}}"
     "catch(_){S('restarting...');}},2000);}"
-    // The release list, filtered to the assets this chip runs, from which the user picks the variant.
-    "const CHIP='" MOONBASE_CHIP "';let RELS=[],VAR='';"
-    // With the variant the app persisted, the one firmware this board takes; without it, every firmware for the chip rather than a guess.
-    "fetch('/api/variant').then(r=>r.text()).then(t=>{VAR=t.trim();fillFw();}).catch(()=>{});"
-    "function fwList(i){const r=RELS[i];if(!r)return [];"
-    "return (r.assets||[]).map(a=>a.name).filter(n=>/^firmware-.+\\.bin$/.test(n)"
-    "&&!/-(bootloader|partition-table|ota-data|slot0)\\.bin$/.test(n)"
-    // The chip matches to a boundary, a hyphen or the P4's revision suffix, since one target name is a prefix of another's.
-    "&&n.slice(9).startsWith(CHIP)"
-    "&&(n.slice(9+CHIP.length).startsWith('-')||/^rev\\d/.test(n.slice(9+CHIP.length)))"
-    "&&(!VAR||n.slice(9).startsWith(VAR+'-')));}"
-    "function fillFw(){const f=document.getElementById('fw');f.innerHTML='';"
-    "const l=fwList(document.getElementById('rel').selectedIndex);"
-    "for(const n of l){const o=document.createElement('option');o.textContent=n;f.appendChild(o);}"
-    "document.getElementById('rs').textContent=l.length?'':'no firmware for this chip in that release';}"
-    "fetch('https://api.github.com/repos/MoonModules/MoonLight/releases?per_page=10')"
-    ".then(r=>r.json()).then(j=>{RELS=j;const s=document.getElementById('rel');"
-    "for(const r of RELS){const o=document.createElement('option');"
-    "o.textContent=(r.name||r.tag_name)+(r.prerelease?' (pre)':'');s.appendChild(o);}"
-    "s.onchange=fillFw;fillFw();})"
-    ".catch(()=>{document.getElementById('rs').textContent="
-    "'could not reach github: use a URL or a file below';});"
+    // The release list: the web installer's picker, loaded at runtime from its site, which serves it cross-origin; the chip narrows it, the app's variant preselects it, Install installs its URL.
+    "const CHIP='" MOONBASE_CHIP "',SITE='https://moonmodules.org/MoonLight/install/';let DEV=null;"
+    "(async()=>{try{const VAR=(await (await fetch('/api/variant')).text()).trim();"
+    "const{installPicker}=await import(SITE+'install-picker.js');"
+    "const devs=await import(SITE+'install-picker-devices.js').catch(()=>null);"
+    // Only calls every published picker has: a board in the field keeps its MoonBase while the site's picker moves on.
+    "let CAT=[];const sup=devs&&{...devs,loadDevices:async()=>(CAT=await (await fetch(SITE+'deviceModels.json')).json())};"
+    "await installPicker.init({container:document.getElementById('pick'),targetChip:CHIP,ownFirmwareKey:VAR||null,deviceSupport:sup,"
+    "onInstall:async(_f,_m,u)=>{const n=installPicker.getSelectedDevice();DEV=CAT.find(d=>d.name===n)||null;"
+    "document.getElementById('u').value=u;await url();return 'installing: the status below follows it';}});}"
+    "catch(_){document.getElementById('rs').textContent='could not reach the installer: use a URL or a file below';}})();"
     // Installing a release is installing its URL: one path, so the vetting, the progress and the retry all behave identically however the URL was chosen.
-    "async function rl(){const r=RELS[document.getElementById('rel').selectedIndex];"
-    "const n=document.getElementById('fw').value;if(!r||!n)return;"
-    "const a=(r.assets||[]).find(x=>x.name===n);if(!a)return;"
-    "document.getElementById('u').value=a.browser_download_url;url();}"
     "async function url(){const u=document.getElementById('u').value;if(!u)return;"
     "const r=await fetch('/api/firmware/url',{method:'POST',body:u});S(await r.text());if(r.ok)W();}"
     // Prefill the URL field with the last install source (RAM-held), so Install doubles as retry: the escape after a cancel or failure wiped the app slot.
@@ -547,8 +545,6 @@ const char kPage[] =
     "S('the app is not answering: it may not be installed');}"
     "async function cx(){S(await (await fetch('/api/firmware/cancel',{method:'POST'})).text());}"
     "</script>";
-
-// The app's build variant for the page, empty before the app has run.
 
 // The application slot, or null when this image is itself in it, installed as the app, so a caller says so rather than loops.
 const esp_partition_t* appPartition() {

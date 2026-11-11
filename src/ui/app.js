@@ -4445,13 +4445,19 @@ const GRAPH_ZOOM_MAX = 8;   // the closest the map zooms in, eight times
 const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its four label lines inside the cell
 const GRAPH_LABEL_DY = 20, GRAPH_LINE_H = { "graph-label": 12, "graph-sublabel": 11, "graph-services": 13 };   // a node's first baseline below its dot, and each line's height
 const GRAPH_CHAR_W = { "graph-label": 6.2, "graph-sublabel": 5, "graph-services": 13, "graph-edge-label": 5.4 };   // a character's width, about, at each line's font size
-// Each kind Discovery names its own color (devTypeStr); a kind it does not name takes a hashed one.
-const GRAPH_KIND_COLORS = { MoonLight: "var(--accent)", WLED: "var(--yellow)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg-muted)", MoonBase: "var(--red)", ESPHome: "var(--teal)", Tasmota: "var(--blue)" };
-const GRAPH_COLORS = ["var(--accent)", "var(--green)", "var(--yellow)", "var(--red)", "var(--fg-muted)"];
+// Each kind Discovery names its own color (devTypeStr), and a WLED flavor its own; a kind it does not name is generic, white on dark.
+const GRAPH_KIND_COLORS = { MoonLight: "var(--accent)", WLED: "var(--yellow)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg)", MoonBase: "var(--red)", ESPHome: "var(--teal)", Tasmota: "var(--blue)", "WLED-MM": "var(--orange)" };
 // Each light output's driver type as the kind of light it drives, which a node shows; a driver it does not name shows its type, and moving heads show 🎯 whatever drives them.
 const GRAPH_OUTPUT_EMOJI = { RmtLedDriver: "\u{1F4A1}", ParallelLedDriver: "\u{1F4A1}", PwmLightDriver: "\u{1F506}", Hub75Driver: "\u{1F532}", HdmiDriver: "\u{1F4FA}", PanelCardDriver: "\u{1F9F1}", HueDriver: "\u{1F3EE}", NetworkSendDriver: "\u{1F4E1}", NdiDriver: "\u{1F3A5}", HlsDriver: "\u{1F3A5}", RtspDriver: "\u{1F3A5}" };
 // Each protocol a module reports, a service it offers (NetworkUse::service) or traffic (NetworkUse::flow), as the emoji its node or line shows; one it does not name shows its name.
 const GRAPH_PROTOCOL_EMOJI = { HTTP: "\u{1F310}", OSC: "\u{1F39B}\uFE0F", "RTP-MIDI": "\u{1F3B9}", "audio sync": "\u{1F50A}", "Art-Net": "\u{1F3AD}", "E1.31": "\u{1F39A}\uFE0F", DDP: "\u{1F4E6}", ColorLight: "\u{1F9F1}", "WLED API": "\u{1F419}", Hue: "\u{1F3EE}" };
+
+// The kind a node is colored by: a WLED's flavor, WLED or WLED-MM, once its /json/info says which, and generic until then, so a WLED-MM
+// that does not answer never shows as a plain WLED; every other row its type.
+function graphKind(row) {
+    if (row.type === "WLED") return row.flavor ?? "generic";
+    return String(row.type ?? "generic");
+}
 
 function graphHash(text) {
     let h = 2166136261;   // FNV-1a, so a kind keeps its color and a node its seed spot
@@ -4615,7 +4621,12 @@ function redrawGraph(container) {
     if (container._graphPanning) return;   // the pan's end redraws
     const a = container._graphArgs;
     const old = container.querySelector("svg.list-graph");
-    if (a && old) old.replaceWith(buildListGraph(container, a.rows, a.details, a.opts));
+    if (!a || !old) return;
+    const focused = old.contains(document.activeElement) ? document.activeElement.closest("g.graph-link")?.dataset.key : null;
+    const fresh = buildListGraph(container, a.rows, a.details, a.opts);
+    old.replaceWith(fresh);
+    // The node a keyboard user is on keeps the focus, though the redraw, about once a second, replaced it.
+    if (focused != null) fresh.querySelector(`g.graph-link[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
 }
 
 function refreshPeerGraphs(container) {
@@ -4721,7 +4732,7 @@ function buildListGraph(container, rows, details, opts) {
     svg.setAttribute("role", "group");   // its nodes are buttons, each reached on its own
     svg.setAttribute("aria-label", `${nodes.length} device${nodes.length === 1 ? "" : "s"}`);
     const show = container._graphShow || {};
-    if (graphShown(show, "version")) fillWledVersions(container, nodes);
+    fillWledInfo(container, nodes);
     const boxes = nodes.map(node => graphNodeBox(pos.get(node.key), graphNodeLines(node.row, node.key, show)));
     const traffic = graphShown(show, "traffic");
     const labelAt = placeEdgeLabels(links.map(([i, j, label]) => [pos.get(nodes[i].key), pos.get(nodes[j].key), traffic ? graphTrafficLabel(label) : ""]), boxes);
@@ -4755,10 +4766,10 @@ function buildListGraph(container, rows, details, opts) {
         g.setAttribute("class", "graph-node" + (node.self ? " graph-self" : "") +
                                 (age === "age-stale" ? " graph-faded" : "") +
                                 (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
-        const kind = String(node.row.type ?? "");
+        const kind = graphKind(node.row);
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
-        dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_COLORS[graphHash(kind) % GRAPH_COLORS.length]);
+        dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_KIND_COLORS.generic);
         g.appendChild(dot);
         let y = p.y + GRAPH_LABEL_DY;
         for (const [line, cls] of graphNodeLines(node.row, node.key, show)) {
@@ -4777,6 +4788,7 @@ function buildListGraph(container, rows, details, opts) {
         g.appendChild(title);
         // A button, reached by Tab and pressed by Enter or Space as by a click.
         g.classList.add("graph-link");
+        g.dataset.key = node.key;   // which node, so a redraw gives the focus back to it
         g.setAttribute("tabindex", "0");
         g.setAttribute("role", "button");
         g.setAttribute("aria-label", summary);
@@ -4886,18 +4898,20 @@ function graphShown(show, what) {
     return what in show ? !!show[what] : !!(GRAPH_SHOW.find(([w]) => w === what) || [])[2];
 }
 
-// A WLED's version for its node, read from its /json/info, which WLED serves cross-origin; its presence packet carries none.
-// Asked once, and again a minute after a WLED that did not answer, as the device asks its added addresses.
-function fillWledVersions(container, nodes, now = Date.now()) {
-    const known = container._wledVersions || (container._wledVersions = new Map());
+// A WLED's version and flavor for its node, read from its /json/info, which WLED serves cross-origin; its presence packet carries neither.
+// WLED-MM answers product "MoonModules", WLED "FOSS". Asked once, and again a minute after a WLED that did not answer, as the device asks its added addresses.
+function fillWledInfo(container, nodes, now = Date.now()) {
+    const known = container._wledInfo || (container._wledInfo = new Map());
     for (const node of nodes) {
         if (node.row.type !== "WLED" || !node.row.ip) continue;
         const k = known.get(node.key);
-        if (k && k.ver) { node.row = Object.assign({}, node.row, { version: k.ver }); continue; }
+        if (k && k.ver) { node.row = Object.assign({}, node.row, { version: k.ver, flavor: k.flavor }); continue; }
         if (k && now - k.at < 60000) continue;   // asked within the minute
         known.set(node.key, { at: now });
         fetch(`http://${node.row.ip}/json/info`).then(r => r.json()).then(info => {
-            if (info && info.ver) { known.set(node.key, { at: now, ver: String(info.ver) }); redrawGraph(container); }
+            if (!info || !info.ver) return;
+            known.set(node.key, { at: now, ver: String(info.ver), flavor: info.product === "MoonModules" ? "WLED-MM" : "WLED" });
+            redrawGraph(container);
         }).catch(() => { /* no answer: asked again in a minute */ });
     }
 }
@@ -5012,14 +5026,54 @@ function openGraphNode(row, opts) {
     head.append(title, close);
     const detail = document.createElement("div");
     detail.className = "list-detail";
-    fillListDetail(detail, row, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName));
+    fillListDetail(detail, popupFields(row), listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName));
+    linkIp(detail, row);
     dlg.append(head, detail);
     if (row.type === "MoonLight") dlg.appendChild(buildPeerSummary(row));
     if (row.type === "MoonBase") dlg.appendChild(buildMoonBaseInstall(row));
+    if (row.type === "WLED") dlg.appendChild(buildWledMigrate(row));
+    if (row.type === "Tasmota") dlg.appendChild(buildTasmotaMigrate(row));
+    if (row.type === "ESPHome") dlg.appendChild(buildEsphomeMigrate(row));
     document.body.appendChild(dlg);
-    dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });   // a click on the backdrop closes it
+    // A click on the backdrop closes it, except while a move runs in it: its steps run in the browser, and closing would hide them.
+    const mayClose = () => !dlg.dataset.busy || confirm("A move is running. Close this popup? It goes on, out of sight, until the app reloads.");
+    dlg.addEventListener("click", (e) => { if (e.target === dlg && !dlg.dataset.busy) dlg.close(); });
+    dlg.addEventListener("cancel", (e) => { if (!mayClose()) e.preventDefault(); });   // Escape
+    close.addEventListener("click", (e) => { if (!mayClose()) e.preventDefault(); });
     dlg.addEventListener("close", () => dlg.remove(), { once: true });
     dlg.showModal();
+}
+
+// The fields a node's popup lists: its flavor as its type (WLED-MM), and as its url the `<name>.local` address a MoonLight board answers on;
+// the ip links to the address the device was found on, so a url saying the same goes. A desktop serves on a port and answers no mDNS.
+function popupFields(row) {
+    const shown = Object.assign({}, row);
+    if (shown.flavor) { shown.type = shown.flavor; delete shown.flavor; }
+    delete shown.url;
+    if (row.type === "MoonLight" && !row.port && /^[a-z0-9-]+$/i.test(row.name || "")) shown.url = `http://${row.name}.local/`;
+    return shown;
+}
+
+// The popup's ip as a link to the device's page.
+function linkIp(detail, row) {
+    const span = detail.querySelector('.display[data-key="ip"]');
+    if (!span || !row.ip) return;
+    const a = document.createElement("a");
+    a.className = "display control-url";
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.href = `${peerBase(row)}/`;
+    a.textContent = row.ip;
+    span.replaceWith(a);
+}
+
+// A device's JSON, or null when it does not answer within `ms`: a hung device leaves a popup saying so rather than reading for ever.
+async function fetchJsonWithin(url, ms = 4000) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), ms);
+    try { return await (await fetch(url, { signal: ctl.signal })).json(); }
+    catch (_) { return null; }
+    finally { clearTimeout(timer); }
 }
 
 // Where a device's API answers: the UI's own origin for the device serving it, its address for another.
@@ -5062,66 +5116,355 @@ async function peerUpdate(dev) {
     return { label: `latest (${v})`, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-v${v}.bin`) };
 }
 
-// The firmware images a release carries for `chip`, by variant: firmware-esp32-v7.1.0.bin and firmware-esp32-eth-v7.1.0.bin for esp32,
-// never esp32c3's, nor the -bootloader.bin and -partition-table.bin a serial flash takes beside each image.
-function chipFirmwares(release, chip) {
-    const re = new RegExp(`^firmware-(${chip}(?:-[a-z0-9]+)*)-v\\d+\\.\\d+\\.\\d+(?:-[a-z]+\\.\\d+)?\\.bin$`);
-    return (release?.assets || []).map(a => ({ m: re.exec(a.name), url: a.browser_download_url })).filter(x => x.m).map(x => ({ variant: x.m[1], url: x.url }));
+// The Ethernet boards of WLED's table the migration carries over, by WLED's `eth.type`, as kWledEthernet in WledNetworks.h maps them.
+const WLED_ETHERNET_MAPPED = [1, 2, 3, 4, 5, 6, 8, 9, 10];
+
+// What the move does with a WLED's Ethernet: nothing to say without one, its wiring carried over for a board the migration maps, else a warning
+// that it comes back on its saved WiFi or as an access point.
+function wledEthernetNote(type) {
+    if (!type) return "";
+    return WLED_ETHERNET_MAPPED.includes(type)
+        ? " On Ethernet: MoonLight takes over its wiring and comes back on the cable."
+        : ` On Ethernet board ${type}, which the move does not carry over: it comes back on its saved WiFi, else as an access point to join.`;
 }
 
-// A board MoonBase holds: its chip from MoonBase's /api/system, the newest release's firmware for it, the variant the app ran first,
-// and Install MoonLight, which hands MoonBase the file's address as its own page does; then the node turns back into MoonLight.
+// The chip a WLED's /json/info names, as MoonLight's files spell it: "esp32-c3" is esp32c3; null for one MoonLight does not build for.
+function wledChip(info) {
+    const arch = String(info?.arch || "").toLowerCase().replace(/-/g, "");
+    return /^esp32[a-z0-9]*$/.test(arch) ? arch : null;
+}
+
+// The migration image a WLED takes: its chip's, and on a P4 from revision 3 that revision line's, which WLED-MM's chip model names ("ESP32-P4 rev.301").
+function wledFamily(info, chip) {
+    const rev = Number(/rev\.(\d+)/.exec(String(info?.e32model || ""))?.[1] || 0);
+    return chip === "esp32p4" && rev >= 300 ? "esp32p4rev3" : chip;
+}
+
+// The web installer's Pages site, which serves its files cross-origin where GitHub's own downloads do not.
+const INSTALLER_URL = "https://moonmodules.org/MoonLight/install/";
+
+// Where the browser takes a release's migration image: the installer's mirror of the release.
+function migrateImageUrl(tag, chip) {
+    return `${INSTALLER_URL}releases/${tag}/shared-migrate-${chip}.bin`;
+}
+
+// A WLED device's way to MoonLight without a cable, in one go: the install picker for its chip, a confirm that going back needs a cable,
+// then the migration image through WLED's update page, MoonLight from MoonBase, and the device's defaults.
+function buildWledMigrate(row) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    const line = document.createElement("div");
+    line.textContent = "WLED: reading…";
+    box.appendChild(line);
+    const base = `http://${row.ip}`;
+    (async () => {
+        const [info, cfg] = await Promise.all([fetchJsonWithin(`${base}/json/info`), fetchJsonWithin(`${base}/json/cfg`)]);
+        if (!info) { line.textContent = "WLED does not answer."; return; }
+        const chip = wledChip(info);
+        line.textContent = `WLED ${info.ver || ""} on ${info.arch || "an unknown chip"}.${wledEthernetNote(cfg?.eth?.type)}`;
+        if (!chip) { line.textContent += " MoonLight does not run on it."; return; }
+        // A migration image from this computer, a build or a download, for a release that carries none for this chip.
+        const file = document.createElement("label");
+        file.className = "graph-popup-file";
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".bin";
+        file.append("Migration image, for a release without one ", input);
+        mountMapPicker(box, base, chip, null, file, async (binaryUrl, tag, note) => {
+            if (!confirm("Move this WLED device to MoonLight over the network? Going back to WLED needs a USB cable.")) return null;
+            await wledToMoonBase(base, input.files[0] || migrateImageUrl(tag, wledFamily(info, chip)), tag, chip, note);
+            return moonBaseToMoonLight(base, binaryUrl, note);
+        });
+    })();
+    return box;
+}
+
+// A board MoonBase holds: its chip from MoonBase's /api/system, and the install picker for it.
 function buildMoonBaseInstall(row) {
     const box = document.createElement("div");
     box.className = "graph-popup-firmware";
     const line = document.createElement("div");
     line.textContent = "MoonBase: reading…";
-    const note = document.createElement("div");
-    box.append(line, note);
+    box.appendChild(line);
     const base = peerBase(row);
     (async () => {
-        let sys = null;
-        try { sys = await (await fetch(`${base}/api/system`)).json(); } catch (_) { /* answered below */ }
+        const sys = await fetchJsonWithin(`${base}/api/system`);
         if (!sys || !sys.moonbase) { line.textContent = "MoonBase does not answer."; return; }
         line.textContent = `MoonBase ${sys.version} on an ${sys.chip}: MoonLight's installer holds this board.`;
-        let releases = [];
-        try { releases = await cachedJson(`${RELEASES_API}?per_page=5`, "MoonLight.moonbase.releases.v1", false); } catch (_) { /* answered below */ }
-        const release = (releases || []).find(r => chipFirmwares(r, sys.chip).length);
-        if (!release) { note.textContent = `No release carries firmware for the ${sys.chip}.`; return; }
-        const files = chipFirmwares(release, sys.chip);
-        const pick = document.createElement("select");
-        for (const f of files) {
-            const o = document.createElement("option");
-            o.value = f.url;
-            o.textContent = `${f.variant} (${release.tag_name})`;
-            o.selected = f.variant === (sys.firmware || sys.chip);
-            pick.appendChild(o);
-        }
-        const btn = document.createElement("button");
-        btn.className = "graph-popup-update";
-        btn.textContent = "Install MoonLight";
-        btn.addEventListener("click", async () => {
-            btn.disabled = true;
-            note.textContent = "Handing MoonBase the firmware…";
-            try {
-                const res = await fetch(`${base}/api/firmware/url`, { method: "POST", body: pick.value });
-                if (!res.ok && res.status !== 202) { note.textContent = `Refused: ${await res.text()}`; btn.disabled = false; return; }
-            } catch (_) { note.textContent = "MoonBase does not answer."; btn.disabled = false; return; }
-            note.textContent = "Installing: the board restarts into MoonLight when it is done…";
-            const deadline = Date.now() + 300000;
-            while (Date.now() < deadline) {
-                await fwSleep(3000);
-                try {
-                    const now = await (await fetch(`${base}/api/system`)).json();
-                    if (now && !now.moonbase && now.version) { box.closest("dialog")?.close(); return; }   // done: the node turns back into MoonLight
-                    if (now && now.moonbase) { const st = await (await fetch(`${base}/moonbase`)).text(); if (st) note.textContent = `Installing: ${st}`; }
-                } catch (_) { /* restarting */ }
-            }
-            note.textContent = "No MoonLight after five minutes: open the board's address to see where MoonBase stands.";
-        });
-        box.append(pick, btn);
+        mountMapPicker(box, base, sys.chip, sys.firmware, null, (binaryUrl, _tag, note) => moonBaseToMoonLight(base, binaryUrl, note));
     })();
     return box;
+}
+
+// The web installer's Device row for a map's install: its own helpers and catalog from its Pages site, which serves both cross-origin, so
+// none of it ships in the firmware. The module's loadDevices reads the catalog beside the page, the installer's, so this one reads it beside
+// the module. Null offline, which leaves the picker Release and Firmware.
+let mapDeviceSupport = null;
+function loadMapDeviceSupport() {
+    mapDeviceSupport ??= import(`${INSTALLER_URL}install-picker-devices.js`)
+        .then(m => ({ ...m, loadDevices: async () => (await fetchJsonWithin(`${INSTALLER_URL}deviceModels.json`)) || [] }))
+        .catch(() => null);
+    return mapDeviceSupport;
+}
+
+// The shared install picker on a node's popup, as the web installer shows it: Release, Device and Firmware for `chip`, and Apply device defaults.
+// `move(binaryUrl, tag, note)` puts MoonLight on the board and answers its /api/system once MoonLight runs, or null when the user stops;
+// the picked device's defaults follow, and the status line says how it ended.
+async function mountMapPicker(box, base, chip, ranFirmware, extra, move, blocker = null) {
+    const note = document.createElement("div");
+    note.className = "graph-popup-note";
+    const defaults = document.createElement("label");
+    defaults.className = "graph-popup-defaults";
+    const tick = document.createElement("input");
+    tick.type = "checkbox";
+    tick.checked = true;
+    defaults.append(tick, " Apply device defaults sets this device model's recommended modules/settings.");
+    const extras = document.createElement("div");
+    extras.className = "graph-popup-extras";
+    if (extra) extras.appendChild(extra);
+    extras.append(defaults, note);
+    const mount = document.createElement("div");
+    mount.className = "install-picker-host";
+    box.appendChild(mount);
+    const picker = await installPicker.init({
+        container: mount, targetChip: chip, ownFirmwareKey: ranFirmware || null,
+        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, blocker,
+        onInstall: async (_firmware, _manifestUrl, binaryUrl, _entry, label, tag) => {
+            const dlg = box.closest("dialog");
+            if (dlg) dlg.dataset.busy = "1";   // the move runs in the browser: openGraphNode keeps the popup open meanwhile
+            try {
+                const sys = await move(binaryUrl, tag, note);
+                if (!sys) return "Not started.";
+                const applied = tick.checked ? await applyDeviceDefaults(base, picker?.selectedDeviceEntry()) : "";
+                return `✓ MoonLight ${sys.version || label} runs.${applied}`;
+            } finally {
+                if (dlg) delete dlg.dataset.busy;
+            }
+        },
+    });
+    return picker;
+}
+
+// Upload the migration image, `source` a chosen file or the mirror's address, as WLED's update page does, field `update`, with skipValidation
+// for WLED 16's release-name check; the reply is unreadable cross-origin, so the board's own answer says how it went: MoonBase on /api/system.
+async function wledToMoonBase(base, source, tag, chip, note) {
+    const image = await migrationImage(source, tag, chip, note);
+    note.textContent = "Uploading to WLED: keep the power on for the next minutes…";
+    const form = new FormData();
+    form.append("skipValidation", "1");
+    form.append("update", image, "shared-migrate.bin");
+    try { await fetch(`${base}/update`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
+    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
+    throw new Error("still WLED after a minute and a half: WLED refused the upload. A newer WLED checks the release name until Skip validation is ticked on its update page; an update lock or password refuses it too");
+}
+
+// The migration image: a chosen file as it is, else downloaded from the release's mirror.
+async function migrationImage(source, tag, chip, note) {
+    if (typeof source !== "string") return source;
+    note.textContent = "Fetching the migration image…";
+    const res = await fetch(source).catch(() => null);
+    if (!res || !res.ok) throw new Error(`${tag} carries no migration image for the ${chip}: choose one from this computer, or move it by cable through the web installer`);
+    return res.blob();
+}
+
+// A Tasmota device's way to MoonLight without a cable: its chip from Discovery, the owner's one-time SetOption128 in Tasmota's console, then the install picker.
+function buildTasmotaMigrate(row) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    const line = document.createElement("div");
+    line.textContent = `Tasmota ${row.version || ""}${row.chip ? ` on an ${row.chip}` : ""}.`;
+    box.appendChild(line);
+    if (!row.chip) { line.textContent += " Its chip shows once Discovery has asked its page."; return box; }
+    const base = `http://${row.ip}`;
+    const extra = document.createElement("div");
+    extra.className = "graph-popup-extras";
+    const how = document.createElement("div");
+    how.className = "graph-popup-file";
+    // Until Tasmota answers the map: where to switch it on. The link is Tasmota's main page, since its console serves only a request whose Referer is Tasmota itself until SetOption128 is 1.
+    const ask = document.createElement("span");
+    const tasmotaLink = document.createElement("a");
+    tasmotaLink.href = `${base}/`;
+    tasmotaLink.target = "_blank";
+    tasmotaLink.rel = "noopener";
+    tasmotaLink.textContent = "open Tasmota";
+    ask.append("First, once: ", tasmotaLink, ", go to Tools → Console and enter SetOption128 1, which lets the map reach Tasmota's update.");
+    const done = document.createElement("span");
+    done.textContent = "✓ SetOption128 is on: the map reaches Tasmota's update.";
+    done.hidden = true;
+    how.append(ask, done);
+    const file = document.createElement("label");
+    file.className = "graph-popup-file";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".bin";
+    file.append("Migration image, for a release without one ", input);
+    extra.append(how, file);
+    // Install waits until Tasmota answers the map, which it does once SetOption128 is 1, checked again every few seconds while the popup shows.
+    let open = false, picker = null;
+    const check = async () => {
+        if (!box.isConnected) return;   // the popup closed: the box is in it from the moment it opens
+        open = await tasmotaApiOpen(base);
+        ask.hidden = open;
+        done.hidden = !open;
+        picker?.refresh();
+        setTimeout(check, 3000);
+    };
+    mountMapPicker(box, base, row.chip, null, extra, async (binaryUrl, tag, note) => {
+        if (!confirm("Move this Tasmota device to MoonLight over WiFi? Going back to Tasmota needs a USB cable.")) return null;
+        await tasmotaToMoonBase(base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
+        return moonBaseToMoonLight(base, binaryUrl, note);
+    }, () => (open ? "" : "Enter SetOption128 1 in Tasmota's Console first")).then((p) => { picker = p; check(); });
+    return box;
+}
+
+// An ESPHome device's way to MoonLight without a cable: ESPHome takes an image only through its own update protocol, which a browser cannot speak,
+// so the device serving the app hands it on (`/api/relay/esphome`), the image's MD5 computed here since ESPHome asks for it before the image.
+function buildEsphomeMigrate(row) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    const line = document.createElement("div");
+    line.textContent = `ESPHome ${row.version || ""}${row.chip ? ` on an ${row.chip}` : ""}.`;
+    box.appendChild(line);
+    if (!row.chip) { line.textContent += " Its chip shows once its mDNS record has named it."; return box; }
+    const file = document.createElement("label");
+    file.className = "graph-popup-file";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".bin";
+    file.append("Migration image, for a release without one ", input);
+    const base = `http://${row.ip}`;
+    mountMapPicker(box, base, row.chip, null, file, async (binaryUrl, tag, note) => {
+        if (!confirm("Move this ESPHome device to MoonLight over WiFi? Going back to ESPHome needs a USB cable, or ESPHome's own tools.")) return null;
+        await esphomeToMoonBase(row.ip, base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
+        return moonBaseToMoonLight(base, binaryUrl, note);
+    });
+    return box;
+}
+
+// The image to the ESPHome device at `ip` through the app's own device, which speaks ESPHome's update protocol and answers how it went; then MoonBase.
+async function esphomeToMoonBase(ip, base, source, tag, chip, note) {
+    const image = await migrationImage(source, tag, chip, note);
+    note.textContent = "Handing the image to ESPHome through this device: keep the power on for the next minutes…";
+    const md5 = md5Hex(new Uint8Array(await image.arrayBuffer()));
+    const res = await fetch(`/api/relay/esphome?host=${encodeURIComponent(ip)}&md5=${md5}`, {
+        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: image }).catch(() => null);
+    if (!res) throw new Error("this device did not answer the relay");
+    if (!res.ok) throw new Error(`ESPHome refused the image: ${await errorMessage(res)}`);
+    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
+    throw new Error("ESPHome took the image but no MoonBase answered within a minute and a half");
+}
+
+// The MD5 of `bytes` as 32 hex digits (RFC 1321), which ESPHome's update asks for before the image; the browser's own crypto has no MD5.
+function md5Hex(bytes) {
+    const s = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+    const k = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0);
+    const padded = new Uint8Array(((bytes.length + 8) >> 6 << 6) + 64);
+    padded.set(bytes);
+    padded[bytes.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    view.setUint32(padded.length - 8, (bytes.length * 8) >>> 0, true);
+    view.setUint32(padded.length - 4, Math.floor(bytes.length / 2 ** 29), true);
+    let [a0, b0, c0, d0] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+    for (let off = 0; off < padded.length; off += 64) {
+        let [a, b, c, d] = [a0, b0, c0, d0];
+        for (let i = 0; i < 64; i++) {
+            const r = i >> 4;
+            const f = r === 0 ? (b & c) | (~b & d) : r === 1 ? (d & b) | (~d & c) : r === 2 ? b ^ c ^ d : c ^ (b | ~d);
+            const g = r === 0 ? i : r === 1 ? (5 * i + 1) & 15 : r === 2 ? (3 * i + 5) & 15 : (7 * i) & 15;
+            const sum = (a + f + k[i] + view.getUint32(off + g * 4, true)) | 0;
+            const sh = s[r * 4 + (i & 3)];
+            [a, d, c] = [d, c, b];
+            b = (b + ((sum << sh) | (sum >>> (32 - sh)))) | 0;
+        }
+        [a0, b0, c0, d0] = [(a0 + a) | 0, (b0 + b) | 0, (c0 + c) | 0, (d0 + d) | 0];
+    }
+    return [a0, b0, c0, d0].map(w => Array.from({ length: 4 }, (_, i) => ((w >>> (8 * i)) & 255).toString(16).padStart(2, "0")).join("")).join("");
+}
+
+// Whether Tasmota answers a command from the map: with SetOption128 off it drops the request unanswered, which the browser reports as a network error;
+// on, it answers, which a no-cors request sees without reading it.
+async function tasmotaApiOpen(base) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 2500);
+    try { await fetch(`${base}/cm?cmnd=SetOption128`, { mode: "no-cors", signal: ctl.signal }); return true; }
+    catch (_) { return false; }
+    finally { clearTimeout(timer); }
+}
+
+// The two steps Tasmota's own update page runs: `/u4?u4=fct` restarts it into safeboot, then the image goes to `/u2`, field `u2`. Safeboot takes an upload only
+// after a `fct` it answered itself marked one as coming, and each upload clears the mark, so `fct` goes again before every upload, as Tasmota's page repeats it.
+// Tasmota sends no CORS header, so the page reads none of its answers: it watches the board drop off and come back, and confirms by MoonBase answering on /api/system.
+async function tasmotaToMoonBase(base, source, tag, chip, note) {
+    const image = await migrationImage(source, tag, chip, note);
+    note.textContent = "Restarting Tasmota into its safeboot…";
+    await fetch(`${base}/u4?u4=fct&api=`, { mode: "no-cors" }).catch(() => null);
+    if (await waitForRestart(base, 12000, 30000)) await fwSleep(3000);   // back, its web server answers before its upload is ready; never dropped, it was in safeboot already
+    // Twice at most: an upload safeboot was not ready for, or cut off, reads here like a refusal, the reply being unreadable.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        await fetch(`${base}/u4?u4=fct&api=`, { mode: "no-cors" }).catch(() => null);   // the mark safeboot needs before it takes an upload
+        note.textContent = `Uploading to Tasmota's safeboot${attempt > 1 ? ", again" : ""}: keep the power on for the next minutes…`;
+        const form = new FormData();
+        form.append("u2", image, "shared-migrate.bin");
+        try { await fetch(`${base}/u2?fsz=${image.size}`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
+        if (await waitForSystem(base, (sys) => sys.moonbase, 60000)) return;
+    }
+    throw new Error("still Tasmota after two uploads: its safeboot did not take the image, or SetOption128 is not 1 in its Console");
+}
+
+// Whether the board at `base` dropped off within `dropMs` and answered again within `ms`, as a restart does; read without CORS, so only whether it answers.
+async function waitForRestart(base, dropMs, ms) {
+    const start = Date.now(), deadline = start + ms;
+    let dropped = false;
+    while (Date.now() < deadline) {
+        if (!dropped && Date.now() - start > dropMs) return false;   // it never went down: nothing to wait for
+        await fwSleep(1000);
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 1500);
+        const up = await fetch(`${base}/`, { mode: "no-cors", signal: ctl.signal }).then(() => true, () => false);
+        clearTimeout(timer);
+        if (!up) dropped = true;
+        else if (dropped) return true;
+    }
+    return false;
+}
+
+// Hand MoonBase the firmware's address as its own page does and follow its progress; MoonLight's /api/system once it runs.
+async function moonBaseToMoonLight(base, binaryUrl, note) {
+    note.textContent = "Handing MoonBase the firmware…";
+    const res = await fetch(`${base}/api/firmware/url`, { method: "POST", body: binaryUrl }).catch(() => null);
+    if (!res) throw new Error("MoonBase does not answer");
+    if (!res.ok) throw new Error(`MoonBase refused: ${await res.text()}`);
+    const progress = async () => {
+        try { const st = await (await fetch(`${base}/moonbase`)).text(); if (st) note.textContent = `MoonBase: ${st}`; } catch (_) { /* restarting */ }
+    };
+    const sys = await waitForSystem(base, (s) => !s.moonbase, 300000, progress);
+    if (!sys) throw new Error("no MoonLight after five minutes: open the board's address to see where MoonBase stands");
+    note.textContent = "";
+    return sys;
+}
+
+// The board's /api/system every three seconds until `done` holds for it or `ms` pass, `onWait` hearing each other answer; the answer, or null.
+async function waitForSystem(base, done, ms, onWait) {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+        await fwSleep(3000);
+        const sys = await fetchJsonWithin(`${base}/api/system`, 2500);
+        if (sys && done(sys)) return sys;
+        if (sys && onWait) await onWait(sys);
+    }
+    return null;
+}
+
+// A device model's defaults onto the new MoonLight as one state document, the one the web installer sends over serial; WiFi and Ethernet
+// are wired in code, so a model's Network replace keeps them and the board stays reachable.
+async function applyDeviceDefaults(base, model) {
+    if (!model || !model.state) return "";
+    try {
+        const res = await fetch(`${base}/api/state`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(model.state) });
+        return res.ok ? ` ${model.name}'s defaults applied.` : ` ${model.name}'s defaults refused: ${await errorMessage(res)}.`;
+    } catch (_) {
+        return ` ${model.name}'s defaults did not reach it.`;
+    }
 }
 
 // A device's summary lines, each only when the device reports it: its board, identity, health, what

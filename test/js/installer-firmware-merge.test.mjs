@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFirmwaresFromAssets, mergeFirmwares } from "../../src/ui/install-picker.js";
+import { parseFirmwaresFromAssets, mergeFirmwares, firmwareChip, chipKey } from "../../src/ui/install-picker.js";
 
 // A GitHub-style asset entry: parse keys off `name`, the URL is `browser_download_url`.
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
@@ -106,4 +106,13 @@ test("parseFirmwaresFromAssets: MoonBase assets are never offered as an OTA imag
     assert.deepEqual(fw.map((f) => f.firmware), ["esp32"]);
     assert.match(fw[0].binaryUrl, /firmware-esp32-v2\.0\.0\.bin$/,
                  "the app image stays the binary, not a MoonBase asset");
+});
+
+test("a map installing onto another device matches firmware and devices by that device's chip", () => {
+    assert.equal(firmwareChip("esp32"), "esp32");
+    assert.equal(firmwareChip("esp32-eth"), "esp32", "a classic's variants share its chip");
+    assert.equal(firmwareChip("esp32s3-n16r8"), "esp32s3", "not the classic's, though esp32 is its prefix");
+    assert.equal(firmwareChip("esp32p4rev1-eth"), "esp32p4", "the silicon revision is a variant, not a chip");
+    assert.equal(chipKey("ESP32-S3"), "esp32s3", "the catalog's family as firmware keys spell it");
+    assert.equal(chipKey("ESP32"), "esp32");
 });

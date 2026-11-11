@@ -108,7 +108,7 @@
     },
     "identify": {
      "line": "Blink the lights for five seconds, so this device is found by looking.",
-     "more": "Dark and lit twice a second at their own brightness, never brighter. The Devices map presses it from a device's details."
+     "more": "Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details."
     },
     "palette": {
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
@@ -5241,7 +5241,7 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
+   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",
@@ -5264,19 +5264,6 @@
       {
        "title": "Firmware MoonBase joins the apps network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:live:scenario_Firmware_MoonBase_joins_the_apps_network"
-      }
-     ]
-    },
-    "mDNS": {
-     "line": "The `<name>.local` hostname, on IPv4 and IPv6.",
-     "tests": [
-      {
-       "title": "Network hardware reconfigures live",
-       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
-      },
-      {
-       "title": "Network identity and discovery",
-       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
     }

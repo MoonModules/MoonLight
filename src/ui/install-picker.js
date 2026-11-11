@@ -106,6 +106,7 @@ function makeState() {
         installRowExtras: null,
         extrasAfterInstall: false,
         moonbaseOnly: false,
+        targetChip: null,      // another device's chip ("esp32s3"), which a device's map installs onto: firmwares and devices of that chip only
         releases: [],          // normalized release records from the API
         sortedReleases: [],    // releases sorted newest-first; render() fills this
         releaseIdx: 0,         // index into sortedReleases
@@ -115,12 +116,9 @@ function makeState() {
         deviceResolved: false,  // has the link/preference default been applied yet? render()
                                 // runs on every setDesktopMode toggle, and re-resolving there
                                 // threw away the pick the visitor made after the first one.
-        hasPort: null,         // web installer only: () => bool, "is a USB port
-                               // picked?". When set, Install is disabled until it
-                               // returns true (the host re-evaluates via
-                               // notifyPortChanged on every port change). null on
-                               // the on-device OTA picker (no serial-port concept),
-                               // which leaves the button ungated as before.
+        blocker: null,         // () => the host's reason Install must wait, "" when nothing blocks it: the web
+                               // installer's unpicked USB port, the map's Tasmota without SetOption128. The host
+                               // re-evaluates through notifyReadyChanged or the handle's refresh. null: ungated.
         deviceSupport: null,    // device-catalog + chip-detect helpers injected by
                                // the web installer (install-picker-devices.js); null
                                // on-device, so no device code ships in the firmware.
@@ -296,6 +294,16 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey) {
     if (ownFirmwareKey === "unknown") return candidateFirmwareKey === desktopKeyForThisHost();
     const strip = f => f.replace(/-eth.*$/, "");
     return strip(ownFirmwareKey) === strip(candidateFirmwareKey);
+}
+
+// The chip a firmware variant is built for, as a device reports it: esp32s3 for esp32s3-n16r8, esp32p4 for esp32p4rev1-eth, esp32 for esp32-eth.
+function firmwareChip(firmware) {
+    return firmware.split("-")[0].replace(/rev\d+$/, "");
+}
+
+// A catalog chip family as firmware keys spell it: "ESP32-S3" is esp32s3.
+function chipKey(family) {
+    return String(family || "").toLowerCase().replace(/-/g, "");
 }
 
 // The desktop builds of the firmware registry (moondeck/build/firmwares.py), written here by
@@ -528,16 +536,12 @@ function render(state) {
     // the dropdown.
     let firmwareReady = false;
 
-    // Final Install-button gate: a valid firmware AND (when the host supplied a
-    // hasPort predicate — web installer) a USB port picked. The on-device OTA
-    // picker passes no hasPort, so it's port-gate-free as before. Shows the reason
-    // as the button title so the disabled state isn't a mystery.
+    // Final Install-button gate: a valid firmware AND nothing the host names blocking it. Shows the
+    // reason as the button title so the disabled state isn't a mystery.
     function applyInstallEnabled() {
-        const portOk = !state.hasPort || state.hasPort();
-        installBtn.disabled = !(firmwareReady && portOk);
-        installBtn.title = !firmwareReady ? "Select a firmware to flash"
-                         : !portOk ? "Select a USB port first"
-                         : "";
+        const why = state.blocker ? state.blocker() : "";
+        installBtn.disabled = !(firmwareReady && !why);
+        installBtn.title = !firmwareReady ? "Select a firmware to flash" : why;
     }
     state.applyInstallEnabled = applyInstallEnabled;
 
@@ -562,7 +566,8 @@ function render(state) {
             // question, and offering another chip's image is what the device's own header check
             // exists to refuse.
             .filter(f => state.moonbaseOnly ? f.firmware === state.ownFirmwareKey
-                                            : isCompatible(state.ownFirmwareKey, f.firmware));
+                       : state.targetChip ? firmwareChip(f.firmware) === state.targetChip
+                                          : isCompatible(state.ownFirmwareKey, f.firmware));
         // Narrow by selected device (web installer only, since selectedDevice stays
         // null on the on-device picker since the device <select> isn't rendered).
         // Defensive: a device the user picked that isn't in the catalog (e.g.
@@ -763,7 +768,7 @@ function render(state) {
         // gates on one (the button is already disabled in that state, but a stale
         // enablement shouldn't let a flash through). The dropdown stays the place
         // to pick a port.
-        if (state.hasPort && !state.hasPort()) { applyInstallEnabled(); return; }
+        if (state.blocker && state.blocker()) { applyInstallEnabled(); return; }
         const entry = (r.firmwares || []).find(f => f.firmware === state.firmware);
         if (!entry) return;
         // Mismatch guard: if Detect ran and the user then overrode the device to
@@ -789,9 +794,10 @@ function render(state) {
             ? `Downloading ${releaseLabel(r)}…`
             : `Installing ${releaseLabel(r)} (${state.firmware})…`;
         try {
-            await state.onInstall(state.firmware, entry.manifestUrl, entry.binaryUrl, entry, releaseLabel(r));
-            statusEl.textContent = entry.isDesktop
-                ? `Download started. Open it to install.`
+            // A caller that follows the install to its end answers what came of it, which the status line then says.
+            const outcome = await state.onInstall(state.firmware, entry.manifestUrl, entry.binaryUrl, entry, releaseLabel(r), r.tag_name);
+            statusEl.textContent = typeof outcome === "string" ? outcome
+                : entry.isDesktop ? `Download started. Open it to install.`
                 : `Install request sent — watch device status for progress.`;
         } catch (e) {
             statusEl.textContent = `Error: ${e && e.message ? e.message : e}`;
@@ -810,7 +816,7 @@ function render(state) {
 // Pure helpers exported for unit testing (test/js/installer-firmware-merge.test.mjs).
 // They take data and return data — no DOM, no fetch — so a node test can exercise
 // the real functions rather than a re-implemented copy.
-export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, releaseLabel };
+export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, releaseLabel, firmwareChip, chipKey };
 
 export const installPicker = {
     /**
@@ -841,9 +847,9 @@ export const installPicker = {
      * @param {HTMLElement} opts.container - DOM element to mount into.
      * @param {string|null} opts.ownFirmwareKey - device's MM_FIRMWARE_NAME for
      *   OTA compatibility filtering, or null for the web installer (no filter).
-     * @param {(firmware: string, manifestUrl: string, binaryUrl: string) => Promise<void>} opts.onInstall
+     * @param {(firmware: string, manifestUrl: string, binaryUrl: string, entry: object, label: string, tag: string) => Promise<string|void>} opts.onInstall
      *   - Called when the user clicks Install. The picker doesn't decide how
-     *     to install — the caller decides.
+     *     to install — the caller decides. A string it answers is the final status line.
      * @param {() => Promise<string>} [opts.onDetect] - web installer only:
      *   opens the serial port and returns the connected chip-family string
      *   ("ESP32" / "ESP32-S3"). When provided, the picker renders a "Detect
@@ -859,6 +865,8 @@ export const installPicker = {
      *   uses this for the "Erase chip first" checkbox; on-device OTA omits
      *   it. The picker re-attaches the SAME node on every render(), so
      *   listeners the caller wired on the element keep firing.
+     * @param {string} [opts.targetChip] - another device's chip ("esp32s3"), for a device's
+     *   map installing onto it: the firmware and device lists hold that chip's only.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection
      *   helpers ({ loadDevices, fillDeviceOptions, applyDetectedChip }) from
      *   install-picker-devices.js. WEB INSTALLER ONLY: the Pages page imports
@@ -876,9 +884,9 @@ export const installPicker = {
      *   tree-shaking here; embed_ui.cmake gzips this file verbatim).
      */
     async init({ container, ownFirmwareKey, onInstall, onDetect = null,
-                 enableDevicePicker = true, installRowExtras = null, hasPort = null,
+                 enableDevicePicker = true, installRowExtras = null, blocker = null,
                  moonbaseOnly = false, extrasAfterInstall = false,
-                 deviceSupport = null, extraFirmwaresByTag = null }) {
+                 deviceSupport = null, extraFirmwaresByTag = null, targetChip = null }) {
         const state = makeState();
         state.container = container;
         state.ownFirmwareKey = ownFirmwareKey || null;
@@ -890,8 +898,9 @@ export const installPicker = {
         // Offer the MOONBASE image instead of the app firmwares: one per chip, unversioned, and
         // installed into the factory slot. The on-device card sets this from its image selector.
         state.moonbaseOnly = moonbaseOnly;
-        state.hasPort = hasPort;
+        state.blocker = blocker;
         state.deviceSupport = deviceSupport;
+        state.targetChip = targetChip;
 
         // Show the full field skeleton immediately (each select spins) instead of
         // a single "Loading…" row, so a slow GitHub fetch doesn't leave the form
@@ -907,7 +916,7 @@ export const installPicker = {
             loadReleases({ bypassCache: bypass }),
             (enableDevicePicker && deviceSupport) ? deviceSupport.loadDevices() : Promise.resolve([]),
         ]);
-        state.devices = devices;
+        state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === targetChip) : devices;
         _lastState = state;
         // Honour a mode the host chose while the release fetch was still in flight.
         if (_pendingDesktopMode !== null) {
@@ -945,15 +954,17 @@ export const installPicker = {
             return;
         }
         render(state);
+        // This picker's own picked device, for a host with several pickers on its page, where the getters below answer the last one mounted.
+        return { selectedDeviceEntry: () => state.devices.find(d => d.name === state.selectedDevice) || null,
+                 refresh: () => state.applyInstallEnabled && state.applyInstallEnabled() };
     },
 
     /**
      * Re-evaluate the Install button's enabled state — call from the host
-     * whenever the USB-port selection changes, so the button enables once a
-     * port is picked and disables again if it's cleared. No-op until the picker
-     * has rendered (applyInstallEnabled is wired during render()).
+     * whenever what its blocker reads changes, the web installer's USB port.
+     * No-op until the picker has rendered (applyInstallEnabled is wired during render()).
      */
-    notifyPortChanged() {
+    notifyReadyChanged() {
         if (_lastState && _lastState.applyInstallEnabled) _lastState.applyInstallEnabled();
     },
 

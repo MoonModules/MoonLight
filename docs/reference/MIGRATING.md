@@ -37,7 +37,13 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 The device list is the Discovery card in a top-level Devices container, where it was a card under Network. The device reads Discovery's settings from the Devices file, so `addressing` starts at its default, multicast and broadcast. The list itself is not saved: it fills within seconds of boot as devices announce themselves, and a saved `devices` entry is ignored. It has no fixed size: it holds as many devices as memory allows, where it stopped at 32.
 
-A device serving its page on a port other than 80, a desktop or a Pi on 8080, adds that port to its presence packet. A board on older firmware ignores the longer packet and stops listing such a device until it is updated too; WLED keeps listing it.
+A MoonLight or MoonBase board appends its page's port and its base MAC to its presence packet, so a desktop or a Pi on 8080 is linked at its port and a board moving from WiFi to Ethernet stays one device on the map. A board on older firmware ignores the longer packet and stops listing updated boards until it is updated too; WLED keeps listing them.
+
+### mDNS is always on
+
+**Action: *nothing*.**
+
+The Network card's `mDNS` switch is gone: a device always answers on `<device name>.local` while a network carries it, since its name is its address. A saved `mDNS` setting is ignored, so a device that had it off is found by name again.
 
 ### The level spans from where the gate opens to its top
 

@@ -579,8 +579,13 @@ function setupLayout() {
         if (forceSmall !== tooWide) { forceSmall = tooWide; applyMode(); }
         applySizes();
     };
-    widenCards_ = (clientX) => { if (mode() === "side") widen(clientX); };
-    saveLayout_ = save;
+    // The corner grip's drag decides at its start whether it moves the card column, so a drag that sends the preview small brings it back on its way in.
+    let cornerWidens = null;
+    widenCards_ = (clientX) => {
+        if (cornerWidens === null) cornerWidens = mode() === "side";
+        if (cornerWidens) widen(clientX);
+    };
+    saveLayout_ = () => { cornerWidens = null; save(); };   // the drag's end
     const onSplitMove = (e) => {
         const r = ws.getBoundingClientRect();
         if (splitFrom === "under") {

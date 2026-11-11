@@ -107,6 +107,7 @@ add_executable(mm_tests
     unit/core/unit_MoonBaseContract.cpp
     unit/core/unit_WledNetworks.cpp
     unit/core/unit_Mdns.cpp
+    unit/core/unit_EsphomeOta.cpp
     unit/core/unit_NetworkModule_legacy.cpp
     unit/core/unit_IpSettings.cpp
     unit/core/unit_NetworkModule.cpp

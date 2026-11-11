@@ -65,29 +65,35 @@ TEST_CASE("WledPacket::readName truncates a long name to the buffer, never overr
     CHECK(std::strlen(small) == 7);   // truncated to cap-1, NUL-terminated
 }
 
-TEST_CASE("WledPacket: a MoonLight device on another port appends it, and one on port 80 sends the plain header") {
+TEST_CASE("WledPacket: a marked packet appends the page's port and the board's base MAC, and a plain header means port 80 and no MAC") {
     const uint8_t ip[4] = {192, 168, 1, 147};
-    uint8_t pkt[WledPacket::kSizeWithPort];
+    const uint8_t mac[6] = {0x08, 0xb6, 0x1f, 0x6f, 0xbd, 0x3c};
+    uint8_t pkt[WledPacket::kSizeWithMac];
     WledPacket::build(pkt, ip, "MM-Desktop", 32, true);
     WledPacket::stampMarker(pkt);
-    CHECK(WledPacket::stampHttpPort(pkt, 80) == WledPacket::kSize);
+    uint8_t read[6] = {};
     CHECK(WledPacket::httpPort(pkt, WledPacket::kSize) == 80);   // absent means 80, as in an http URL
+    CHECK_FALSE(WledPacket::readMac(pkt, WledPacket::kSize, read));   // WLED's header names no MAC
 
-    const size_t len = WledPacket::stampHttpPort(pkt, 8080);
-    CHECK(len == WledPacket::kSizeWithPort);
+    const size_t len = WledPacket::stampTail(pkt, 8080, mac);
+    CHECK(len == WledPacket::kSizeWithMac);
     CHECK(WledPacket::isValid(pkt, len));            // WLED reads 40 bytes or more and ignores the rest
     CHECK(WledPacket::hasMarker(pkt, len));
     CHECK(WledPacket::httpPort(pkt, len) == 8080);
     CHECK(pkt[WledPacket::kPortOff] == 0x90);        // little-endian, like the header's other fields
     CHECK(pkt[WledPacket::kPortOff + 1] == 0x1f);
+    REQUIRE(WledPacket::readMac(pkt, len, read));
+    CHECK(std::memcmp(read, mac, 6) == 0);
+    CHECK(WledPacket::httpPort(pkt, WledPacket::stampTail(pkt, 0, mac)) == 80);   // no port reported yet: 80
 }
 
-TEST_CASE("WledPacket: only the header, or the header and a port, is presence") {
-    uint8_t pkt[WledPacket::kSizeWithPort + 1] = {255, 1};
+TEST_CASE("WledPacket: only the header, or the header with MoonLight's tail, is presence") {
+    uint8_t pkt[WledPacket::kSizeWithMac + 1] = {255, 1};
     CHECK(WledPacket::isValid(pkt, WledPacket::kSize));
-    CHECK(WledPacket::isValid(pkt, WledPacket::kSizeWithPort));
+    CHECK(WledPacket::isValid(pkt, WledPacket::kSizeWithMac));
     CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSize + 1));
-    CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSizeWithPort + 1));
+    CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSize + 2));   // the port alone is no packet MoonLight sends
+    CHECK_FALSE(WledPacket::isValid(pkt, WledPacket::kSizeWithMac + 1));
 }
 
 TEST_CASE("WledPacket: MoonBase's sentinel is its own, read as neither MoonLight's nor plain WLED's") {

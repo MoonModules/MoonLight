@@ -6,6 +6,7 @@
 #include "core/util/Mdns.h"
 #include "mdns_replies.h"
 
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -20,7 +21,7 @@ TEST_CASE("the browse is one PTR question for the service, as RFC 6763 asks it")
     CHECK(mm::mdns::buildQuery("_esphomelib._tcp.local", q, 20) == 0);   // too small a buffer writes nothing usable
 }
 
-TEST_CASE("an ESPHome board's reply names its instance, its friendly name, its version and its board") {
+TEST_CASE("an ESPHome board's reply names its instance, its friendly name, its version, its board and its MAC") {
     const std::vector<uint8_t> r = mdns_replies::bytes(mdns_replies::kEsphomeReply);
     mm::mdns::Service s;
     REQUIRE(mm::mdns::parseReply(r.data(), r.size(), "_esphomelib._tcp.local", s));
@@ -28,6 +29,41 @@ TEST_CASE("an ESPHome board's reply names its instance, its friendly name, its v
     CHECK(std::string(s.name) == "ESPHome Web 7388c8");
     CHECK(std::string(s.version) == "2026.9.1");
     CHECK(std::string(s.board) == "esp32");
+    const uint8_t mac[6] = {0xc8, 0xf0, 0x9e, 0x73, 0x88, 0xc8};
+    CHECK(std::memcmp(s.mac, mac, 6) == 0);
+    CHECK(std::string(s.chip) == "esp32");   // platform ESP32, board esp32: the classic
+}
+
+TEST_CASE("an ESPHome record's chip comes from its variant, else its board's name, and is none for a platform MoonLight does not run on") {
+    char chip[10];
+    chip[0] = 0; mm::mdns::esphomeChip("ESP32", "ESP32S3", "esp32dev", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32s3");
+    chip[0] = 0; mm::mdns::esphomeChip("ESP32", "", "esp32-c3-devkitm-1", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32c3");
+    chip[0] = 0; mm::mdns::esphomeChip("ESP32", "", "esp32dev", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32");
+    chip[0] = 0; mm::mdns::esphomeChip("ESP8266", "", "d1_mini", chip, sizeof(chip)); CHECK(std::string(chip).empty());
+}
+
+TEST_CASE("a WLED board's reply names its MAC, the identity its presence packet lacks") {
+    const std::vector<uint8_t> r = mdns_replies::bytes(mdns_replies::kWledReply);
+    mm::mdns::Service s;
+    REQUIRE(mm::mdns::parseReply(r.data(), r.size(), "_wled._tcp.local", s));
+    CHECK(std::string(s.instance) == "wled-e15ceb");
+    const uint8_t mac[6] = {0x30, 0xed, 0xa0, 0xe1, 0x5c, 0xeb};
+    CHECK(std::memcmp(s.mac, mac, 6) == 0);
+    CHECK_FALSE(mm::mdns::parseReply(r.data(), r.size(), "_esphomelib._tcp.local", s));   // the other browse's reply names nothing
+}
+
+TEST_CASE("a MAC reads as twelve hex digits, with or without separators, and nothing else does") {
+    uint8_t m[6] = {};
+    REQUIRE(mm::mdns::parseMac("08b61f6fbd3c", m));
+    CHECK(m[0] == 0x08);
+    CHECK(m[5] == 0x3c);
+    REQUIRE(mm::mdns::parseMac("08:B6:1F:6F:BD:3C", m));
+    CHECK(m[1] == 0xb6);
+    CHECK(mm::mdns::parseMac("08-b6-1f-6f-bd-3c", m));
+    CHECK_FALSE(mm::mdns::parseMac("08b61f6fbd", m));       // short
+    CHECK_FALSE(mm::mdns::parseMac("08b61f6fbd3c00", m));   // long
+    CHECK_FALSE(mm::mdns::parseMac("08b61f6fbdzz", m));     // not hex
+    CHECK_FALSE(mm::mdns::parseMac("", m));
 }
 
 TEST_CASE("a reply for another service, a question, or a cut-off reply names nothing, and never reads past its end") {

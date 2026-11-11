@@ -62,3 +62,7 @@ CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
 # stack, which overflowed the 3.5 KB default the moment the TLS handshake ran (the plain-HTTP
 # LAN path fit, which is why the bench missed it). RAM is not scarce here; 12 KB buys margin.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
+
+# MoonBase installs whichever release the user picks, built in whichever flash mode that release chose: the bootloader sets the mode at boot, not
+# the app, so the update's comparison of the two app descriptors' modes would refuse a good image (ESP_ERR_OTA_SPI_MODE_MISMATCH, 0x1508).
+CONFIG_ESP_HTTPS_OTA_VERIFY_SPI_MODE=n

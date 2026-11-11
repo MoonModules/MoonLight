@@ -1,0 +1,3 @@
+# The P4 boards WLED-MM and MoonLight's esp32p4rev1 variants run are revision 1.x, which an image built for 3.x does not boot on.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_100=y

@@ -19,7 +19,7 @@
 
 #include "doctest.h"
 #include "discovery_rows.h"
-#include "mdns_replies.h"   // an ESPHome board's real reply to the browse
+#include "mdns_replies.h"   // real replies to the browse: an ESPHome board and a WLED-MM board
 #include "core/system/DevicesModule.h"
 #include "core/system/WledPacket.h"
 #include "core/util/JsonSink.h"
@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 
 using namespace mm;
 
@@ -287,10 +288,11 @@ TEST_CASE("DevicesModule: a host setting naming a board resolves from the device
 TEST_CASE("DevicesModule: a peer serving on another port is linked and read at that port") {
     DevicesModule dev;
     const uint8_t ip[4] = {192, 0, 2, 61};
-    uint8_t pkt[WledPacket::kSizeWithPort];
+    uint8_t pkt[WledPacket::kSizeWithMac];
+    const uint8_t mac[6] = {2, 0, 0, 0, 0, 61};
     WledPacket::build(pkt, ip, "MM-Pi", 32, true);
     WledPacket::stampMarker(pkt);
-    dev.injectPacketForTest(pkt, WledPacket::stampHttpPort(pkt, 8080), ip);
+    dev.injectPacketForTest(pkt, WledPacket::stampTail(pkt, 8080, mac), ip);
     REQUIRE(dev.listRowCount() >= 1);
     CHECK(std::strstr(rowFor(dev, "192.0.2.61").c_str(), "\"port\":8080") != nullptr);
     const std::string detail = discovery_rows::rowAt(dev, "192.0.2.61", true);
@@ -397,5 +399,150 @@ TEST_CASE("DevicesModule: added addresses restored at boot are asked, as a chang
     dev.setup();
     dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: Tasmota/16.0.0 (ESP32-D0WD-V3)\r\n\r\n<h2>Garage</h2>", 32);
     CHECK(std::strstr(rowFor(dev, "192.0.2.105").c_str(), "Garage") != nullptr);
+    dev.release();
+}
+
+// A board flashed from MoonLight to WLED sends only unmarked packets: once the marked ones have stopped for the hold, the row shows what it runs.
+TEST_CASE("DevicesModule: a MoonLight board flashed to WLED is listed as WLED once its marked packets have stopped, not a day later") {
+    struct Clock { ~Clock() { platform::setTestNowMs(0); } } guard;
+    DevicesModule dev;
+    const uint8_t ip[4] = {192, 0, 2, 207};
+    platform::setTestNowMs(1000);
+    discovery_rows::hearPresence(dev, ip, "MM-Olimex", true);
+    platform::setTestNowMs(1000 + 10000);
+    discovery_rows::hearPresence(dev, ip, "WLED-Olimex", false);   // within the hold: one stray unmarked packet changes nothing
+    CHECK(std::strstr(rowFor(dev, "192.0.2.207").c_str(), "\"type\":\"MoonLight\"") != nullptr);
+    platform::setTestNowMs(1000 + 31000);
+    discovery_rows::hearPresence(dev, ip, "WLED-Olimex", false);   // past it: the board runs WLED now
+    CHECK(std::strstr(rowFor(dev, "192.0.2.207").c_str(), "\"type\":\"WLED\"") != nullptr);
+}
+
+namespace {
+// A MoonLight board's marked presence from 192.0.2.d, naming its base MAC, which ends in `id`.
+void hearWithMac(DevicesModule& dev, uint8_t d, uint8_t id, const char* name = "MM-Olimex") {
+    const uint8_t ip[4] = {192, 0, 2, d};
+    const uint8_t mac[6] = {0x08, 0xb6, 0x1f, 0x6f, 0xbd, id};
+    uint8_t pkt[WledPacket::kSizeWithMac];
+    WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
+    WledPacket::stampMarker(pkt);
+    dev.injectPacketForTest(pkt, WledPacket::stampTail(pkt, 80, mac), ip);
+}
+}  // namespace
+
+TEST_CASE("DevicesModule: a board moving from WiFi to Ethernet keeps one row, which takes its new address") {
+    DevicesModule dev;
+    hearWithMac(dev, 70, 0x3c);
+    hearWithMac(dev, 71, 0x3c);   // the same base MAC from the Ethernet address
+    CHECK(dev.listRowCount() == 1);
+    CHECK(rowFor(dev, "192.0.2.70").empty());
+    CHECK(std::strstr(rowFor(dev, "192.0.2.71").c_str(), "\"mac\":\"08:b6:1f:6f:bd:3c\"") != nullptr);
+}
+
+TEST_CASE("DevicesModule: a row an address held before its device named its MAC merges into the row holding that MAC") {
+    DevicesModule dev;
+    hearWithMac(dev, 72, 0x3d);
+    inject(dev, "MM-Olimex", /*mm=*/true, 192, 0, 2, 73);   // heard first without a MAC at its second address
+    REQUIRE(dev.listRowCount() == 2);
+    hearWithMac(dev, 73, 0x3d);
+    CHECK(dev.listRowCount() == 1);
+    CHECK_FALSE(rowFor(dev, "192.0.2.73").empty());
+}
+
+TEST_CASE("DevicesModule: another device taking an address starts a row of its own") {
+    DevicesModule dev;
+    hearWithMac(dev, 74, 0x01, "MM-First");
+    hearWithMac(dev, 74, 0x02, "MM-Second");   // DHCP handed the address on
+    CHECK(dev.listRowCount() == 1);
+    const std::string row = rowFor(dev, "192.0.2.74");
+    CHECK(std::strstr(row.c_str(), "MM-Second") != nullptr);
+    CHECK(std::strstr(row.c_str(), "\"mac\":\"08:b6:1f:6f:bd:02\"") != nullptr);
+}
+
+TEST_CASE("DevicesModule: a WLED-service reply adds its MAC to the row a presence packet made, and makes no row of its own") {
+    DevicesModule dev;
+    const std::vector<uint8_t> reply = mdns_replies::bytes(mdns_replies::kWledReply);
+    const uint8_t troy[4] = {192, 0, 2, 75};
+    dev.injectMdnsReplyForTest(reply.data(), reply.size(), troy);
+    CHECK(dev.listRowCount() == 0);   // MoonLight boards answer this service too, so a presence packet types the row
+    inject(dev, "WLED-Troy", /*mm=*/false, 192, 0, 2, 75);
+    dev.injectMdnsReplyForTest(reply.data(), reply.size(), troy);
+    const std::string row = rowFor(dev, "192.0.2.75");
+    CHECK(std::strstr(row.c_str(), "\"type\":\"WLED\"") != nullptr);
+    CHECK(std::strstr(row.c_str(), "WLED-Troy") != nullptr);
+    CHECK(std::strstr(row.c_str(), "\"mac\":\"30:ed:a0:e1:5c:eb\"") != nullptr);
+}
+
+// The bench's Tasmota at its added address, found by the probe, its MAC in the address table.
+constexpr uint8_t kTasmotaIp[4] = {192, 0, 2, 103};
+constexpr uint8_t kTasmotaMac[6] = {0xc8, 0xf0, 0x9e, 0x73, 0x88, 0x4c};
+static void probeTasmota(DevicesModule& dev) {
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.103");
+    dev.setup();
+    platform::setTestArpEntry(kTasmotaIp, kTasmotaMac);   // what the stack learned from the probe's connection, as RFC 826 has it
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: Tasmota/16.0.0 (ESP32-D0WD-V3)\r\n\r\n<h2>Tasmota</h2>", 32);
+}
+
+TEST_CASE("DevicesModule: an added address takes the MAC the address table holds for it once the probe has connected") {
+    DevicesModule dev;
+    probeTasmota(dev);
+    CHECK(std::strstr(rowFor(dev, "192.0.2.103").c_str(), "\"mac\":\"c8:f0:9e:73:88:4c\"") != nullptr);
+    platform::setTestArpEntry(nullptr, nullptr);
+    dev.release();
+}
+
+TEST_CASE("DevicesModule: an added address whose page names no kind keeps the type another source gave its row") {
+    DevicesModule dev;
+    const std::vector<uint8_t> reply = mdns_replies::bytes(mdns_replies::kEsphomeReply);
+    const uint8_t ip[4] = {192, 0, 2, 227};
+    dev.injectMdnsReplyForTest(reply.data(), reply.size(), ip);   // ESPHome, by its browse reply
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.227");
+    dev.setup();
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: lighttpd/1.4\r\n\r\n<html><body>web server</body></html>", 64);   // a page with no kind of its own
+    CHECK(std::strstr(rowFor(dev, "192.0.2.227").c_str(), "\"type\":\"ESPHome\"") != nullptr);
+    dev.release();
+}
+
+TEST_CASE("DevicesModule: a Tasmota's Server header names its chip, as MoonLight's files spell it") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.103");
+    dev.setup();
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: Tasmota/16.0.0 (ESP32-D0WD-V3)\r\n\r\n<h2>Tasmota</h2>", 32);
+    CHECK(std::strstr(discovery_rows::rowAt(dev, "192.0.2.103", true).c_str(), "\"chip\":\"esp32\"") != nullptr);   // the classic's silicon name
+    dev.release();
+    DevicesModule s3;
+    std::snprintf(s3.addedIps, sizeof(s3.addedIps), "192.0.2.104");
+    s3.setup();
+    s3.injectPageForTest("HTTP/1.1 200 OK\r\nServer: Tasmota/15.1.0 (ESP32-S3)\r\n\r\n<h2>Desk</h2>", 32);
+    CHECK(std::strstr(discovery_rows::rowAt(s3, "192.0.2.104", true).c_str(), "\"chip\":\"esp32s3\"") != nullptr);
+    s3.release();
+}
+
+TEST_CASE("DevicesModule: a Tasmota's chip reads through its package suffix, so a C3 bulb is offered the C3's firmware") {
+    for (const auto& [server, chip] : {std::pair{"(ESP32-C3FH4)", "esp32c3"}, std::pair{"(ESP32-S3R8)", "esp32s3"}, std::pair{"(ESP32-PICO-V3-02)", "esp32"}}) {
+        DevicesModule dev;
+        std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.105");
+        dev.setup();
+        const std::string page = std::string("HTTP/1.1 200 OK\r\nServer: Tasmota/16.0.0 ") + server + "\r\n\r\n<h2>Bulb</h2>";
+        dev.injectPageForTest(page.c_str(), 32);
+        CAPTURE(server);
+        CHECK(std::strstr(discovery_rows::rowAt(dev, "192.0.2.105", true).c_str(), (std::string("\"chip\":\"") + chip + "\"").c_str()) != nullptr);
+        dev.release();
+    }
+}
+
+
+TEST_CASE("DevicesModule: a device that changes kind drops what its old kind announced, a Tasmota's version on what is now MoonBase") {
+    DevicesModule dev;
+    probeTasmota(dev);
+    REQUIRE(std::strstr(discovery_rows::rowAt(dev, "192.0.2.103", true).c_str(), "\"version\":\"16.0.0\"") != nullptr);
+    uint8_t pkt[WledPacket::kSizeWithMac];
+    WledPacket::build(pkt, kTasmotaIp, "MM-884C", 0, false);
+    WledPacket::stampMarker(pkt, WledPacket::kMbMarker);   // the migration: MoonBase announces itself from the same board
+    dev.injectPacketForTest(pkt, WledPacket::stampTail(pkt, 80, kTasmotaMac), kTasmotaIp);
+    const std::string row = discovery_rows::rowAt(dev, "192.0.2.103", true);
+    CHECK(std::strstr(row.c_str(), "\"type\":\"MoonBase\"") != nullptr);
+    CHECK(std::strstr(row.c_str(), "16.0.0") == nullptr);
+    CHECK(std::strstr(row.c_str(), "\"chip\"") == nullptr);
+    platform::setTestArpEntry(nullptr, nullptr);
     dev.release();
 }

@@ -20,6 +20,7 @@
     --yellow:      #d0a040;
     --teal:        #30b0b0;
     --blue:        #4a90e2;
+    --orange:      #e0662a;
 }
 
 body[data-theme="light"] {
@@ -39,6 +40,7 @@ body[data-theme="light"] {
     --yellow:      #b58000;
     --teal:        #1f8a8a;
     --blue:        #2a6fc0;
+    --orange:      #c2501a;
 }
 
 * { box-sizing: border-box; }
@@ -1208,6 +1210,8 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 .graph-popup-head button { background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 1rem; }
 .graph-popup-firmware { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
 .graph-popup-update, .graph-popup-identify { align-self: flex-start; }
+.graph-popup-extras { display: flex; flex-direction: column; gap: 0.3rem; }
+.graph-popup-file, .graph-popup-defaults { color: var(--fg-muted); font-size: 0.9em; }
 .graph-popup-summary { display: flex; flex-direction: column; gap: 0.25rem; }
 .list-graph .graph-link:hover circle { stroke: var(--accent); stroke-width: 2; }
 .list-graph .graph-link:focus { outline: none; }
@@ -1715,7 +1719,8 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
     cursor: pointer;
     font-size: 13px;
 }
-.control-row button.action-btn:hover { filter: brightness(1.15); }
+.control-row button.action-btn:hover:not(:disabled) { filter: brightness(1.15); }
+.control-row button.action-btn:disabled { opacity: 0.45; cursor: default; }   /* the install picker's Install while an install runs */
 /* A button that cannot be undone shows red once armed, as the File Manager's delete does. */
 .control-row button.action-btn--danger.armed { background: var(--red); }
 

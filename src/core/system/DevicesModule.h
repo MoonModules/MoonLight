@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>   // the two services the browse asks for
 
 namespace mm {
 
@@ -60,9 +61,11 @@ namespace mm {
 ///
 /// **Discovery is passive, but for one question.** Each device announces a presence packet on the multicast group and the broadcast address WLED listens on, and this listens for both. A device appears when heard and ages out when it stops.
 ///
-/// ESPHome announces only over mDNS, so once a minute one browse for `_esphomelib._tcp` goes out from an ordinary port and the answers come back to it (`Mdns.h`), naming the device and its version.
+/// ESPHome announces only over mDNS, so once a minute a browse for `_esphomelib._tcp` and one for `_wled._tcp` go out from an ordinary port and the answers come back to it (`Mdns.h`): ESPHome's naming the device and its version, WLED's the MAC its presence packet lacks.
 ///
-/// **Ports and addresses.** A device whose page is not on port 80 adds its port to the packet. A link-local address (169.254.0.0/16) gets no row: no peer reaches it, and a board's second interface would list the board twice.
+/// **One device, one row: the MAC is its identity**, named by MoonLight's and MoonBase's packet or an ESPHome or WLED mDNS record, the address standing in until then; a board moving to Ethernet keeps its row, and a rename never splits one.
+///
+/// **Ports and addresses.** MoonLight's and MoonBase's packet appends the page's port and the board's base MAC. A link-local address (169.254.0.0/16) gets no row: no peer reaches it, and a board's second interface would list the board twice.
 ///
 /// **Plugins are the interop seam.** A foreign ecosystem hooks in as a plugin, not a branch. Each declares its port and turns a datagram into a device kind, ours offered first; a new system is one new file.
 ///
@@ -128,6 +131,7 @@ public:
             sink.append(",\"version\":");   // what another ecosystem's device announced it runs
             sink.writeJsonString(d.version);
         }
+        if (!d.self && d.chip[0]) sink.appendf(",\"chip\":\"%s\"", d.chip);
         sink.append("}");
     }
 
@@ -300,10 +304,7 @@ public:
         finishProbe();
     }
     /// Test-only: an mDNS reply arriving from `srcIp`, as the browse's read takes it.
-    void injectMdnsReplyForTest(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {
-        mdns::Service s;
-        if (mdns::parseReply(data, len, kEsphomeService, s)) noteMdnsDevice(srcIp, s);
-    }
+    void injectMdnsReplyForTest(const uint8_t* data, size_t len, const uint8_t srcIp[4]) { noteMdnsReply(data, len, srcIp); }
 
 private:
     /// One discovered device, as the list serializes it.
@@ -317,8 +318,11 @@ private:
         uint8_t  colorCount = 0; ///< Hue bridge only: how many of its lights are color-capable
                                     ///< (the figure for sizing a layout). 0 for non-bridge rows.
         uint8_t  broadcastRun = 0;   ///< broadcast copies since this peer's last multicast one, saturating
+        uint32_t markedMs = 0;       ///< platform::millis() at its last MoonLight- or MoonBase-marked packet
         uint16_t httpPort = WledPacket::kDefaultHttpPort;   ///< the port its web page answers on, from its presence
         char     version[16] = {};   ///< the firmware version a device of another ecosystem announces, ESPHome's in its mDNS TXT
+        uint8_t  mac[6] = {};        ///< its identity once a source names it, all zero until then, while its address stands in
+        char     chip[10] = {};      ///< the chip a device of another ecosystem names, a Tasmota's in its Server header, as MoonLight's files spell it ("esp32s3")
     };
 
     /// The seat behind `active()`, claimed on build and vacated on release.
@@ -330,6 +334,8 @@ private:
     static constexpr uint8_t  kWorthOther = 0, kWorthMoonLight = 1, kWorthSelf = 2;
     /// How often we announce ourselves, in ticks, which is how fast a peer discovers us.
     static constexpr uint32_t kBroadcastEverySec = 10;
+    /// How long a row stays one of ours with only unmarked packets arriving: three of MoonLight's presence intervals.
+    static constexpr uint32_t kMarkedHoldMs = 3 * kBroadcastEverySec * 1000;
     /// How long a live-confirmed device stays listed, the list being durable history.
     static constexpr uint32_t kStaleMs = 24u * 60u * 60u * 1000u;
     /// How many packets one tick will process, which bounds the work.
@@ -355,6 +361,7 @@ private:
     static constexpr uint32_t kMdnsEverySec = 60;
     static constexpr size_t   kMdnsReplyMax = 768;   ///< a responder's whole reply, an ESPHome board's runs to about 400 bytes
     static constexpr const char* kEsphomeService = "_esphomelib._tcp.local";
+    static constexpr const char* kWledService = "_wled._tcp.local";   ///< WLED's, which MoonLight answers too, its TXT carrying the MAC WLED's presence packet lacks
 
     /// The added addresses, parsed from `addedIps`, and the one probe asking them in turn.
     static constexpr uint8_t kMaxAdded = 8;
@@ -397,6 +404,7 @@ private:
         sink.append("{\"name\":");
         sink.writeJsonString(d.name[0] ? d.name : ip);
         sink.appendf(",\"ip\":\"%s\",\"type\":\"%s\"", ip, devTypeStr(d.type));
+        if (hasMac(d.mac)) sink.appendf(",\"mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\"", d.mac[0], d.mac[1], d.mac[2], d.mac[3], d.mac[4], d.mac[5]);
         if (d.type == DevType::Hue) sink.appendf(",\"color\":%u", d.colorCount);
     }
 
@@ -585,7 +593,7 @@ private:
         }
     }
 
-    /// Ask once a minute who offers the ESPHome service, and read the replies that came back, a few a tick: devices that announce nothing on the presence port.
+    /// Ask once a minute who offers the ESPHome and WLED services, and read a few replies a tick: devices silent on the presence port, and WLED's MAC.
     void browseMdns() {
         if (!mdnsOpen_) {
             if (!mdns_.open()) return;
@@ -594,27 +602,42 @@ private:
         }
         if (++mdnsTick_ >= kMdnsEverySec) {
             mdnsTick_ = 0;
-            uint8_t q[48];
-            const size_t n = mdns::buildQuery(kEsphomeService, q, sizeof(q));
-            if (n) mdns_.sendToAddr(mdns::kGroup, mdns::kPort, q, n);
+            for (const char* service : {kEsphomeService, kWledService}) {
+                uint8_t q[48];
+                const size_t n = mdns::buildQuery(service, q, sizeof(q));
+                if (n) mdns_.sendToAddr(mdns::kGroup, mdns::kPort, q, n);
+            }
         }
         uint8_t src[4];
         for (int i = 0; i < kMaxDrainPerTick; i++) {
             const int n = mdns_.recvFrom(mdnsBuf_.data(), mdnsBuf_.count(), src);
             if (n <= 0) break;
-            mdns::Service s;
-            if (mdns::parseReply(mdnsBuf_.data(), static_cast<size_t>(n), kEsphomeService, s)) noteMdnsDevice(src, s);
+            noteMdnsReply(mdnsBuf_.data(), static_cast<size_t>(n), src);
         }
     }
 
-    /// A device that answered the browse: its row by the reply's source address, named and versioned as it announces itself.
+    /// A reply to either browse: an ESPHome device named and versioned as it announces itself, or the MAC of a row a presence packet made.
+    void noteMdnsReply(const uint8_t* data, size_t len, const uint8_t ip[4]) {
+        mdns::Service s;
+        if (mdns::parseReply(data, len, kEsphomeService, s)) { noteMdnsDevice(ip, s); return; }
+        if (!mdns::parseReply(data, len, kWledService, s)) return;
+        // Only a MAC the row lacks: MoonLight boards announce this service too, for WLED's apps, from either interface, so the presence packet keeps the row's identity, type and name.
+        Device* d = findByIp(ip);
+        if (!d || hasMac(d->mac) || !hasMac(s.mac) || findByMac(s.mac)) return;
+        std::memcpy(d->mac, s.mac, 6);
+        refreshStatus();
+    }
+
+    /// A device that answered the ESPHome browse: its row by its MAC, else the reply's source address, named and versioned as it announces itself.
     void noteMdnsDevice(const uint8_t ip[4], const mdns::Service& s) {
         DiscoveredDevice found;
         found.type = DevType::Esphome;
         setDeviceName(found, s.name);
+        std::memcpy(found.mac, s.mac, 6);
         upsertDevice(ip, found);
         Device* d = findByIp(ip);
         if (d && std::strcmp(d->version, s.version) != 0) mm::formatTo(d->version, sizeof(d->version), "%s", s.version);
+        if (d && s.chip[0]) mm::formatTo(d->chip, sizeof(d->chip), "%s", s.chip);   // what the map's move installs for
     }
 
     /// Ask each added address for its page, one at a time and once a minute, never waiting: a connect and a read move one step a tick.
@@ -669,12 +692,12 @@ private:
                     if (p.lineLen == 0) p.body = true;   // the blank line ends the headers
                     else if (const char* h = http::findHeader(p.line, "Server:")) mm::formatTo(p.server, sizeof(p.server), "%s", http::skipSpace(h + 7));
                     p.lineLen = 0;
-                } else if (c != '\r' && p.lineLen + 1 < sizeof(p.line)) {
+                } else if (c != '\r' && p.lineLen + 1u < sizeof(p.line)) {
                     p.line[p.lineLen++] = c;
                 }
             } else if (p.inH2) {
                 if (c == '<') return true;
-                if (p.h2Len + 1 < sizeof(p.h2)) { p.h2[p.h2Len++] = c; p.h2[p.h2Len] = 0; }
+                if (p.h2Len + 1u < sizeof(p.h2)) { p.h2[p.h2Len++] = c; p.h2[p.h2Len] = 0; }
             } else {
                 p.h2At = (c == kH2[p.h2At]) ? p.h2At + 1 : (c == kH2[0] ? 1 : 0);
                 if (p.h2At == sizeof(kH2) - 1) p.inH2 = true;
@@ -693,15 +716,25 @@ private:
             found.type = tasmota ? DevType::Tasmota : DevType::Generic;
             setDeviceName(found, p.h2[0] ? p.h2 : "");
             const uint8_t* ip = addedHosts_[p.host].ip;
+            platform::arpLookup(ip, found.mac);   // the probe's connection put its MAC in the address table: the identity a page need not give
             upsertDevice(ip, found);
             if (Device* d = findByIp(ip); d && tasmota && slash) {
                 char v[16] = {};
                 size_t k = 0;
                 for (const char* q = slash + 1; *q && *q != ' ' && k + 1 < sizeof(v); q++) v[k++] = *q;   // "16.0.0" from "Tasmota/16.0.0 (ESP32-D0WD-V3)"
                 mm::formatTo(d->version, sizeof(d->version), "%s", v);
+                tasmotaChip(p.server, d->chip, sizeof(d->chip));
             }
         }
         nextAdded();
+    }
+
+    /// The chip in a Tasmota's Server header, "(ESP32-C3FH4)" or "(ESP32-D0WD-V3)", as MoonLight's files spell it: the family inside the brackets, the classic's silicon names being the classic.
+    static void tasmotaChip(const char* server, char* out, size_t cap) {
+        const char* open = std::strstr(server, "(ESP32");
+        if (!open) return;
+        const char* close = std::strchr(open, ')');
+        mdns::chipFamily(open + 6, close ? static_cast<size_t>(close - open - 6) : std::strlen(open + 6), out, cap);
     }
 
     /// Close this probe and move to the next added address, back to the first after the last.
@@ -714,11 +747,13 @@ private:
 
     /// Announce ourselves: a compatible packet, stamped so a peer types us correctly.
     void broadcastPresence(const uint8_t ip[4]) {
-        uint8_t pkt[WledPacket::kSizeWithPort];
+        uint8_t pkt[WledPacket::kSizeWithMac];
         const char* n = (selfName_ && selfName_[0]) ? selfName_ : "MoonLight";
         WledPacket::build(pkt, ip, n, boardTypeByte(), /*lightsOn=*/true);
         WledPacket::stampMarker(pkt);
-        const size_t len = WledPacket::stampHttpPort(pkt, selfHttpPort());
+        uint8_t mac[6];
+        platform::getMacAddress(mac);
+        const size_t len = WledPacket::stampTail(pkt, selfHttpPort(), mac);
         // Both ways during the bootstrap window, so a peer can tell which way reaches it.
         const bool bothWays = addressing == kDevMulticastBroadcast || platform::millis() - boundMs_ < kBothWaysMs;
         sendAddressed(bothWays ? Addressing::MulticastBroadcast : Addressing::Multicast, Traffic::Occasional, nullptr, 0,
@@ -769,20 +804,31 @@ private:
         uint8_t local[4] = {};
         platform::localIPv4(local);
         const bool isSelf = ipEq(ip, local);
-        Device* d = findByIp(ip);
         bool changed = false;
+        Device* d = rowFor(ip, found.mac, changed);
         if (!d) {
             const uint8_t newcomerWorth = isSelf ? kWorthSelf
                                         : (ours(found.type) ? kWorthMoonLight : kWorthOther);
             d = addRow(ip, newcomerWorth);
             if (!d) { refreshStatus(); return; }   // memory full and every row worth more
             d->type = found.type;          // first sighting: take the plugin's type
+            std::memcpy(d->mac, found.mac, 6);
             changed = true;
         }
-        // A marker is definitive, so the latest marked packet says whether MoonLight or MoonBase holds the board, and an unmarked one never downgrades either.
+        // The latest marked packet says MoonLight or MoonBase; an unmarked one takes over once marked ones stop for three intervals, a board flashed to WLED.
+        const uint32_t now = platform::millis();
+        if (ours(found.type)) d->markedMs = now;
+        const bool markedLately = ours(d->type) && now - d->markedMs < kMarkedHoldMs;
+        // A generic sighting, such as the address probe's page with no kind of its own, carries no type evidence, so it keeps the row's.
+        const bool keepsType = markedLately || found.type == DevType::Generic;
         const DevType newType = isSelf ? DevType::MoonLight
-                              : (ours(found.type) ? found.type : (ours(d->type) ? d->type : found.type));
-        if (d->type != newType) { d->type = newType; changed = true; }
+                              : (ours(found.type) ? found.type : (keepsType ? d->type : found.type));
+        if (d->type != newType) {
+            d->type = newType;
+            d->version[0] = 0;   // what the old kind announced, a Tasmota's version on what is now MoonBase: the new kind's own source fills it again
+            d->chip[0] = 0;
+            changed = true;
+        }
         if (d->self != isSelf) { d->self = isSelf; changed = true; }
         if (d->httpPort != found.httpPort) { d->httpPort = found.httpPort; changed = true; }
         d->lastSeenMs = platform::millis();
@@ -840,6 +886,42 @@ private:
         char ipStr[16];
         formatDottedQuad(ipStr, ip);
         return std::strcmp(name, ipStr) == 0;
+    }
+
+    /// The row a sighting from `ip` naming `mac` belongs to, null for a newcomer: the row holding the MAC, else the one at the address.
+    Device* rowFor(const uint8_t ip[4], const uint8_t mac[6], bool& changed) {
+        Device* byIp = findByIp(ip);
+        if (!hasMac(mac)) return byIp;
+        if (Device* byMac = findByMac(mac)) {
+            if (byMac == byIp) return byMac;
+            if (byIp) { dropRow(byIp); byMac = findByMac(mac); }   // the address's old row: this device's own before it named its MAC, or a device gone from it
+            std::memcpy(byMac->ip, ip, 4);
+            changed = true;
+            return byMac;
+        }
+        if (byIp && hasMac(byIp->mac)) { dropRow(byIp); changed = true; return nullptr; }
+        if (byIp) { std::memcpy(byIp->mac, mac, 6); changed = true; }
+        return byIp;
+    }
+
+    /// Whether a source named a MAC: all zero means it did not.
+    static bool hasMac(const uint8_t mac[6]) {
+        for (int i = 0; i < 6; i++) if (mac[i]) return true;
+        return false;
+    }
+
+    /// The device with this MAC, or null.
+    Device* findByMac(const uint8_t mac[6]) {
+        for (ListRow i = 0; i < deviceCount_; i++)
+            if (std::memcmp(devices_[i].mac, mac, 6) == 0) return &devices_[i];
+        return nullptr;
+    }
+
+    /// Remove one row, keeping the rest in order.
+    void dropRow(Device* d) {
+        const ListRow at = static_cast<ListRow>(d - devices_.data());
+        for (ListRow r = at; r + 1u < deviceCount_; r++) devices_[r] = devices_[r + 1u];
+        deviceCount_--;
     }
 
     /// The device at this address, or null.

@@ -26,7 +26,8 @@ namespace mm {
 /// | 38 | 1 | the board kind in the low seven bits, the top bit meaning the lights are on |
 /// | 39 | 1 | the last IP octet, which WLED uses as an instance index |
 /// | 40 | 4 | a numeric build date, informational only |
-/// | 44 | 2 | MoonLight only: its web page's TCP port, sent when not 80 |
+/// | 44 | 2 | MoonLight and MoonBase only: the web page's TCP port |
+/// | 46 | 6 | MoonLight and MoonBase only: the board's base MAC, its identity |
 ///
 /// ## What WLED checks
 ///
@@ -40,9 +41,9 @@ namespace mm {
 ///
 /// MoonBase, MoonLight's installer, sends the same packet with `MB` in place of `MM`, so a board keeps its place on a peer's map while MoonBase holds it, and no WLED or MoonLight recognizer claims it.
 ///
-/// ## The web page's port
+/// ## The web page's port and the MAC
 ///
-/// A device serving its page on another port than 80 appends it, so a peer links it at the right address; absent means 80, as in an http URL.
+/// A marked packet appends the page's port, so a peer links it at the right address, and the board's base MAC, which a peer keys its row by: a board moving from WiFi to Ethernet changes its address but not its base MAC, the same on every interface. A 44-byte packet means port 80 and no MAC, as WLED's.
 ///
 /// WLED reads any packet of 40 bytes or more and ignores the rest, so the longer packet stays WLED-valid.
 ///
@@ -56,14 +57,15 @@ struct WledPacket {
     static constexpr size_t   kNameOff = 6;    ///< where the hostname starts
     static constexpr size_t   kNameMax = 32;   ///< how many bytes the hostname may fill
     static constexpr size_t   kTypeOff = 38;   ///< where the board kind and lights-on bit sit
-    static constexpr size_t   kPortOff = 44;   ///< where a MoonLight device's web port follows the header: @xref{the-web-pages-port}
-    static constexpr size_t   kSizeWithPort = kPortOff + 2;   ///< the packet with the port appended
+    static constexpr size_t   kPortOff = 44;   ///< where a MoonLight device's web port follows the header: @xref{the-web-pages-port-and-the-mac}
+    static constexpr size_t   kMacOff = kPortOff + 2;         ///< where the base MAC follows the port
+    static constexpr size_t   kSizeWithMac = kMacOff + 6;     ///< the packet a MoonLight or MoonBase board sends: @xref{the-web-pages-port-and-the-mac}
     static constexpr uint16_t kDefaultHttpPort = 80;   ///< the port an absent field means
 
     /// Whether this is a valid presence header, any other datagram reading as false: @xref{what-wled-checks}.
     static bool isValid(const uint8_t* data, size_t len) {
-        // The header, or the header and a web port: any other length on this port is something else, not presence.
-        return data && (len == kSize || len == kSizeWithPort) && data[0] == kToken && data[1] == kId;
+        // The header, alone or with MoonLight's tail: any other length on this port is something else, not presence.
+        return data && (len == kSize || len == kSizeWithMac) && data[0] == kToken && data[1] == kId;
     }
 
     /// Copy the null-padded name into `out`, truncating to fit, once `isValid` has passed.
@@ -111,17 +113,25 @@ struct WledPacket {
     /// Mark which copy this is, the one sent to the broadcast address or the one sent to the group.
     static void stampVia(uint8_t* out, bool broadcast) { out[kMarkerOff] = broadcast ? 1 : 0; }
 
-    /// Append the web page's port when it is not 80, into a buffer of kSizeWithPort; answers the packet's length.
-    static size_t stampHttpPort(uint8_t* out, uint16_t port) {
-        if (port == kDefaultHttpPort || port == 0) return kSize;
+    /// Append the web page's port and the board's base MAC, into a buffer of kSizeWithMac; answers the packet's length.
+    static size_t stampTail(uint8_t* out, uint16_t port, const uint8_t mac[6]) {
+        if (port == 0) port = kDefaultHttpPort;
         out[kPortOff] = static_cast<uint8_t>(port & 0xff);
         out[kPortOff + 1] = static_cast<uint8_t>(port >> 8);
-        return kSizeWithPort;
+        std::memcpy(out + kMacOff, mac, 6);
+        return kSizeWithMac;
+    }
+
+    /// Copy the base MAC a valid packet carries into `out`; false when it carries none.
+    static bool readMac(const uint8_t* data, size_t len, uint8_t out[6]) {
+        if (len < kSizeWithMac) return false;
+        std::memcpy(out, data + kMacOff, 6);
+        return true;
     }
 
     /// The web page's port a valid packet carries, 80 when it carries none.
     static uint16_t httpPort(const uint8_t* data, size_t len) {
-        if (len < kSizeWithPort) return kDefaultHttpPort;
+        if (len < kSizeWithMac) return kDefaultHttpPort;
         const uint16_t port = static_cast<uint16_t>(data[kPortOff] | (data[kPortOff + 1] << 8));
         return port ? port : kDefaultHttpPort;
     }

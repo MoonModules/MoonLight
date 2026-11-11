@@ -3,6 +3,7 @@
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/system/IpSettings.h"
+#include "core/util/EthPresets.h"   // the board wirings, shared with MoonBase
 #include "core/util/JsonUtil.h"   // adoptLegacy reads the flat config
 #include "platform/platform.h"
 
@@ -157,29 +158,53 @@ public:
         noteIpProblem();
     }
 
+    /// How a changed interface setting takes effect.
+    enum class EthApply : uint8_t { Off, Live, NextBoot };
+
+    /// Live when no interface holds the pads or the SPI device re-inits, off when none is wanted, else at the next boot (backlog: Live RMII Ethernet reconfigure).
+    static constexpr EthApply ethApply(uint8_t running, uint8_t wanted, bool w5500Live) {
+        constexpr uint8_t none = static_cast<uint8_t>(platform::ethNone);
+        if (running == none) return wanted == none ? EthApply::Off : EthApply::Live;
+        if (wanted == static_cast<uint8_t>(platform::ethW5500) && w5500Live) return EthApply::Live;
+        return EthApply::NextBoot;
+    }
+
     /// Apply an interface change live where the hardware allows it, returning true when the interface restarted.
     bool syncLive() {
         if constexpr (platform::hasEthernet) {
             if (ethSigApplied_ && ethSig() == appliedEthSig_) return false;   // nothing changed
-            // Only for the SPI device, since elsewhere a restart would strand the device.
-            const bool hotReinit = (ethType_ == platform::ethW5500) && platform::hasEthW5500;
-            if (hotReinit) {
-                platform::ethStop();
-                syncConfig();
-                if (platform::ethInit()) {
-                    std::printf("EthernetModule: W5500 re-init (live config change)\n");
+            switch (ethApply(appliedEthType_, ethType_, platform::hasEthW5500)) {
+                case EthApply::Off:
+                    syncConfig();
                     setStatus("");
-                    return true;
+                    return false;
+                case EthApply::Live:
+                    return startLive();
+                case EthApply::NextBoot: {
+                    // Record it for the next boot without disturbing the running interface, whose pads stay held until then.
+                    const uint8_t running = appliedEthType_;
+                    syncConfig();
+                    appliedEthType_ = running;
+                    setStatus("saved, restart to apply");
+                    return false;
                 }
-                setStatus("W5500 re-init failed, check pins", Severity::Error);
-            } else {
-                // Record it for the next boot without disturbing the running interface, whose pads stay held until then.
-                const uint8_t running = appliedEthType_;
-                syncConfig();
-                appliedEthType_ = running;
-                setStatus("saved, restart to apply");
             }
         }
+        return false;
+    }
+
+    /// Stop whatever runs, a no-op when nothing does, and start the interface with the new settings.
+    bool startLive() {
+        const bool fresh = appliedEthType_ == static_cast<uint8_t>(platform::ethNone);
+        platform::ethStop();
+        syncConfig();
+        if (platform::ethInit()) {
+            std::printf("EthernetModule: %s (live config change)\n", fresh ? "started" : "W5500 re-init");
+            setStatus("");
+            return true;
+        }
+        appliedEthType_ = static_cast<uint8_t>(platform::ethNone);   // nothing holds the pads after a failed start
+        setStatus(fresh ? "start failed, check the board" : "W5500 re-init failed, check pins", Severity::Error);
         return false;
     }
 
@@ -279,37 +304,12 @@ private:
     /// What the driver is running, which the fixed-pin report must read.
     uint8_t appliedEthType_ = static_cast<uint8_t>(platform::ethNone);
 
-    /// One board's Ethernet wiring, the fields matching EthPinConfig; -1 leaves a line unused.
-    struct EthPreset {
-        const char* label;
-        int8_t type;          // an EthPhyType
-        int8_t phyAddr;
-        int8_t mdc, mdio, rst;
-        int8_t rmiiClock;
-        bool   rmiiClockExtIn;
-        int8_t miso, mosi, sck, cs, irq;
-        bool   editable;      // false on a soldered map: those lines are not the user's to set
-    };
-
-    /// The presets this module knows, each a wiring that boards follow rather than one product; Custom keeps whatever is in the fields, for a hand-wired board.
-    static constexpr EthPreset kEthPresets[] = {
-        // The LAN8720 reference wiring most classic boards follow, which is also the chip default.
-        {"Classic RMII",            1,  0, 23, 18,  5, 17, false, -1, -1, -1, -1, -1, false},
-        // The same wiring with no reset, for a board using GPIO 5 as an LED lane: the PHY resets by jumper.
-        {"Classic RMII (no reset)", 1,  0, 23, 18, -1, 17, false, -1, -1, -1, -1, -1, false},
-        // The IP101 wiring the Waveshare P4 boards and the shields on their pinout follow, the clock fed in.
-        {"P4 RMII",                 2,  1, 31, 52, 51, 50, true,  -1, -1, -1, -1, -1, false},
-        // The S31's 1 Gb YT8531 PHY, addressed by scan rather than by a fixed address.
-        {"S31 RGMII",               4, -1,  5,  6,  7, -1, false, -1, -1, -1, -1, -1, false},
-        {"Custom",                  0, -1, -1, -1, -1, -1, false, -1, -1, -1, -1, -1, true},
-    };
-    static constexpr uint8_t kEthPresetCount = sizeof(kEthPresets) / sizeof(kEthPresets[0]);
 
     /// The Ethernet wiring by name.
     /// @guide Custom shows every pin; a fixed interface has no choice.
     uint8_t ethPresetSel_ = 0;
-    const char* ethPresetOptions_[kEthPresetCount] = {};
-    uint8_t ethPresetIndex_[kEthPresetCount] = {};
+    const char* ethPresetOptions_[eth::kPresetCount] = {};
+    uint8_t ethPresetIndex_[eth::kPresetCount] = {};
     uint8_t ethPresetCount_ = 0;
     /// Never a valid row, so the first build applies whatever the selection resolved to: @xref{why-one-preset-defaults-to-itself}.
     static constexpr uint8_t kEthPresetNone = 0xFF;
@@ -319,21 +319,21 @@ private:
     void buildEthPresetOptions() {
         const char* current = (ethPresetSel_ < ethPresetCount_) ? ethPresetOptions_[ethPresetSel_] : nullptr;
         ethPresetCount_ = 0;
-        for (uint8_t i = 0; i < kEthPresetCount; i++) {
-            if (!presetFits(kEthPresets[i].type)) continue;
-            ethPresetOptions_[ethPresetCount_] = kEthPresets[i].label;
+        for (uint8_t i = 0; i < eth::kPresetCount; i++) {
+            if (!presetFits(eth::kPresets[i].type)) continue;
+            ethPresetOptions_[ethPresetCount_] = eth::kPresets[i].label;
             ethPresetIndex_[ethPresetCount_] = i;
             ethPresetCount_++;
         }
         // By LABEL, so a filtered list cannot select a different board, falling back to CUSTOM rather than row 0: a real preset whose map would overwrite the chip's defaults.
         uint8_t sel = 0;
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
-            if (kEthPresets[ethPresetIndex_[k]].editable) { sel = k; break; }
+            if (eth::kPresets[ethPresetIndex_[k]].editable) { sel = k; break; }
         }
         // Unless the chip's filter left exactly ONE real preset: @xref{why-one-preset-defaults-to-itself}.
         uint8_t real = 0, onlyReal = 0;
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
-            if (!kEthPresets[ethPresetIndex_[k]].editable) { real++; onlyReal = k; }
+            if (!eth::kPresets[ethPresetIndex_[k]].editable) { real++; onlyReal = k; }
         }
         if (real == 1) sel = onlyReal;
         if (current) {
@@ -347,7 +347,7 @@ private:
     /// Has nothing chosen a preset yet? True while the selection is the editable Custom row.
     bool ethPresetIsUnset() const {
         if (ethPresetSel_ >= ethPresetCount_) return true;
-        return kEthPresets[ethPresetIndex_[ethPresetSel_]].editable;
+        return eth::kPresets[ethPresetIndex_[ethPresetSel_]].editable;
     }
 
     /// The interface this device drives: where the platform fixes it, the platform's own type wins over the control.
@@ -358,13 +358,13 @@ private:
     /// Are the pin controls the user's to edit, for the preset currently selected?
     bool ethPinsEditable() const {
         if (ethPresetSel_ >= ethPresetCount_) return true;   // nothing resolved: never hide
-        return kEthPresets[ethPresetIndex_[ethPresetSel_]].editable;
+        return eth::kPresets[ethPresetIndex_[ethPresetSel_]].editable;
     }
 
     /// Write the chosen preset's map into the pin controls; Custom writes nothing, so switching to it after an edit keeps the edit.
     void applyEthPreset() {
         if (ethPresetSel_ >= ethPresetCount_) return;
-        const EthPreset& p = kEthPresets[ethPresetIndex_[ethPresetSel_]];
+        const eth::Preset& p = eth::kPresets[ethPresetIndex_[ethPresetSel_]];
         if (p.editable) return;
         ethType_       = static_cast<uint8_t>(p.type);
         ethPhyAddr_    = p.phyAddr;
@@ -383,7 +383,7 @@ private:
     /// The preset whose map these pin values already are, or Custom when none matches, so a provisioned device opens on its own name.
     void seedEthPresetFromPins() {
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
-            const EthPreset& p = kEthPresets[ethPresetIndex_[k]];
+            const eth::Preset& p = eth::kPresets[ethPresetIndex_[k]];
             if (p.editable) continue;
             if (p.type == static_cast<int8_t>(ethType_) && p.phyAddr == ethPhyAddr_ &&
                 p.mdc == ethMdcGpio_ && p.mdio == ethMdioGpio_ && p.rst == ethRstGpio_ &&
@@ -396,7 +396,7 @@ private:
         }
         // Custom is the last row, and the only editable one.
         for (uint8_t k = 0; k < ethPresetCount_; k++) {
-            if (kEthPresets[ethPresetIndex_[k]].editable) { ethPresetSel_ = k; return; }
+            if (eth::kPresets[ethPresetIndex_[k]].editable) { ethPresetSel_ = k; return; }
         }
     }
 

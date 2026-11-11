@@ -38,8 +38,8 @@ processes:
         detail: |
           MoonBase's page means the app did not start or an update was interrupted, and it boots only an image that validates. Not on your network? MoonBase opens the device's `MM-XXXX` access point, protected by your WiFi's password once it knows one. Joining it opens MoonBase's page, also at **4.3.2.1**.
       - id: retry
-        say: Install a firmware file or URL instead.
-        when: { manual: "From a file takes a downloaded .bin; From a URL fetches it." }
+        say: Install a release, a file or a URL.
+        when: { manual: "From a release picks the device and firmware as the web installer does; From a file takes a downloaded .bin; From a URL fetches it." }
         detail: |
           The [releases page](https://github.com/MoonModules/MoonLight/releases) has one file per firmware variant, named for it, and a link to each to paste. A URL crosses into MoonBase through a fixed slot of 255 characters, and a longer one is refused rather than truncated.
       - id: usb
@@ -51,31 +51,60 @@ processes:
     goal: A WLED device moves to MoonLight without a cable.
     systems: [MoonBase]
     page: reference/migrating-over-the-air.md
+    inputs:
+      type: object
+      properties:
+        route: { type: string, enum: [From the map, By hand], description: "Does a MoonLight device see the WLED device on its Devices map?" }
     intro: |
-      The migration image, a small program that runs once, writes MoonBase and MoonLight's partition table through the old firmware's own update page, and MoonBase then installs MoonLight. It checks it can finish before it writes anything, and restarts the old firmware unchanged when it cannot. A power cut in the 50 milliseconds it rewrites the partition table, or going back to the old firmware, needs a USB cable. The migration is at your own risk: [What can stop it](reference/migrating-over-the-air.md#what-can-stop-it).
+      The migration image, a small program that runs once, writes MoonBase, MoonLight's bootloader and MoonLight's partition table through the old firmware's own update page, and MoonBase then installs MoonLight. It checks it can finish before it writes anything, and restarts the old firmware unchanged when it cannot. A power cut in the half second it rewrites the bootloader or the 50 milliseconds it rewrites the partition table, or going back to the old firmware, needs a USB cable. The migration is at your own risk: [What can stop it](reference/migrating-over-the-air.md#what-can-stop-it).
     steps:
+      - id: map
+        section: From the map
+        say: Open the WLED device on the Devices map.
+        given: [{ input: route, equals: From the map }]
+        when: { open: { module: DevicesModule } }
+        detail: |
+          Any MoonLight device on the same network shows it, and its popup reads the chip from WLED and lists the releases that carry MoonLight for it. On Ethernet, the popup says whether the device comes back on its cable or on its saved WiFi. A Tasmota or an ESPHome device moves the same way: Tasmota asks for `SetOption128 1` once in its console, under Tools → Console on the Tasmota page the popup links to, and ESPHome asks nothing.
+      - id: choose
+        say: Pick the Release, the Device and the Firmware.
+        given: [{ input: route, equals: From the map }]
+        when: { manual: "The same picker as the web installer's, for the device's chip." }
+        detail: |
+          With **Apply device defaults** ticked, the device's drivers, pins and Ethernet follow the install. A release without a migration image for the chip takes the file from this computer.
+      - id: update
+        say: Press Install and confirm.
+        given: [{ input: route, equals: From the map }]
+        when: { manual: "The popup ends on MoonLight runs." }
+        detail: |
+          Keep the power on for the next minutes: the popup uploads the migration image, waits for MoonBase, installs MoonLight and applies the board's settings, saying each as it goes. Still WLED after a minute and a half, it names the likely cause.
       - id: chip
+        section: By hand
         say: Check the chip on WLED's Info page.
+        given: [{ input: route, equals: By hand }]
         when: { manual: "A migration image is built for one chip." }
         detail: |
-          One image per chip family, the classic ESP32 and the ESP32-C3 verified from WLED 0.15.0: [What can move](reference/migrating-over-the-air.md#what-can-move).
+          One image per chip family, which fits every flash size of it: [What can move](reference/migrating-over-the-air.md#what-can-move).
       - id: download
         say: Download the migration image for that chip.
+        given: [{ input: route, equals: By hand }]
         when: { open: { url: "https://github.com/MoonModules/MoonLight/releases" } }
         detail: |
-          From the latest release: `shared-migrate-esp32.bin` for a classic ESP32, `shared-migrate-esp32c3.bin` for an ESP32-C3.
+          From the latest release, `shared-migrate-<chip>.bin`: `esp32` for a classic ESP32, `esp32c3`, `esp32s3`, `esp32s31`, `esp32p4` for a P4 below revision 3 and `esp32p4rev3` from it.
       - id: upload
         say: Upload it through WLED's update page.
+        given: [{ input: route, equals: By hand }]
         when: { manual: "Config, Security & Updates, Manual OTA Update, then Update." }
         detail: |
           Keep the power on for the next ten seconds. A newer WLED checks an upload's release name until its option to skip that check is ticked.
       - id: moonbase
         say: Open the device's address in a browser.
+        given: [{ input: route, equals: By hand }]
         when: { manual: "It restarts as MoonBase, on the same WiFi." }
         detail: |
           Off your network, it could not carry the WiFi over and opens an `MM-` access point: [join it](moonwalk.md#join-access-point) and set your WiFi there.
       - id: install
         say: Install MoonLight from MoonBase.
+        given: [{ input: route, equals: By hand }]
         when: { manual: "Pick the release's firmware for the chip and press Install." }
         detail: |
           On a classic ESP32 that is `esp32`, or `esp32-eth` for a board with Ethernet: the migration writes the 4 MB layout they share. MoonLight starts on the same WiFi.

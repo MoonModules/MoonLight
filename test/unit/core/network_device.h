@@ -32,6 +32,7 @@ struct NetworkDevice {
         fs->setScheduler(&scheduler);
         sys->setTypeName("SystemModule");
         net->setTypeName("NetworkModule");
+        net->setName("Network");   // as the factory names it on a device, so a saved Network document applies here too
         eth = static_cast<EthernetModule*>(ModuleFactory::create("EthernetModule"));
         wifi = static_cast<WiFiModule*>(ModuleFactory::create("WiFiModule"));
         ap = static_cast<AccessPointModule*>(ModuleFactory::create("AccessPointModule"));
