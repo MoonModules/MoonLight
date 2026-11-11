@@ -483,7 +483,7 @@ const char kPage[] =
     // Installing from a release without typing a URL: the web installer's own picker, loaded from its site, and this image only receives the URL.
     "<section><b>From a release</b><div id=pick></div><small id=rs></small></section>"
     "<section><b>From a URL</b><br><input id=u size=34 placeholder=https://...>"
-    "<button onclick=url()>Install</button></section>"
+    "<button onclick=DEV=null;url()>Install</button></section>"
     "<section><b>Back to the app</b><br>Boot the installed firmware without changing it."
     "<br><button onclick=ba()>Boot the app</button> "
     // Shown only while an install is running (S() toggles it): the one moment cancel applies.
@@ -514,9 +514,9 @@ const char kPage[] =
     // The install runs on its own task (202); W() watches its status until the app answers (404 on /moonbase means the new firmware is up, at this same address).
     "function W(){const t=setInterval(async()=>{try{const p=await fetch('/moonbase');"
     "if(p.status==404){clearInterval(t);S('done, the app is starting...');"
-    // The device picked in the picker brings its defaults, sent to the app once it answers, as the web installer and the map apply them.
-    "if(DEV&&DEV.state)await fetch('/api/state',{method:'PATCH',headers:{'Content-Type':'application/json'},"
-    "body:JSON.stringify(DEV.state)}).catch(()=>{});"
+    // The device picked in the picker brings its defaults, sent to the app once it answers, as the web installer and the map apply them; a typed URL brings none (its Install clears DEV). A refusal stays on screen.
+    "if(DEV&&DEV.state){const a=await fetch('/api/state',{method:'PATCH',headers:{'Content-Type':'application/json'},"
+    "body:JSON.stringify(DEV.state)}).catch(()=>null);if(!a||!a.ok){S('the app runs, but '+DEV.name+'\\'s defaults did not apply: pick the device in the app');return;}}"
     "setTimeout(()=>location.reload(),3000);}else{S(await p.text());}}"
     "catch(_){S('restarting...');}},2000);}"
     // The release list: the web installer's picker, loaded at runtime from its site, which serves it cross-origin; the chip narrows it, the app's variant preselects it, Install installs its URL.
@@ -830,14 +830,22 @@ void serveOne(int sock) {
     if (contentLen > prefixLen && mm::http::expectsContinue(head))
         sendAll(sock, mm::http::kContinue, sizeof(mm::http::kContinue) - 1);
 
+    // A page from beyond this network is refused here, install and read alike, by the app's rule (fromBeyondNetwork).
+    sockaddr_in local = {};
+    socklen_t localLen = sizeof(local);
+    const bool gotLocal = ::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &localLen) == 0;
+    const auto* localIp = reinterpret_cast<const uint8_t*>(&local.sin_addr.s_addr);
+    if (mm::http::fromBeyondNetwork(head, gotLocal && mm::captive::throughAccessPoint(localIp), g_deviceName)) {
+        sendResponse(sock, "403 Forbidden", "text/plain", "error: a page from outside this network may not use this device");
+        ::close(sock);
+        return;
+    }
+
     // A phone on the access point asking for its own captive-check page gets this one, which is what shows it the sign-in screen.
     if (std::strncmp(head, "GET ", 4) == 0) {
-        sockaddr_in local = {};
-        socklen_t localLen = sizeof(local);
         const char* host = mm::http::findHeader(head, "Host:");
         if (host) { host += 5; while (*host == ' ') host++; }
-        if (host && ::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &localLen) == 0 &&
-            mm::captive::redirects(reinterpret_cast<const uint8_t*>(&local.sin_addr.s_addr), host, head + 4)) {
+        if (host && gotLocal && mm::captive::redirects(localIp, host, head + 4)) {
             ::send(sock, mm::captive::kRedirect, std::strlen(mm::captive::kRedirect), 0);
             ::shutdown(sock, SHUT_RDWR);
             ::close(sock);
@@ -860,17 +868,22 @@ void serveOne(int sock) {
             const size_t urlLen = prefixLen < contentLen ? prefixLen : contentLen;
             std::memcpy(stagedUrlTask_, head + headLen, urlLen);
             stagedUrlTask_[urlLen] = '\0';
-            std::snprintf(status_, sizeof(status_), "starting the install");
-            cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch
-            installing_ = true;   // cleared by the task after its final attempt
-            if (xTaskCreate(unattendedInstallTask, "mb_install", 12288, nullptr, 5, nullptr) != pdPASS) {
-                // A failed spawn with the flag left set would refuse every later install: THE deadlock this guard exists to prevent.
-                installing_ = false;
-                std::snprintf(status_, sizeof(status_), "error: cannot start the install task");
-                sendResponse(sock, "500 Internal Server Error", "text/plain", status_);
+            if (!mm::http::isHttpUrl(stagedUrlTask_)) {
+                stagedUrlTask_[0] = '\0';   // the retry field stays empty
+                sendResponse(sock, "400 Bad Request", "text/plain", "error: url must start with http:// or https://");
             } else {
-                // 202: the install runs on its own task while this server keeps answering GET /moonbase with live progress; the caller watches that, not this response.
-                sendResponse(sock, "202 Accepted", "text/plain", status_);
+                std::snprintf(status_, sizeof(status_), "starting the install");
+                cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch
+                installing_ = true;   // cleared by the task after its final attempt
+                if (xTaskCreate(unattendedInstallTask, "mb_install", 12288, nullptr, 5, nullptr) != pdPASS) {
+                    // A failed spawn with the flag left set would refuse every later install: THE deadlock this guard exists to prevent.
+                    installing_ = false;
+                    std::snprintf(status_, sizeof(status_), "error: cannot start the install task");
+                    sendResponse(sock, "500 Internal Server Error", "text/plain", status_);
+                } else {
+                    // 202: the install runs on its own task while this server keeps answering GET /moonbase with live progress; the caller watches that, not this response.
+                    sendResponse(sock, "202 Accepted", "text/plain", status_);
+                }
             }
         }
     } else if (std::strncmp(head, "POST /api/firmware/upload", 25) == 0) {

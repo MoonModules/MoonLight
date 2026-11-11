@@ -14,6 +14,8 @@
 ///
 /// It lives here once so the migration image (`moonbase/migrate/`) and a desktop test run the same code, on the standard C headers alone.
 
+#include "core/util/JsonEscape.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -211,16 +213,30 @@ inline bool readEthernet(const char* cfg, Ethernet& out) {
     return out.type != 0;
 }
 
-/// `s` as a JSON string literal into `out`.
-inline void quoted(const char* s, char* out, size_t len) {
-    size_t i = 0;
-    if (i + 1 < len) out[i++] = '"';
-    for (; *s && i + 3 < len; s++) {
-        if (*s == '"' || *s == '\\') out[i++] = '\\';
-        out[i++] = *s;
+/// `s` as a JSON string literal at `doc + n`, control characters escaped so a name holding a tab or a newline still makes a valid document; the new length, `cap` when it does not fit.
+inline int appendQuoted(char* doc, size_t cap, int n, const char* s) {
+    size_t at = static_cast<size_t>(n);
+    if (at + 2 >= cap) return static_cast<int>(cap);
+    doc[at++] = '"';
+    for (char esc[7]; *s; s++) {
+        const size_t k = jsonEscapeByte(static_cast<unsigned char>(*s), esc);
+        if (at + k + 2 >= cap) return static_cast<int>(cap);
+        std::memcpy(doc + at, esc, k);
+        at += k;
     }
-    out[i++] = '"';
-    out[i] = 0;
+    doc[at++] = '"';
+    doc[at] = 0;
+    return static_cast<int>(at);
+}
+
+/// One known network, the `index`th, at `doc + n`; the new length, past `cap` when it does not fit.
+inline int appendNetwork(char* doc, size_t cap, int n, const Network& net, int index) {
+    n += std::snprintf(doc + n, cap - n, "%s{\"id\":%d,\"ssid\":", index ? "," : "", index + 1);
+    if (static_cast<size_t>(n) < cap) n = appendQuoted(doc, cap, n, net.ssid);
+    if (static_cast<size_t>(n) < cap) n += std::snprintf(doc + n, cap - n, ",\"password\":");
+    if (static_cast<size_t>(n) < cap) n = appendQuoted(doc, cap, n, net.psk);
+    if (static_cast<size_t>(n) < cap) n += std::snprintf(doc + n, cap - n, ",\"ipSettings\":0}");
+    return n;
 }
 
 /// The Ethernet card for `eth` at `doc + n`, a member of Network; the new length.
@@ -235,12 +251,7 @@ inline int appendNetworks(char* doc, size_t cap, int n, const Network* nets, int
     n += std::snprintf(doc + n, cap - n, "\"WiFi\":{\"type\":\"WiFiModule\",");
     if (txPower > 0 && static_cast<size_t>(n) < cap) n += std::snprintf(doc + n, cap - n, "\"txPowerSetting\":%d,", txPower);
     if (static_cast<size_t>(n) < cap) n += std::snprintf(doc + n, cap - n, "\"known\":[");
-    for (int i = 0; i < count && static_cast<size_t>(n) < cap; i++) {
-        char s[72], p[136];
-        quoted(nets[i].ssid, s, sizeof(s));
-        quoted(nets[i].psk, p, sizeof(p));
-        n += std::snprintf(doc + n, cap - n, "%s{\"id\":%d,\"ssid\":%s,\"password\":%s,\"ipSettings\":0}", i ? "," : "", i + 1, s, p);
-    }
+    for (int i = 0; i < count && static_cast<size_t>(n) < cap; i++) n = appendNetwork(doc, cap, n, nets[i], i);
     return n;
 }
 

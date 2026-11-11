@@ -34,6 +34,14 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## The REST API
 ///
+/// **A page from outside this network is refused.** A request whose `Origin` names a host beyond it gets 403 before any route, WebSocket and preflight included (`http::isTrustedOrigin`, OWASP's origin check), so a site from the internet cannot use a visitor's browser against the device.
+///
+/// This network is a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, one label, or the device's own name.
+///
+/// A DNS-rebinding page's read carries no `Origin`, so its `Host` decides: an IP literal, a local name or the device's own name under any domain, as its router names it, is served, and every other name refused (`http::fromBeyondNetwork`).
+///
+/// A request with no `Origin`, from a script, another device or Home Assistant, is served as before; MoonBase applies the same rule.
+///
 /// `GET /` serves `index.html` and the UI assets. Every other route, with its parameters and answers, is the OpenAPI description [the REST API](https://moonmodules.org/MoonLight/reference/api.html) renders, which a test checks against this server's routes.
 ///
 /// ## The two WebSocket channels

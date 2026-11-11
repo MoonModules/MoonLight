@@ -4,7 +4,9 @@ info:
   version: 7.0.0-dev
   summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a desktop.
   description: |
-    Every route answers every client and allows any origin; an `OPTIONS` request on any path answers 204 as the CORS preflight.
+    Every route answers a client sending no `Origin` and a page from this network, which a private, shared or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, one label or the device's own name names; a page from beyond it gets 403 on every route, WebSockets included.
+    A request's `Host` names an IP address, a local name or the device's own name under any domain; every other `Host` gets 403, which stops a DNS-rebinding page.
+    An `OPTIONS` request on any path from such a page answers 204 as the CORS preflight.
     A request body is read as JSON whatever its `Content-Type` says, and a number rides as a JSON number.
     A malformed `Content-Length` answers 400 and an oversized one 413, an unknown path 404 and an unknown method 405.
     The live state and the preview travel over the `/ws` and `/wsp` WebSockets, described in [Integrating](integrating.html#websocket).
@@ -451,12 +453,15 @@ paths:
       operationId: relayEsphome
       summary: Hands the uploaded image on to an ESPHome device through ESPHome's own update protocol (TCP 3232), the body passed through as it arrives.
       parameters:
-        - { name: host, in: query, required: true, description: "The ESPHome device's IPv4 address.", schema: { type: string, format: ipv4 } }
+        - { name: host, in: query, required: true, description: "The ESPHome device's IPv4 address, on this network: any other answers 403.", schema: { type: string, format: ipv4 } }
         - { name: md5, in: query, required: true, description: "The image's MD5, which ESPHome asks for before the image.", schema: { type: string, pattern: "^[0-9a-f]{32}$" } }
       requestBody: { $ref: "#/components/requestBodies/Image" }
       responses:
         "200": { $ref: "#/components/responses/Ok" }
         "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "411": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
         "502": { $ref: "#/components/responses/Error" }
         "503": { $ref: "#/components/responses/Error" }
         "504": { $ref: "#/components/responses/Error" }

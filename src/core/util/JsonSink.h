@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/util/JsonEscape.h"   // jsonEscape: a string as a literal's contents, control characters included
 #include "platform/platform.h"
 
 #include <cmath>
@@ -141,24 +142,9 @@ public:
         // A character at a time, so there is no truncation ceiling; the standard requires escaping the quote, the backslash and every control byte.
         if (!s) s = "";
         append("\"");
-        char buf[8];  // longest emission is "\uXXXX" (6) + NUL; 8 is round
-        for (; *s; s++) {
-            unsigned char c = static_cast<unsigned char>(*s);
-            if (c == '"' || c == '\\') {
-                buf[0] = '\\'; buf[1] = static_cast<char>(c); buf[2] = 0;
-                append(buf);
-            } else if (c == '\n') { append("\\n"); }
-            else if (c == '\r') { append("\\r"); }
-            else if (c == '\t') { append("\\t"); }
-            else if (c == '\b') { append("\\b"); }
-            else if (c == '\f') { append("\\f"); }
-            else if (c < 0x20) {
-                std::snprintf(buf, sizeof(buf), "\\u%04x", c);
-                append(buf);
-            } else {
-                buf[0] = static_cast<char>(c); buf[1] = 0;
-                append(buf);
-            }
+        for (char esc[8]; *s; s++) {
+            esc[jsonEscapeByte(static_cast<unsigned char>(*s), esc)] = 0;
+            append(esc);
         }
         append("\"");
     }
@@ -257,16 +243,5 @@ private:
     int  optionIndex_ = -1; // >= 0: this sink is asking for that option object (see requestOption)
     size_t written_ = 0;    // every byte appended, whatever the mode
 };
-
-/// Escape a string for embedding in a literal, without the surrounding quotes, truncating rather than overflowing its output.
-inline void jsonEscape(const char* in, char* out, size_t outMax) {
-    if (outMax == 0) return;  // no room even for the terminator
-    size_t oi = 0;
-    for (; *in && oi + 2 < outMax; in++) {
-        if (*in == '"' || *in == '\\') out[oi++] = '\\';
-        out[oi++] = *in;
-    }
-    out[oi] = 0;
-}
 
 } // namespace mm

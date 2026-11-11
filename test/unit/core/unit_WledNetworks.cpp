@@ -94,6 +94,17 @@ TEST_CASE("the network document the migration writes is what MoonBase reads: the
     CHECK(std::strstr(doc, "EthernetModule") == nullptr);   // no Ethernet card for a board on WiFi only
 }
 
+TEST_CASE("a saved network name holding a quote, a tab or a newline is escaped, so the document stays valid JSON") {
+    const Network nets[1] = {{"Cafe\t\"Lux\"\n2", "pa\x01ss"}};
+    char doc[1024];
+    REQUIRE(mm::wlednet::networkDocument(doc, sizeof(doc), nets, 1, nullptr) > 0);
+    CHECK(std::strstr(doc, R"("ssid":"Cafe\t\"Lux\"\n2")") != nullptr);
+    CHECK(std::strstr(doc, R"("password":"pa\u0001ss")") != nullptr);
+    for (const char* c = doc; *c; c++) CHECK_MESSAGE(static_cast<unsigned char>(*c) >= 0x20, "a raw control character in the document");
+    const Network worst[1] = {{"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01", ""}};
+    CHECK(mm::wlednet::networkDocument(doc, 100, worst, 1, nullptr) == 0);   // an escape that outgrows the buffer writes nothing usable, never a cut one
+}
+
 TEST_CASE("WLED's TX power limit carries over in whole dBm, and its maximum carries no limit") {
     CHECK(mm::wlednet::readTxPower(R"({"nw":{"ins":[]},"wifi":{"sleep":false,"phy":0,"txpwr":34}})") == 8);   // 8.5 dBm, a board that browns out at full power
     CHECK(mm::wlednet::readTxPower(R"({"wifi":{"txpwr":78}})") == 0);    // 19.5 dBm, WLED's default: no limit

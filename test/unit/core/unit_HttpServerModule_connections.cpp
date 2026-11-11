@@ -390,3 +390,25 @@ TEST_CASE("HttpServer: a refused port is tried again each second, and a changed 
     CHECK(mm::HttpServerModule::servedPort() == kTestPort + 8);
     http.release();
 }
+
+// A site from the internet, opened in a browser on this network, drove every device: the browser stamps its Origin, and the server refuses a public one before any route.
+TEST_CASE("HttpServer: a request from a page outside this network is refused, one from a local page or a script is served") {
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    const auto status = [&](const char* req) {
+        mm::platform::TcpConnection client;
+        REQUIRE(connectAndAccept(http, client, kTestPort));
+        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), std::strlen(req)));
+        char reply[256] = {};
+        readReply(http, client, reply, sizeof(reply));
+        client.close();
+        return std::string(reply, std::strlen(reply) < 12 ? std::strlen(reply) : 12);
+    };
+    CHECK(status("POST /api/reboot HTTP/1.1\r\nHost: 192.168.1.158\r\nOrigin: https://evil.example\r\nContent-Length: 0\r\n\r\n") == "HTTP/1.1 403");
+    CHECK(status("GET /api/state HTTP/1.1\r\nHost: evil.example\r\n\r\n") == "HTTP/1.1 403");   // a DNS-rebinding page's same-origin read: its own name in Host, no Origin
+    CHECK(status("OPTIONS /api/control HTTP/1.1\r\nHost: test\r\nOrigin: https://evil.example\r\n\r\n") == "HTTP/1.1 403");
+    CHECK(status("OPTIONS /api/control HTTP/1.1\r\nHost: test\r\nOrigin: http://192.168.1.20\r\n\r\n") == "HTTP/1.1 204");
+    CHECK(status("OPTIONS /api/control HTTP/1.1\r\nHost: test\r\n\r\n") == "HTTP/1.1 204");
+    http.release();
+}

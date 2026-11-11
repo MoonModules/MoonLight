@@ -12,8 +12,12 @@
 /// Protocol version 2 answers one "chunk OK" per 8 KB received and one for the remainder, which this counts in passing.
 ///
 /// Pure: bytes in, bytes out, no socket, so a desktop test runs a whole session; nothing here allocates.
+#include "core/util/HttpHead.h"   // queryValue: the relay's query read as its parameters
+#include "core/util/Ipv4.h"
+
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 namespace mm::esphomeota {
@@ -26,6 +30,16 @@ enum Reply : uint8_t {
     kOk = 0x00, kRequestAuth = 0x01, kRequestSha256Auth = 0x02, kHeaderOk = 0x40, kAuthOk = 0x41, kPrepareOk = 0x42,
     kMd5Ok = 0x43, kReceiveOk = 0x44, kEndOk = 0x45, kSupportsCompression = 0x46, kChunkOk = 0x47, kFeatureFlags = 0x48, kFirstError = 0x80,
 };
+
+/// The relay's query, `host=<dotted quad>&md5=<32 lowercase hex digits>`, into `host`, `ip` and `md5`; false when either is missing, malformed or followed by more.
+inline bool parseRelayQuery(const char* query, char (&host)[16], uint8_t (&ip)[4], char (&md5)[33]) {
+    host[0] = md5[0] = '\0';
+    const char* h = http::queryValue(query, "host");
+    const char* m = http::queryValue(query, "md5");
+    if (!h || !m || std::sscanf(h, "%15[0-9.]", host) != 1 || std::sscanf(m, "%32[0-9a-f]", md5) != 1) return false;
+    const auto whole = [](const char* at, size_t n) { return at[n] == '&' || at[n] == '\0'; };
+    return std::strlen(md5) == 32 && whole(h, std::strlen(host)) && whole(m, 32) && parseDottedQuad(host, ip);
+}
 
 /// One update, driven by the caller's socket.
 class Client {

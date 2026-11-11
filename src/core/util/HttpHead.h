@@ -6,6 +6,8 @@
 ///
 /// The reads take a `recv(buf, cap)` callable returning the bytes read, 0 or less when the peer is gone, so a test feeds the bytes in whatever pieces it likes: TCP keeps no message boundaries, and a head or a body arrives split anywhere.
 
+#include "core/util/Ipv4.h"   // isPrivateIPv4: whether an Origin's address is this network's
+
 #include <cctype>
 #include <cerrno>
 #include <cstddef>
@@ -106,5 +108,114 @@ size_t fillTo(char* buf, size_t have, size_t want, Recv&& recv) {
     }
     return have;
 }
+
+/// The value of query parameter `name`, up to the next `&` or the end, or null; a parameter matches whole, so `xlive=` is not `live=`.
+inline const char* queryValue(const char* query, const char* name) {
+    const size_t n = std::strlen(name);
+    for (const char* p = query; p && *p;) {
+        if (std::strncmp(p, name, n) == 0 && p[n] == '=') return p + n + 1;
+        p = std::strchr(p, '&');
+        if (p) p++;
+    }
+    return nullptr;
+}
+
+/// Whether the query holds the parameter `name=value` whole: `live=10` is not `live=1`.
+inline bool queryHas(const char* query, const char* name, const char* value) {
+    const char* at = queryValue(query, name);
+    const size_t v = std::strlen(value);
+    return at && std::strncmp(at, value, v) == 0 && (at[v] == '&' || at[v] == '\0');
+}
+
+/// Whether a bracketed IPv6 host is loopback, unique local (fc00::/7) or link-local (fe80::/10).
+inline bool isLocalIPv6(const char* h) {
+    return std::strcmp(h, "[::1]") == 0 || std::strncmp(h, "[fc", 3) == 0 || std::strncmp(h, "[fd", 3) == 0
+        || (std::strncmp(h, "[fe", 3) == 0 && h[3] >= '8' && h[3] <= 'b');
+}
+
+/// Whether a lowercase name of `n` bytes is local: `localhost` (RFC 6761), `.local` (RFC 6762), `.home.arpa` (RFC 8375), `.internal`, or one label.
+inline bool isLocalName(const char* h, size_t n) {
+    constexpr const char* kTails[] = {".localhost", ".local", ".home.arpa", ".internal"};
+    if (std::strcmp(h, "localhost") == 0 || std::strchr(h, '.') == nullptr) return true;
+    for (const char* t : kTails) {
+        const size_t l = std::strlen(t);
+        if (n > l && std::strcmp(h + n - l, t) == 0) return true;
+    }
+    return false;
+}
+
+/// `host` (`n` bytes) lowercased into `h`, a fully qualified name's root dot dropped; its length, 0 when empty or past the buffer.
+inline size_t lowerHost(const char* host, size_t n, char (&h)[64]) {
+    if (n == 0 || n >= sizeof(h)) return 0;
+    for (size_t i = 0; i < n; i++) h[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(host[i])));
+    h[n] = '\0';
+    if (h[n - 1] == '.') h[--n] = '\0';
+    return n;
+}
+
+/// Whether a URL's host (`n` bytes, no port) names this network: a private or loopback address, or a local name.
+inline bool isLocalHost(const char* host, size_t n) {
+    char h[64];
+    if ((n = lowerHost(host, n, h)) == 0) return false;
+    if (h[0] == '[') return isLocalIPv6(h);
+    uint8_t ip[4];
+    return parseDottedQuad(h, ip) ? isPrivateIPv4(ip) : isLocalName(h, n);
+}
+
+/// The length of the host at `p`, up to its port, path or the field's end; an IPv6 address runs to its closing bracket, past its colons.
+inline size_t hostLength(const char* p) {
+    const char* stop = *p == '[' ? "]" : ":/";
+    const char* end = p;
+    while (!isFieldEnd(*end) && !std::strchr(stop, *end)) end++;
+    if (*end == ']') end++;
+    return static_cast<size_t>(end - p);
+}
+
+/// The host of a URL in a header value, `n` bytes up to its port, or null when its line holds no `scheme://`.
+inline const char* urlHost(const char* value, size_t& n) {
+    const char* scheme = skipSpace(value);
+    while (!isFieldEnd(*scheme) && std::strncmp(scheme, "://", 3) != 0) scheme++;
+    if (std::strncmp(scheme, "://", 3) != 0) return nullptr;
+    n = hostLength(scheme + 3);
+    return scheme + 3;
+}
+
+/// Whether a host's first label is `own`, case-insensitively: the device under whatever domain its router or mDNS gives the name it sends as its DHCP hostname.
+inline bool isOwnName(const char* host, size_t n, const char* own) {
+    const size_t k = own ? std::strlen(own) : 0;
+    if (k == 0 || n < k || (n > k && host[k] != '.')) return false;
+    for (size_t i = 0; i < k; i++)
+        if (std::tolower(static_cast<unsigned char>(host[i])) != std::tolower(static_cast<unsigned char>(own[i]))) return false;
+    return true;
+}
+
+/// Whether a `Host` value names this device as only the network can: an IP literal, a local name that public DNS leaves unserved, or its own name under any domain.
+inline bool isOwnHost(const char* host, size_t n, const char* own) {
+    char h[64];
+    if ((n = lowerHost(host, n, h)) == 0) return false;
+    uint8_t ip[4];
+    return h[0] == '[' || parseDottedQuad(h, ip) || isLocalName(h, n) || isOwnName(h, n, own);
+}
+
+/// Whether an `Origin` value, the page a browser request comes from, names this network or this device, judged by its own name alone, since a DNS-rebinding page sets `Host`.
+inline bool isTrustedOrigin(const char* value, const char* own = nullptr) {
+    size_t n = 0;
+    const char* host = urlHost(value, n);
+    return host && (isLocalHost(host, n) || isOwnName(host, n, own));
+}
+
+/// Whether a request comes from beyond this network, by a public `Origin` or, for a rebinding page's read that carries none, a `Host` naming another than device `own`; the access point exempt.
+inline bool fromBeyondNetwork(const char* head, bool viaAccessPoint, const char* own = nullptr) {
+    if (viaAccessPoint) return false;
+    const char* origin = findHeader(head, "Origin:");
+    if (origin && !isTrustedOrigin(origin + 7, own)) return true;
+    const char* host = findHeader(head, "Host:");
+    if (!host) return false;   // HTTP/1.0 names none
+    host = skipSpace(host + 5);
+    return !isOwnHost(host, hostLength(host), own);
+}
+
+/// Whether `url` is one a device fetches: http or https only.
+inline bool isHttpUrl(const char* url) { return std::strncmp(url, "http://", 7) == 0 || std::strncmp(url, "https://", 8) == 0; }
 
 }  // namespace mm::http

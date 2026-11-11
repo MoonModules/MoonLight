@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A page from outside the local network is refused
+
+**Action: *nothing*, unless a page served from the internet drives your devices; serve it from the local network, or call the device from a script, which sends no Origin.**
+
+A browser request whose page comes from beyond the local network, by its `Origin` header, now gets 403 from MoonLight and MoonBase, reads and the WebSocket included. Before, any website open in a browser on the network could install firmware on a device or read its saved WiFi passwords. Pages served by a device, the desktop app, MoonDeck, Home Assistant and scripts are unaffected. A device answers by its address, `localhost`, a local name, or its own name under any domain, such as `mm-acfd.fritz.box`; under another name, such as a dynamic DNS name, it answers 403: open it by one of those instead.
+
 ### Discovery moves from Network to Devices
 
 **Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*.**
@@ -43,7 +49,7 @@ A MoonLight or MoonBase board appends its page's port and its base MAC to its pr
 
 **Action: *nothing*.**
 
-The Network card's `mDNS` switch is gone: a device always answers on `<device name>.local` while a network carries it, since its name is its address. A saved `mDNS` setting is ignored, so a device that had it off is found by name again.
+The Network card's `mDNS` switch is gone: a board always answers on `<device name>.local` while it is on a WiFi network or Ethernet, since its name is its address. On its own access point it does not, and a desktop answers by its computer's own name. A saved `mDNS` setting is ignored, so a device that had it off is found by name again.
 
 ### The level spans from where the gate opens to its top
 

@@ -5068,10 +5068,13 @@ function linkIp(detail, row) {
 }
 
 // A device's JSON, or null when it does not answer within `ms`: a hung device leaves a popup saying so rather than reading for ever.
-async function fetchJsonWithin(url, ms = 4000) {
+async function fetchJsonWithin(url, ms = 4000) { return fetchWithin(url, ms, (r) => r.json()); }
+
+// A reply read by `read` within `ms`, body included, or null: a device that answers and then stalls releases its caller at the time.
+async function fetchWithin(url, ms, read) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), ms);
-    try { return await (await fetch(url, { signal: ctl.signal })).json(); }
+    try { return await read(await fetch(url, { signal: ctl.signal })); }
     catch (_) { return null; }
     finally { clearTimeout(timer); }
 }
@@ -5232,10 +5235,11 @@ async function mountMapPicker(box, base, chip, ranFirmware, extra, move, blocker
         onInstall: async (_firmware, _manifestUrl, binaryUrl, _entry, label, tag) => {
             const dlg = box.closest("dialog");
             if (dlg) dlg.dataset.busy = "1";   // the move runs in the browser: openGraphNode keeps the popup open meanwhile
+            const device = picker?.selectedDeviceEntry();   // the device the firmware was picked for, whatever the selector shows by the end
             try {
                 const sys = await move(binaryUrl, tag, note);
                 if (!sys) return "Not started.";
-                const applied = tick.checked ? await applyDeviceDefaults(base, picker?.selectedDeviceEntry()) : "";
+                const applied = tick.checked ? await applyDeviceDefaults(base, device) : "";
                 return `✓ MoonLight ${sys.version || label} runs.${applied}`;
             } finally {
                 if (dlg) delete dlg.dataset.busy;
@@ -5435,7 +5439,8 @@ async function moonBaseToMoonLight(base, binaryUrl, note) {
     if (!res) throw new Error("MoonBase does not answer");
     if (!res.ok) throw new Error(`MoonBase refused: ${await res.text()}`);
     const progress = async () => {
-        try { const st = await (await fetch(`${base}/moonbase`)).text(); if (st) note.textContent = `MoonBase: ${st}`; } catch (_) { /* restarting */ }
+        const st = await fetchWithin(`${base}/moonbase`, 2500, (r) => r.text());   // bounded, so the five-minute deadline holds
+        if (st) note.textContent = `MoonBase: ${st}`;
     };
     const sys = await waitForSystem(base, (s) => !s.moonbase, 300000, progress);
     if (!sys) throw new Error("no MoonLight after five minutes: open the board's address to see where MoonBase stands");

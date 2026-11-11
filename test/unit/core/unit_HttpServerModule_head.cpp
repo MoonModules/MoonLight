@@ -138,3 +138,77 @@ TEST_CASE("an image shorter than its identifying bytes comes up short, so the in
     char buf[4096];
     CHECK(mm::http::fillTo(buf, 0, mm::firmware::kIdentifyBytes, PeerRef{&peer}) == 20);
 }
+
+TEST_CASE("a query parameter matches whole: a value is found by its own name only, and a flag only with its own value") {
+    using mm::http::queryValue;
+    using mm::http::queryHas;
+    CHECK(std::string(queryValue("path=/a.json&hidden=1", "path")) == "/a.json&hidden=1");   // up to the caller's '&'
+    CHECK(std::string(queryValue("path=/a.json&hidden=1", "hidden")) == "1");
+    CHECK(queryValue("xpath=/a.json", "path") == nullptr);
+    CHECK(queryValue("pathx=/a.json", "path") == nullptr);
+    CHECK(queryValue("", "path") == nullptr);
+    CHECK(queryValue(nullptr, "path") == nullptr);
+    CHECK(queryHas("live=1", "live", "1"));
+    CHECK(queryHas("a=2&live=1&b=3", "live", "1"));
+    CHECK_FALSE(queryHas("live=10", "live", "1"));
+    CHECK_FALSE(queryHas("xlive=1", "live", "1"));
+    CHECK_FALSE(queryHas("live=", "live", "1"));
+}
+
+TEST_CASE("a device fetches only an http or https URL, never a file, a relative path or another scheme") {
+    using mm::http::isHttpUrl;
+    CHECK(isHttpUrl("http://192.168.1.10/fw.bin"));
+    CHECK(isHttpUrl("https://github.com/MoonModules/MoonLight/releases/download/v7.0.0/firmware-esp32.bin"));
+    CHECK_FALSE(isHttpUrl("file:///etc/passwd"));
+    CHECK_FALSE(isHttpUrl("//evil.example/fw.bin"));
+    CHECK_FALSE(isHttpUrl("ftp://host/fw.bin"));
+    CHECK_FALSE(isHttpUrl(""));
+}
+
+TEST_CASE("a page's Origin is trusted when it names this network, an address or a local name, and refused when it names the internet") {
+    using mm::http::isTrustedOrigin;
+    const char* trusted[] = {
+        "http://192.168.1.158", " http://192.168.1.158:8080", "http://10.0.0.5", "http://172.16.0.1", "http://172.31.255.254",
+        "http://169.254.1.1", "http://127.0.0.1:8080", "http://localhost:8080", "http://mm-acfd.local", "http://MM-ACFD.LOCAL.",
+        "http://lights.home.arpa", "http://nas.internal", "http://moonlight", "http://[::1]:8080", "http://[fe80::1]", "http://[fd12::3]",
+    };
+    for (const char* o : trusted) CHECK_MESSAGE(isTrustedOrigin(o), o);
+    const char* refused[] = {
+        "https://evil.example", "http://192.168.1.158.evil.example", "http://8.8.8.8", "http://172.32.0.1", "http://11.0.0.1",
+        "http://local.evil.example", "null", "", "http://", "http://[2001:db8::1]", "https://moonmodules.org",
+        "null\r\nReferer: http://192.168.1.158/",   // a header without a scheme ends at its own line, never borrowing the next one's host
+    };
+    for (const char* o : refused) CHECK_MESSAGE(!isTrustedOrigin(o), o);
+}
+
+TEST_CASE("an address is this network's when private, a VPN's shared space, link-local or loopback") {
+    const uint8_t mine[][4] = {{10, 1, 2, 3}, {172, 16, 0, 1}, {172, 31, 9, 9}, {192, 168, 1, 227}, {100, 64, 0, 1}, {100, 127, 9, 9}, {169, 254, 3, 4}, {127, 0, 0, 1}};
+    for (const auto& a : mine) CHECK(mm::isPrivateIPv4(a));
+    const uint8_t theirs[][4] = {{8, 8, 8, 8}, {172, 15, 0, 1}, {172, 32, 0, 1}, {192, 169, 0, 1}, {1, 1, 1, 1}, {100, 63, 0, 1}, {100, 128, 0, 1}};
+    for (const auto& a : theirs) CHECK_FALSE(mm::isPrivateIPv4(a));
+}
+
+TEST_CASE("a request comes from beyond the network by a public Origin, or by a Host a rebinding page could own, never through the access point") {
+    using mm::http::fromBeyondNetwork;
+    const char* own = "MM-ACFD";
+    CHECK(fromBeyondNetwork("GET /api/file?path=/.config/WiFi.json HTTP/1.1\r\nHost: evil.example\r\n\r\n", false, own));   // DNS rebinding: no Origin on a same-origin GET
+    CHECK(fromBeyondNetwork("POST /api/reboot HTTP/1.1\r\nHost: 192.168.1.158\r\nOrigin: https://evil.example\r\n\r\n", false, own));
+    CHECK(fromBeyondNetwork("GET / HTTP/1.1\r\nHost: mm-acfdx.fritz.box\r\n\r\n", false, own));   // a name that only begins like the device's
+    CHECK(fromBeyondNetwork("GET / HTTP/1.1\r\nHost: myhome.dyndns.example:8080\r\n\r\n", false, own));
+    const char* served[] = {
+        "GET / HTTP/1.1\r\nHost: 192.168.1.158\r\n\r\n", "GET / HTTP/1.1\r\nHost: 192.168.1.158:8080\r\n\r\n",
+        "GET / HTTP/1.1\r\nHost: 203.0.113.5\r\n\r\n",                 // a public LAN address: an IP literal, which rebinding cannot use
+        "GET / HTTP/1.1\r\nHost: [2001:db8::1]:8080\r\n\r\n", "GET / HTTP/1.1\r\nHost: localhost:8080\r\n\r\n",
+        "GET / HTTP/1.1\r\nHost: mm-acfd.local\r\n\r\n", "GET / HTTP/1.1\r\nHost: MM-ACFD.fritz.box\r\n\r\n",   // the router's name for it
+        "GET / HTTP/1.1\r\nHost: mm-acfd.lan\r\n\r\n", "GET / HTTP/1.1\r\nHost: mm-acfd.tailnet.ts.net\r\n\r\n",
+        "GET / HTTP/1.1\r\nHost: mm-acfd\r\n\r\n", "GET / HTTP/1.1\r\nHost: nas\r\n\r\n",   // one label, which public DNS never serves
+        "GET / HTTP/1.0\r\n\r\n",
+        "POST /api/state HTTP/1.1\r\nHost: 192.168.1.158\r\nOrigin: http://192.168.1.20:8080\r\n\r\n",
+        "POST /api/state HTTP/1.1\r\nHost: mm-acfd.fritz.box\r\nOrigin: http://mm-acfd.fritz.box\r\n\r\n",   // its own page under the router's name
+    };
+    for (const char* r : served) CHECK_MESSAGE(!fromBeyondNetwork(r, false, own), r);
+    CHECK(fromBeyondNetwork("GET / HTTP/1.1\r\nHost: mm-acfd.fritz.box\r\n\r\n", false, nullptr));   // a device without a name has no own name to match
+    // A phone on the access point checks for a sign-in page under any name, and the UI there is http://4.3.2.1, no private address.
+    CHECK_FALSE(fromBeyondNetwork("GET /generate_204 HTTP/1.1\r\nHost: connectivitycheck.gstatic.com\r\n\r\n", true, own));
+    CHECK_FALSE(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: 4.3.2.1\r\nOrigin: http://4.3.2.1\r\n\r\n", true, own));
+}

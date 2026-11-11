@@ -35,16 +35,18 @@ struct Service {
 
 /// The ESP32 family the first `n` characters of a chip or board name hold ("C3FH4", "esp32-s3-devkitc-1"), as MoonLight's files spell it; the classic when they name none.
 inline void chipFamily(const char* name, size_t n, char* out, size_t cap) {
-    static constexpr const char* kFamilies[] = {"s3", "s2", "c3", "c5", "c6", "h2", "p4"};
-    for (const char* family : kFamilies)
-        for (size_t i = 0; i + 1 < n; i++)
-            if ((name[i] | 0x20) == family[0] && name[i + 1] == family[1]) { std::snprintf(out, cap, "esp32%s", family); return; }
+    static constexpr const char* kFamilies[] = {"s31", "s3", "s2", "c3", "c5", "c6", "h2", "p4"};   // the S31 before the S3 its name begins with
+    for (const char* family : kFamilies) {
+        const size_t len = std::strlen(family);
+        for (size_t i = 0; i + len <= n; i++)
+            if ((name[i] | 0x20) == family[0] && std::strncmp(name + i + 1, family + 1, len - 1) == 0) { std::snprintf(out, cap, "esp32%s", family); return; }
+    }
     std::snprintf(out, cap, "esp32");
 }
 
 /// The chip an ESPHome record names, as MoonLight spells it: its `variant` ("ESP32S3"), else the family its board names ("esp32-s3-devkitc-1") or the classic; none off the ESP32 platform.
 inline void esphomeChip(const char* platform, const char* variant, const char* board, char* out, size_t cap) {
-    if (!variant[0] && std::strcmp(platform, "ESP32") != 0) return;   // an ESP8266 or an RP2040 MoonLight does not run on
+    if (platform[0] ? std::strcmp(platform, "ESP32") != 0 : !variant[0]) return;   // an ESP8266 or an RP2040 MoonLight does not run on, whatever its variant says
     const char* from = variant[0] ? variant : board;
     chipFamily(from, std::strlen(from), out, cap);
 }

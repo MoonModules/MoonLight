@@ -1,9 +1,9 @@
 {
-  "commit": "8b313669a",
+  "commit": "6a8808111",
   "flash": {
-    "esp32s3-n16r8": 2481920,
-    "esp32": 2273536,
-    "esp32p4rev1-eth": 2608816,
+    "esp32s3-n16r8": 2489088,
+    "esp32": 2280864,
+    "esp32p4rev1-eth": 2608832,
     "esp32p4rev1-eth-wifi": 2670560,
     "esp32s3-n8r8": 2355984,
     "esp32s31": 2798864,
@@ -11,12 +11,12 @@
     "esp32-eth": 1871072,
     "esp32-wrover": 2196080,
     "qemu": 1383648,
-    "esp32p4rev3-eth": 2615440,
+    "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2432432,
-    "desktop-macos": 2565536,
+    "desktop-macos": 2582432,
     "desktop-windows": 1925120,
-    "esp32c3": 2397008,
+    "esp32c3": 2397024,
     "desktop-linux": 2548000,
     "esp32s3-n32r16": 2489792,
     "teensy41": 1289160,
@@ -800,8 +800,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 10,
-      "fps": 100000,
+      "tick_us": 8,
+      "fps": 125000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -841,16 +841,16 @@
     }
   },
   "loc": {
-    "core": 37529,
+    "core": 37679,
     "light": 35110,
     "platform": 24972,
-    "ui": 14522,
-    "test": 85522,
-    "moondeck": 35447
+    "ui": 14529,
+    "test": 85679,
+    "moondeck": 35454
   },
   "comments": {
     "core": {
-      "lines": 7370,
+      "lines": 7400,
       "ratio": 0.218
     },
     "light": {
@@ -862,12 +862,12 @@
       "ratio": 0.199
     },
     "ui": {
-      "lines": 3635,
+      "lines": 3636,
       "ratio": 0.265
     },
     "test": {
-      "lines": 7901,
-      "ratio": 0.107
+      "lines": 7903,
+      "ratio": 0.106
     },
     "moondeck": {
       "lines": 4507,
@@ -875,20 +875,20 @@
     }
   },
   "tests": {
-    "cases": 3195,
+    "cases": 3204,
     "scenarios": 37
   },
   "docs": {
     "md_files": 121,
-    "md_lines": 19825,
+    "md_lines": 19832,
     "plans_files": 13,
     "backlog_lines": 3058,
     "lessons_lines": 455,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6204,
-    "over_threshold": 338,
+    "functions": 6219,
+    "over_threshold": 337,
     "worst_ccn": 128
   }
 }

@@ -76,12 +76,16 @@ namespace mm {
 /// **The map's edges come from the modules.** Once a second every enabled module reports its services and traffic (NetworkUse). A peer gets a row, a group address one of kind group. This device's row carries its outbound flows and services, a peer's row its inbound flow. A flow from a peer is a sighting; one to a silent receiver is not, so a dead receiver ages out.
 ///
 /// **Growth, and what memory refuses.** The rows are one block that doubles when a device needs a row, checked against the heap's reserve, so N devices cost about log₂ N allocations. A refused growth replaces the least recently heard row of the lowest worth: other devices, then MoonLight boards, never this device.
+///
+/// ## Who sees and changes what
+///
+/// Anyone on the network reads the map; what it exposes, sends unasked and guards: [Security](https://moonmodules.org/MoonLight/explanation/security.html#the-devices-map).
 class DevicesModule : public MoonModule, public ListSource {
 public:
     /// Adopt this device's own name, so its own row matches what everything else shows.
     void setSelfName(const char* name) { selfName_ = name; }
 
-    /// The devices drawn as a map above the list, each row a node keyed by its address.
+    /// The devices drawn as a map above the list, each row a node keyed by its address, which anyone on the network reads: @xref{who-sees-and-changes-what}.
     bool listAsGraph() const override { return true; }
 
     /// How many devices are currently listed.
@@ -557,7 +561,6 @@ private:
         }
         return victim;
     }
-
 
     /// Offer one datagram to each plugin, the first to claim it winning.
     void mergePacket(const uint8_t* data, size_t len, const uint8_t srcIp[4]) {

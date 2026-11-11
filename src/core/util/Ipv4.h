@@ -12,6 +12,12 @@ namespace mm {
 ///
 /// MoonBase includes it as well as the app, so the recovery image refuses the same static settings the app refuses and comes up where the app does.
 
+/// Whether an address is this network's rather than the internet's: private (RFC 1918), shared as a VPN such as Tailscale gives out (RFC 6598), link-local (RFC 3927) or loopback.
+inline bool isPrivateIPv4(const uint8_t a[4]) {
+    return a[0] == 10 || (a[0] == 172 && (a[1] & 0xF0) == 16) || (a[0] == 192 && a[1] == 168) || (a[0] == 100 && (a[1] & 0xC0) == 64)
+        || (a[0] == 169 && a[1] == 254) || a[0] == 127;
+}
+
 /// Parse "A.B.C.D" into four octets, returning false on anything else; `out` is written only on success, as `inet_pton` does.
 inline bool parseDottedQuad(const char* s, uint8_t out[4]) {
     if (!s) return false;

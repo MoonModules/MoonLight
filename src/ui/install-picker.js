@@ -540,7 +540,7 @@ function render(state) {
     // reason as the button title so the disabled state isn't a mystery.
     function applyInstallEnabled() {
         const why = state.blocker ? state.blocker() : "";
-        installBtn.disabled = !(firmwareReady && !why);
+        installBtn.disabled = state.installing || !(firmwareReady && !why);   // one install at a time, whatever a host's refresh asks
         installBtn.title = !firmwareReady ? "Select a firmware to flash" : why;
     }
     state.applyInstallEnabled = applyInstallEnabled;
@@ -763,7 +763,7 @@ function render(state) {
 
     installBtn.addEventListener("click", async () => {
         const r = sorted[state.releaseIdx];
-        if (!r || !state.firmware) return;
+        if (!r || !state.firmware || state.installing) return;
         // Belt-and-suspenders: never flash without a picked port when the host
         // gates on one (the button is already disabled in that state, but a stale
         // enablement shouldn't let a flash through). The dropdown stays the place
@@ -789,6 +789,7 @@ function render(state) {
         // straight through). Desktop keys are excluded for the reason given at that write.
         safeLocalSet(PREF_RELEASE_KEY, r.tag_name);
         if (!entry.isDesktop) safeLocalSet(PREF_FIRMWARE_KEY, state.firmware);
+        state.installing = true;
         installBtn.disabled = true;
         statusEl.textContent = entry.isDesktop
             ? `Downloading ${releaseLabel(r)}…`
@@ -804,6 +805,7 @@ function render(state) {
         } finally {
             // Recompute via the gate, not a blind enable — a flash with no port
             // picked (host gates on one) must stay disabled after the attempt.
+            state.installing = false;
             applyInstallEnabled();
         }
     });

@@ -15,13 +15,14 @@
 #include "core/util/JsonSink.h"
 #include "core/util/LightOutput.h"      // the summary's outputs and effects, read from the light domain
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
+#include "core/system/ControlModule.h"   // deviceName: the name a Host may carry under any domain
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
-#include "core/system/SystemModule.h"      // deviceName() for the WLED /json/info shim
+#include "core/system/SystemModule.h"      // deviceModel, the board /api/system names
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
@@ -372,18 +373,6 @@ bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
     return false;
 }
 
-// Whether the query holds the parameter `name=value` whole, as a query parameter is read: `xlive=1` and `live=10` are other parameters.
-static bool queryHas(const char* query, const char* name, const char* value) {
-    const size_t n = std::strlen(name), v = std::strlen(value);
-    for (const char* p = query; p && *p;) {
-        const char* end = std::strchr(p, '&');
-        const size_t len = end ? static_cast<size_t>(end - p) : std::strlen(p);
-        if (len == n + 1 + v && std::strncmp(p, name, n) == 0 && p[n] == '=' && std::strncmp(p + n + 1, value, v) == 0) return true;
-        p = end ? end + 1 : nullptr;
-    }
-    return false;
-}
-
 // Whether the request line is `prefix`, the method and the state path, ending there or going on with a query.
 static bool isStatePath(const char* req, const char* prefix) {
     const size_t n = std::strlen(prefix);
@@ -548,6 +537,12 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     char* queryStart = std::strchr(path, '?');
     if (queryStart) *queryStart = 0;
 
+    // A page from beyond this network is refused here, read or write, WebSocket included, by its Origin or a rebinding page's Host (fromBeyondNetwork). A script or another device naming the device by address is unaffected.
+    if (http::fromBeyondNetwork(req, captive::throughAccessPoint(local), ControlModule::deviceName())) {
+        sendResponse(conn, 403, "application/json", "{\"error\":\"a page from outside this network may not use this device\"}");
+        return;
+    }
+
     // WebSocket upgrade: `/ws` is the control plane (JSON state), `/wsp` the lossy binary preview, separate so a large preview frame cannot delay a state push.
     const bool isWs  = std::strcmp(path, "/ws") == 0;
     const bool isWsp = std::strcmp(path, "/wsp") == 0;
@@ -625,7 +620,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         } else if (std::strcmp(path, "/api/state") == 0 && body) {
             // POST for a client that cannot send PATCH: the same document, the same engine.
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
-            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
+            handleApplyState(conn, body, queryStart && http::queryHas(queryStart + 1, "live", "1"));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -690,7 +685,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         // Editable list: PATCH /api/list/<module>/<control>/<id> edits one row: a field ({"field":F,"value":V}) or a reorder ({"to":N}).
         if (std::strcmp(path, "/api/state") == 0 && body) {
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
-            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
+            handleApplyState(conn, body, queryStart && http::queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
@@ -763,9 +758,8 @@ void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, c
 
 // Copy the `path=` query value into `out` (decoding %XX and '+'), rooted at the mount; false on a missing path or a ".." traversal.
 bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
-    const char* p = query ? std::strstr(query, "path=") : nullptr;
+    const char* p = query ? http::queryValue(query, "path") : nullptr;
     if (!p) return false;
-    p += 5;                                   // past "path="
     size_t i = 0;
     // The path may be its own query (stop at '&') and percent-encoded ('/' → %2F, ' ' → %20).
     while (*p && *p != '&' && i + 1 < cap) {
@@ -831,7 +825,7 @@ void HttpServerModule::serveDirListing(platform::TcpConnection& conn, const char
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
     JsonSink sink(conn);
-    DirListState st{&sink, query && std::strstr(query, "hidden=1") != nullptr, true};
+    DirListState st{&sink, query && http::queryHas(query, "hidden", "1"), true};
     sink.append("[");
     platform::fsList(path, &dirListTrampoline, &st);
     sink.append("]");
@@ -1087,23 +1081,15 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platf
     t->conn = std::move(conn);
 }
 
-namespace {
-// The relay's query, `host=<dotted quad>&md5=<32 hex digits>`, into `host`, `ip` and `md5`; false when either is missing or malformed.
-bool parseRelayQuery(const char* query, char (&host)[16], uint8_t (&ip)[4], char (&md5)[33]) {
-    const char* h = std::strstr(query, "host=");
-    const char* m = std::strstr(query, "md5=");
-    if (!h || !m) return false;
-    std::sscanf(h + 5, "%15[0-9.]", host);
-    std::sscanf(m + 4, "%32[0-9a-f]", md5);
-    return parseDottedQuad(host, ip) && std::strlen(md5) == 32;
-}
-}  // namespace
-
 void HttpServerModule::handleRelay(platform::TcpConnection& conn, const char* query, const char* initialBody, size_t initialLen, size_t contentLen) {
     char host[16] = {}, md5[33] = {};
     uint8_t ip[4];
-    if (!query || !parseRelayQuery(query, host, ip, md5) || contentLen == 0) {
+    if (!query || !esphomeota::parseRelayQuery(query, host, ip, md5) || contentLen == 0) {
         sendResponse(conn, 400, "application/json", "{\"error\":\"a host address and the image's 32-digit MD5 are needed\"}");
+        return;
+    }
+    if (!isPrivateIPv4(ip)) {   // the relay hands an image to a device on this network only
+        sendResponse(conn, 403, "application/json", "{\"error\":\"the relay reaches devices on this network only\"}");
         return;
     }
     FileTransfer* t = claimTransfer(conn);
@@ -2104,8 +2090,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         sendResponse(conn, 400, "application/json", "{\"error\":\"url required\"}");
         return;
     }
-    // Cheap URL-shape sanity: only http(s). Stops accidental file:// or protocol-relative things from reaching the platform layer.
-    if (std::strncmp(url, "http://", 7) != 0 && std::strncmp(url, "https://", 8) != 0) {
+    if (!http::isHttpUrl(url)) {
         sendResponse(conn, 400, "application/json",
                      "{\"error\":\"url must start with http:// or https://\"}");
         return;

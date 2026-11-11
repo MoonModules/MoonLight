@@ -40,6 +40,9 @@ TEST_CASE("an ESPHome record's chip comes from its variant, else its board's nam
     chip[0] = 0; mm::mdns::esphomeChip("ESP32", "", "esp32-c3-devkitm-1", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32c3");
     chip[0] = 0; mm::mdns::esphomeChip("ESP32", "", "esp32dev", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32");
     chip[0] = 0; mm::mdns::esphomeChip("ESP8266", "", "d1_mini", chip, sizeof(chip)); CHECK(std::string(chip).empty());
+    chip[0] = 0; mm::mdns::esphomeChip("ESP8266", "ESP8266EX", "d1_mini", chip, sizeof(chip)); CHECK(std::string(chip).empty());   // a variant on another platform
+    chip[0] = 0; mm::mdns::esphomeChip("ESP32", "ESP32S31", "", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32s31");    // the S31, not the S3 its name begins with
+    chip[0] = 0; mm::mdns::esphomeChip("", "ESP32C3", "", chip, sizeof(chip)); CHECK(std::string(chip) == "esp32c3");          // an older record without a platform
 }
 
 TEST_CASE("a WLED board's reply names its MAC, the identity its presence packet lacks") {

@@ -72,3 +72,50 @@ TEST_CASE("a device asking for a password, or answering with an error code, ends
     e.received(0x48);                     // not ESPHome's answer to the magic bytes
     CHECK(e.state() == Client::State::Failed);
 }
+
+TEST_CASE("a byte while the client's own bytes are still going out ends the update as out of turn, and bytes after the end change nothing") {
+    Client c;
+    c.begin(100, kMd5);                   // the magic bytes queued, none sent yet
+    c.received(0x00);
+    CHECK(c.state() == Client::State::Failed);
+    CHECK(std::string(c.error()) == "an answer out of turn");
+
+    Client d;
+    d.begin(100, kMd5);
+    drain(d);
+    d.received(0x00); d.received(0x02); drain(d);
+    d.received(0x40); d.received(0x41); drain(d);
+    d.received(0x42); drain(d);
+    d.received(0x43);
+    d.dataSent(100);
+    d.received(0x47); d.received(0x44); d.received(0x45); drain(d);
+    REQUIRE(d.state() == Client::State::Done);
+    for (int b = 0; b < 256; b++) d.received(static_cast<uint8_t>(b));   // a device that keeps talking
+    CHECK(d.state() == Client::State::Done);
+}
+
+TEST_CASE("the relay's query takes a whole dotted-quad host and a whole 32-digit lowercase MD5, and refuses anything else") {
+    using mm::esphomeota::parseRelayQuery;
+    char host[16], md5[33];
+    uint8_t ip[4];
+    REQUIRE(parseRelayQuery("host=192.168.1.227&md5=0123456789abcdef0123456789abcdef", host, ip, md5));
+    CHECK(std::string(host) == "192.168.1.227");
+    CHECK(ip[3] == 227);
+    CHECK(std::string(md5) == kMd5);
+    CHECK(parseRelayQuery("md5=0123456789abcdef0123456789abcdef&host=10.0.0.1", host, ip, md5));   // either order
+    const char* refused[] = {
+        "",                                                                   // nothing
+        "host=192.168.1.227",                                                 // no MD5
+        "md5=0123456789abcdef0123456789abcdef",                               // no host
+        "ghost=192.168.1.227&md5=0123456789abcdef0123456789abcdef",           // another parameter ending in host
+        "host=192.168.1.227x&md5=0123456789abcdef0123456789abcdef",           // a host with more after it
+        "host=192.168.1.2270&md5=0123456789abcdef0123456789abcdef",           // an octet past 255
+        "host=1.2.3&md5=0123456789abcdef0123456789abcdef",                    // three octets
+        "host=evil.example&md5=0123456789abcdef0123456789abcdef",             // a name, not an address
+        "host=192.168.1.227&md5=0123456789ABCDEF0123456789abcdef",            // uppercase hex
+        "host=192.168.1.227&md5=0123456789abcdef0123456789abcde",             // 31 digits
+        "host=192.168.1.227&md5=0123456789abcdef0123456789abcdef0",           // 33 digits
+        "host=192.168.1.227&md5=0123456789abcdef0123456789abcdef%00",         // trailing bytes
+    };
+    for (const char* q : refused) CHECK_MESSAGE(!parseRelayQuery(q, host, ip, md5), q);
+}
