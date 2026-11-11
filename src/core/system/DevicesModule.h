@@ -37,7 +37,7 @@ namespace mm {
 ///
 /// ## The map
 ///
-/// This device sits in the middle, ringed. A line is traffic; devices without any sit in rows beneath. Each node shows its lights, address, version and services. The scroll wheel zooms, a drag pans, ⌖ resets; the bar above adds the IP and version or hides traffic. A click or Enter opens its details, Identify among them, which blinks its lights.
+/// This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html).
 ///
 /// ## The emoji
 ///
@@ -77,15 +77,12 @@ namespace mm {
 ///
 /// **Growth, and what memory refuses.** The rows are one block that doubles when a device needs a row, checked against the heap's reserve, so N devices cost about log₂ N allocations. A refused growth replaces the least recently heard row of the lowest worth: other devices, then MoonLight boards, never this device.
 ///
-/// ## Who sees and changes what
-///
-/// Anyone on the network reads the map; what it exposes, sends unasked and guards: [Security](https://moonmodules.org/MoonLight/explanation/security.html#the-devices-map).
 class DevicesModule : public MoonModule, public ListSource {
 public:
     /// Adopt this device's own name, so its own row matches what everything else shows.
     void setSelfName(const char* name) { selfName_ = name; }
 
-    /// The devices drawn as a map above the list, each row a node keyed by its address, which anyone on the network reads: @xref{who-sees-and-changes-what}.
+    /// The devices drawn as a map above the list, each row a node keyed by its address, which anyone on the network reads.
     bool listAsGraph() const override { return true; }
 
     /// How many devices are currently listed.

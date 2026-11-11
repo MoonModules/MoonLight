@@ -199,10 +199,13 @@ const char* refusal(const Region& target, const Region& otadata, const Region& f
     return nullptr;
 }
 
-// Boot what ran before this image, the other slot, so a board that cannot move keeps working as it was.
+// Boot what ran before this image, the other slot, so a board that cannot move keeps working as it was; on a table of one app slot, Tasmota's, its safeboot in the factory slot.
 void backToWhatRan(const char* why) {
     ESP_LOGE(kTag, "cannot move this board: %s; restarting what ran before", why);
-    if (const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr)) esp_ota_set_boot_partition(other);
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
+    if (!other || other == running) other = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, nullptr);
+    if (other && other != running) esp_ota_set_boot_partition(other);
     esp_restart();
 }
 

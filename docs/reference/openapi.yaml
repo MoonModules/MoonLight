@@ -4,7 +4,7 @@ info:
   version: 7.0.0-dev
   summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a desktop.
   description: |
-    Every route answers a client sending no `Origin` and a page from this network, which a private, shared or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, one label or the device's own name names; a page from beyond it gets 403 on every route, WebSockets included.
+    Every route answers a client sending no `Origin` and a page from this network, which a private, shared or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name or one label names, or the device itself under the name it was opened by; a page from beyond it gets 403 on every route, WebSockets included.
     A request's `Host` names an IP address, a local name or the device's own name under any domain; every other `Host` gets 403, which stops a DNS-rebinding page.
     An `OPTIONS` request on any path from such a page answers 204 as the CORS preflight.
     A request body is read as JSON whatever its `Content-Type` says, and a number rides as a JSON number.

@@ -36,7 +36,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// **A page from outside this network is refused.** A request whose `Origin` names a host beyond it gets 403 before any route, WebSocket and preflight included (`http::isTrustedOrigin`, OWASP's origin check), so a site from the internet cannot use a visitor's browser against the device.
 ///
-/// This network is a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, one label, or the device's own name.
+/// This network is a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or one label; a page the device served passes under the name it was opened by.
 ///
 /// A DNS-rebinding page's read carries no `Origin`, so its `Host` decides: an IP literal, a local name or the device's own name under any domain, as its router names it, is served, and every other name refused (`http::fromBeyondNetwork`).
 ///

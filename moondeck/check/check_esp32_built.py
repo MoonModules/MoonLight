@@ -208,10 +208,9 @@ def main():
             print(f"  build it: {build_cmd}")
             return 1
         mb_built = mb_bin.stat().st_mtime
-        # What MoonBase compiles, its own sources and the headers it shares from src/, from its build's ninja database; moonbase/ minus the migration image's project when that cannot be read.
-        mb_deps = ninja_deps(mb_bin.parent)
-        mb_files = ([ROOT / d for d in mb_deps] if mb_deps else
-                    [f for f in (ROOT / "moonbase").rglob("*") if not f.is_relative_to(ROOT / "moonbase" / "migrate")])
+        # What MoonBase builds from: its own project, CMake files and defaults included, which no compiler reports, plus the headers it shares from src/, from its build's ninja database.
+        mb_deps = ninja_deps(mb_bin.parent) or set()
+        mb_files = [ROOT / d for d in mb_deps] + [f for f in (ROOT / "moonbase").rglob("*") if not f.is_relative_to(ROOT / "moonbase" / "migrate")]
         mb_newest = max((f.stat().st_mtime for f in mb_files if f.is_file() and f.suffix in SOURCE_SUFFIXES
                          and not SKIP_PARTS.intersection(f.relative_to(ROOT).parts)), default=0)
         if mb_newest > mb_built:

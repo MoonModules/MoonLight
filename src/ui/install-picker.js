@@ -296,6 +296,13 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey) {
     return strip(ownFirmwareKey) === strip(candidateFirmwareKey);
 }
 
+// Whether the picker offers `firmware` to a board: its MoonBase key's chip exactly; a target chip's firmwares, narrowed by the variant the board runs when known, since another variant of the chip can panic on its PSRAM; else the variants compatible with its own.
+function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey }, firmware) {
+    if (moonbaseOnly) return firmware === ownFirmwareKey;
+    if (targetChip) return firmwareChip(firmware) === targetChip && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware));
+    return isCompatible(ownFirmwareKey, firmware);
+}
+
 // The chip a firmware variant is built for, as a device reports it: esp32s3 for esp32s3-n16r8, esp32p4 for esp32p4rev1-eth, esp32 for esp32-eth.
 function firmwareChip(firmware) {
     return firmware.split("-")[0].replace(/rev\d+$/, "");
@@ -565,9 +572,7 @@ function render(state) {
             // (which strips -eth and compares) does not apply: an exact chip match is the whole
             // question, and offering another chip's image is what the device's own header check
             // exists to refuse.
-            .filter(f => state.moonbaseOnly ? f.firmware === state.ownFirmwareKey
-                       : state.targetChip ? firmwareChip(f.firmware) === state.targetChip
-                                          : isCompatible(state.ownFirmwareKey, f.firmware));
+            .filter(f => offersFirmware(state, f.firmware));
         // Narrow by selected device (web installer only, since selectedDevice stays
         // null on the on-device picker since the device <select> isn't rendered).
         // Defensive: a device the user picked that isn't in the catalog (e.g.
@@ -818,7 +823,7 @@ function render(state) {
 // Pure helpers exported for unit testing (test/js/installer-firmware-merge.test.mjs).
 // They take data and return data — no DOM, no fetch — so a node test can exercise
 // the real functions rather than a re-implemented copy.
-export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, releaseLabel, firmwareChip, chipKey };
+export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, offersFirmware, releaseLabel, firmwareChip, chipKey };
 
 export const installPicker = {
     /**
@@ -851,7 +856,7 @@ export const installPicker = {
      *   OTA compatibility filtering, or null for the web installer (no filter).
      * @param {(firmware: string, manifestUrl: string, binaryUrl: string, entry: object, label: string, tag: string) => Promise<string|void>} opts.onInstall
      *   - Called when the user clicks Install. The picker doesn't decide how
-     *     to install — the caller decides. A string it answers is the final status line.
+     *     to install: the caller decides. A string it answers is the final status line.
      * @param {() => Promise<string>} [opts.onDetect] - web installer only:
      *   opens the serial port and returns the connected chip-family string
      *   ("ESP32" / "ESP32-S3"). When provided, the picker renders a "Detect

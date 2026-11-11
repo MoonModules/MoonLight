@@ -212,3 +212,21 @@ TEST_CASE("a request comes from beyond the network by a public Origin, or by a H
     CHECK_FALSE(fromBeyondNetwork("GET /generate_204 HTTP/1.1\r\nHost: connectivitycheck.gstatic.com\r\n\r\n", true, own));
     CHECK_FALSE(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: 4.3.2.1\r\nOrigin: http://4.3.2.1\r\n\r\n", true, own));
 }
+
+TEST_CASE("the map on one device drives another when both are named under their router's domain, and a page from another domain is refused") {
+    using mm::http::fromBeyondNetwork;
+    CHECK_FALSE(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: mm-bbbb.fritz.box\r\nOrigin: http://mm-aaaa.fritz.box\r\n\r\n", false, "MM-BBBB"));
+    CHECK_FALSE(fromBeyondNetwork("GET /api/state HTTP/1.1\r\nHost: mm-bbbb.lan:80\r\nOrigin: http://mm-aaaa.lan\r\n\r\n", false, "MM-BBBB"));
+    CHECK(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: mm-bbbb.fritz.box\r\nOrigin: http://mm-aaaa.evil.example\r\n\r\n", false, "MM-BBBB"));   // another domain
+    CHECK(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: 192.168.1.20\r\nOrigin: http://mm-aaaa.fritz.box\r\n\r\n", false, "MM-BBBB"));   // named by address, no domain to share
+    CHECK(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: mm-bbbb.box\r\nOrigin: http://evil.fritz.box\r\n\r\n", false, "MM-BBBB"));   // the domains differ: fritz.box and box
+}
+
+TEST_CASE("a page's own name is trusted only on a request to that same name, so a public page named like the device is refused") {
+    using mm::http::fromBeyondNetwork;
+    const char* own = "MM-ACFD";
+    CHECK(fromBeyondNetwork("POST /api/firmware/url HTTP/1.1\r\nHost: 192.168.1.158\r\nOrigin: http://mm-acfd.attacker.example\r\n\r\n", false, own));   // a site named after the device, calling it by address
+    CHECK_FALSE(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: mm-acfd.fritz.box\r\nOrigin: http://mm-acfd.fritz.box\r\n\r\n", false, own));   // its own page under the router's name
+    CHECK_FALSE(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: 203.0.113.5\r\nOrigin: http://203.0.113.5\r\n\r\n", false, own));   // its own page at a public LAN address
+    CHECK(fromBeyondNetwork("POST /api/state HTTP/1.1\r\nHost: 203.0.113.5\r\nOrigin: http://198.51.100.7\r\n\r\n", false, own));   // another public address
+}

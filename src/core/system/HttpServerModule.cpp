@@ -15,14 +15,13 @@
 #include "core/util/JsonSink.h"
 #include "core/util/LightOutput.h"      // the summary's outputs and effects, read from the light domain
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
-#include "core/system/ControlModule.h"   // deviceName: the name a Host may carry under any domain
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
-#include "core/system/SystemModule.h"      // deviceModel, the board /api/system names
+#include "core/system/SystemModule.h"      // the device name and model a request is judged and answered by
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
@@ -538,7 +537,8 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     if (queryStart) *queryStart = 0;
 
     // A page from beyond this network is refused here, read or write, WebSocket included, by its Origin or a rebinding page's Host (fromBeyondNetwork). A script or another device naming the device by address is unaffected.
-    if (http::fromBeyondNetwork(req, captive::throughAccessPoint(local), ControlModule::deviceName())) {
+    const MoonModule* system = findModuleByName("System");   // its device name, which a Host may carry under any domain
+    if (http::fromBeyondNetwork(req, captive::throughAccessPoint(local), system ? static_cast<const SystemModule*>(system)->deviceName() : nullptr)) {
         sendResponse(conn, 403, "application/json", "{\"error\":\"a page from outside this network may not use this device\"}");
         return;
     }

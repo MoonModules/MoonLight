@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { parseFirmwaresFromAssets, mergeFirmwares, firmwareChip, chipKey } from "../../src/ui/install-picker.js";
+import { parseFirmwaresFromAssets, mergeFirmwares, firmwareChip, chipKey, offersFirmware } from "../../src/ui/install-picker.js";
 
 // A GitHub-style asset entry: parse keys off `name`, the URL is `browser_download_url`.
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
@@ -115,4 +115,17 @@ test("a map installing onto another device matches firmware and devices by that 
     assert.equal(firmwareChip("esp32p4rev1-eth"), "esp32p4", "the silicon revision is a variant, not a chip");
     assert.equal(chipKey("ESP32-S3"), "esp32s3", "the catalog's family as firmware keys spell it");
     assert.equal(chipKey("ESP32"), "esp32");
+});
+
+test("a board whose variant is known is offered that variant's firmwares only, the chip's other variants held back", () => {
+    const zero = { targetChip: "esp32s3", ownFirmwareKey: "esp32s3-zero" };
+    assert.ok(offersFirmware(zero, "esp32s3-zero"));
+    assert.ok(!offersFirmware(zero, "esp32s3-n16r8"), "an octal-PSRAM build panics on the Zero's quad PSRAM");
+    const p4 = { targetChip: "esp32p4", ownFirmwareKey: "esp32p4rev1-eth" };
+    assert.ok(offersFirmware(p4, "esp32p4rev1-eth-wifi"), "the same board with its radio compiled in");
+    assert.ok(!offersFirmware(p4, "esp32p4rev3-eth"), "another chip revision");
+    const wled = { targetChip: "esp32s3", ownFirmwareKey: null };   // a WLED board moving over: no MoonLight variant yet, the Device row narrows
+    assert.ok(offersFirmware(wled, "esp32s3-n16r8") && offersFirmware(wled, "esp32s3-zero"));
+    assert.ok(!offersFirmware(wled, "esp32-eth"), "another chip");
+    assert.ok(offersFirmware({ moonbaseOnly: true, ownFirmwareKey: "esp32s3" }, "esp32s3") && !offersFirmware({ moonbaseOnly: true, ownFirmwareKey: "esp32s3" }, "esp32"));
 });

@@ -5176,7 +5176,7 @@
    "guide": [
     {
      "title": "The map",
-     "text": "This device sits in the middle, ringed. A line is traffic; devices without any sit in rows beneath. Each node shows its lights, address, version and services. The scroll wheel zooms, a drag pans, ⌖ resets; the bar above adds the IP and version or hides traffic. A click or Enter opens its details, Identify among them, which blinks its lights."
+     "text": "This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html)."
     },
     {
      "title": "The emoji",

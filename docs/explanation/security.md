@@ -10,9 +10,11 @@ MoonLight trusts its local network. Every client that reaches a device can read 
 
 A device serves one plain HTTP port: 80 on a board, 8080 on a desktop. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client on the network. A client can set any control, add or delete modules, read and write files, install firmware, reboot the device and reset it to factory settings. The routes: [the REST API](../reference/api.md).
 
-A web page from outside the network is refused. A browser names the page a request comes from in its `Origin` header, and a device answers 403, the WebSocket included, when that page's host is not on the network: a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or a name without a dot, or the device's own name. So a site from the internet cannot use a browser on the network against a device.
+A web page from outside the network is refused. A browser names the page a request comes from in its `Origin` header, and a device answers 403, the WebSocket included, when that page's host is not on the network: a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or a name without a dot; a page the device served, called under the name it was opened by, passes as well. So a site from the internet cannot use a browser on the network against a device.
 
-A DNS-rebinding page, which points its own name at the device and reads it as its own, is refused by the `Host` header. A device answers an IP address, a local name (`localhost`, `.local`, `.home.arpa`, `.internal`, one label) and its own name under any domain, as its router names it from the hostname the device sends (`mm-acfd.fritz.box`, `mm-acfd.lan`); the name the device already has is all the rule reads. Pages a device serves, the desktop app, other devices, MoonDeck, Home Assistant and scripts, which send no `Origin`, are unaffected; MoonBase applies the same rule.
+A DNS-rebinding page, which points its own name at the device and reads it as its own, is refused by the `Host` header. A device answers an IP address, a local name (`localhost`, `.local`, `.home.arpa`, `.internal`, one label) and its own name under any domain, as its router names it from the hostname the device sends (`mm-acfd.fritz.box`, `mm-acfd.lan`); the name the device already has is all the rule reads. What remains is a rebinding page that guesses the device's name and serves it under its own domain, so a name that is hard to guess, such as the default `MM-XXXX`, keeps that out of reach.
+
+Both checks apply to requests on the network; a request through the device's own access point passes them, since its captive check asks under any name and its clients reach the device alone. Pages a device serves, the desktop app, other devices, MoonDeck, Home Assistant and scripts, which send no `Origin`, are unaffected; MoonBase applies the same rule.
 
 The UDP listeners follow the same model and accept any sender:
 
@@ -58,7 +60,7 @@ A [backup](../reference/backup-and-restore.md) holds every file, `/.config` incl
 
 Firmware images are unsigned, and secure boot and flash encryption are off. Each image is vetted before it is written: an ESP32 image must carry the right magic byte, chip id and project name, and its checksum must match. A Teensy image must carry a valid boot header and the mark of the variant the board runs. These checks stop a wrong or damaged image, which is what they are for; anyone on the network can still install any MoonLight build.
 
-[MoonBase](architecture/moonbase.md), the recovery image in the factory slot, serves its own unauthenticated update page on port 80, under the same `Origin` rule, and installs only from an http or https URL.
+[MoonBase](architecture/moonbase.md), the recovery image in the factory slot, serves its own unauthenticated update page on port 80, under the same `Origin` rule, and installs only from an http or https URL. Its page and the Devices map load the web installer's picker from moonmodules.org, MoonLight's own site, as code running with the page's rights.
 
 ## Files and scripts
 

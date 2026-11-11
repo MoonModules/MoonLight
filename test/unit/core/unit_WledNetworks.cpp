@@ -103,6 +103,11 @@ TEST_CASE("a saved network name holding a quote, a tab or a newline is escaped, 
     for (const char* c = doc; *c; c++) CHECK_MESSAGE(static_cast<unsigned char>(*c) >= 0x20, "a raw control character in the document");
     const Network worst[1] = {{"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01", ""}};
     CHECK(mm::wlednet::networkDocument(doc, 100, worst, 1, nullptr) == 0);   // an escape that outgrows the buffer writes nothing usable, never a cut one
+    const Network shorts[1] = {{"a\bb\fc", "pw"}};   // the escapes with a short form, read back as MoonBase reads them
+    REQUIRE(mm::wlednet::networkDocument(doc, sizeof(doc), shorts, 1, nullptr) > 0);
+    char ssid[16] = {}, pw[16] = {};
+    REQUIRE(mm::configscrape::findNetwork(doc, 0, ssid, sizeof(ssid), pw, sizeof(pw)));
+    CHECK(std::string(ssid) == "a\bb\fc");
 }
 
 TEST_CASE("WLED's TX power limit carries over in whole dBm, and its maximum carries no limit") {

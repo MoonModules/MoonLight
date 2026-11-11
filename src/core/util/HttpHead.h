@@ -180,13 +180,17 @@ inline const char* urlHost(const char* value, size_t& n) {
     return scheme + 3;
 }
 
+/// Whether `n` bytes of `a` and `b` match, case-insensitively, as names compare.
+inline bool sameName(const char* a, const char* b, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i]))) return false;
+    return true;
+}
+
 /// Whether a host's first label is `own`, case-insensitively: the device under whatever domain its router or mDNS gives the name it sends as its DHCP hostname.
 inline bool isOwnName(const char* host, size_t n, const char* own) {
     const size_t k = own ? std::strlen(own) : 0;
-    if (k == 0 || n < k || (n > k && host[k] != '.')) return false;
-    for (size_t i = 0; i < k; i++)
-        if (std::tolower(static_cast<unsigned char>(host[i])) != std::tolower(static_cast<unsigned char>(own[i]))) return false;
-    return true;
+    return k > 0 && n >= k && (n == k || host[k] == '.') && sameName(host, own, k);
 }
 
 /// Whether a `Host` value names this device as only the network can: an IP literal, a local name that public DNS leaves unserved, or its own name under any domain.
@@ -197,22 +201,40 @@ inline bool isOwnHost(const char* host, size_t n, const char* own) {
     return h[0] == '[' || parseDottedQuad(h, ip) || isLocalName(h, n) || isOwnName(h, n, own);
 }
 
-/// Whether an `Origin` value, the page a browser request comes from, names this network or this device, judged by its own name alone, since a DNS-rebinding page sets `Host`.
-inline bool isTrustedOrigin(const char* value, const char* own = nullptr) {
+/// Whether an `Origin` value, the page a browser request comes from, names this network by an address or a local name, judged by itself.
+inline bool isTrustedOrigin(const char* value) {
     size_t n = 0;
     const char* host = urlHost(value, n);
-    return host && (isLocalHost(host, n) || isOwnName(host, n, own));
+    return host && isLocalHost(host, n);
+}
+
+/// Whether an `Origin` names the host the request names: a page the device served, under whichever name or address it was opened by, which the `Host` check vets.
+inline bool isSameHost(const char* value, const char* host, size_t hostLen) {
+    size_t n = 0;
+    const char* origin = urlHost(value, n);
+    return origin && host && n == hostLen && sameName(origin, host, n);
+}
+
+/// Whether an `Origin` names another device under the domain this request names the device by (`mm-aaaa.fritz.box` to `mm-bbbb.fritz.box`): the map on one device driving another, both under their router's names.
+inline bool isSiblingOrigin(const char* value, const char* host, size_t hostLen, const char* own) {
+    size_t n = 0;
+    const char* origin = urlHost(value, n);
+    const size_t k = own ? std::strlen(own) : 0;
+    if (!origin || !host || !isOwnName(host, hostLen, own) || hostLen <= k) return false;   // the device's own name, under a domain
+    const char* dot = static_cast<const char*>(std::memchr(origin, '.', n));
+    const size_t domainLen = hostLen - k;
+    return dot && static_cast<size_t>(origin + n - dot) == domainLen && sameName(dot, host + k, domainLen);
 }
 
 /// Whether a request comes from beyond this network, by a public `Origin` or, for a rebinding page's read that carries none, a `Host` naming another than device `own`; the access point exempt.
 inline bool fromBeyondNetwork(const char* head, bool viaAccessPoint, const char* own = nullptr) {
     if (viaAccessPoint) return false;
-    const char* origin = findHeader(head, "Origin:");
-    if (origin && !isTrustedOrigin(origin + 7, own)) return true;
     const char* host = findHeader(head, "Host:");
-    if (!host) return false;   // HTTP/1.0 names none
-    host = skipSpace(host + 5);
-    return !isOwnHost(host, hostLength(host), own);
+    if (host) host = skipSpace(host + 5);
+    const size_t hostLen = host ? hostLength(host) : 0;
+    const char* origin = findHeader(head, "Origin:");
+    if (origin && !isTrustedOrigin(origin + 7) && !isSameHost(origin + 7, host, hostLen) && !isSiblingOrigin(origin + 7, host, hostLen, own)) return true;
+    return host && !isOwnHost(host, hostLen, own);   // HTTP/1.0 names none
 }
 
 /// Whether `url` is one a device fetches: http or https only.
