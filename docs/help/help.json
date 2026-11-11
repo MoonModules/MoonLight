@@ -4565,7 +4565,7 @@
        "line": "Each module claiming the pin and its role there."
       },
       "warning": {
-       "line": "Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash, PSRAM or USB, an input-only pin driven, or a boot strap."
+       "line": "Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash or PSRAM, an input-only pin driven, a USB serial pin driven, or a boot strap."
       }
      }
     }

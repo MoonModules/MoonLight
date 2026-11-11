@@ -52,6 +52,7 @@
 #endif
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "improv.h"
 #include "soc/soc_caps.h"
 
@@ -62,6 +63,7 @@
 #endif
 
 #include <atomic>
+#include <mutex>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -95,7 +97,7 @@ struct ImprovTaskState {
     size_t opOutLen = 0;
     std::atomic<bool>* opReady = nullptr;
 };
-static ImprovTaskState g_improv;  // single global — only one Improv task per device
+static ImprovTaskState g_improv;  // single global: one Improv task per device
 
 static const char* IMPROV_TAG = "mm_improv";  // ESP_LOG* tag for the Improv task
 
@@ -107,10 +109,30 @@ static void improvSetStatus(const char* fmt, ...) {
     va_end(args);
 }
 
-// Whether the USB read driver is up, which gates sending on that transport so a board without it never writes into a dead peripheral. Read and written on the same task, so a plain flag is enough.
+// Whether the USB read driver is up, which gates sending on that transport so only a live peripheral is written to; written on the Improv task, read by a driver asking for its pads.
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
-static bool g_jtagReady = false;
+static std::atomic<bool> g_jtagReady{false};
+// A light driver taking the USB pads: the Improv task, on the core it installed the driver on, uninstalls it and gives the semaphore; once taken, the pads keep the driver out.
+static std::atomic<bool> g_jtagPadsTaken{false};
+static std::atomic<bool> g_jtagReleaseAsked{false};
+static SemaphoreHandle_t g_jtagReleased = nullptr;
+// One decision at a time: the task's look at the pads and its install against a driver's claim and its look at the install, so a driver always lands on a released pad.
+static std::mutex g_jtagMutex;
 #endif
+
+// Hand the USB pads to the light driver asking for them: called wherever the task waits, its loop and its long RPCs alike, so a request is served within one 100 ms poll.
+static void serveUsbRelease() {
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+    if (!g_jtagReleaseAsked.exchange(false)) return;
+    if (g_jtagReady) {   // the driver goes first, on the core it was installed on
+        usb_serial_jtag_vfs_use_nonblocking();
+        usb_serial_jtag_driver_uninstall();
+        g_jtagReady = false;
+        improvSetStatus("listening (USB pins taken by a light driver)");
+    }
+    xSemaphoreGive(g_jtagReleased);
+#endif
+}
 
 // Which transport a reply goes back on: @xref{replies-go-back-the-way-the-request-came|why one stored value suffices}.
 enum class ImprovSource : uint8_t { Both, Uart, Jtag };
@@ -121,7 +143,7 @@ static void improvSend(ImprovFrameType type, const std::vector<uint8_t>& payload
     uint8_t frame[6 + 1 + 1 + 1 + kImprovMaxPayload + 1];
     size_t n = buildImprovFrame(type, payload.data(), payload.size(),
                                 frame, sizeof(frame));
-    if (n == 0) return;  // oversize payload — caller bug, silently drop
+    if (n == 0) return;  // oversize payload: a caller bug, dropped
     const bool toUart =
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
         (g_replySource != ImprovSource::Jtag);
@@ -174,6 +196,7 @@ static void improvSendWifiNetworks() {
     int n = -1;
     for (int waited = 0; n < 0 && waited < 100; waited++) {   // up to 10 s @ 100 ms
         vTaskDelay(pdMS_TO_TICKS(100));
+        serveUsbRelease();
         n = wifiScanResults(found, 10);
     }
     if (n < 0) n = 0;
@@ -214,6 +237,7 @@ static void improvHandleProvision(const improv::ImprovCommand& cmd) {
     bool associated = false;
     for (uint32_t waited = 0; waited < mm::staWindowMs(associated) + 2000; waited += 100) {
         vTaskDelay(pdMS_TO_TICKS(100));
+        serveUsbRelease();
         associated = wifiStaAssociated();
         if (wifiStaConnected()) {
             wifiStaGetIPv4(ip);
@@ -236,7 +260,7 @@ static void improvHandleProvision(const improv::ImprovCommand& cmd) {
     improvSendCurrentState(improv::STATE_PROVISIONED);
 }
 
-#endif // MM_NO_WIFI — end WiFi-provisioning RPCs
+#endif // MM_NO_WIFI: end of the WiFi-provisioning RPCs
 
 // The transmit-power operation, the escape hatch for a board that browns out at full power: @xref{the-two-vendor-operations|why it must arrive before association}. The payload is one byte of whole decibels, zero lifting any cap; the module's tick persists and applies it.
 static constexpr uint8_t IMPROV_CMD_SET_TX_POWER = 0xFD;
@@ -357,6 +381,28 @@ static void improvFeedByte(ImprovFrameParser& parser, uint8_t b, ImprovSource so
     }
 }
 
+// Install the USB driver, which on a native-USB board is the interface the host talks to; best-effort, since the secondary console may have taken the peripheral first, and skipped once a light driver has its pads.
+static void installUsbSerial() {
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+    std::lock_guard<std::mutex> padLock(g_jtagMutex);
+    if (g_jtagPadsTaken) return;   // a light driver drives the USB pads, which the driver's interrupt would storm on
+    if (usb_serial_jtag_is_driver_installed()) {
+        // Someone else installed it (rare). We read and write through it, and the console must too.
+        usb_serial_jtag_vfs_use_driver();
+        g_jtagReady = true;
+        return;
+    }
+    usb_serial_jtag_driver_config_t jtag_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    esp_err_t jtag_err = usb_serial_jtag_driver_install(&jtag_cfg);
+    if (jtag_err != ESP_OK) {
+        ESP_LOGW(IMPROV_TAG, "usb_serial_jtag_install failed: %s", esp_err_to_name(jtag_err));
+        return;
+    }
+    usb_serial_jtag_vfs_use_driver();   // or the log's direct FIFO writes collide with the driver and the port goes silent
+    g_jtagReady = true;
+#endif
+}
+
 static void improvTask(void* /*arg*/) {
     // UART0 driver install. UART0 is already configured at 115200-8N1 by the bootloader; we just claim the interrupt + RX FIFO. RX buf 256 is plenty (Improv RPC payloads max out around 96 bytes).
     bool uartReady = false;
@@ -369,24 +415,7 @@ static void improvTask(void* /*arg*/) {
                  esp_err_to_name(uart_err));
     }
 
-#if SOC_USB_SERIAL_JTAG_SUPPORTED
-    // The USB driver install, which on a native-USB board is the interface the host actually talks to; best-effort, since the secondary console may have taken the peripheral first.
-    if (!usb_serial_jtag_is_driver_installed()) {
-        usb_serial_jtag_driver_config_t jtag_cfg = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
-        esp_err_t jtag_err = usb_serial_jtag_driver_install(&jtag_cfg);
-        if (jtag_err == ESP_OK) {
-            usb_serial_jtag_vfs_use_driver();   // or the log's direct FIFO writes collide with the driver and the port goes silent
-            g_jtagReady = true;
-        } else {
-            ESP_LOGW(IMPROV_TAG, "usb_serial_jtag_install failed: %s",
-                     esp_err_to_name(jtag_err));
-        }
-    } else {
-        // Someone else already installed it (rare). We read and write through it, and the console must too.
-        usb_serial_jtag_vfs_use_driver();
-        g_jtagReady = true;
-    }
-#endif
+    installUsbSerial();
 
     // If both installs failed, the task has nothing to do. Park it.
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
@@ -416,6 +445,7 @@ static void improvTask(void* /*arg*/) {
 #endif
     uint8_t b;
     for (;;) {
+        serveUsbRelease();
         // A symmetric non-blocking poll of both, draining whichever has data and yielding only when both come up empty. Blocking on one made the other lumpy on a board that has both.
         bool anyRead = false;
         if (uartReady) {
@@ -444,6 +474,23 @@ static void improvTask(void* /*arg*/) {
 }
 
 } // anonymous namespace
+
+void gpioTake(int gpio) {
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+    if (gpio < 0 || gpio > 255 || !gpioCapability(static_cast<uint8_t>(gpio)).usbSerial) return;   // unset or out of range: not a pad
+    {
+        std::lock_guard<std::mutex> lock(g_jtagMutex);
+        g_jtagPadsTaken = true;
+        if (!g_jtagReady || !g_jtagReleased) return;
+        g_jtagReleaseAsked = true;
+    }
+    // The task serves it within one 100 ms poll, wherever it waits; a frame it is sending finishes first.
+    if (xSemaphoreTake(g_jtagReleased, pdMS_TO_TICKS(500)) != pdTRUE)
+        ESP_LOGW(IMPROV_TAG, "GPIO %d: the USB serial driver is still installed", gpio);
+#else
+    (void)gpio;
+#endif
+}
 
 bool improvProvisioningInit(const ImprovDeviceInfo& info,
                             char* ssidOut, size_t ssidOutLen,
@@ -478,8 +525,12 @@ bool improvProvisioningInit(const ImprovDeviceInfo& info,
     g_improv.opOutLen = opOutLen;
     g_improv.opReady = opReady;
 
-    // 4 KB stack: the deepest path, a scan answered network by network, measured at 1.5 KB on the classic, the strings and vectors being on the heap. Priority 4, below OTA (5), above idle. Single task per device; not pinned to a core.
-    BaseType_t ok = xTaskCreate(&improvTask, "improv", 4096, nullptr, 4, nullptr);
+    // 4 KB stack: the deepest path, a scan answered network by network, measured at 1.5 KB on the classic, the strings and vectors being on the heap. Priority 4, below OTA (5), above idle.
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+    if (!g_jtagReleased) g_jtagReleased = xSemaphoreCreateBinary();
+#endif
+    // Pinned: the USB driver must be uninstalled on the core it was installed on (usb_serial_jtag.h), which a light driver taking its pads asks for.
+    BaseType_t ok = xTaskCreatePinnedToCore(&improvTask, "improv", 4096, nullptr, 4, nullptr, 0);
     if (ok != pdPASS) {
         improvSetStatus("error: task create failed");
         return false;

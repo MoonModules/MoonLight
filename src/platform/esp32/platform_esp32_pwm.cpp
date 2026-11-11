@@ -78,6 +78,7 @@ int pwmAttach(int timer, uint8_t pin, uint32_t phase) {
         cfg.timer_sel = static_cast<ledc_timer_t>(timer);
         cfg.duty = 0;
         cfg.hpoint = static_cast<int>(phase);
+        gpioTake(pin);
         if (ledc_channel_config(&cfg) != ESP_OK) return -1;
         g_channels[c].timer = timer;
         return c;

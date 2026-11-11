@@ -634,6 +634,8 @@ bool initPeripheral(MoonI80State* st, uint32_t pclkHz) {
 void configureGpio(MoonI80State* st, const uint16_t* dataPins, uint8_t laneCount, uint16_t wrGpio,
                    bool routeWr) {
     const uint8_t n = laneCount < 16 ? laneCount : 16;
+    for (size_t i = 0; i < laneCount; i++) gpioTake(dataPins[i]);
+    if (routeWr) gpioTake(wrGpio);
     for (size_t i = 0; i < laneCount; i++) {
         gpio_func_sel(static_cast<gpio_num_t>(dataPins[i]), PIN_FUNC_GPIO);
         esp_rom_gpio_connect_out_signal(dataPins[i], soc_lcd_i80_signals[kBusId].data_sigs[i],

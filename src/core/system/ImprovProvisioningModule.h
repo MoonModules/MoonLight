@@ -36,6 +36,8 @@ namespace mm {
 ///
 /// **Transports.** The listener serves an external USB-to-UART bridge and a native USB port alike; on a Teensy it is the USB serial port, polled from this module's tick. Without either, the access point serves instead.
 ///
+/// **USB pins as LED pins.** A light driver configured on a pin of the native USB port takes it: the listener hands the port over first and the status reads "listening (USB pins taken by a light driver)", the external bridge serving on.
+///
 /// **The commands.** Four standard commands report state, scan for networks, and set credentials. Two vendor commands extend them: one caps transmit power before any association, for a board whose supply browns out.
 ///
 /// The other carries a state document, applied by the same engine as `PATCH /api/state`, so a call over the network and one over serial execute identically. That lets the installer configure a device a browser cannot reach directly.

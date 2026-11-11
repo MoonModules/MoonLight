@@ -123,6 +123,7 @@ ParlioState* createState(const uint16_t* dataPins, uint8_t laneCount,
     cfg.dma_burst_size = 64;
     cfg.shift_edge = PARLIO_SHIFT_EDGE_POS;   // shift data on the clock's rising edge
     cfg.bit_pack_order = PARLIO_BIT_PACK_ORDER_MSB;
+    for (uint8_t i = 0; i < laneCount && i < busWidth; i++) gpioTake(dataPins[i]);
     if (parlio_new_tx_unit(&cfg, &st->unit) != ESP_OK) {
         destroyState(st);
         return nullptr;

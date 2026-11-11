@@ -531,7 +531,7 @@ const char kPage[] =
     "document.getElementById('u').value=u;await url();return 'installing: the status below follows it';}});}"
     "catch(_){document.getElementById('rs').textContent='could not reach the installer: use a URL or a file below';}})();"
     // Installing a release is installing its URL: one path, so the vetting, the progress and the retry all behave identically however the URL was chosen.
-    "async function url(){const u=document.getElementById('u').value;if(!u)return;"
+    "async function url(){const u=document.getElementById('u').value.trim();if(!u)return;"
     "const r=await fetch('/api/firmware/url',{method:'POST',body:u});S(await r.text());if(r.ok)W();}"
     // Prefill the URL field with the last install source (RAM-held), so Install doubles as retry: the escape after a cancel or failure wiped the app slot.
     "fetch('/api/firmware/last-url').then(r=>r.text()).then(u=>{if(u)document.getElementById('u').value=u;})"

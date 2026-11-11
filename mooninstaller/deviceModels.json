@@ -719,6 +719,65 @@
     }
   },
   {
+    "name": "Gledopto GL-C-616WL",
+    "chip": "ESP32",
+    "flashBaud": 460800,
+    "firmwares": [
+      "esp32",
+      "esp32-eth"
+    ],
+    "image": "assets/deviceModels/esp32-gledopto-gl-c-616wl.png",
+    "description": "A relay cuts the LED power while the lights are off.",
+    "url": "https://www.gledopto.com/GL-C-616WL.html",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Ethernet",
+      "Audio",
+      "Relay"
+    ],
+    "planned": [
+      "Button"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Gledopto GL-C-616WL"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "relayPins": "18",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "16,2"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 1,
+          "ethPhyAddr": 1,
+          "ethRstGpio": 5,
+          "ethMdcGpio": 23,
+          "ethMdioGpio": 33,
+          "ethClockGpio": 0,
+          "ethClockExtIn": true
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "sckPin": 14,
+          "wsPin": 15,
+          "sdPin": 32
+        }
+      }
+    }
+  },
+  {
     "name": "ESP32-S3 N16R8 Dev",
     "chip": "ESP32-S3",
     "firmwares": [

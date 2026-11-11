@@ -182,6 +182,9 @@ I80State* createState(const uint16_t* dataPins, uint8_t laneCount,
     }
     busCfg.max_transfer_bytes = bufferBytes;
     busCfg.dma_burst_size = 64;
+    for (uint8_t i = 0; i < laneCount && i < busWidth; i++) gpioTake(dataPins[i]);
+    gpioTake(wrGpio);
+    gpioTake(dcGpio);
     if (esp_lcd_new_i80_bus(&busCfg, &st->bus) != ESP_OK) {
         destroyState(st);
         return nullptr;

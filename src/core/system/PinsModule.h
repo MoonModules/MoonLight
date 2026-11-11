@@ -236,12 +236,13 @@ private:
             }
         }
 
-        /// Grade one claim against the pin's capability, setting its severity and its reason: reserved or invalid is an error, a driven role on a strap a warning.
+        /// Grade one claim against the pin's capability, setting its severity and its reason: reserved or invalid is an error, a driven role on a USB serial pin or a strap a warning.
         static void gradeClaim(Claim& c, bool isOutput) {
             const platform::GpioCapability cap = platform::gpioCapability(c.gpio);
             if (!cap.validGpio)      { c.severity = "error"; c.reason = "invalid GPIO: not a pin on this chip"; return; }
-            if (cap.reserved)        { c.severity = "error"; c.reason = "reserved for flash / PSRAM / USB"; return; }
+            if (cap.reserved)        { c.severity = "error"; c.reason = "reserved for flash / PSRAM"; return; }
             if (isOutput && !cap.outputCapable) { c.severity = "warn"; c.reason = "input-only pin: a driven role can't output here"; return; }
+            if (isOutput && cap.usbSerial)      { c.severity = "warn"; c.reason = "USB serial pin: serial and Improv over USB end while a driver holds it"; return; }
             if (isOutput && cap.strap)          { c.severity = "warn"; c.reason = "boot strap: driving it at reset can change boot mode"; return; }
         }
 
@@ -271,7 +272,7 @@ private:
 
     /// A row per claimed GPIO.
     /// @field claims Each module claiming the pin and its role there.
-    /// @field warning Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash, PSRAM or USB, an input-only pin driven, or a boot strap.
+    /// @field warning Why the claim is a risk: two claims on one pin, a GPIO the chip lacks, a pin reserved for flash or PSRAM, an input-only pin driven, a USB serial pin driven, or a boot strap.
     PinListSource pins_;
 };
 

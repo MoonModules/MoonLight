@@ -6,7 +6,7 @@
 #include "core/system/PinsModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"   // setTestGpioCapability — inject an unsafe pin for the severity cases
+#include "platform/platform.h"   // setTestGpioCapability: inject an unsafe pin for the severity cases
 
 #include <cstring>
 #include <string>
@@ -122,7 +122,7 @@ TEST_CASE("PinsModule: rows are GPIO-ordered and a double-claim stays visible in
     FakePinModule a("Alpha");
     a.sck = 21; a.ws = 9;         // 21 (BCLK) + 9 (WS)
     FakePinModule b("Beta");
-    b.sd = 21;                    // also claims 21 (data) — the double-claim
+    b.sd = 21;                    // also claims 21 (data), the double-claim
     PinsModule pins;
     scheduler.addModule(&a);
     scheduler.addModule(&b);
@@ -262,7 +262,7 @@ TEST_CASE("PinsModule: a claim survives its owning module being destroyed (no us
         scheduler.addModule(&pins);
         scheduler.setup();
         pins.tick1s();   // claim {gpio 7, owner "Doomed"} captured here
-    }   // `doomed` destroyed — its name_[16] storage is gone; a borrowed owner pointer would dangle
+    }   // `doomed` destroyed: its name_[16] storage is gone; a borrowed owner pointer would dangle
 
     const ListSource* src = pinsSource(pins);
     REQUIRE(src != nullptr);
@@ -282,7 +282,7 @@ TEST_CASE("PinsModule: a CSV with an out-of-range pin claims nothing, and never 
     Scheduler scheduler;
     FakePinModule driver("RmtLed");
     driver.withPinsCsv = true;
-    std::strcpy(driver.pins, "18,300,19");   // 300 is past MM_MAX_GPIO — the whole list is rejected
+    std::strcpy(driver.pins, "18,300,19");   // 300 is past MM_MAX_GPIO, so the whole list is rejected
     PinsModule pins;
     scheduler.addModule(&driver);
     scheduler.addModule(&pins);
@@ -292,7 +292,7 @@ TEST_CASE("PinsModule: a CSV with an out-of-range pin claims nothing, and never 
     const ListSource* src = pinsSource(pins);
     REQUIRE(src != nullptr);
     const std::string rows = allRows(*src);
-    CHECK(rows.find("\"gpio\":44") == std::string::npos);   // 300 & 0xFF = 44 — must NEVER appear
+    CHECK(rows.find("\"gpio\":44") == std::string::npos);   // 300 & 0xFF = 44: a truncated pin stays out of the map
     CHECK(src->listRowCount() == 0);                        // malformed list → no lane claims
 }
 
@@ -342,6 +342,33 @@ TEST_CASE("PinsModule: a driven role on a strap pin is flagged severity warn") {
     platform::clearTestGpioCapability();
 }
 
+TEST_CASE("PinsModule: an LED lane on a USB serial pin is flagged severity warn, naming what ends") {
+    platform::clearTestGpioCapability();
+    platform::GpioCapability usb;         // the P4's GPIO 25, the USB serial/JTAG D+ pad
+    usb.usbSerial = true;
+    platform::setTestGpioCapability(25, usb);
+
+    Scheduler scheduler;
+    FakePinModule drv("ParallelLed");
+    drv.withPinsCsv = true;
+    std::strcpy(drv.pins, "21,25");
+    PinsModule pins;
+    scheduler.addModule(&drv);
+    scheduler.addModule(&pins);
+    scheduler.setup();
+    pins.tick1s();
+
+    const ListSource& src = *pinsSource(pins);
+    CHECK(allRows(src).find("\"severity\":\"warn\"") != std::string::npos);
+    std::string details;   // the reason rides in the detail an expanded row shows
+    for (ListRow i = 0; i < src.listRowCount(); i++) {
+        JsonSink d; src.writeListRowDetail(d, i);
+        details += d.data();
+    }
+    CHECK(details.find("USB serial pin") != std::string::npos);
+    platform::clearTestGpioCapability();
+}
+
 TEST_CASE("PinsModule: an input role on an input-only pin is NOT flagged") {
     platform::clearTestGpioCapability();
     platform::GpioCapability inputOnly;   // valid but no output driver (classic ESP32 34-39)
@@ -350,7 +377,7 @@ TEST_CASE("PinsModule: an input role on an input-only pin is NOT flagged") {
 
     Scheduler scheduler;
     FakePinModule mic("Audio");
-    mic.sd = 34;                           // a mic data line READS the pin — input-only is fine
+    mic.sd = 34;                           // a mic data line READS the pin, so input-only is fine
     PinsModule pins;
     scheduler.addModule(&mic);
     scheduler.addModule(&pins);
@@ -472,10 +499,10 @@ TEST_CASE("PinsModule: dir column reflects the live pad direction (out/in/both/o
     platform::clearTestGpioLiveState();
 }
 
-TEST_CASE("PinsModule: dir is shown as info, NOT a warning — a driven role with output off is unflagged") {
+TEST_CASE("PinsModule: dir is shown as info, NOT a warning: a driven role with output off is unflagged") {
     // The live direction is informational only: I²C, a loopback Tx and an RMII clock are legitimately not driving when idle, so `dir` reading in/off must NOT auto-warn. Only the static capability flags drive severity.
     platform::clearTestGpioLiveState();
-    platform::GpioLiveState notDriving;   // a driven role's pin reads output-off — but this is NOT flagged
+    platform::GpioLiveState notDriving;   // a driven role's pin reads output-off, but this is NOT flagged
     notDriving.valid = true; notDriving.output = false; notDriving.input = true;
     platform::setTestGpioLiveState(14, notDriving);
 

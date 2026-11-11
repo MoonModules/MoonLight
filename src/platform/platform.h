@@ -200,12 +200,15 @@ struct GpioCapability {
     bool outputCapable = true;  ///< has an output driver (classic ESP32 34-39 are input-only)
     bool rtc = false;           ///< an RTC pin, usable for deep-sleep wake and RTC I/O
     bool strap = false;         ///< a boot-strapping pin: driving it at reset can change boot mode
-    bool reserved = false;      ///< wired to flash, PSRAM or native USB: routing I/O here corrupts the device
+    bool reserved = false;      ///< wired to flash or PSRAM: routing I/O here corrupts the device
+    bool usbSerial = false;     ///< a pad of the USB serial/JTAG port: a driver taking it ends serial over that port
 };
 /// Look up one pin's static capability; pure lookup, no state.
 GpioCapability gpioCapability(uint8_t gpio);
 /// Why a driver must refuse this pin, or null when it may use it.
 const char* gpioRefusal(uint8_t gpio);
+/// Hand `gpio` to a light driver before it configures the pad: a system function holding it lets go first, the USB serial/JTAG port's driver here, which storms with interrupts once another peripheral takes its pad.
+void gpioTake(int gpio);
 /// Make gpioCapability answer `cap` for one gpio, so pin severity is testable where every real pin is safe.
 void setTestGpioCapability(uint8_t gpio, GpioCapability cap);
 /// Drop every injected capability.

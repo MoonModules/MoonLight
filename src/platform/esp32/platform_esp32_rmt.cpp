@@ -216,6 +216,7 @@ void rmtInitOnThisCore(void* arg) {
     txCfg.flags.invert_out = job->invert ? 1 : 0;
     // One memory block per channel at the chip's own size, since a hardcoded one is rejected elsewhere, so every channel stays available to a fully populated board. The block is the refill deadline, and extra blocks only softened a deadline the high-priority refill removes entirely, so they bought nothing and lost pins.
     txCfg.mem_block_symbols = SOC_RMT_MEM_WORDS_PER_CHANNEL;
+    gpioTake(job->gpio);
     if (rmt_new_tx_channel(&txCfg, &st->channel) != ESP_OK) { job->ok = false; return; }
 
     // The SDK's own byte encoder, which expands each wire byte as it feeds the peripheral, so the caller keeps only the few bytes per light the correction produces.

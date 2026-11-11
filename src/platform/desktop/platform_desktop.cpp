@@ -581,6 +581,7 @@ const char* gpioRefusal(uint8_t gpio) {
     if (c.reserved)   return "is wired to flash/PSRAM on this chip";
     return nullptr;
 }
+void gpioTake(int /*gpio*/) {}   // a host holds no pads
 
 void setTestGpioCapability(uint8_t gpio, GpioCapability cap) {
     for (auto& o : g_gpioCapOverrides)

@@ -263,6 +263,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
         g_lastError = "a HUB75 line is unset: every color, address and control pin is required";
         return false;
     }
+    for (size_t i = 0; i < busCount; i++) gpioTake(busPins[i]);
 
     // The size comes from the encoder, which is the one home for the wire format. Recomputing it here is how the two silently disagreed: this must be the exact buffer hub75Encode writes, or a correct encode overruns the DMA frame.
     mm::Hub75Geometry geo;

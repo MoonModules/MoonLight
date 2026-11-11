@@ -292,6 +292,7 @@ const char* gpioRefusal(uint8_t gpio) {
     if (ethOwnsPin(gpio)) return "carries the W5500's SPI bus";
     return nullptr;
 }
+void gpioTake(int /*gpio*/) {}   // its USB port has its own pins, apart from the GPIO header
 
 GpioLiveState gpioLiveState(uint8_t gpio) {
     GpioLiveState s;

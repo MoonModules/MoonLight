@@ -46,6 +46,8 @@
 
 #include "sdkconfig.h"        // CONFIG_IDF_TARGET_*: selects the per-chip strap/reserved table
 #include "soc/gpio_num.h"     // GPIO_IS_VALID_GPIO / GPIO_IS_VALID_OUTPUT_GPIO
+#include "soc/io_mux_reg.h"   // USB_INT_PHY0_D[MP]_GPIO_NUM: the pads the USB serial/JTAG port owns
+#include "soc/soc_caps.h"     // SOC_USB_SERIAL_JTAG_SUPPORTED
 #include "driver/gpio.h"      // gpio_get_level / gpio_get_drive_capability: the live-state reads
 #include "driver/rtc_io.h"    // rtc_gpio_is_valid_gpio
 #include "esp_adc/adc_oneshot.h"  // adcRead: the ADC1 oneshot unit
@@ -87,7 +89,7 @@ uint32_t packageId() {
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
 // The wider memory bus reserves a second range, but only on a module that has it, and the mode is the image's rather than the part's.
 // So a narrower build leaves those free, which one board drives panel lines on, and the wider image cannot run on that part anyway.
-// The debug and serial roles are conflicts rather than reservations: they stay usable as ordinary pins, so they are not flagged here.
+// The debug and serial roles are conflicts rather than reservations: they stay usable as ordinary pins, so the reserved list leaves them out.
 constexpr uint8_t kReserved[]        = {26, 27, 28, 29, 30, 31, 32};
 #if CONFIG_SPIRAM_MODE_OCT
 constexpr uint8_t kReservedIfPsram[] = {33, 34, 35, 36, 37};
@@ -115,6 +117,15 @@ constexpr uint8_t kStrap[]           = {};
 bool psramPresent() {
     static const bool present = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0;
     return present;
+}
+// The two pads the USB serial/JTAG port owns, where the chip has one.
+bool usbSerialPad(uint8_t gpio) {
+#if SOC_USB_SERIAL_JTAG_SUPPORTED && defined(USB_INT_PHY0_DP_GPIO_NUM)
+    return gpio == USB_INT_PHY0_DM_GPIO_NUM || gpio == USB_INT_PHY0_DP_GPIO_NUM;
+#else
+    (void)gpio;
+    return false;
+#endif
 }
 
 }  // namespace
@@ -148,6 +159,7 @@ GpioCapability gpioCapability(uint8_t gpio) {
         break;
     }
 #endif
+    c.usbSerial     = usbSerialPad(gpio);
     return c;
 }
 
@@ -180,7 +192,7 @@ GpioLiveState gpioLiveState(uint8_t gpio) {
 
 bool gpioInputBegin(uint8_t gpio, GpioPull pull) {
     if (!GPIO_IS_VALID_GPIO(gpio)) return false;
-    // A RESERVED pin is wired to flash, PSRAM or native USB, and routing I/O there corrupts the device (gpioCapability's own words). Refused rather than configured: the caller reports a pin it could not open, where a corrupted flash reports nothing at all.
+    // A RESERVED pin is wired to flash or PSRAM, and routing I/O there corrupts the device (gpioCapability's own words). Refused rather than configured: the caller reports a pin it could not open, where a corrupted flash is silent.
     if (gpioCapability(gpio).reserved) return false;
     gpio_config_t cfg = {};
     cfg.pin_bit_mask = 1ULL << gpio;
@@ -199,7 +211,7 @@ bool gpioRead(uint8_t gpio) {
 bool gpioWrite(uint8_t gpio, bool high) {
     // Output-capable, not merely valid: the classic ESP32's 34-39 are input-only, and driving one silently does nothing. Refusing here is what lets a caller report the pin rather than wonder.
     if (!GPIO_IS_VALID_OUTPUT_GPIO(gpio)) return false;
-    // And not RESERVED, the same policy gpioInputBegin applies: a pin wired to flash, PSRAM or native USB corrupts the device when driven, and a relay list is exactly where a wrong number gets typed.
+    // And not RESERVED, the same policy gpioInputBegin applies: a pin wired to flash or PSRAM corrupts the device when driven, and a relay list is exactly where a wrong number gets typed.
     if (gpioCapability(gpio).reserved) return false;
     // Configured on first use so a caller that owns the pin just writes it. gpio_config is idempotent, and this runs on a control change, never per frame.
     gpio_config_t cfg = {};
