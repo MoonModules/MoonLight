@@ -240,6 +240,13 @@ size_t totalInternalHeap();
 
 /// Heap to keep free for stack, HTTP, WiFi and overhead; any allocator checks against this before committing.
 constexpr size_t HEAP_RESERVE = 32768;
+/// Whether `bytes` fits one free block with the reserve left intact, the check every growing allocation makes first; a platform reporting 0 for a figure sets no limit there.
+inline bool fitsWithReserve(size_t bytes) {
+    const size_t block = maxAllocBlock();
+    if (block != 0 && block < bytes) return false;
+    const size_t free = freeHeap();
+    return free == 0 || (free > HEAP_RESERVE && free - HEAP_RESERVE >= bytes);
+}
 /// The internal RAM a board keeps free, which an allocator that takes what is left stops at: WiFi, HTTP and the UI need it.
 constexpr size_t kInternalFreeFloor = 100 * 1024;
 
@@ -247,6 +254,8 @@ constexpr size_t kInternalFreeFloor = 100 * 1024;
 void getMacAddress(uint8_t mac[6]);
 /// The MAC as canonical "XX:XX:XX:XX:XX:XX", in a static buffer a ReadOnly control can bind straight to.
 const char* macString();
+/// A neighbor's MAC from the address table this device's IPv4 stack keeps (ARP, RFC 826); false when the table holds none for `ip`, as before any exchange with it.
+bool arpLookup(const uint8_t ip[4], uint8_t mac[6]);
 /// The chip this runs on, as a static string.
 const char* chipModel();
 
@@ -716,6 +725,8 @@ void setTestEthSendFails(bool fail);
 void setTestEthLinkSpeed(uint16_t mbps);
 /// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
 void setTestEthIPv4(const uint8_t* ip);
+/// Fake one address table entry, `ip` answering with `mac`, null `ip` removing it, so a host test can drive arpLookup.
+void setTestArpEntry(const uint8_t* ip, const uint8_t* mac);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.
 void setTestEthRestartFails(bool fail);
 /// How many times ethRestartTx has run, which pins the once-per-wedge bound.

@@ -6,6 +6,7 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/MoonModule.h"
 #include "core/util/JsonSink.h"
+#include "core/module/NetworkUse.h"   // what the server reports of its API clients
 #include "core/module/StateDocument.h"   // the engine's refusal an op passes back
 #include "fake_light_output.h"   // the fake Drivers is the light output too
 
@@ -13,7 +14,7 @@
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively
 #include <vector>    // the client frames the /ws tests build
 
-// Pins the transport-free apply-core that HttpServerModule exposes, the add, delete, replace and set operations behind the HTTP /api/modules and /api/control handlers. Each structural one is a one-member state document, so the document engine's rules hold on every path. Also exercises the robustness rule: bad input, an unknown module or type and a malformed op return a typed result, never a crash.
+// Pins the transport-free apply-core behind the HTTP /api/modules and /api/control handlers (add, delete, replace, set). Bad input, an unknown module or type and a malformed op return a typed result, never a crash.
 
 namespace {
 
@@ -26,7 +27,7 @@ struct Knob : public mm::MoonModule {
         if (showExtra) controls_.addControl("extra", value, 0, 100);
     }
 };
-// A container. Declares the roles it takes, because applyAddModule now enforces that declaration: the rule used to live only in the UI's picker, so the API would happily nest an effect inside a layout, which ticks in the wrong pass and renders its controls on the wrong card.
+// A container. Declares the roles it takes, because applyAddModule enforces that declaration: an effect nested inside a layout ticks in the wrong pass and renders its controls on the wrong card.
 struct Box : public mm::MoonModule {
     const char* acceptsChildRoles() const override { return "generic,effect"; }
 };
@@ -34,7 +35,7 @@ struct Box : public mm::MoonModule {
 // A container that takes NOTHING, so a test can assert the refusal rather than only the accept.
 struct Leaf : public mm::MoonModule {};
 
-// A leaf with a VALIDATED Text control, mirrors SystemModule.deviceModel: the printable- ASCII rule is a per-control validator, so a bad value is rejected on EVERY write path (including a document the installer sends over serial), not in a bespoke per-transport RPC.
+// A leaf with a VALIDATED Text control, mirrors SystemModule.deviceModel: the printable-ASCII rule is a per-control validator, so a bad value is rejected on EVERY write path, a document sent over serial included.
 struct Tag : public mm::MoonModule {
     char label[32] = "init";
     static bool printableAscii(const char* v) {
@@ -110,7 +111,7 @@ struct PatchTree {
 
 } // namespace
 
-// A parent's declared child roles are a RULE the device enforces, not advice to the UI. The picker filters by the same declaration, so a user never sees a bad pairing, but the API is reachable without it: an effect nested inside a layout ticks in the wrong pass, and because the UI resolves a card by module name it renders its controls onto the parent's card.
+// A parent's declared child roles are a RULE the device enforces, not advice to the UI: an effect nested inside a layout ticks in the wrong pass and, since the UI resolves a card by module name, renders its controls onto the parent's card.
 TEST_CASE("apply-core: a parent refuses a child whose role it does not accept") {
     registerTestTypes();
     mm::Scheduler sched;
@@ -306,7 +307,7 @@ TEST_CASE("apply-core: applySetControl writes a value, rejects out-of-range / un
     s.deleteTree(root);
 }
 
-// A per-control validator (like SystemModule.deviceModel's printable-ASCII rule) is enforced through the control write, so every path that writes a control, a document over serial included, is guarded the same way. This is the point of moving validation onto the control: one backend check, every path.
+// A per-control validator (like SystemModule.deviceModel's printable-ASCII rule) is enforced through the control write, so every path that writes a control, a document over serial included, is guarded the same way.
 TEST_CASE("apply-core: a control validator rejects bad input on the set path") {
     registerTestTypes();
     mm::Scheduler s;
@@ -336,7 +337,7 @@ TEST_CASE("apply-core: a control validator rejects bad input on the set path") {
     s.deleteTree(root);
 }
 
-// The WLED shim's `{on,bri}` apply drives the real `on` + `brightness` controls independently: turning off must NOT clobber the brightness value (the whole point of the shared `on` control, replacing the old bri=0 fudge). Home Assistant + the WLED app both post through this path.
+// The WLED shim's `{on,bri}` apply drives the real `on` + `brightness` controls independently: turning off must NOT clobber the brightness value. Home Assistant and the WLED app both post through this path.
 TEST_CASE("apply-core: applyWledState sets on + bri independently (no brightness clobber)") {
     registerTestTypes();
     mm::Scheduler s;
@@ -400,7 +401,7 @@ TEST_CASE("apply-core: applyWledState picks a palette by index and by color thro
     s.deleteTree(drivers);
 }
 
-// Diff-on-the-wire (the 1 Hz-stutter fix): the periodic WS push sends only CHANGED control values, not the whole ~34 KB tree every second. buildStatePatch value-hashes each leaf against a baseline and emits only the ones that differ. These pin the core guarantees: an unchanged tree → EMPTY patch (the whole point, no per-second re-serialize of static config), and a single value change → a one-entry patch addressed by "<module>/<control>".
+// Diff-on-the-wire: the periodic WS push sends only CHANGED control values. buildStatePatch value-hashes each leaf against a baseline: an unchanged tree gives an EMPTY patch, a single change a one-entry patch addressed by "<module>/<control>".
 TEST_CASE("buildStatePatch: unchanged tree yields an empty patch") {
     PatchTree tree;
     auto& http = tree.http;
@@ -412,7 +413,7 @@ TEST_CASE("buildStatePatch: unchanged tree yields an empty patch") {
     CHECK(std::strcmp(sink.data(), "{\"patch\":[]}") == 0);
 }
 
-// A schema change (rebuildControls, hidden flags / option sets) can't be seen by the value-hash patch, so any module's rebuildControls() flips the WS full-resync flag through the static schema-changed hook. This is what carries a metadata-only change (WiFi addressing hides fields, a preset Select gains an option) to connected clients. Pins the hook wiring + the subtraction of the old per-call-site resyncs.
+// A schema change (rebuildControls, hidden flags, option sets) is invisible to the value-hash patch, so any module's rebuildControls() flips the WS full-resync flag through the static schema-changed hook. Pins that hook wiring.
 TEST_CASE("schema-changed hook: rebuildControls() resyncs ONLY on a real schema change") {
     PatchTree tree;
     auto& http = tree.http;
@@ -430,7 +431,7 @@ TEST_CASE("schema-changed hook: rebuildControls() resyncs ONLY on a real schema 
     k->rebuildControls();
     CHECK(http.fullResyncPendingForTest());         // …flips the resync flag via the hook
 
-    // A CHILD's schema change caught by a rebuild on the PARENT, rebuildControls() rebuilds the whole subtree, so the signature must recurse into children or the resync is dropped (the preset-library case: adding a preset grows every child driver's Select while the parent's own controls are unchanged). Toggle the child, rebuild the parent, expect a resync.
+    // A CHILD's schema change caught by a rebuild on the PARENT: rebuildControls() rebuilds the whole subtree, so the signature must recurse into children or the resync is dropped (adding a preset grows every child driver's Select).
     http.clearFullResyncForTest();
     k->showExtra = false;
     tree.root->rebuildControls();                   // parent rebuild cascades to the child
@@ -528,7 +529,7 @@ TEST_CASE("a configured control write goes out early, and a driven one waits for
     CHECK(http.buildSoonPatchForTest(none) == 0);
 }
 
-// A module's STATUS must ride the 1 Hz value-diff, not the full state alone. A driver can fault at any moment (a bus that won't init, a loopback verdict, a Hue pairing result) with no schema change and no structural change, so nothing triggers a resync, and a status carried only by the full state would sit stale indefinitely. It is worse with the tabbed UI: a module whose card is behind a collapsed tab would surface no fault at all. This pins @status/@severity as patch leaves.
+// A module's STATUS must ride the 1 Hz value-diff: a driver can fault at any moment with no schema or structural change, so nothing triggers a resync, and a status carried only by the full state sits stale. Pins @status/@severity as patch leaves.
 TEST_CASE("buildStatePatch: a status change rides the patch (no resync needed)") {
     registerTestTypes();
     mm::Scheduler s;
@@ -555,18 +556,18 @@ TEST_CASE("buildStatePatch: a status change rides the patch (no resync needed)")
     CHECK(std::strstr(sink.data(), "bus init failed") != nullptr);
     CHECK(std::strstr(sink.data(), "\"K/@severity\"") != nullptr);
     CHECK(std::strstr(sink.data(), "error") != nullptr);
-    // The status value must be VALID JSON: singly-quoted, not `""bus init failed""`. The double-quote bug (writeJsonString self-quotes, plus a manual quote wrap) produced invalid JSON that made the browser drop the WHOLE patch, so the status never updated live. A strstr for the text alone missed it (the text is still a substring of the malformed form), so assert the value's exact quoting here.
+    // The status value must be VALID JSON, singly quoted, not `""bus init failed""`: the double-quote bug made the browser drop the WHOLE patch. A strstr for the text alone missed it, so assert the exact quoting.
     CHECK(std::strstr(sink.data(), "\"value\":\"bus init failed\"") != nullptr);  // correct single quotes
     CHECK(std::strstr(sink.data(), "\"\"bus init failed\"\"") == nullptr);        // NOT double-quoted
 
     s.deleteTree(root);
 }
 
-// A spy for the schema-changed hook: HttpServerModule wires this hook to requestFullResync(), so counting its fires is exactly "how many full-state resyncs would this control change request." A static counter because the hook is a plain function pointer (MoonModule::setSchemaChangedHook), mirroring the production wiring.
+// A spy for the schema-changed hook: HttpServerModule wires it to requestFullResync(), so counting its fires is "how many full-state resyncs a control change requests". A static counter, because the hook is a plain function pointer.
 static int g_schemaFires = 0;
 static void countSchemaFire() { g_schemaFires++; }
 
-// REGRESSION GUARD for the front/back-end sync class of bug that recurred several times: a control change the UI can only learn from the FULL state (never the per-second value patch) MUST request a full resync, or the client's cached state keeps the stale value and reverts the change ~1 s later. The canonical case is the module `enabled` toggle (it rides the full state, not the patch). The counterpart is equally load-bearing: an ORDINARY value change must NOT request a resync, or every slider drag nukes+rebuilds the whole UI (the "expander collapses / picker closes" symptom). This test pins BOTH directions at the one seam where they broke, Scheduler::setControl, via applySetControl, using the schema-changed hook as the resync signal.
+// REGRESSION GUARD: a change the UI learns only from the FULL state (the module `enabled` toggle) MUST request a full resync, or the client reverts it ~1 s later. An ORDINARY value change must NOT, or every slider drag rebuilds the UI.
 TEST_CASE("apply-core: enabled toggle requests a full resync; a plain value change does not") {
     registerTestTypes();
     mm::Scheduler s;
@@ -599,9 +600,9 @@ TEST_CASE("apply-core: enabled toggle requests a full resync; a plain value chan
 
 // --- a file write re-derives what was built from the file -------------------------------------
 //
-// Persistent state changes two ways: a control write, and a file write. Core enforced "re-derive what depends on it" for the first only, so saving a file's CONTENTS under an unchanged name changed nothing on the device: a scripted module kept running the program compiled from the PREVIOUS text, and the only way to make it notice was to re-name the file. Editing a script and seeing the fixture change is the loop this closes.
+// Persistent state changes two ways: a control write and a file write. Saving a file's CONTENTS under an unchanged name must re-derive what depends on it, or a scripted module keeps running the program compiled from the previous text.
 namespace {
-// A module that counts its own prepare() calls. Observing the COUNT rather than the scheduler's private request flag keeps the test on the behavior (something re-derived) instead of on the mechanism (a bool was set), so a future change of mechanism does not have to rewrite it.
+// A module that counts its own prepare() calls. Observing the COUNT rather than the scheduler's private request flag keeps the test on the behavior (something re-derived) instead of the mechanism.
 struct Prepares : public mm::MoonModule {
     uint8_t prepared = 0;
     void prepare() override { prepared++; }
@@ -668,7 +669,7 @@ TEST_CASE("a file write with no scheduler is a no-op, not a crash") {
     CHECK(true);
 }
 
-// The preview channel's inbound framing: masked client data frames whose payloads are handed on OPAQUELY (the producer owns their meaning). The parser's job is refusal and unmasking: wrong opcode, unmasked, oversized, truncated, all -1, never a read past the buffer.
+// The preview channel's inbound framing: masked client data frames whose payloads are handed on OPAQUELY. The parser refuses wrong opcode, unmasked, oversized and truncated frames with -1, never reading past the buffer.
 TEST_CASE("the preview uplink parser unmasks exactly one small client data frame") {
     uint8_t out[8];
     int used = 0;
@@ -795,4 +796,87 @@ TEST_CASE("the frame walker hands a Ping and a Close to the control callback, in
     CHECK(seen[0] == "text:{\"a\":1}");
     CHECK(seen[1] == "9:hi");
     CHECK(seen[2] == "8:\x03\xe8");
+}
+
+TEST_CASE("/api/system carries the summary a peer's map shows: identity, board, signal, light outputs and effects") {
+    PatchTree t;
+    struct Lights final : mm::test::FakeLightOutput {} lights;
+    lights.outputs_ = "{\"driver\":\"LedDriver\",\"lights\":300}";
+    lights.effects_ = "\"Noise\",\"Lines\"";
+    lights.outputSeat_.claim();
+    char buf[512] = {};
+    {
+        mm::JsonSink sink(buf, sizeof(buf));
+        t.http.writeDeviceSummaryForTest(sink);
+    }
+    const std::string doc = std::string("{") + buf + "\"end\":0}";
+    CHECK(doc.find("\"mac\":\"") != std::string::npos);
+    CHECK(doc.find("\"board\":") != std::string::npos);
+    CHECK(doc.find("\"chip\":") != std::string::npos);
+    CHECK(doc.find("\"rssi\":") != std::string::npos);
+    CHECK(doc.find("\"outputs\":[{\"driver\":\"LedDriver\",\"lights\":300}]") != std::string::npos);
+    CHECK(doc.find("\"effects\":[\"Noise\",\"Lines\"]") != std::string::npos);
+    lights.outputSeat_.vacate();
+    // Without a light output the lists are empty, never absent, so a reader tells new firmware from old.
+    char none[512] = {};
+    {
+        mm::JsonSink sink(none, sizeof(none));
+        t.http.writeDeviceSummaryForTest(sink);
+    }
+    CHECK(std::strstr(none, "\"outputs\":[],\"effects\":[],") != nullptr);
+}
+
+TEST_CASE("each WLED API client is traffic into this device, Home Assistant named by its User-Agent, its rate a minute, the last whole one") {
+    struct Clock { ~Clock() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1000);
+    PatchTree t;
+    const uint8_t ha[4] = {192, 168, 1, 50}, app[4] = {192, 168, 1, 60};
+    for (int i = 0; i < 6; i++) t.http.noteApiClientForTest(ha, "HomeAssistant/2026.11.0 aiohttp/3.12 Python/3.13");
+    t.http.noteApiClientForTest(app, "WLED/1.0 CFNetwork");
+    t.http.closeApiMinute();
+    struct Flows final : mm::NetworkUse {
+        std::string seen;
+        void service(const char*, uint16_t) override {}
+        void flow(const char* protocol, bool outbound, const uint8_t peer[4], uint32_t rate, const char* unit, const char* name) override {
+            char line[96];
+            std::snprintf(line, sizeof(line), "%s %s %u.%u.%u.%u %u %s %s|", protocol, outbound ? "out" : "in", peer[0], peer[1], peer[2], peer[3],
+                          static_cast<unsigned>(rate), unit, name ? name : "-");
+            seen += line;
+        }
+    } flows;
+    t.http.reportNetworkUse(flows);
+    CHECK(flows.seen.find("WLED API in 192.168.1.50 6 /m Home Assistant|") != std::string::npos);
+    CHECK(flows.seen.find("WLED API in 192.168.1.60 1 /m -|") != std::string::npos);   // an unknown client keeps its address
+    // Five quiet minutes and a client leaves, so its row ages out of the map.
+    mm::platform::setTestNowMs(1000 + 5 * 60000);
+    t.http.closeApiMinute();
+    flows.seen.clear();
+    t.http.reportNetworkUse(flows);
+    CHECK(flows.seen.find("WLED API") == std::string::npos);
+}
+
+// A list's detail, the map's edges and services among them, changes while its rows do not: the patch carries it, or an open page keeps the detail it connected with until a reload.
+TEST_CASE("a list whose detail changes while its rows do not is patched, its detail beside its value") {
+    struct Roster final : mm::MoonModule, mm::ListSource {
+        int speed = 1;
+        mm::ListRow listRowCount() const override { return 1; }
+        void writeListRow(mm::JsonSink& sink, mm::ListRow) const override { sink.append("{\"name\":\"peer\"}"); }
+        void writeListRowDetail(mm::JsonSink& sink, mm::ListRow) const override { sink.appendf("{\"fps\":%d}", speed); }
+        void defineControls() override { controls_.addList("rows", *this); }
+    };
+    mm::Scheduler s;
+    auto* roster = new Roster();
+    roster->setName("Roster");
+    s.addModule(roster);
+    s.setup();
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    http.installHooksForTest();
+    http.baselineLeafHashesForTest();
+    roster->speed = 44;
+    mm::JsonSink sink;
+    CHECK(http.buildStatePatchForTest(sink) == 1);
+    CHECK(std::strstr(sink.data(), "{\"path\":\"Roster/rows\",\"value\":[{\"name\":\"peer\"}],\"detail\":[{\"fps\":44}]}") != nullptr);
+    http.release();
+    s.deleteTree(roster);
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>   // framesPerSecond: a count of its own, or none
+
 #include "core/module/MoonModule.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/layers/Buffer.h"
@@ -49,6 +51,10 @@ public:
     virtual bool hasCorrectionControls() const { return true; }
     /// Whether this driver reads a slice of the shared buffer, so its card shows start and count.
     virtual bool hasWindowControls() const { return false; }
+    /// Whether this driver lights something, which every output does and the preview, a picture of the output, does not.
+    virtual bool drivesLights() const { return true; }
+    /// Frames it sent last second where it counts them itself, a network output whose sends can fall behind the render; none means it sends every rendered frame.
+    virtual std::optional<uint32_t> framesPerSecond() const { return std::nullopt; }
     /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.
     void setLayer(Layer* layer) { layer_ = layer; }
 
@@ -58,8 +64,8 @@ public:
     int32_t windowCount() const { return count_; }
     /// Set the window directly, which takes effect on the next parse as a control edit does.
     void setWindow(int32_t start, int32_t count) { start_ = start; count_ = count; }
-    /// Test-only: resolve the window against a buffer of `bufN` lights into its length.
-    nrOfLightsType resolveWindowLenForTest(nrOfLightsType bufN) const {
+    /// How many lights this driver sends from a buffer of `bufN`: its window, clamped to the buffer.
+    nrOfLightsType windowLength(nrOfLightsType bufN) const {
         nrOfLightsType outStart = 0, outLen = 0;
         windowSlice(bufN, outStart, outLen);
         return outLen;

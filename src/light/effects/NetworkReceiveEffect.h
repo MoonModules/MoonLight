@@ -2,6 +2,7 @@
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/HostResolver.h"   // formatPeer: the sender by its board's name
+#include "core/system/ControlModule.h"   // ControlModule::deviceName(): this device's name for an ArtPoll reply
 #include "light/effects/ChannelDataSink.h"   // staging, the held frame and its placement
 #include "light/effects/EffectBase.h"
 
@@ -475,6 +476,26 @@ private:
         setStatus(recvStatus_, Severity::Status);
     }
 
+public:
+    /// The ports it listens on, and the frames a second from the sender it receives.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (listensFor(kProtoArtNet)) use.service("Art-Net", ARTNET_PORT);
+        if (listensFor(kProtoE131)) use.service("E1.31", E131_PORT);
+        if (listensFor(kProtoDdp)) use.service("DDP", ddpPort);
+        const char* proto = senderProto_.load(std::memory_order_acquire);
+        if (!proto || !framesPerS_) return;
+        const uint32_t v = senderIp_.load(std::memory_order_relaxed);
+        const uint8_t ip[4] = {static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v)};
+        use.flow(proto, false, ip, framesPerS_, "/s");
+    }
+
+    /// The name an ArtPoll reply gives this node: the device's own, so a controller polling several boards tells them apart; "MoonLight" before a tree holds one.
+    static const char* nodeName() {
+        const char* name = ControlModule::deviceName();
+        return (name && name[0]) ? name : "MoonLight";
+    }
+
+private:
     /// Answer an ArtPoll with our address and name, so controllers list the device.
     void replyToPoll(const uint8_t pollerIp[4]) {
         uint8_t myIp[4];
@@ -485,9 +506,11 @@ private:
         }
         uint8_t mac[6];
         platform::getMacAddress(mac);
+        const char* name = nodeName();
+        char longName[64];
+        mm::formatTo(longName, sizeof(longName), "MoonLight %s", name);
         uint8_t reply[ARTNET_POLL_REPLY_SIZE];
-        buildArtPollReply(reply, myIp, mac, "MoonLight", "MoonLight NetworkReceive",
-                          universeStart);
+        buildArtPollReply(reply, myIp, mac, name, longName, universeStart);
         artnetSocket_.sendToAddr(pollerIp, ARTNET_PORT, reply, sizeof(reply));
     }
 };

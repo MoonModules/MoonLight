@@ -126,7 +126,7 @@ public:
         bufW_ = width;
         bufH_ = height;
         floor_ = noiseFloor;
-        back_ = writerTask && secondFits(bytes) && b_.resize(bytes) ? b_.data() : nullptr;
+        back_ = writerTask && platform::fitsWithReserve(bytes) && b_.resize(bytes) ? b_.data() : nullptr;
         if (!back_) b_.resize(0);
         if (writerTask && !back_) setStatus("one picture buffer: not enough memory, a capture may skip frames", Severity::Warning);
         else clearStatus();
@@ -391,13 +391,6 @@ private:
         }
     }
 
-    /// Whether an optional picture of `bytes` fits one free block with the heap's reserve intact, the rule the mapping uses; 0 from the platform means no limit.
-    static bool secondFits(size_t bytes) {
-        const size_t block = platform::maxAllocBlock();
-        if (block != 0 && block < bytes) return false;
-        const size_t free = platform::freeHeap();
-        return free == 0 || (free > platform::HEAP_RESERVE && free - platform::HEAP_RESERVE >= bytes);
-    }
 
     uint32_t openedGen_ = 0;   ///< the device list the last open saw, so a grabber arriving or leaving re-opens
     ScratchBuffer<uint8_t> a_{*this}, b_{*this};   ///< the pictures, three bytes a pixel; b_ only for a writer task

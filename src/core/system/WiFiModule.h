@@ -250,10 +250,10 @@ public:
     // ListSource: the known networks.
 
     /// How many rows the list shows.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// A row as the collapsed list shows it: the name, open when it has no password, and a static address.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.appendf("{\"id\":%lu,\"ssid\":", static_cast<unsigned long>(r.id));
@@ -278,7 +278,7 @@ public:
     bool listHoldsSecrets() const override { return true; }
 
     /// A row as the saved file keeps it: the name and password first, which is what MoonBase reads.
-    void writeListRowSaved(JsonSink& sink, uint8_t row) const override {
+    void writeListRowSaved(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.appendf("{\"id\":%lu,\"ssid\":", static_cast<unsigned long>(r.id));
@@ -300,7 +300,7 @@ public:
     }
 
     /// A row's editable fields: its name, its password, and its IP settings, the static fields only under Static.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.append("{\"fields\":[{\"name\":\"ssid\",\"type\":\"text\",\"value\":");
@@ -566,12 +566,12 @@ private:
     struct Available : ListSource {
         WiFiModule& w;
         explicit Available(WiFiModule& owner) : w(owner) {}
-        uint8_t listRowCount() const override { return w.foundCount_; }
+        ListRow listRowCount() const override { return w.foundCount_; }
         bool persistsList() const override { return false; }   // a scan is never saved
         bool isEditableList() const override { return true; }
         bool listRowsFixed() const override { return true; }
         /// Signal as bars and a lock on secured networks, as every WiFi picker shows them.
-        void writeListRow(JsonSink& sink, uint8_t row) const override {
+        void writeListRow(JsonSink& sink, ListRow row) const override {
             if (row >= w.foundCount_) { sink.append("{}"); return; }
             const platform::WifiNetwork& n = w.found_[row];
             const int r = n.rssi;
@@ -585,7 +585,7 @@ private:
             sink.append("}");
         }
         /// A password field where the network asks for one and is not known yet, then Connect.
-        void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+        void writeListRowDetail(JsonSink& sink, ListRow row) const override {
             if (row >= w.foundCount_) { sink.append("{}"); return; }
             const platform::WifiNetwork& n = w.found_[row];
             sink.append("{\"fields\":[");

@@ -6,145 +6,79 @@
 ///
 /// ## Why the parser decodes escapes
 ///
-/// Appending the character after a backslash raw turned `\n` into a literal `n`, so a multi-line string arrived as one line.
-/// The failure was invisible until `write_file` staged a script and the compiler reported "expected '(' after the function name" on a file that looked correct in the JSON.
-/// So every escape the parser accepts is decoded to the byte it names.
+/// Appending the character after a backslash raw turned `\n` into a literal `n`, so a multi-line string arrived as one line and a staged script failed to compile. Every escape the parser accepts is decoded to the byte it names.
 ///
 /// ## Why a uXXXX escape warns instead of decoding
 ///
-/// No scenario needs one, and a half-done UTF-16 surrogate decoder would be worse than not having one.
-/// It must not pass through silently either. Appending a literal `u` stages a script containing `u00e9`, and the failure then surfaces as a confusing compile error in a file that looks right in the JSON.
-/// So the runner says so, loudly, once, and keeps the escape visible rather than half-decoding it.
+/// No scenario needs a uXXXX escape and a half-done surrogate decoder is worse than none, so the runner warns loudly once and keeps the escape visible, rather than appending a literal `u` that surfaces later as a confusing compile error.
 ///
 /// ## Why the target key is always the host desktop
 ///
-/// The per-step `contract[<target>]` lookup needs a target key, and the in-process runner builds for the host only.
-/// There is no cross-compiled scenario_runner, so the key is always `desktop-<host-os>`, matching the `run_live_scenario.py` convention.
+/// The per-step `contract[<target>]` lookup needs a target key and the in-process runner builds for the host only, so the key is always `desktop-<host-os>`, matching the `run_live_scenario.py` convention.
 ///
 /// ## How a scenario value reaches a control
 ///
-/// A `set_control` step finds the module by id and the control by name, writes the typed value, then mirrors `HttpServerModule::handleSetControl`.
-/// That means calling `onControlChanged()` and, when `affectsPrepare()` returns true, rebuilding the scope `prepareScope()` names so the pipeline reconciles.
-/// The bridge runs JsonVal through raw JSON text into `mm::applyControlValue`, so this file hand-rolls none of the per-ControlType dispatch that Control.cpp owns.
-/// A tiny `{"v":VALUE}` wrapper built with JsonSink in heap-grow mode carries it, since writeNumber, writeBool and writeJsonString each produce JSON-correct text per JsonVal type.
-/// Re-serialize-then-parse costs nothing worth counting in test code, at most a hundred set_control ops per scenario.
-/// Strict policy: an out-of-range Uint8, Int16 or Select fails the step, so a scenario-authoring bug surfaces instead of silently clamping into a boundary value.
-/// This is stricter than the pre-refactor behavior for Uint8 and Int16, which clamped silently, and matches it for Select and IPv4, which already failed; no scenario relied on the clamp.
+/// A `set_control` step finds the module by id and the control by name, then mirrors `HttpServerModule::handleSetControl` through `mm::applyControlValue`, which owns the per-ControlType dispatch; an out-of-range Uint8, Int16 or Select fails the step.
 ///
 /// ## How a step builds the tree
 ///
-/// A scenario names its top-level containers in `top`, each created as the device boots it, with the apparatus main.cpp wires into it, from the table both share.
-/// Below the top level, `apply_state` documents in the shape `PATCH /api/state` takes build the rest: a typed member adds or re-types a module, `null` removes one, `"$patch":"replace"` empties a container.
-/// The first document starts the scheduler, so it applies as a request with the full lifecycle, and the step prepares the tree at once.
-/// Effects finds the top-level Layouts and Drivers the top-level Effects, so a fixture names no wiring.
-/// No broadcaster is wired, the harness has no WS server, so the preview's sendFrame and sendCoordTable early-return while the light-extraction work still runs for honest tick measurement.
+/// A scenario names its top-level containers in `top`, created as the device boots them from the table main.cpp shares. `apply_state` documents in the `PATCH /api/state` shape build the rest; no broadcaster is wired, so the preview's sends early-return.
 ///
 /// ## The construct and mutate modes
 ///
-/// The `mode` field says what shape the scenario expects the world to be in; see docs/reference/testing.md § Scenario modes.
-/// A construct scenario builds the pipeline from an empty scheduler and runs in-process only. A live device's main.cpp owns the top-level shape, and only the in-process runner can provide an empty scheduler.
-/// A mutate scenario assumes a wired pipeline. In-process creates its `top` containers and replays the embedded `fixture` array first, steps in the same shape as `steps`, then the steps. Live runs the steps directly against whatever is wired.
-/// A scenario whose subject exists only on a device says so with `"live_only": true`, the one rule that keeps a scenario out of this runner. A mutate scenario with neither `top` nor `fixture` that does not say so fails, since in-process it would assert nothing.
-/// The default is construct, for back-compatibility with the scenarios that pre-date the field and build their pipelines explicitly.
-/// Bespoke convention: the construct and mutate split, plus fixture and reset, is MoonLight-specific rather than borrowed from an off-the-shelf BDD framework.
-/// It exists because the same JSON serves an in-process runner that owns the scheduler and a live runner that does not, main.cpp doing that there.
-/// xUnit fixtures are the closest analog for `fixture`, and SQL BEGIN/ROLLBACK for `reset`.
+/// The `mode` field says what world the scenario expects (docs/reference/testing.md, Scenario modes): construct builds the pipeline from an empty scheduler in-process, mutate assumes a wired one (`fixture` first), `"live_only": true` skips this runner.
 ///
 /// ## The fixture, reset and steps sections
 ///
-/// Three sections run in order, each with its own banner so the output is easy to scan.
-/// Fixture carries `apply_state` steps, in-process only, and builds the wired pipeline.
-/// Reset carries set_control steps to a known state, runs on both tiers, and makes a scenario start from the same place regardless of previous runs.
-/// Steps is the scenario proper.
+/// Three sections run in order, each with its own banner: fixture (`apply_state` steps, in-process only) builds the wired pipeline, reset (set_control steps, both tiers) starts every run from the same place, and steps is the scenario proper.
 ///
 /// ## Why the scheduler starts lazily
 ///
-/// Steps are processed in order, and the first measure step, or the end of the scenario, flips the scheduler into setup and running mode.
-/// After that a mid-scenario `apply_state` or set_control step mutates the running pipeline, the same shape as the live runner driving changes over REST.
-/// Starting after the fixture is what makes set_control work at all, since controls are populated in defineControls during setup.
-/// Per-step heap snapshots roll forward, so each measuring step reports its delta against the previous one.
+/// The first measure step, or the end of the scenario, starts the scheduler, so set_control works (controls are populated in defineControls during setup) and a mid-scenario change mutates the running pipeline, as the live runner does over REST.
 ///
 /// ## Why an unknown module type fails
 ///
-/// A failed create is a failed scenario: naming an unregistered type would otherwise pass while testing nothing.
-/// The `optional` flag is for a type genuinely unavailable here, and it is honoured on apply_state, set_control and measure and nowhere else.
-/// Carrying it elsewhere reads as an escape hatch that does not exist, so the runner fails such a step rather than accepting the word.
+/// A failed create fails the scenario, since an unregistered type would otherwise pass while testing nothing. `optional` is honored on apply_state, set_control and measure only; elsewhere the step fails rather than accepting a nonexistent escape hatch.
 ///
 /// ## Why write_file exists
 ///
-/// It stages a file the way the UI's editor does, so a scenario can drive the script loop end-to-end. Write a script, point a module's `script` control at it, and measure.
-/// It uses the primitive the HTTP save path uses, fsWriteAtomic, so a scenario exercises the file the device would actually read. The write creates the parent folder, so a scenario names `/moonlive/x.mle` without staging the directory.
-/// The interesting cases have no shipped file to select. A deliberately broken script, proving the device degrades rather than dies, could not live in moonlive/, where unit_MoonLiveScripts compiles all of them.
-/// Neither could an edit that changes a script's control set, proving controls re-derive and keep their values.
-/// A malformed step and a failed write are both failed scenarios. Every later step then runs against a file that was never staged, and the run could still report PASSED.
-/// Skipping either silently is what makes a typo'd key pass here and fail on hardware, where `run_live_scenario.py` already treats it as an error.
+/// It stages a file the way the UI's editor does, through fsWriteAtomic, so a scenario can drive the script loop end-to-end with cases no shipped file covers, such as a broken script. A malformed step or failed write fails the scenario.
 ///
 /// ## Why a measure step has two spellings
 ///
-/// `"measure": true` is the explicit flag, used alongside a set_control to measure after a mutation.
-/// `op: "measure"` is the implicit-measure shape, a snapshot step with no other side effects, so scenarios can interleave snapshots without faking a control write.
-/// The measurement block honours both.
+/// `"measure": true` measures after a set_control mutation; `op: "measure"` is a snapshot step with no side effects, so scenarios can interleave snapshots without faking a control write. The measurement block honors both.
 ///
 /// ## What the heap numbers mean
 ///
-/// `heap=` is the absolute free heap after the measurement window, which is what `observed.<target>.free_heap` consumes: the rolling promise is on actual free heap rather than on a delta.
-/// On desktop `freeHeap()` returns 0, meaning unlimited, and the value renders as 0, which the runner treats as "no heap assertion".
-/// `(step: ±N)` is the signed step delta from the pre-step heap to the post-measurement heap, useful for diagnosing which step consumed memory but not what the contract asserts on.
-/// It is kept for human-readable diagnostics.
+/// `heap=` is the absolute free heap after the measurement window, which `observed.<target>.free_heap` consumes; desktop reports 0 (no heap assertion). `(step: ±N)` is the signed delta from pre-step heap, a diagnostic only.
 ///
 /// ## Why the block size is internal RAM only
 ///
-/// `maxInternalAllocBlock` reports the largest contiguous block in internal RAM, which diagnoses internal-heap fragmentation.
-/// Fragmentation silently degrades the Layer LUT, whose buffer needs 60 to 90 KB contiguous at 128×128 with mirror, and dropping mirror does not change free_heap.
-/// The internal-only variant is what makes the signal work on PSRAM boards too, where `maxAllocBlock` would report about 8 MB regardless of internal pressure.
-/// On desktop it reads 0, meaning unlimited.
+/// `maxInternalAllocBlock` is the largest contiguous internal-RAM block, which diagnoses the fragmentation that degrades the Layer LUT (60 to 90 KB at 128×128 with mirror); internal-only suits PSRAM boards. Desktop reads 0, meaning unlimited.
 ///
 /// ## The performance contract
 ///
-/// Each measure step may carry a `contract[<target>]` block with `tick_us` and `free_heap`, optional `tick_tolerance_pct`, `heap_tolerance_pct` and `tolerance_us`, and `set_by` plus `reason` describing when and why the contract was set.
-/// Contracts are hand-blessed promises, renegotiated with `--update-contract --reason`; the whole block is optional, and the live runner shares this shape so the same scenarios serve both tiers.
-/// `tick_us` is a ceiling, so faster than contract is good news and the tolerance absorbs upward jitter only: a speedup never fails.
-/// `free_heap` is a floor, meaningful on ESP32 and reported as unlimited on desktop. The device must deliver at least this much, more is fine, and less by more than the tolerance is a regression.
-/// `max_alloc_block` is a floor too, because the LUT and driver buffers need a single contiguous chunk far larger than total free heap once fragmentation kicks in.
-/// A scenario opts into that assertion when its workload depends on a specific minimum, the mirror LUT degrading silently when the block will not fit; see `src/light/layers/Layer.h` Layer::rebuildLUT.
-/// The field is optional and skipped on desktop, where the value is always 0.
+/// A measure step may carry an optional `contract[<target>]` block: `tick_us` (ceiling), `free_heap` and `max_alloc_block` (floors, skipped on desktop), tolerances, hand-blessed with `--update-contract --reason`; the live runner shares the shape.
 ///
 /// ## Why the tolerance defaults differ per target
 ///
-/// The per-target defaults reflect run-to-run variance rather than indifference.
-/// A desktop target carries multi-process OS jitter, so 20 percent plus a 200us absolute floor, and the floor dominates below about 1ms tick, the realistic case.
-/// An esp32 target is a bounded RTOS with lwIP and EMAC jitter, so 10 percent plus a 5us floor, realistic for the bounded RTOS clock.
-/// An absolute floor is needed because OS scheduling jitter dwarfs any percentage tolerance at sub-millisecond ticks.
-/// KEEP IN SYNC: the live runner re-declares the same defaults in the contract-block handler of `moondeck/scenario/run_live_scenario.py`, and tuning one without the other silently desyncs the two tiers.
+/// Per-target defaults reflect run-to-run variance: desktop OS jitter gets 20 percent plus a 200us floor, an esp32 RTOS gets 10 percent plus a 5us floor. KEEP IN SYNC with the contract-block handler of `moondeck/scenario/run_live_scenario.py`.
 ///
 /// ## Why a filesystem error escapes main
 ///
-/// Directory iteration can throw `filesystem_error`, a scenarios/ directory deleted mid-run being the case.
-/// Letting it escape main is the correct outcome for a CLI test runner. It terminates with a diagnostic and a non-zero status, which is exactly what a harness needs to see.
-/// Discovery is recursive so the core/ and light/ split picks up every JSON without each subfolder needing its own loop.
+/// Directory iteration can throw `filesystem_error` (a scenarios/ directory deleted mid-run); letting it escape main gives a CLI runner a diagnostic and a non-zero status. Discovery is recursive so every JSON under core/ and light/ is picked up.
 ///
 /// ## What a measurement covers
 ///
-/// A measure step ticks for a span of wall time rather than a fixed frame count, and reports the average tick.
-/// The frame count measured the wrong thing: 200 back-to-back ticks span well under a millisecond.
-/// An effect whose animation arrives on a beat has nothing to do inside a window that short.
-/// A span is the clock the effects read, so a window of wall time holds that much animation on any host.
+/// A measure step ticks for a span of wall time, the clock the effects read, and reports the average tick; a frame count measured the wrong thing, since 200 back-to-back ticks span well under a millisecond, too short for a beat-driven animation.
 ///
-/// The window is sized to the slowest shipped default, which is PulseEffect at its default 40 bpm: it emits every 1500 ms and returns early on every tick in between.
-/// A window shorter than one of those intervals can fall entirely between two emissions and report an idle effect as the effect's cost.
+/// The window is sized to the slowest shipped default, PulseEffect at 40 bpm, which emits every 1500 ms; a shorter window can fall between two emissions and report an idle effect as its cost.
 ///
-/// The frame cap is the other half of the same rule, sized ABOVE what the window can reach rather than as a round number.
-/// An early-outing effect on a desktop ticks about three thousand times per millisecond, so a cap of 200k ended the loop after 65 ms of a 1600 ms window.
-/// Every sample then stopped short of the animation it was meant to cover.
-/// So reaching the cap before the clock is reported rather than passed off as a full span.
+/// The frame cap is sized ABOVE what the window can reach: an early-outing effect ticks about three thousand times per millisecond on a desktop, so a 200k cap stopped after 65 ms of a 1600 ms window. Reaching the cap before the clock is reported.
 ///
 /// ## What a green run is allowed to mean
 ///
-/// A scenario that did not run returns `kSkipped` rather than 0, because a skip counted as a pass is how a suite that stopped testing reads as green.
-/// Ten of eleven scenarios once skipped for a missing fixture while the summary said `11 passed`, hiding three assertion bugs for a commit.
-/// The same reason makes a scenario that runs to the end with zero checks a failure: it is indistinguishable from one whose every step silently did nothing.
-/// `expect_control` therefore also takes `not_equals`, for a value that moves per release where the only stable claim is a negative one.
-/// An empty string is what a read-only control renders when its source is missing, so `not_equals: ""` asserts that a card reports anything at all.
+/// A scenario that did not run returns `kSkipped` rather than 0, since a counted skip makes a suite that stopped testing read as green, and a run with zero checks fails. `expect_control` takes `not_equals` (`""` asserts a card reports anything).
 ///
 
 #include "module_types.h"
@@ -427,7 +361,7 @@ static ListStep listStep(ScenarioContext& ctx, const JsonVal& step) {
     for (uint8_t i = 0; i < cs.count() && !ls.source; i++)
         if (cs[i].type == mm::ControlType::List && step["key"].str == cs[i].name) ls.source = static_cast<mm::ListSource*>(cs[i].ptr);
     if (!ls.source || !ls.source->isEditableList()) { ls.source = nullptr; ls.why = "no editable list of that name"; return ls; }
-    for (uint8_t r = 0; r < ls.source->listRowCount() && !ls.found; r++) {
+    for (mm::ListRow r = 0; r < ls.source->listRowCount() && !ls.found; r++) {
         mm::JsonSink sink;
         ls.source->writeListRow(sink, r);
         const JsonVal row = parseJson(std::string(sink.data(), sink.size()));
@@ -693,7 +627,7 @@ static int runScenario(const char* path) {
         } else if (step.has("optional") && step["optional"].boolean
                    && std::strcmp(op, "apply_state") != 0 && std::strcmp(op, "set_control") != 0
                    && std::strcmp(op, "measure") != 0) {
-            // `optional` is honoured by the ops above and nowhere else: @xref{why-an-unknown-module-type-fails}.
+            // `optional` is honored by the ops above and nowhere else: @xref{why-an-unknown-module-type-fails}.
             std::printf("  %s %s: `optional` does nothing on this op\n", op, name);
             result.check(false, name);
         } else if (std::strcmp(op, "expect_file") == 0) {

@@ -1,7 +1,6 @@
 /// @module HttpServerModule
 ///
-/// A control client receives the modules it subscribes to in full and an outline of the rest, streamed as fragments that no board has to hold whole.
-/// The tree here has two roots, so a subscription to one shows what the other leaves out; the loopback test reads the fragmented WebSocket message off a real socket.
+/// A control client receives its subscribed modules in full and an outline of the rest, in fragments; two roots show what a subscription leaves out, read off a real socket.
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
@@ -112,9 +111,9 @@ namespace {
 // A select, a palette and a list whose options and rows run to many kilobytes, as Drivers' palette and the fixture profile list do.
 struct Lots : public mm::MoonModule, public mm::ListSource {
     static constexpr int kOptions = 200;
-    uint8_t listRowCount() const override { return 60; }
-    void writeListRow(mm::JsonSink& sink, uint8_t row) const override { sink.appendf("{\"id\":%u,\"name\":\"profile %02u\"}", row, row); }
-    void writeListRowDetail(mm::JsonSink& sink, uint8_t row) const override {
+    mm::ListRow listRowCount() const override { return 60; }
+    void writeListRow(mm::JsonSink& sink, mm::ListRow row) const override { sink.appendf("{\"id\":%u,\"name\":\"profile %02u\"}", row, row); }
+    void writeListRowDetail(mm::JsonSink& sink, mm::ListRow row) const override {
         sink.appendf("{\"channels\":\"red green blue white amber uv dimmer strobe pan tilt\",\"row\":%u}", row);
     }
     void writeListOptionSets(mm::JsonSink& sink) const override { sink.append("\"kinds\":[\"rgb\",\"rgbw\"]"); }

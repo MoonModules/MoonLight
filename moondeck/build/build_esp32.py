@@ -293,8 +293,6 @@ FIRMWARES: dict[str, dict] = {
         "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": False,
         "description": "ESP32-C3 (4 MB flash, no PSRAM) - WiFi only, one RISC-V core at 160 MHz.",
-        # A board running WLED moves to this variant over WiFi through the migration image.
-        "migrate": True,
         "ships": True,
         "panel_cards": False,
     },
@@ -767,6 +765,43 @@ def build_dir_for(firmware: str) -> Path:
     return ROOT / "build" / f"esp32-{firmware}"
 
 
+def idf_build(firmware: str, cmd: list[str], env: dict, args, action: str = "build") -> None:
+    """Configure build/esp32-<firmware> and run one idf.py action in it: `build` for the firmware, `bootloader` for the bootloader a migration image carries."""
+    chip = FIRMWARES[firmware]["chip"]
+    build_dir = build_dir_for(firmware)
+    # Each firmware keeps its sdkconfig in its own build dir (-DSDKCONFIG, absolute since CMake resolves it from the build dir), ESP-IDF's way to parallel builds:
+    # a shared esp32/sdkconfig would carry one firmware's target into the next. A new build dir takes `set-target` first, which seeds it from the defaults.
+    b_arg = ["-B", str(build_dir), "-DSDKCONFIG=" + str(build_dir / "sdkconfig")]
+    extra = firmware_cmake_args(firmware, args.release, args.version,
+                                task_cpu_stats=args.task_cpu_stats)
+
+    # A build dir configured for another feature set (a stale MM_NO_ETH / MM_ETH_ONLY a reconfigure keeps) is wiped, so set-target below seeds a clean cache.
+    stale = stale_feature_cache(build_dir, extra, chip)
+    if stale:
+        print(f"Build dir {build_dir.relative_to(ROOT)} has a stale feature "
+              f"cache ({stale}); removing it for a clean reconfigure.")
+        shutil.rmtree(build_dir)
+
+    # A chip in PREVIEW_TARGETS needs `--preview` on idf.py itself, before the action, or set-target and reconfigure refuse it.
+    preview = ["--preview"] if chip in PREVIEW_TARGETS else []
+    digest = sdkconfig_fragments.refresh(cmd + preview + b_arg + extra, build_dir,
+                                         fragment_paths(extra), ESP32_DIR, env)
+
+    if not build_dir.exists():
+        print(f"Setting target to {chip} (firmware: {firmware}, build dir: "
+              f"{build_dir.relative_to(ROOT)})...")
+        r = subprocess.run(cmd + preview + b_arg + extra + ["set-target", chip],
+                           cwd=ESP32_DIR, env=env)
+        if r.returncode != 0:
+            sys.exit(r.returncode)
+
+    print(f"Building {'for' if action == 'build' else 'the ' + action + ' for'} {chip} (firmware: {firmware})...")
+    r = subprocess.run(cmd + b_arg + extra + [action], cwd=ESP32_DIR, env=env)
+    if r.returncode != 0:
+        sys.exit(r.returncode)
+    sdkconfig_fragments.record(build_dir, digest)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", help="ESP32 chip type (legacy; derived from --firmware)")
@@ -788,7 +823,7 @@ def main():
                              "A profiling build only: costs ~5%% tick; off by default.")
     parser.add_argument("--migrate-pause", type=int, default=0, metavar="SECONDS",
                         help="Also build a rehearsal migration image that pauses this long after each step, "
-                             "into build/migrate-<chip>-pause, so a power cut can be tested at each point.")
+                             "into build/migrate-<family>-pause, so a power cut can be tested at each point.")
     parser.add_argument("--skip-idf-pin-check", action="store_true",
                         help="Build against the currently-checked-out IDF even if "
                              "it differs from PINNED_IDF_COMMIT (for a dev "
@@ -827,71 +862,26 @@ def main():
     env = idf_env(idf_path)
     cmd = idf_cmd(idf_path)
 
+    idf_build(firmware, cmd, env, args)
     build_dir = build_dir_for(firmware)
-    # -B points idf.py at the per-firmware build dir. -DSDKCONFIG keeps each
-    # firmware's sdkconfig inside its own build dir too; without this idf.py
-    # writes `esp32/sdkconfig` at the project root, and switching firmwares
-    # poisons it ("project sdkconfig was generated for target X, but
-    # CMakeCache contains Y"). Per-build-dir sdkconfig is the IDF-supported
-    # way to do parallel builds; CMake forwards the variable into the
-    # build component manager. Absolute paths are necessary for SDKCONFIG
-    # because CMake resolves it relative to the build dir, not the project.
-    sdkconfig_path = build_dir / "sdkconfig"
-    b_arg = [
-        "-B", str(build_dir),
-        "-DSDKCONFIG=" + str(sdkconfig_path),
-    ]
-
-    # First-time build for this firmware: idf.py needs `set-target` before
-    # `build` so sdkconfig gets seeded from SDKCONFIG_DEFAULTS. On subsequent
-    # builds the per-build-dir sdkconfig already has the chip pinned, so
-    # set-target is skipped; switching to another firmware uses a different
-    # build_dir entirely, so its sdkconfig is untouched.
-    #
-    # esp32p4rev1-eth-wifi needs no special handling: on IDF v6.1-rc1 a clean build and an
-    # incremental rebuild through this wrapper both keep CONFIG_SLAVE_IDF_TARGET_ESP32C6=y
-    # (esp_wifi_remote's slave target), so it builds like any other variant.
-    extra = firmware_cmake_args(firmware, args.release, args.version,
-                                task_cpu_stats=args.task_cpu_stats)
-
-    # Guard against a build dir configured for a different feature set (a stale
-    # MM_NO_ETH / MM_ETH_ONLY in CMakeCache that a plain reconfigure won't clear).
-    # Wiping the dir forces the set-target path below, which seeds a clean cache.
-    stale = stale_feature_cache(build_dir, extra, chip)
-    if stale:
-        print(f"Build dir {build_dir.relative_to(ROOT)} has a stale feature "
-              f"cache ({stale}); removing it for a clean reconfigure.")
-        shutil.rmtree(build_dir)
-
-    # A chip in PREVIEW_TARGETS needs `--preview` on idf.py itself, before the action, or
-    # set-target and reconfigure refuse it.
-    preview = ["--preview"] if chip in PREVIEW_TARGETS else []
-    digest = sdkconfig_fragments.refresh(cmd + preview + b_arg + extra, build_dir,
-                                         fragment_paths(extra), ESP32_DIR, env)
-
-    if not build_dir.exists():
-        print(f"Setting target to {chip} (firmware: {firmware}, build dir: "
-              f"{build_dir.relative_to(ROOT)})...")
-        r = subprocess.run(cmd + preview + b_arg + extra + ["set-target", chip],
-                           cwd=ESP32_DIR, env=env)
-        if r.returncode != 0:
-            sys.exit(r.returncode)
-
-    print(f"Building for {chip} (firmware: {firmware})...")
-    r = subprocess.run(cmd + b_arg + extra + ["build"], cwd=ESP32_DIR, env=env)
-    if r.returncode != 0:
-        sys.exit(r.returncode)
-    sdkconfig_fragments.record(build_dir, digest)
 
     # The flash/RAM summary, read from the linker map: `idf.py size` builds again first, and the build stamp would relink the image a second time.
     subprocess.run([cmd[0], "-m", "esp_idf_size", str(build_dir / "MoonLight.map")], cwd=ESP32_DIR, env=env)
 
-    if FIRMWARES[firmware].get("moonbase"):
-        build_moonbase(cmd, env, chip, args.version)
-    if FIRMWARES[firmware].get("migrate"):
-        build_migrate(cmd, env, chip, build_dir)
+    # The family's first firmware builds its migration image, which carries MoonBase and, beside each table, the bootloader of the variant that table comes from.
+    family = migration_family(firmware)
+    builds_migration = firmware == family_members(family)[0]
+    preview = ["--preview"] if chip in PREVIEW_TARGETS else []
+    if FIRMWARES[firmware].get("moonbase") or builds_migration:
+        build_moonbase(cmd + preview, env, chip, args.version, family)
+    if builds_migration:
+        entries = migration_tables(family)
+        for donor in dict.fromkeys(d for _, d in entries if d != firmware):
+            idf_build(donor, cmd, env, args, "bootloader")
+        pairs = [(csv, build_dir_for(d) / "bootloader" / "bootloader.bin") for csv, d in entries]
+        build_migrate(cmd + preview, env, chip, family, pairs)
         if args.migrate_pause:
-            build_migrate(cmd, env, chip, build_dir, args.migrate_pause)
+            build_migrate(cmd + preview, env, chip, family, pairs, args.migrate_pause)
 
 
 # ---- MoonBase flash layout, shared by every consumer of the build output ----
@@ -901,19 +891,48 @@ def main():
 # binary at the first app partition (0x10000: the factory slot, MoonBase's home), because it
 # knows nothing about the two-image scheme. These helpers are the one place that knows better.
 
+def fragment_value(fragments, key: str) -> str | None:
+    """The value a fragment list gives `key` (`CONFIG_...`), the last fragment naming it winning, IDF's own merge order; None when none does."""
+    value = None
+    for frag in fragments:
+        fp = ESP32_DIR / frag
+        if fp.exists():
+            m = re.search(rf'^{key}=(.*)$', fp.read_text(encoding="utf-8"), re.MULTILINE)
+            if m:
+                value = m.group(1).strip().strip('"')
+    return value
+
+
+def migration_family(firmware: str) -> str:
+    """The boards one migration image serves: the firmware's chip, and on the P4 its revision line, since an image for revision 3 and one for below it exclude each other."""
+    spec = FIRMWARES[firmware]
+    return spec["chip"] + ("rev3" if fragment_value(spec["fragments"], "CONFIG_ESP32P4_REV_MIN_300") == "y" else "")
+
+
+def family_members(family: str) -> list[str]:
+    """The shipping firmwares of a migration family, in FIRMWARES order."""
+    return [k for k, v in FIRMWARES.items() if v.get("ships") and migration_family(k) == family]
+
+
+def migration_tables(family: str) -> list[tuple[Path, str]]:
+    """What the family's migration image carries: one table per flash size and flash type (quad or octal), each with the firmware whose bootloader goes beside it, the variant with MoonBase's own slot first where two share both."""
+    def rows(csv: Path) -> list[list[str]]:
+        return [[f.strip() for f in line.split(",")] for line in csv.read_text(encoding="utf-8").splitlines()
+                if line.strip() and not line.lstrip().startswith("#")]
+    chosen: dict[tuple[int, bool], tuple[Path, str]] = {}
+    members = family_members(family)
+    for fw in sorted(members, key=lambda k: (all(r[0] != "moonbase" for r in rows(table_from_fragments(FIRMWARES[k]["fragments"]))), members.index(k))):
+        csv = table_from_fragments(FIRMWARES[fw]["fragments"])
+        octal = fragment_value(FIRMWARES[fw]["fragments"], "CONFIG_ESPTOOLPY_OCT_FLASH") == "y"
+        chosen.setdefault((max(int(r[3], 0) + int(r[4], 0) for r in rows(csv)), octal), (csv, fw))
+    return [chosen[k] for k in sorted(chosen)]
+
+
 def table_from_fragments(fragments) -> Path:
     """The partition CSV a fragment list selects (last fragment naming one wins, IDF's own
     merge order). The one resolver: moonbase_table_csv and stale_feature_cache both use it."""
-    csv = ESP32_DIR / "partitions" / "esp32dev.csv"
-    for frag in fragments:
-        fp = ESP32_DIR / frag
-        if not fp.exists():
-            continue
-        m = re.search(r'^CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="([^"]+)"',
-                      fp.read_text(encoding="utf-8"), re.MULTILINE)
-        if m:
-            csv = ESP32_DIR / m.group(1)
-    return csv
+    name = fragment_value(fragments, "CONFIG_PARTITION_TABLE_CUSTOM_FILENAME")
+    return ESP32_DIR / (name or "partitions/esp32dev.csv")
 
 
 def moonbase_table_csv(firmware: str) -> Path:

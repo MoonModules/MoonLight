@@ -68,6 +68,17 @@ def build_frame(msg_type: int, payload: bytes) -> bytes:
     return body + bytes([checksum(body)])
 
 
+def rpc_strings(body: bytes) -> list[str]:
+    """The strings an Improv RPC result carries: [command][length][each string as [length][bytes]]."""
+    idx, out = 2, []
+    while idx < len(body):
+        slen = body[idx]
+        idx += 1
+        out.append(body[idx:idx + slen].decode("utf-8", errors="replace"))
+        idx += slen
+    return out
+
+
 def build_wifi_settings_payload(ssid: str, password: str) -> bytes:
     """RPC payload for WIFI_SETTINGS:
     [cmd][total_len][ssid_len][ssid_bytes][pw_len][pw_bytes].
@@ -329,6 +340,8 @@ def main() -> int:
                     help="WiFi password (default: read from host's WiFi via "
                          "Keychain on macOS, NetworkManager on Linux, netsh "
                          "on Windows; empty for open networks)")
+    ap.add_argument("--wait-provisioned", dest="wait_provisioned", type=float, default=0.0, metavar="SECONDS",
+                    help="the device joins with credentials of its own: ask its state until it reports provisioned, never sending ours")
     ap.add_argument("--timeout", type=float, default=45.0,
                     help="Max seconds to wait for a final response (default: 45)")
     ap.add_argument("--device-model", dest="device_model", default=None, metavar="NAME",
@@ -443,20 +456,37 @@ def main() -> int:
     # PROVISIONED and never re-announces it for a second WIFI_SETTINGS, so a re-provision used
     # to sit out the whole timeout and skip the config push that needs no provisioning at all.
     # (The push works on any reachable device with the port open, the same as the browser's.)
-    ser.reset_input_buffer()
-    ser.write(build_frame(TYPE_RPC, bytes([CMD_GET_CURRENT_STATE, 0])))
-    ser.flush()
+    # With --wait-provisioned the device brings its own credentials, so it is asked again until it reports joining, and is never sent ours.
     already_provisioned = False
     probe_answered = False
-    probe_deadline = time.monotonic() + 3.0
-    while time.monotonic() < probe_deadline:
-        reply = parse_frame(ser, probe_deadline)
-        if reply is None:
+    wait_until = time.monotonic() + args.wait_provisioned
+    while True:
+        ser.reset_input_buffer()
+        ser.write(build_frame(TYPE_RPC, bytes([CMD_GET_CURRENT_STATE, 0])))
+        ser.flush()
+        probe_deadline = time.monotonic() + 3.0
+        while time.monotonic() < probe_deadline:
+            reply = parse_frame(ser, probe_deadline)
+            if reply is None:
+                break
+            probe_answered = True
+            if reply[0] == TYPE_CURRENT_STATE and reply[1] and reply[1][0] == 4:
+                already_provisioned = True
+                # Improv's answer to the state request goes on, for a provisioned device, with an RPC result naming its URL.
+                while (more := parse_frame(ser, probe_deadline)) is not None:
+                    if more[0] == TYPE_RPC_RESPONSE and more[1] and more[1][0] == CMD_GET_CURRENT_STATE:
+                        urls = rpc_strings(more[1])
+                        if urls:
+                            print(f"==> provisioned: {urls[0]}")
+                        break
+                break
+        if already_provisioned or time.monotonic() >= wait_until:
             break
-        probe_answered = True
-        if reply[0] == TYPE_CURRENT_STATE and reply[1] and reply[1][0] == 4:
-            already_provisioned = True
-            break
+        time.sleep(2)
+    if args.wait_provisioned and not already_provisioned:
+        print(f"==> ERROR: not provisioned within {args.wait_provisioned:.0f} s", file=sys.stderr)
+        ser.close()
+        return 1
     if not probe_answered:
         # No Improv listener heard us. The common cause on QuinLED boards is not a fault: their
         # catalog pins include GPIO 1/3 (UART0), so once the LED driver claims them a provisioned
@@ -514,14 +544,7 @@ def main() -> int:
             # Response: [cmd][len][n strings (each [len][bytes])]
             if len(body) < 2 or body[0] != CMD_WIFI_SETTINGS:
                 continue   # not the response we're waiting for (e.g. device info)
-            # Walk the strings; the URL is the first one.
-            idx = 2
-            urls: list[str] = []
-            while idx < len(body):
-                slen = body[idx]
-                idx += 1
-                urls.append(body[idx:idx + slen].decode("utf-8", errors="replace"))
-                idx += slen
+            urls = rpc_strings(body)   # the URL is the first
             url = urls[0] if urls else "(no URL reported)"
             print(f"==> provisioned: {url}")
             if args.device_model:

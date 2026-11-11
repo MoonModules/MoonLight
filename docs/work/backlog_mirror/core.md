@@ -16,21 +16,6 @@ Live slots are not saved, so after a boot only a target or a writer gives them a
 The followers then keep what they last had, and a refresh repairs them once the leader's target is back.
 Pinned by a test: a disabled target's slot produces no feedback datagram.
 
-## DevicesModule
-
-### DevicesModule: interop plugins and the command half
-
-Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287074692)
-
-Discovery is shipped ([DevicesModule](../../moonmodules/core/system.md)). It stays a code-wired child of Network: it is fleet-scope rather than this-device, so it is neither a System nor a Services module, and it moves to a top-level container of its own only once a second fleet module exists to justify one. What remains is *growth on the seam*, each piece additive (one plugin file, no core change):
-
-- **More discovery plugins**: ESPHome, Tasmota, Hue (*hub-shaped*: a bridge whose Zigbee bulbs are children behind it, with link-button auth). Each is a new `DevicePlugin` declaring its `discoveryPort()` + classifying the datagram (or, for a system that only does mDNS, a re-introduced advertise-side browse scoped to *foreign* services only, never the ones we advertise). Hue is the canonical "more than a flat device" case the seam is shaped for. (Note: Hue *control* already ships as an **output driver**, see [HueDriver](../../moonmodules/light/drivers.md#hue): bulbs as effect pixels; the driver also *lists* its bridge in DevicesModule with the color-light count. Two complementary follow-ups remain: (a) auto-fill the driver's bridge IP from discovery so the user doesn't type it (the mDNS-browse plugin above); (b) **pair once, not per driver**: pairing + the app key currently live on each HueDriver, so two drivers on one bridge pair twice. The clean end-state moves the bridge identity (IP + key + Pair button + light list) into DevicesModule and makes HueDriver a pure output that reads the paired bridge by IP; do this together with the discovery plugin, since both hinge on DevicesModule owning the bridge.)
-- **The command half** — `DevicePlugin::command()` (+ per-plugin capability/auth), so MoonLight can *control* a discovered foreign device, not just list it: set WLED brightness via its JSON API, a Hue resource via the bridge's authenticated CLIP API, a Tasmota via `cmnd`. Built when a control consumer exists; the discovery seam is already shaped to accept it (incl. hub plugins). This is the **multi-ecosystem selling point** — one UI controlling WLED + ESPHome + Hue. Commands split by need (the rule, not "all REST"): must-arrive config over REST; latency-critical sync over UDP (~0.5–1 ms vs REST's 10–50 ms — REST would visibly de-sync).
-- **Live peer state** — a discovered peer's brightness / on-off shown in our list, refreshed by polling its REST `/json` after discovery gives the IP (discovery = UDP/mDNS, state = REST). The read-side complement to the command half.
-- **Non-IP transports (board-gated, far future)** — Tasmota-MQTT / zigbee2mqtt need an MQTT client; **direct Zigbee/Thread** (S31/C6/H2 802.15.4 radio) makes MoonLight the *hub itself*, driving bulbs over the mesh with no gateway — the standout differentiator, the biggest lift. Same plugin philosophy, a transport addition + board gate.
-
-Full design + the reasoned transport split: `Plan-20260629 - UDP device discovery + mDNS advertise-only` (in the plans archive).
-
 ## Drivers
 
 ### The encode worker is parked before a control change or a prepare reallocates a driver's buffers (2026-11-05)
@@ -489,17 +474,6 @@ Confirmed by external review (CodeRabbit, PR #56).
 `SphereMoveEffect`). Review suggested fixed-point, but the float trajectory IS the ported
 MoonLight behaviour and fidelity is deliberate. If the FPU-less Xtensa cost is real, that is a
 profiling question first, not a lint fix.
-
-### Clock sync: a shared monotonic clock across devices
-
-Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077324)
-
-The second half of the core [multi-device runtime](../../explanation/architecture/mooncore.md#multi-device-runtime); discovery ships, this does not. The design: one leader sends its elapsed time over OSC, the protocol that already carries the shared controls, with the same `addressing`; followers compute their offset, targeting sub-millisecond accuracy. A shared monotonic clock is the foundation any cross-device coordination builds on, which is why it is core rather than light-domain.
-
-The light-domain payoff is a wall of controllers animating in lockstep: effects already animate off elapsed time, so feeding them the leader's synced clock instead of each device's local one is the whole change on the render side. Device-to-device light *distribution* is a separate topology question and rides the existing ArtNet / E1.31 / DDP standards rather than a bespoke protocol.
-
-
-Three render-side consequences. Time-seeded randomness takes a frame index derived from the synced clock rather than raw milliseconds, so devices a millisecond apart hash alike. `hashInt` is the default for anything a synced effect randomizes, and the `Random8` stream stays for local-only effects. Particles, ripple, fire and the cellular automata expose a deterministic re-seed from (time, seed), so a late device is placed into the same state by replay or keyframe.
 
 ### Config provenance: firmware/MCU → deviceModel (catalog follow-ups)
 

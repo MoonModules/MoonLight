@@ -7,10 +7,13 @@
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"   // PATCH /api/state applies a document through it
 #include "core/util/hex.h"
+#include "core/util/HttpHead.h"
+#include "core/util/Ipv4.h"   // the relay's target address
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/parse.h"
 #include "core/util/JsonSink.h"
+#include "core/util/LightOutput.h"      // the summary's outputs and effects, read from the light domain
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
@@ -18,7 +21,7 @@
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
-#include "core/system/SystemModule.h"      // deviceName() for the WLED /json/info shim
+#include "core/system/SystemModule.h"      // the device name and model a request is judged and answered by
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
@@ -30,8 +33,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>   // strtol: bounded Content-Length parse
-#include <cctype>    // tolower, case-insensitive header names (findHeaderCI)
-#include <cerrno>    // errno / ERANGE: Content-Length overflow check
+#include <cerrno>    // errno / ERANGE: the id overflow check
 #include <cstring>
 #include <cstdint>
 #include <new>       // placement new: a send's source built in its heap block
@@ -168,6 +170,7 @@ HttpServerModule::FileTransfer* HttpServerModule::claimTransfer(platform::TcpCon
 
 void HttpServerModule::finishTransfer(FileTransfer& t, bool closeConn) {
     if (closeConn) t.conn.close();
+    t.peer.close();   // a relay's ESPHome device, however the relay ended
     t.active = false;
     t.waiting = false;
     t.wstream = platform::FsWriteStream{};
@@ -296,7 +299,8 @@ void HttpServerModule::driveTransfers() {
         if (!t.active) continue;
         for (;;) {
             const uint32_t now = platform::millis();
-            const bool progressed = t.kind == FileTransfer::Kind::Request ? driveRequest(t, now) : driveUpload(t, now);
+            const bool progressed = t.kind == FileTransfer::Kind::Request ? driveRequest(t, now)
+                                  : t.kind == FileTransfer::Kind::Relay ? driveRelay(t, now) : driveUpload(t, now);
             if (!t.active) break;           // finished or failed this chunk
             if (!progressed) break;         // no data moved: nothing more to do until next tick
             if (now - budgetStart >= kTransferTickBudgetMs) break;
@@ -307,8 +311,54 @@ void HttpServerModule::driveTransfers() {
 void HttpServerModule::tick1s() MM_NONBLOCKING {
     // The listener follows `port`, and a port the system refused is tried again, so a busy port at boot does not leave the server dark, as HttpServerModule.h's served port says.
     ensureListener();
+    if (platform::millis() - apiMinuteAt_ >= 60000) closeApiMinute();
     const SecretsHidden hide(anyWsClientOnAccessPoint());   // one push serves every client
     pushStateToWebSockets();
+}
+
+// The clients a User-Agent names (RFC 9110 § 10.1.5): its product token, as each sends it.
+static const char* clientName(const char* userAgent) {
+    static constexpr struct { const char* product; const char* name; } kClients[] = {{"HomeAssistant/", "Home Assistant"}};
+    if (!userAgent) return nullptr;
+    for (const auto& c : kClients)
+        if (std::strncmp(userAgent, c.product, std::strlen(c.product)) == 0) return c.name;
+    return nullptr;
+}
+
+void HttpServerModule::noteApiClient(const uint8_t peer[4], const char* userAgent) {
+    ApiClient* c = nullptr;
+    for (uint8_t i = 0; i < apiClientCount_ && !c; i++)
+        if (std::memcmp(apiClients_[i].ip, peer, 4) == 0) c = &apiClients_[i];
+    if (!c) {
+        if (apiClientCount_ == UINT8_MAX || !apiClients_.ensure(apiClientCount_ + 1u)) return;   // memory refused: this client goes uncounted
+        c = &apiClients_[apiClientCount_++];
+        *c = ApiClient{{peer[0], peer[1], peer[2], peer[3]}, nullptr, 0, 0, 0};
+    }
+    if (const char* name = clientName(userAgent)) c->name = name;
+    c->lastMs = platform::millis();
+    if (c->count < UINT16_MAX) c->count++;
+}
+
+void HttpServerModule::closeApiMinute() MM_NONBLOCKING {
+    const uint32_t now = platform::millis();
+    apiMinuteAt_ = now;
+    uint8_t kept = 0;
+    for (uint8_t i = 0; i < apiClientCount_; i++) {
+        ApiClient c = apiClients_[i];
+        if (now - c.lastMs >= 5 * 60000u) continue;   // gone quiet: it leaves, and its row ages out of the map
+        c.perMinute = c.count;
+        c.count = 0;
+        apiClients_[kept++] = c;
+    }
+    apiClientCount_ = kept;
+}
+
+void HttpServerModule::reportNetworkUse(NetworkUse& use) const {
+    if (boundPort_) use.service(kHttpService, boundPort_);
+    for (uint8_t i = 0; i < apiClientCount_; i++) {
+        const ApiClient& c = apiClients_[i];
+        use.flow("WLED API", false, c.ip, c.perMinute, "/m", c.name);
+    }
 }
 
 bool HttpServerModule::onAccessPoint(const platform::TcpConnection& conn) {
@@ -319,18 +369,6 @@ bool HttpServerModule::onAccessPoint(const platform::TcpConnection& conn) {
 bool HttpServerModule::anyWsClientOnAccessPoint() const MM_NONBLOCKING {
     for (int i = 0; i < kMaxWsClients; i++)
         if (wsOnAccessPoint_[i] && wsClients_[i].valid()) return true;
-    return false;
-}
-
-// Whether the query holds the parameter `name=value` whole, as a query parameter is read: `xlive=1` and `live=10` are other parameters.
-static bool queryHas(const char* query, const char* name, const char* value) {
-    const size_t n = std::strlen(name), v = std::strlen(value);
-    for (const char* p = query; p && *p;) {
-        const char* end = std::strchr(p, '&');
-        const size_t len = end ? static_cast<size_t>(end - p) : std::strlen(p);
-        if (len == n + 1 + v && std::strncmp(p, name, n) == 0 && p[n] == '=' && std::strncmp(p + n + 1, value, v) == 0) return true;
-        p = end ? end + 1 : nullptr;
-    }
     return false;
 }
 
@@ -381,6 +419,7 @@ static bool routeModuleName(const char* segment, char (&out)[MoonModule::kNameLe
 static bool isStreamingUpload(const char* req) {
     return std::strncmp(req, "POST /api/file", 14) == 0 ||
            std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
+           std::strncmp(req, "POST /api/relay/esphome", 23) == 0 ||
            // The trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
            std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
 }
@@ -411,39 +450,35 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patie
     auto* req = reinterpret_cast<char*>(buf);
 
     auto* headerEnd = std::strstr(req, "\r\n\r\n");
-    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
-    if (clh) {
-        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), via strtoull not strtoul: `unsigned long` is only 32-bit on this RV32 target, the same width as that ceiling itself.
+    uint64_t parsed = 0;
+    const http::Length length = headerEnd ? http::contentLength(req, parsed) : http::Length::Absent;
+    if (length == http::Length::Invalid) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"invalid content-length\"}");
+        return true;
+    }
+    if (length == http::Length::Valid) {
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX).
         const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
-        const unsigned long long kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
-        const char* valStart = clh + 15;
-        while (*valStart == ' ' || *valStart == '\t') valStart++;   // skip OWS after the colon
-        char* valEnd = nullptr;
-        errno = 0;
-        const unsigned long long parsed = std::strtoull(valStart, &valEnd, 10);
-        const bool consumedDigits = valEnd != valStart;
-        const bool endsCleanly = *valEnd == '\r' || *valEnd == '\n' || *valEnd == ' ' ||
-                                 *valEnd == '\t' || *valEnd == '\0';
-        if (!consumedDigits || !endsCleanly || errno == ERANGE) {
-            sendResponse(conn, 400, "application/json",
-                         "{\"error\":\"invalid content-length\"}");
-            return true;
-        }
+        const uint64_t kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
         // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
         if (parsed > kContentLenMax) {
             sendResponse(conn, 413, "application/json",
                          "{\"error\":\"request body too large\"}");
             return true;
         }
-        if (!isStreamingUpload(req)) {
-            const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
-            const size_t whole = headerSize + static_cast<size_t>(parsed);
-            // A state document holds an effects stack and outgrows the request buffer; every other body is read whole within it, so an oversized one is 413, never a truncated parse.
-            const bool state = isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
-            if (whole > (state ? headerSize + kStateDocumentMax : sizeof(buf) - 1)) {
-                sendResponse(conn, 413, "application/json", state ? "{\"error\":\"document too large\"}" : "{\"error\":\"request body too large\"}");
-                return true;
-            }
+        const size_t headerSize = static_cast<size_t>(headerEnd + 4 - req);
+        const size_t whole = headerSize + static_cast<size_t>(parsed);
+        const bool streaming = isStreamingUpload(req);
+        // A state document holds an effects stack and outgrows the request buffer; every other body is read whole within it, so an oversized one is 413, never a truncated parse.
+        const bool state = isStatePath(req, "PATCH /api/state") || isStatePath(req, "POST /api/state");
+        if (!streaming && whole > (state ? headerSize + kStateDocumentMax : sizeof(buf) - 1)) {
+            sendResponse(conn, 413, "application/json", state ? "{\"error\":\"document too large\"}" : "{\"error\":\"request body too large\"}");
+            return true;
+        }
+        // A body this server accepts and has not all in, from a client holding it for the interim response.
+        if (static_cast<size_t>(totalRead) < whole && http::expectsContinue(req))
+            conn.write(reinterpret_cast<const uint8_t*>(http::kContinue), sizeof(http::kContinue) - 1);
+        if (!streaming) {
             // A body not all in yet, held back by a delayed ACK or a resend, waits in a slot rather than in the frame, and is routed once whole.
             if (static_cast<size_t>(totalRead) < whole) {
                 deferRequest(conn, req, static_cast<size_t>(totalRead), whole);
@@ -486,9 +521,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     uint8_t local[4] = {};
     conn.localIPv4(local);   // the address it reached, which the captive redirect decides by
     auto* headerEnd = std::strstr(req, "\r\n\r\n");
-    const char* clh = headerEnd ? findHeaderCI(req, "Content-Length:") : nullptr;
-    const bool hasContentLen = clh != nullptr;   // header PRESENT: an explicit 0 is a legitimate empty write
-    const size_t contentLen = clh ? static_cast<size_t>(std::strtoull(clh + 15, nullptr, 10)) : 0;   // validated by handleConnection
+    uint64_t declared = 0;   // validated by handleConnection
+    const bool hasContentLen = headerEnd && http::contentLength(req, declared) == http::Length::Valid;   // header PRESENT: an explicit 0 is a legitimate empty write
+    const size_t contentLen = static_cast<size_t>(declared);
     const int totalRead = static_cast<int>(len);   // a byte count, never strlen: an uploaded image holds zero bytes
 
     // Parse method and path, into members rather than locals: one request routes at a time, and on the stack they pushed this frame past 512 bytes.
@@ -501,11 +536,18 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     char* queryStart = std::strchr(path, '?');
     if (queryStart) *queryStart = 0;
 
+    // A page from beyond this network is refused here, read or write, WebSocket included, by its Origin or a rebinding page's Host (fromBeyondNetwork). A script or another device naming the device by address is unaffected.
+    const MoonModule* system = findModuleByName("System");   // its device name, which a Host may carry under any domain
+    if (http::fromBeyondNetwork(req, captive::throughAccessPoint(local), system ? static_cast<const SystemModule*>(system)->deviceName() : nullptr)) {
+        sendResponse(conn, 403, "application/json", "{\"error\":\"a page from outside this network may not use this device\"}");
+        return;
+    }
+
     // WebSocket upgrade: `/ws` is the control plane (JSON state), `/wsp` the lossy binary preview, separate so a large preview frame cannot delay a state push.
     const bool isWs  = std::strcmp(path, "/ws") == 0;
     const bool isWsp = std::strcmp(path, "/wsp") == 0;
     if (std::strcmp(method, "GET") == 0 && (isWs || isWsp) &&
-        findHeaderCI(req, "Upgrade: websocket")) {
+        http::findHeader(req, "Upgrade: websocket")) {
         handleWebSocketUpgrade(conn, req, isWsp);
         return; // don't close: connection is now a WebSocket
     }
@@ -513,9 +555,16 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     // The body starts after the headers
     char* body = headerEnd ? const_cast<char*>(headerEnd) + 4 : nullptr;
 
+    // A WLED API client, Home Assistant or the WLED app, is traffic into this device the map draws.
+    if (std::strncmp(path, "/json", 5) == 0 || std::strcmp(path, "/win") == 0 || std::strcmp(path, "/presets.json") == 0) {
+        uint8_t peer[4] = {};
+        const char* agent = http::findHeader(req, "User-Agent:");
+        if (conn.peerIPv4(peer)) noteApiClient(peer, agent ? http::skipSpace(agent + 11) : nullptr);
+    }
+
     // A phone on the access point asking for its own captive-check page gets the UI, which is what shows it the sign-in screen.
     if (std::strcmp(method, "GET") == 0) {
-        const char* host = findHeaderCI(req, "Host:");
+        const char* host = http::findHeader(req, "Host:");
         if (host) { host += 5; while (*host == ' ') host++; }
         if (captive::redirects(local, host, path)) {   // `local` was read when the connection came in
             conn.write(reinterpret_cast<const uint8_t*>(captive::kRedirect), std::strlen(captive::kRedirect));
@@ -525,7 +574,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 
     // Route
     if (std::strcmp(method, "GET") == 0) {
-        const char* ifNoneMatch = findHeaderCI(req, "If-None-Match:");
+        const char* ifNoneMatch = http::findHeader(req, "If-None-Match:");
         if (std::strcmp(path, "/") == 0) serveFile(conn, *embeddedFile("index.html"), ifNoneMatch);
         // Every UI file at `/<name>`, from the one list embed_ui.cmake generates.
         else if (const ui::EmbeddedFile* file = embeddedFile(path + 1)) serveFile(conn, *file, ifNoneMatch);
@@ -571,7 +620,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         } else if (std::strcmp(path, "/api/state") == 0 && body) {
             // POST for a client that cannot send PATCH: the same document, the same engine.
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
-            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
+            handleApplyState(conn, body, queryStart && http::queryHas(queryStart + 1, "live", "1"));
         } else if (std::strcmp(path, "/api/file") == 0 && body) {
             // File Manager: POST /api/file?path=<rel> streams the body to an atomic write; `body` holds the bytes that came with the headers, and a transfer slot pulls the rest off the socket.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -619,6 +668,11 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
                 return;
             }
             handleFirmwareUpload(conn, platform::OtaTarget::MoonBase, body, initialLen, static_cast<size_t>(contentLen));
+        } else if (std::strcmp(path, "/api/relay/esphome") == 0 && body) {
+            // The map moving an ESPHome device to MoonLight: the browser cannot speak ESPHome's update protocol, so this device does, passing the image through.
+            const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleRelay(conn, queryStart ? queryStart + 1 : "", body, initialLen, static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/firmware/upload") == 0 && body) {
             // OTA from an uploaded .bin body: the browser POSTs the image to the device, which streams it into the OTA partition like /api/file.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -631,7 +685,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         // Editable list: PATCH /api/list/<module>/<control>/<id> edits one row: a field ({"field":F,"value":V}) or a reorder ({"to":N}).
         if (std::strcmp(path, "/api/state") == 0 && body) {
             if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
-            handleApplyState(conn, body, queryStart && queryHas(queryStart + 1, "live", "1"));
+            handleApplyState(conn, body, queryStart && http::queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
         } else {
@@ -702,27 +756,10 @@ void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, c
 
 // The /api/file endpoints: a file body is not a control value; parseFilePath vets the `path=<rel>` query (rejects "..", roots at the mount), the one traversal guard every filesystem entry shares.
 
-// Case-insensitive header lookup (MSVC has no strcasestr), matching only at the start of a header line and stopping at the blank line, so lookalikes and body bytes never match.
-const char* HttpServerModule::findHeaderCI(const char* hay, const char* needle) {
-    const size_t n = std::strlen(needle);
-    const char* line = hay;
-    while (line && *line) {
-        if (line[0] == '\r' && line[1] == '\n') break;   // blank line: end of the header section
-        size_t i = 0;
-        while (i < n && std::tolower(static_cast<unsigned char>(line[i])) ==
-                        std::tolower(static_cast<unsigned char>(needle[i]))) i++;
-        if (i == n) return line;
-        const char* nl = std::strchr(line, '\n');
-        line = nl ? nl + 1 : nullptr;
-    }
-    return nullptr;
-}
-
 // Copy the `path=` query value into `out` (decoding %XX and '+'), rooted at the mount; false on a missing path or a ".." traversal.
 bool HttpServerModule::parseFilePath(const char* query, char* out, size_t cap) {
-    const char* p = query ? std::strstr(query, "path=") : nullptr;
+    const char* p = query ? http::queryValue(query, "path") : nullptr;
     if (!p) return false;
-    p += 5;                                   // past "path="
     size_t i = 0;
     // The path may be its own query (stop at '&') and percent-encoded ('/' → %2F, ' ' → %20).
     while (*p && *p != '&' && i + 1 < cap) {
@@ -788,7 +825,7 @@ void HttpServerModule::serveDirListing(platform::TcpConnection& conn, const char
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
     JsonSink sink(conn);
-    DirListState st{&sink, query && std::strstr(query, "hidden=1") != nullptr, true};
+    DirListState st{&sink, query && http::queryHas(query, "hidden", "1"), true};
     sink.append("[");
     platform::fsList(path, &dirListTrampoline, &st);
     sink.append("]");
@@ -1044,6 +1081,117 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platf
     t->conn = std::move(conn);
 }
 
+void HttpServerModule::handleRelay(platform::TcpConnection& conn, const char* query, const char* initialBody, size_t initialLen, size_t contentLen) {
+    char host[16] = {}, md5[33] = {};
+    uint8_t ip[4];
+    if (!query || !esphomeota::parseRelayQuery(query, host, ip, md5) || contentLen == 0) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"a host address and the image's 32-digit MD5 are needed\"}");
+        return;
+    }
+    if (!isPrivateIPv4(ip)) {   // the relay hands an image to a device on this network only
+        sendResponse(conn, 403, "application/json", "{\"error\":\"the relay reaches devices on this network only\"}");
+        return;
+    }
+    FileTransfer* t = claimTransfer(conn);
+    if (!t) return;
+    t->kind = FileTransfer::Kind::Relay;
+    t->peerUp = false;
+    t->refused = false;
+    if (!t->peer.connectStart(host, esphomeota::kPort)) {
+        sendResponse(conn, 502, "application/json", "{\"error\":\"the ESPHome device is not reachable\"}");
+        finishTransfer(*t, true);
+        return;
+    }
+    t->esp.begin(static_cast<uint32_t>(contentLen), md5);
+    const size_t initial = initialLen < contentLen ? initialLen : contentLen;   // the bytes that came with the request go on first
+    std::memcpy(t->buf, initialBody, initial);
+    t->bufLen = initial;
+    t->bufAt = 0;
+    t->remaining = contentLen - initial;
+    t->lastMoveMs = platform::millis();
+    t->windowStartMs = t->lastMoveMs;
+    t->windowBytes = 0;
+    t->active = true;
+    t->conn = std::move(conn);
+}
+
+bool HttpServerModule::endRelay(FileTransfer& t, int status, const char* body) {
+    sendResponse(t.conn, status, "application/json", body);
+    finishTransfer(t, true);
+    return false;
+}
+
+bool HttpServerModule::endRelayFailed(FileTransfer& t, uint32_t now) {
+    const bool refused = t.esp.state() == esphomeota::Client::State::Failed;
+    // The answer waits in the slot's path area while the rest of the body is read and dropped, so it reaches a browser still sending rather than a reset.
+    char* msg = uploadPath(t);
+    std::snprintf(msg, kUploadPathBytes, "{\"error\":\"%s (0x%02x)\"}", refused ? t.esp.error() : "the ESPHome device closed the connection", t.esp.errorCode());
+    if (t.remaining == 0) return endRelay(t, 502, msg);
+    t.peer.close();
+    t.refused = true;
+    t.lastMoveMs = now;
+    return false;
+}
+
+bool HttpServerModule::drainRelay(FileTransfer& t, uint32_t now) {
+    const int r = t.remaining ? t.conn.read(reinterpret_cast<uint8_t*>(t.buf), t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes) : 0;
+    if (r > 0) { t.remaining -= static_cast<size_t>(r); t.lastMoveMs = now; }
+    if (t.remaining == 0) return endRelay(t, 502, uploadPath(t));
+    if (r == 0 || now - t.lastMoveMs > kTransferStallMs) finishTransfer(t, true);   // the browser left, or stopped sending
+    return r > 0;
+}
+
+bool HttpServerModule::relayConnected(FileTransfer& t, uint32_t now) {
+    const auto r = t.peer.connectPoll();
+    if (r == platform::TcpConnection::ConnectResult::Failed) return endRelay(t, 502, "{\"error\":\"the ESPHome device refused its update port\"}");
+    if (r == platform::TcpConnection::ConnectResult::Pending) return now - t.lastMoveMs > kTransferStallMs ? endRelay(t, 504, "{\"error\":\"the ESPHome device did not answer\"}") : false;
+    t.peerUp = true;
+    return true;
+}
+
+bool HttpServerModule::relayHandshake(FileTransfer& t, bool& progressed) {
+    uint8_t in[16];
+    int n;
+    while ((n = t.peer.read(in, sizeof(in))) > 0) {   // its answers, a byte each
+        for (int i = 0; i < n; i++) t.esp.received(in[i]);
+        progressed = true;
+    }
+    size_t want = 0;
+    const uint8_t* out = t.esp.pending(want);
+    const int w = want ? t.peer.writeSome(out, want) : 0;
+    if (w > 0) { t.esp.sent(static_cast<size_t>(w)); progressed = true; }
+    return n != 0;
+}
+
+bool HttpServerModule::relayImage(FileTransfer& t, bool& progressed) {
+    if (t.bufAt == t.bufLen && t.remaining > 0) {   // the next piece of the browser's body
+        const int r = t.conn.read(reinterpret_cast<uint8_t*>(t.buf), t.remaining < kTransferBufBytes ? t.remaining : kTransferBufBytes);
+        if (r == 0) { finishTransfer(t, true); return false; }   // the browser left mid-image
+        if (r > 0) { t.bufLen = static_cast<size_t>(r); t.bufAt = 0; t.remaining -= static_cast<size_t>(r); moved(t, static_cast<size_t>(r)); }
+    }
+    const int w = t.bufAt < t.bufLen ? t.peer.writeSome(reinterpret_cast<const uint8_t*>(t.buf) + t.bufAt, t.bufLen - t.bufAt) : 0;
+    if (w > 0) { t.bufAt += static_cast<size_t>(w); t.esp.dataSent(static_cast<size_t>(w)); progressed = true; }
+    return true;
+}
+
+bool HttpServerModule::driveRelay(FileTransfer& t, uint32_t now) {
+    if (t.refused) return drainRelay(t, now);
+    if (!t.peerUp && !relayConnected(t, now)) return false;
+    bool progressed = false;
+    const bool peerOpen = relayHandshake(t, progressed);
+    if (t.esp.wantsData() && !relayImage(t, progressed)) return false;
+    return relayVerdict(t, now, peerOpen, progressed);
+}
+
+bool HttpServerModule::relayVerdict(FileTransfer& t, uint32_t now, bool peerOpen, bool progressed) {
+    using esphomeota::Client;
+    if (t.esp.state() == Client::State::Done) return endRelay(t, 200, "{\"ok\":true}");
+    if (t.esp.state() == Client::State::Failed || !peerOpen) return endRelayFailed(t, now);
+    if (progressed) t.lastMoveMs = now;
+    else if (now - t.lastMoveMs > kTransferStallMs) return endRelay(t, 504, "{\"error\":\"the update stalled\"}");
+    return progressed;
+}
+
 void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, platform::OtaTarget target) {
     if (!ok) {
         char msg[128];
@@ -1289,9 +1437,11 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     conn.write(reinterpret_cast<const uint8_t*>(header), std::strlen(header));
 
     JsonSink sink(conn);
-    // maxBlock is internal-only, since all-memory reports ~8 MB on PSRAM boards; `allocated`/`allocPeak` mean the same on a board and a laptop, where free heap does not.
+    // version, build and firmware first, what a peer's map reads; maxBlock is internal-only, since all-memory reports ~8 MB on PSRAM boards.
+    sink.appendf("{\"version\":\"%s\",\"build\":\"%s\",\"firmware\":\"%s\",", kVersion, kBuildId, kFirmwareName);
+    writeDeviceSummary(sink);
     sink.appendf(
-        "{\"fps\":%u,\"tickTimeUs\":%u,\"freeHeap\":%u,\"freeInternal\":%u,\"maxBlock\":%u,\"maxExec\":%u,"
+        "\"fps\":%u,\"tickTimeUs\":%u,\"freeHeap\":%u,\"freeInternal\":%u,\"maxBlock\":%u,\"maxExec\":%u,"
         "\"allocated\":%u,\"allocPeak\":%u,\"allocBlocks\":%u,\"uptime\":%u,\"modules\":[",
         static_cast<unsigned>(scheduler_ ? scheduler_->fps() : 0),
         static_cast<unsigned>(scheduler_ ? scheduler_->tickTimeUs() : 0),
@@ -1314,6 +1464,23 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
 
     sink.append("]}");
     sink.flush();
+}
+
+// Who the device is and what it runs, the part of the summary a peer's map shows: its MAC-derived identity, its board, its WiFi signal (0 off WiFi), its light outputs and its effects.
+void HttpServerModule::writeDeviceSummary(JsonSink& sink) {
+    sink.append("\"mac\":");
+    sink.writeJsonString(platform::macString());
+    const MoonModule* sys = findModuleByName("System");
+    sink.append(",\"board\":");
+    sink.writeJsonString(sys ? static_cast<const SystemModule*>(sys)->deviceModel() : "");
+    sink.append(",\"chip\":");
+    sink.writeJsonString(platform::chipModel());
+    sink.appendf(",\"rssi\":%d,\"outputs\":[", platform::wifiStaRssi());
+    const LightOutput* out = LightOutput::active();
+    if (out) out->writeOutputs(sink);
+    sink.append("],\"effects\":[");
+    if (out) out->writeEffects(sink);
+    sink.append("],");
 }
 
 void HttpServerModule::writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first) {
@@ -1923,8 +2090,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         sendResponse(conn, 400, "application/json", "{\"error\":\"url required\"}");
         return;
     }
-    // Cheap URL-shape sanity: only http(s). Stops accidental file:// or protocol-relative things from reaching the platform layer.
-    if (std::strncmp(url, "http://", 7) != 0 && std::strncmp(url, "https://", 8) != 0) {
+    if (!http::isHttpUrl(url)) {
         sendResponse(conn, 400, "application/json",
                      "{\"error\":\"url must start with http:// or https://\"}");
         return;
@@ -1979,7 +2145,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
 void HttpServerModule::handleWebSocketUpgrade(platform::TcpConnection& conn, const char* req,
                                               bool previewChannel) {
     // Extract Sec-WebSocket-Key
-    const char* keyHeader = findHeaderCI(req, "Sec-WebSocket-Key: ");
+    const char* keyHeader = http::findHeader(req, "Sec-WebSocket-Key: ");
     if (!keyHeader) { conn.close(); return; }
     keyHeader += 19;
     char wsKey[32] = {};

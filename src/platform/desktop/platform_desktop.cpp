@@ -183,6 +183,9 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <net/ethernet.h>       // ETH_P_ALL
 #endif
 #ifdef __APPLE__
+#include <sys/sysctl.h>   // the routing table's link-layer entries (arpLookup)
+#include <net/route.h>
+#include <net/if_dl.h>
 #include <net/if_media.h>   // SIOCGIFMEDIA: the negotiated link rate, for the interface labels
 #include <pthread.h>    // pthread_jit_write_protect_np: macOS arm64 W^X JIT toggle
 #include <sys/ioctl.h>  // BIOCSETIF: binding a BPF device to an interface (ethSendRaw)
@@ -1517,6 +1520,82 @@ bool winDescForPcapName(const MIB_IF_TABLE2* table, const char* pcapName, char* 
 }
 #endif  // _WIN32
 }  // namespace
+
+namespace {
+uint8_t testArpIp_[4] = {}, testArpMac_[6] = {};   // one faked table entry, an all-zero address meaning none
+
+#ifdef _WIN32
+// The neighbor table Windows keeps, IPv4 rows only.
+bool osArpLookup(const uint8_t ip[4], uint8_t mac[6]) {
+    MIB_IPNET_TABLE2* table = nullptr;
+    if (GetIpNetTable2(AF_INET, &table) != NO_ERROR) return false;
+    bool found = false;
+    for (ULONG i = 0; i < table->NumEntries && !found; i++) {
+        const MIB_IPNET_ROW2& row = table->Table[i];
+        if (row.PhysicalAddressLength != 6 || std::memcmp(&row.Address.Ipv4.sin_addr, ip, 4) != 0) continue;
+        std::memcpy(mac, row.PhysicalAddress, 6);
+        found = true;
+    }
+    FreeMibTable(table);
+    return found;
+}
+#elif defined(__linux__)
+// The kernel's table as /proc/net/arp lists it, a complete entry flagged 0x2.
+bool osArpLookup(const uint8_t ip[4], uint8_t mac[6]) {
+    FILE* f = std::fopen("/proc/net/arp", "r");
+    if (!f) return false;
+    char want[16], line[160], addr[16], hw[18];
+    std::snprintf(want, sizeof(want), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    unsigned type = 0, flags = 0;
+    bool found = false;
+    while (!found && std::fgets(line, sizeof(line), f)) {
+        if (std::sscanf(line, "%15s 0x%x 0x%x %17s", addr, &type, &flags, hw) != 4 || std::strcmp(addr, want) != 0 || !(flags & 0x2)) continue;
+        unsigned b[6];
+        found = std::sscanf(hw, "%x:%x:%x:%x:%x:%x", &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]) == 6;
+        for (int k = 0; found && k < 6; k++) mac[k] = static_cast<uint8_t>(b[k]);
+    }
+    std::fclose(f);
+    return found;
+}
+#elif defined(__APPLE__)
+// The routing table's link-layer entries, as arp(8) reads them; macOS 27 returns them only to a binary signed with an identifier, which the build gives it.
+bool osArpLookup(const uint8_t ip[4], uint8_t mac[6]) {
+    int mib[6] = {CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_FLAGS, RTF_LLINFO};
+    size_t len = 0;
+    if (sysctl(mib, 6, nullptr, &len, nullptr, 0) < 0 || len == 0) return false;
+    std::vector<char> buf(len);
+    if (sysctl(mib, 6, buf.data(), &len, nullptr, 0) < 0) return false;
+    const auto roundUp = [](size_t a) { return a ? 1 + ((a - 1) | (sizeof(uint32_t) - 1)) : sizeof(uint32_t); };   // arp(8)'s ROUNDUP
+    for (const char* p = buf.data(); p + sizeof(rt_msghdr) <= buf.data() + len;) {
+        const auto* rtm = reinterpret_cast<const rt_msghdr*>(p);
+        if (rtm->rtm_msglen == 0) break;
+        const auto* sin = reinterpret_cast<const sockaddr_in*>(rtm + 1);
+        const auto* sdl = reinterpret_cast<const sockaddr_dl*>(reinterpret_cast<const char*>(sin) + roundUp(sin->sin_len));
+        if (std::memcmp(&sin->sin_addr, ip, 4) == 0 && sdl->sdl_alen == 6) {
+            std::memcpy(mac, LLADDR(sdl), 6);
+            return true;
+        }
+        p += rtm->rtm_msglen;
+    }
+    return false;
+}
+#else
+bool osArpLookup(const uint8_t[4], uint8_t[6]) { return false; }
+#endif
+}  // namespace
+
+void setTestArpEntry(const uint8_t* ip, const uint8_t* mac) {
+    for (int i = 0; i < 4; i++) testArpIp_[i] = ip ? ip[i] : 0;
+    for (int i = 0; i < 6; i++) testArpMac_[i] = mac ? mac[i] : 0;
+}
+
+bool arpLookup(const uint8_t ip[4], uint8_t mac[6]) {
+    if (testArpIp_[0] && std::memcmp(testArpIp_, ip, 4) == 0) {
+        std::memcpy(mac, testArpMac_, 6);
+        return true;
+    }
+    return osArpLookup(ip, mac);
+}
 
 void getMacAddress(uint8_t mac[6]) {
     // A stored identity, generated once and kept beside the config: @xref{the-identity-is-stored-not-read-from-a-nic|why}. Cached per ROOT rather than per process, since the root is settable and a stale cache would describe the wrong install.

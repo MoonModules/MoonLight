@@ -24,6 +24,8 @@ on:
       - 'test/**'
       - 'esp32/**'
       - 'teensy/**'
+      # MoonBase and the migration image ship in the ESP32 jobs' assets.
+      - 'moonbase/**'
       - 'moondeck/build/**'
       # package_desktop.py builds and packages the three desktop jobs; without this line a
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a

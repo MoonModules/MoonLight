@@ -31,8 +31,8 @@ struct FakeSurface : public MoonModule, public ListSource {
 
     bool isEditableList() const override { return true; }
     bool listAsPads() const override { return true; }
-    uint8_t listRowCount() const override { return 3; }
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    ListRow listRowCount() const override { return 3; }
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         // Slots 0, 2 and 5: deliberately NOT contiguous, so a test that passes by using the row index instead of the slot would fail here.
         static const uint8_t kSlots[] = {0, 2, 5};
         sink.appendf("{\"id\":%u,\"slot\":%u,\"name\":\"p%u\"}",

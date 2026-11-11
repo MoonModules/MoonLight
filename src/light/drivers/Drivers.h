@@ -54,6 +54,41 @@ public:
     uint8_t paletteCount() const override { return mm::paletteCount(); }
     /// Every palette name, in picker order.
     void writePaletteNames(JsonSink& sink) const override { mm::paletteNames(sink); }
+    /// Each enabled driver that lights something, by type, with the lights its window sends from the frame the drivers read, its frames a second, and whether its fixtures are moving heads.
+    void writeOutputs(JsonSink& sink) const override {
+        const nrOfLightsType n = source_ ? source_->count() : 0;
+        bool first = true;
+        for (uint8_t i = 0; i < childCount(); i++) {
+            const MoonModule* c = child(i);
+            if (c->role() != ModuleRole::Driver || !c->enabled()) continue;
+            const auto* d = static_cast<const DriverBase*>(c);
+            if (!d->drivesLights()) continue;
+            sink.append(first ? "{\"driver\":" : ",{\"driver\":");
+            sink.writeJsonString(c->typeName());
+            // Frames a second: its own count where it keeps one, else every rendered frame, the device's rate.
+            const std::optional<uint32_t> own = d->framesPerSecond();
+            const uint32_t fps = own ? *own : (Scheduler::instance() ? Scheduler::instance()->fps() : 0);
+            sink.appendf(",\"lights\":%u,\"fps\":%u", static_cast<unsigned>(d->windowLength(n)), static_cast<unsigned>(fps));
+            sink.append(d->correction().hasMotion ? ",\"movingHeads\":true}" : "}");
+            first = false;
+        }
+    }
+    /// Each enabled effect on an enabled layer, by name, in stack order.
+    void writeEffects(JsonSink& sink) const override {
+        if (!effects_) return;
+        bool first = true;
+        for (uint8_t i = 0; i < effects_->childCount(); i++) {
+            const MoonModule* layer = effects_->child(i);
+            if (layer->role() != ModuleRole::Layer || !layer->enabled()) continue;
+            for (uint8_t j = 0; j < layer->childCount(); j++) {
+                const MoonModule* e = layer->child(j);
+                if (e->role() != ModuleRole::Effect || !e->enabled()) continue;
+                if (!first) sink.append(",");
+                sink.writeJsonString(e->name());
+                first = false;
+            }
+        }
+    }
     using LightOutput::nearestPalette;   // the RGB form, beside the override
 
     /// Release the children, then vacate every static seat this container published, since each seat references this object's members.
@@ -231,6 +266,9 @@ public:
     bool        softStarting_ = false;          ///< the lights are still rising after this boot
     bool        dark_ = false;                  ///< safe mode: every driver sends black, so no LED holds a bright frame
     bool        softStartBegun_ = false;        ///< the first lit frame has started the rise
+    bool        identifying_ = false;           ///< `identify` was pressed and its blink runs
+    bool        identifyDark_ = false;          ///< the blink's dark half, which effectiveBrightness reads
+    uint32_t    identifyAt_ = 0;                ///< when `identify` was pressed
     const Buffer* source_ = nullptr;            ///< the frame the drivers read, which the rise waits to see lit
     uint32_t    softStartAt_ = 0;               ///< when they started rising
 
@@ -254,7 +292,7 @@ public:
 
     /// The brightness the LUT is built from: 0 when powered off, else the set level, rising through the soft start; `on` stays independent, so off never clobbers the level.
     uint8_t effectiveBrightness() const MM_NONBLOCKING {
-        if (!on || dark_) return 0;
+        if (!on || dark_ || identifyDark_) return 0;
         if (!softStarting_) return brightness;
         if (!softStartBegun_) return 0;   // dark until the first frame, where the rise starts
         const uint32_t up = platform::millis() - softStartAt_;
@@ -263,6 +301,8 @@ public:
 
     /// How long the lights take to rise to their brightness after the device boots, so a supply that cannot hold the level fails within the boot record's minute.
     static constexpr uint32_t kSoftStartMs = 5000;
+    /// How long `identify` blinks the lights, and each half of a blink: twice a second, for five seconds.
+    static constexpr uint32_t kIdentifyMs = 5000, kIdentifyHalfMs = 250;
 
     /// How long a powered-off rig keeps tracking before its heads go still, in seconds.
     /// @guide A short hold is a blackout between cues, a long one a park between sets.
@@ -284,6 +324,9 @@ public:
         controls_.addText("relayPins", relayPins, sizeof(relayPins));
         controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
         controls_.addControl("brightness", brightness, 0, 255);
+        /// Blink the lights for five seconds, so this device is found by looking.
+        /// @guide Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details.
+        controls_.addButton("identify");
         // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
         if (!live_.scanned) refreshLivePalettes();
         // Published here too, so a saved palette name resolves when the file is applied, before setup.
@@ -313,6 +356,11 @@ public:
 
     /// React to a control change: re-bake the LUTs (no pipeline realloc, so the slider stays fluent), resolve a palette, drive the relay.
     void onControlChanged(const char* controlName) override {
+        if (std::strcmp(controlName, "identify") == 0) {
+            identifying_ = true;
+            identifyAt_ = platform::millis();
+            return;   // tick20ms blinks it
+        }
         if (std::strcmp(controlName, "palette") == 0) {
             if (LivePalettes::isLive(palette)) {
                 // The script fills the entries every frame, so there is nothing to expand here.
@@ -422,6 +470,15 @@ public:
 
     /// Rebake the brightness tables through the soft start, the last time at the set level.
     void tick20ms() MM_NONBLOCKING override {
+        if (identifying_) {
+            const uint32_t t = platform::millis() - identifyAt_;
+            if (t >= kIdentifyMs) identifying_ = false;
+            const bool dark = identifying_ && ((t / kIdentifyHalfMs) & 1u);
+            if (dark != identifyDark_) {
+                identifyDark_ = dark;
+                rampDrivers(effectiveBrightness());
+            }
+        }
         if (softStarting_) {
             // From the first frame with a light lit, so the whole rise is seen, or once the boot counts as good, so a dark show stops scanning.
             if (!softStartBegun_) {
@@ -431,10 +488,15 @@ public:
             }
             const uint8_t level = effectiveBrightness();
             if (platform::millis() - softStartAt_ >= kSoftStartMs) softStarting_ = false;
-            for (uint8_t i = 0; i < childCount(); i++)
-                if (child(i)->role() == ModuleRole::Driver) static_cast<DriverBase*>(child(i))->rampBrightness(level);
+            rampDrivers(level);
         }
         MoonModule::tick20ms();
+    }
+
+    /// Rebake every driver's brightness table at `level`, the one step the soft start and the identify blink share.
+    void rampDrivers(uint8_t level) MM_NONBLOCKING {
+        for (uint8_t i = 0; i < childCount(); i++)
+            if (child(i)->role() == ModuleRole::Driver) static_cast<DriverBase*>(child(i))->rampBrightness(level);
     }
 
     /// Whether the frame the drivers read has any light on: its color slots, since an aim alone emits nothing.

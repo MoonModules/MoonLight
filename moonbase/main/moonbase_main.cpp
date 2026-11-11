@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>   // the presence packet's two destinations
 
 #include "esp_event.h"
 #include "esp_http_client.h"
@@ -31,6 +32,9 @@
 #include "core/util/ConfigScrape.h"   // the keys this image reads out of the app's config, shared so the app's test runs the same scraper
 #include "core/util/CaptivePortal.h"  // the access point's address, DNS answer and redirect rule, shared with the app's portal
 #include "core/util/DeviceName.h"     // defaultDeviceName: the name the app gives a board that never saved one
+#include "core/util/EthPresets.h"     // the P4's wiring, which the app's Ethernet card defaults a P4 to
+#include "core/util/HttpHead.h"       // the request head reads, shared with the app's server
+#include "core/system/WledPacket.h"   // the presence packet the app's Devices map lists a board by, marked as MoonBase
 #include "esp_app_desc.h"    // esp_app_get_description: this image's own version
 #include "esp_https_ota.h"
 #include "esp_littlefs.h"
@@ -88,15 +92,20 @@ volatile bool switchingNetwork_ = false;
 // Credentials
 // ---------------------------------------------------------------------------------------------
 
-// The board's Ethernet wiring from the app's config: type 0 or absent is none, and an absent pin keeps the silicon default, as in the app.
+// The board's Ethernet wiring from the app's config, type 0 none and an absent pin the silicon default; absent altogether, a P4 takes the wiring the app defaults it to, so a migrated P4 answers on its cable.
+#if CONFIG_IDF_TARGET_ESP32P4
+constexpr mm::eth::Preset kEthDefault = mm::eth::kPresets[mm::eth::kP4Rmii];
+#else
+constexpr mm::eth::Preset kEthDefault = {"none", 0, -1, -1, -1, -1, 0, true, -1, -1, -1, -1, -1, true};
+#endif
 struct {
-    int  type       = 0;
-    int  phyAddr    = -1;      // -1: scan the MDIO bus
-    int  rstGpio    = -1;
-    int  mdcGpio    = -1;      // <0: leave the EMAC default
-    int  mdioGpio   = -1;
-    int  clockGpio  = 0;
-    bool clockExtIn = true;
+    int  type       = kEthDefault.type;
+    int  phyAddr    = kEthDefault.phyAddr;      // -1: scan the MDIO bus
+    int  rstGpio    = kEthDefault.rst;
+    int  mdcGpio    = kEthDefault.mdc;          // <0: leave the EMAC default
+    int  mdioGpio   = kEthDefault.mdio;
+    int  clockGpio  = kEthDefault.rmiiClock;
+    bool clockExtIn = kEthDefault.rmiiClockExtIn;
 } ethCfg_;
 
 // The Ethernet card's addressing, so a board the app pins to a static address answers there in recovery too.
@@ -107,6 +116,10 @@ int txPowerDbm_ = 0;
 
 // The app's build variant ("esp32s3-zero"), or empty before the app has run, when the page offers every firmware for the chip.
 char g_appVariant[24] = {};
+// The name the app gives the board, or its anonymous `MM-XXXX` before the app has saved one: what the map shows on its node.
+char g_deviceName[33] = {};
+// The address this image answers at once a network gave it one, which the presence packet carries.
+uint8_t g_ip[4] = {};
 
 // A config file whole, on the heap (caller frees), since a key sits wherever the app's module order and list lengths put it.
 char* readConfig(const char* path) {
@@ -126,6 +139,7 @@ void loadIdentity() {
     char* buf = readConfig(kSystemConfig);
     if (!buf) return;
     mm::configscrape::findString(buf, "firmware", g_appVariant, sizeof(g_appVariant));
+    mm::configscrape::findString(buf, "deviceName", g_deviceName, sizeof(g_deviceName));
     std::free(buf);
 }
 
@@ -194,10 +208,39 @@ esp_netif_t* staNetif_ = nullptr;
 volatile int staCurrent_ = -1;
 volatile bool staPinned_ = false;
 
-void onGotIp(void*, esp_event_base_t, int32_t id, void*) {
+void onGotIp(void*, esp_event_base_t, int32_t id, void* data) {
     // Registered for every IP event; only an acquired STA address means online (IP_EVENT_STA_LOST_IP arrives on the same base and must not set the bit).
-    if (id == IP_EVENT_STA_GOT_IP || id == IP_EVENT_ETH_GOT_IP)
+    if (id == IP_EVENT_STA_GOT_IP || id == IP_EVENT_ETH_GOT_IP) {
+        const uint32_t a = static_cast<const ip_event_got_ip_t*>(data)->ip_info.ip.addr;   // network order: the first octet in the low byte
+        g_ip[0] = a & 0xff; g_ip[1] = (a >> 8) & 0xff; g_ip[2] = (a >> 16) & 0xff; g_ip[3] = (a >> 24) & 0xff;
         xEventGroupSetBits(netEvents_, kNetGotIp);
+    }
+}
+
+// The app's presence packet, marked as MoonBase, every two seconds to the broadcast address and the discovery group, so a peer's map keeps this board's node while MoonBase holds it.
+void presenceTask(void*) {
+    const int sock = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) { vTaskDelete(nullptr); return; }
+    int yes = 1;
+    ::setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(yes));
+    static constexpr uint8_t kBroadcast[4] = {255, 255, 255, 255};
+    uint8_t mac[6];
+    esp_efuse_mac_get_default(mac);   // the base MAC the app sends too, so a peer's row follows the board between the two
+    while (true) {
+        uint8_t pkt[mm::WledPacket::kSizeWithMac];
+        mm::WledPacket::build(pkt, g_ip, g_deviceName, 0, false);
+        mm::WledPacket::stampMarker(pkt, mm::WledPacket::kMbMarker);
+        mm::WledPacket::stampTail(pkt, 80, mac);
+        for (const uint8_t* to : {kBroadcast, mm::WledPacket::kDiscoveryGroup}) {
+            mm::WledPacket::stampVia(pkt, to == kBroadcast);
+            sockaddr_in dst = {};
+            dst.sin_family = AF_INET;
+            dst.sin_port = htons(mm::WledPacket::kPort);
+            std::memcpy(&dst.sin_addr.s_addr, to, 4);
+            ::sendto(sock, pkt, sizeof(pkt), 0, reinterpret_cast<const sockaddr*>(&dst), sizeof(dst));
+        }
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
 }
 
 void onWifiEvent(void*, esp_event_base_t, int32_t id, void*) {
@@ -226,7 +269,8 @@ bool ethStart() {
     // No internal EMAC on this chip, so its recovery network is WiFi.
     return false;
 #else
-    if (ethCfg_.type != 1) return false;   // 1 = LAN8720/RMII in the app's ethType vocabulary
+    // 1 LAN8720 and 2 IP101 in the app's ethType vocabulary, both RMII on the on-chip MAC; both keep the IEEE 802.3 registers the generic PHY driver reads.
+    if (ethCfg_.type != 1 && ethCfg_.type != 2) return false;
 
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     esp_netif_t* netif = esp_netif_new(&netif_cfg);
@@ -413,13 +457,15 @@ const char kPage[] =
     "background:#1a1a2e;color:#e0e0e0}"
     "h1{font-size:1.3rem;margin:0}.sub{color:#a0a0b0;margin-top:0}"
     "a{color:#a78bfa}"
-    "input,button{font:inherit;padding:.5rem;background:#283661;color:#e0e0e0;"
+    "input,button,select{font:inherit;padding:.5rem;background:#283661;color:#e0e0e0;"
     "border:1px solid #2a3a6a;border-radius:.35rem}button{cursor:pointer}"
     "section{margin:1.5rem 0;padding:1rem;border:1px solid #2a3a6a;border-radius:.5rem;"
     "background:#1f2c4f}"
     "#hdr{display:flex;align-items:center;gap:.7rem}#hdr img{width:40px;height:40px}"
     "#hlp{margin-left:auto;text-decoration:none;border:1px solid #2a3a6a;border-radius:.35rem;"
     "padding:.15rem .55rem}"
+    // The shared picker's rows, the label beside its field as the app lays them out.
+    ".control-row{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}.control-label{min-width:5rem;color:#a0a0b0}"
     "#s{margin-top:1rem;font-variant-numeric:tabular-nums}</style>"
     "<div id=hdr><img src=/logo.png alt=''><h1>MoonBase</h1>"
     // The (?) module cards carry, pointing at the published MoonBase doc.
@@ -434,12 +480,10 @@ const char kPage[] =
     "<br><small>Firmware files: <a href='https://github.com/MoonModules/MoonLight/releases' "
     "target=_blank rel=noopener>github.com/MoonModules/MoonLight/releases</a> "
     "(the firmware-...bin matching this board)</small></section>"
-    // Installing from a release without typing a URL: the browser fetches the list, and this image only receives the URL.
-    "<section><b>From a release</b><br>"
-    "<select id=rel></select> <select id=fw></select> <button onclick=rl()>Install</button>"
-    "<br><small id=rs></small></section>"
+    // Installing from a release without typing a URL: the web installer's own picker, loaded from its site, and this image only receives the URL.
+    "<section><b>From a release</b><div id=pick></div><small id=rs></small></section>"
     "<section><b>From a URL</b><br><input id=u size=34 placeholder=https://...>"
-    "<button onclick=url()>Install</button></section>"
+    "<button onclick=DEV=null;url()>Install</button></section>"
     "<section><b>Back to the app</b><br>Boot the installed firmware without changing it."
     "<br><button onclick=ba()>Boot the app</button> "
     // Shown only while an install is running (S() toggles it): the one moment cancel applies.
@@ -470,35 +514,23 @@ const char kPage[] =
     // The install runs on its own task (202); W() watches its status until the app answers (404 on /moonbase means the new firmware is up, at this same address).
     "function W(){const t=setInterval(async()=>{try{const p=await fetch('/moonbase');"
     "if(p.status==404){clearInterval(t);S('done, the app is starting...');"
+    // The device picked in the picker brings its defaults, sent to the app once it answers, as the web installer and the map apply them; a typed URL brings none (its Install clears DEV). A refusal stays on screen.
+    "if(DEV&&DEV.state){const a=await fetch('/api/state',{method:'PATCH',headers:{'Content-Type':'application/json'},"
+    "body:JSON.stringify(DEV.state)}).catch(()=>null);if(!a||!a.ok){S('the app runs, but '+DEV.name+'\\'s defaults did not apply: pick the device in the app');return;}}"
     "setTimeout(()=>location.reload(),3000);}else{S(await p.text());}}"
     "catch(_){S('restarting...');}},2000);}"
-    // The release list, filtered to the assets this chip runs, from which the user picks the variant.
-    "const CHIP='" MOONBASE_CHIP "';let RELS=[],VAR='';"
-    // With the variant the app persisted, the one firmware this board takes; without it, every firmware for the chip rather than a guess.
-    "fetch('/api/variant').then(r=>r.text()).then(t=>{VAR=t.trim();fillFw();}).catch(()=>{});"
-    "function fwList(i){const r=RELS[i];if(!r)return [];"
-    "return (r.assets||[]).map(a=>a.name).filter(n=>/^firmware-.+\\.bin$/.test(n)"
-    "&&!/-(bootloader|partition-table|ota-data|slot0)\\.bin$/.test(n)"
-    // The chip matches to a boundary, a hyphen or the P4's revision suffix, since one target name is a prefix of another's.
-    "&&n.slice(9).startsWith(CHIP)"
-    "&&(n.slice(9+CHIP.length).startsWith('-')||/^rev\\d/.test(n.slice(9+CHIP.length)))"
-    "&&(!VAR||n.slice(9).startsWith(VAR+'-')));}"
-    "function fillFw(){const f=document.getElementById('fw');f.innerHTML='';"
-    "const l=fwList(document.getElementById('rel').selectedIndex);"
-    "for(const n of l){const o=document.createElement('option');o.textContent=n;f.appendChild(o);}"
-    "document.getElementById('rs').textContent=l.length?'':'no firmware for this chip in that release';}"
-    "fetch('https://api.github.com/repos/MoonModules/MoonLight/releases?per_page=10')"
-    ".then(r=>r.json()).then(j=>{RELS=j;const s=document.getElementById('rel');"
-    "for(const r of RELS){const o=document.createElement('option');"
-    "o.textContent=(r.name||r.tag_name)+(r.prerelease?' (pre)':'');s.appendChild(o);}"
-    "s.onchange=fillFw;fillFw();})"
-    ".catch(()=>{document.getElementById('rs').textContent="
-    "'could not reach github: use a URL or a file below';});"
+    // The release list: the web installer's picker, loaded at runtime from its site, which serves it cross-origin; the chip narrows it, the app's variant preselects it, Install installs its URL.
+    "const CHIP='" MOONBASE_CHIP "',SITE='https://moonmodules.org/MoonLight/install/';let DEV=null;"
+    "(async()=>{try{const VAR=(await (await fetch('/api/variant')).text()).trim();"
+    "const{installPicker}=await import(SITE+'install-picker.js');"
+    "const devs=await import(SITE+'install-picker-devices.js').catch(()=>null);"
+    // Only calls every published picker has: a board in the field keeps its MoonBase while the site's picker moves on.
+    "let CAT=[];const sup=devs&&{...devs,loadDevices:async()=>(CAT=await (await fetch(SITE+'deviceModels.json')).json())};"
+    "await installPicker.init({container:document.getElementById('pick'),targetChip:CHIP,ownFirmwareKey:VAR||null,deviceSupport:sup,"
+    "onInstall:async(_f,_m,u)=>{const n=installPicker.getSelectedDevice();DEV=CAT.find(d=>d.name===n)||null;"
+    "document.getElementById('u').value=u;await url();return 'installing: the status below follows it';}});}"
+    "catch(_){document.getElementById('rs').textContent='could not reach the installer: use a URL or a file below';}})();"
     // Installing a release is installing its URL: one path, so the vetting, the progress and the retry all behave identically however the URL was chosen.
-    "async function rl(){const r=RELS[document.getElementById('rel').selectedIndex];"
-    "const n=document.getElementById('fw').value;if(!r||!n)return;"
-    "const a=(r.assets||[]).find(x=>x.name===n);if(!a)return;"
-    "document.getElementById('u').value=a.browser_download_url;url();}"
     "async function url(){const u=document.getElementById('u').value;if(!u)return;"
     "const r=await fetch('/api/firmware/url',{method:'POST',body:u});S(await r.text());if(r.ok)W();}"
     // Prefill the URL field with the last install source (RAM-held), so Install doubles as retry: the escape after a cancel or failure wiped the app slot.
@@ -513,8 +545,6 @@ const char kPage[] =
     "S('the app is not answering: it may not be installed');}"
     "async function cx(){S(await (await fetch('/api/firmware/cancel',{method:'POST'})).text());}"
     "</script>";
-
-// The app's build variant for the page, empty before the app has run.
 
 // The application slot, or null when this image is itself in it, installed as the app, so a caller says so rather than loops.
 const esp_partition_t* appPartition() {
@@ -602,6 +632,12 @@ bool installFromUrl(const char* url) {
 
 constexpr size_t kRecvChunk = 4096;
 
+// The socket as the `recv` the shared head reads take.
+struct SocketRecv {
+    int sock;
+    int operator()(char* buf, size_t cap) const { return static_cast<int>(::recv(sock, buf, cap, 0)); }
+};
+
 void sendAll(int sock, const char* data, size_t len) {
     size_t sent = 0;
     while (sent < len) {
@@ -630,7 +666,7 @@ void sendResponse(int sock, const char* status, const char* type, const char* bo
     char head[192];
     const int n = std::snprintf(head, sizeof(head),
                                 "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\n"
-                                "Cache-Control: no-store\r\nConnection: close\r\n\r\n",
+                                "Cache-Control: no-store\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
                                 status, type, static_cast<unsigned>(std::strlen(body)));
     if (n > 0) sendAll(sock, head, static_cast<size_t>(n));
     sendAll(sock, body, std::strlen(body));
@@ -657,23 +693,41 @@ bool installFromSocketLocked(int sock, const char* prefix, size_t prefixLen, siz
         return false;
     }
 
-    size_t written = 0;
+    char* buf = static_cast<char*>(std::malloc(kRecvChunk));
+    if (!buf) { esp_ota_abort(handle); std::snprintf(status_, sizeof(status_), "error: out of memory"); return false; }
+
+    // The body's first bytes may arrive with the headers, in later segments, or after a 100 Continue, so read until the descriptor is in hand.
     if (prefixLen > contentLen) prefixLen = contentLen;   // never store bytes past the declared body
-    // The URL path's refusal, from the bytes in hand, refusing a prefix too short to identify rather than passing it.
-    if (prefixLen < mm::firmware::kIdentifyBytes) {
+    static_assert(mm::firmware::kIdentifyBytes <= kRecvChunk, "the descriptor fits one chunk");
+    const size_t identifyLen = contentLen < mm::firmware::kIdentifyBytes ? contentLen : mm::firmware::kIdentifyBytes;
+    size_t have = prefixLen < kRecvChunk ? prefixLen : kRecvChunk;
+    std::memcpy(buf, prefix, have);
+    have = mm::http::fillTo(buf, have, identifyLen, SocketRecv{sock});
+    // The URL path's refusal: an image too short to identify is refused rather than passed.
+    if (have < mm::firmware::kIdentifyBytes) {
+        std::free(buf);
         esp_ota_abort(handle);
         std::snprintf(status_, sizeof(status_), "error: could not identify the image");
         return false;
     }
-    const auto incomingUp = mm::firmware::identify(
-        reinterpret_cast<const uint8_t*>(prefix), prefixLen);
+    const auto incomingUp = mm::firmware::identify(reinterpret_cast<const uint8_t*>(buf), have);
     if (incomingUp.described && mm::firmware::isMoonBaseImage(incomingUp.project)) {
+        std::free(buf);
         esp_ota_abort(handle);
         std::snprintf(status_, sizeof(status_), "error: that is a MoonBase image, not an app");
         return false;
     }
-    if (prefixLen) {
-        if (esp_ota_write(handle, prefix, prefixLen) != ESP_OK) {
+    if (esp_ota_write(handle, buf, have) != ESP_OK) {
+        std::free(buf);
+        esp_ota_abort(handle);
+        std::snprintf(status_, sizeof(status_), "error: write failed");
+        return false;
+    }
+    size_t written = have;
+    // A prefix longer than one chunk (headers under 1 KB leave at most that much) writes its remainder straight from the head buffer.
+    if (prefixLen > have) {
+        if (esp_ota_write(handle, prefix + have, prefixLen - have) != ESP_OK) {
+            std::free(buf);
             esp_ota_abort(handle);
             std::snprintf(status_, sizeof(status_), "error: write failed");
             return false;
@@ -681,8 +735,6 @@ bool installFromSocketLocked(int sock, const char* prefix, size_t prefixLen, siz
         written = prefixLen;
     }
 
-    char* buf = static_cast<char*>(std::malloc(kRecvChunk));
-    if (!buf) { esp_ota_abort(handle); std::snprintf(status_, sizeof(status_), "error: out of memory"); return false; }
     while (written < contentLen) {
         const size_t want = (contentLen - written) < kRecvChunk ? (contentLen - written) : kRecvChunk;
         const int n = ::recv(sock, buf, want, 0);
@@ -756,36 +808,44 @@ void unattendedInstallTask(void*) {
 }
 
 void serveOne(int sock) {
-    // TCP does not coalesce: the header block (or a small body) can arrive in several segments, so read until the blank line is seen, bounded by the buffer. A request whose headers do not fit 1023 bytes is not one of ours and falls out as 404.
+    // A request whose headers do not fit 1023 bytes is not one of ours and falls out as 404.
     char head[1024];
-    size_t got = 0;
-    const char* bodyStart = nullptr;
-    while (got < sizeof(head) - 1) {
-        const int n = ::recv(sock, head + got, sizeof(head) - 1 - got, 0);
-        if (n <= 0) break;
-        got += static_cast<size_t>(n);
-        head[got] = '\0';
-        if ((bodyStart = std::strstr(head, "\r\n\r\n"))) break;
-    }
+    size_t headLen = 0;
+    const size_t got = mm::http::readHead(head, sizeof(head), SocketRecv{sock}, headLen);
     if (got == 0) { ::close(sock); return; }   // serveOne owns the fd; a bare return leaks it
-    head[got] = '\0';
-    const size_t headLen = bodyStart ? static_cast<size_t>(bodyStart + 4 - head) : got;
     size_t prefixLen = got - headLen;
 
-    // HTTP header names are case-insensitive; strcasestr is not in the std namespace but is provided by newlib, and the probe is bounded by the header buffer.
-    size_t contentLen = 0;
-    if (const char* cl = strcasestr(head, "Content-Length:")) {
-        contentLen = static_cast<size_t>(std::strtoul(cl + 15, nullptr, 10));
+    uint64_t declared = 0;
+    if (mm::http::contentLength(head, declared) == mm::http::Length::Invalid) {
+        sendResponse(sock, "400 Bad Request", "text/plain", "error: invalid Content-Length");
+        ::close(sock);
+        return;
+    }
+    if (declared > SIZE_MAX) {   // past what this chip addresses, which a narrowing cast would wrap into a small body
+        sendResponse(sock, "413 Content Too Large", "text/plain", "error: request body too large");
+        ::close(sock);
+        return;
+    }
+    const size_t contentLen = static_cast<size_t>(declared);
+    if (contentLen > prefixLen && mm::http::expectsContinue(head))
+        sendAll(sock, mm::http::kContinue, sizeof(mm::http::kContinue) - 1);
+
+    // A page from beyond this network is refused here, install and read alike, by the app's rule (fromBeyondNetwork).
+    sockaddr_in local = {};
+    socklen_t localLen = sizeof(local);
+    const bool gotLocal = ::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &localLen) == 0;
+    const auto* localIp = reinterpret_cast<const uint8_t*>(&local.sin_addr.s_addr);
+    if (mm::http::fromBeyondNetwork(head, gotLocal && mm::captive::throughAccessPoint(localIp), g_deviceName)) {
+        sendResponse(sock, "403 Forbidden", "text/plain", "error: a page from outside this network may not use this device");
+        ::close(sock);
+        return;
     }
 
     // A phone on the access point asking for its own captive-check page gets this one, which is what shows it the sign-in screen.
     if (std::strncmp(head, "GET ", 4) == 0) {
-        sockaddr_in local = {};
-        socklen_t localLen = sizeof(local);
-        const char* host = strcasestr(head, "\r\nHost:");
-        if (host) { host += 7; while (*host == ' ') host++; }
-        if (host && ::getsockname(sock, reinterpret_cast<sockaddr*>(&local), &localLen) == 0 &&
-            mm::captive::redirects(reinterpret_cast<const uint8_t*>(&local.sin_addr.s_addr), host, head + 4)) {
+        const char* host = mm::http::findHeader(head, "Host:");
+        if (host) { host += 5; while (*host == ' ') host++; }
+        if (host && gotLocal && mm::captive::redirects(localIp, host, head + 4)) {
             ::send(sock, mm::captive::kRedirect, std::strlen(mm::captive::kRedirect), 0);
             ::shutdown(sock, SHUT_RDWR);
             ::close(sock);
@@ -798,29 +858,32 @@ void serveOne(int sock) {
         sendResponse(sock, "409 Conflict", "text/plain", "error: an install is already running");
     } else if (std::strncmp(head, "POST /api/firmware/url", 22) == 0) {
         // The body is the URL itself; small enough to finish reading into the same buffer.
-        while (prefixLen < contentLen && headLen + prefixLen < sizeof(head) - 1) {
-            const int n = ::recv(sock, head + headLen + prefixLen,
-                                 sizeof(head) - 1 - headLen - prefixLen, 0);
-            if (n <= 0) break;
-            prefixLen += static_cast<size_t>(n);
-        }
+        const size_t room = sizeof(head) - 1 - headLen;
+        prefixLen = mm::http::fillTo(head + headLen, prefixLen, contentLen < room ? contentLen : room, SocketRecv{sock});
         if (contentLen >= sizeof(stagedUrlTask_)) {
             // Same 255-byte contract the app's route enforces (platform.h): refusing beats truncating into a URL that fails later as a misleading download error.
             sendResponse(sock, "400 Bad Request", "text/plain", "error: url too long (max 255)");
         } else {
-            std::memcpy(stagedUrlTask_, head + headLen, prefixLen);
-            stagedUrlTask_[prefixLen] = '\0';
-            std::snprintf(status_, sizeof(status_), "starting the install");
-            cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch
-            installing_ = true;   // cleared by the task after its final attempt
-            if (xTaskCreate(unattendedInstallTask, "mb_install", 12288, nullptr, 5, nullptr) != pdPASS) {
-                // A failed spawn with the flag left set would refuse every later install: THE deadlock this guard exists to prevent.
-                installing_ = false;
-                std::snprintf(status_, sizeof(status_), "error: cannot start the install task");
-                sendResponse(sock, "500 Internal Server Error", "text/plain", status_);
+            // At most the declared body: bytes past it are not the URL, and the check above sized the buffer by it.
+            const size_t urlLen = prefixLen < contentLen ? prefixLen : contentLen;
+            std::memcpy(stagedUrlTask_, head + headLen, urlLen);
+            stagedUrlTask_[urlLen] = '\0';
+            if (!mm::http::isHttpUrl(stagedUrlTask_)) {
+                stagedUrlTask_[0] = '\0';   // the retry field stays empty
+                sendResponse(sock, "400 Bad Request", "text/plain", "error: url must start with http:// or https://");
             } else {
-                // 202: the install runs on its own task while this server keeps answering GET /moonbase with live progress; the caller watches that, not this response.
-                sendResponse(sock, "202 Accepted", "text/plain", status_);
+                std::snprintf(status_, sizeof(status_), "starting the install");
+                cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch
+                installing_ = true;   // cleared by the task after its final attempt
+                if (xTaskCreate(unattendedInstallTask, "mb_install", 12288, nullptr, 5, nullptr) != pdPASS) {
+                    // A failed spawn with the flag left set would refuse every later install: THE deadlock this guard exists to prevent.
+                    installing_ = false;
+                    std::snprintf(status_, sizeof(status_), "error: cannot start the install task");
+                    sendResponse(sock, "500 Internal Server Error", "text/plain", status_);
+                } else {
+                    // 202: the install runs on its own task while this server keeps answering GET /moonbase with live progress; the caller watches that, not this response.
+                    sendResponse(sock, "202 Accepted", "text/plain", status_);
+                }
             }
         }
     } else if (std::strncmp(head, "POST /api/firmware/upload", 25) == 0) {
@@ -864,6 +927,13 @@ void serveOne(int sock) {
     } else if (std::strncmp(head, "GET /api/variant", 16) == 0) {
         // The application's build variant, read from its config at boot. Empty when the app has never run here, which the page treats as "offer every firmware for the chip".
         sendResponse(sock, "200 OK", "text/plain", g_appVariant);
+    } else if (std::strncmp(head, "GET /api/system", 15) == 0) {
+        // The app's health endpoint by the same name and fields, so a peer's map reads which image answers, its chip and the variant the app ran: the firmware Install MoonLight offers.
+        const esp_app_desc_t* d = esp_app_get_description();
+        char body[160];
+        std::snprintf(body, sizeof(body), "{\"moonbase\":true,\"version\":\"%s\",\"chip\":\"%s\",\"firmware\":\"%s\"}",
+                      d ? d->version : "unknown", MOONBASE_CHIP, g_appVariant);
+        sendResponse(sock, "200 OK", "application/json", body);
     } else if (std::strncmp(head, "GET /api/version", 16) == 0) {
         // This image's version from its descriptor, on its own route, since the app parses the status route's body.
         const esp_app_desc_t* d = esp_app_get_description();
@@ -993,6 +1063,15 @@ extern "C" void app_main() {
         }
     }
 
+    // Announced on a network it joined, never on its own access point, where no peer's map can reach it.
+    if (online) {
+        if (!g_deviceName[0]) {
+            uint8_t mac[6];
+            esp_efuse_mac_get_default(mac);
+            mm::defaultDeviceName(mac, g_deviceName, sizeof(g_deviceName));
+        }
+        xTaskCreate(presenceTask, "mb_presence", 3072, nullptr, 3, nullptr);
+    }
     if (!online) online = wifiAccessPoint();
 
     // With no network there is nothing MoonBase can do but wait. A user who cannot reach it will reflash over USB, and restarting into an application slot that may be empty helps nobody.

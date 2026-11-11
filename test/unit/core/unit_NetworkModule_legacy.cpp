@@ -7,6 +7,8 @@
 #include "network_device.h"
 
 #include <cstdint>
+#include "core/util/WledNetworks.h"   // the document the migration image writes
+
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -91,6 +93,28 @@ TEST_CASE("a 6.0 config on a named Ethernet board takes the board's map, as 6.0 
         CHECK(pin(*d.eth, "ethRstGpio") == -1);   // the map's, not the stale saved 5
         CHECK(pin(*d.eth, "ethMdcGpio") == 23);
         CHECK(d.wifi->knownCount() == 0);          // no network to move
+    }
+    std::filesystem::remove_all(root);
+    mm::platform::fsSetRoot(nullptr);   // the default root
+}
+
+TEST_CASE("the network document the migration writes boots MoonLight on the WLED board's Ethernet wiring, its networks and its TX power limit") {
+    const mm::wlednet::Network nets[1] = {{"Home", "secret12"}};
+    const mm::wlednet::Ethernet eth = mm::wlednet::kWledEthernet[4];
+    char doc[1024];
+    REQUIRE(mm::wlednet::networkDocument(doc, sizeof(doc), nets, 1, &eth, 8) > 0);
+    const std::string root = freshRoot(doc);
+    {
+        Device d(root.c_str());
+        CHECK(*static_cast<const uint8_t*>(controlPtr(*d.eth, "ethType")) == 1);
+        d.eth->rebuildControls();
+        CHECK(pin(*d.eth, "ethRstGpio") == 5);
+        CHECK(pin(*d.eth, "ethMdcGpio") == 23);
+        CHECK(pin(*d.eth, "ethMdioGpio") == 18);
+        CHECK(pin(*d.eth, "ethClockGpio") == 17);
+        REQUIRE(d.wifi->knownCount() == 1);
+        CHECK(std::strcmp(d.wifi->ssidAt(0), "Home") == 0);
+        CHECK(d.wifi->txPowerSetting() == 8);   // WLED's limit, kept
     }
     std::filesystem::remove_all(root);
     mm::platform::fsSetRoot(nullptr);   // the default root

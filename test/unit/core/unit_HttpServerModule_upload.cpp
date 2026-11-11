@@ -7,6 +7,7 @@
 #include "core/system/HttpServerModule.h"
 #include "platform/platform.h"
 #include "http_loopback.h"
+#include "core/util/HttpHead.h"
 
 // RealtimeSanitizer prints a report for every unsafe call inside a tick, which inflates a tick's wall time; a timing bound means nothing under it.
 #if defined(__has_feature)
@@ -44,6 +45,15 @@ void postStart(mm::platform::TcpConnection& client, const char* path, size_t dec
 
 
 
+// The upload is answered 200 once it commits, and the file at `path` holds exactly `payload`.
+void checkLanded(mm::HttpServerModule& http, mm::platform::TcpConnection& client, const char* path, const std::string& payload) {
+    const std::string reply = pumpUntil(http, client, 12);
+    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
+    std::string back(payload.size() + 1, '\0');   // fsRead null-terminates
+    CHECK(mm::platform::fsRead(path, back.data(), back.size()) == static_cast<int>(payload.size()));
+    CHECK(std::memcmp(back.data(), payload.data(), payload.size()) == 0);
+}
+
 // A fresh flash root under a temp dir for one test.
 struct FlashFixture {
     char root[256];
@@ -75,12 +85,31 @@ TEST_CASE("a flash upload larger than one chunk streams across ticks and lands w
 
     const std::string payload = pattern(20000);
     postStart(client, "/big.bin", payload.size(), payload);
-    const std::string reply = pumpUntil(http, client, 12);
-    CHECK(std::strncmp(reply.c_str(), "HTTP/1.1 200", 12) == 0);
+    checkLanded(http, client, "/big.bin", payload);
 
-    char back[20001];   // fsRead null-terminates
-    CHECK(mm::platform::fsRead("/big.bin", back, sizeof(back)) == static_cast<int>(payload.size()));
-    CHECK(std::memcmp(back, payload.data(), payload.size()) == 0);
+    client.close();
+    http.release();
+}
+
+TEST_CASE("an upload holding its body for 100 Continue hears it, then streams and lands whole") {
+    // curl holds any body over 1 MB behind `Expect: 100-continue`; without the interim response it waits a second before sending anyway.
+    FlashFixture fix;
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+
+    const std::string payload = pattern(9000);
+    char req[256];
+    const int reqLen = std::snprintf(req, sizeof(req),
+        "POST /api/file?path=/held.bin HTTP/1.1\r\nContent-Length: %zu\r\nExpect: 100-continue\r\n\r\n", payload.size());
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(reqLen)));
+    const std::string interim = pumpUntil(http, client, std::strlen(mm::http::kContinue));
+    CHECK(interim.rfind(mm::http::kContinue, 0) == 0);
+
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+    checkLanded(http, client, "/held.bin", payload);
 
     client.close();
     http.release();

@@ -247,6 +247,9 @@ def readme_text(version: str, platform_label: str) -> str:
     )
 
 
+BUNDLE_ID = "org.moonmodules.moonlight"   # the macOS bundle's identifier, and the one every binary is signed with
+
+
 def adhoc_sign(binary: Path) -> None:
     """Sign the macOS binary with an ad-hoc signature. Free, and it changes what a user sees.
 
@@ -262,7 +265,8 @@ def adhoc_sign(binary: Path) -> None:
     Best effort: a failure prints and continues, because an unsigned build is still shippable and
     a release that stops for this would be worse than one that warns.
     """
-    r = subprocess.run(["codesign", "--force", "--sign", "-", str(binary)],
+    # The identifier the bundle's Info.plist names, which a bare binary takes too: macOS 27 answers the address table's sysctl only to a binary signed with one (arpLookup).
+    r = subprocess.run(["codesign", "--force", "--sign", "-", "--identifier", BUNDLE_ID, str(binary)],
                        capture_output=True, text=True)
     if r.returncode == 0:
         print("package_desktop: ad-hoc signed (Gatekeeper shows the standard unverified-developer prompt)")
@@ -335,7 +339,7 @@ def make_app_bundle(binary: Path, version: str, dest: Path) -> Path:
 <dict>
   <key>CFBundleName</key><string>MoonLight</string>
   <key>CFBundleDisplayName</key><string>MoonLight</string>
-  <key>CFBundleIdentifier</key><string>org.moonmodules.moonlight</string>
+  <key>CFBundleIdentifier</key><string>{BUNDLE_ID}</string>
   <key>CFBundleVersion</key><string>{version}</string>
   <key>CFBundleShortVersionString</key><string>{version}</string>
   <key>CFBundleExecutable</key><string>MoonLight-launcher</string>

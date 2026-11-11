@@ -139,6 +139,8 @@
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
 #include "lwip/netdb.h"   // getaddrinfo: hostname resolution for TcpConnection::connect
+#include "lwip/etharp.h"  // etharp_get_entry: a neighbor's MAC (arpLookup)
+#include "lwip/tcpip.h"   // LOCK_TCPIP_CORE: the table is read under the stack's lock
 #include "platform/select_wait.h"   // the select() wait the desktop shares, after the socket headers
 
 #include <atomic>
@@ -326,6 +328,28 @@ size_t totalInternalHeap() {
 
 void getMacAddress(uint8_t mac[6]) {
     esp_efuse_mac_get_default(mac);
+}
+
+bool arpLookup(const uint8_t ip[4], uint8_t mac[6]) {
+#if LWIP_ARP && LWIP_TCPIP_CORE_LOCKING
+    ip4_addr_t want;
+    IP4_ADDR(&want, ip[0], ip[1], ip[2], ip[3]);
+    bool found = false;
+    LOCK_TCPIP_CORE();   // the table is the stack's own, read under its lock
+    for (size_t i = 0; i < ARP_TABLE_SIZE && !found; i++) {
+        ip4_addr_t* at = nullptr;
+        struct netif* nif = nullptr;
+        struct eth_addr* eth = nullptr;
+        if (etharp_get_entry(i, &at, &nif, &eth) && ip4_addr_cmp(at, &want)) {
+            std::memcpy(mac, eth->addr, 6);
+            found = true;
+        }
+    }
+    UNLOCK_TCPIP_CORE();
+    return found;
+#else
+    return false;
+#endif
 }
 
 const char* macString() {

@@ -1,0 +1,12 @@
+# documentation-standards.md: "Positive form only." The words that most often name a bare absence; "not" and "no" usually carry a real
+# constraint ("the DMA cannot read PSRAM at shift clock"), which the standard keeps, so they stay out and this warns for the reviewer to decide.
+extends: existence
+message: "'%s' negates: say what the thing is, unless it states a real constraint."
+level: warning
+ignorecase: true
+tokens:
+  - '\bnever\b'
+  - '\bnothing\b'
+  - '\bneither\b'
+  - '\bnor\b'
+  - '\bwithout\b'

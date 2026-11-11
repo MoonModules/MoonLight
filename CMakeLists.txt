@@ -371,6 +371,12 @@ add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/desktop/
 target_include_directories(MoonLight PRIVATE src/)
 target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
+# macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_desktop.py).
+if(APPLE)
+    add_custom_command(TARGET MoonLight POST_BUILD
+        COMMAND codesign --force --sign - --identifier org.moonmodules.moonlight $<TARGET_FILE:MoonLight>
+        COMMENT "Signing MoonLight as org.moonmodules.moonlight" VERBATIM)
+endif()
 
 # Tests
 enable_testing()

@@ -71,10 +71,10 @@ public:
     bool isEditableList() const override { return true; }
 
     /// How many rows are configured.
-    uint8_t listRowCount() const override { return count_; }
+    ListRow listRowCount() const override { return count_; }
 
     /// Append one row's summary, ending with the live state so a button can be seen working.
-    void writeListRow(JsonSink& sink, uint8_t row) const override {
+    void writeListRow(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         sink.appendf("{\"id\":%u,\"pin\":%d,\"activeLow\":%s",
@@ -85,7 +85,7 @@ public:
     }
 
     /// The row's editable fields, so a button is retargeted on the card rather than through the API.
-    void writeListRowDetail(JsonSink& sink, uint8_t row) const override {
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
         if (row >= count_) { sink.append("{}"); return; }
         const Row& r = rows_[row];
         openInputPinFields(sink, r.pin);

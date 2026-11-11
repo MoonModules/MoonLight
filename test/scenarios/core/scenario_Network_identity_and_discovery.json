@@ -3,60 +3,38 @@
   "module": "NetworkModule",
   "mode": "mutate",
   "instances": {
-    "Devices": "DevicesModule",
+    "Discovery": "DevicesModule",
     "Network": "NetworkModule"
   },
   "also": [
     "DevicesModule",
     "SystemModule"
   ],
-  "description": "The network card's own settings, and the one thing a rename could silently change: how this device is advertised and how it types the peers it finds. mDNS and the device list both key on names, so each is set, restarted, and read back rather than merely written.",
+  "description": "The network card's own settings, and the one thing a rename could silently change: how this device types the peers it finds. The device list keys on names, so it is set, restarted, and read back rather than merely written.",
   "top": [
-    "NetworkModule"
+    "NetworkModule",
+    "Devices"
   ],
   "steps": [
-    {
-      "name": "mdns-off",
-      "description": "mDNS is what lets a browser reach the device by name rather than by address.",
-      "op": "set_control",
-      "id": "Network",
-      "key": "mDNS",
-      "value": false
-    },
-    {
-      "name": "mdns-is-off",
-      "op": "expect_control",
-      "id": "Network",
-      "key": "mDNS",
-      "equals": "false"
-    },
-    {
-      "name": "mdns-on",
-      "description": "Back on, because a device nobody can find by name is a support call.",
-      "op": "set_control",
-      "id": "Network",
-      "key": "mDNS",
-      "value": true
-    },
     {
       "name": "multicast-only",
       "description": "The broadcast copy is what makes this device appear in the WLED apps.",
       "op": "set_control",
-      "id": "Devices",
+      "id": "Discovery",
       "key": "addressing",
       "value": 0
     },
     {
       "name": "broadcast-is-off",
       "op": "expect_control",
-      "id": "Devices",
+      "id": "Discovery",
       "key": "addressing",
       "equals": "0"
     },
     {
       "name": "broadcast-on",
       "op": "set_control",
-      "id": "Devices",
+      "id": "Discovery",
       "key": "addressing",
       "value": 1
     },
@@ -67,16 +45,9 @@
       "timeout": 60
     },
     {
-      "name": "mdns-survived",
-      "op": "expect_control",
-      "id": "Network",
-      "key": "mDNS",
-      "equals": "true"
-    },
-    {
       "name": "broadcast-survived",
       "op": "expect_control",
-      "id": "Devices",
+      "id": "Discovery",
       "key": "addressing",
       "equals": "1"
     }

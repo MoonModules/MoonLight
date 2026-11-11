@@ -26,7 +26,8 @@
       "Drivers": {
         "$patch": "replace",
         "RmtLed": {
-          "type": "RmtLedDriver"
+          "type": "RmtLedDriver",
+          "pins": "16"
         }
       },
       "Network": {
@@ -1081,7 +1082,8 @@
     "name": "MM testbench classic olimex",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32",
+      "esp32-eth"
     ],
     "image": "assets/deviceModels/esp32-olimex-testbench.jpg",
     "supported": [
@@ -1895,6 +1897,7 @@
   {
     "name": "Adafruit MatrixPortal S3",
     "chip": "ESP32-S3",
+    "image": "assets/deviceModels/esp32-s3-n8r2-adafruit-matrixportal-pinout.jpg",
     "firmwares": [
       "esp32s3-n8r2"
     ],

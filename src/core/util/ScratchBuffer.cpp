@@ -5,7 +5,7 @@
 #include "core/module/MoonModule.h"    // full definition: the dynamic-bytes readout
 #include "platform/platform.h"  // alloc / free
 
-#include <cstring>              // memset
+#include <cstring>              // memset, memcpy
 
 namespace mm {
 
@@ -34,6 +34,27 @@ bool ScratchBufferBase::resizeBytes(std::size_t bytes) {
     owner_.addDynamicBytes(static_cast<std::ptrdiff_t>(bytes_) -
                            static_cast<std::ptrdiff_t>(old));
     return bytes_ == bytes;
+}
+
+bool ScratchBufferBase::ensureBytes(std::size_t bytes, std::size_t minBytes) {
+    if (bytes <= bytes_) return true;
+    std::size_t grown = bytes_ ? bytes_ : minBytes;
+    while (grown < bytes) grown *= 2;
+    // The doubled size first, then the exact one, which is how a nearly full heap still takes one more row.
+    return growTo(grown) || (grown != bytes && growTo(bytes));
+}
+
+bool ScratchBufferBase::growTo(std::size_t want) {
+    if (!platform::fitsWithReserve(want)) return false;
+    void* fresh = platform::alloc(want);
+    if (!fresh) return false;
+    if (raw_) std::memcpy(fresh, raw_, bytes_);
+    std::memset(static_cast<uint8_t*>(fresh) + bytes_, 0, want - bytes_);
+    if (raw_) platform::free(raw_);
+    owner_.addDynamicBytes(static_cast<std::ptrdiff_t>(want) - static_cast<std::ptrdiff_t>(bytes_));
+    raw_ = fresh;
+    bytes_ = want;
+    return true;
 }
 
 } // namespace mm

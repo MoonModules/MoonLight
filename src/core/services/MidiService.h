@@ -381,6 +381,15 @@ private:
         }
     }
 
+public:
+    /// The RTP-MIDI session while one is open, and its peer once one joined; the session keeps no rate.
+    void reportNetworkUse(NetworkUse& use) const override {
+        if (!session_) return;
+        use.service("RTP-MIDI", port);
+        if (session_->connected()) use.flow("RTP-MIDI", true, session_->peerIp(), 0, "");
+    }
+
+private:
     /// Open the network session on `port`, the status saying when the port is taken.
     void openSession() {
         session_.reset(new (std::nothrow) RtpMidiSession());

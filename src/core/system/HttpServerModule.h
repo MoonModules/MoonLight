@@ -5,6 +5,7 @@
 #include "core/util/ScratchBuffer.h"   // leafHashes_: the growable diff-on-the-wire value-hash cache
 #include "core/util/BinaryBroadcaster.h"
 #include "core/util/JsonSink.h"   // walkPatch_ holds the second's gathered patch between ticks
+#include "core/util/EsphomeOta.h"   // a relay slot speaks ESPHome's update protocol to the device it hands an image
 #include "platform/platform.h"
 
 #include <array>
@@ -33,6 +34,14 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## The REST API
 ///
+/// **A page from outside this network is refused.** A request whose `Origin` names a host beyond it gets 403 before any route, WebSocket and preflight included (`http::isTrustedOrigin`, OWASP's origin check), so a site from the internet cannot use a visitor's browser against the device.
+///
+/// This network is a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or one label; a page the device served passes under the name it was opened by.
+///
+/// A DNS-rebinding page's read carries no `Origin`, so its `Host` decides: an IP literal, a local name or the device's own name under any domain, as its router names it, is served, and every other name refused (`http::fromBeyondNetwork`).
+///
+/// A request with no `Origin`, from a script, another device or Home Assistant, is served as before; MoonBase applies the same rule.
+///
 /// `GET /` serves `index.html` and the UI assets. Every other route, with its parameters and answers, is the OpenAPI description [the REST API](https://moonmodules.org/MoonLight/reference/api.html) renders, which a test checks against this server's routes.
 ///
 /// ## The two WebSocket channels
@@ -53,7 +62,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// Snapshot then patch, the shape Redux and Firestore sync use and RFC 6902 formalises. Re-serializing the mostly static tree every second on the render thread stuttered the LEDs at 1 Hz.
 ///
-/// A client gets a full state when it subscribes, then each second a patch of the values that changed. Each leaf's serialized value is hashed with FNV-1a and compared with the cached hash.
+/// A client gets a full state when it subscribes, then each second a patch of the values that changed. Each leaf's serialized value is hashed with FNV-1a and compared with the cached hash. A list's leaf is its rows and, beside them in the entry, their `detail`, so a detail that changes alone is sent too.
 ///
 /// The second's walk moves about 1 ms per 20 ms tick and sends its patch when it ends, so no frame pays for every value. It visits the leaves in the baseline's order, so the cached hash it compares with is the entry after the last match, found without a search.
 ///
@@ -134,6 +143,8 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 /// Live state goes over `/ws` as a state-and-info frame: Drivers brightness, and the active palette's color from `LightOutput::paletteRgb()`, or black without a light output.
 ///
 /// The app's slider and toggle send a frame on the same socket, applied to Drivers brightness through the apply core that REST and Improv share.
+///
+/// Each client of the WLED API is reported as traffic into this device, requests a minute over the last whole minute, so the map draws a line from it. Its User-Agent's product token names it: `HomeAssistant/` is Home Assistant. A client quiet for five minutes is dropped.
 ///
 /// ## Reading an uplink frame, and taking the lease
 ///
@@ -333,8 +344,6 @@ public:
     /// Decode a `path=` query value into `out`, rooted at the mount, false when it is unsafe. @xref{two-guards-that-are-static-on-purpose}
     static bool parseFilePath(const char* query, char* out, size_t cap);
 
-    /// Find a header by name, case-insensitively, as RFC 9112 requires.
-    static const char* findHeaderCI(const char* hay, const char* needle);
     /// What a replaced module is called: the requested name, else a custom one, else its own default.
     static const char* replacementName(const char* requested, const char* current,
                                        const char* oldDefault);
@@ -344,6 +353,8 @@ public:
 
     /// Test seams for the wire diff, so a unit test proves it without a socket.
     uint16_t buildStatePatchForTest(JsonSink& sink) { return buildStatePatch(sink); }
+    /// Test-only: the summary members /api/system leads with after the firmware.
+    void writeDeviceSummaryForTest(JsonSink& sink) { writeDeviceSummary(sink); }
     /// Re-baseline the leaf hashes, for a test.
     void baselineLeafHashesForTest() { baselineLeafHashes(true); }
     /// Ask for a full resync, for a test.
@@ -356,6 +367,12 @@ public:
     bool clientResyncPendingForTest(int client) const { return resyncClient_[client]; }
     /// The port the live server is bound to, or 0 when none is up.
     static uint16_t servedPort() { return instance_ ? instance_->boundPort_ : 0; }
+    /// The web page and API, on the port the listener bound, and each client of the WLED API, Home Assistant named by its User-Agent.
+    void reportNetworkUse(NetworkUse& use) const override;
+    /// Count one WLED API request from `peer`, whose `userAgent` may name it, as a request does; for a test.
+    void noteApiClientForTest(const uint8_t peer[4], const char* userAgent) { noteApiClient(peer, userAgent); }
+    /// Close the minute that turns each client's count into its rate and drops one unheard for five; tick1s does it each minute.
+    void closeApiMinute() MM_NONBLOCKING;
 
     /// Build the early patch of the modules that asked for one, for a test.
     uint16_t buildSoonPatchForTest(JsonSink& sink) { return buildSoonPatch(sink); }
@@ -396,10 +413,10 @@ private:
 
     /// Every upload, a firmware image among them, and every request whose body comes after its headers is read here across ticks, a bounded slice at a time. Neither a large file nor a slow or lossy client holds the render loop.
     struct FileTransfer {
-        enum class Kind : uint8_t { Upload, Firmware, Request };
+        enum class Kind : uint8_t { Upload, Firmware, Request, Relay };
         bool active = false;
         Kind kind = Kind::Upload;
-        bool refused = false;              // firmware: the writer refused the image, so the rest of the body is read and dropped before the answer
+        bool refused = false;              // firmware or relay: the writer or the device refused the image, so the rest of the body is read and dropped before the answer
         platform::OtaTarget target = platform::OtaTarget::App;
         platform::TcpConnection conn;
         platform::FsWriteStream wstream;   // valid for an upload
@@ -411,6 +428,11 @@ private:
         size_t windowBytes = 0;            // body bytes moved in it
         bool waiting = false;              // an upload's whole body is in and waits for a reader of its file
         uint32_t waitSinceMs = 0;          // since then
+        platform::TcpConnection peer;      // relay: the ESPHome device the body goes on to
+        esphomeota::Client esp;            // relay: its update protocol
+        bool peerUp = false;               // relay: connected
+        size_t bufAt = 0;                  // relay: how much of buf's bufLen bytes went on
+        uint32_t lastMoveMs = 0;           // relay: the last byte moved either way, which the stall guard reads
     };
     static constexpr int kTransferSlots = 2;
     static constexpr size_t kTransferBufBytes = 4096;
@@ -433,6 +455,24 @@ private:
     void driveTransfers();
     /// One upload slot's bounded chunk: socket to storage or to the firmware writer, then the rate guard. Returns whether real bytes moved.
     bool driveUpload(FileTransfer& t, uint32_t now);
+    /// A relay slot's step: the ESPHome device's answers in, the handshake out, then the browser's body on to the device, a buffer at a time.
+    bool driveRelay(FileTransfer& t, uint32_t now);
+    /// End a relay the device refused or closed with the device's reason and error byte as a 502, once the browser's body is in.
+    bool endRelayFailed(FileTransfer& t, uint32_t now);
+    /// A refused relay's step: the rest of the browser's body read and dropped, then the answer endRelayFailed kept.
+    bool drainRelay(FileTransfer& t, uint32_t now);
+    /// Whether the relay's connection to the ESPHome device is up; false while it is pending, and false once a refusal or a timeout ended the relay.
+    bool relayConnected(FileTransfer& t, uint32_t now);
+    /// The device's answers in and the handshake bytes due out; false once the device closed its connection.
+    bool relayHandshake(FileTransfer& t, bool& progressed);
+    /// The next piece of the browser's body on to the device; false once the browser left, the relay ended.
+    bool relayImage(FileTransfer& t, bool& progressed);
+    /// How a relay step ends: the device's verdict, its refusal or closing, a stall, or on to the next tick.
+    bool relayVerdict(FileTransfer& t, uint32_t now, bool peerOpen, bool progressed);
+    /// End a relay with `status` and `body` to the browser.
+    bool endRelay(FileTransfer& t, int status, const char* body);
+    /// Hand the uploaded image on to the ESPHome device at `host` (`POST /api/relay/esphome?host=&md5=`): its update protocol, the body passed through as it comes.
+    void handleRelay(platform::TcpConnection& conn, const char* query, const char* initialBody, size_t initialLen, size_t contentLen);
     /// Whether a send holds `path` open: LittleFS refuses to replace an open file, so an upload of it commits once this is false.
     bool sendingFile(const char* path) const;
     /// Whether an upload of `path` waits to commit, during which a new read of it answers 503 so readers cannot starve the write.
@@ -654,6 +694,15 @@ private:
     /// Derived from free contiguous memory, so a tight board takes small bites and a roomy one drains fast.
     size_t drainChunkBytes() const;
 
+    /// A client of the WLED API, such as Home Assistant: who, the requests this minute and the last whole minute, and when it was last heard.
+    struct ApiClient { uint8_t ip[4]; const char* name; uint32_t lastMs; uint16_t count; uint16_t perMinute; };
+    /// Grown as a client first asks, so a device nobody polls holds none.
+    ScratchBuffer<ApiClient> apiClients_{*this};
+    uint8_t apiClientCount_ = 0;
+    uint32_t apiMinuteAt_ = 0;   // when the current minute began
+    /// Count a request to the WLED API from `peer`, named by its User-Agent where one is known.
+    void noteApiClient(const uint8_t peer[4], const char* userAgent);
+
     /// The wire diff's cache: one path hash and one value hash per leaf, eight bytes each. @xref{how-a-leaf-is-named}
     struct LeafHash { uint32_t path = 0; uint32_t value = 0; };
     /// Growable rather than fixed: sized to the exact leaf count each baseline, so no leaf is dropped.
@@ -837,6 +886,8 @@ private:
     /// The device's name, MAC and, when `ip` is given, live address, resolved once for every WLED handler to share. @xref{the-wled-compatibility-shim}
     void resolveWledIdentity(const char*& name, uint8_t mac[6], uint8_t* ip,
                              const char* nameFallback = "MoonLight");
+    /// The summary's identity, board, signal, light outputs and effects, members of /api/system's object, each followed by a comma.
+    void writeDeviceSummary(JsonSink& sink);
     void writeModuleMetricsJson(JsonSink& sink, MoonModule* mod, bool& first);
 
     // Module CRUD

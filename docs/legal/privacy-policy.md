@@ -14,12 +14,13 @@ Whatever you switch on, MoonLight does not transmit **your name, email or postal
 
 ## What reaches the internet before you opt in
 
-Four things, each either something you asked for or something your browser does, and none of them reach a server of ours:
+Five things, each either something you asked for or something your browser does, and none of them reach a server of ours:
 
 - **The update check**: your browser asks GitHub's public release API whether a newer version exists.
 - **Downloading a MoonLive script**: your browser fetches it from `raw.githubusercontent.com`.
 - **A firmware update**: your device downloads it from GitHub, when you start one.
 - **The web installer**: served by GitHub Pages; flashing happens over USB, directly between your browser and the board.
+- **Installing from the Devices map or MoonBase's page**: your browser loads the installer's picker, its device list and the chosen release's files from GitHub Pages, when you open a device to install or move it. What the map learns about your network, names, addresses and MACs, stays on your network: in the device's memory and in the browsers on your network that open the map.
 
 These go to GitHub under [its privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement). This documentation site and the release downloads are hosted by GitHub too, which receives the requests your browser makes, including your IP address. We add no analytics, no cookies of our own and no tracking.
 

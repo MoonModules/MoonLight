@@ -33,20 +33,20 @@ CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
 SCHEMA = ROOT / "mooninstaller" / "deviceModels.schema.json"
 MODULE_TYPES_CPP = ROOT / "src" / "module_types.cpp"
 MAIN_CPP = ROOT / "src" / "main.cpp"
-ETHERNET_MODULE = ROOT / "src" / "core" / "system" / "EthernetModule.h"
+ETH_PRESETS = ROOT / "src" / "core" / "util" / "EthPresets.h"
 SD_CARD_MODULE = ROOT / "src" / "core" / "services" / "SdCardService.h"
 PLATFORM_CONFIG = ROOT / "src" / "platform" / "esp32" / "platform_config.h"
 DOCS = ROOT / "docs"
 
 
 def preset_labels(header, table):
-    """The preset labels of a module header's board-preset table, such as EthernetModule.h's kEthPresets.
+    """The preset labels of a header's board-preset table, such as EthPresets.h's kPresets.
 
     Read from the firmware rather than restated here, so a preset renamed in one place and not the
     other fails this check instead of silently leaving a catalog entry pointing at nothing.
     """
     text = header.read_text(encoding="utf-8")
-    block = re.search(table + r"\[\]\s*=\s*\{(.*?)\n    \};", text, re.S)
+    block = re.search(table + r"\[\]\s*=\s*\{(.*?)\n\s*\};", text, re.S)
     if not block:
         return set()
     return set(re.findall(r'^\s*\{"([^"]+)"', block.group(1), re.M))
@@ -61,11 +61,11 @@ def eth_preset_drift():
     and this check binds it, because the drift is silent where it matters most: `seedEthPresetFromPins`
     matches on exact equality, so one corrected pin would reseed every provisioned board to Custom.
     """
-    table = ETHERNET_MODULE.read_text(encoding="utf-8")
+    table = ETH_PRESETS.read_text(encoding="utf-8")
     header = PLATFORM_CONFIG.read_text(encoding="utf-8")
-    block = re.search(r"kEthPresets\[\]\s*=\s*\{(.*?)\n    \};", table, re.S)
+    block = re.search(r"kPresets\[\]\s*=\s*\{(.*?)\n\s*\};", table, re.S)
     if not block:
-        return [("kEthPresets", "table", "present", "unreadable")]
+        return [("kPresets", "table", "present", "unreadable")]
 
     rows = {}
     for m in re.finditer(r'\{"([^"]+)",\s*([^}]+)\}', block.group(1)):
@@ -122,7 +122,7 @@ def top_level_names():
 
 # Each rule is one kind of mistake the catalog or the firmware tables it restates can hold; a finding is one error the run reports.
 RULES = {
-    "preset drift": {"reason": "An Ethernet preset row restates a chip default, and the two must agree or a provisioned board reseeds to Custom.", "fix": "Make kEthPresets and ethConfigDefault carry the same pins."},
+    "preset drift": {"reason": "An Ethernet preset row restates a chip default, and the two must agree or a provisioned board reseeds to Custom.", "fix": "Make EthPresets.h's kPresets and ethConfigDefault carry the same pins."},
     "unreadable source": {"reason": "A table or file the check reads could not be parsed, so the rules that depend on it cannot run.", "fix": "Restore the table's shape the check expects."},
     "schema violation": {"reason": "An entry breaks the shape in deviceModels.schema.json.", "fix": "Correct the field the message names."},
     "duplicate name": {"reason": "The name is the identity key, so two entries cannot share it.", "fix": "Rename one entry."},
@@ -135,7 +135,7 @@ RULES = {
     "device identity": {"reason": "System.deviceModel is the entry's identity and must be set and equal the entry name.", "fix": "Set System.deviceModel to the entry name."},
     "pins on non-light driver": {"reason": "A pins control only has meaning on a light driver.", "fix": "Move pins to a light driver."},
     "expander wiring": {"reason": "A 74HCT595 pin expander with bad wiring fails on a bench as dark LEDs, not loudly.", "fix": "Give the expander a latch pin of its own and 1..8 data pins."},
-    "unknown board preset": {"reason": "A board preset is not a label the firmware's preset table holds.", "fix": "Use a label from EthernetModule.h or SdCardService.h."},
+    "unknown board preset": {"reason": "A board preset is not a label the firmware's preset table holds.", "fix": "Use a label from EthPresets.h or SdCardService.h."},
     "ethernet pinning": {"reason": "Ethernet is pinned explicitly, never inherited from a per-chip default.", "fix": "Give ethType an integer and list the board-wiring pins (-1 for an unused one)."},
 }
 CATALOG_REL = "mooninstaller/deviceModels.json"
@@ -149,14 +149,14 @@ def main():
         errors.append(message)
         found.append({"rule": rule, "message": message, "file": CATALOG_REL, "level": "error"})
 
-    eth_presets = preset_labels(ETHERNET_MODULE, "kEthPresets")
+    eth_presets = preset_labels(ETH_PRESETS, "kPresets")
     sd_presets = preset_labels(SD_CARD_MODULE, "kSdPresets")
     for label, field, was, now in eth_preset_drift():
-        fail("preset drift", f"EthernetModule.h kEthPresets {label!r}: {field} is {now}, but "
+        fail("preset drift", f"EthPresets.h kPresets {label!r}: {field} is {now}, but "
                       f"platform_config.h's ethConfigDefault says {was}: the preset restates the "
                       f"chip default, so the two must agree or a provisioned board reseeds to Custom")
     if not eth_presets:
-        fail("unreadable source", "EthernetModule.h: could not read the kEthPresets table, so the ethBoard check cannot run")
+        fail("unreadable source", "EthPresets.h: could not read the kPresets table, so the ethBoard check cannot run")
     if not sd_presets:
         fail("unreadable source", "SdCardService.h: could not read the kSdPresets table, so the SD board check cannot run")
 
@@ -326,7 +326,7 @@ def main():
                     if not isinstance(board, str):
                         fail("unknown board preset", f"{where}: EthernetModule ethBoard must be the preset LABEL as a string, got {board!r}")
                     elif board not in eth_presets:
-                        fail("unknown board preset", f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthernetModule.h (known: {sorted(eth_presets)})")
+                        fail("unknown board preset", f"{where}: EthernetModule ethBoard {board!r} is not a preset in EthPresets.h (known: {sorted(eth_presets)})")
                 et = controls.get("ethType")
                 # ethType must be an int (a JSON string like "2" would silently skip the rule below and
                 # also isn't what the device deserializes into the Select), so reject a stringified value.
@@ -334,7 +334,7 @@ def main():
                 # would pass as ethType 1 (LAN8720).
                 if et is not None and type(et) is not int:
                     fail("ethernet pinning", f"{where}: EthernetModule ethType must be an integer, got {et!r}")
-                # A named preset IS the explicit pinning: the map lives in EthernetModule.h, under
+                # A named preset IS the explicit pinning: the map lives in EthPresets.h, under
                 # the same review as any other firmware constant, rather than repeated per board.
                 if type(et) is int and et != 0 and board in (None, "Custom"):
                     # RMII LAN8720(1)/IP101(2): rst + clock. RGMII YT8531(4): mdc/mdio/rst.

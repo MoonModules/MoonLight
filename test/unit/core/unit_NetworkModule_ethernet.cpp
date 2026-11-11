@@ -418,3 +418,17 @@ TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
         }
     }
 }
+
+TEST_CASE("an Ethernet setting starts the interface live when none runs, and waits for a boot only to replace a running internal one") {
+    using A = mm::EthernetModule::EthApply;
+    constexpr uint8_t none = static_cast<uint8_t>(mm::platform::ethNone);
+    constexpr uint8_t lan = static_cast<uint8_t>(mm::platform::ethLan8720);
+    constexpr uint8_t w5500 = static_cast<uint8_t>(mm::platform::ethW5500);
+    CHECK(mm::EthernetModule::ethApply(none, lan, false) == A::Live);       // a fresh board picking its device model: nothing to tear down
+    CHECK(mm::EthernetModule::ethApply(none, none, false) == A::Off);       // still off: nothing to start
+    CHECK(mm::EthernetModule::ethApply(w5500, w5500, true) == A::Live);     // the SPI device re-inits
+    CHECK(mm::EthernetModule::ethApply(lan, w5500, true) == A::Live);
+    CHECK(mm::EthernetModule::ethApply(lan, lan, false) == A::NextBoot);    // a running internal controller stays until the next boot
+    CHECK(mm::EthernetModule::ethApply(lan, none, false) == A::NextBoot);
+    CHECK(mm::EthernetModule::ethApply(none, w5500, false) == A::Live);     // tried, and a build without the driver says it failed
+}

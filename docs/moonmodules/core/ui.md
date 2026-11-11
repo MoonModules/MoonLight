@@ -35,6 +35,7 @@ What remains is the browser-side rendering behavior.
   - **Beside** the cards on a screen 960 px wide or more. The split handle between them sets the card column's width; dragged so wide the preview drops under 240 px, the preview moves to the small layout, and back while the same drag returns.
   - **Under** the cards, in a band whose height the split handle sets, which suits a phone.
   - **Floating**, dragged by its bar and staying where it is dropped, kept as fractions of the screen so it holds its place through a rotation.
+- The module panel resizes as a macOS window does (`panel.js`): nothing is drawn, and the cursor changes on the top-level card's left border, the split handle, on its bottom border and on its bottom-left corner, which beside the preview also widens it. A card's areas are fixed or expandable: a control or a row keeps its natural height, and an expandable area, the device map or a text area, takes a share of the height the panel gains or gives up, in proportion to its own, down to 80 px; the device map then zooms out to fit. The height is kept per page and per browser; a double-click on an edge returns the page to its natural size.
 - A screen under 960 px uses the small layout, under or floating, which the preview bar's ⬓ / ⧉ switches. ⤢ takes a wide screen's preview out of the side and ⤡ puts it back. All of it is kept per browser.
 - The preview bar's ⏺ records three seconds of the canvas as a GIF the browser saves, encoded by `gif.js` (GIF89a with a median-cut palette), for a preset's gallery preview.
 

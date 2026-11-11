@@ -25,7 +25,7 @@ const uint8_t kSrcIp[4] = {192, 168, 1, 50};
 // Build a WLED-valid presence packet; `mm` stamps the MoonLight marker (a MoonLight peer).
 void packet(uint8_t out[WledPacket::kSize], const char* name, bool mm) {
     WledPacket::build(out, kSrcIp, name, /*boardType=*/34, /*lightsOn=*/true);
-    if (mm) WledPacket::stampMmMarker(out);
+    if (mm) WledPacket::stampMarker(out);
 }
 }  // namespace
 

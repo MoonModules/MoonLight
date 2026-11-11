@@ -79,6 +79,8 @@ inline bool decodeEscape(const char*& p, char& c) {
     if (e == 'n') { c = '\n'; return true; }
     if (e == 'r') { c = '\r'; return true; }
     if (e == 't') { c = '\t'; return true; }
+    if (e == 'b') { c = '\b'; return true; }
+    if (e == 'f') { c = '\f'; return true; }
     if (e != 'u') { c = e; return true; }   // \" \\ \/ decode to the char itself
     unsigned v = 0;
     for (int k = 0; k < 4; k++, p++) {

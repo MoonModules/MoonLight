@@ -30,7 +30,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 /// Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.
 /// @card NetworkModule.png
 ///
-/// Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under @xref{the-cascade|The cascade} in the header.
+/// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under @xref{the-cascade|The cascade} in the header.
 ///
 /// @guide
 ///
@@ -138,10 +138,6 @@ public:
 
         // Always present, since every variant has a mode.
         controls_.addReadOnly("mode", modeStr_, sizeof(modeStr_));
-
-        // Expert-only: discovery works without it.
-        controls_.addControl("mDNS", mdnsEnabled_);
-        controls_.setAdvanced(controls_.count() - 1);
     }
 
     /// Advance the cascade, then apply anything a control changed live.
@@ -514,8 +510,6 @@ private:
     /// The name last advertised, so a live rename is noticed and re-registered.
     char lastMdnsName_[24] = {};
 
-    /// The `<name>.local` hostname, on IPv4 and IPv6.
-    bool mdnsEnabled_ = true;
     /// The storage behind the inherited status slot, which holds only a pointer into it.
     char statusBuf_[80] = {};   // 62 needed by the longest line, the link-local one: a 15-character address, a 23-character device name and .local
 
@@ -799,7 +793,7 @@ private:
 
     /// Publish the status with whether the local name answers, its name or why it failed, a warning then, since a silent failure looks like a device nothing can find (found by Funkelfetisch).
     void publishWithMdns() {
-        const bool wanted = mdnsEnabled_ && (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
+        const bool wanted = state_ == State::ConnectedEth || state_ == State::ConnectedSta;
         const char* why = platform::mdnsError();
         const size_t used = std::strlen(statusBuf_);
         if (wanted && mdnsRunning_) mm::formatTo(statusBuf_ + used, sizeof(statusBuf_) - used, ", %s.local", lastMdnsName_);
@@ -836,7 +830,7 @@ private:
     /// Start, restart or stop the local-name advertisement to match the state.
     void syncMdns() {
         bool attempted = false;
-        bool shouldRun = mdnsEnabled_ && (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
+        const bool shouldRun = state_ == State::ConnectedEth || state_ == State::ConnectedSta;   // the name is the address, advertised whenever a network carries the device
         const char* devName = readDeviceName();
         if (shouldRun && !mdnsRunning_) {
             // Marked only on success, so a failure retries next tick; the status says which it was.

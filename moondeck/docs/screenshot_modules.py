@@ -277,7 +277,8 @@ CORE_NAV_ROOT = {
     # Stats and Talk are MoonCloud children, each carrying its own consent.
     "MoonStatsModule": "MoonCloudModule",
     "MoonTalkModule": "MoonCloudModule",
-    "DevicesModule": "NetworkModule",
+    # Discovery is the fixed Devices child (wired-by-code).
+    "DevicesModule": "Devices",
     "ImprovProvisioningModule": "NetworkModule",
     # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in
@@ -741,9 +742,9 @@ def find_container_nav_names(host: str) -> dict[str, str]:
 
 
 def find_core_module_names(host: str) -> dict[str, str]:
-    """Return a map of type → live module name for core (always-present) modules.
-    Recurses the tree: some core modules (Mqtt, Devices, Improv) are children of
-    NetworkModule, not top-level, so a flat scan would miss them."""
+    """Return a map of type → live module name for core (always-present) modules and their nav roots.
+    Recurses the tree: some core modules are children (Mqtt and Improv under Network,
+    Discovery under Devices), so a flat scan would miss them."""
     r = _get(f"http://{host}/api/state", timeout=5)
     if not r.ok:
         return {}
@@ -752,7 +753,7 @@ def find_core_module_names(host: str) -> dict[str, str]:
     def walk(mods):
         for m in mods:
             t = m.get("type", "")
-            if t in CORE_MODULES and t not in result:
+            if (t in CORE_MODULES or t in CORE_NAV_ROOT.values()) and t not in result:
                 result[t] = m.get("name", "")
             walk(m.get("children", []))
 
@@ -1173,7 +1174,7 @@ def main() -> int:
                     continue
                 print(f"  {type_name} …", end=" ", flush=True)
                 # A top-level module is its own nav root (screenshot_container navs + cards by the
-                # same name). A CHILD module (Mqtt/Devices/Improv under Network) has no nav entry of
+                # same name). A CHILD module (Mqtt/Improv under Network, Discovery under Devices) has no nav entry of
                 # its own — nav to its parent root, then screenshot the child's own card by name.
                 parent_type = CORE_NAV_ROOT.get(type_name)
                 if parent_type:

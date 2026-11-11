@@ -203,6 +203,7 @@
 #include "core/system/MoonTalkModule.h"
 #include "core/system/ImprovProvisioningModule.h"
 #include "core/system/MqttModule.h"
+#include "core/system/Devices.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/util/ModuleFactory.h"
@@ -395,7 +396,8 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::MoonTalkModule>("MoonTalkModule", "core/system.md#talk");
     mm::ModuleFactory::registerType<mm::ImprovProvisioningModule>("ImprovProvisioningModule", "core/system.md#improv-provisioning");
     mm::ModuleFactory::registerType<mm::MqttModule>("MqttModule", "core/system.md#mqtt");
-    mm::ModuleFactory::registerType<mm::DevicesModule>("DevicesModule", "core/system.md#devices");
+    mm::ModuleFactory::registerType<mm::Devices>("Devices", "core/devices.md");
+    mm::ModuleFactory::registerType<mm::DevicesModule>("DevicesModule", "core/devices.md#discovery");
     mm::ModuleFactory::registerType<mm::NetworkModule>("NetworkModule", "core/system.md#network");
     mm::ModuleFactory::registerType<mm::EthernetModule>("EthernetModule", "core/system.md#ethernet");
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule", "core/system.md#wifi");
@@ -429,7 +431,7 @@ constexpr BootModule kBootModules[] = {
     {"NetworkModule", "AccessPointModule", nullptr, mm::platform::hasWiFi},
     {"NetworkModule", "ImprovProvisioningModule", nullptr, mm::platform::hasImprov},
     {"NetworkModule", "MqttModule", nullptr, mm::platform::hasNetwork},
-    {"NetworkModule", "DevicesModule", nullptr, true},
+    {"Devices", "DevicesModule", "Discovery", true},
     {"Drivers", "FixtureProfilesModule", nullptr, true},
     {"Drivers", "PreviewDriver", nullptr, true},
     {"MoonCloudModule", "MoonStatsModule", "Stats", true},

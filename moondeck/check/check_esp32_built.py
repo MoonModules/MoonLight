@@ -123,8 +123,8 @@ def with_ui(deps: set) -> set:
     return deps | ui_inputs() if UI_HEADER in deps else deps
 
 
-def compiled_sources(firmware):
-    """The files this firmware's build actually reads, from ninja's own dependency database.
+def ninja_deps(build_dir: Path):
+    """The repo files a build directory's outputs read, from ninja's own dependency database.
 
     A firmware compiles a SUBSET of src/: a driver gated behind a per-firmware flag (MM_PANEL_CARDS)
     is not in the S3 build at all. Comparing every source against that binary flags it stale forever
@@ -134,7 +134,6 @@ def compiled_sources(firmware):
     Returns None when the database cannot be read, and the caller then falls back to scanning
     everything: over-reporting staleness is the safe direction for a freshness gate.
     """
-    build_dir = ROOT / "build" / f"esp32-{firmware}"
     if not (build_dir / ".ninja_deps").exists():
         return None
     try:
@@ -153,7 +152,13 @@ def compiled_sources(firmware):
                 deps.add(path.relative_to(ROOT).as_posix())
             except ValueError:
                 pass   # outside the repo (IDF, toolchain) — not ours to watch
-    return with_ui(deps) or None
+    return deps or None
+
+
+def compiled_sources(firmware):
+    """The files this firmware's build reads, the UI's inputs with them; None when ninja's database cannot be read."""
+    deps = ninja_deps(ROOT / "build" / f"esp32-{firmware}")
+    return (with_ui(deps) or None) if deps else None
 
 
 def main():
@@ -203,12 +208,14 @@ def main():
             print(f"  build it: {build_cmd}")
             return 1
         mb_built = mb_bin.stat().st_mtime
-        mb_newest = max((f.stat().st_mtime for f in (ROOT / "moonbase").rglob("*")
-                         if f.is_file() and f.suffix in SOURCE_SUFFIXES
-                         and not SKIP_PARTS.intersection(f.parts)), default=0)
+        # What MoonBase builds from: its own project, CMake files and defaults included, which no compiler reports, plus the headers it shares from src/, from its build's ninja database.
+        mb_deps = ninja_deps(mb_bin.parent) or set()
+        mb_files = [ROOT / d for d in mb_deps] + [f for f in (ROOT / "moonbase").rglob("*") if not f.is_relative_to(ROOT / "moonbase" / "migrate")]
+        mb_newest = max((f.stat().st_mtime for f in mb_files if f.is_file() and f.suffix in SOURCE_SUFFIXES
+                         and not SKIP_PARTS.intersection(f.relative_to(ROOT).parts)), default=0)
         if mb_newest > mb_built:
-            record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a moonbase/ source is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
-            print(f"MoonBase image for {args.firmware} is STALE: a moonbase/ source is newer.")
+            record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a source MoonBase compiles is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
+            print(f"MoonBase image for {args.firmware} is STALE: a source it compiles is newer.")
             print(f"  rebuild: {build_cmd}")
             return 1
 

@@ -17,7 +17,7 @@
 
 using namespace mm;
 
-// A published board map hides its fourteen pin controls (soldered lines, nothing to edit), and the pin map reads a hidden pin control as free. These tests pin the bridge: while such a board is selected the lines reach the map through fixedPins(), so a collision with another driver is flagged; while an editable board is selected the visible controls carry the claim instead.
+// A published board map hides its fourteen pin controls and the pin map reads a hidden pin control as free. These tests pin the bridge: a selected published board reaches the map through fixedPins(), an editable board through its visible controls.
 
 namespace {
 
@@ -65,7 +65,7 @@ const ListSource* pinsSource(const MoonModule& m) {
 
 std::string allRows(const ListSource& src) {
     std::string out;
-    for (uint8_t i = 0; i < src.listRowCount(); i++) {
+    for (ListRow i = 0; i < src.listRowCount(); i++) {
         JsonSink r; src.writeListRow(r, i);
         out += r.data();
     }
@@ -132,7 +132,7 @@ TEST_CASE("PinsModule flags a HUB75 board line colliding with an LED lane") {
     CHECK(rows.find("\"role\":\"clk\"") != std::string::npos);
     // Both GPIO-18 rows carry the conflict.
     size_t flagged = 0;
-    for (uint8_t i = 0; i < src->listRowCount(); i++) {
+    for (ListRow i = 0; i < src->listRowCount(); i++) {
         JsonSink r; src->writeListRow(r, i);
         const std::string row(r.data());
         if (row.find("\"gpio\":18") != std::string::npos &&
@@ -141,7 +141,7 @@ TEST_CASE("PinsModule flags a HUB75 board line colliding with an LED lane") {
     CHECK(flagged == 2);
 }
 
-// A published map can land a line on a pin THIS module has wired to PSRAM (the MatrixPortal's b, d and b2 sit on 35-37, free on its quad-PSRAM part and the PSRAM bus on an octal one). Routing the LCD bus there resets the chip with no panic, so the driver refuses before init and names the line, the same guard ParallelLedDriver applies to its lanes.
+// A published map can land a line on a pin THIS module has wired to PSRAM (the MatrixPortal's b, d and b2 on 35-37, the PSRAM bus on an octal part). The LCD bus there resets the chip with no panic, so the driver refuses before init.
 TEST_CASE("Hub75Driver refuses a line on a flash/PSRAM pin and names it, rather than resetting") {
     platform::GpioCapability psram;
     psram.reserved = true;

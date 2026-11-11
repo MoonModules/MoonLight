@@ -15,7 +15,7 @@ class JsonSink;
 ///
 /// ## Core declares, light implements
 ///
-/// The light domain's `Drivers` container implements `LightOutput` and claims its seat from prepare, and the WLED shim, MQTT and MoonStats read through it. Core reaches the light pipeline without including a light header.
+/// The light domain's `Drivers` container implements `LightOutput` and claims its seat from prepare, and the WLED shim, MQTT, MoonStats and the device summary read through it. Core reaches the light pipeline without including a light header.
 ///
 /// With no light output the seat is empty, and every reader degrades to the all-zero summary and palette 0.
 ///
@@ -29,18 +29,18 @@ class JsonSink;
 ///
 /// A color wheel (Home Assistant, HomeKit through MQTT, the WLED app) picks a palette by color. Matching happens in hue and saturation, so the interface carries those two, and the RGB forms are conversions on top.
 
-/// A small plain-data summary of the light pipeline's output.
+/// A small plain-data summary of the light pipeline's output, @xref{the-summary-is-plain-data|overwritten in place}.
 struct LightSummary {
     uint32_t lightCount = 0;              ///< total physical lights driven (Layer::physicalLightCount()).
     uint8_t  channelsPerLight = 3;        ///< 3 = RGB, 4 = RGBW, more = multi-channel DMX fixtures.
 };
 
-/// The light domain as the domain-neutral transports reach it.
+/// The light domain as the domain-neutral transports reach it: @xref{core-declares-light-implements|core declares, light implements}.
 class LightOutput {
 public:
     /// The live pipeline's shape.
     virtual const LightSummary& summary() const = 0;
-    /// The palette whose representative color is nearest a hue (0..359) and saturation (0..255).
+    /// The palette whose representative color is nearest a hue (0..359) and saturation (0..255), @xref{palettes-as-colors|matched in hue and saturation}.
     virtual uint8_t nearestPalette(uint16_t hue, uint8_t sat) const = 0;
     /// A palette's representative hue (0..359) and saturation (0..255).
     virtual void paletteHueSat(uint8_t index, uint16_t& hue, uint16_t& sat) const = 0;
@@ -48,6 +48,10 @@ public:
     virtual uint8_t paletteCount() const = 0;
     /// Every palette name as JSON strings, comma-separated, in picker order.
     virtual void writePaletteNames(JsonSink& sink) const = 0;
+    /// Each enabled driver that lights something, as `{"driver":<type>,"lights":<count>,"fps":<frames a second>}`, with `"movingHeads":true` when its fixtures aim, comma-separated.
+    virtual void writeOutputs(JsonSink& sink) const = 0;
+    /// Each enabled effect on an enabled layer, as its name in JSON, comma-separated.
+    virtual void writeEffects(JsonSink& sink) const = 0;
 
     /// A palette's representative color at full value, so brightness stays the caller's concern and nothing dims twice.
     RGB paletteRgb(uint8_t index) const {

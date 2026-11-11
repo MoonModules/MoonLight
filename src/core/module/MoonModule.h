@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/Control.h"
+#include "core/module/NetworkUse.h"   // what a module reports of its network traffic, as it reports its memory
 #include "core/util/ScratchBuffer.h"
 #include "core/util/fnv.h"
 #include "platform/platform.h"
@@ -434,6 +435,9 @@ public:
     uint8_t childCount() const { return childCount_; }
     /// One child by index, or null past the end.
     MoonModule* child(uint8_t i) const { return i < childCount_ ? children_[i] : nullptr; }
+
+    /// Report the services this module offers on the network and the traffic it exchanges, from counters it already keeps; a module with no network use reports nothing.
+    virtual void reportNetworkUse(NetworkUse& /*use*/) const {}
 
     /// This module's instance size, which registration sets once.
     size_t classSize() const { return classSize_ > 0 ? classSize_ : sizeof(MoonModule); }

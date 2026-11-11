@@ -6,7 +6,7 @@
     "Mqtt": "MqttModule",
     "Network": "NetworkModule"
   },
-  "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, mDNS announcing over a real radio, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
+  "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
   "also": [
     "NetworkModule",
     "MqttModule",
@@ -116,114 +116,6 @@
             "p95": 20,
             "min": 20,
             "max": 20,
-            "n": 1
-          },
-          "last_updated": "2026-09-30"
-        },
-        "teensy41": {
-          "tick_us": {
-            "p50": 2146,
-            "p95": 2146,
-            "min": 2146,
-            "max": 2146,
-            "n": 1
-          },
-          "free_heap": {
-            "p50": 324688,
-            "p95": 324688,
-            "min": 324688,
-            "max": 324688,
-            "n": 1
-          },
-          "max_alloc_block": {
-            "p50": 322784,
-            "p95": 322784,
-            "min": 322784,
-            "max": 322784,
-            "n": 1
-          },
-          "last_updated": "2026-10-11"
-        }
-      }
-    },
-    {
-      "name": "mdns-off",
-      "description": "The responder off. On a device this stops real announcement traffic on a real radio, where the desktop advertises nothing at all.",
-      "op": "set_control",
-      "id": "Network",
-      "key": "mDNS",
-      "value": false
-    },
-    {
-      "name": "mdns-off-took",
-      "op": "expect_control",
-      "id": "Network",
-      "key": "mDNS",
-      "equals": false
-    },
-    {
-      "name": "mdns-on",
-      "description": "And back on, which re-registers the service. The cost of that registration is what a desktop cannot show.",
-      "op": "set_control",
-      "id": "Network",
-      "key": "mDNS",
-      "value": true
-    },
-    {
-      "name": "measure-mdns-cycled",
-      "description": "The render loop after a full off-on cycle. A responder that leaks a socket or a task shows here rather than in a unit test.",
-      "op": "measure",
-      "observed": {
-        "esp32s3-n16r8": {
-          "tick_us": {
-            "p50": 8692,
-            "p95": 9102,
-            "min": 8692,
-            "max": 9102,
-            "n": 2
-          },
-          "free_heap": {
-            "p50": 8320031,
-            "p95": 8482995,
-            "min": 8320031,
-            "max": 8482995,
-            "n": 2
-          },
-          "max_alloc_block": {
-            "p50": 61440,
-            "p95": 69632,
-            "min": 61440,
-            "max": 69632,
-            "n": 2
-          },
-          "last_updated": "2026-09-30"
-        },
-        "desktop-windows": {
-          "tick_us": {
-            "p50": 2834,
-            "p95": 2834,
-            "min": 2834,
-            "max": 2834,
-            "n": 1
-          },
-          "last_updated": "2026-09-30"
-        },
-        "desktop-docker-arm64": {
-          "tick_us": {
-            "p50": 237,
-            "p95": 237,
-            "min": 237,
-            "max": 237,
-            "n": 1
-          },
-          "last_updated": "2026-09-30"
-        },
-        "desktop-macos": {
-          "tick_us": {
-            "p50": 19,
-            "p95": 19,
-            "min": 19,
-            "max": 19,
             "n": 1
           },
           "last_updated": "2026-09-30"
@@ -491,13 +383,6 @@
       "description": "A device that forgets its network settings is one somebody has to set up twice.",
       "op": "reboot",
       "timeout": 60
-    },
-    {
-      "name": "mdns-survived",
-      "op": "expect_control",
-      "id": "Network",
-      "key": "mDNS",
-      "equals": true
     },
     {
       "name": "eth-survived",

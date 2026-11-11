@@ -106,6 +106,10 @@
       }
      ]
     },
+    "identify": {
+     "line": "Blink the lights for five seconds, so this device is found by looking.",
+     "more": "Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details."
+    },
     "palette": {
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
      "tests": [
@@ -5158,17 +5162,37 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/MqttModule.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mqttmodule"
   },
+  "Devices": {
+   "line": "The container for what reaches past this device to the others on the network: the Discovery list, and the groups that join it.",
+   "summary": "Fleet-scope rather than this-device, so neither System nor Network: a device's own interfaces live under Network, the devices it finds live here.",
+   "role": "generic",
+   "dim": 0,
+   "doc": "core/devices.md",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/Devices.h"
+  },
   "DevicesModule": {
    "line": "Discovers other devices on the LAN, MoonLight and WLED among them, and lists them, this one included and marked as such.",
-   "summary": "The last-known list survives a reboot. A child of Network, discovery depending on the network being up.",
+   "summary": "The Discovery card under Devices, listening once the network is up; the list is rebuilt within seconds of boot.",
    "guide": [
+    {
+     "title": "The map",
+     "text": "This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html)."
+    },
+    {
+     "title": "The emoji",
+     "text": "Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls."
+    },
+    {
+     "title": "As many devices as memory holds",
+     "text": "When memory runs short the card says \"memory full\", and a new device replaces the one heard longest ago, MoonLight boards kept longest."
+    },
     {
      "title": "Finding WLED devices",
      "text": "WLED lists a device only from the broadcast copy, and the copy costs the rest of the LAN next to nothing.\n\nA network that drops multicast is detected, and the status says so ([IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping))."
     },
     {
      "title": "Boards by name",
-     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer, and a host setting, show a board heard this session by its name beside its address. A host setting shows them as of the page's last load."
+     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DevicesModule.png",
@@ -5182,6 +5206,9 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
+    },
+    "addedIps": {
+     "line": "Devices that announce nothing, a Tasmota among them, by IP address, comma-separated."
     },
     "devices": {
      "line": "The discovered devices; a row expands to its details.",
@@ -5202,19 +5229,19 @@
        "line": "How many color lights a Hue bridge has."
       },
       "ageSec": {
-       "line": "When it was last heard, or cached for one restored from flash and not heard since."
+       "line": "When it was last heard."
       }
      }
     }
    },
    "role": "generic",
    "dim": 0,
-   "doc": "core/system.md#devices",
+   "doc": "core/devices.md#discovery",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DevicesModule.h"
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and mDNS; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
+   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",
@@ -5237,19 +5264,6 @@
       {
        "title": "Firmware MoonBase joins the apps network",
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:live:scenario_Firmware_MoonBase_joins_the_apps_network"
-      }
-     ]
-    },
-    "mDNS": {
-     "line": "The `<name>.local` hostname, on IPv4 and IPv6.",
-     "tests": [
-      {
-       "title": "Network hardware reconfigures live",
-       "url": "https://moonmodules.org/MoonLight/reference/tests.html#uncategorized:live:scenario_Network_hardware_reconfigures_live"
-      },
-      {
-       "title": "Network identity and discovery",
-       "url": "https://moonmodules.org/MoonLight/reference/tests.html#networkmodule:scenario:scenario_Network_identity_and_discovery"
       }
      ]
     }
@@ -5541,6 +5555,12 @@
      "caption": "Every service in turn: audio, button, analog, infrared, and a scripted one."
     }
    ]
+  },
+  "core/devices.md": {
+   "title": "Devices",
+   "base": "Devices",
+   "line": "The container for what reaches past this device to the others on the network: the Discovery list, and the groups that join it.",
+   "summary": "Fleet-scope rather than this-device, so neither System nor Network: a device's own interfaces live under Network, the devices it finds live here."
   }
  }
 }

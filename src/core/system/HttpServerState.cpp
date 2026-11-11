@@ -178,6 +178,8 @@ bool HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, 
                 leaf([&](JsonSink& s) {
                     if (c.type == ControlType::Password) writeObfuscatedPassword(s, static_cast<const char*>(c.ptr));   // as the full state shows it
                     else writeControlValue(s, c);
+                    // A list's detail rides beside its value, a sibling member of the patch entry, so the hash covers both and a changed detail is sent.
+                    if (c.type == ControlType::List) writeListDetail(s, c);
                 });
             }
         }
@@ -599,6 +601,7 @@ void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor&
         const auto* ls = static_cast<const ListSource*>(c.ptr);
         if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
         if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
+        if (ls && ls->listAsGraph()) sink.append(",\"graph\":true");
         if (ls && ls->listAsPads()) {
             sink.append(",\"pads\":true");
             const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();
