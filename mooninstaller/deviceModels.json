@@ -734,11 +734,10 @@
       "WiFi",
       "Ethernet",
       "Audio",
+      "Buttons",
       "Relay"
     ],
-    "planned": [
-      "Button"
-    ],
+    "planned": [],
     "state": {
       "System": {
         "deviceModel": "Gledopto GL-C-616WL"
@@ -770,9 +769,20 @@
         "Audio": {
           "type": "AudioService",
           "mode": 2,
-          "sckPin": 14,
+          "micMode": 1,
           "wsPin": 15,
           "sdPin": 32
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 17,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
         }
       }
     }

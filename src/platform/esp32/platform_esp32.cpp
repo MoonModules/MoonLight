@@ -248,7 +248,7 @@ void writeExec(void* dst, const void* src, size_t len) {
 }
 
 void yield() {
-    vTaskDelay(pdMS_TO_TICKS(1));
+    taskYIELD();   // a turn for a ready task of this priority or above, with no wait: the spin-on-a-lock callers' holder is microseconds from done
 }
 
 void delayMs(uint32_t ms) {
@@ -258,10 +258,6 @@ void delayMs(uint32_t ms) {
 // The interface is the embedded one alone.
 bool uiFolderFile(const char*, char*&, size_t&) { return false; }
 void setUiFolder(const char*) {}
-
-void pauseLoop() {
-    // Nothing: yield() here is vTaskDelay(1), which already yields to the idle task for a tick. A further sleep would come straight out of the render budget.
-}
 
 void delayUs(uint32_t us) {
     // Busy-wait, fine for the few-hundred-µs protocol gaps this exists for (e.g. the WS2812 inter-frame latch), off any latency-critical context.
@@ -1786,7 +1782,7 @@ void netSetDhcp(NetIface iface) {
     ESP_LOGI(NET_TAG, "DHCP restarted on %s", iface == NetIface::Eth ? "eth" : "sta");
 }
 
-// The discovery stack, brought up once and kept up. Advertising is gated on the user's toggle, so toggling back on re-advertises without a full restart.
+// The discovery stack, brought up once and kept up, so a reconnect or a rename re-advertises on the running stack.
 static std::atomic<bool> mdnsStackUp_{false};
 // Held across a name query and the stack's release, since mdns_free deletes the semaphore an in-flight query waits on.
 static std::mutex mdnsQueryMutex_;

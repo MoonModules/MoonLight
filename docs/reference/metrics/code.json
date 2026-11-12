@@ -1,10 +1,10 @@
 {
  "#define used as a constant": 1,
  "(duplicated lines)": 3193,
- "(total)": 1614,
+ "(total)": 1613,
  "blocking call on the render path": 198,
  "complex function": 288,
- "deeply nested": 103,
+ "deeply nested": 102,
  "double in firmware code": 2,
  "duplicated block": 712,
  "large file": 24,

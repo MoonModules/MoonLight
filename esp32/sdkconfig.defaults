@@ -90,6 +90,10 @@ CONFIG_ESP_WIFI_ENABLED=y
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
 
+# A 1 ms scheduler tick, Arduino-ESP32's rate: the code waits in whole milliseconds, and at IDF's 100 Hz
+# pdMS_TO_TICKS of anything under 10 ms is 0 ticks, a wait that never blocks.
+CONFIG_FREERTOS_HZ=1000
+
 # Optimize for performance (-O2). IDF's default is COMPILER_OPTIMIZATION_DEBUG (-Og), which is the wrong
 # trade for this firmware: the WS2812 shift encoder is SWAR bit-twiddling (delta-swaps, inlined templates)
 # on a 32-bit Xtensa, code whose whole performance is register allocation across inlined calls, which -Og

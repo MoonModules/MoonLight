@@ -796,8 +796,8 @@ private:
 
     // HTTP handling
 
-    /// Serve one connection; false when no request arrived within `patienceMs`, the connection left open to be parked.
-    bool handleConnection(platform::TcpConnection& conn, int patienceMs = 5);
+    /// Serve one connection; false when its request has yet to arrive, the connection left open to be parked.
+    bool handleConnection(platform::TcpConnection& conn);
     void park(platform::TcpConnection& conn);
     void serveParked();
     void serveConnections();

@@ -149,7 +149,7 @@ void HttpServerModule::serveParked() {
     const uint32_t now = platform::millis();
     for (int i = 0; i < kParkedSlots; i++) {
         if (!parked_[i].valid()) continue;
-        if (handleConnection(parked_[i], 0)) parked_[i].close();
+        if (handleConnection(parked_[i])) parked_[i].close();
         else if (now - parkedAt_[i] >= kParkMs) parked_[i].close();
     }
 }
@@ -424,24 +424,21 @@ static bool isStreamingUpload(const char* req) {
            std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
 }
 
-bool HttpServerModule::handleConnection(platform::TcpConnection& conn, int patienceMs) {
+bool HttpServerModule::handleConnection(platform::TcpConnection& conn) {
     uint8_t buf[2048];
     int totalRead = 0;
 
-    // read() is non-blocking, so a newly accepted connection gets a short bounded wait for its request: five polls 1 ms apart, a yield each on a 100 Hz FreeRTOS tick. An idle connection costs at most that.
-    for (int empties = 0; totalRead < static_cast<int>(sizeof(buf) - 1);) {
+    // read() is non-blocking and the render loop waits on no socket: a connection whose request is still on its way is parked, and the next tick reads it.
+    while (totalRead < static_cast<int>(sizeof(buf) - 1)) {
         int n = conn.read(buf + totalRead, sizeof(buf) - 1 - totalRead);
         if (n > 0) {
             totalRead += n;
             buf[totalRead] = 0;
             if (std::strstr(reinterpret_cast<char*>(buf), "\r\n\r\n")) break;
-            empties = 0;                 // got data: reset the patience counter
         } else if (n == 0) {
-            return true;                      // peer closed
-        } else {                          // -1 = nothing pending yet
-            if (totalRead > 0) break;    // had a partial then nothing more: process it
-            if (++empties > patienceMs) break;   // no bytes within the patience: the caller decides
-            platform::delayMs(1);
+            return true;   // peer closed
+        } else {
+            break;         // nothing pending: a partial is processed, an empty one parked
         }
     }
 

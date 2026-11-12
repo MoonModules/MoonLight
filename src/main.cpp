@@ -322,7 +322,6 @@ void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort) {
 
     paced:
         // Pace the loop rather than spin, since a bare yield burns a whole core: @xref{why-the-loop-pacing-uses-goto-and-a-sleep}.
-        mm::platform::yield();
         mm::platform::pauseLoop();
     }
 

@@ -4,7 +4,7 @@
 #include "core/util/TryLock.h"     // staging, shared by a writer task and the render copy
 #include "light/effects/EffectBase.h"
 #include "light/layers/Layer.h"    // the mapping a sender-mapped frame is placed through
-#include "platform/platform.h"     // yield, while a writer waits out the render copy
+#include "platform/platform.h"     // delayMs, while a writer waits out the render copy
 
 #include <atomic>
 #include <cstring>
@@ -85,7 +85,8 @@ public:
     template <bool kWait>
     bool acquire() {
         if constexpr (!kWait) return lock_.tryAcquire();
-        for (uint32_t spins = 0; !lock_.tryAcquire(); spins++) if (spins >= kSpins) platform::yield();
+        // Past the spins it sleeps a tick, since a yield reaches only its own priority and above, and a single-core chip's render loop holds it below.
+        for (uint32_t spins = 0; !lock_.tryAcquire(); spins++) if (spins >= kSpins) platform::delayMs(1);
         return true;
     }
 
@@ -147,7 +148,7 @@ private:
         }
     }
 
-    static constexpr uint32_t kSpins = 256;   ///< tries before a waiter gives up, a few microseconds of spinning
+    static constexpr uint32_t kSpins = 256;   ///< tries before a waiter sleeps, a few microseconds of spinning
     static constexpr size_t kChunkBytes = 4096;   ///< one lock hold, tens of microseconds
     EffectBase& owner_;
     ScratchBuffer<uint8_t> staging_{owner_};             ///< the held frame

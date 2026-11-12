@@ -116,14 +116,14 @@ void  freeExec(void* ptr, size_t bytes);
 /// Copy emitted code into an allocExec block and make it executable; `len` may be any length.
 void  writeExec(void* dst, const void* src, size_t len);
 
-/// Give the scheduler a turn.
+/// Hand the processor to a ready task of the caller's priority or above, returning at once.
 void yield();
 
 /// Which core the caller runs on, safe in an ISR; a driver seeing core 1 knows the render/encode split is engaged.
 uint8_t currentCore();
 /// Upper bound on cores running driver code at once, sizing per-CPU scratch; single-core targets leave slice 1 unused.
 inline constexpr uint8_t kMaxCores = 2;
-/// Pace the render loop for one pass, so a desktop loop stops spinning a whole core.
+/// Pace the render loop for one pass with a short real wait, so every task sharing its core gets a turn.
 void pauseLoop();
 /// Blocking sleep; only use outside the hot path.
 void delayMs(uint32_t ms);

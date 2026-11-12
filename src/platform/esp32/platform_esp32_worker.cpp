@@ -54,7 +54,7 @@ namespace {
 constexpr uint32_t kStopJoinTimeoutMs = 300;
 
 // The opaque WorkerTask::impl. Holds the RTOS handle, the caller's fn/user, and a stop flag the spawned trampoline checks.
-struct EspWorker : InternalRamObject {   // the timer interrupt reads it with the flash cache possibly off
+struct EspWorker {
     TaskHandle_t handle = nullptr;
     WorkerFn fn = nullptr;
     void* user = nullptr;
@@ -112,33 +112,48 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
     return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(timeoutMs)) != 0;
 }
 
-// Without a timer the task sleeps a whole scheduler tick, which stretches a paced frame tenfold, so the first time says so.
-static void sleepTick(EspWorker* w) {
-    if (!w->sleepFellBack) ESP_LOGW("mm_worker", "sleepUs: no timer, sleeping a scheduler tick per gap");
-    w->sleepFellBack = true;
+// Without a timer the task sleeps a whole scheduler tick, far longer than the gap asked for, so the first time says so.
+static void sleepTick(bool& fellBack) {
+    if (!fellBack) ESP_LOGW("mm_worker", "sleepUs: no timer, sleeping a scheduler tick per gap");
+    fellBack = true;
     vTaskDelay(1);
 }
 
-// The wake runs in the timer's interrupt, since the esp_timer task shares a core and a priority with a busy render loop and waited for its time slice: a 165 µs gap took 7 ms. In IRAM, the interrupt firing while a flash write has the cache off.
+// The wake runs in the timer's interrupt, since the timer task waited behind a busy render loop: a 165 µs gap took 7 ms. In IRAM, firing while a flash write has the cache off; its argument is the task handle, its only read.
 static void IRAM_ATTR sleepWake(void* arg) {
     BaseType_t woken = pdFALSE;
-    vTaskNotifyGiveFromISR(static_cast<EspWorker*>(arg)->handle, &woken);
+    vTaskNotifyGiveFromISR(static_cast<TaskHandle_t>(arg), &woken);
     if (woken) esp_timer_isr_dispatch_need_yield();   // ESP-IDF's rule for an ISR-dispatched callback, which switches once every due timer ran
 }
 
-// A one-shot esp_timer notifies the task, so a gap below the 10 ms scheduler tick costs no busy-wait; a stop's notification ends it early, as it should.
+// Block the calling task for `us` on a one-shot timer that notifies it, finer than the scheduler tick, the core free meanwhile. The timer is the first sleeper's. False when no timer could run.
+static bool sleepOnTimer(esp_timer_handle_t& timer, uint32_t us) {
+    if (!timer) {
+        const esp_timer_create_args_t args = {
+            .callback = &sleepWake,
+            .arg = xTaskGetCurrentTaskHandle(), .dispatch_method = ESP_TIMER_ISR, .name = "sleepUs", .skip_unhandled_events = true};
+        if (esp_timer_create(&args, &timer) != ESP_OK) { timer = nullptr; return false; }
+    }
+    if (esp_timer_start_once(timer, us) != ESP_OK) return false;
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(us / 1000 + 20));   // bounded, so a lost wake costs one gap and no hang
+    esp_timer_stop(timer);   // a notification that woke it early leaves the timer armed
+    return true;
+}
+
+// A stop's notification ends the sleep early, as it should.
 void sleepUs(WorkerTask& t, uint32_t us) {
     auto* w = static_cast<EspWorker*>(t.impl);
     if (!w || w->stop.load(std::memory_order_acquire)) return;
-    if (!w->sleepTimer) {
-        const esp_timer_create_args_t args = {
-            .callback = &sleepWake,
-            .arg = w, .dispatch_method = ESP_TIMER_ISR, .name = "sleepUs", .skip_unhandled_events = true};
-        if (esp_timer_create(&args, &w->sleepTimer) != ESP_OK) { w->sleepTimer = nullptr; sleepTick(w); return; }
-    }
-    if (esp_timer_start_once(w->sleepTimer, us) != ESP_OK) { sleepTick(w); return; }
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(us / 1000 + 20));   // bounded, so a lost wake costs one gap and no hang
-    esp_timer_stop(w->sleepTimer);   // a stop that woke it early leaves the timer armed
+    if (!sleepOnTimer(w->sleepTimer, us)) sleepTick(w->sleepFellBack);
+}
+
+// The render loop blocks a moment each pass so every task on its core gets a turn: a yield reaches only its own priority and above, and a frame with no wait starved mDNS and Improv. The render loop's alone.
+void pauseLoop() {
+    // Long enough for the scheduler to switch a waiting task in, short against a frame: half a percent of an 8 ms one.
+    static constexpr uint32_t kLoopPauseUs = 50;
+    static esp_timer_handle_t timer = nullptr;
+    static bool fellBack = false;
+    if (!sleepOnTimer(timer, kLoopPauseUs)) sleepTick(fellBack);
 }
 
 void stopPinnedTask(WorkerTask& t) {
@@ -147,9 +162,9 @@ void stopPinnedTask(WorkerTask& t) {
     w->stop.store(true, std::memory_order_release);   // the fn re-checks this after its next wake
     if (w->handle) xTaskNotifyGive(w->handle);         // wake it so it observes the stop
     // Wait for the trampoline to run out and delete itself, bounded rather than infinite: @xref{stopping-is-bounded-never-infinite|the deadlock an unbounded spin caused}.
-    const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(kStopJoinTimeoutMs);
+    const TickType_t start = xTaskGetTickCount();
     while (!w->finished.load(std::memory_order_acquire)) {
-        if (xTaskGetTickCount() > deadline) {
+        if (xTaskGetTickCount() - start >= pdMS_TO_TICKS(kStopJoinTimeoutMs)) {   // elapsed, which holds across the counter's wrap
             // DETACH, hand `w` to the trampoline. The exchange makes exactly one side free it: if the trampoline already ran (raced us to `detached`), WE free `w` here; otherwise the trampoline frees it when it finally exits. Either way `w` is freed once, never used-after-free, and this caller returns instead of deadlocking (see the timeout rationale above).
             if (w->detached.exchange(true, std::memory_order_acq_rel)) delete w;
             t.impl = nullptr;

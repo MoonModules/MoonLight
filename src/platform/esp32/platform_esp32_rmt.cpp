@@ -337,8 +337,8 @@ bool rmtWs2812Wait(RmtWs2812Handle& h, uint32_t timeoutMs) {
         // Spin first and yield only if the frame is genuinely long, since the shortest sleep is a whole scheduler tick.
         // A frame clocking out in a fraction of a millisecond still cost the full tick, measured flat on the bench whatever the light or lane count.
         // That is the scheduler rather than the wire, and a frame here is bounded and short.
-        // So busy-waiting to about one tick keeps the processor for the case that is over in microseconds, while still yielding on a long strand.
-        const int64_t spinUntil = esp_timer_get_time() + 10000;   // ~1 scheduler tick
+        // So busy-waiting up to one tick keeps the processor for the case that is over in microseconds, while still yielding on a long strand.
+        const int64_t spinUntil = esp_timer_get_time() + 1000000 / configTICK_RATE_HZ;
         while (s_hi[st->channelId].busy) {
             const int64_t now = esp_timer_get_time();
             if (now > deadline) return false;

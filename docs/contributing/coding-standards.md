@@ -97,7 +97,7 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 
 **A function split out of a per-light loop stays a step, not a call.** Splitting one to satisfy the complex-function rule keeps it inline in the same header, and the target's `-O2 -S` shows no call left; where one is, `[[gnu::always_inline]]` on that helper.
 
-**A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 100, so `pdMS_TO_TICKS` below 10 ms is 0 and a wait with it spins the task.
+**A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 1000, so 1 ms is the shortest blocking wait and a shorter one is a `platform::sleepUs` timer wake. A spinning loop starves the tasks below it on its core, so the render loop waits in `platform::pauseLoop` each pass.
 
 ## Shaping a module
 
