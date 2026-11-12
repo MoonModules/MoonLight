@@ -472,7 +472,7 @@ const char* flashMode() {
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
 // Whether the radio stack was brought up: the companion link starts there, since esp_wifi_init is what connects to the chip, so while Ethernet carries the device it stays unstarted.
-static bool coprocessorLinkStarted_ = false;
+static std::atomic<bool> coprocessorLinkStarted_{false};
 // The status line and what the chip reported, one record for the line and the update offer.
 static CoprocessorStatus coprocessorStatus_;
 #endif
@@ -531,9 +531,8 @@ bool coprocessorStartLinkSync() {
     }
     coprocessorLinkStarted_ = true;   // the status line reads link down from here until the chip answers
     esp_hosted_connect_to_slave();    // waits for the chip; a live link is left as it is
-    if (is_transport_tx_ready()) return true;
-    coprocessorLinkStarted_ = false;  // given up: the line offers connect again rather than reading link down for good
-    return false;
+    // A failed attempt stays started: esp_hosted keeps its retry count until a success, so a second attempt only pulses the chip's reset; a chip that answers later still brings the link up.
+    return is_transport_tx_ready() != 0;
 }
 
 static void coprocessorConnectTask(void*) {
@@ -546,7 +545,9 @@ bool coprocessorConnect() {
     // 4 KB as the version query's caller needs; priority 5, as the install tasks.
     return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
 }
+bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 #else
+bool wifiRadioReady() MM_NONBLOCKING { return true; }   // a native radio starts whenever asked
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
@@ -1389,7 +1390,8 @@ static bool ensureWifiInit() {
     ensureNetifInit();
 
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
-    coprocessorLinkStarted_ = true;   // the init below connects to the companion chip
+    // The init connects to the companion chip and waits for it, up to about 20 s on one that does not answer, on the render thread: refused until the link is up, which starts on its own task, so the cascade falls back rather than the watchdog firing.
+    if (!is_transport_tx_ready()) { coprocessorConnect(); return false; }
 #endif
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_err_t err = esp_wifi_init(&cfg);

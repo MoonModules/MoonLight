@@ -1967,7 +1967,12 @@ static std::atomic<bool> testWifiStaAvailable{false};
 void setTestWifiStaAvailable(bool available) { testWifiStaAvailable.store(available, std::memory_order_relaxed); }
 static char testLastStaSsid_[33] = {};
 const char* testLastStaSsid() { return testLastStaSsid_; }
+// Test seam: a radio that waits for its chip, as a WiFi coproc board's does before the link is up; ready by default.
+static std::atomic<bool> testWifiRadioReady{true};
+void setTestWifiRadioReady(bool ready) { testWifiRadioReady.store(ready, std::memory_order_relaxed); }
+bool wifiRadioReady() MM_NONBLOCKING { return testWifiRadioReady.load(std::memory_order_relaxed); }
 bool wifiStaInit(const char* ssid, const char* /*password*/) {
+    if (!wifiRadioReady()) return false;   // refused before any join, as the board's radio refuses
     std::snprintf(testLastStaSsid_, sizeof(testLastStaSsid_), "%s", ssid ? ssid : "");
     return testWifiStaAvailable.load(std::memory_order_relaxed);
 }
@@ -2045,6 +2050,7 @@ void setTestWifiApAvailable(bool available) {
 }
 const WifiApConfig& testLastApConfig() { return testApConfig_; }
 bool wifiApInit(const WifiApConfig& cfg) {
+    if (!wifiRadioReady()) return false;
     std::snprintf(testApName_, sizeof(testApName_), "%s", cfg.name ? cfg.name : "");
     std::snprintf(testApPassword_, sizeof(testApPassword_), "%s", cfg.password ? cfg.password : "");
     testApUp_ = testApAvailable_;

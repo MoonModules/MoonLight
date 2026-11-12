@@ -284,6 +284,12 @@ const char* coprocessorLine() MM_NONBLOCKING;
 const char* coprocessorHostVersion();
 /// Whether the radio chip has settled on firmware that does not match the host's, the update the Firmware card offers.
 bool coprocessorOutdated() MM_NONBLOCKING;
+/// Whether the WiFi radio can start now: always on a native radio, and on a board whose radio is a separate chip once the link to it is up, since starting it before waits on the chip.
+bool wifiRadioReady() MM_NONBLOCKING;
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Make the radio wait for its chip as a WiFi coproc board's does, refusing the station and the access point until it is ready, for a host test.
+void setTestWifiRadioReady(bool ready);
+#endif
 /// Start the link to the radio chip on its own task where it is still unstarted, so its firmware can be read and updated over Ethernet; false where there is no such chip or the task cannot start.
 bool coprocessorConnect();
 

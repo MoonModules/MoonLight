@@ -675,3 +675,44 @@ TEST_CASE("the Network card says whether the local name answers, and why when it
     mm::platform::setTestWifiStaIPv4(nullptr);
     mm::platform::setTestWifiStaAvailable(false);
 }
+
+// A WiFi coproc whose link is not up refuses the radio, which waits on the chip; the cascade says so and starts over as soon as the chip answers, rather than a retry interval later.
+TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins as soon as it answers") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestWifiRadioReady(false);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("coproc-home", "pw");
+        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi, which refuses
+        CHECK(std::strstr(w.net.status(), "waiting for the WiFi coproc") != nullptr);
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") != 0);
+        mm::platform::setTestNowMs(1000 + 5000);
+        w.net.tick1s();   // still waiting: the radio refuses every join
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") != 0);
+        mm::platform::setTestWifiRadioReady(true);
+        mm::platform::setTestNowMs(1000 + 6000);   // well inside the 60 s retry interval
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") == 0);
+    }
+    mm::platform::setTestWifiRadioReady(true);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// With no network known, the access point is how a user reaches the device, so it opens the tick the WiFi coproc's radio is ready.
+TEST_CASE("with no network known, the access point opens the tick a waiting WiFi coproc answers") {
+    FrozenClock clock;
+    mm::platform::setTestWifiApAvailable(true);
+    mm::platform::setTestWifiRadioReady(false);
+    {
+        WiFiNetwork w;
+        w.net.setup();
+        CHECK(std::strstr(w.net.status(), "waiting for the WiFi coproc") != nullptr);
+        mm::platform::setTestWifiRadioReady(true);
+        mm::platform::setTestNowMs(1000 + 3000);
+        w.net.tick1s();
+        CHECK(std::strncmp(w.net.status(), "AP:", 3) == 0);
+    }
+    mm::platform::setTestWifiRadioReady(true);
+    mm::platform::setTestWifiApAvailable(false);
+}

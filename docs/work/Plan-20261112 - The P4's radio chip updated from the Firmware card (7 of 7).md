@@ -19,12 +19,13 @@ Absorbs the card "ESP32-P4 WiFi through the C6 co-processor", deleted once absor
 
 ## Steps
 
-### 1. The C6 image in every release 🧪 the asset on the next pre-release
+### 1. The C6 image in every release ✅
 
 - **Build:** the release workflow builds the `slave/` project of the managed `esp_hosted` component for `esp32c6`, after a P4 firmware build has fetched the component, and stages it as `shared-c6-slave-<version>.bin`, the version read from the component's `idf_component.yml`.
 - **Locally:** a MoonDeck script builds the same image, so a bench board updates before a release has one.
 - **Verified by:** the asset on a pre-release, its app descriptor naming `network_adapter` at the host's version.
 - **Built (2026-11-12).** [coprocessor_image.py](../../moondeck/build/coprocessor_image.py) builds a copy of the fetched component's `slave/` into `build/coprocessor-esp32c6/shared-c6-slave-<version>.bin`, named so the release's `shared-*.bin` upload carries it; the two P4 WiFi variants name `coprocessor: esp32c6`, so `build_esp32.py` builds it after the app, and `release_stage.py` ships it. Built locally: `c6-slave-2.12.13.bin`, 1252 KB.
+- **Verified (2026-11-12)** on the `latest` pre-release: `shared-c6-slave-2.12.13.bin`, 1,282,448 bytes, its descriptor naming `network_adapter` 2.12.13 for chip id 13, the ESP32-C6. CI needed its own target for the chip (the job exports the app's as IDF_TARGET) and the `shared-` name its upload list carries.
 
 ### 2. The C6 as an update target ✅
 
@@ -41,33 +42,33 @@ Absorbs the card "ESP32-P4 WiFi through the C6 co-processor", deleted once absor
 - **The move:** the line leaves the System card; a MIGRATING entry names the new place.
 - **Verified by:** .132, whose C6 has never connected on the bench, updated from the tab over Ethernet; .139 re-sent the same image.
 - **Built (2026-11-12).** The Firmware card's tabs follow the device's `image` options; the WiFi coproc tab, named C6 when first built, shows `version`, `needs` and `connect`, warns on a settled mismatch, and installs from the release, a URL or a file. On .132 (WiFi): tabs App and C6, the warning, `C6 too old to report`, `ESP-Hosted 2.12.13`.
-- **Verified (2026-11-12)** by the product owner on .132: `c6-slave-2.12.13.bin` installed from a file on the tab, the device restarted, the tab reads the new version and the warning is gone. Install from the release waits on step 1's asset.
+- **Verified (2026-11-12)** by the product owner on .132: `c6-slave-2.12.13.bin` installed from a file on the tab, the device restarted, the tab reads the new version and the warning is gone. Install from the release verified the same day on the MHC-WLED shield (P4 rev v1.0, WiFi only): "Install the matching image" fetched `shared-c6-slave-2.12.13.bin` from the `latest` release through the C6 it was updating, took its C6 from 2.0.17 to 2.12.13, and cleared the warning.
 
-### 4. A dead co-processor link does not abort the board ⏳
+### 4. A dead co-processor link does not abort the board ✅
 
 - **The defect:** on a board whose C6 never completes the handshake (the MHC-WLED P4 shield, chip rev v1.0, 2026-09-08), the WiFi cascade walks into `esp_wifi_init`, which waits out esp_hosted's slave-ready loop, up to about 20 s with a slave reset every 10 s, on the render thread and past the 5 s watchdog: a reboot every ~22 s.
 - **Ours, twice:** the cascade does not consult the link, and the forwarded calls run on the render thread. The signal exists now: `coprocessorLinkUp()`, esp_hosted's transport state. A gate tried in September failed on its two signals, the TRANSPORT_UP event, posted before the firmware's event loop exists, and the version query.
 - **Meanwhile:** such a board runs the eth-only image, or its C6 gets ESP-Hosted over its own UART, since an update over the link needs the link.
-- **Verified by:** the shield on eth-wifi without Ethernet, running and saying the WiFi coproc does not answer instead of rebooting.
+- **Verified by:** the NetworkModule tests through the desktop seam, a station and an access point started the tick the radio is ready, and the bench boards still joining on every boot with the gate in place; the dead-link boot itself, which the bench no longer shows, reopens the step on a user's report.
+- **Built (2026-11-12).** `platform::wifiRadioReady()`; `ensureWifiInit()` refuses while the link is down and starts it on its own task, once, as esp_hosted keeps its retry count until a success, so the cascade falls back to "No network: waiting for the WiFi coproc" and starts WiFi the tick the chip answers; pinned by a NetworkModule test through `setTestWifiRadioReady`. On the bench: .139 joins on boot (refused, link up at 10.9 s, IP at 21.4 s), and the MHC-WLED shield (P4 rev v1.0, WiFi only) ran five resets without one: its C6 answered on each, on firmware 0.0.0, so the dead-link boot is still to be seen; with the shield's C6 now on 2.12.13 the bench has no board that shows it, so the product owner closes the step on the desktop test and the healthy-path runs, to reopen on a user's report.
 
-### 5. Association on every boot ⏳
+### 5. Association on every boot ✅
 
 - **The question:** the intermittent association on IDF v6.1 (2026-10-12) predates the C6 update; one boot on each NANO is not every boot.
 - **Verified by:** ten cold boots of a NANO with C6 2.12.13 on WiFi only, each associating.
+- **Verified (2026-11-12)** on the MHC-WLED shield, the board whose association was intermittent, its C6 updated to 2.12.13: ten power cycles by the product owner, each back on WiFi with a lease, answering at 17 to 19 s of uptime, boot reason POWERON every time.
 
-### 6. Teardown and re-init on a co-processor board ⏳
+### 6. Teardown and re-init on a co-processor board ✅
 
 - **The path:** `wifiStaStop()` calls `esp_wifi_deinit()`, and the next start runs `esp_wifi_init()`, which reconnects the transport. ESP-Hosted 2.12.13 skips the slave reset on a live link, where older releases paid one; a user on another codebase fixed the mirror symptom by never tearing the stack down on a co-processor board.
 - **First:** test STA retry and the access-point fallback on a NANO with C6 2.12.13, then change only what fails.
+- **Verified (2026-11-12)** on .139, C6 2.12.13: joining an absent network from the card stopped and deinited the station, the next start reconnected the transport with "Transport is already up", and it returned to MoonModules in 19 s; with every known network absent it deinited again and opened its access point, the same way. No reset either time, nothing to change.
 
-### 7. The WiFi tail ⏳
+### 7. The WiFi tail ✅
 
 - **Measured (2026-11-12, 64 lights):** 2 of 90 fetches past 100 ms (106 and 186 ms) over WiFi, where native-radio boards had none; the link's traffic costs the render loop about 0.4 ms a frame (454 fps on Ethernet, 384 on WiFi).
 - **Stop rule:** the tail matches a native-radio board's within the run-to-run spread, or a measurement names the cause and its fix costs less than the 0.4 ms it buys back.
-
-## Backlog
-
-- **Recovery over the C6's own UART,** for a C6 whose link never comes up: a hardware path, documented rather than built.
+- **Measured (2026-11-12, 300 fetches each, C6 2.12.13):** .139 over WiFi median 37.6 ms, p99 68 ms, none past 100 ms; a native-radio S3 at the same RSSI 41.8 ms, p99 66 ms, none past 100 ms: the stop rule holds. At rest the link costs about 50 µs a frame (2,252 µs on WiFi against about 2,200 on Ethernet); continuous fetching adds about 1 ms a frame, the requests the render loop serves, whose share of SDIO traffic needs the same load over Ethernet to split.
 
 ## What it removes
 

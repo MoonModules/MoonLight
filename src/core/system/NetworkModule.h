@@ -403,14 +403,31 @@ private:
         if (ethUp()) {
             std::printf("NetworkModule: Ethernet up (recovered from Idle)\n");
             onConnected(State::ConnectedEth, now);
-        } else if constexpr (platform::hasWiFi) {
-            if (staUp()) {
-                std::printf("NetworkModule: WiFi STA up (recovered from Idle)\n");
-                onConnected(State::ConnectedSta, now);
-            } else {
-                retryKnown(now);
-            }
+            return;
         }
+        if constexpr (platform::hasWiFi) tickIdleWifi(now);
+    }
+
+    /// Idle on a device with WiFi: a station that joined promotes, a radio that became ready since the last tick starts over, else the known networks are retried on their interval.
+    void tickIdleWifi(uint32_t now) {
+        if (staUp()) {
+            std::printf("NetworkModule: WiFi STA up (recovered from Idle)\n");
+            onConnected(State::ConnectedSta, now);
+        } else if (radioBecameReady()) {
+            // The radio's chip answered after the cascade fell back for want of it: start over now rather than a retry interval later.
+            std::printf("NetworkModule: WiFi radio ready, starting WiFi\n");
+            beginSta(now);
+        } else {
+            retryKnown(now);
+        }
+    }
+
+    /// Whether the radio became ready since the last ask, as a WiFi coproc's does once its link is up.
+    bool radioBecameReady() MM_NONBLOCKING {
+        const bool ready = platform::wifiRadioReady();
+        const bool became = ready && !radioReady_;
+        radioReady_ = ready;
+        return became;
     }
 
     /// Whether any network is known to join.
@@ -496,6 +513,7 @@ private:
     }
     /// How often the fallback retries the known networks, long because each attempt moves the radio to a router's channel, knocking the access point's phones off.
     static constexpr uint32_t kApRetryStaMs = 60000;
+    bool radioReady_ = true;   ///< the radio could start at the last ask, so a WiFi coproc coming up is noticed once
     bool apUp_ = false;          ///< whether the access point runs
     bool idleAfterSetup_ = false;  ///< the fallback found nothing because the access point was for the first setup only
     uint32_t apSig_ = 0;         ///< how it appears as it was opened, so a change re-opens it live
@@ -555,8 +573,12 @@ private:
         } else {
             // Idle retries the known networks, so a device whose access point stays closed still rejoins.
             state_ = State::Idle;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), closed ? "No network: retrying, the access point was for the first setup only" : "No network");
-            setStatus(statusBuf_, closed ? Severity::Warning : Severity::Error);
+            // A WiFi coproc whose link is not up refuses the radio, and the wait is the reason rather than a failure.
+            const bool waiting = !platform::wifiRadioReady();
+            radioReady_ = !waiting;
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), waiting ? "No network: waiting for the WiFi coproc"
+                                                         : closed ? "No network: retrying, the access point was for the first setup only" : "No network");
+            setStatus(statusBuf_, waiting || closed ? Severity::Warning : Severity::Error);
         }
         stateChangeTime_ = now;
         // The status needs no rebuild, but the radio readouts' visibility does.
@@ -636,8 +658,8 @@ private:
         const auto opens = ap_->opens(others);
         const bool connected = (state_ == State::ConnectedEth || state_ == State::ConnectedSta);
         if (!apUp_) {
-            // Not while a station join is in progress: one radio, so opening moves the channel under the join, and the first join after boot failed that way on the bench.
-            if (opens == AccessPointModule::Opens::Always && state_ != State::WaitingSta) openAp();
+            // Once the radio is ready and no join is under way: one radio, so opening moves a join's channel (the first boot join failed so on the bench), and a WiFi coproc's chip answers first.
+            if (opens == AccessPointModule::Opens::Always && state_ != State::WaitingSta && platform::wifiRadioReady()) openAp();
             // Idle only because it stayed closed: lifting that opens it now, as every setting applies live.
             else if (idleAfterSetup_ && opens == AccessPointModule::Opens::OnFailure) fallBack(now);
             return;
