@@ -254,6 +254,25 @@ TEST_CASE("the type list arrives whole with its tag, and a browser holding that 
 }
 
 namespace {
+// A module whose release, like Network's or the camera's, would shut down state its live instance owns.
+struct ReleaseCounter : public mm::MoonModule {
+    static inline int releases = 0;
+    void release() override { releases++; mm::MoonModule::release(); }
+};
+}  // namespace
+
+// Found as mDNS going silent each time a browser opened the page: the defaults probe released a NetworkModule, which freed the live one's mDNS stack.
+TEST_CASE("the type list reads each type's defaults from an unreleased probe, so a page load shuts down nothing a live module owns") {
+    static bool registered = false;
+    if (!registered) { mm::ModuleFactory::registerType<ReleaseCounter>("ReleaseCounter"); registered = true; }
+    RackServer server;
+    ReleaseCounter::releases = 0;
+    const std::string full = requestWhole(server.http, "GET /api/types HTTP/1.1\r\n\r\n");
+    REQUIRE(full.find("\"name\":\"ReleaseCounter\"") != std::string::npos);
+    CHECK(ReleaseCounter::releases == 0);
+}
+
+namespace {
 
 // The full state with a Sender whose hosts text is `hosts`, as the device list hears MM-S31 at .125 and MM-Eye at .30.
 std::string stateWithHosts(const char* hosts) {

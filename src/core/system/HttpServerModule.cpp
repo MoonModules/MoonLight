@@ -1861,7 +1861,7 @@ void HttpServerModule::writeTypeDefaults(JsonSink& sink, const char* typeName) {
         writeControlValue(sink, c);
         first = false;
     }
-    probe->release();
+    // Deleted unreleased: release undoes a prepare, which the probe skipped, and a module's release shuts down shared platform state (mDNS, the camera, USB MIDI, HDMI) that the live module owns.
     delete probe;
 }
 
