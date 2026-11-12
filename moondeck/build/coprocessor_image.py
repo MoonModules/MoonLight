@@ -38,6 +38,8 @@ def build_coprocessor(cmd: list[str], env: dict, chip: str) -> Path | None:
     if not version:
         print("No esp_hosted component fetched: build a variant with a WiFi co-processor first.")
         return None
+    # The radio chip's own target: CI exports the app's chip as IDF_TARGET for the job, which idf.py refuses beside another target.
+    env = {**env, "IDF_TARGET": chip}
     build_dir = ROOT / "build" / f"coprocessor-{chip}"
     # A copy, since building in place writes the project's lock file and managed components into a fetched component, which the component manager then reports as modified.
     src = build_dir / "src"
