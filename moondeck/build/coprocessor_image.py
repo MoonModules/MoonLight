@@ -28,8 +28,8 @@ def hosted_version(component: Path = COMPONENT) -> str:
 
 
 def asset_name(chip: str, version: str) -> str:
-    """The release asset's name, `c6-slave-2.12.13.bin` for an esp32c6: the version is what a device asks for."""
-    return f"{chip.removeprefix('esp32')}-slave-{version}.bin"
+    """The release asset's name, `shared-c6-slave-2.12.13.bin` for an esp32c6: `shared-`, as every variant with the chip builds the same image and the release uploads the shared ones, and the version is what a device asks for."""
+    return f"shared-{chip.removeprefix('esp32')}-slave-{version}.bin"
 
 
 def build_coprocessor(cmd: list[str], env: dict, chip: str) -> Path | None:

@@ -2428,7 +2428,7 @@ function createCard(mod, depth) {
         urlField.type = "url";
         urlField.className = "fw-url-field";
         urlField.placeholder = kind === "moonbase" ? "http://…/shared-moonbase-<chip>.bin"
-            : kind === "coprocessor" ? "http://…/c6-slave-<version>.bin" : "http://…/firmware.bin";
+            : kind === "coprocessor" ? "http://…/shared-c6-slave-<version>.bin" : "http://…/firmware.bin";
         const urlBtn = document.createElement("button");
         urlBtn.className = "fm-tool";
         urlBtn.textContent = "Install";

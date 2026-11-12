@@ -7,7 +7,7 @@ Absorbs the card "ESP32-P4 WiFi through the C6 co-processor", deleted once absor
 ## The design basis
 
 - **One version pin drives both chips.** The C6 image is built from the `slave/` project inside the same `espressif/esp_hosted` component the P4 firmware links, so a release's two images match by construction. Moving the pin in [esp32/main/idf_component.yml](../../esp32/main/idf_component.yml) moves both.
-- **A release asset, not an embedded image.** The C6 image, about 1.3 MB, ships beside the firmwares as `c6-slave-<esp_hosted version>.bin`. Embedding it would cost every P4 update a megabyte for a chip that rarely changes.
+- **A release asset, not an embedded image.** The C6 image, about 1.3 MB, ships beside the firmwares as `shared-c6-slave-<esp_hosted version>.bin`. Embedding it would cost every P4 update a megabyte for a chip that rarely changes.
 - **The existing update path, one more target.** `platform::OtaTarget` gains `Coprocessor` beside `App` and `MoonBase`: the URL fetch and the upload stream into it as they stream into the others, and `otaBegin`, `otaWrite` and `otaEnd` call ESP-Hosted's `esp_hosted_slave_ota_begin`, `_write`, `_end` and `_activate`.
 - **One home for the C6's identity.** The status line moves from the System card (`wifiCoproc`) to a WiFi coproc tab on the Firmware card, beside MoonBase's tab.
 
@@ -21,10 +21,10 @@ Absorbs the card "ESP32-P4 WiFi through the C6 co-processor", deleted once absor
 
 ### 1. The C6 image in every release 🧪 the asset on the next pre-release
 
-- **Build:** the release workflow builds the `slave/` project of the managed `esp_hosted` component for `esp32c6`, after a P4 firmware build has fetched the component, and stages it as `c6-slave-<version>.bin`, the version read from the component's `idf_component.yml`.
+- **Build:** the release workflow builds the `slave/` project of the managed `esp_hosted` component for `esp32c6`, after a P4 firmware build has fetched the component, and stages it as `shared-c6-slave-<version>.bin`, the version read from the component's `idf_component.yml`.
 - **Locally:** a MoonDeck script builds the same image, so a bench board updates before a release has one.
 - **Verified by:** the asset on a pre-release, its app descriptor naming `network_adapter` at the host's version.
-- **Built (2026-11-12).** [coprocessor_image.py](../../moondeck/build/coprocessor_image.py) builds a copy of the fetched component's `slave/` into `build/coprocessor-esp32c6/c6-slave-<version>.bin`; the two P4 WiFi variants name `coprocessor: esp32c6`, so `build_esp32.py` builds it after the app, and `release_stage.py` ships it. Built locally: `c6-slave-2.12.13.bin`, 1252 KB.
+- **Built (2026-11-12).** [coprocessor_image.py](../../moondeck/build/coprocessor_image.py) builds a copy of the fetched component's `slave/` into `build/coprocessor-esp32c6/shared-c6-slave-<version>.bin`, named so the release's `shared-*.bin` upload carries it; the two P4 WiFi variants name `coprocessor: esp32c6`, so `build_esp32.py` builds it after the app, and `release_stage.py` ships it. Built locally: `c6-slave-2.12.13.bin`, 1252 KB.
 
 ### 2. The C6 as an update target ✅
 

@@ -521,7 +521,7 @@ paths:
             schema:
               type: object
               properties:
-                url: { type: string, description: "The image to install; omitted, the release's matching `c6-slave-<version>.bin`." }
+                url: { type: string, description: "The image to install; omitted, the release's matching `shared-c6-slave-<version>.bin`." }
       responses:
         "202": { $ref: "#/components/responses/Ok" }
         "400": { $ref: "#/components/responses/Error" }

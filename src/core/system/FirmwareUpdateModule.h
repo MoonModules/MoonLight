@@ -34,7 +34,7 @@ constexpr const char* kReleaseAssetUrlFormat =
 
 /// The release asset the radio chip updates from: repository, release tag, the ESP-Hosted version this firmware links, which names the matching image.
 constexpr const char* kCoprocessorAssetUrlFormat =
-    "https://github.com/%s/releases/download/%s/c6-slave-%s.bin";
+    "https://github.com/%s/releases/download/%s/shared-c6-slave-%s.bin";
 
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written
