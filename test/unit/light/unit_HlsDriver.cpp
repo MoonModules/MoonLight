@@ -16,6 +16,7 @@
 #include <vector>
 
 using mm::test::Wall;
+using mm::test::paintLight;
 using mm::test::wire;
 
 namespace {
@@ -38,19 +39,14 @@ void setUp(mm::HlsDriver& driver, mm::Buffer& source, Wall& wall, mm::nrOfLights
     mm::platform::setTestNowMs(1);
 }
 
-void paint(mm::Buffer& b, mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t bl) {
-    uint8_t* p = b.data() + static_cast<size_t>(i) * 3;
-    p[0] = r; p[1] = g; p[2] = bl;
-}
-
 // The one frame the encoder seam recorded, or null.
 const uint8_t* encodedFrame() { return mm::platform::encoderTestFrameCount() == 1 ? mm::platform::encoderTestFrameData(0) : nullptr; }
 
 // A 64x32 snaked face streamed at 1:1 with the placement table refused: a frame of the face fits, the table, four bytes a pixel against three, does not.
 struct NoRoomStream {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
-    mm::test::RefuseAbove refuse{64 * 32 * 3};
     mm::test::DriverOnPanels<mm::HlsDriver> rig{1, 64, 32, true};
+    mm::test::RefuseAbove refuse{64 * 32 * 3};   // after the rig, so only what prepare() asks for meets it
     NoRoomStream() {
         mm::platform::encoderTestClearFrames();
         mm::platform::setTestNowMs(1);
@@ -77,7 +73,7 @@ TEST_CASE("HlsDriver reports a missing ffmpeg instead of failing") {
     CHECK(mm::platform::encoderTestFrameCount() == 0);
 }
 
-// The ffmpeg invocation IS the desktop encode contract: raw RGB in at the grid size and chosen rate, zerolatency x264 at the chosen bitrate, 1 s segments on a short rolling playlist (the live tuning behind the documented 2-5 s latency), segments deleted as they age out. The driver states only the numbers (EncoderConfig); this pins what the desktop platform makes of them.
+// The ffmpeg invocation is the desktop encode contract: raw RGB at the grid size and rate, zerolatency x264 at the bitrate, 1 s segments on a short rolling playlist for the 2-5 s latency, aged segments deleted.
 TEST_CASE("HlsDriver hands ffmpeg the exact live-HLS invocation") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -123,8 +119,8 @@ TEST_CASE("HlsDriver pipes the grid pixel-exact") {
     driver.scale = 1;                                 // 1:1, so a light is one video pixel
     driver.prepare();
 
-    paint(source, 0, 10, 20, 30);
-    paint(source, 7, 40, 50, 60);
+    paintLight(source, 0, 10, 20, 30);
+    paintLight(source, 7, 40, 50, 60);
 
     mm::platform::setTestNowMs(1000);
     driver.tick();
@@ -217,7 +213,7 @@ TEST_CASE("HlsDriver releases and re-prepares cleanly") {
     CHECK(mm::platform::encoderTestFrameCount() == 1);
 }
 
-// The restart budget is finite: an encoder that dies on every attempt (an encoder name this ffmpeg's build lacks exits immediately after every spawn) ends at the visible give-up status, not an endless respawn loop. encoderStart() can only verify ffmpeg launches, so this status IS how an unavailable encoder surfaces.
+// The restart budget is finite: an encoder that dies on every spawn, such as one this ffmpeg lacks, ends at the give-up status instead of respawning forever, and that status is how an unavailable encoder surfaces.
 TEST_CASE("HlsDriver gives up visibly when the encoder dies on every restart") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -235,7 +231,7 @@ TEST_CASE("HlsDriver gives up visibly when the encoder dies on every restart") {
     CHECK(std::string(driver.status()).find("encoder exited") != std::string::npos);
 }
 
-// The frame rate must hold EXACTLY over time, not just per-frame. `1000/fps` truncates (30 fps asks for a 33 ms period, so 30 frames span 990 ms), and pacing from each frame's arrival time lets every late tick shift the schedule for good. Either way the stream drifts against the player's clock, and the player stalls to re-buffer: the periodic hiccup seen on the bench.
+// The frame rate holds over time: `1000/fps` truncates (30 frames in 990 ms) and pacing from arrival lets a late tick shift the schedule, and either drifts against the player's clock until it re-buffers.
 TEST_CASE("HlsDriver holds the exact frame rate over a full second") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -286,7 +282,7 @@ TEST_CASE("HlsDriver keeps its schedule after a late tick") {
     CHECK(mm::platform::encoderTestFrameCount() == afterLate + 1);
 }
 
-// A wall smaller than the encoder's minimum frame is blown up rather than refused: the P4's hardware encoder will not accept anything under 80x80, and a player showing a 4x2 stream renders a postage stamp. Auto picks the smallest whole factor that clears the floor on BOTH axes, so the aspect ratio is untouched.
+// A wall smaller than the encoder's minimum frame is scaled up, as the P4's encoder takes 80x80 and up: Auto picks the smallest whole factor that clears the floor on both axes, keeping the aspect ratio.
 TEST_CASE("HlsDriver blows a small wall up to the encoder's minimum, keeping its shape") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -323,8 +319,8 @@ TEST_CASE("HlsDriver upscales by whole blocks, inventing no colors") {
     driver.scale = 4;                                 // a 2x2 wall becomes an 8x8 frame
     driver.prepare();
 
-    paint(source, 0, 10, 20, 30);                     // top-left light
-    paint(source, 3, 40, 50, 60);                     // bottom-right light
+    paintLight(source, 0, 10, 20, 30);                     // top-left light
+    paintLight(source, 3, 40, 50, 60);                     // bottom-right light
 
     mm::platform::setTestNowMs(1000);
     driver.tick();
@@ -344,7 +340,7 @@ TEST_CASE("HlsDriver upscales by whole blocks, inventing no colors") {
     CHECK(px(4, 4)[0] == 40); CHECK(px(4, 4)[1] == 50); CHECK(px(4, 4)[2] == 60);
 }
 
-// The SHORT axis decides the factor, and the ceiling must not get in the way. A 4x2 wall needs x40 to lift its height to 80; a ceiling below that would hand the encoder a 64x32 frame it refuses, so the feature would fail precisely on the smallest walls it exists for.
+// The short axis decides the factor, above any ceiling: a 4x2 wall needs x40 to reach a height of 80, and a lower ceiling would hand the encoder a 64x32 frame it refuses, on the small walls scaling exists for.
 TEST_CASE("HlsDriver auto-scale clears the minimum on both axes, however thin the wall") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -357,7 +353,7 @@ TEST_CASE("HlsDriver auto-scale clears the minimum on both axes, however thin th
     CHECK(args.find("-s 160x80") != std::string::npos);   // x40, driven by the height
 }
 
-// Both operands can be sane while their PRODUCT is not: lengthType is int16_t, so an 821x4 wall at scale 80 wraps to 144x320. The frame buffer would then be sized from the wrapped number while the pixel loop still walks the real 821x4 source, writing ~196 KB past the end of the heap buffer. The scaled geometry is therefore computed wide and rejected before narrowing.
+// Both operands can be sane while their product wraps: an 821x4 wall at scale 80 wraps int16 to 144x320, a buffer sized from that while the loop walks 821x4, so the geometry is computed wide and checked first.
 TEST_CASE("HlsDriver refuses a scaled frame too large for the encoder, never wrapping into one") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;
@@ -387,7 +383,7 @@ TEST_CASE("HlsDriver accepts a scaled frame that exactly meets the encoder's lim
     CHECK(std::string(mm::platform::encoderTestArgs()).find("-s 1920x1440") != std::string::npos);
 }
 
-// A long stall resyncs the schedule rather than firing a burst to catch up. The frame sent AT the resync is the new schedule's frame 0, so the next is due a full period later. Counting it as frame 0 instead made the following tick recompute its due time back to that same instant and fire again one millisecond later, which is a duplicate frame in the stream.
+// A long stall resyncs the schedule instead of bursting: the frame sent at the resync is the new schedule's frame 0, so the next is due a full period later, not a millisecond later as a duplicate.
 TEST_CASE("HlsDriver resyncs after a stall without sending a duplicate frame") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;

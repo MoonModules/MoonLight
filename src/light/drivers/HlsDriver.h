@@ -16,9 +16,9 @@ namespace mm {
 /// Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.
 /// @card HlsDriver.png
 ///
-/// Open the `url` the card shows in VLC, a browser or an Apple TV. Where @ref NdiDriver feeds production tools, this feeds anything that plays video.
+/// Open the `url` the card shows. Where @ref NdiDriver feeds production tools, this feeds anything that plays video.
 ///
-/// The grid becomes the frame, output correction applied. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live-control feedback. The card's status line carries the state, the drops, or why the encoder stopped.
+/// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.
 ///
 /// @attribution Delphium, HLS, FFmpeg
 ///

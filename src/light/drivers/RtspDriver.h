@@ -17,9 +17,9 @@ namespace mm {
 /// Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.
 /// @card RtspDriver.png
 ///
-/// HLS ships whole segments and a player buffers several before it starts, so a viewer sees seconds ago. RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.
+/// RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.
 ///
-/// Point VLC or ffplay at the `url` the card shows. It runs on the ESP32-P4 and the desktop, and shares one encoder with @ref HlsDriver, so only one of the two runs at a time.
+/// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the desktop, and shares one encoder with @ref HlsDriver, so only one of the two runs at a time.
 ///
 /// @attribution Delphium, RTSP, RTP
 ///

@@ -40,7 +40,7 @@ public:
         staging_.resize(lights * owner_.channelsPerLight());
         const bool placed = senderMapped_ && layer->lut().hasLUT() && layer->wiringSource() != &owner_;
         placement_.resize(placed ? owner_.nrOfLights() : 0);
-        if (placement_) layer->placeByLayout(placement_.data(), static_cast<nrOfLightsType>(placement_.count()));
+        if (placement_) layer->placeByLayout(placement_.data(), placement_.count(), {layer->width(), layer->height(), layer->depth()});
         dirty_.store(true, std::memory_order_release);   // a resize, or a re-enable, paints the layer from staging once
     }
 

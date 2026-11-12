@@ -13,7 +13,7 @@ namespace mm {
 /// Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.
 /// @card NdiDriver.png
 ///
-/// The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
+/// One light per pixel, placed where the layout puts it and corrected as the wall is. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
 ///
 /// Desktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with @ref NetworkSendDriver, and takes them in with @ref NetworkReceiveEffect.
 ///

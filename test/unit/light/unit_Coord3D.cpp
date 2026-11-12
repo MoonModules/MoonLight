@@ -3,7 +3,9 @@
 #include "doctest.h"
 #include "light/util/light_types.h"
 
-// Coord3D is the coordinate/size type the modifier fold interface mutates. The per-axis (Hadamard) operators are what let a modifier read like geometry (`pos = pos % size`); the % and / variants must guard a zero/degenerate axis so a fold over a 1-wide or empty axis can't divide by zero or wrap.
+#include <type_traits>
+
+// Coord3D is the type a modifier's fold mutates: per-axis operators let it read as geometry (`pos = pos % size`), and % and / guard a zero axis, so a fold over a 1-wide or empty axis stays defined.
 
 TEST_CASE("Coord3D arithmetic is per-axis") {
     mm::Coord3D a{10, 20, 30};
@@ -48,18 +50,20 @@ TEST_CASE("Coord3D is inside a box only when every axis is from 0 up to below th
     CHECK_FALSE(mm::Coord3D{0, 0, 1}.isInside(box));
 }
 
-// The index is row-major and wide: a box past 2^31 cells stays exact, beyond both a signed int and a light index.
-TEST_CASE("Coord3D's index in a box is row-major and wide") {
+// The index is row-major and 64 bits on every board: the largest box, 32767 a side, stays exact under 2^45, past a 32-bit size_t.
+TEST_CASE("Coord3D's index in a box is row-major and 64 bits on every board") {
+    CHECK(std::is_same_v<decltype(mm::Coord3D{}.indexIn({})), uint64_t>);
     CHECK(mm::Coord3D{1, 1, 0}.indexIn({4, 2, 1}) == 5u);
     CHECK(mm::Coord3D{0, 0, 1}.indexIn({4, 2, 2}) == 8u);
-    CHECK(mm::Coord3D{1023, 1023, 2047}.indexIn({1024, 1024, 2048}) == static_cast<size_t>(1024) * 1024 * 2048 - 1);
+    CHECK(mm::Coord3D{1023, 1023, 2047}.indexIn({1024, 1024, 2048}) == uint64_t{1024} * 1024 * 2048 - 1);
+    CHECK(mm::Coord3D{32766, 32766, 32766}.indexIn({32767, 32767, 32767}) == uint64_t{32767} * 32767 * 32767 - 1);
 }
 
-// Whether a position is index i of a box is answered by dividing i, never by multiplying the box out, so no size overflows or aliases.
-TEST_CASE("Coord3D knows whether it is a given row-major index of a box, without multiplying the box out") {
+// Whether a position is index i of a box: inside it, and its 64-bit index is i, so no size overflows or aliases.
+TEST_CASE("Coord3D knows whether it is a given row-major index of a box") {
     CHECK(mm::Coord3D{1, 1, 0}.isAtIndex(5, {4, 2, 1}));
     CHECK_FALSE(mm::Coord3D{1, 1, 0}.isAtIndex(4, {4, 2, 1}));
-    CHECK(mm::Coord3D{1023, 1023, 2047}.isAtIndex(static_cast<size_t>(1024) * 1024 * 2048 - 1, {1024, 1024, 2048}));
+    CHECK(mm::Coord3D{1023, 1023, 2047}.isAtIndex(uint64_t{1024} * 1024 * 2048 - 1, {1024, 1024, 2048}));
     CHECK(mm::Coord3D{112, 16, 1}.isAtIndex(70000, {256, 257, 2}));
     CHECK_FALSE(mm::Coord3D{0, 0, 0}.isAtIndex(65536, {1, 1, 1}));   // an index past the box is no position in it, however it would narrow
     CHECK_FALSE(mm::Coord3D{-1, 1, 0}.isAtIndex(3, {4, 2, 1}));      // outside the box is no index of it

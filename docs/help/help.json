@@ -3522,7 +3522,7 @@
   },
   "NdiDriver": {
    "line": "Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.",
-   "summary": "The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nDesktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nDesktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
    "attribution": "[NDI](https://moonmodules.org/MoonLight/reference/attributions.html#ndi), [Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium)",
    "guide": [
     {
@@ -3572,7 +3572,7 @@
   },
   "HlsDriver": {
    "line": "Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.",
-   "summary": "Open the `url` the card shows in VLC, a browser or an Apple TV. Where [Ndi](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#ndi) feeds production tools, this feeds anything that plays video.\n\nThe grid becomes the frame, output correction applied. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live-control feedback. The card's status line carries the state, the drops, or why the encoder stopped.",
+   "summary": "Open the `url` the card shows. Where [Ndi](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#ndi) feeds production tools, this feeds anything that plays video.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.",
    "attribution": "[Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium), [HLS](https://moonmodules.org/MoonLight/reference/attributions.html#hls), [FFmpeg](https://moonmodules.org/MoonLight/reference/attributions.html#ffmpeg)",
    "guide": [
     {
@@ -3627,7 +3627,7 @@
   },
   "RtspDriver": {
    "line": "Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.",
-   "summary": "HLS ships whole segments and a player buffers several before it starts, so a viewer sees seconds ago. RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nPoint VLC or ffplay at the `url` the card shows. It runs on the ESP32-P4 and the desktop, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
+   "summary": "RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the desktop, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
    "attribution": "[Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium), [RTSP](https://moonmodules.org/MoonLight/reference/attributions.html#rtsp), [RTP](https://moonmodules.org/MoonLight/reference/attributions.html#rtp)",
    "guide": [
     {
