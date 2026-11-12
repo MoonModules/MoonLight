@@ -27,7 +27,8 @@ public:
         if (!table_.resize(cells)) return placed_ = false;   // a refused resize leaves the table empty: the raster order
         for (size_t c = 0; c < cells; c++) table_[c] = Layer::kNoDriver;
         Walk walk{this, w, h};
-        layouts->placeLights(CoordSink{&placeOne, nullptr, &walk});
+        // A gap claims no pixel, as Layer::placeByLayout() has it: a lit light at the same place shows, and a lone gap's pixel stays black from draw().
+        layouts->placeLights(CoordSink{&placeOne, [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, &walk});
         return true;
     }
 

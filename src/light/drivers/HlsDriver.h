@@ -229,10 +229,11 @@ public:
         if (statusStale_ || droppedFrames_ != lastReportedDrops_) {
             statusStale_ = false;
             lastReportedDrops_ = droppedFrames_;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u, %u frames dropped",
+            // The placement note and its severity stay: a dropped frame leaves the picture's order as it was.
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u, %u frames dropped%s",
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
-                          static_cast<unsigned>(droppedFrames_));
-            setStatus(statusBuf_, Severity::Status);
+                          static_cast<unsigned>(droppedFrames_), picture_.note());
+            setStatus(statusBuf_, picture_.placed() ? Severity::Status : Severity::Warning);
         }
     }
 

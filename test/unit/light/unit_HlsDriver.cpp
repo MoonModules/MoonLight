@@ -46,6 +46,19 @@ void paint(mm::Buffer& b, mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t bl
 // The one frame the encoder seam recorded, or null.
 const uint8_t* encodedFrame() { return mm::platform::encoderTestFrameCount() == 1 ? mm::platform::encoderTestFrameData(0) : nullptr; }
 
+// A 64x32 snaked face streamed at 1:1 with the placement table refused: a frame of the face fits, the table, four bytes a pixel against three, does not.
+struct NoRoomStream {
+    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
+    mm::test::RefuseAbove refuse{64 * 32 * 3};
+    mm::test::DriverOnPanels<mm::HlsDriver> rig{1, 64, 32, true};
+    NoRoomStream() {
+        mm::platform::encoderTestClearFrames();
+        mm::platform::setTestNowMs(1);
+        rig.driver->scale = 1;
+        rig.driver->prepare();
+    }
+};
+
 }  // namespace
 
 // Without ffmpeg the driver is inert but SAFE, and says why: the state every machine without it is in, including CI, so it is the default path rather than an edge case.
@@ -438,15 +451,22 @@ TEST_CASE("HlsDriver streams each light where the layout puts it, so a snaked la
 }
 
 TEST_CASE("HlsDriver without room to place the lights still streams them, in their own order, and warns why") {
-    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
-    mm::test::RefuseAbove refuse(64 * 32 * 3);   // a frame of the face at 1:1: the table, four bytes a pixel against three, is refused
-    mm::test::DriverOnPanels<mm::HlsDriver> rig(1, 64, 32, true);
-    auto& driver = rig.driver;
-    mm::platform::encoderTestClearFrames();
-    mm::platform::setTestNowMs(1);
-    driver->scale = 1;
-    driver->prepare();
+    NoRoomStream stream;
+    auto& driver = stream.rig.driver;
     CHECK(driver->severity() == mm::MoonModule::Severity::Warning);
     CHECK(std::string(driver->status()).find("streaming 64x32") == 0);
     CHECK(std::string(driver->status()).find(", no memory to place the lights by the layout") != std::string::npos);
+}
+
+TEST_CASE("HlsDriver keeps the placement warning when it reports dropped frames") {
+    NoRoomStream stream;
+    auto& driver = stream.rig.driver;
+    mm::platform::setTestEncoderWriteResult(0);   // the pipe refuses the next frame
+    mm::platform::setTestNowMs(1000);
+    driver->tick();
+    driver->tick1s();                             // the healthy branch repaints the status with the drop count
+    const std::string status = driver->status();
+    CHECK(status.find("frames dropped") != std::string::npos);
+    CHECK(status.find(", no memory to place the lights by the layout") != std::string::npos);
+    CHECK(driver->severity() == mm::MoonModule::Severity::Warning);
 }

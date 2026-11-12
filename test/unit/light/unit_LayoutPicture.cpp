@@ -30,6 +30,16 @@ struct ShortRaster : mm::LayoutBase {
     }
 };
 
+// A dark slot at (0, 0) first, then four lights across one row from (0, 0): two layouts overlapping, the first with a dark column, as GridBlacks makes one.
+struct GapUnderLight : mm::LayoutBase {
+    mm::nrOfLightsType lightCount() const override { return 5; }
+    bool hasBlackPixels() const override { return true; }
+    void placeLights(const mm::CoordSink& sink) const override {
+        sink.blackPixel(0, 0, 0, 0);
+        for (mm::nrOfLightsType i = 1; i < 5; i++) sink.pixel(i, static_cast<mm::lengthType>(i - 1), 0, 0);
+    }
+};
+
 // Each light's bytes as its own color, so a drawn pixel names the light it shows.
 void identity(const uint8_t* s, uint8_t* rgb) MM_NONBLOCKING { std::memcpy(rgb, s, 3); }
 
@@ -129,4 +139,14 @@ TEST_CASE("LayoutPicture takes a table for a dense layout with a light outside t
     CHECK(owner.dynamicBytes() == 8 * sizeof(mm::nrOfLightsType));
     CHECK(picture.lightAt(3) == mm::Layer::kNoDriver);   // (3, 0) has no light: light 3 sits outside
     CHECK(picture.lightAt(4) == 4);
+}
+
+TEST_CASE("LayoutPicture shows the lit light where a dark slot shares its pixel, since a gap claims no pixel") {
+    Owner owner;
+    mm::LayoutPicture picture(owner);
+    auto f = std::make_unique<LayoutFace<GapUnderLight>>();
+    f->build();
+    REQUIRE(picture.place(f->layer, 4, 1));
+    CHECK(picture.lightAt(0) == 1);   // the dark slot came first; the light at (0, 0) is what shows
+    CHECK(picture.lightAt(3) == 4);
 }
