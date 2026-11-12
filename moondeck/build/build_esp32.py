@@ -17,6 +17,7 @@ from pathlib import Path
 import compute_version   # sibling: the one place a version string is derived
 import sdkconfig_fragments   # sibling: a changed fragment regenerates a build dir's sdkconfig
 from moonbase_images import MOONBASE_BIN, build_migrate, build_moonbase   # sibling: the images that carry MoonBase
+from coprocessor_image import build_coprocessor   # sibling: the radio chip firmware a WiFi co-processor variant carries
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
@@ -311,11 +312,10 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
                       "sdkconfig.defaults.esp32p4rev1-eth-wifi"],
         "eth_only": False,
-        "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board "
-                       "ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
-                       "ONLY. Ethernet works; WiFi over the C6 associates on some "
-                       "boots and not on others.",
-        # Ships while WiFi is intermittent so users can try it (backlog/platform § ESP32-P4 round 3). CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, which this device never enters.
+        "coprocessor": "esp32c6",   # the radio chip, whose ESP-Hosted firmware is built beside the app (coprocessor_image.py)
+        "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
+                       "ONLY. The C6 runs the ESP-Hosted release this firmware links, installed from the Firmware card's WiFi coproc tab.",
+        # CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, a mode this device stays out of.
         "ships": True,
         "panel_cards": True,
     },
@@ -343,11 +343,9 @@ FIRMWARES: dict[str, dict] = {
                       "sdkconfig.defaults.esp32p4rev1-eth-wifi",
                       "sdkconfig.defaults.esp32p4rev3"],
         "eth_only": False,
-        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet + WiFi via the "
-                       "on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x (the "
-                       "CURRENT silicon). The rev1 build of this image is bench-verified; "
-                       "this one differs only in the chip revision and has never been "
-                       "booted.",
+        "coprocessor": "esp32c6",   # the radio chip, whose ESP-Hosted firmware is built beside the app (coprocessor_image.py)
+        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet + WiFi via the on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x "
+                       "(the CURRENT silicon). The rev1 build is bench-verified; this one differs only in the chip revision and is unbooted.",
         "ships": True,
         "panel_cards": True,
     },
@@ -874,6 +872,8 @@ def main():
     preview = ["--preview"] if chip in PREVIEW_TARGETS else []
     if FIRMWARES[firmware].get("moonbase") or builds_migration:
         build_moonbase(cmd + preview, env, chip, args.version, family)
+    if FIRMWARES[firmware].get("coprocessor"):
+        build_coprocessor(cmd, env, FIRMWARES[firmware]["coprocessor"])
     if builds_migration:
         entries = migration_tables(family)
         for donor in dict.fromkeys(d for _, d in entries if d != firmware):

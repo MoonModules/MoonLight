@@ -415,13 +415,14 @@ static bool routeModuleName(const char* segment, char (&out)[MoonModule::kNameLe
     return true;
 }
 
-// The uploads that stream their body to storage as it comes, never held whole: a file, a firmware image and a MoonBase image.
+// The uploads that stream their body to storage as it comes rather than held whole: a file, a firmware image, a MoonBase image and a radio chip image.
 static bool isStreamingUpload(const char* req) {
     return std::strncmp(req, "POST /api/file", 14) == 0 ||
            std::strncmp(req, "POST /api/firmware/upload", 25) == 0 ||
            std::strncmp(req, "POST /api/relay/esphome", 23) == 0 ||
-           // The trailing space keeps `moonbase-update-url`, a small JSON body read whole, out of the match.
-           std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0;
+           // The trailing space keeps the `-url` routes, small JSON bodies read whole, out of the match.
+           std::strncmp(req, "POST /api/firmware/moonbase-update ", 35) == 0 ||
+           std::strncmp(req, "POST /api/firmware/coprocessor-update ", 38) == 0;
 }
 
 bool HttpServerModule::handleConnection(platform::TcpConnection& conn) {
@@ -656,7 +657,15 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
             handleBootMoonBase(conn);
         } else if (std::strcmp(path, "/api/firmware/moonbase-update-url") == 0 && body) {
             // Install a new MoonBase the device fetches itself, so a release asset comes straight from GitHub.
-            handleMoonBaseUrl(conn, body);
+            handleImageUrl(conn, body, platform::OtaTarget::MoonBase);
+        } else if (std::strcmp(path, "/api/firmware/coprocessor-update-url") == 0 && body) {
+            // Update the radio chip from an image the device fetches itself, by default its release's matching asset.
+            handleImageUrl(conn, body, platform::OtaTarget::Coprocessor);
+        } else if (std::strcmp(path, "/api/firmware/coprocessor-update") == 0 && body) {
+            // Update the radio chip from an uploaded image, for a device that cannot reach the internet.
+            const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
+            if (!hasContentLen) { sendResponse(conn, 411, "application/json", "{\"error\":\"length required\"}"); return; }
+            handleFirmwareUpload(conn, platform::OtaTarget::Coprocessor, body, initialLen, static_cast<size_t>(contentLen));
         } else if (std::strcmp(path, "/api/firmware/moonbase-update") == 0 && body) {
             // Install a new MOONBASE from an uploaded image: the one direction the other firmware routes cannot go, since only the running app may write the factory slot.
             const size_t initialLen = static_cast<size_t>(totalRead) - static_cast<size_t>(body - req);
@@ -1038,6 +1047,16 @@ void HttpServerModule::applyFileChanged(const char* path) {
     scheduler_->requestPrepareTree();
 }
 
+// Why `target` cannot take an image now, or null when it can, before otaBegin, which stays the real guard; a running MoonBase is the slot it would write.
+static const char* imageUnavailable(platform::OtaTarget target) {
+    if (target == platform::OtaTarget::MoonBase) {
+        if (!platform::otaHasMoonBase()) return "no MoonBase on this device";
+        if (platform::otaRunningMoonBase()) return "running from MoonBase, boot the app first";
+    }
+    if (target == platform::OtaTarget::Coprocessor && !platform::hasWifiCoprocessor) return "no radio chip on this device";
+    return nullptr;
+}
+
 // A firmware image moves through a transfer slot as a file upload does, its bytes pushed into the platform's writer as they arrive, so no frame waits on the sender.
 void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platform::OtaTarget target, const char* initialBody,
                                             size_t initialLen, size_t contentLen) {
@@ -1045,16 +1064,11 @@ void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platf
         sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
         return;
     }
-    if (target == platform::OtaTarget::MoonBase) {
-        if (!platform::otaHasMoonBase()) {
-            sendResponse(conn, 409, "application/json", "{\"error\":\"no MoonBase on this device\"}");
-            return;
-        }
-        // Running from MoonBase means the factory slot is executing and cannot be written; this answers with the reason, and otaBegin is the real guard.
-        if (platform::otaRunningMoonBase()) {
-            sendResponse(conn, 409, "application/json", "{\"error\":\"running from MoonBase, boot the app first\"}");
-            return;
-        }
+    if (const char* why = imageUnavailable(target)) {
+        char msg[96];
+        std::snprintf(msg, sizeof(msg), "{\"error\":\"%s\"}", why);
+        sendResponse(conn, 409, "application/json", msg);
+        return;
     }
     // One OTA at a time, as handleFirmwareUrl guards: both write g_ota* state.
     if (otaInFlight()) {
@@ -1213,18 +1227,20 @@ void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, pl
     platform::reboot();   // noreturn: boots the flashed image
 }
 
-void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const char* body) {
+// The radio chip's image is named by the ESP-Hosted release this firmware links, so its own release carries the one that matches; a local build looks in the latest.
+static void matchingCoprocessorUrl(char* url, size_t len) {
+    std::snprintf(url, len, kCoprocessorAssetUrlFormat, kReleaseRepo, kRelease[0] ? kRelease : "latest", platform::coprocessorHostVersion());
+}
+
+void HttpServerModule::handleImageUrl(platform::TcpConnection& conn, const char* body, platform::OtaTarget target) {
     if constexpr (!platform::hasOta) {
         sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
         return;
     }
-    if (!platform::otaHasMoonBase()) {
-        sendResponse(conn, 409, "application/json", "{\"error\":\"no MoonBase on this device\"}");
-        return;
-    }
-    if (platform::otaRunningMoonBase()) {
-        sendResponse(conn, 409, "application/json",
-                     "{\"error\":\"running from MoonBase, boot the app first\"}");
+    if (const char* why = imageUnavailable(target)) {
+        char msg[96];
+        std::snprintf(msg, sizeof(msg), "{\"error\":\"%s\"}", why);
+        sendResponse(conn, 409, "application/json", msg);
         return;
     }
     if (otaInFlight()) {
@@ -1233,6 +1249,7 @@ void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const ch
     }
     char url[512] = {};
     mm::json::parseString(body, "url", url, sizeof(url));
+    if (url[0] == 0 && target == platform::OtaTarget::Coprocessor) matchingCoprocessorUrl(url, sizeof(url));
     if (url[0] == 0) {
         sendResponse(conn, 400, "application/json", "{\"error\":\"url required\"}");
         return;
@@ -1244,9 +1261,11 @@ void HttpServerModule::handleMoonBaseUrl(platform::TcpConnection& conn, const ch
     }
     g_otaBytesRead = 0;
     g_otaBytesTotal = 0;
+    // The radio chip's install ends in a restart, which drops settings still waiting for their debounce, so they are written now.
+    if (target == platform::OtaTarget::Coprocessor) FilesystemModule::flushPending();
     // 202 and return: the install runs on its own task, so the browser polls progress instead of holding a request open.
-    const bool started = platform::otaFetchMoonBaseUrl(url, g_otaStatus, sizeof(g_otaStatus),
-                                                       &g_otaBytesRead, &g_otaBytesTotal);
+    const bool started = platform::otaFetchUrl(target, url, g_otaStatus, sizeof(g_otaStatus),
+                                               &g_otaBytesRead, &g_otaBytesTotal);
     if (!started) {
         char msg[128];
         std::snprintf(msg, sizeof(msg), "{\"error\":\"%.90s\"}", g_otaStatus);
@@ -2125,6 +2144,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
     std::snprintf(g_otaStatus, sizeof(g_otaStatus), "starting");
     g_otaBytesRead = 0;
     g_otaBytesTotal = 0;
+    FilesystemModule::flushPending();   // the install ends in a restart, which drops settings still waiting for their debounce
 
     if (!platform::http_fetch_to_ota(url, g_otaStatus, sizeof(g_otaStatus),
                                      &g_otaBytesRead, &g_otaBytesTotal)) {

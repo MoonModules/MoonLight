@@ -1450,16 +1450,6 @@
   "number": null
  },
  {
-  "title": "ESP32-P4 WiFi through the C6 co-processor",
-  "area": "Platform",
-  "module": "",
-  "kind": "Bug",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287085924",
-  "number": null
- },
- {
   "title": "Ethernet on the QuinLED Dig-Next-2 (W5500 over SPI)",
   "area": "Platform",
   "module": "",

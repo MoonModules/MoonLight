@@ -197,3 +197,30 @@ TEST_CASE("a name that fills its descriptor field unterminated is still compared
     std::memcpy(field, "MoonLight", 10);          // terminated inside the field, junk after it
     CHECK(isAppImage(field, sizeof(field)));
 }
+
+TEST_CASE("a radio chip image is accepted for the C6 when its ESP-Hosted major.minor matches the host's") {
+    const auto c6 = makeImage(kImageMagic, 0x000D, "network_adapter", "2.12.13");
+    const auto info = identify(c6.data(), c6.size());
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "2.12.13") == nullptr);
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "2.12.0") == nullptr);   // the patch level is free
+}
+
+TEST_CASE("a radio chip image is refused for another chip, as another project, or at another ESP-Hosted major.minor") {
+    const auto c6 = makeImage(kImageMagic, 0x000D, "network_adapter", "2.12.13");
+    const auto info = identify(c6.data(), c6.size());
+    CHECK(coprocessorRejection(info, ChipId::Esp32C5, "2.12.13") == std::string("image is for another chip"));
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "2.13.0") == std::string("image's ESP-Hosted version does not match this firmware's"));
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "") == std::string("image's ESP-Hosted version does not match this firmware's"));
+    const auto app = makeImage(kImageMagic, 0x000D, "MoonLight", "2.12.13");
+    const auto appInfo = identify(app.data(), app.size());
+    CHECK(coprocessorRejection(appInfo, ChipId::Esp32C6, "2.12.13") == std::string("not a radio chip image"));
+}
+
+TEST_CASE("versions compare on major and minor only, whole numbers rather than prefixes") {
+    CHECK(sameMajorMinor("2.12.13", "2.12.0"));
+    CHECK(sameMajorMinor("2.12", "2.12.9"));
+    CHECK_FALSE(sameMajorMinor("2.1.0", "2.12.0"));
+    CHECK_FALSE(sameMajorMinor("2.12.0", "3.12.0"));
+    CHECK_FALSE(sameMajorMinor("0.0.0", "2.12.13"));
+    CHECK_FALSE(sameMajorMinor("2", "2.12.0"));
+}

@@ -278,6 +278,14 @@ const char* flashMode();
 
 /// WiFi co-processor status for a board whose radio lives on a separate chip, empty on a native radio.
 const char* coprocessorWifi();
+/// The co-processor line as the last coprocessorWifi() left it, a plain read for a control to bind to.
+const char* coprocessorLine() MM_NONBLOCKING;
+/// The ESP-Hosted version this firmware's host side is built with, which the radio chip's firmware must match on major.minor; empty on a native radio.
+const char* coprocessorHostVersion();
+/// Whether the radio chip has settled on firmware that does not match the host's, the update the Firmware card offers.
+bool coprocessorOutdated() MM_NONBLOCKING;
+/// Start the link to the radio chip on its own task where it is still unstarted, so its firmware can be read and updated over Ethernet; false where there is no such chip or the task cannot start.
+bool coprocessorConnect();
 
 /// This host's LAN IPv4 as a dotted string, or empty; on ESP32 the device IP belongs to NetworkModule.
 const char* hostIp();
@@ -898,8 +906,8 @@ bool http_fetch_to_ota(const char* url,
 
 /// An image written as its bytes arrive, which whoever receives it pushes a chunk at a time.
 struct OtaWrite { void* impl = nullptr; };
-/// Which slot an image goes to: the application's, or MoonBase's, which only the running application can write.
-enum class OtaTarget : uint8_t { App, MoonBase };
+/// Which image an install writes: the application's slot, MoonBase's, which only the running application can write, or the radio chip's firmware, streamed over its link.
+enum class OtaTarget : uint8_t { App, MoonBase, Coprocessor };
 /// Start an image of `contentLen` bytes (0 when unknown) for `target`, its progress in `statusBuf` and `bytesOut`; false with the reason there.
 bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut);
 /// Hand the image its next bytes; false once it is refused or the flash fails, the reason in its status and the image abandoned.
@@ -923,9 +931,9 @@ bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
 /// Give a desktop a MoonBase with this descriptor version and build time, for a host test; null removes it.
 void setTestMoonBase(const char* version, const char* built);
 #endif
-/// The same install from a URL, which the device fetches itself; runs on its own task and returns at once.
-bool otaFetchMoonBaseUrl(const char* url, char* statusBuf, size_t statusBufLen,
-                         uint32_t* bytesReadOut, uint32_t* bytesTotalOut);
+/// An install of `target` from a URL, which the device fetches itself; runs on its own task and returns at once. For the radio chip it starts the link first where it is still unstarted.
+bool otaFetchUrl(OtaTarget target, const char* url, char* statusBuf, size_t statusBufLen,
+                 uint32_t* bytesReadOut, uint32_t* bytesTotalOut);
 /// Stage an install URL for MoonBase to pick up on its next boot, at most 255 bytes.
 bool moonbaseStageInstallUrl(const char* url);
 /// Erase a staged URL that was never consumed, which a power cut mid-stage leaves armed.

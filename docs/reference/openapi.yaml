@@ -510,6 +510,38 @@ paths:
         "500": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
 
+  /api/firmware/coprocessor-update-url:
+    post:
+      tags: [Firmware]
+      operationId: installCoprocessorUrl
+      summary: Updates the WiFi coproc from an image the device fetches itself, by default its release's image matching this firmware's ESP-Hosted version; the device restarts after.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, description: "The image to install; omitted, the release's matching `c6-slave-<version>.bin`." }
+      responses:
+        "202": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
+  /api/firmware/coprocessor-update:
+    post:
+      tags: [Firmware]
+      operationId: uploadCoprocessor
+      summary: Updates the WiFi coproc from an uploaded image, over a link that is up; the device restarts after.
+      requestBody: { $ref: "#/components/requestBodies/Image" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "409": { $ref: "#/components/responses/Error" }
+        "411": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
+
   /hls/{file}:
     get:
       tags: [Media]

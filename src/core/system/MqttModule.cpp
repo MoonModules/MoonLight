@@ -123,6 +123,7 @@
 #include "core/util/JsonSink.h"      // jsonEscape: escape the editable deviceName into the discovery JSON
 #include "core/util/build_info.h"    // kVersion / kFirmwareName: reported to HA's update entity
 #include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight: shared with the OTA task
+#include "core/system/FilesystemModule.h"      // flushPending: settings written before an install restarts the device
 #include "core/util/LightOutput.h"   // the palettes as colors, for the HSV pair
 
 #include <cstdio>
@@ -402,6 +403,7 @@ void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
     std::snprintf(g_otaStatus, sizeof(g_otaStatus), "starting");
     g_otaBytesRead = 0;
     g_otaBytesTotal = 0;
+    FilesystemModule::flushPending();   // the install ends in a restart, which drops settings still waiting for their debounce
 
     (void)platform::http_fetch_to_ota(url, g_otaStatus, sizeof(g_otaStatus),
                                       &g_otaBytesRead, &g_otaBytesTotal,

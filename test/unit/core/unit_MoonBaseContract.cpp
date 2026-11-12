@@ -1,5 +1,5 @@
 /// @module NetworkModule
-/// @also FilesystemModule
+/// @also FilesystemModule, FirmwareUpdateModule
 
 /// The two contracts between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, and the install routes both images serve.
 
@@ -223,6 +223,18 @@ TEST_CASE("the two boot images serve the OTA routes under the same names") {
     const std::string ui = read("src/ui/app.js");
     CHECK_MESSAGE(ui.find("c.name === \"image\"") != std::string::npos,
                   "the UI must detect MoonBase by the control the module actually publishes");
+
+    // The WiFi coproc tab follows the same contract: routes the app serves and the UI calls, its upload on the allowlist, and one tab name on both sides. Read from source, since the tab is compiled only for a board with the chip.
+    const std::string firmware = read("src/core/system/FirmwareUpdateModule.h");
+    for (const char* route : {"\"/api/firmware/coprocessor-update-url\"", "\"/api/firmware/coprocessor-update\""}) {
+        CHECK_MESSAGE(app.find(route) != std::string::npos, "the app must serve " << route);
+        CHECK_MESSAGE(ui.find(route) != std::string::npos, "the UI must call " << route);
+    }
+    CHECK_MESSAGE(app.find("\"POST /api/firmware/coprocessor-update \"", allow) < app.find("\n}\n", allow),
+                  "the radio chip upload must be on the streaming allowlist");
+    CHECK(app.find("no radio chip on this device") != std::string::npos);
+    CHECK(firmware.find("\"WiFi coproc\"") != std::string::npos);
+    CHECK(ui.find("\"WiFi coproc\": \"coprocessor\"") != std::string::npos);
     CHECK_MESSAGE(read("src/core/system/FirmwareUpdateModule.h").find("addSelect(\"image\"") != std::string::npos,
                   "the module must publish that control");
 

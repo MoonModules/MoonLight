@@ -192,7 +192,7 @@ bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32
 }
 
 // One image and no recovery image beside it: the MoonBase questions all answer no.
-bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
+bool otaFetchUrl(OtaTarget, const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
     return http_fetch_to_ota(nullptr, statusBuf, statusBufLen, bytesReadOut, bytesTotalOut, nullptr);
 }
 bool moonbaseStageInstallUrl(const char*) { return false; }

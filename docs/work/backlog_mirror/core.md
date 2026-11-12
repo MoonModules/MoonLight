@@ -464,8 +464,9 @@ Confirmed by external review (CodeRabbit, PR #56).
 - `FilesystemModule::tick1s` — the debounced `flush()` does filesystem work; the poll itself is
   fine, the save wants a worker.
 - `FileManagerModule::tick1s` — `platform::filesystemUsed()`; wants a cached value.
-- `SystemModule::tick1s` — the P4 `coprocessorWifi()` path calls
-  `esp_hosted_get_coprocessor_fwversion()` synchronously; wants a cached snapshot.
+- `FirmwareUpdateModule::tick1s`: the WiFi coproc version query runs on the render thread, twice
+  once the link is up, each up to a second on firmware that does not answer; wants the task
+  `coprocessorConnect()` uses.
 - `ImprovProvisioningModule::tick` — runs the queued APPLY_OP inline; wants a cold task to
   execute and publish only the result.
 - `Scheduler::tick` — dispatches all of the above, so its own contract is only as good as theirs.

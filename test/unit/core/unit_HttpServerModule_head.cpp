@@ -171,11 +171,12 @@ TEST_CASE("a page's Origin is trusted when it names this network, an address or 
         "http://192.168.1.158", " http://192.168.1.158:8080", "http://10.0.0.5", "http://172.16.0.1", "http://172.31.255.254",
         "http://169.254.1.1", "http://127.0.0.1:8080", "http://localhost:8080", "http://mm-acfd.local", "http://MM-ACFD.LOCAL.",
         "http://lights.home.arpa", "http://nas.internal", "http://moonlight", "http://[::1]:8080", "http://[fe80::1]", "http://[fd12::3]",
+        "http://ledstrip.lan", "http://ledstrip.home", "http://ledstrip.localdomain",   // the routers' own defaults
     };
     for (const char* o : trusted) CHECK_MESSAGE(isTrustedOrigin(o), o);
     const char* refused[] = {
         "https://evil.example", "http://192.168.1.158.evil.example", "http://8.8.8.8", "http://172.32.0.1", "http://11.0.0.1",
-        "http://local.evil.example", "null", "", "http://", "http://[2001:db8::1]", "https://moonmodules.org",
+        "http://local.evil.example", "http://lan.evil.example", "http://evil.homes", "null", "", "http://", "http://[2001:db8::1]", "https://moonmodules.org",
         "null\r\nReferer: http://192.168.1.158/",   // a header without a scheme ends at its own line, never borrowing the next one's host
     };
     for (const char* o : refused) CHECK_MESSAGE(!isTrustedOrigin(o), o);
@@ -202,6 +203,7 @@ TEST_CASE("a request comes from beyond the network by a public Origin, or by a H
         "GET / HTTP/1.1\r\nHost: mm-acfd.local\r\n\r\n", "GET / HTTP/1.1\r\nHost: MM-ACFD.fritz.box\r\n\r\n",   // the router's name for it
         "GET / HTTP/1.1\r\nHost: mm-acfd.lan\r\n\r\n", "GET / HTTP/1.1\r\nHost: mm-acfd.tailnet.ts.net\r\n\r\n",
         "GET / HTTP/1.1\r\nHost: mm-acfd\r\n\r\n", "GET / HTTP/1.1\r\nHost: nas\r\n\r\n",   // one label, which public DNS never serves
+        "GET / HTTP/1.1\r\nHost: ledstrip.lan\r\n\r\n",   // a router's own default domain, under a name other than the device's
         "GET / HTTP/1.0\r\n\r\n",
         "POST /api/state HTTP/1.1\r\nHost: 192.168.1.158\r\nOrigin: http://192.168.1.20:8080\r\n\r\n",
         "POST /api/state HTTP/1.1\r\nHost: mm-acfd.fritz.box\r\nOrigin: http://mm-acfd.fritz.box\r\n\r\n",   // its own page under the router's name

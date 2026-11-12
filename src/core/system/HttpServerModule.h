@@ -927,7 +927,7 @@ private:
     /// The answer once the image is in: the reason on a failure, a 200 then the reboot for the application, a 200 and the card's new version for MoonBase.
     void answerFirmware(platform::TcpConnection& conn, bool ok, platform::OtaTarget target);
     /// The same install, fetched by the device itself from a URL.
-    void handleMoonBaseUrl(platform::TcpConnection& conn, const char* body);   // POST /api/firmware/moonbase-update-url
+    void handleImageUrl(platform::TcpConnection& conn, const char* body, platform::OtaTarget target);   // POST /api/firmware/moonbase-update-url and coprocessor-update-url
 
     // WebSocket
 

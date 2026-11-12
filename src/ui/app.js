@@ -1405,7 +1405,13 @@ function scrollableStrip(strip, key) {
 // `version`, which left this testing for a name nothing emits: the card silently lost its tab
 // strip AND its way into MoonBase, on a device that has one.
 function deviceHasMoonBase(mod) {
-    return (mod.controls || []).some(c => c.name === "image");
+    return firmwareImages(mod).includes("MoonBase");
+}
+
+// The images the Firmware card's tabs offer, in the device's order: the options of its `image` control, or the app alone.
+function firmwareImages(mod) {
+    const c = (mod.controls || []).find(c => c.name === "image");
+    return c && Array.isArray(c.options) ? c.options : ["App"];
 }
 
 // Ask a question in the app's own chrome rather than the browser's.
@@ -2284,7 +2290,10 @@ function createCard(mod, depth) {
             return c ? c.value : null;
         };
         const hasMoonBase = deviceHasMoonBase(mod);
-        const kind = (hasMoonBase && ctrlValue("image") === 1) ? "moonbase" : "app";
+        // Each tab is named by the device; the name says which image the rows describe.
+        const KIND_OF = { App: "app", MoonBase: "moonbase", "WiFi coproc": "coprocessor" };
+        const images = firmwareImages(mod);
+        const kind = KIND_OF[images[ctrlValue("image") || 0]] || "app";
         const KINDS = {
             app: {
                 label: "App",
@@ -2300,6 +2309,13 @@ function createCard(mod, depth) {
                 confirm: askMoonBaseInstall,
                 reboots: false,
             },
+            coprocessor: {
+                label: "WiFi coproc",
+                urlRoute: "/api/firmware/coprocessor-update-url",
+                uploadRoute: "/api/firmware/coprocessor-update",
+                confirm: null,
+                reboots: true,
+            },
         };
         const k = KINDS[kind];
 
@@ -2307,11 +2323,11 @@ function createCard(mod, depth) {
         // as a tab rather than as one setting among the settings it governs. The device holds the
         // selection (the control is marked hidden there), so this renders a fact rather than
         // owning one. Inserted after the card's title, ahead of the rows it governs.
-        if (hasMoonBase) {
+        if (images.length > 1) {
             const strip = document.createElement("div");
             strip.className = "tab-strip";
             strip.setAttribute("role", "tablist");
-            ["app", "moonbase"].forEach((tabKind, i) => {
+            images.map(name => KIND_OF[name] || "app").forEach((tabKind, i) => {
                 const tab = document.createElement("button");
                 tab.type = "button";
                 tab.className = tabKind === kind ? "tab tab-active" : "tab";
@@ -2324,6 +2340,7 @@ function createCard(mod, depth) {
                 imageTabs[tabKind] = tab;
                 const dev = deviceFirmwareInfo();
                 if (tabKind === "moonbase" && dev && dev.moonbase) applyTabDot(tab, { severity: "warning" });
+                if (tabKind === "coprocessor" && ctrlValue("coprocessorMismatch") !== null) applyTabDot(tab, { severity: "warning" });
                 strip.appendChild(tab);
             });
             const titleRow = controlsHost.querySelector(":scope > .card-title");
@@ -2392,7 +2409,7 @@ function createCard(mod, depth) {
             const res = await fetch(k.urlRoute, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify(url ? { url } : {}),
             });
             if (res.status === 501 && kind === "app") { await installViaBrowser(url); return; }
             if (!res.ok) throw new Error(await errorMessage(res));
@@ -2410,8 +2427,8 @@ function createCard(mod, depth) {
         const urlField = document.createElement("input");
         urlField.type = "url";
         urlField.className = "fw-url-field";
-        urlField.placeholder = kind === "moonbase"
-            ? "http://…/shared-moonbase-<chip>.bin" : "http://…/firmware.bin";
+        urlField.placeholder = kind === "moonbase" ? "http://…/shared-moonbase-<chip>.bin"
+            : kind === "coprocessor" ? "http://…/c6-slave-<version>.bin" : "http://…/firmware.bin";
         const urlBtn = document.createElement("button");
         urlBtn.className = "fm-tool";
         urlBtn.textContent = "Install";
@@ -2467,12 +2484,39 @@ function createCard(mod, depth) {
         extras.appendChild(fileRow);
         extras.appendChild(status);
 
+        // -- the radio chip: one matching image per release, so a button rather than the picker --
+        if (kind === "coprocessor") {
+            const relRow = document.createElement("div");
+            relRow.className = "control-row fw-upload-row";
+            const relLabel = document.createElement("span");
+            relLabel.className = "control-label";
+            relLabel.textContent = "Release";
+            const relBtn = document.createElement("button");
+            relBtn.className = "fm-tool";
+            relBtn.textContent = "Install the matching image";
+            relBtn.title = "The device fetches the image built for its ESP-Hosted release from GitHub, which needs internet on the device";
+            relBtn.addEventListener("click", async () => {
+                relBtn.disabled = true;
+                say("installing…");
+                try {
+                    await installUrl("");   // the device names the matching asset itself
+                } catch (err) {
+                    say("install failed: " + err.message);
+                } finally {
+                    relBtn.disabled = false;
+                }
+            });
+            relRow.append(relLabel, relBtn);
+            controlsHost.appendChild(relRow);
+            controlsHost.appendChild(extras);
+        }
+
         // -- the shared picker ----------------------------------------------------------
         const mount = document.createElement("div");
         mount.className = "install-picker-host";
         controlsHost.appendChild(available);
         controlsHost.appendChild(mount);
-        installPicker.init({
+        if (kind !== "coprocessor") installPicker.init({
             container: mount,
             // MoonBase ships ONE image per chip rather than one per variant, so on that tab the
             // picker offers the shared-moonbase assets and matches on the CHIP the device
@@ -7599,7 +7643,7 @@ function setupUpdateBadge() {
         selectModule("Firmware");
         // Straight to the tab that installs it.
         const fw = state && state.modules.find(m => m.type === "FirmwareUpdateModule");
-        if (badge.dataset.moonbase && fw) sendControl(fw.name, "image", 1);
+        if (badge.dataset.moonbase && fw) sendControl(fw.name, "image", firmwareImages(fw).indexOf("MoonBase"));
     });
 }
 

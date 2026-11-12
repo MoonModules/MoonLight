@@ -576,6 +576,10 @@ bool installFromUrl(const char* url) {
 
     esp_https_ota_handle_t handle = nullptr;
     esp_err_t beginErr = esp_https_ota_begin(&ota, &handle);
+    if (beginErr == ESP_ERR_HTTP_CONNECT) {
+        std::snprintf(status_, sizeof(status_), "%s", mm::firmware::kNoInternetHint);
+        return false;
+    }
     if (beginErr != ESP_OK) {
         // Numeric on purpose: the error-name table is compiled out for size (ESP_ERR_TO_NAME_LOOKUP=n), so esp_err_to_name would say "UNKNOWN ERROR".
         std::snprintf(status_, sizeof(status_), "error: cannot start the download (0x%x)",

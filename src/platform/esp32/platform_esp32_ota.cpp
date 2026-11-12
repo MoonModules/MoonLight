@@ -101,6 +101,11 @@
 #include "esp_heap_caps.h"   // heap_caps_malloc/free — the upload chunk buffer
 #include "esp_log.h"
 #include "nvs.h"           // moonbaseStageInstallUrl: the URL handoff to MoonBase
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
+#define MM_COPROCESSOR_OTA 1   // a radio chip behind esp_hosted, whose firmware streams over its link
+#include "esp_hosted_ota.h"
+#include "platform/esp32/platform_esp32_coprocessor.h"
+#endif
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -134,6 +139,7 @@ struct OtaTaskParams {
     size_t statusBufLen;
     uint32_t* bytesReadOut;   // current bytes downloaded
     uint32_t* bytesTotalOut;  // image size; 0 until esp_https_ota reports it
+    OtaTarget target = OtaTarget::App;   // where a URL install writes; the app's own install ignores it
 };
 
 // One bounded status writer for the file: @xref{one-bounded-status-writer|why a plain variadic beats a template}.
@@ -189,9 +195,9 @@ void otaTask(void* arg) {
         err = esp_https_ota_begin(&ota_config, &handle);
     }
     if (err != ESP_OK) {
-        // esp_https_ota_begin collapses ~6 distinct failures (DNS, TLS, HTTP, partition init, header-buffer overflow) into one ESP_FAIL, so the only useful detail is in the IDF log on the serial console. We surface the IDF error name plus a pointer to the log.
-        otaSetStatus(p, "error: ota begin %s (see serial log)",
-                     esp_err_to_name(err));
+        // esp_https_ota_begin collapses DNS, TLS, HTTP and partition failures into one ESP_FAIL, the detail in the serial log; a failed connection it names, and the hint says what to do.
+        if (err == ESP_ERR_HTTP_CONNECT) otaSetStatus(p, "%s", firmware::kNoInternetHint);
+        else otaSetStatus(p, "error: ota begin %s (see serial log)", esp_err_to_name(err));
         delete p;
         vTaskDelete(nullptr);
         return;
@@ -374,22 +380,47 @@ void freeImage(OtaWrite& w, Image* img) {
     w.impl = nullptr;
 }
 
+// Whether the first chunk is an image `img`'s target takes, its status naming the refusal where it is not: everything that can refuse an image is decided here, before a byte lands.
+bool acceptFirstChunk(Image* img, size_t n) {
+    if (img->target == OtaTarget::MoonBase) {
+        if (moonBaseImageRejected(img->buf, n, img->status, img->statusLen)) return false;
+        imageStatus(img, "writing MoonBase");
+        return true;
+    }
+    // A full chunk is far past the descriptor, so only an image ending sooner is too short to identify.
+    if (n < firmware::kIdentifyBytes) { imageStatus(img, "error: too short to be a firmware image"); return false; }
+    const auto info = firmware::identify(img->buf, n);
+    if (img->target == OtaTarget::Coprocessor) {
+        // Another chip's image, another project, or an ESP-Hosted release whose calls this host cannot make.
+        const char* why = firmware::coprocessorRejection(info, firmware::ChipId::Esp32C6, coprocessorHostVersion());
+        if (why) imageStatus(img, "error: %s", why);
+        return !why;
+    }
+    if (info.described && firmware::isMoonBaseImage(info.project)) { imageStatus(img, "error: that is a MoonBase image, not an app"); return false; }
+    if (!info.described || !firmware::isAppImage(info.project)) { imageStatus(img, "error: that image is not this project"); return false; }
+    return true;
+}
+
+// The buffer to the radio chip in pieces of the size ESP-Hosted's own example sends, each one remote call over the link.
+bool writeToCoprocessor(Image* img, size_t n) {
+#ifdef MM_COPROCESSOR_OTA
+    constexpr size_t kPiece = 1500;
+    for (size_t at = 0; at < n; at += kPiece) {
+        const esp_err_t err = esp_hosted_slave_ota_write(img->buf + at, static_cast<uint32_t>(std::min(kPiece, n - at)));
+        if (err != ESP_OK) { imageStatus(img, "error: the radio chip refused a write (%s)", esp_err_to_name(err)); return false; }
+    }
+    return true;
+#else
+    (void)img; (void)n;
+    return false;
+#endif
+}
+
 // Write what the buffer holds. Everything that can refuse the image runs on the first chunk, before a byte lands: @xref{writing-the-wrong-image-is-the-unrecoverable-direction|why}.
 bool flushImage(Image* img) {
     const size_t n = img->held;
     if (!n) return true;
-    if (img->written == 0) {
-        if (img->target == OtaTarget::MoonBase) {
-            if (moonBaseImageRejected(img->buf, n, img->status, img->statusLen)) return false;
-            imageStatus(img, "writing MoonBase");
-        } else {
-            // A full chunk is far past the descriptor, so only an image ending sooner is too short to identify.
-            if (n < firmware::kIdentifyBytes) { imageStatus(img, "error: too short to be a firmware image"); return false; }
-            const auto info = firmware::identify(img->buf, n);
-            if (info.described && firmware::isMoonBaseImage(info.project)) { imageStatus(img, "error: that is a MoonBase image, not an app"); return false; }
-            if (!info.described || !firmware::isAppImage(info.project)) { imageStatus(img, "error: that image is not this project"); return false; }
-        }
-    }
+    if (img->written == 0 && !acceptFirstChunk(img, n)) return false;
     if (img->target == OtaTarget::MoonBase) {
         // Whole words only: a full chunk is whole, and the last one pads with what erased flash reads. @xref{short-chunks-are-kept-not-padded}
         const size_t whole = (n + 3u) & ~size_t{3};
@@ -399,6 +430,8 @@ bool flushImage(Image* img) {
         if (err != ESP_OK) { imageStatus(img, "error: erase %s", esp_err_to_name(err)); return false; }
         err = esp_partition_write(img->part, img->written, img->buf, whole);
         if (err != ESP_OK) { imageStatus(img, "error: write %s", esp_err_to_name(err)); return false; }
+    } else if (img->target == OtaTarget::Coprocessor) {
+        if (!writeToCoprocessor(img, n)) return false;
     } else {
         const esp_err_t err = esp_ota_write(img->handle, img->buf, n);
         if (err != ESP_OK) { imageStatus(img, "error: ota write %s", esp_err_to_name(err)); return false; }
@@ -408,13 +441,42 @@ bool flushImage(Image* img) {
     // The counts ride the status, the way MoonBase's own page reports them. @xref{progress-rides-the-status-string}
     if (img->target == OtaTarget::MoonBase && img->contentLen)
         imageStatus(img, "writing MoonBase: %u of %u bytes", static_cast<unsigned>(img->written), static_cast<unsigned>(img->contentLen));
+    if (img->target == OtaTarget::Coprocessor)
+        imageStatus(img, "flashing the radio chip: %u bytes", static_cast<unsigned>(img->written));
     img->held = 0;
     return true;
 }
 }  // namespace
 
+// The radio chip's image: no slot of this chip's, so the begin is the chip's own over the link.
+static bool coprocessorBegin(OtaWrite& w, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
+#ifdef MM_COPROCESSOR_OTA
+    // The link must carry calls already: starting it waits on the chip, which only a task may do.
+    if (!coprocessorLinkUp()) { statusf(statusBuf, statusBufLen, "error: the radio chip's link is not up, connect it first"); return false; }
+    auto* img = new (std::nothrow) Image{OtaTarget::Coprocessor, nullptr, 0, nullptr, 0, 0, 0, contentLen, statusBuf, statusBufLen, bytesOut};
+    if (img) img->buf = static_cast<uint8_t*>(heap_caps_malloc(kOtaChunkBytes, MALLOC_CAP_8BIT));
+    esp_err_t err = (img && img->buf) ? esp_hosted_slave_ota_begin() : ESP_ERR_NO_MEM;
+    if (err != ESP_OK) {
+        if (err == ESP_ERR_NO_MEM) statusf(statusBuf, statusBufLen, "error: out of memory for the upload buffer");
+        else statusf(statusBuf, statusBufLen, "error: the radio chip refused the update (%s)", esp_err_to_name(err));
+        if (img) heap_caps_free(img->buf);
+        delete img;
+        return false;
+    }
+    w.impl = img;
+    statusf(statusBuf, statusBufLen, "flashing the radio chip");
+    *bytesOut = 0;
+    return true;
+#else
+    (void)w; (void)contentLen; (void)bytesOut;
+    statusf(statusBuf, statusBufLen, "error: no radio chip on this device");
+    return false;
+#endif
+}
+
 bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
     if (!statusBuf || statusBufLen == 0 || !bytesOut) return false;
+    if (target == OtaTarget::Coprocessor) return coprocessorBegin(w, contentLen, statusBuf, statusBufLen, bytesOut);
     const bool app = target == OtaTarget::App;
     const esp_partition_t* part = app ? esp_ota_get_next_update_partition(nullptr) : moonBasePartition();
     if (!part) {
@@ -481,7 +543,16 @@ bool otaEnd(OtaWrite& w, bool commit) {
         return false;
     }
     bool ok = true;
-    if (img->target == OtaTarget::App) {
+    if (img->target == OtaTarget::Coprocessor) {
+#ifdef MM_COPROCESSOR_OTA
+        // The chip checks the image whole; firmware from 2.6.0 on switches to it on activate, older firmware at the end by itself.
+        esp_err_t err = esp_hosted_slave_ota_end();
+        if (err == ESP_OK && coprocessorActivateSupported()) err = esp_hosted_slave_ota_activate();
+        if (err != ESP_OK) { imageStatus(img, "error: the radio chip did not take the image (%s)", esp_err_to_name(err)); ok = false; }
+        // Both chips restart so the link resyncs, as ESP-Hosted's own update does.
+        else imageStatus(img, "rebooting");
+#endif
+    } else if (img->target == OtaTarget::App) {
         esp_err_t err = esp_ota_end(img->handle);   // validates the image and consumes the handle
         img->handle = 0;
         if (err == ESP_OK) err = esp_ota_set_boot_partition(img->part);
@@ -502,8 +573,8 @@ bool otaEnd(OtaWrite& w, bool commit) {
 
 #undef imageStatus
 
-bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
-                          uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
+bool fetchUrlSync(OtaTarget target, const char* url, char* statusBuf, size_t statusBufLen,
+                  uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
     // A macro, not a lambda: the format reaches statusf as a literal. Through a lambda it arrives as a runtime pointer, which defeats the format check.
     #define setStatus(...) statusf(statusBuf, statusBufLen, __VA_ARGS__)
     esp_http_client_config_t cfg = {};
@@ -523,6 +594,11 @@ bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
     int status = 0;
     for (int hop = 0; hop <= cfg.max_redirection_count; hop++) {
         const esp_err_t err = esp_http_client_open(client, 0);
+        if (err == ESP_ERR_HTTP_CONNECT) {
+            setStatus("%s", firmware::kNoInternetHint);
+            esp_http_client_cleanup(client);
+            return false;
+        }
         if (err != ESP_OK) {
             setStatus("error: cannot start the download (%s)", esp_err_to_name(err));
             esp_http_client_cleanup(client);
@@ -545,7 +621,7 @@ bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
 
     // The download pushes into the writer the upload uses: @xref{a-url-pull-reuses-the-upload-writer|one writer, two sources}.
     OtaWrite w;
-    bool ok = otaBegin(w, OtaTarget::MoonBase, len > 0 ? static_cast<size_t>(len) : 0, statusBuf, statusBufLen, bytesReadOut);
+    bool ok = otaBegin(w, target, len > 0 ? static_cast<size_t>(len) : 0, statusBuf, statusBufLen, bytesReadOut);
     bool interrupted = false;
     char chunk[1024];
     while (ok) {
@@ -562,16 +638,30 @@ bool moonBaseFetchUrlSync(const char* url, char* statusBuf, size_t statusBufLen,
 }
 
 // Its own task, so the HTTP request answers 202 at once: @xref{why-the-install-runs-on-its-own-task|what a synchronous install costs}.
-void moonBaseUrlTask(void* arg) {
+void urlInstallTask(void* arg) {
     auto* p = static_cast<OtaTaskParams*>(arg);
-    moonBaseFetchUrlSync(p->url, p->statusBuf, p->statusBufLen, p->bytesReadOut, p->bytesTotalOut);
-    // No reboot on either outcome: the app is running from the other partition and is untouched. On failure the status already says what went wrong, and it stays there for the UI to read.
+    bool ok = true;
+#ifdef MM_COPROCESSOR_OTA
+    // The radio chip is reachable only over its link, which Ethernet leaves unstarted: start it here, where waiting on the chip costs no frame.
+    if (p->target == OtaTarget::Coprocessor) {
+        otaSetStatus(p, "starting");
+        ok = coprocessorStartLinkSync();
+        if (!ok) otaSetStatus(p, "error: the radio chip does not answer on its link");
+    }
+#endif
+    if (ok) ok = fetchUrlSync(p->target, p->url, p->statusBuf, p->statusBufLen, p->bytesReadOut, p->bytesTotalOut);
+    // MoonBase keeps the app running either way, from the other partition; the radio chip restarted on its new image, so the board follows to resync. A failure stays in the status.
+    const bool restart = ok && p->target == OtaTarget::Coprocessor;
     delete p;
+    if (restart) {
+        vTaskDelay(pdMS_TO_TICKS(600));   // the UI's last poll sees "rebooting" before the socket drops
+        esp_restart();
+    }
     vTaskDelete(nullptr);
 }
 
-bool otaFetchMoonBaseUrl(const char* url, char* statusBuf, size_t statusBufLen,
-                         uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
+bool otaFetchUrl(OtaTarget target, const char* url, char* statusBuf, size_t statusBufLen,
+                 uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
     if (!url || !statusBuf || statusBufLen == 0 || !bytesReadOut || !bytesTotalOut) return false;
     const size_t urlLen = std::strlen(url);
     auto* p = new (std::nothrow) OtaTaskParams{};
@@ -589,11 +679,12 @@ bool otaFetchMoonBaseUrl(const char* url, char* statusBuf, size_t statusBufLen,
     p->statusBufLen = statusBufLen;
     p->bytesReadOut = bytesReadOut;
     p->bytesTotalOut = bytesTotalOut;
+    p->target = target;
     *bytesReadOut = 0;
     *bytesTotalOut = 0;
     std::snprintf(statusBuf, statusBufLen, "starting");
     // 8 KB against the app OTA's 12: no esp_https_ota state machine here, just an http client feeding a writer. Priority 5 and the same core assignment as urlOta.
-    if (xTaskCreate(&moonBaseUrlTask, "mbOta", 8192, p, 5, nullptr) != pdPASS) {
+    if (xTaskCreate(&urlInstallTask, "urlInstall", 8192, p, 5, nullptr) != pdPASS) {
         std::snprintf(statusBuf, statusBufLen, "error: task create failed");
         delete p;
         return false;

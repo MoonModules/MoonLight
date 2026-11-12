@@ -20,6 +20,7 @@ add_executable(mm_tests
     unit/core/unit_AreaSample.cpp
     unit/core/unit_usbvideo_frames.cpp
     unit/core/unit_edid.cpp
+    unit/core/unit_coprocessor_status.cpp
     unit/core/unit_stop_signal.cpp
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp

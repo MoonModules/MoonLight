@@ -4196,9 +4196,6 @@
     "logLevel": {
      "line": "Serial log verbosity.",
      "more": "Warn by default. The first 60 seconds always log at Info, which is when the installer reads the IP."
-    },
-    "wifiCoproc": {
-     "line": "The firmware version of the separate WiFi chip."
     }
    },
    "role": "generic",
@@ -4955,8 +4952,12 @@
    "summary": "A flash swaps the binary and restarts the device, the one change that does not apply live. The flash is driven by the web route; the module shows its progress.",
    "guide": [
     {
-     "title": "Two images",
-     "text": "A device carrying two images, the app and MoonBase, shows them as two tabs. A Restart in MoonBase button sits on the card.\n\nWhen MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it."
+     "title": "The images",
+     "text": "Each image has its own tab: the app, MoonBase where present, the WiFi coproc on a P4 with WiFi. A Restart in MoonBase button sits on the card.\n\nWhen MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it."
+    },
+    {
+     "title": "The WiFi coproc",
+     "text": "A P4 with WiFi has its radio on an ESP32-C6, on the WiFi coproc tab: link not started on Ethernet (connect starts it), link down, then its version.\n\nIts major.minor must match the tab's ESP-Hosted release, or the card warns. Install from the release or a file; the device restarts."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/FirmwareUpdateModule.png",
@@ -4967,8 +4968,11 @@
     "moonbaseMismatch": {
      "line": "The installed version."
     },
+    "coprocessorMismatch": {
+     "line": "The radio chip's firmware, published only while it does not match this app."
+    },
     "image": {
-     "line": "Which image the card describes, drawn as two tabs."
+     "line": "Which image the card describes, drawn as tabs."
     },
     "version": {
      "line": "The installed version.",
@@ -4978,6 +4982,12 @@
        "url": "https://moonmodules.org/MoonLight/reference/tests.html#firmwareupdatemodule:scenario:scenario_Firmware_reports_what_is_running"
       }
      ]
+    },
+    "needs": {
+     "line": "The ESP-Hosted release this firmware needs on the radio chip."
+    },
+    "connect": {
+     "line": "Start the link to the radio chip, to read and update it over Ethernet."
     },
     "build": {
      "line": "The git id, then the build date."

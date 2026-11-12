@@ -364,6 +364,12 @@ const char* macString() {
 const char* chipModel() { return "i.MX RT1062"; }
 const char* hostPlatform() { return ""; }
 const char* psramType() { return ""; }
+// The radio, where a board has one, is native: no companion chip to report or update.
+const char* coprocessorWifi() { return ""; }
+const char* coprocessorLine() MM_NONBLOCKING { return ""; }
+const char* coprocessorHostVersion() { return ""; }
+bool coprocessorOutdated() MM_NONBLOCKING { return false; }
+bool coprocessorConnect() { return false; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot
 const char* hostIp() { return ""; }
 

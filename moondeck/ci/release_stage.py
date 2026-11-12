@@ -149,6 +149,9 @@ def stage_esp32(firmware: str, version: str) -> None:
     if moonbase:
         import build_esp32
         (DIST / "shared-ota-data-slot0.bin").write_bytes(build_esp32.otadata_slot0_bytes())
+    # The radio chip firmware a WiFi co-processor variant carries, named for the ESP-Hosted version a device asks for: every such variant builds the same one.
+    for image in sorted((ROOT / "build").glob("coprocessor-*/*-slave-*.bin")):
+        shutil.copy(image, DIST / image.name)
     # The migration image a board running WLED installs through WLED's own update page (moonbase/migrate/): one per chip, shared like MoonBase.
     for image, chip in migrate_chips(sorted((ROOT / "build").glob("migrate-*/MoonLight-migrate.bin"))):
         shutil.copy(image, DIST / f"shared-migrate-{chip}.bin")

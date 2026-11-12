@@ -898,6 +898,10 @@ const char* sdkVersion() {
 const char* coprocessorWifi() {
     return "";   // desktop has no WiFi co-processor
 }
+const char* coprocessorLine() MM_NONBLOCKING { return ""; }
+const char* coprocessorHostVersion() { return ""; }
+bool coprocessorOutdated() MM_NONBLOCKING { return false; }
+bool coprocessorConnect() { return false; }
 
 const char* psramType() {
     return "";   // desktop has no PSRAM
@@ -2136,9 +2140,9 @@ bool otaMoonBaseBuild(char* out, size_t len) {
     return out[0] != 0;
 }
 bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
-// No factory partition to install into off-device.
-bool otaFetchMoonBaseUrl(const char*, char* statusBuf, size_t statusBufLen,
-                         uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
+// No image to install into off-device, of any target.
+bool otaFetchUrl(OtaTarget, const char*, char* statusBuf, size_t statusBufLen,
+                 uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
     if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
     if (bytesReadOut) *bytesReadOut = 0;
     if (bytesTotalOut) *bytesTotalOut = 0;

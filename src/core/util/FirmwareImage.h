@@ -107,6 +107,9 @@ inline constexpr const char* kAppImageNames[]      = {"MoonLight", "projectMM"};
 /// The same pair for the recovery image, which an app slot must never receive.
 inline constexpr const char* kMoonBaseImageNames[] = {"MoonLight-moonbase", "projectMM-moonbase"};
 
+/// What an install from a URL says when the device cannot connect to the server, the usual case being an offline device, whose browser can still download the file.
+inline constexpr const char* kNoInternetHint = "error: the device cannot reach the internet, download the image and install it from a file";
+
 /// How long an install waits on a download delivering no bytes: @xref{a-download-that-goes-silent}.
 inline constexpr uint32_t kDownloadStallMs = 60000;
 
@@ -125,12 +128,44 @@ inline bool isAppImage(const char* name, size_t cap = 32) { return namedAmong(na
 /// Whether `name` is this project's recovery image.
 inline bool isMoonBaseImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kMoonBaseImageNames); }
 
-/// The reason this is not a MoonBase image for `chip`, or null when it is.
-inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
+/// The project name ESP-Hosted's co-processor image carries: the `slave/` project every release builds for the radio chip.
+inline constexpr const char* kCoprocessorImageNames[] = {"network_adapter"};
+
+/// Whether `name` is ESP-Hosted's co-processor image.
+inline bool isCoprocessorImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kCoprocessorImageNames); }
+
+/// Whether two `major.minor.patch` versions agree on major and minor, the pair ESP-Hosted requires host and co-processor to share.
+inline bool sameMajorMinor(const char* a, const char* b) {
+    if (!a || !b || !a[0] || !b[0]) return false;
+    const char* aDot = std::strchr(a, '.');
+    const char* bDot = std::strchr(b, '.');
+    if (!aDot || !bDot) return false;
+    const char* aEnd = std::strchr(aDot + 1, '.');
+    const char* bEnd = std::strchr(bDot + 1, '.');
+    const size_t aLen = aEnd ? static_cast<size_t>(aEnd - a) : std::strlen(a);
+    const size_t bLen = bEnd ? static_cast<size_t>(bEnd - b) : std::strlen(b);
+    return aLen == bLen && std::strncmp(a, b, aLen) == 0;
+}
+
+/// The reason `info` is not an image `isKind` accepts for `chip`, or null when it is: the checks in the order they are cheapest to detect.
+template <class IsKind>
+inline const char* imageRejection(const ImageInfo& info, ChipId chip, IsKind isKind, const char* notKind) {
     if (!info.valid)     return "not a firmware image";
     if (info.chip != chip) return "image is for another chip";
     if (!info.described) return "image carries no description";
-    if (!isMoonBaseImage(info.project)) return "not a MoonBase image";
+    if (!isKind(info.project)) return notKind;
+    return nullptr;
+}
+
+/// The reason this is not a MoonBase image for `chip`, or null when it is.
+inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
+    return imageRejection(info, chip, [](const char* p) { return isMoonBaseImage(p); }, "not a MoonBase image");
+}
+
+/// The reason this is not a co-processor image for `chip` matching the host's ESP-Hosted `hostVersion`, or null when it is; a mismatched major.minor would leave the link's calls timing out.
+inline const char* coprocessorRejection(const ImageInfo& info, ChipId chip, const char* hostVersion) {
+    if (const char* why = imageRejection(info, chip, [](const char* p) { return isCoprocessorImage(p); }, "not a radio chip image")) return why;
+    if (!sameMajorMinor(info.version, hostVersion)) return "image's ESP-Hosted version does not match this firmware's";
     return nullptr;
 }
 

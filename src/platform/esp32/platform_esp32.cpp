@@ -16,16 +16,6 @@
 ///
 /// An instruction-type sync alone does only the second, and on the P4 the core then refetches stale memory and decodes garbage. On the other chip the region is directly executable; the sequence is correct on both.
 ///
-/// ## The coprocessor version query is asked twice, then never again
-///
-/// The P4's radio runs on a companion chip, and the query asks what firmware version it reported over the link. It is a blocking call over that link, and the module asks from the one-second tick, which runs inline on the render thread.
-///
-/// Measured on a board with the radio live: the call times out after about a second, every second, forever, so the module showed over a million microseconds per tick at zero frames.
-///
-/// The link works while this one call does not answer, so retrying buys nothing. Two attempts, since each unanswered one is a second of stutter and one retry still catches a companion mid-handshake.
-///
-/// After that the display keeps what it learned, since the version cannot change while the host runs.
-///
 /// ## The vendor PHY needs two steps the generic driver cannot do
 ///
 /// No dedicated driver exists for this part, so both go through the standard register interface, mirroring the vendor's own example for this board.
@@ -127,6 +117,10 @@
 #if defined(CONFIG_IDF_TARGET_ESP32P4)
 // On the P4 the radio calls are forwarded to the companion chip, which self-initializes at boot, so no bring-up call is needed. This header is only for the read-only version query, and matches the guard on that function.
 #include "esp_hosted.h"
+#include "platform/coprocessor_status.h"
+#include "platform/esp32/platform_esp32_coprocessor.h"
+// The link state, from esp_hosted's transport driver: its public header has no getter, and its public link-up event is posted from a boot constructor, before this firmware's event loop exists to receive it.
+extern "C" uint8_t is_transport_tx_ready(void);
 #endif
 #endif
 #include "esp_log.h"
@@ -476,29 +470,87 @@ const char* flashMode() {
     }
 }
 
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
+// Whether the radio stack was brought up: the companion link starts there, since esp_wifi_init is what connects to the chip, so while Ethernet carries the device it stays unstarted.
+static bool coprocessorLinkStarted_ = false;
+// The status line and what the chip reported, one record for the line and the update offer.
+static CoprocessorStatus coprocessorStatus_;
+#endif
+
 const char* coprocessorWifi() {
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
-    // The firmware version the companion chip reported; empty means it never completed its handshake. Asked twice, then never again: @xref{the-coprocessor-version-query-is-asked-twice-then-never-again|the measurement}.
-    static char buf[24] = "querying…";
-    static uint8_t attemptsLeft = 2;
-    if (attemptsLeft == 0) return buf;
-    esp_hosted_coprocessor_fwver_t ver = {};
-    if (esp_hosted_get_coprocessor_fwversion(&ver) == ESP_OK
-        && (ver.major1 || ver.minor1 || ver.patch1)) {
-        attemptsLeft = 0;                       // answered: never ask again
-        std::snprintf(buf, sizeof(buf), "C6 fw %u.%u.%u",
-                      static_cast<unsigned>(ver.major1),
-                      static_cast<unsigned>(ver.minor1),
-                      static_cast<unsigned>(ver.patch1));
-    } else if (--attemptsLeft == 0) {
-        // Out of attempts. Say WHY the field is empty rather than asserting the C6 is absent: the query is what failed, and on this bench WiFi runs fine while it does.
-        std::snprintf(buf, sizeof(buf), "no version reply");
-    }
-    return buf;
+    // The line's rules, asking twice once the link is up, live in platform/coprocessor_status.h; this supplies the link state and the query.
+    const CoprocessorLink link = is_transport_tx_ready() ? CoprocessorLink::Up
+                               : coprocessorLinkStarted_ ? CoprocessorLink::Down
+                               : CoprocessorLink::NotStarted;
+    return coprocessorStatus_.update(link, [] {
+        esp_hosted_coprocessor_fwver_t ver = {};
+        CoprocessorVersion v;
+        v.answered = esp_hosted_get_coprocessor_fwversion(&ver) == ESP_OK;
+        v.major = ver.major1;
+        v.minor = ver.minor1;
+        v.patch = ver.patch1;
+        return v;
+    });
 #else
     return "";   // native-radio targets have no WiFi co-processor
 #endif
 }
+
+#if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
+const char* coprocessorHostVersion() {
+    static char version[16] = {};
+    if (!version[0]) std::snprintf(version, sizeof(version), "%d.%d.%d", ESP_HOSTED_VERSION_MAJOR_1, ESP_HOSTED_VERSION_MINOR_1, ESP_HOSTED_VERSION_PATCH_1);
+    return version;
+}
+
+bool coprocessorOutdated() MM_NONBLOCKING {
+    return coprocessorStatus_.outdated(ESP_HOSTED_VERSION_MAJOR_1, ESP_HOSTED_VERSION_MINOR_1);
+}
+
+const char* coprocessorLine() MM_NONBLOCKING { return coprocessorStatus_.line(); }
+
+bool coprocessorActivateSupported() {
+    // The update asks itself where the line has no answer yet, so the decision owns its input: skipping activate on a 2.6.0+ chip leaves it on the old image.
+    CoprocessorVersion v = coprocessorStatus_.reported();
+    if (!v.answered) {
+        esp_hosted_coprocessor_fwver_t ver = {};
+        if (esp_hosted_get_coprocessor_fwversion(&ver) == ESP_OK) { v.answered = true; v.major = ver.major1; v.minor = ver.minor1; }
+    }
+    return v.answered && (v.major > 2 || (v.major == 2 && v.minor >= 6));
+}
+
+bool coprocessorLinkUp() { return is_transport_tx_ready() != 0; }
+
+bool coprocessorStartLinkSync() {
+    if (is_transport_tx_ready()) return true;
+    if (coprocessorLinkStarted_) {
+        // Started by another caller: wait for it rather than run a second transport bring-up beside the first, which esp_hosted does not lock.
+        for (int i = 0; i < 200 && !is_transport_tx_ready(); i++) vTaskDelay(pdMS_TO_TICKS(100));
+        return is_transport_tx_ready() != 0;
+    }
+    coprocessorLinkStarted_ = true;   // the status line reads link down from here until the chip answers
+    esp_hosted_connect_to_slave();    // waits for the chip; a live link is left as it is
+    if (is_transport_tx_ready()) return true;
+    coprocessorLinkStarted_ = false;  // given up: the line offers connect again rather than reading link down for good
+    return false;
+}
+
+static void coprocessorConnectTask(void*) {
+    coprocessorStartLinkSync();
+    vTaskDelete(nullptr);
+}
+
+bool coprocessorConnect() {
+    if (coprocessorLinkStarted_ || is_transport_tx_ready()) return true;   // started already: the status line follows it
+    // 4 KB as the version query's caller needs; priority 5, as the install tasks.
+    return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
+}
+#else
+const char* coprocessorHostVersion() { return ""; }
+bool coprocessorOutdated() MM_NONBLOCKING { return false; }
+bool coprocessorConnect() { return false; }
+#endif
 
 namespace {
 constexpr const char* kBootNamespace = "mm";
@@ -1336,6 +1388,9 @@ static bool ensureWifiInit() {
 
     ensureNetifInit();
 
+#if defined(CONFIG_IDF_TARGET_ESP32P4)
+    coprocessorLinkStarted_ = true;   // the init below connects to the companion chip
+#endif
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_err_t err = esp_wifi_init(&cfg);
     if (err != ESP_OK) {

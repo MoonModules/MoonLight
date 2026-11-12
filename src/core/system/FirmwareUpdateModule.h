@@ -4,6 +4,7 @@
 #include "core/module/MoonModule.h"
 #include "core/util/build_info.h"   // kVersion / kRelease / kBuildDate / kFirmwareName
 #include "platform/platform.h" // firmwareSize / firmwarePartition
+#include "platform/coprocessor_status.h"   // kLinkNotStarted: the radio chip line that offers connect
 
 #include <cstdint>
 #include <cstdio>
@@ -31,6 +32,10 @@ constexpr const char* kFallbackRepo = "MoonModules/projectMM";
 constexpr const char* kReleaseAssetUrlFormat =
     "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
 
+/// The release asset the radio chip updates from: repository, release tag, the ESP-Hosted version this firmware links, which names the matching image.
+constexpr const char* kCoprocessorAssetUrlFormat =
+    "https://github.com/%s/releases/download/%s/c6-slave-%s.bin";
+
 inline char     g_otaStatus[64]     = "idle";   ///< the phase the install is in, shared by every unit
 inline uint32_t g_otaBytesRead      = 0;        ///< how much has been written
 inline uint32_t g_otaBytesTotal     = 0;        ///< the image size, zero until it is known
@@ -56,11 +61,17 @@ inline bool otaInFlight() {
 ///
 /// @guide
 ///
-/// ## Two images
+/// ## The images
 ///
-/// A device carrying two images, the app and MoonBase, shows them as two tabs. A Restart in MoonBase button sits on the card.
+/// Each image has its own tab: the app, MoonBase where present, the WiFi coproc on a P4 with WiFi. A Restart in MoonBase button sits on the card.
 ///
 /// When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it.
+///
+/// ## The WiFi coproc
+///
+/// A P4 with WiFi has its radio on an ESP32-C6, on the WiFi coproc tab: link not started on Ethernet (connect starts it), link down, then its version.
+///
+/// Its major.minor must match the tab's ESP-Hosted release, or the card warns. Install from the release or a file; the device restarts.
 ///
 /// @technical
 ///
@@ -119,17 +130,12 @@ public:
             controls_.addReadOnly("moonbaseMismatch", moonbaseStr_, sizeof(moonbaseStr_));
             controls_.setHidden(controls_.count() - 1, true);
         }
-        if (platform::otaHasMoonBase()) {
-            // Two images described by the same four facts, so eight controls would say each twice.
-            static const char* const kImages[] = { "App", "MoonBase" };
-            controls_.addSelect("image", imageSel_, kImages, kImageCount);
-            // Drawn as a tab strip rather than a setting among those it governs.
-            controls_.setHidden(controls_.count() - 1, true);
-        } else {
-            imageSel_ = kImageApp;   // nothing else to describe: the app is the only image
-        }
+        listImages();
+        const Image shown = images_[imageSel_];
 
-        if (imageSel_ == kImageApp) {
+        if (shown == kImageCoprocessor) {
+            defineCoprocessorControls();
+        } else if (shown == kImageApp) {
             controls_.addReadOnly("version", versionStr_, sizeof(versionStr_));
             controls_.addReadOnly("build", buildStr_, sizeof(buildStr_));
             controls_.addReadOnly("firmware", firmwareStr_, sizeof(firmwareStr_));
@@ -155,15 +161,63 @@ public:
         // The phase rides the shared status slot, and progress the overlay, not a card row.
     }
 
-    /// Rebuild the controls when the selector changes which image they describe.
+    /// The images this device carries, in tab order, and the selector over them; the WiFi coproc's mismatch rides beside them for the tab's warning.
+    void listImages() {
+        if constexpr (platform::hasWifiCoprocessor) {
+            if (platform::coprocessorOutdated()) {
+                /// The radio chip's firmware, published only while it does not match this app.
+                controls_.addReadOnly("coprocessorMismatch", const_cast<char*>(platform::coprocessorLine()));
+                controls_.setHidden(controls_.count() - 1, true);
+            }
+        }
+        // The images this device carries, in tab order; the selector indexes this list.
+        imageCount_ = 0;
+        images_[imageCount_] = kImageApp; imageNames_[imageCount_++] = "App";
+        if (platform::otaHasMoonBase()) { images_[imageCount_] = kImageMoonBase; imageNames_[imageCount_++] = "MoonBase"; }
+        if constexpr (platform::hasWifiCoprocessor) { images_[imageCount_] = kImageCoprocessor; imageNames_[imageCount_++] = "WiFi coproc"; }
+        if (imageSel_ >= imageCount_) imageSel_ = 0;
+        if (imageCount_ > 1) {
+            // Images described by the same facts, so a set of controls per image would say each again.
+            controls_.addSelect("image", imageSel_, imageNames_, imageCount_);
+            // Drawn as a tab strip rather than a setting among those it governs.
+            controls_.setHidden(controls_.count() - 1, true);
+        }
+    }
+
+    /// The WiFi coproc tab: the chip's line, the ESP-Hosted release it needs, and connect while its link is unstarted.
+    void defineCoprocessorControls() {
+        if constexpr (platform::hasWifiCoprocessor) {
+            // The radio chip's link and the firmware it reports, its readings in the card's guide.
+            controls_.addReadOnly("version", const_cast<char*>(platform::coprocessorLine()));
+            std::snprintf(hostedStr_, sizeof(hostedStr_), "ESP-Hosted %s", platform::coprocessorHostVersion());
+            /// The ESP-Hosted release this firmware is built with, whose major.minor the radio chip's firmware must match.
+            controls_.addReadOnly("needs", hostedStr_, sizeof(hostedStr_));
+            /// Start the link to the radio chip, to read and update it over Ethernet.
+            controls_.addButton("connect");
+            linkStarted_ = std::strcmp(platform::coprocessorLine(), platform::kLinkNotStarted) != 0;
+            controls_.setHidden(controls_.count() - 1, linkStarted_);   // only while there is a link to start
+        }
+    }
+
+    /// Rebuild the controls when the selector changes which image they describe; connect starts the radio chip's link.
     void onControlChanged(const char* controlName) override {
         if (std::strcmp(controlName, "image") == 0) rebuildControls();
+        if (std::strcmp(controlName, "connect") == 0) platform::coprocessorConnect();
     }
 
     /// Poll the install task's progress and phase into the bound buffers.
     void tick1s() MM_NONBLOCKING override {
         // No locks: one writer, and a torn read shows as a brief glimpse.
         mm::formatTo(statusStr_, sizeof(statusStr_), "%s", g_otaStatus);   // always NUL-terminates
+        bool rebind = false;   // one rebuild a tick, whatever asked for it
+        if constexpr (platform::hasWifiCoprocessor) {
+            // The line's controls point at the platform's buffer, so this one call a tick is the refresh, and the one that may ask the chip, keeping the two attempts a second apart; a settled mismatch or a started link re-binds the tab.
+            const bool started = std::strcmp(platform::coprocessorWifi(), platform::kLinkNotStarted) != 0;
+            const bool outdated = platform::coprocessorOutdated();
+            rebind = outdated != coprocessorOutdated_ || started != linkStarted_;
+            coprocessorOutdated_ = outdated;
+            linkStarted_ = started;
+        }
         publishStatus();
         // A recovery install ends with no reboot, so watching the phase is what notices.
         const bool installing = std::strcmp(statusStr_, "checking") == 0 ||
@@ -171,7 +225,7 @@ public:
                                 std::strncmp(statusStr_, "writing MoonBase", 16) == 0;
         if (wasInstallingMoonBase_ && !installing) {
             readMoonBaseVersion();
-            rebuildControls();
+            rebind = true;
         }
         wasInstallingMoonBase_ = installing;
 
@@ -189,8 +243,9 @@ public:
         // Re-bind when the total lands, since the control captured the old one by value.
         if (g_otaBytesTotal != totalSnap_) {
             totalSnap_ = g_otaBytesTotal;
-            rebuildControls();   // re-bind the progress total the overlay reads
+            rebind = true;   // re-bind the progress total the overlay reads
         }
+        if (rebind) rebuildControls();
     }
 
     /// Publish the phase on the shared slot, taking its severity from the text's own prefix; between installs, a MoonBase that does not match this app.
@@ -198,6 +253,7 @@ public:
         if (std::strcmp(statusStr_, "idle") == 0) {
             // A constant, since both versions are on the card's rows already.
             if (moonbaseOutdated_) setStatus("MoonBase does not match this app: install the matching one on the MoonBase tab", Severity::Warning);
+            else if (coprocessorOutdated_) setStatus("the radio chip's firmware does not match this app: install the matching one on the WiFi coproc tab", Severity::Warning);
             else clearStatus();
         } else {
             setStatus(statusStr_,
@@ -230,10 +286,18 @@ private:
     uint32_t moonbaseTotalVal_ = 0;        ///< the factory slot's size
     /// The build variant; on the MoonBase tab, its chip.
     char     moonbaseChipStr_[16] = {};
-    /// The images `imageSel_` picks from, in kImages order.
-    enum Image : uint8_t { kImageApp, kImageMoonBase, kImageCount };
-    /// Which image the card describes, drawn as two tabs.
-    uint8_t  imageSel_ = kImageApp;
+    /// The images a device can carry.
+    enum Image : uint8_t { kImageApp, kImageMoonBase, kImageCoprocessor, kImageCount };
+    /// The images this device carries, in tab order, and their tab names.
+    Image    images_[kImageCount] = {};
+    const char* imageNames_[kImageCount] = {};
+    uint8_t  imageCount_ = 1;
+    /// Which image the card describes, drawn as tabs.
+    uint8_t  imageSel_ = 0;
+    /// The ESP-Hosted release this firmware needs on the radio chip.
+    char     hostedStr_[24] = {};
+    bool     coprocessorOutdated_ = false;   ///< the radio chip settled on firmware that does not match
+    bool     linkStarted_ = false;           ///< the radio chip's link was started, which hides connect
     bool     wasWriting_ = false;          ///< edge-detects the end of any install, to restore the bar
     bool     wasInstallingMoonBase_ = false;   ///< edge-detects the end of a MoonBase install
 };

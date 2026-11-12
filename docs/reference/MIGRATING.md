@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The P4's radio chip status moves from System to the Firmware card
+
+**Action: *nothing*, unless a script reads it; read `version` on the Firmware module's WiFi coproc tab instead of `wifiCoproc` on System.**
+
+On an ESP32-P4 with WiFi, the read-only line about the separate radio chip is now the WiFi coproc tab of the Firmware card, which also updates the chip's firmware. It reads `link not started` while Ethernet carries the device, `link down` until the chip completes its handshake, then the chip's firmware version, or `C6 too old to report` when the chip's firmware predates the version query. It is read-only and unsaved.
+
 ### A page from outside the local network is refused
 
 **Action: *nothing*, unless a page served from the internet drives your devices; serve it from the local network, or call the device from a script, which sends no Origin.**

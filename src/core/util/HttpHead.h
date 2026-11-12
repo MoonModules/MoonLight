@@ -133,9 +133,9 @@ inline bool isLocalIPv6(const char* h) {
         || (std::strncmp(h, "[fe", 3) == 0 && h[3] >= '8' && h[3] <= 'b');
 }
 
-/// Whether a lowercase name of `n` bytes is local: `localhost` (RFC 6761), `.local` (RFC 6762), `.home.arpa` (RFC 8375), `.internal`, or one label.
+/// Whether a lowercase name of `n` bytes is local: `localhost` (RFC 6761), `.local` (RFC 6762), `.home.arpa` (RFC 8375), `.internal`, the routers' own defaults `.lan`, `.home` and `.localdomain`, which public DNS does not delegate, or one label.
 inline bool isLocalName(const char* h, size_t n) {
-    constexpr const char* kTails[] = {".localhost", ".local", ".home.arpa", ".internal"};
+    constexpr const char* kTails[] = {".localhost", ".local", ".home.arpa", ".internal", ".lan", ".home", ".localdomain"};
     if (std::strcmp(h, "localhost") == 0 || std::strchr(h, '.') == nullptr) return true;
     for (const char* t : kTails) {
         const size_t l = std::strlen(t);

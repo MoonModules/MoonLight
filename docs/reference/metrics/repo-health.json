@@ -1,10 +1,10 @@
 {
-  "commit": "2b27cb859",
+  "commit": "b69f6e694",
   "flash": {
-    "esp32s3-n16r8": 2490720,
-    "esp32": 2281776,
+    "esp32s3-n16r8": 2492784,
+    "esp32": 2283888,
     "esp32p4rev1-eth": 2617552,
-    "esp32p4rev1-eth-wifi": 2670560,
+    "esp32p4rev1-eth-wifi": 2875088,
     "esp32s3-n8r8": 2355984,
     "esp32s31": 2798864,
     "esp32-16mb": 2263392,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2432432,
-    "desktop-macos": 2582512,
+    "desktop-macos": 2582752,
     "desktop-windows": 1925120,
     "esp32c3": 2405632,
     "desktop-linux": 2548000,
@@ -32,7 +32,7 @@
     "esp32s3-n8r8": "2026-10-30",
     "esp32s3-zero": "2026-10-30",
     "esp32-16mb": "2026-10-30",
-    "esp32p4rev1-eth-wifi": "2026-10-30",
+    "esp32p4rev1-eth-wifi": "2026-11-12",
     "esp32-eth": "2026-11-11",
     "esp32p4rev3-eth": "2026-11-11",
     "desktop-macos": "2026-11-12",
@@ -800,8 +800,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 10,
-      "fps": 100000,
+      "tick_us": 8,
+      "fps": 125000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -841,16 +841,16 @@
     }
   },
   "loc": {
-    "core": 37700,
+    "core": 37806,
     "light": 35111,
-    "platform": 25060,
-    "ui": 14534,
-    "test": 85748,
-    "moondeck": 35453
+    "platform": 25322,
+    "ui": 14578,
+    "test": 85909,
+    "moondeck": 35523
   },
   "comments": {
     "core": {
-      "lines": 7403,
+      "lines": 7426,
       "ratio": 0.218
     },
     "light": {
@@ -858,36 +858,36 @@
       "ratio": 0.232
     },
     "platform": {
-      "lines": 4441,
-      "ratio": 0.199
+      "lines": 4477,
+      "ratio": 0.198
     },
     "ui": {
-      "lines": 3637,
-      "ratio": 0.265
+      "lines": 3640,
+      "ratio": 0.264
     },
     "test": {
-      "lines": 7905,
+      "lines": 7909,
       "ratio": 0.106
     },
     "moondeck": {
-      "lines": 4507,
+      "lines": 4511,
       "ratio": 0.146
     }
   },
   "tests": {
-    "cases": 3208,
+    "cases": 3220,
     "scenarios": 37
   },
   "docs": {
-    "md_files": 121,
-    "md_lines": 19828,
-    "plans_files": 13,
-    "backlog_lines": 3058,
+    "md_files": 122,
+    "md_lines": 19688,
+    "plans_files": 14,
+    "backlog_lines": 2835,
     "lessons_lines": 455,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6229,
+    "functions": 6262,
     "over_threshold": 337,
     "worst_ccn": 128
   }

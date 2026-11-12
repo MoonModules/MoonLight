@@ -58,11 +58,6 @@ public:
             defaultDeviceName(mac, deviceName_, sizeof(deviceName_));
         }
 
-        // The static strings bind straight to the platform's own storage, with no copy here.
-        if constexpr (platform::hasWifiCoprocessor) {
-            (void)platform::coprocessorWifi();   // prime the static (the control points at it)
-        }
-
         if (chipFlashVal_ > 0) {
             std::snprintf(flashStr_, sizeof(flashStr_), "%uMB",
                           static_cast<unsigned>(chipFlashVal_ / (1024 * 1024)));
@@ -172,11 +167,6 @@ public:
         controls_.addButton("factory reset", /*confirm*/ true);
         controls_.addSelect("logLevel", logLevel_, logLevelOptions_, 6);
         controls_.setDeveloper(controls_.count() - 1);
-        // Compiled out where the radio is native, so the control and its query both vanish.
-        if constexpr (platform::hasWifiCoprocessor) {
-            /// The firmware version of the separate WiFi chip.
-            controls_.addReadOnly("wifiCoproc", const_cast<char*>(platform::coprocessorWifi()));
-        }
 
         MoonModule::defineControls();
     }
@@ -217,11 +207,6 @@ public:
         // The internal block, not the all-memory one, which reads as megabytes on a PSRAM board.
         mm::formatTo(maxBlockStr_, sizeof(maxBlockStr_), "%uKB",
                       static_cast<unsigned>(platform::maxInternalAllocBlock() / 1024));
-
-        // The control points straight at the platform's buffer, so calling it is the refresh.
-        if constexpr (platform::hasWifiCoprocessor) {
-            (void)platform::coprocessorWifi();
-        }
 
         MoonModule::tick1s();
     }
