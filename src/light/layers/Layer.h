@@ -335,20 +335,24 @@ public:
         return layers == 1;
     }
 
-    /// Each logical cell's physical light by the layout's own positions, `kNoDriver` where none: a wiring-order frame placed this way lands before the modifiers, which then transform it.
-    void placeByLayout(nrOfLightsType* out, nrOfLightsType cells) const {
-        for (nrOfLightsType c = 0; c < cells; c++) out[c] = kNoDriver;
+    /// Each of the first `cells` cells of `box` gets the light the layout puts there, the first where several share it, `kNoDriver` where none: a layer's logical box, or a screen's face.
+    void placeByLayout(nrOfLightsType* out, size_t cells, Coord3D box) const {
+        for (size_t c = 0; c < cells; c++) out[c] = kNoDriver;
         if (!layouts_) return;
-        struct Ctx { nrOfLightsType* out; nrOfLightsType cells; lengthType w, h, d; };
-        Ctx ctx{out, cells, width_, height_, depth_};
-        // A gap stays dark, so its slot is not placed; a position outside the folded box has no cell.
+        struct Ctx { nrOfLightsType* out; size_t cells; Coord3D box; };
+        Ctx ctx{out, cells, box};
+        // A gap stays dark and claims no cell, so a light at the same place shows; a position outside the box has no cell.
         layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType idx, lengthType x, lengthType y, lengthType z) {
             auto* k = static_cast<Ctx*>(c);
-            if (x >= k->w || y >= k->h || z >= k->d) return;
-            const nrOfLightsType cell = static_cast<nrOfLightsType>(z) * k->w * k->h + static_cast<nrOfLightsType>(y) * k->w + x;
+            const Coord3D pos{x, y, z};
+            if (!pos.isInside(k->box)) return;   // checked per axis: a negative axis would wrap to a valid cell
+            const uint64_t cell = pos.indexIn(k->box);
             if (cell < k->cells && k->out[cell] == kNoDriver) k->out[cell] = idx;
-        }, [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, &ctx});
+        }, kDropGap, &ctx});
     }
+
+    /// The gap callback of a walk where a gap is dropped and stays black: a wire slot present, with no source.
+    static constexpr CoordCallback kDropGap = [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {};
 
     /// Whether a mapping was wanted but could not be built, so the layer degraded to identity.
     bool lutSkipped() const { return lutSkipped_; }
@@ -394,7 +398,7 @@ public:
         if (!buildFoldedLUT(logical, logicalCount, driverCount)) {
             // Degrade to identity rather than crashing, at the cost of lighting a gapped layout.
             lutSkipped_ = true;
-            setStatus("modifier mapping skipped — not enough memory", Severity::Warning);
+            setStatus("modifier mapping skipped: not enough memory", Severity::Warning);
             width_ = physicalWidth_; height_ = physicalHeight_; depth_ = physicalDepth_;
             lut_.setIdentity(boxCount);
             allocateBuffer(boxCount);
@@ -408,15 +412,14 @@ public:
 
     /// Whether the layout emits lights in box order, which validates the dense fast path; measured over the coords the build walks.
     bool isNaturalOrder() const {
-        struct Ctx { lengthType w, h; bool ok; };
-        Ctx ctx{physicalWidth_, physicalHeight_, true};
-        // Reached only for a gap-free layout, so blackCb is null.
+        struct Ctx { Coord3D box; bool ok; };
+        Ctx ctx{{physicalWidth_, physicalHeight_, physicalDepth_}, true};
+        // A gap reaches this callback too, since blackCb is null: out of place it breaks the order like any light.
         layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType driverIdx, lengthType x, lengthType y, lengthType z) {
             auto* k = static_cast<Ctx*>(c);
             if (!k->ok) return;   // once a mismatch is found the answer is settled; skip the rest
-            nrOfLightsType box = static_cast<nrOfLightsType>(z) * k->w * k->h
-                               + static_cast<nrOfLightsType>(y) * k->w + x;
-            if (driverIdx != box) k->ok = false;
+            // A light outside the box breaks the order however its index would wrap, so it answers false rather than being skipped.
+            if (!Coord3D{x, y, z}.isAtIndex(driverIdx, k->box)) k->ok = false;
         }, nullptr, &ctx});
         return ctx.ok;
     }
@@ -444,20 +447,13 @@ public:
                 if (m->hasModifyLive()) continue;                 // dynamic: not in the static fold
                 if (!m->modifyLogical(pos)) return;               // rejected: no logical source
             }
-            if (pos.x < 0 || pos.x >= f->logical.x || pos.y < 0 || pos.y >= f->logical.y ||
-                pos.z < 0 || pos.z >= f->logical.z) return;                          // defensive
-            const nrOfLightsType li =
-                static_cast<nrOfLightsType>(pos.z) * static_cast<nrOfLightsType>(f->logical.x) * static_cast<nrOfLightsType>(f->logical.y) +
-                static_cast<nrOfLightsType>(pos.y) * static_cast<nrOfLightsType>(f->logical.x) +
-                static_cast<nrOfLightsType>(pos.x);
-            if (li >= f->logicalCount) return;                                       // defensive
+            if (!pos.isInside(f->logical)) return;                                    // defensive
+            const uint64_t cell = pos.indexIn(f->logical);
+            if (cell >= f->logicalCount) return;                                     // defensive, before the index narrows
+            const auto li = static_cast<nrOfLightsType>(cell);
             if (f->place) f->self->lut_.place(li, driverIdx);
             else f->self->lut_.count(li);
         };
-
-        // A gap is dropped from the LUT and stays black: a wire slot present, with no source.
-        static constexpr CoordCallback kDropGap =
-            [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {};
 
         layouts_->placeLights(CoordSink{onCoord, kDropGap, &fctx});
         if (!lut_.startRuns()) return false;
@@ -538,7 +534,7 @@ private:
             if (buffer_.holds(count, channelsPerLight_) || canAllocate(needed)) {
                 if (buffer_.allocate(count, channelsPerLight_)) {
                     setDynamicBytes(buffer_.bytes() + lut_.memoryUsed());
-                    if (reduced) setStatus("buffer reduced — not enough memory", Severity::Warning);
+                    if (reduced) setStatus("buffer reduced: not enough memory", Severity::Warning);
                     return;
                 }
                 // allocate refused despite the canAllocate check, so degrade
@@ -558,9 +554,9 @@ private:
         if (!buffer_.allocate(count, channelsPerLight_)) {
             std::printf("  DEGRADE  buffer_.allocate failed at minimum size %u\n",
                         static_cast<unsigned>(count));
-            setStatus("buffer allocation failed — not enough memory", Severity::Error);
+            setStatus("buffer allocation failed: not enough memory", Severity::Error);
         } else if (reduced) {
-            setStatus("buffer reduced — not enough memory", Severity::Warning);
+            setStatus("buffer reduced: not enough memory", Severity::Warning);
         }
         setDynamicBytes(buffer_.bytes() + lut_.memoryUsed());
     }

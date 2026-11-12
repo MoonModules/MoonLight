@@ -9,8 +9,10 @@
 #include "correction_presets.h"
 #include "wall_fixture.h"
 #include "light/layers/Buffer.h"
+#include "light/layouts/PanelsLayout.h"
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace {
@@ -58,6 +60,106 @@ TEST_CASE("HdmiDriver hands over one pixel per light at the layer's size, keepin
     CHECK(f[5 * 3 + 0] == 10);
     CHECK(f[5 * 3 + 1] == 20);
     CHECK(f[5 * 3 + 2] == 30);
+}
+
+namespace {
+
+// A driver on any layout's face, wired as production wires it; build() applies the layout, so a case can shape it, or refuse memory, first.
+template <class LayoutT>
+struct LayoutWall {
+    HdmiSeamGuard seam;
+    mm::Buffer source;
+    mm::HdmiDriver driver;
+    mm::test::LayoutFace<LayoutT> face;
+    uint32_t nowMs = 1000;   ///< each frame a second after the last, past the fps ceiling
+    void build() {
+        face.build();
+        wireDriver();
+    }
+    // The driver onto the built layer: its first prepare, so a case can refuse memory between the layer and the driver.
+    void wireDriver() { mm::test::wire(driver, source, face.layer, face.layout.lightCount()); }
+    // Light `i` painted (10, 20, 30), one frame shown: the screen pixel index it lands on, or -1 when nowhere.
+    int pixelOf(mm::nrOfLightsType i) {
+        uint8_t* p = source.data() + static_cast<size_t>(i) * 3;
+        p[0] = 10; p[1] = 20; p[2] = 30;
+        driver.prepare();
+        mm::platform::setTestNowMs(nowMs += 1000);
+        driver.tick();
+        const uint8_t* f = mm::platform::hdmiTestFrameData();
+        if (!f) return -1;
+        const int pixels = mm::platform::hdmiTestFrameWidth() * mm::platform::hdmiTestFrameHeight();
+        for (int c = 0; c < pixels; c++)
+            if (f[c * 3] == 10 && f[c * 3 + 1] == 20 && f[c * 3 + 2] == 30) return c;
+        return -1;
+    }
+};
+
+// `across` panels of `w` by `h` in a row, snaked inside each when `snake`.
+std::unique_ptr<LayoutWall<mm::PanelsLayout>> panelWall(uint16_t across, uint16_t w, uint16_t h, bool snake) {
+    auto wall = std::make_unique<LayoutWall<mm::PanelsLayout>>();
+    mm::test::shapePanels(wall->face.layout, across, w, h, snake);
+    wall->build();
+    return wall;
+}
+
+// One 64x32 panel, its layer built with room, then its driver wired while every allocation above a frame of the face is refused: only the picture's table, four bytes a pixel against three, meets the refusal.
+struct NoRoomWall {
+    std::unique_ptr<LayoutWall<mm::PanelsLayout>> w = std::make_unique<LayoutWall<mm::PanelsLayout>>();
+    std::optional<mm::test::RefuseAbove> refuse;
+    explicit NoRoomWall(bool snake) {
+        mm::test::shapePanels(w->face.layout, 1, 64, 32, snake);
+        w->face.build();
+        refuse.emplace(64 * 32 * 3);
+        w->wireDriver();
+        mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Monitor);
+        w->driver.prepare();
+    }
+};
+
+}  // namespace
+
+// A chained panel wall's lights run panel by panel; the screen shows them where the layout puts them, as one picture.
+TEST_CASE("HdmiDriver places each light where the layout puts it, so a wall of chained panels shows as one picture") {
+    auto w = panelWall(2, 2, 2, false);   // two 2x2 panels side by side: a 4x2 picture
+    CHECK(w->pixelOf(4) == 2);   // panel 1's first light: x 2 of the top row, not the screen's fifth pixel
+}
+
+TEST_CASE("HdmiDriver places a snaked layout's lights where the layout puts them") {
+    auto w = panelWall(1, 4, 2, true);   // one 4x2 panel, its second row running back
+    CHECK(w->pixelOf(4) == 7);   // the second row's first light sits at its right end
+}
+
+TEST_CASE("HdmiDriver leaves a light placed outside the box off the screen, without touching another pixel") {
+    auto w = std::make_unique<LayoutWall<mm::test::LeftOfBox>>();
+    w->build();
+    CHECK(w->pixelOf(0) == -1);   // at (-1, 1): no pixel
+    std::memset(w->source.data(), 0, 3);   // light 0 dark again, so the next frame shows only light 4
+    CHECK(w->pixelOf(4) == 3);    // (3, 0) shows its own light, which a wrapped index would have given to light 0
+}
+
+TEST_CASE("HdmiDriver takes no placement table, not even for a moment, when the layout's order is the raster") {
+    if (sizeof(mm::nrOfLightsType) <= 3) {   // a table no heavier than a frame: the refusal cannot tell them apart
+        MESSAGE("skipped: a light index of " << sizeof(mm::nrOfLightsType) << " bytes");
+        return;
+    }
+    NoRoomWall raster(false);   // one panel walked in plain rows: light i is pixel i
+    CHECK(raster.w->driver.severity() == mm::MoonModule::Severity::Status);
+    CHECK(raster.w->pixelOf(70) == 70);
+}
+
+TEST_CASE("HdmiDriver holds a placement table only for a layout that needs one") {
+    auto raster = panelWall(1, 64, 32, false);
+    auto snaked = panelWall(1, 64, 32, true);
+    raster->driver.prepare();
+    snaked->driver.prepare();
+    CHECK(snaked->driver.dynamicBytes() - raster->driver.dynamicBytes() == 64 * 32 * sizeof(mm::nrOfLightsType));
+}
+
+TEST_CASE("HdmiDriver without room for a needed table keeps a picture in the lights' own order, and warns why") {
+    NoRoomWall snaked(true);
+    CHECK(snaked.w->driver.severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(snaked.w->driver.status()).find("no memory to place the lights by the layout") != std::string::npos);
+    CHECK(snaked.w->pixelOf(70) == 70);   // the straight copy: light 70 on pixel 70, where the layout would put it elsewhere
 }
 
 // The frame one light of (10, 20, 30) hands over, corrected through a profile of these roles, uncurved.

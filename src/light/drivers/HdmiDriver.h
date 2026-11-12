@@ -4,6 +4,7 @@
 #include "core/util/ScratchBuffer.h"
 #include "core/util/format.h"   // formatTo: the monitor line, written once a second without blocking
 #include "light/drivers/DriverBase.h"
+#include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "platform/edid.h"   // edid::Monitor, the monitor readout
 #include "platform/platform.h"
 
@@ -14,7 +15,7 @@ namespace mm {
 
 /// Shows the layer on a monitor through the board's HDMI port, scaled to the screen.
 ///
-/// One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).
+/// One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).
 ///
 /// ESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.
 ///
@@ -41,7 +42,7 @@ public:
     static constexpr const char* kTags = "🖥️";
 
     /// Bind the frame buffer to this module, so its registration puts its memory in the report.
-    HdmiDriver() : rgb_(*this) {}
+    HdmiDriver() : rgb_(*this), picture_(*this) {}
 
     /// The catalog tags shown on this driver's card.
     const char* tags() const override { return kTags; }
@@ -101,6 +102,7 @@ public:
             release();
             return;
         }
+        picture_.place(*layer_, width_, height_);   // a refused table keeps the raster order, and the status says why
         formatLiveLine();
         writeStatus();
     }
@@ -120,6 +122,8 @@ public:
             mm::formatTo(statusBuf_, sizeof(statusBuf_), "%ux%u on %ux%u%s (no %ux%u)", static_cast<unsigned>(width_),
                          static_cast<unsigned>(height_), static_cast<unsigned>(shown.width), static_cast<unsigned>(shown.height), rate,
                          static_cast<unsigned>(modes[mode].width), static_cast<unsigned>(modes[mode].height));
+        const size_t used = std::strlen(statusBuf_);
+        mm::formatTo(statusBuf_ + used, sizeof(statusBuf_) - used, "%s", picture_.note());
     }
 
     /// Stop the output, so the screen goes dark and its memory is freed.
@@ -158,13 +162,14 @@ public:
 
         const nrOfLightsType want = static_cast<nrOfLightsType>(width_) * height_;
         const nrOfLightsType have = sourceBuffer_->count();
-        const nrOfLightsType n    = want < have ? want : have;
-        if (n == 0 || rgb_.count() < static_cast<size_t>(want) * 3) return;
+        if (have == 0 || rgb_.count() < static_cast<size_t>(want) * 3) return;
         const uint8_t srcCh = sourceBuffer_->channelsPerLight();
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no picture
         uint8_t* dst = &rgb_[0];
-        correctFrameToRgb(sourceBuffer_->data(), srcCh, dst, n);   // corrected like every other driver, so the screen shows what the wall shows
-        if (n < want) std::memset(dst + static_cast<size_t>(n) * 3, 0, static_cast<size_t>(want - n) * 3);
+        // Each pixel from the light the layout puts there, corrected like every other driver, so the screen shows what the wall shows.
+        const bool ordered = rgbOrdered();
+        picture_.draw(sourceBuffer_->data(), srcCh, have, 1, dst,
+                      [&](const uint8_t* s, uint8_t* rgb) MM_NONBLOCKING { correctToRgb(s, srcCh, rgb, ordered); });
         platform::hdmiWrite(dst, static_cast<uint16_t>(width_), static_cast<uint16_t>(height_), scaling == kScalingFit);
     }
 
@@ -193,7 +198,7 @@ private:
             case platform::HdmiLink::NoMonitor: setStatus("no monitor connected", Severity::Warning); return;
             case platform::HdmiLink::Monitor:   break;
         }
-        setStatus(statusBuf_, modeListed() && sizeMatches() ? Severity::Status : Severity::Warning);
+        setStatus(statusBuf_, modeListed() && sizeMatches() && picture_.placed() ? Severity::Status : Severity::Warning);
     }
 
     /// Whether the display runs the size chosen; true while its mode is not known yet.
@@ -246,7 +251,8 @@ private:
     char           modeNames_[kMaxModes][20]{};
     const char*    modeOptions_[kMaxModes]{};
     ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
-    char           statusBuf_[64]{};
+    LayoutPicture picture_;               ///< which light each pixel shows
+    char           statusBuf_[112]{};
     char           monitorStr_[64]{};
     char           bridgeStr_[48]{};
 };

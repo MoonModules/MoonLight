@@ -147,6 +147,7 @@ add_executable(mm_tests
     unit/light/unit_NetworkSendDriver_packet.cpp
     unit/light/unit_NdiDriver.cpp
     unit/light/unit_HdmiDriver.cpp
+    unit/light/unit_LayoutPicture.cpp
     unit/light/unit_HlsDriver.cpp
     unit/light/unit_RtpH264.cpp
     unit/light/unit_RtspSession.cpp

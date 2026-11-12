@@ -9,13 +9,10 @@
 #include "light/effects/RainbowEffect.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/RegionModifier.h"
+#include "wall_fixture.h"
+#include <vector>
 
-// The driver/output buffer must hold ONLY the real lights, never the dense bounding box. A sphere defines a 9x9x9 (=729) render grid but only 210 shell lights; the MappingLUT extracts those 210 into the driver buffer (what ArtNet and the preview consume). These tests pin:
-//  - sparse layout (sphere) builds a LUT whose destinations are driver indices
-//    in [0, lightCount), never a box index >= lightCount (the latent overflow);
-//  - dense grid stays on the identity fast path (no LUT), unchanged;
-//  - a sphere + Mirror modifier still maps into driver-index space.
-// The Layer buffer (where effects render) stays the dense box in all cases.
+// The driver buffer holds only the real lights while effects render the box: a 9x9x9 sphere's 210 shell lights land in driver-index space, alone or under Mirror, and a dense grid keeps the identity fast path.
 
 namespace {
 
@@ -46,7 +43,7 @@ TEST_CASE("Layer: dense grid stays on the identity path (no LUT)") {
     CHECK(rig.layer.buffer().count() == 64);        // render buffer == box == lights
 }
 
-// Serpentine grid: dense (every box cell is a light, so the count check alone would pick the identity fast path) but SHUFFLED (driver index i != box cell i). isNaturalOrder() measures that from the coords and routes it through the box->driver LUT instead. This is the lever for exercising the non-identity mapping path without a sparse layout or a modifier.
+// A serpentine grid is dense, so the count alone would pick the identity fast path, but shuffled, driver index i at another cell; isNaturalOrder() reads that from the coordinates and routes it through the LUT.
 TEST_CASE("Layer: serpentine grid leaves the identity path and builds a LUT") {
     mm::GridLayout g;
     g.width = 4; g.height = 4; g.depth = 1;   // 16 lights, dense
@@ -64,9 +61,9 @@ TEST_CASE("Layer: serpentine grid leaves the identity path and builds a LUT") {
         lut.forEachDestination(box, [&](mm::nrOfLightsType dst) { d = dst; });
         return d;
     };
-    CHECK(driverOf(0) == 0);    // row 0, x=0 — natural
-    CHECK(driverOf(4) == 7);    // row 1, x=0 — reversed: last of the row's driver indices
-    CHECK(driverOf(7) == 4);    // row 1, x=3 — reversed: first
+    CHECK(driverOf(0) == 0);    // row 0, x=0, natural
+    CHECK(driverOf(4) == 7);    // row 1, x=0, reversed: last of the row's driver indices
+    CHECK(driverOf(7) == 4);    // row 1, x=3, reversed: first
 
     // Flipping serpentine off returns it to the identity fast path (no LUT).
     g.serpentine = false;
@@ -129,7 +126,7 @@ TEST_CASE("Layer: sphere + mirror maps into driver-index space") {
     }
 }
 
-// REGRESSION: a high fan-out Multiply (8×8×4 = 256) on a 128×128 grid must build a NON-EMPTY LUT that covers every physical light. The maxDest estimate (logicalCount × maxMultiplier) is computed in 64-bit; before that fix it overflowed uint16 on no-PSRAM boards (256 × 256 = 65536 wraps to 0), sized the LUT to ~nothing, and blanked the display. Here we assert the LUT actually maps the full light set, in range, the symptom that black-screened the device.
+// A high fan-out Multiply (8x8x4 = 256) on a 128x128 grid builds a LUT covering every light: the maxDest estimate is 64-bit, where 16 bits on a board without PSRAM would wrap 256 x 256 to 0 and blank the wall.
 TEST_CASE("Layer: high fan-out Multiply builds a full, in-range LUT (no overflow)") {
     mm::GridLayout g;
     g.width = 128; g.height = 128; g.depth = 1;     // 16384 physical lights
@@ -164,7 +161,7 @@ TEST_CASE("Layer: high fan-out Multiply builds a full, in-range LUT (no overflow
     CHECK(inRange);
 }
 
-// Region carving: a RegionModifier shrinks the Layer's LOGICAL box to the region (so the effect renders only there), and the LUT maps each region cell to its box cell at the start offset, every destination in range, none outside the region. The driver buffer still holds all physical lights; cells outside the region simply get no logical source (dark). Default 0/100 = full box (the no-carve fast path) is covered by unit_RegionModifier; here we carve a quarter.
+// A RegionModifier shrinks the logical box to the region, and the LUT maps each region cell to its box cell at the start offset; cells outside it get no source and stay dark. The full box is unit_RegionModifier's.
 TEST_CASE("Layer: RegionModifier carves the logical box to a sub-region") {
     mm::GridLayout g;
     g.width = 8; g.height = 8; g.depth = 1;   // 64 lights, dense
@@ -189,7 +186,7 @@ TEST_CASE("Layer: RegionModifier carves the logical box to a sub-region") {
     // Physical driver buffer is unchanged, all 64 lights still exist; carving only restricts which of them the effect sources into.
     CHECK(layer.physicalLightCount() == 64);
 
-    // Every destination is a real box light inside the carved quarter (x<4, y<4), there are exactly 16 of them (one per logical cell, no fan-out), and they are all DISTINCT, a 1:1 carve must reach 16 different physical lights, never collapse two logical cells onto one destination or leave a cell unreached.
+    // Every destination is a distinct box light inside the carved quarter (x<4, y<4), 16 of them, one per logical cell: a 1:1 carve reaches 16 different lights, each cell exactly once.
     std::size_t total = 0;
     bool insideRegion = true;
     bool seen[64] = {false};     // 8×8 box
@@ -204,10 +201,10 @@ TEST_CASE("Layer: RegionModifier carves the logical box to a sub-region") {
     }
     CHECK(total == 16);          // 4×4 region, 1:1, nothing outside
     CHECK(insideRegion);
-    CHECK_FALSE(duplicate);      // 16 distinct physical lights — no cell collapses onto another
+    CHECK_FALSE(duplicate);      // 16 distinct physical lights: no cell collapses onto another
 }
 
-// Black pixels (mid-strand dark gaps): a GridLayout with a dark column run leaves the identity fast path (an identity map would light the gap) and builds a LUT that maps only the LIT cells. The gap's physical index is a real wire slot (counted in the physical/driver total) but is NO logical cell's destination, so the scatter never writes it and it stays black, a "physical pixel that stays black". This is the GridLayout-native form of the sparse mapping the sphere/region tests above pin.
+// Dark gaps: a GridBlacks dark column leaves the identity fast path for a LUT of the lit cells; a gap is a real wire slot in the driver total and no cell's destination, so it stays black.
 TEST_CASE("Layer: GridBlacks black columns build a gap-dropping LUT") {
     mm::GridBlacksLayout g;
     g.width = 8; g.height = 4; g.depth = 1;   // 32-cell box
@@ -236,7 +233,7 @@ TEST_CASE("Layer: GridBlacks black columns build a gap-dropping LUT") {
     }
     CHECK(total == 24);            // exactly the lit cells reach a physical light
     CHECK(inRange);
-    CHECK_FALSE(anyGapDest);       // the 8 dark slots carry no color — they stay black
+    CHECK_FALSE(anyGapDest);       // the 8 dark slots carry no color: they stay black
 
     // Clearing the run returns to the dense identity fast path (no LUT), byte-identical to a plain grid, the gap machinery must not perturb the common case (regression).
     g.blackCount = 0;
@@ -264,7 +261,7 @@ TEST_CASE("Layer: an effect renders through a gapped GridBlacks layer") {
     CHECK(lit > 0);                        // the frame reached the buffer rather than stopping at the table
 }
 
-// Robustness: an ALL-black grid (every column dark) is a valid degenerate config, every physical slot is a real wire position the driver still clocks, but NO cell maps to a light, so the LUT has zero destinations. Must build and run (buffer stays black), never crash.
+// An all-black grid is a valid degenerate layout: every slot is a wire position the driver clocks and no cell maps to a light, so the LUT has zero destinations; it builds and runs, its buffer black.
 TEST_CASE("Layer: an all-black GridBlacks builds an empty LUT without crashing") {
     mm::GridBlacksLayout g;
     g.width = 8; g.height = 4; g.depth = 1;
@@ -277,5 +274,23 @@ TEST_CASE("Layer: an all-black GridBlacks builds an empty LUT without crashing")
     std::size_t total = 0;
     for (mm::nrOfLightsType li = 0; li < lut.logicalCount(); li++)
         lut.forEachDestination(li, [&](mm::nrOfLightsType) { total++; });
-    CHECK(total == 0);                              // no cell reaches a light — the whole grid is dark
+    CHECK(total == 0);                              // no cell reaches a light: the whole grid is dark
+}
+
+// A light outside the box is not in box order, however its row-major index happens to come out: here light 3 sits at (-1, 1), whose index wraps to cell 3.
+TEST_CASE("Layer: a dense layout with a light outside the box is not natural order, so it takes the mapped path") {
+    mm::test::OneOutsideDense layout;
+    LayerRig rig(&layout);
+    CHECK_FALSE(rig.layer.isNaturalOrder());
+    CHECK(rig.layer.lut().hasLUT());   // the identity fast path would give light 3 the cell it does not sit in
+}
+
+// Placement skips a light outside the box, so the light that sits at a cell gets it, whichever arrives first.
+TEST_CASE("Layer: placeByLayout gives each cell the light that sits there, skipping a light outside the box") {
+    mm::test::LeftOfBox layout;   // light 0 at (-1, 1), then a 4x2 raster: light 4 at (3, 0)
+    LayerRig rig(&layout);
+    std::vector<mm::nrOfLightsType> out(8);
+    rig.layer.placeByLayout(out.data(), 8, {4, 2, 1});
+    CHECK(out[3] == 4);   // (3, 0) is light 4's; light 0's wrapped index would have claimed it first
+    for (mm::nrOfLightsType c = 0; c < 8; c++) CHECK(out[c] != 0);
 }

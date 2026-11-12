@@ -15,6 +15,7 @@
 #include <string>
 
 using mm::test::Wall;
+using mm::test::paintLight;
 using mm::test::wire;
 
 namespace {
@@ -35,11 +36,8 @@ void setUp(mm::NdiDriver& driver, mm::Buffer& source, Wall& wall, mm::nrOfLights
     mm::platform::ndiTestClearFrames();
 }
 
-// Paint light `i` a flat color, so a test can name the bytes it expects back.
-void paint(mm::Buffer& b, mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t bl) {
-    uint8_t* p = b.data() + static_cast<size_t>(i) * 3;
-    p[0] = r; p[1] = g; p[2] = bl;
-}
+// The one frame the seam recorded, or null.
+const uint8_t* sentFrame() { return mm::platform::ndiTestFrameCount() == 1 ? mm::platform::ndiTestFrameData(0) : nullptr; }
 
 }  // namespace
 
@@ -69,8 +67,8 @@ TEST_CASE("NdiDriver sends one pixel per light at the layer's size") {
     setUp(driver, source, wall, 8);
     driver.prepare();
 
-    paint(source, 0, 10, 20, 30);
-    paint(source, 7, 40, 50, 60);
+    paintLight(source, 0, 10, 20, 30);
+    paintLight(source, 7, 40, 50, 60);
 
     mm::platform::setTestNowMs(1000);
     driver.tick();
@@ -97,7 +95,7 @@ TEST_CASE("NdiDriver applies the driver's own brightness correction") {
     driver.correctionForTest() = half;
     driver.prepare();
 
-    paint(source, 0, 200, 200, 200);
+    paintLight(source, 0, 200, 200, 200);
 
     mm::platform::setTestNowMs(1000);
     driver.tick();
@@ -124,7 +122,7 @@ TEST_CASE("NdiDriver sends a white-first profile's colors, not its white") {
     driver->correctionForTest() = *wrgb;
     driver->prepare();
 
-    paint(*source, 0, 10, 20, 30);
+    paintLight(*source, 0, 10, 20, 30);
 
     mm::platform::setTestNowMs(1000);
     driver->tick();
@@ -183,7 +181,7 @@ TEST_CASE("NdiDriver blanks the tail when the layer is smaller than the frame") 
     setUp(driver, source, wall, 4);        // but only 4 lights behind it
     driver.prepare();
 
-    for (mm::nrOfLightsType i = 0; i < 4; i++) paint(source, i, 99, 99, 99);
+    for (mm::nrOfLightsType i = 0; i < 4; i++) paintLight(source, i, 99, 99, 99);
 
     mm::platform::setTestNowMs(1000);
     driver.tick();
@@ -194,4 +192,27 @@ TEST_CASE("NdiDriver blanks the tail when the layer is smaller than the frame") 
     CHECK(f[0] == 99);                     // a real light
     CHECK(f[12] == 0);                     // light 4 onward: blanked, not stale
     CHECK(f[23] == 0);
+}
+
+// A snaked layout's second row runs back; a receiver sees each light where the layout puts it, as one picture.
+TEST_CASE("NdiDriver sends each light where the layout puts it, so a snaked layout arrives as one picture") {
+    NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
+    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 4, 2, true);
+    mm::platform::ndiTestClearFrames();
+    rig.driver->prepare();
+    mm::test::checkSnakedFrame(mm::test::frameAfterPainting(*rig.driver, *rig.source, 4, sentFrame));
+}
+
+TEST_CASE("NdiDriver without room to place the lights still sends them, in their own order, and warns why") {
+    NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
+    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 64, 32, true);
+    mm::test::RefuseAbove refuse(64 * 32 * 3);   // once the wall is built, a frame of the face: the table, four bytes a pixel against three, is refused
+    mm::platform::ndiTestClearFrames();
+    rig.driver->prepare();
+    CHECK(rig.driver->severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(rig.driver->status()).find("sending 64x32") == 0);
+    CHECK(std::string(rig.driver->status()).find(", no memory to place the lights by the layout") != std::string::npos);
+    const uint8_t* f = mm::test::frameAfterPainting(*rig.driver, *rig.source, 70, sentFrame);
+    REQUIRE(f != nullptr);
+    CHECK(f[70 * 3] == 10);   // light 70 on pixel 70: the raster order
 }

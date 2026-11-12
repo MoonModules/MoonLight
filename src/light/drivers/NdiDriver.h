@@ -2,6 +2,7 @@
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
+#include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -12,7 +13,7 @@ namespace mm {
 /// Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.
 /// @card NdiDriver.png
 ///
-/// The grid becomes the frame, one light per pixel, output correction applied, so a receiver sees what the wall sees. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
+/// One light per pixel, placed where the layout puts it and corrected as the wall is. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
 ///
 /// Desktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with @ref NetworkSendDriver, and takes them in with @ref NetworkReceiveEffect.
 ///
@@ -47,7 +48,7 @@ public:
     static constexpr const char* kTags = "🖥️";
 
     /// Bind the frame buffer to this module, so its registration puts its memory in the report.
-    NdiDriver() : rgb_(*this) {}
+    NdiDriver() : rgb_(*this), picture_(*this) {}
 
     /// The catalog tags shown on this driver's card.
     const char* tags() const override { return kTags; }
@@ -99,10 +100,11 @@ public:
             return;
         }
 
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "sending %ux%u at %u fps",
+        picture_.place(*layer_, width_, height_);   // a refused table keeps the raster order, and the status says why
+        std::snprintf(statusBuf_, sizeof(statusBuf_), "sending %ux%u at %u fps%s",
                       static_cast<unsigned>(width_), static_cast<unsigned>(height_),
-                      static_cast<unsigned>(fps));
-        setStatus(statusBuf_, Severity::Status);
+                      static_cast<unsigned>(fps), picture_.note());
+        setStatus(statusBuf_, picture_.placed() ? Severity::Status : Severity::Warning);
     }
 
     /// Close the sender, so the source stops being advertised, and free the staging with it.
@@ -122,8 +124,7 @@ public:
 
         const nrOfLightsType want = static_cast<nrOfLightsType>(width_) * height_;
         const nrOfLightsType have = sourceBuffer_->count();
-        const nrOfLightsType n    = want < have ? want : have;
-        if (n == 0) return;
+        if (have == 0) return;
 
         // Corrected like every other driver, so a receiver sees what the wall sees.
         if (rgb_.count() < static_cast<size_t>(want) * 3) return;
@@ -132,10 +133,9 @@ public:
         const uint8_t  srcCh = sourceBuffer_->channelsPerLight();
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
-        correctFrameToRgb(src, srcCh, dst, n);   // the protocol carries RGB only
-        // Blanked, so a layout that shrank cannot show the previous frame's tail.
-        if (n < want) std::memset(dst + static_cast<size_t>(n) * 3, 0,
-                                  static_cast<size_t>(want - n) * 3);
+        // Each pixel from the light the layout puts there, RGB only as the protocol carries; a pixel no light reaches is black.
+        const bool ordered = rgbOrdered();
+        picture_.draw(src, srcCh, have, 1, dst, [&](const uint8_t* s, uint8_t* rgb) MM_NONBLOCKING { correctToRgb(s, srcCh, rgb, ordered); });
 
         platform::ndiSendFrame(dst, static_cast<uint16_t>(width_),
                                static_cast<uint16_t>(height_), fps);
@@ -153,7 +153,8 @@ private:
     bool           open_   = false;
     uint32_t       lastSendMs_ = 0;
     ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
-    char           statusBuf_[64]{};
+    char           statusBuf_[96]{};
+    LayoutPicture  picture_;              ///< which light each pixel shows
 };
 
 }  // namespace mm
