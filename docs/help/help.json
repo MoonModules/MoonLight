@@ -3680,7 +3680,7 @@
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
-   "summary": "One light per pixel, corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
    "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
    "guide": [
     {

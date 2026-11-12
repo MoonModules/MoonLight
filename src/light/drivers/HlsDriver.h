@@ -3,6 +3,7 @@
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
+#include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "platform/platform.h"
 
 #include <atomic>
@@ -51,7 +52,7 @@ public:
     static constexpr const char* kSegmentDir = "/.hls";
 
     /// Bind the frame buffer to this module, so its memory is accounted for.
-    HlsDriver() : rgb_(*this) {}
+    HlsDriver() : rgb_(*this), picture_(*this) {}
 
     /// The catalog tags shown on this driver's card.
     const char* tags() const override { return kTags; }
@@ -87,7 +88,7 @@ public:
 
         srcWidth_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
         srcHeight_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
-        // An explicit scale is honoured except below a hardware encoder's own minimum frame.
+        // An explicit scale is honored except below a hardware encoder's own minimum frame.
         const uint8_t floorScale = platform::hasEncoderChoice ? 1 : autoScale();
         scale_     = scale ? (scale > floorScale ? scale : floorScale) : autoScale();
         // Widened BEFORE multiplying: both operands are sane while their product need not be.
@@ -120,6 +121,7 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
+        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         // Only where the encoder writes segments to disk rather than keeping them in RAM.
         if constexpr (platform::hasFsSegments) {
@@ -135,16 +137,16 @@ public:
         // RELATIVE: the browser resolves it against the host it loaded from, so it never goes stale.
         std::snprintf(urlBuf_, sizeof(urlBuf_), "/hls/stream.m3u8");
         if (scale_ > 1) {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u as %ux%u at %u fps",
+            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u as %ux%u at %u fps%s",
                           static_cast<unsigned>(srcWidth_), static_cast<unsigned>(srcHeight_),
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
-                          static_cast<unsigned>(targetFps));
+                          static_cast<unsigned>(targetFps), picture_.note());
         } else {
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps",
+            std::snprintf(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps%s",
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
-                          static_cast<unsigned>(targetFps));
+                          static_cast<unsigned>(targetFps), picture_.note());
         }
-        setStatus(statusBuf_, Severity::Status);
+        setStatus(statusBuf_, picture_.placed() ? Severity::Status : Severity::Warning);
     }
 
     /// Stop the encoder and drop the segments it wrote.
@@ -180,50 +182,19 @@ public:
         }
 
         // A wide type: the light type is narrow on some boards and the product would overflow it.
-        const size_t lights = static_cast<size_t>(srcWidth_) * srcHeight_;
         const size_t have   = sourceBuffer_->count();
-        const size_t n      = lights < have ? lights : have;
         const size_t frameBytes = static_cast<size_t>(width_) * height_ * 3;
-        if (n == 0 || rgb_.count() < frameBytes) return;
+        if (have == 0 || rgb_.count() < frameBytes) return;
 
         const uint8_t* src   = sourceBuffer_->data();
         const uint8_t  srcCh = sourceBuffer_->channelsPerLight();
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
-        // Packed with the output correction, so the stream shows what the wall shows.
+        // Each light where the layout puts it, corrected as the wall is, one conversion per light in scale x scale blocks; a pixel no light reaches is black.
         uint8_t* dst = &rgb_[0];
-        const size_t rowBytes = static_cast<size_t>(width_) * 3;
         const bool ordered = rgbOrdered();
-        for (nrOfLightsType i = 0; i < n; i++) {
-            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
-            uint8_t rgb[3];
-            correctToRgb(s, srcCh, rgb, ordered);
-            const lengthType sx = static_cast<lengthType>(i % srcWidth_);
-            const lengthType sy = static_cast<lengthType>(i / srcWidth_);
-            // One color conversion per light; the replication is a copy, not per-pixel work.
-            uint8_t* row0 = dst + (static_cast<size_t>(sy) * scale_) * rowBytes
-                                + (static_cast<size_t>(sx) * scale_) * 3;
-            for (uint8_t px = 0; px < scale_; px++) {
-                row0[px * 3 + 0] = rgb[0];
-                row0[px * 3 + 1] = rgb[1];
-                row0[px * 3 + 2] = rgb[2];
-            }
-            for (uint8_t py = 1; py < scale_; py++)
-                std::memcpy(row0 + static_cast<size_t>(py) * rowBytes, row0,
-                            static_cast<size_t>(scale_) * 3);
-        }
-        // Lights the source buffer never supplied leave their blocks black.
-        if (n < lights) {
-            for (nrOfLightsType i = n; i < lights; i++) {
-                const lengthType sx = static_cast<lengthType>(i % srcWidth_);
-                const lengthType sy = static_cast<lengthType>(i / srcWidth_);
-                uint8_t* row0 = dst + (static_cast<size_t>(sy) * scale_) * rowBytes
-                                    + (static_cast<size_t>(sx) * scale_) * 3;
-                for (uint8_t py = 0; py < scale_; py++)
-                    std::memset(row0 + static_cast<size_t>(py) * rowBytes, 0,
-                                static_cast<size_t>(scale_) * 3);
-            }
-        }
+        picture_.draw(src, srcCh, static_cast<nrOfLightsType>(have), scale_, dst,
+                      [&](const uint8_t* s, uint8_t* rgb) MM_NONBLOCKING { correctToRgb(s, srcCh, rgb, ordered); });
 
         // Non-blocking: a full pipe drops the frame, and a dead process schedules a restart.
         const int wrote = platform::encoderWrite(dst, frameBytes);
@@ -388,8 +359,9 @@ private:
     std::atomic<uint32_t> droppedFrames_{0};
     uint32_t       lastReportedDrops_ = 0; ///< tick1s-only
     ScratchBuffer<uint8_t> rgb_;          ///< tight RGB staging, sized in prepare()
+    LayoutPicture          picture_;      ///< which light each pixel shows
     char           urlBuf_[64]{};
-    char           statusBuf_[64]{};
+    char           statusBuf_[112]{};
 };
 
 }  // namespace mm

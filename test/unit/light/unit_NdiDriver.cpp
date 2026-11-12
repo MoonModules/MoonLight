@@ -41,6 +41,9 @@ void paint(mm::Buffer& b, mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t bl
     p[0] = r; p[1] = g; p[2] = bl;
 }
 
+// The one frame the seam recorded, or null.
+const uint8_t* sentFrame() { return mm::platform::ndiTestFrameCount() == 1 ? mm::platform::ndiTestFrameData(0) : nullptr; }
+
 }  // namespace
 
 // Without the runtime the driver is inert but SAFE, and says why. This is the state every machine without NDI installed is in, including CI, so it is the default path rather than an edge case.
@@ -194,4 +197,27 @@ TEST_CASE("NdiDriver blanks the tail when the layer is smaller than the frame") 
     CHECK(f[0] == 99);                     // a real light
     CHECK(f[12] == 0);                     // light 4 onward: blanked, not stale
     CHECK(f[23] == 0);
+}
+
+// A snaked layout's second row runs back; a receiver sees each light where the layout puts it, as one picture.
+TEST_CASE("NdiDriver sends each light where the layout puts it, so a snaked layout arrives as one picture") {
+    NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
+    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 4, 2, true);
+    mm::platform::ndiTestClearFrames();
+    rig.driver->prepare();
+    mm::test::checkSnakedFrame(mm::test::frameAfterPainting(*rig.driver, *rig.source, 4, sentFrame));
+}
+
+TEST_CASE("NdiDriver without room to place the lights still sends them, in their own order, and warns why") {
+    NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
+    mm::test::RefuseAbove refuse(64 * 32 * 3);   // a frame of the face: the table, four bytes a pixel against three, is refused
+    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 64, 32, true);
+    mm::platform::ndiTestClearFrames();
+    rig.driver->prepare();
+    CHECK(rig.driver->severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(rig.driver->status()).find("sending 64x32") == 0);
+    CHECK(std::string(rig.driver->status()).find(", no memory to place the lights by the layout") != std::string::npos);
+    const uint8_t* f = mm::test::frameAfterPainting(*rig.driver, *rig.source, 70, sentFrame);
+    REQUIRE(f != nullptr);
+    CHECK(f[70 * 3] == 10);   // light 70 on pixel 70: the raster order
 }

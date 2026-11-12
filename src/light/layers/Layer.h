@@ -344,8 +344,9 @@ public:
         // A gap stays dark, so its slot is not placed; a position outside the folded box has no cell.
         layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType idx, lengthType x, lengthType y, lengthType z) {
             auto* k = static_cast<Ctx*>(c);
-            if (x >= k->w || y >= k->h || z >= k->d) return;
-            const nrOfLightsType cell = static_cast<nrOfLightsType>(z) * k->w * k->h + static_cast<nrOfLightsType>(y) * k->w + x;
+            const Coord3D pos{x, y, z}, box{k->w, k->h, k->d};
+            if (!pos.isInside(box)) return;   // checked per axis: a negative axis would wrap to a valid cell
+            const size_t cell = pos.indexIn(box);
             if (cell < k->cells && k->out[cell] == kNoDriver) k->out[cell] = idx;
         }, [](void*, nrOfLightsType, lengthType, lengthType, lengthType) {}, &ctx});
     }
@@ -408,15 +409,14 @@ public:
 
     /// Whether the layout emits lights in box order, which validates the dense fast path; measured over the coords the build walks.
     bool isNaturalOrder() const {
-        struct Ctx { lengthType w, h; bool ok; };
-        Ctx ctx{physicalWidth_, physicalHeight_, true};
-        // Reached only for a gap-free layout, so blackCb is null.
+        struct Ctx { Coord3D box; bool ok; };
+        Ctx ctx{{physicalWidth_, physicalHeight_, physicalDepth_}, true};
+        // A gap reaches this callback too, since blackCb is null: out of place it breaks the order like any light.
         layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType driverIdx, lengthType x, lengthType y, lengthType z) {
             auto* k = static_cast<Ctx*>(c);
             if (!k->ok) return;   // once a mismatch is found the answer is settled; skip the rest
-            nrOfLightsType box = static_cast<nrOfLightsType>(z) * k->w * k->h
-                               + static_cast<nrOfLightsType>(y) * k->w + x;
-            if (driverIdx != box) k->ok = false;
+            // A light outside the box breaks the order however its index would wrap, so it answers false rather than being skipped.
+            if (!Coord3D{x, y, z}.isAtIndex(driverIdx, k->box)) k->ok = false;
         }, nullptr, &ctx});
         return ctx.ok;
     }
@@ -444,12 +444,8 @@ public:
                 if (m->hasModifyLive()) continue;                 // dynamic: not in the static fold
                 if (!m->modifyLogical(pos)) return;               // rejected: no logical source
             }
-            if (pos.x < 0 || pos.x >= f->logical.x || pos.y < 0 || pos.y >= f->logical.y ||
-                pos.z < 0 || pos.z >= f->logical.z) return;                          // defensive
-            const nrOfLightsType li =
-                static_cast<nrOfLightsType>(pos.z) * static_cast<nrOfLightsType>(f->logical.x) * static_cast<nrOfLightsType>(f->logical.y) +
-                static_cast<nrOfLightsType>(pos.y) * static_cast<nrOfLightsType>(f->logical.x) +
-                static_cast<nrOfLightsType>(pos.x);
+            if (!pos.isInside(f->logical)) return;                                    // defensive
+            const nrOfLightsType li = static_cast<nrOfLightsType>(pos.indexIn(f->logical));
             if (li >= f->logicalCount) return;                                       // defensive
             if (f->place) f->self->lut_.place(li, driverIdx);
             else f->self->lut_.count(li);

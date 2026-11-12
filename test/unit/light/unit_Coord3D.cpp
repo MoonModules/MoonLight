@@ -34,3 +34,33 @@ TEST_CASE("Coord3D equality") {
     CHECK(mm::Coord3D{1, 2, 3} != mm::Coord3D{1, 2, 4});
     CHECK(mm::Coord3D{} == mm::Coord3D{0, 0, 0});   // default-constructed is the origin
 }
+
+// A layout can place a light outside the box: a script's out-of-range coordinate arrives negative, and a composed layout can be shifted below 0. Inside means every axis from 0 up to below the size.
+TEST_CASE("Coord3D is inside a box only when every axis is from 0 up to below the box's size") {
+    const mm::Coord3D box{4, 2, 1};
+    CHECK(mm::Coord3D{0, 0, 0}.isInside(box));
+    CHECK(mm::Coord3D{3, 1, 0}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{-1, 1, 0}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{0, -1, 0}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{0, 0, -1}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{4, 0, 0}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{0, 2, 0}.isInside(box));
+    CHECK_FALSE(mm::Coord3D{0, 0, 1}.isInside(box));
+}
+
+// The index is row-major and wide: a box past 2^31 cells stays exact, beyond both a signed int and a light index.
+TEST_CASE("Coord3D's index in a box is row-major and wide") {
+    CHECK(mm::Coord3D{1, 1, 0}.indexIn({4, 2, 1}) == 5u);
+    CHECK(mm::Coord3D{0, 0, 1}.indexIn({4, 2, 2}) == 8u);
+    CHECK(mm::Coord3D{1023, 1023, 2047}.indexIn({1024, 1024, 2048}) == static_cast<size_t>(1024) * 1024 * 2048 - 1);
+}
+
+// Whether a position is index i of a box is answered by dividing i, never by multiplying the box out, so no size overflows or aliases.
+TEST_CASE("Coord3D knows whether it is a given row-major index of a box, without multiplying the box out") {
+    CHECK(mm::Coord3D{1, 1, 0}.isAtIndex(5, {4, 2, 1}));
+    CHECK_FALSE(mm::Coord3D{1, 1, 0}.isAtIndex(4, {4, 2, 1}));
+    CHECK(mm::Coord3D{1023, 1023, 2047}.isAtIndex(static_cast<size_t>(1024) * 1024 * 2048 - 1, {1024, 1024, 2048}));
+    CHECK(mm::Coord3D{112, 16, 1}.isAtIndex(70000, {256, 257, 2}));
+    CHECK_FALSE(mm::Coord3D{0, 0, 0}.isAtIndex(65536, {1, 1, 1}));   // an index past the box is no position in it, however it would narrow
+    CHECK_FALSE(mm::Coord3D{-1, 1, 0}.isAtIndex(3, {4, 2, 1}));      // outside the box is no index of it
+}

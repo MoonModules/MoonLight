@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include "platform_config.h"
@@ -36,6 +37,18 @@ struct Coord3D {
     Coord3D operator/(const Coord3D& o) const { return {divAxis(x, o.x), divAxis(y, o.y), divAxis(z, o.z)}; }
     bool operator==(const Coord3D& o) const { return x == o.x && y == o.y && z == o.z; }
     bool operator!=(const Coord3D& o) const { return !(*this == o); }
+    /// Whether this position lies in a box of `size` cornered at the origin: every axis from 0 up to below the size, the one test before a position is flattened.
+    bool isInside(const Coord3D& size) const { return x >= 0 && y >= 0 && z >= 0 && x < size.x && y < size.y && z < size.z; }
+    /// This position's row-major index in a box of `size`, computed wide, so a large box stays exact; meaningful for a position inside the box.
+    size_t indexIn(const Coord3D& size) const {
+        return (static_cast<size_t>(z) * static_cast<size_t>(size.y) + static_cast<size_t>(y)) * static_cast<size_t>(size.x) + static_cast<size_t>(x);
+    }
+    /// Whether this position is row-major index `index` of a box of `size`, found by dividing the index, so no product of the box can overflow or alias.
+    bool isAtIndex(size_t index, const Coord3D& size) const {
+        if (!isInside(size)) return false;
+        const size_t w = static_cast<size_t>(size.x), h = static_cast<size_t>(size.y);
+        return index % w == static_cast<size_t>(x) && (index / w) % h == static_cast<size_t>(y) && index / w / h == static_cast<size_t>(z);
+    }
 
 private:
     static lengthType modAxis(lengthType a, lengthType m) { return m > 0 ? static_cast<lengthType>(a % m) : a; }

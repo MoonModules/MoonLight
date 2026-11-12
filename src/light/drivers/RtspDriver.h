@@ -3,6 +3,7 @@
 #include "core/module/Control.h"
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
+#include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "light/util/RtpH264.h"
 #include "light/util/RtspSession.h"
 #include "platform/platform.h"
@@ -52,7 +53,7 @@ public:
     static constexpr const char* kTags = "🖥️";
 
     /// Bind the frame buffer to this module, so its memory is accounted for.
-    RtspDriver() : rgb_(*this) {}
+    RtspDriver() : rgb_(*this), picture_(*this) {}
 
     /// The catalog tags shown on this driver's card.
     const char* tags() const override { return kTags; }
@@ -103,6 +104,7 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
+        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         platform::EncoderConfig cfg{};
         cfg.width       = static_cast<uint16_t>(width_);
@@ -140,9 +142,7 @@ public:
         sendEpochMs_ = platform::millis();
         nextSendMs_  = sendEpochMs_;
         frameIndex_  = 0;
-        std::snprintf(statusBuf_, sizeof(statusBuf_), "ready at %ux%u, waiting for a viewer",
-                      static_cast<unsigned>(width_), static_cast<unsigned>(height_));
-        setStatus(statusBuf_, Severity::Status);
+        showReady();
     }
 
     /// Stop the encoder, drop the session and stop listening.
@@ -231,10 +231,10 @@ private:
             rtp_ = mm::rtp::Packetiser(platform::millis(), 0);
             // Where the packets go, read off the control socket: a client names a port it can receive on, and an address it cannot.
             client_.peerIPv4(peerIp_);
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps to a viewer",
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "streaming %ux%u at %u fps to a viewer%s",
                           static_cast<unsigned>(width_), static_cast<unsigned>(height_),
-                          static_cast<unsigned>(targetFps));
-            setStatus(statusBuf_, Severity::Status);
+                          static_cast<unsigned>(targetFps), picture_.note());
+            setStatus(statusBuf_, picture_.placed() ? Severity::Status : Severity::Warning);
         }
         playing_ = nowPlaying;
         if (parsed.verb == mm::rtsp::Request::Verb::Teardown) dropClient();
@@ -245,43 +245,31 @@ private:
         client_.close();
         playing_ = false;
         reqLen_  = 0;
-        mm::formatTo(statusBuf_, sizeof(statusBuf_), "ready at %ux%u, waiting for a viewer",
-                      static_cast<unsigned>(width_), static_cast<unsigned>(height_));
-        setStatus(statusBuf_, Severity::Status);
+        showReady();
+    }
+
+    /// The waiting state on the status line, with the picture's note when its table found no memory.
+    void showReady() MM_NONBLOCKING {
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "ready at %ux%u, waiting for a viewer%s",
+                     static_cast<unsigned>(width_), static_cast<unsigned>(height_), picture_.note());
+        setStatus(statusBuf_, picture_.placed() ? Severity::Status : Severity::Warning);
     }
 
     /// Pack the corrected frame and hand it to the encoder, which never blocks the caller.
     void feedEncoder() MM_NONBLOCKING {
-        const size_t lights = static_cast<size_t>(srcWidth_) * srcHeight_;
         const size_t have   = sourceBuffer_->count();
-        const size_t n      = lights < have ? lights : have;
         const size_t frameBytes = static_cast<size_t>(width_) * height_ * 3;
-        if (n == 0 || rgb_.count() < frameBytes) return;
-        // A buffer shorter than the layout would leave the rest of the frame holding the previous one.
-        if (n < lights) std::memset(rgb_.data(), 0, frameBytes);
+        if (have == 0 || rgb_.count() < frameBytes) return;
 
         const uint8_t* src   = sourceBuffer_->data();
         const uint8_t  srcCh = sourceBuffer_->channelsPerLight();
         if (srcCh < 3) return;   // a non-color buffer (DMX roles) has no frame to send
 
+        // Each light where the layout puts it, as a scale x scale block that replication keeps pixel-exact; a pixel no light reaches is black.
         uint8_t* dst = rgb_.data();
-        const size_t rowBytes = static_cast<size_t>(width_) * 3;
         const bool ordered = rgbOrdered();
-        for (nrOfLightsType i = 0; i < n; i++) {
-            const uint8_t* s = src + static_cast<size_t>(i) * srcCh;
-            uint8_t rgb[3];
-            correctToRgb(s, srcCh, rgb, ordered);
-            // One light becomes a scale x scale block, which replication keeps pixel-exact.
-            const size_t lx = (i % srcWidth_) * scale_, ly = (i / srcWidth_) * scale_;
-            for (uint8_t by = 0; by < scale_; by++) {
-                uint8_t* row = dst + (ly + by) * rowBytes + lx * 3;
-                for (uint8_t bx = 0; bx < scale_; bx++) {
-                    row[bx * 3 + 0] = rgb[0];
-                    row[bx * 3 + 1] = rgb[1];
-                    row[bx * 3 + 2] = rgb[2];
-                }
-            }
-        }
+        picture_.draw(src, srcCh, static_cast<nrOfLightsType>(have), scale_, dst,
+                      [&](const uint8_t* s, uint8_t* rgb) MM_NONBLOCKING { correctToRgb(s, srcCh, rgb, ordered); });
         platform::encoderWrite(dst, frameBytes);
     }
 
@@ -332,6 +320,7 @@ public:
 private:
     Buffer*  sourceBuffer_ = nullptr;
     ScratchBuffer<uint8_t> rgb_;
+    LayoutPicture          picture_;   ///< which light each pixel shows
 
     platform::TcpServer     control_;
     platform::TcpConnection client_;

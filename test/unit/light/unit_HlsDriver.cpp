@@ -11,6 +11,7 @@
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,9 @@ void paint(mm::Buffer& b, mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t bl
     uint8_t* p = b.data() + static_cast<size_t>(i) * 3;
     p[0] = r; p[1] = g; p[2] = bl;
 }
+
+// The one frame the encoder seam recorded, or null.
+const uint8_t* encodedFrame() { return mm::platform::encoderTestFrameCount() == 1 ? mm::platform::encoderTestFrameData(0) : nullptr; }
 
 }  // namespace
 
@@ -420,4 +424,29 @@ TEST_CASE("platform encoder is claimed by one module at a time") {
     CHECK(mm::platform::encoderOwner() == nullptr);
     CHECK(mm::platform::encoderClaim(&driverB));            // now B may have it
     mm::platform::encoderRelease(&driverB);
+}
+
+// A snaked layout's second row runs back; the stream shows each light where the layout puts it, as one picture.
+TEST_CASE("HlsDriver streams each light where the layout puts it, so a snaked layout arrives as one picture") {
+    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
+    mm::test::DriverOnPanels<mm::HlsDriver> rig(1, 4, 2, true);
+    mm::platform::encoderTestClearFrames();
+    mm::platform::setTestNowMs(1);
+    rig.driver->scale = 1;   // 1:1, so a light is one video pixel
+    rig.driver->prepare();
+    mm::test::checkSnakedFrame(mm::test::frameAfterPainting(*rig.driver, *rig.source, 4, encodedFrame));
+}
+
+TEST_CASE("HlsDriver without room to place the lights still streams them, in their own order, and warns why") {
+    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
+    mm::test::RefuseAbove refuse(64 * 32 * 3);   // a frame of the face at 1:1: the table, four bytes a pixel against three, is refused
+    mm::test::DriverOnPanels<mm::HlsDriver> rig(1, 64, 32, true);
+    auto& driver = rig.driver;
+    mm::platform::encoderTestClearFrames();
+    mm::platform::setTestNowMs(1);
+    driver->scale = 1;
+    driver->prepare();
+    CHECK(driver->severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(driver->status()).find("streaming 64x32") == 0);
+    CHECK(std::string(driver->status()).find(", no memory to place the lights by the layout") != std::string::npos);
 }

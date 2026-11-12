@@ -9,6 +9,8 @@
 #include "light/effects/RainbowEffect.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/RegionModifier.h"
+#include "wall_fixture.h"
+#include <vector>
 
 // The driver/output buffer must hold ONLY the real lights, never the dense bounding box. A sphere defines a 9x9x9 (=729) render grid but only 210 shell lights; the MappingLUT extracts those 210 into the driver buffer (what ArtNet and the preview consume). These tests pin:
 //  - sparse layout (sphere) builds a LUT whose destinations are driver indices
@@ -278,4 +280,22 @@ TEST_CASE("Layer: an all-black GridBlacks builds an empty LUT without crashing")
     for (mm::nrOfLightsType li = 0; li < lut.logicalCount(); li++)
         lut.forEachDestination(li, [&](mm::nrOfLightsType) { total++; });
     CHECK(total == 0);                              // no cell reaches a light — the whole grid is dark
+}
+
+// A light outside the box is not in box order, however its row-major index happens to come out: here light 3 sits at (-1, 1), whose index wraps to cell 3.
+TEST_CASE("Layer: a dense layout with a light outside the box is not natural order, so it takes the mapped path") {
+    mm::test::OneOutsideDense layout;
+    LayerRig rig(&layout);
+    CHECK_FALSE(rig.layer.isNaturalOrder());
+    CHECK(rig.layer.lut().hasLUT());   // the identity fast path would give light 3 the cell it does not sit in
+}
+
+// Placement skips a light outside the box, so the light that sits at a cell gets it, whichever arrives first.
+TEST_CASE("Layer: placeByLayout gives each cell the light that sits there, skipping a light outside the box") {
+    mm::test::LeftOfBox layout;   // light 0 at (-1, 1), then a 4x2 raster: light 4 at (3, 0)
+    LayerRig rig(&layout);
+    std::vector<mm::nrOfLightsType> out(8);
+    rig.layer.placeByLayout(out.data(), 8);
+    CHECK(out[3] == 4);   // (3, 0) is light 4's; light 0's wrapped index would have claimed it first
+    for (mm::nrOfLightsType c = 0; c < 8; c++) CHECK(out[c] != 0);
 }
