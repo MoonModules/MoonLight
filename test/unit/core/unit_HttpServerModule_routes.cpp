@@ -138,8 +138,9 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
     http.release();
 }
 
-// A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
-TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 400 rather than fetched cut short") {
+// The route reads the URL on a device that updates itself; a container or a read-only build folder answers 501 first.
+TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 400 rather than fetched cut short"
+          * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
     mm::HttpServerModule http;
     http.port = kTestPort;
     http.setup();
@@ -155,6 +156,7 @@ TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 4
     http.release();
 }
 
+// A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
 TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
     RackServer server;
     mm::HttpServerModule& http = server.http;

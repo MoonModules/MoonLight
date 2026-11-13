@@ -1624,16 +1624,10 @@ function watchInstall(kind) {
                 ui.status(`Installing ${kind.label.toLowerCase()}\u2026`);
                 sawWork = true;
             }
-            // ANSWERING AGAIN AFTER SILENCE is the rebooting install's success: the image it
-            // wrote is the one now running.
-            if (kind.reboots && sawWork && silent > 0) {
-                ui.status(`${kind.label} installed`);
-                await fwSleep(1200);
-                location.reload();
-                return;
-            }
-            // Back to rest with no error is the non-rebooting install's success.
-            if (!kind.reboots && sawWork && (text === "" || text === "idle")) {
+            // Back to rest with no error is the success: a fresh run starts at rest, so a rebooting
+            // install that comes back between two probes shows it too. ANSWERING AGAIN AFTER SILENCE
+            // is a rebooting install's success as well: the image it wrote is the one now running.
+            if (sawWork && (text === "" || text === "idle" || (kind.reboots && silent > 0))) {
                 ui.status(`${kind.label} installed`);
                 await fwSleep(1200);
                 location.reload();

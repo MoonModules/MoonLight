@@ -14,10 +14,10 @@ if [ "$1" = configure ]; then
     if [ -e /etc/systemd/system/moonlight.service ]; then
         echo "moonlight: /etc/systemd/system/moonlight.service overrides the packaged service: remove it and run 'systemctl daemon-reload' (MIGRATING)" >&2
     fi
-fi
-# Where systemd runs: a container build unpacks the package and runs none of this.
-if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemctl enable moonlight.service
-    systemctl restart moonlight.service
+    # Where systemd runs: a container build unpacks the package and runs none of this.
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+        systemctl enable moonlight.service
+        systemctl restart moonlight.service
+    fi
 fi

@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseFirmwaresFromAssets, isCompatible, DESKTOP_DOWNLOAD } from "../../src/ui/install-picker.js";
+import { parseFirmwaresFromAssets, isCompatible, pickedEntry, DESKTOP_DOWNLOAD } from "../../src/ui/install-picker.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
@@ -158,4 +158,15 @@ test("a release with only an archive still offers it, for every platform it has"
     const got = parseFirmwaresFromAssets(OLD_RELEASE, "v3.0.0");
     assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.tar\.gz$/);
     assert.match(got.find(f => f.firmware === "desktop-windows-x64").binaryUrl, /\.zip$/);
+});
+
+test("installing a desktop's own program installs the program, and downloading it downloads the package, both in one release", () => {
+    // The package and the program share the key desktop-linux-x64; the install takes the one of the kind on offer.
+    const firmwares = parseFirmwaresFromAssets([...RELEASE, asset("firmware-desktop-linux-x64-v3.0.0.bin")]);
+    const program = pickedEntry(firmwares, "desktop-linux-x64", "desktop-linux-x64");
+    assert.equal(program.binaryUrl, "https://gh/firmware-desktop-linux-x64-v3.0.0.bin");
+    assert.ok(!program.isDesktop);
+    const download = pickedEntry(firmwares, "desktop-linux-x64", DESKTOP_DOWNLOAD);
+    assert.ok(download.isDesktop);
+    assert.ok(download.assets.some(a => a.name.endsWith(".deb")));
 });

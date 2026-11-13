@@ -665,11 +665,12 @@ struct FetchSink {
     size_t len = 0;
     bool   tooBig = false;
     bool   refused = false;             ///< the stream turned a chunk down, which ends the transfer as failed
+    bool   cut = false;                 ///< the transport broke off mid-answer
     DownloadChunkFn stream = nullptr;   ///< a download's receiver, which takes the answer a chunk at a time
     void*  user = nullptr;
     uint32_t* total = nullptr;          ///< where a download learns the answer's size, once its headers name it
-    /// Whether the answer was cut short, by a body too big for the caller or a chunk the stream refused.
-    bool failed() const { return tooBig || refused; }
+    /// Whether the answer was cut short: a body too big for the caller, a chunk the stream refused, or a transport that broke off.
+    bool failed() const { return tooBig || refused || cut; }
     /// Take `n` more bytes, false once they would not fit with the terminator or the stream refuses them.
     bool take(const char* data, size_t n) {
         if (stream) {
@@ -708,8 +709,11 @@ void readAnswer(HINTERNET request, DWORD status, FetchSink& sink) {
     if (sink.stream && status != 200u) return;   // DWORD: an unsigned literal keeps MSVC's /W4 quiet
     char chunk[1024];
     DWORD got = 0;
-    while (WinHttpReadData(request, chunk, sizeof(chunk), &got) && got > 0)
-        if (!sink.take(chunk, got)) break;
+    // A failed read is a broken transfer, apart from the zero-byte read that ends the answer.
+    for (;;) {
+        if (!WinHttpReadData(request, chunk, sizeof(chunk), &got)) { sink.cut = true; return; }
+        if (got == 0 || !sink.take(chunk, got)) return;
+    }
 }
 
 /// One request over WinHTTP into `sink`; the status, or 0.
@@ -3562,6 +3566,9 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
         return false;
     }
     ::signal(SIGPIPE, SIG_IGN);             // a dead ffmpeg surfaces as EPIPE, not a signal
+    // Ours close on exec, so a restart in place hands the encoder its EOF rather than this run's pipes.
+    close_on_exec(fds[1]);
+    if (outFds[0] >= 0) close_on_exec(outFds[0]);
     encPid_ = pid;
     encStdin_ = fds[1];
     encStdout_ = outFds[0];

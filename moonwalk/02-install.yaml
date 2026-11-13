@@ -249,7 +249,7 @@ processes:
           | Teensy | In 1 MB of the program flash. |
           | Windows | `%LOCALAPPDATA%\MoonLight`: paste it into Explorer's address bar. Uninstalling leaves it. |
           | macOS | `~/Library/Application Support/MoonLight`. |
-          | Linux | `~/.local/share/MoonLight`, or under `$XDG_DATA_HOME` when it is set. |
+          | Linux | `/var/lib/moonlight/MoonLight` for the package's service; `~/.local/share/MoonLight`, or `$XDG_DATA_HOME`, run by hand. |
           | Docker | The `moonlight-data` volume; without it, every `docker rm` starts over. |
       - id: update
         section: Updating
@@ -262,11 +262,11 @@ processes:
           A Teensy has no TLS, so the browser downloads the release's `.bin` and uploads it. Power lost right after **Rebooting…** leaves it dark until a USB install with the program button, which keeps the settings.
       - id: update-app
         section: Updating
-        say: Install the new build.
+        say: Update from the ⬆ badge.
         given: [{ input: platform, in: [Windows, macOS, Linux] }]
-        when: { manual: "The ⬆ badge in the top bar opens its release page." }
+        when: { manual: "It opens the Firmware card, or the release page for a program updated by hand." }
         detail: |
-          The badge lights when a newer stable release ships for your OS. A running program cannot replace its own executable, so updating is the download and the install again, in about a minute. Your settings stay.
+          It lights for a newer stable release; your settings stay. A program in a folder it can write installs it and restarts, as a board does; otherwise, download and install it again.
       - id: update-docker
         section: Updating
         say: Recreate the container from the new image.

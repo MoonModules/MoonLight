@@ -13,6 +13,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -25,7 +26,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// FILE rather than a stream: a stream's object takes more stack than the frame limit allows.
+// Read through FILE: a stream's object takes more stack than the frame limit allows.
 std::vector<uint8_t> readBytes(const fs::path& path) {
     std::vector<uint8_t> bytes;
     std::FILE* file = std::fopen(path.string().c_str(), "rb");
@@ -36,11 +37,11 @@ std::vector<uint8_t> readBytes(const fs::path& path) {
     return bytes;
 }
 
+// Written through a stream, whose file takes the process's umask, as the program's own files do.
 void writeBytes(const fs::path& path, const std::vector<uint8_t>& bytes) {
-    std::FILE* file = std::fopen(path.string().c_str(), "wb");
-    REQUIRE(file != nullptr);
-    std::fwrite(bytes.data(), 1, bytes.size(), file);
-    std::fclose(file);
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    REQUIRE(file.good());
+    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 }
 
 void writeText(const fs::path& path, const std::string& text) { writeBytes(path, std::vector<uint8_t>(text.begin(), text.end())); }
@@ -96,9 +97,12 @@ struct Scratch {
     }
 };
 
+/// A container's program is its host's to replace, so the self-update cases run on a native host only.
+const auto kSelfUpdating = doctest::skip(platform::inContainer());
+
 }  // namespace
 
-TEST_CASE("a native program in a folder it can write updates itself, one in a folder it cannot write is updated by hand") {
+TEST_CASE("a native program in a folder it can write updates itself, one in a folder it cannot write is updated by hand" * kSelfUpdating) {
     Scratch s("mode");
     CHECK(platform::updateMode() == platform::UpdateMode::Self);
 #ifndef _WIN32
@@ -113,7 +117,7 @@ TEST_CASE("a native program in a folder it can write updates itself, one in a fo
     CHECK(std::string(platform::updateModeName(platform::UpdateMode::Manual)) == "manual");
 }
 
-TEST_CASE("an image written through the image writer replaces the program and keeps the old one as .prev, pending until it has run") {
+TEST_CASE("an image written through the image writer replaces the program and keeps the old one as .prev, pending until it has run" * kSelfUpdating) {
     Scratch s("install");
     REQUIRE(s.install(s.realProgram));
     CHECK(readBytes(s.program) == s.realProgram);
@@ -122,7 +126,7 @@ TEST_CASE("an image written through the image writer replaces the program and ke
     CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
 }
 
-TEST_CASE("an image that is no program for this system leaves the program as it was") {
+TEST_CASE("an image that is no program for this system leaves the program as it was" * kSelfUpdating) {
     Scratch s("refused");
     const std::string page = "<html>404 Not Found</html>";
     CHECK_FALSE(s.install(std::vector<uint8_t>(page.begin(), page.end())));
@@ -131,14 +135,14 @@ TEST_CASE("an image that is no program for this system leaves the program as it 
     CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
 }
 
-TEST_CASE("an abandoned image leaves the program as it was") {
+TEST_CASE("an abandoned image leaves the program as it was" * kSelfUpdating) {
     Scratch s("abandoned");
     CHECK_FALSE(s.install(s.realProgram, false));
     CHECK(readText(s.program) == "old program");
     CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
 }
 
-TEST_CASE("an image missing the release's digest leaves the program as it was, and one matching it in either case is installed") {
+TEST_CASE("an image missing the release's digest leaves the program as it was, and one matching it in either case is installed" * kSelfUpdating) {
     Scratch s("digest");
     const fs::path next = s.dir / "MoonLight.next";
     writeBytes(next, s.realProgram);

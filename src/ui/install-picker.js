@@ -285,6 +285,14 @@ function mergeFirmwares(published, extras) {
 // "This computer" and on the Firmware card of a desktop its host or its user updates.
 export const DESKTOP_DOWNLOAD = "desktop-download";
 
+// Whether `f` is the kind on offer: a download in download mode, a board's firmware or a desktop's own program otherwise.
+// A desktop's archive and its program share one firmware key, so the kind tells them apart, in the list and at the install alike.
+const ofOfferedKind = (f, ownFirmwareKey) => !!f.isDesktop === (ownFirmwareKey === DESKTOP_DOWNLOAD);
+
+// The entry an install acts on: the picked firmware, of the kind on offer.
+export const pickedEntry = (firmwares, firmware, ownFirmwareKey) =>
+    (firmwares || []).find(f => f.firmware === firmware && ofOfferedKind(f, ownFirmwareKey));
+
 // A desktop's own program, firmware-desktop-<os>-<arch>-v<version>.bin, which a running desktop installs over the air.
 const isDesktopProgram = (firmware) => /^desktop-(?!download$)/.test(firmware || "");
 
@@ -578,7 +586,7 @@ function render(state) {
         // row decides which kind is on offer.
         const wantDesktop = state.ownFirmwareKey === DESKTOP_DOWNLOAD;
         let compatible = (r.firmwares || [])
-            .filter(f => !!f.isDesktop === wantDesktop)
+            .filter(f => ofOfferedKind(f, state.ownFirmwareKey))
             // A MoonBase key is a CHIP ("esp32s3"), not a firmware variant, so the variant rule
             // (which strips -eth and compares) does not apply: an exact chip match is the whole
             // question, and offering another chip's image is what the device's own header check
@@ -782,7 +790,7 @@ function render(state) {
         // enablement shouldn't let a flash through). The dropdown stays the place
         // to pick a port.
         if (state.blocker && state.blocker()) { applyInstallEnabled(); return; }
-        const entry = (r.firmwares || []).find(f => f.firmware === state.firmware);
+        const entry = pickedEntry(r.firmwares, state.firmware, state.ownFirmwareKey);
         if (!entry) return;
         // Mismatch guard: if Detect ran and the user then overrode the device to
         // one of a different chip family, confirm before flashing the wrong

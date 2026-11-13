@@ -188,19 +188,21 @@ std::vector<std::string> commandLine() {
 /// The fetch's own thread: the image downloaded into the writer, put in place, and the program restarted on it.
 void fetchTask(const std::string& url, const std::string& fallbackUrl, const std::string& sha256Hex, char* status, size_t statusLen,
                uint32_t* bytesRead, uint32_t* bytesTotal) {
-    for (const std::string& from : {url, fallbackUrl}) {
-        if (from.empty()) continue;
+    const std::string* const sources[] = {&url, &fallbackUrl};
+    for (const std::string* from : sources) {
+        if (from->empty()) continue;
         OtaWrite w;
         if (!otaBegin(w, OtaTarget::App, 0, status, statusLen, bytesRead)) return;
         static_cast<ProgramWrite*>(w.impl)->sha256 = sha256Hex;
-        const int httpStatus = httpDownload(from.c_str(), 10 * 60 * 1000,
+        const int httpStatus = httpDownload(from->c_str(), 10 * 60 * 1000,
                                             [](void* user, const char* data, size_t n) {
                                                 return otaWrite(*static_cast<OtaWrite*>(user), reinterpret_cast<const uint8_t*>(data), n);
                                             },
                                             &w, bytesTotal);
         if (httpStatus != 200) {
             if (w.impl) abandon(w);
-            say(status, statusLen, "error: the download failed");
+            // The update stays in flight while the other address is still to try, so no second update starts on MoonLight.next meanwhile.
+            say(status, statusLen, from == &url && !fallbackUrl.empty() ? "downloading" : "error: the download failed");
             continue;
         }
         if (otaEnd(w, true)) {
@@ -211,10 +213,8 @@ void fetchTask(const std::string& url, const std::string& fallbackUrl, const std
     }
 }
 
-}  // namespace
-
-fs::path programPath() {
-    if (!g_testProgram.empty()) return g_testProgram;
+/// The running program's file as the system names it, read once at start: once a new program takes the name, Linux names the running one "... (deleted)".
+fs::path executablePath() {
     std::error_code ec;
 #if defined(_WIN32)
     std::wstring path(32768, L'\0');
@@ -229,6 +229,12 @@ fs::path programPath() {
 #else
     return fs::read_symlink("/proc/self/exe", ec);
 #endif
+}
+}  // namespace
+
+fs::path programPath() {
+    static const fs::path installed = executablePath();
+    return g_testProgram.empty() ? installed : g_testProgram;
 }
 
 void setTestProgramPath(const fs::path& path) { g_testProgram = path; }
@@ -252,9 +258,16 @@ bool putProgramInPlace(const fs::path& next, const fs::path& program, const char
         return refuse(why);
     }
     if (sha256Hex && *sha256Hex && !digestMatches(next, sha256Hex)) return refuse("error: the image does not match the release's digest");
-    if (const char* failure = swapIn(next, program)) return refuse(failure);
-    // Pending until the new program has run a minute, which is when the service's rollback stops applying to it.
-    if (std::FILE* pending = openFile(withSuffix(program, ".pending"), "wb")) std::fclose(pending);
+    // Pending until the new program has run a minute, which is when the service's rollback stops applying to it; marked first, so no new program runs unmarked.
+    const fs::path pending = withSuffix(program, ".pending");
+    std::FILE* marker = openFile(pending, "wb");
+    if (!marker) return refuse("error: cannot mark the new program pending");
+    std::fclose(marker);
+    if (const char* failure = swapIn(next, program)) {
+        std::error_code ignored;
+        fs::remove(pending, ignored);
+        return refuse(failure);
+    }
     return true;
 }
 
@@ -317,6 +330,7 @@ bool otaEnd(OtaWrite& w, bool commit) {
     const bool closed = std::fclose(img->file) == 0;
     img->file = nullptr;
     if (!commit || !closed) {
+        if (commit) say(img->status, img->statusLen, "error: cannot write the new program");
         abandon(w);
         return false;
     }
