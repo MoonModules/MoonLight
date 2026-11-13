@@ -3,7 +3,7 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker } from "./install-picker.js";
+import { installPicker, DESKTOP_DOWNLOAD } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
@@ -1624,16 +1624,10 @@ function watchInstall(kind) {
                 ui.status(`Installing ${kind.label.toLowerCase()}\u2026`);
                 sawWork = true;
             }
-            // ANSWERING AGAIN AFTER SILENCE is the rebooting install's success: the image it
-            // wrote is the one now running.
-            if (kind.reboots && sawWork && silent > 0) {
-                ui.status(`${kind.label} installed`);
-                await fwSleep(1200);
-                location.reload();
-                return;
-            }
-            // Back to rest with no error is the non-rebooting install's success.
-            if (!kind.reboots && sawWork && (text === "" || text === "idle")) {
+            // Back to rest with no error is the success: a fresh run starts at rest, so a rebooting
+            // install that comes back between two probes shows it too. ANSWERING AGAIN AFTER SILENCE
+            // is a rebooting install's success as well: the image it wrote is the one now running.
+            if (sawWork && (text === "" || text === "idle" || (kind.reboots && silent > 0))) {
                 ui.status(`${kind.label} installed`);
                 await fwSleep(1200);
                 location.reload();
@@ -2399,7 +2393,7 @@ function createCard(mod, depth) {
 
         // Hand a URL to the device. Every install route answers 202 and works on its own task, so
         // the overlay reports progress rather than this response.
-        const installUrl = async (url) => {
+        const installUrl = async (url, sha256) => {
             if (kind === "app" && hasMoonBase) {
                 // The app is written FROM MoonBase, so this reboots twice and moonbaseUpdateFlow
                 // carries it across the handover.
@@ -2409,7 +2403,7 @@ function createCard(mod, depth) {
             const res = await fetch(k.urlRoute, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(url ? { url } : {}),
+                body: JSON.stringify(url ? { url, sha256: sha256 || undefined } : {}),
             });
             if (res.status === 501 && kind === "app") { await installViaBrowser(url); return; }
             if (!res.ok) throw new Error(await errorMessage(res));
@@ -2527,7 +2521,8 @@ function createCard(mod, depth) {
             // the release asset in each case. Re-deriving the chip from SystemModule here was a
             // second mechanism for a job the device had already done, with a JS transform
             // ("ESP32-S3" -> "esp32s3") that merely coincided with the build system's naming.
-            ownFirmwareKey: moonbaseAssetKeyFrom(ctrlValue("firmware")),
+            // A device its host or its user updates has its card offer the download in place of an install.
+            ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? DESKTOP_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
             // Device already knows its deviceModel (SystemModule): picker is for releases +
             // firmware compatibility only. A board picker here would invite the user to
             // mis-narrow the firmware list.
@@ -2537,9 +2532,7 @@ function createCard(mod, depth) {
             // them above would separate that button from the two dropdowns it acts on.
             extrasAfterInstall: true,
             onInstall: async (_firmware, _manifestUrl, binaryUrl, entry) => {
-                // A desktop build has no OTA: it updates by downloading a new release and being
-                // replaced by hand. So hand the browser the file rather than POSTing to a route
-                // that would 501 here.
+                // A download, for a device its host or its user updates: the browser takes the file, the route would answer 501.
                 if (entry && entry.isDesktop) {
                     const a = document.createElement("a");
                     a.href = binaryUrl;
@@ -2551,7 +2544,7 @@ function createCard(mod, depth) {
                     return;
                 }
                 if (k.confirm && !await k.confirm()) return;
-                await installUrl(binaryUrl);
+                await installUrl(binaryUrl, entry?.sha256);
             },
         });
 
@@ -5147,20 +5140,26 @@ async function peerFirmware(base) {
     }
 }
 
-// The release a device could move to and the image that installs it, by the same checks the
-// update badge makes for this device; url is null for a desktop, which installs from the release page.
+// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
+// a board and a desktop alike. Null url for a device its host or its user updates, and for one older than its firmware name.
+function updateAsset(rel, dev, version) {
+    const installs = !!dev.firmware && (!dev.update || dev.update === "self");
+    const asset = installs ? (rel?.assets || []).find(a => a.name === `firmware-${dev.firmware}-v${version}.bin`) : null;
+    return { url: asset?.browser_download_url ?? null, sha256: asset?.digest?.replace(/^sha256:/, "") ?? null };
+}
+
+// The release a device could move to and the asset that installs it, by the same checks the update badge makes for this device.
 async function peerUpdate(dev) {
-    const asset = (rel, name) => (rel?.assets || []).find(a => a.name === name)?.browser_download_url ?? null;
     const stable = await stableUpdate(dev, false);
     if (stable) {
         const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", false);
-        return { label: stable, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-${stable}.bin`) };
+        return { label: stable, ...updateAsset(rel, dev, stable.replace(/^v/, "")) };
     }
     if ((parse(dev.version)?.prerelease.length || 0) === 0) return null;   // a stable device is not nudged toward a -dev build
     const v = await devUpdate(dev, false);
     if (!v) return null;
     const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", false);
-    return { label: `latest (${v})`, url: dev.isDesktop ? null : asset(rel, `firmware-${dev.firmware}-v${v}.bin`) };
+    return { label: `latest (${v})`, ...updateAsset(rel, dev, v) };
 }
 
 // The Ethernet boards of WLED's table the migration carries over, by WLED's `eth.type`, as kWledEthernet in WledNetworks.h maps them.
@@ -5575,11 +5574,16 @@ function buildPeerSummary(row) {
                 summary.append(btn, idNote);
             }
         }
-        const isDesktop = !fw.firmware || fw.firmware === "unknown";
-        line.textContent = `Firmware: ${fw.version} · ${isDesktop ? "desktop" : fw.firmware}`;
-        const u = await peerUpdate({ version: fw.version, firmware: isDesktop ? null : fw.firmware, isDesktop });
+        line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
+        const update = fw.summary?.update;
+        const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update });
         if (!u) { note.textContent = "Up to date."; return; }
-        if (!u.url) { note.textContent = `${u.label} is available: a desktop installs it from the release page.`; return; }
+        if (!u.url) {
+            note.textContent = update === "host"
+                ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
+                : `${u.label} is available: this device is updated by hand, from the release page.`;
+            return;
+        }
         note.textContent = `${u.label} is available.`;
         const btn = document.createElement("button");
         btn.className = "graph-popup-update";
@@ -5590,7 +5594,7 @@ function buildPeerSummary(row) {
     return box;
 }
 
-// Hand the device the image's address, as its own Firmware card does, and watch it come back on a
+// Hand the device the image's address and digest, as its own Firmware card does, and watch it come back on a
 // new version. A device without TLS answers 501 and installs from its own Firmware card instead.
 async function startPeerUpdate(base, u, oldVersion, note, btn) {
     btn.disabled = true;
@@ -5598,7 +5602,7 @@ async function startPeerUpdate(base, u, oldVersion, note, btn) {
     let res = null;
     try {
         res = await fetch(`${base}/api/firmware/url`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u.url }) });
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u.url, sha256: u.sha256 }) });
     } catch (_) { /* a reboot can cut the reply off; the watch below sees the outcome */ }
     if (res && res.status === 501) {
         note.textContent = "This device has no TLS: open its page and install from its Firmware card.";
@@ -7372,22 +7376,7 @@ function updateStatusBar() {
     const statsEl = document.getElementById("sys-stats");
     if (statsEl) setText(statsEl, headerStats(ctrls, uiMode() >= 1));
 
-    // Hide reboot button on desktop builds: platform::reboot() just exits the process,
-    // which is not useful from the UI and can be mistaken for a crash.
-    const chipCtrl = ctrls.find(c => c.name === "chip");
     const rebootBtn = document.getElementById("reboot-btn");
-    if (rebootBtn) {
-        // Hidden on a desktop, where `reboot()` EXITS THE PROCESS and nothing restarts it. Keyed on
-        // `deviceModel`, which the desktop platform seeds with its own name (macos-arm64,
-        // linux-x64, windows-x64, docker) and a board leaves for tooling to fill from the catalog.
-        //
-        // NOT on `chip`: that used to read "desktop" and now reads the real architecture (arm64,
-        // x64), so the old test silently stopped matching and put a process-killing button on every
-        // desktop card.
-        const modelCtrl = ctrls.find(c => c.name === "deviceModel");
-        const model = String(modelCtrl?.value ?? "");
-        rebootBtn.hidden = /^(macos|linux|windows)-|^docker$/.test(model);
-    }
 
     // bootReason → crashed-state styling on reboot button
     const reasonCtrl = ctrls.find(c => c.name === "bootReason");
@@ -7487,21 +7476,6 @@ async function cachedJson(url, key, force, ttlMs = UPDATE_TTL_MS) {
     return p;
 }
 
-// Which release asset would UPDATE this machine? An ESP32 installs a firmware-<variant>-<ver>.bin
-// through the Firmware card; a desktop downloads an archive and replaces its own binary by hand.
-// Both still want to be TOLD there is a newer version, which is what the badge is for.
-//
-// A desktop reports firmware "unknown" (there is no variant to name), which is how we tell them
-// apart. Before this, that value was truthy and the check looked for a firmware-unknown-*.bin that
-// no release has ever contained, so a desktop user was never told anything.
-function desktopAssetPrefix() {
-    const p = (navigator.platform || "") + " " + (navigator.userAgent || "");
-    if (/Win/i.test(p)) return "MoonLight-windows-x64-v";
-    if (/Mac/i.test(p)) return "MoonLight-macos-arm64-v";
-    if (/Linux|X11/i.test(p)) return "MoonLight-linux-x64-v";
-    return null;                                   // an OS we do not package: say nothing
-}
-
 // The device's app version, its MoonBase's version, and its firmware variant, whichever tab the Firmware card shows.
 // The card's rows describe one image at a time, so the app's version comes from its hidden `appVersion`, a MoonBase that does not match from `moonbaseMismatch`, and the variant from the System card, which names it on every tab.
 function deviceFirmwareInfo() {
@@ -7510,10 +7484,11 @@ function deviceFirmwareInfo() {
     if (!fw) return null;
     const value = (mod, name) => ((mod && mod.controls) || []).find(c => c.name === name)?.value;
     const version = value(fw, "appVersion");
-    const firmware = value(allModules().find(m => m.type === "SystemModule"), "firmware");
-    // "unknown" is what a desktop build reports: no ESP32 variant to name.
-    const isDesktop = !firmware || firmware === "unknown";
-    return version ? { version, firmware: isDesktop ? null : firmware, isDesktop, moonbase: value(fw, "moonbaseMismatch") || null } : null;
+    const sys = allModules().find(m => m.type === "SystemModule");
+    const firmware = value(sys, "firmware");
+    // "unknown" is what a desktop build older than its own firmware name reports, with no image to match.
+    return version ? { version, firmware: firmware && firmware !== "unknown" ? firmware : null, update: value(fw, "update"),
+                       moonbase: value(fw, "moonbaseMismatch") || null } : null;
 }
 
 // The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
@@ -7523,20 +7498,18 @@ function releaseTagOf(version) {
 
 // Light the badge for an available update. `tag` is the release the picker should pre-select
 // (a vX.Y.Z stable tag, or "latest"); `label` is what the badge shows.
-function showUpdateBadge(badge, tag, label, isDesktop) {
+function showUpdateBadge(badge, tag, label, byHand) {
     // The arrow alone, so the header fits a phone; what the update is reads in the tooltip and on
     // the Firmware card the badge opens. setText, not a raw write: this runs on every state patch,
     // and rewriting identical text still destroys a selection inside the element.
     setText(badge, "⬆");
-    // A desktop cannot install from the Firmware card: it has no OTA, and updating means
-    // downloading an archive and replacing the binary. So the badge sends it to the release page
-    // instead of a card that would offer it nothing.
-    badge.title = isDesktop
+    // A device updated by its host or by hand takes its update from the release page, which the badge opens.
+    badge.title = byHand
         ? `Update available: ${label}. Open the release page to download`
         : `Firmware update available: ${label}. Open Firmware to install`;
     badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = tag;
-    badge.dataset.desktop = isDesktop ? "1" : "";
+    badge.dataset.byhand = byHand ? "1" : "";
     badge.dataset.moonbase = "";
     badge.hidden = false;
 }
@@ -7547,7 +7520,7 @@ function showMoonBaseBadge(badge, dev) {
     badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
     badge.setAttribute("aria-label", badge.title);
     badge.dataset.tag = releaseTagOf(dev.version);
-    badge.dataset.desktop = "";
+    badge.dataset.byhand = "";
     badge.dataset.moonbase = "1";
     badge.hidden = false;
 }
@@ -7570,13 +7543,8 @@ async function stableUpdate(dev, force) {
     const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", force);
     if (!rel || !rel.tag_name) return null;
     const assetNames = (rel.assets || []).map(a => a.name);
-    const prefix = dev.isDesktop ? desktopAssetPrefix() : null;
-    const hasBinary = dev.isDesktop
-        // A desktop is told about a release that actually ships a build for ITS OS: an archive
-        // named for the platform, rather than a firmware .bin it could not install anyway.
-        ? !!prefix && assetNames.some(n => n.startsWith(prefix))
-        : !dev.firmware ||
-          assetNames.some(n => n === `firmware-${dev.firmware}-${rel.tag_name}.bin`);
+    // A board or a desktop alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
+    const hasBinary = !!dev.firmware && assetNames.some(n => n === `firmware-${dev.firmware}-${rel.tag_name}.bin`);
     return (isNewer(rel.tag_name, dev.version) && hasBinary) ? rel.tag_name : null;
 }
 
@@ -7588,16 +7556,13 @@ async function stableUpdate(dev, force) {
 // We also require the matching firmware .bin asset so the badge never points at a build the
 // device can't install.
 async function devUpdate(dev, force) {
-    if (!dev.firmware && !dev.isDesktop) return null;        // can't match an asset without the key
+    if (!dev.firmware) return null;        // the firmware key names the asset
     const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", force);
     const v = rel && rel.name;
     if (!v) return null;
     // Assets are versioned, not tagged: the `latest` release ships
     // firmware-<fw>-v<version>.bin (release.yml stages PREFIX="firmware-...-v$V").
-    const prefix = dev.isDesktop ? desktopAssetPrefix() : null;
-    const hasBinary = dev.isDesktop
-        ? !!prefix && (rel.assets || []).some(a => a.name.startsWith(prefix))
-        : (rel.assets || []).some(a => a.name === `firmware-${dev.firmware}-v${v}.bin`);
+    const hasBinary = (rel.assets || []).some(a => a.name === `firmware-${dev.firmware}-v${v}.bin`);
     return (hasBinary && isNewer(v, dev.version)) ? v : null;
 }
 
@@ -7610,7 +7575,8 @@ async function checkFirmwareUpdate(force) {
     if (!dev) { badge.hidden = true; return null; }
 
     const stableTag = await stableUpdate(dev, force);
-    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, dev.isDesktop); return { tag: stableTag, label: stableTag }; }
+    const byHand = !!dev.update && dev.update !== "self";
+    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, byHand); return { tag: stableTag, label: stableTag }; }
 
     // Only a prerelease (-dev…) build follows the moving latest channel; a stable device is
     // not nudged toward an unreleased build.
@@ -7618,7 +7584,7 @@ async function checkFirmwareUpdate(force) {
     if (onPrerelease) {
         const devVer = await devUpdate(dev, force);
         if (devVer) {
-            showUpdateBadge(badge, "latest", `latest (${devVer})`, dev.isDesktop);
+            showUpdateBadge(badge, "latest", `latest (${devVer})`, byHand);
             return { tag: "latest", label: `latest (${devVer})` };
         }
     }
@@ -7633,7 +7599,7 @@ function setupUpdateBadge() {
     const badge = document.getElementById("fw-update-badge");
     if (!badge) return;
     badge.addEventListener("click", () => {
-        if (badge.dataset.desktop) {
+        if (badge.dataset.byhand) {
             const tag = badge.dataset.tag || "latest";
             window.open(`https://github.com/MoonModules/MoonLight/releases/tag/${tag}`, "_blank",
                         "noopener");

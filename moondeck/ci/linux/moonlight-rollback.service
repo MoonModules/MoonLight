@@ -1,0 +1,7 @@
+# Started by moonlight.service's OnFailure=: puts the previous program back when the one just put in place keeps failing.
+[Unit]
+Description=MoonLight: the previous program back after a failed update
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/moonlight/rollback

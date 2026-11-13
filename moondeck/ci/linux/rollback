@@ -1,0 +1,12 @@
+#!/bin/sh
+# The previous program back, when a new one keeps failing before it has proved itself. The swap leaves MoonLight.pending beside the new program,
+# which deletes it after a minute up (systemd's boot assessment, for one program); a confirmed program that fails later fails for another
+# reason, which the previous one would only hide.
+set -eu
+bin=/var/lib/moonlight/bin
+[ -f "$bin/MoonLight.pending" ] && [ -f "$bin/MoonLight.prev" ] || exit 0
+mv -f "$bin/MoonLight.prev" "$bin/MoonLight"
+rm -f "$bin/MoonLight.pending"
+echo "moonlight: the new program kept failing, the previous one is back"
+systemctl reset-failed moonlight.service
+systemctl start moonlight.service

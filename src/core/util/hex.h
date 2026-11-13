@@ -12,4 +12,12 @@ inline int hexDigit(char h) {
     return -1;
 }
 
+/// Whether `text` is exactly `count` hex digits, as a digest written out is.
+inline bool isHexDigits(const char* text, unsigned count) {
+    unsigned n = 0;
+    for (; text[n]; n++)
+        if (n == count || hexDigit(text[n]) < 0) return false;
+    return n == count;
+}
+
 }  // namespace mm

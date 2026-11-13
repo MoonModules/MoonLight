@@ -1,31 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// SHA-256 as FIPS 180-4 defines it, carried in the tree rather than linked from a library.
+/// SHA-256 as FIPS 180-4 defines it, vendored rather than linked: @xref{one-copy-on-every-target|why}; one call over a buffer and a truncated hex: @xref{one-shot-and-truncated|why}.
 ///
 /// @technical
 ///
-/// ## Why a copy rather than a library
+/// ## One copy on every target
 ///
-/// This is the only cryptographic primitive MoonLight needs, and it needs it on all five targets.
-/// OpenSSL does not exist on ESP32, where ESP-IDF ships mbedtls, so linking it would mean an mbedtls path for devices and an OpenSSL path for the desktop.
-/// That is two implementations of one function that must agree byte for byte, and a divergence produces identifiers that silently differ between platforms.
-/// One vendored file is the smaller thing to own, and the algorithm is frozen.
-/// FIPS 180-4 has not changed since 2015 and its test vectors are published, so `unit_sha256.cpp` pins this against them.
+/// ESP-IDF ships mbedtls and the desktop OpenSSL, and two implementations of one function must agree byte for byte; one vendored file of a frozen algorithm is less to own.
 ///
-/// ## What it is not
+/// `unit_sha256.cpp` pins it against FIPS 180-4's published test vectors. Its users: the MoonStats installation id, and a desktop's new program checked against the release's digest.
 ///
-/// The one use today is the MoonStats installation id.
-/// This is no general-purpose crypto layer: no HMAC, no streaming over a socket, no constant-time comparison.
-/// Nothing here needs them, and an unused primitive is a maintenance cost with no user.
+/// ## One shot and truncated
 ///
-/// ## Why one shot and why truncation is safe
+/// Every caller hashes a buffer already in memory, an identifier or a program of a few MB, so `sha256` takes the whole buffer rather than the init, update and final trio.
 ///
-/// `sha256` takes a whole buffer instead of the usual init, update and final trio.
-/// Every caller hashes a short buffer already in memory, so the streaming form would be three functions nobody calls with more than one update.
-///
-/// `sha256Hex` truncates, which is the standard way to derive a shorter identifier (NIST SP 800-107 section 5.1).
-/// At the default of 16 bytes it leaves 128 bits, far past any collision concern for a population of LED controllers.
+/// `sha256Hex` truncates, the standard way to derive a shorter identifier (NIST SP 800-107 § 5.1): 16 bytes leave 128 bits, far past any collision concern here.
 
 #include <cstddef>
 #include <cstdint>

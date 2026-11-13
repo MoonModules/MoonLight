@@ -4,9 +4,11 @@
 Runs under CI on macOS, Windows and Linux runners. The output lands in `dist/`:
 
   macOS arm64:  dist/MoonLight-macos-arm64-vX.Y.Z.tar.gz + .dmg
-  Windows x64:  dist/MoonLight-windows-x64-vX.Y.Z.zip
+  Windows x64:  dist/MoonLight-windows-x64-vX.Y.Z.zip + -setup.exe
   Linux x64:    dist/MoonLight-linux-x64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_amd64.deb
   Linux arm64:  dist/MoonLight-linux-arm64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_arm64.deb
+
+and beside each the bare program, dist/firmware-desktop-<os>-<arch>-vX.Y.Z.bin, which a running desktop installs over the air.
 
 Each archive carries the executable + a short README.txt with run instructions.
 
@@ -35,6 +37,8 @@ BUILD_DIR_MACOS = ROOT / "build" / "macos"
 BUILD_DIR_WIN   = ROOT / "build" / "windows"
 BUILD_DIR_LINUX = ROOT / "build" / "linux"
 DIST_DIR = ROOT / "dist"
+# The .deb's service, rollback and maintainer scripts, each a file of its own.
+LINUX_DIR = ROOT / "moondeck" / "ci" / "linux"
 
 
 def read_version() -> str:
@@ -100,6 +104,16 @@ def configure_and_build_linux(version: str = "") -> Path:
     return binary
 
 
+def stage_program(binary: Path, version: str, firmware: str) -> Path:
+    """The bare program as a firmware image, `firmware-<name>-v<version>.bin`, the name a board's image takes and the one the
+    build names itself by (build_info.cpp), so the Firmware card, the map and Home Assistant install a desktop as they install a board."""
+    DIST_DIR.mkdir(exist_ok=True)
+    out = DIST_DIR / f"firmware-{firmware}-v{version}.bin"
+    shutil.copy2(binary, out)
+    print(f"package_desktop: wrote {out}")
+    return out
+
+
 def package_linux(binary: Path, version: str) -> Path:
     """A .tar.gz and a .deb. No signing: Linux has no Gatekeeper equivalent to satisfy.
 
@@ -122,6 +136,7 @@ def package_linux(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
+    stage_program(binary, version, f"desktop-linux-{tar_label}")
     package_deb(binary, version)
     return out
 
@@ -151,10 +166,21 @@ def package_deb(binary: Path, version: str) -> Path | None:
     stage = DIST_DIR / f"deb-{version}"
     shutil.rmtree(stage, ignore_errors=True)
     (stage / "DEBIAN").mkdir(parents=True)
-    (stage / "usr" / "bin").mkdir(parents=True)
-    shutil.copy2(binary, stage / "usr" / "bin" / "MoonLight")
-    # A menu entry, so a Linux user launches it the way a macOS user opens the .app: Terminal=true
-    # gives the same visible, closeable window that shows the log and stops the server when closed.
+    # The program as a seed the package tracks, which postinst copies into the service user's own folder, where it updates itself;
+    # the service and its rollback beside it, and the maintainer scripts that install and remove them (moondeck/ci/linux/).
+    lib = stage / "usr" / "lib" / "moonlight"
+    lib.mkdir(parents=True)
+    shutil.copy2(binary, lib / "MoonLight")
+    shutil.copy2(LINUX_DIR / "rollback", lib / "rollback")
+    units = stage / "usr" / "lib" / "systemd" / "system"
+    units.mkdir(parents=True)
+    for unit in ("moonlight.service", "moonlight-rollback.service"):
+        shutil.copy2(LINUX_DIR / unit, units / unit)
+    for script in ("postinst", "prerm", "postrm"):
+        shutil.copy2(LINUX_DIR / script, stage / "DEBIAN" / script)
+        (stage / "DEBIAN" / script).chmod(0o755)
+    (lib / "rollback").chmod(0o755)
+    # A menu entry opening the running service's page: the service already holds port 8080, so a second copy would find it taken.
     apps = stage / "usr" / "share" / "applications"
     apps.mkdir(parents=True)
     (apps / "moonlight.desktop").write_text(
@@ -162,9 +188,9 @@ def package_deb(binary: Path, version: str) -> Path | None:
         "Type=Application\n"
         "Name=MoonLight\n"
         "Comment=Drive large LED installations and DMX fixtures\n"
-        "Exec=MoonLight\n"
+        "Exec=xdg-open http://localhost:8080/\n"
         "Icon=moonlight\n"
-        "Terminal=true\n"
+        "Terminal=false\n"
         "Categories=Graphics;Utility;\n", encoding="utf-8")
     icons = stage / "usr" / "share" / "icons" / "hicolor" / "256x256" / "apps"
     icons.mkdir(parents=True)
@@ -187,8 +213,8 @@ def package_deb(binary: Path, version: str) -> Path | None:
         "Maintainer: MoonModules <https://github.com/MoonModules/MoonLight>\n"
         "Description: Drive large LED installations and DMX fixtures\n"
         " MoonLight renders effects to LED fixtures and DMX, controlled from a\n"
-        " browser. This is the desktop build; run MoonLight and open\n"
-        " http://localhost:8080/.\n", encoding="utf-8")
+        " browser. It installs as the moonlight service, which starts at boot\n"
+        " and updates itself from its page: open http://localhost:8080/.\n", encoding="utf-8")
     out = DIST_DIR / f"moonlight_{version}_{deb_arch}.deb"
     run(["dpkg-deb", "--build", "--root-owner-group", str(stage), str(out)])
     shutil.rmtree(stage, ignore_errors=True)
@@ -396,6 +422,7 @@ def package_macos(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
+    stage_program(binary, version, "desktop-macos-arm64")
     package_dmg(binary, version)
     return out
 
@@ -598,6 +625,7 @@ def package_windows(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
+    stage_program(binary, version, "desktop-windows-x64")
     package_windows_installer(binary, version)
     return out
 

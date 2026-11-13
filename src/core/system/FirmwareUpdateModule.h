@@ -126,6 +126,9 @@ public:
         // On either tab, for the update signals: the app's version, and MoonBase's only while it does not match, so this module is the one place that decides.
         controls_.addReadOnly("appVersion", versionStr_, sizeof(versionStr_));
         controls_.setHidden(controls_.count() - 1, true);
+        std::snprintf(updateStr_, sizeof(updateStr_), "%s", platform::updateModeName(platform::updateMode()));
+        controls_.addReadOnly("update", updateStr_, sizeof(updateStr_));
+        controls_.setHidden(controls_.count() - 1, true);
         if (moonbaseOutdated_) {
             controls_.addReadOnly("moonbaseMismatch", moonbaseStr_, sizeof(moonbaseStr_));
             controls_.setHidden(controls_.count() - 1, true);
@@ -267,6 +270,8 @@ private:
     uint32_t totalSnap_     = 0;        ///< the total the progress control was bound at
     /// The installed version.
     char     versionStr_[32] = {};
+    /// How this device takes a new version: self, host or manual.
+    char     updateStr_[8] = {};
     /// The git id, then the build date.
     char     buildStr_[48]   = {};
     /// The build variant; on the MoonBase tab, its chip.

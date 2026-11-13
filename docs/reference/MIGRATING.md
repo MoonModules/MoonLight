@@ -31,6 +31,33 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A desktop updates itself as a board does, and the Debian package installs a service
+
+**Action: *nothing* on most desktops; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
+
+A desktop build names its firmware `desktop-<os>-<arch>`, such as `desktop-linux-arm64`, where it said `unknown`, and installs `firmware-<firmware>-v<version>.bin` from a release through the Firmware card, the Devices map and `/api/firmware/url`, as a board does. `/api/reboot` restarts a desktop where it ended the process: in place, in its terminal window, under systemd or in a container alike. A script that stopped a desktop through `/api/reboot` stops it with Ctrl+C or its service manager instead.
+
+The package now installs and starts `moonlight.service`, run as its own `moonlight` user from `/var/lib/moonlight/bin`, a folder that user owns, so the Devices map updates it like a board. The program moves from `/usr/bin/MoonLight` to `/usr/lib/moonlight/MoonLight`, the copy the service starts from, and the menu entry opens `http://localhost:8080/`.
+
+A hand-written `/etc/systemd/system/moonlight.service`, or a drop-in in `/etc/systemd/system/moonlight.service.d/` that sets `ExecStart`, overrides the packaged one and names the old path, so remove it before upgrading:
+
+```
+sudo systemctl disable --now moonlight
+sudo rm /etc/systemd/system/moonlight.service
+sudo rm -r /etc/systemd/system/moonlight.service.d   # where a drop-in sets ExecStart
+```
+
+Settings now live in `/var/lib/moonlight/MoonLight/`. Copy the old user's across once, `pi` here, after the upgrade:
+
+```
+sudo systemctl stop moonlight
+sudo cp -a /home/pi/.local/share/MoonLight/. /var/lib/moonlight/MoonLight/
+sudo chown -R moonlight:moonlight /var/lib/moonlight/MoonLight
+sudo systemctl start moonlight
+```
+
+A Backup taken before the upgrade and restored after it carries them across too.
+
 ### The P4's radio chip status moves from System to the Firmware card
 
 **Action: *nothing*, unless a script reads it; read `version` on the Firmware module's WiFi coproc tab instead of `wifiCoproc` on System.**

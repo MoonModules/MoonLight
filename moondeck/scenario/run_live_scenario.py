@@ -14,7 +14,6 @@ import atexit
 import copy
 import signal
 import json
-import os
 import re
 import statistics
 import subprocess
@@ -224,8 +223,8 @@ def _detect_target(state: dict, local: bool = True) -> str:
 
     ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
     `esp32s3-n16r8`, …): set at compile time from MM_FIRMWARE_NAME and
-    exposed through the `firmware` control. Desktop: same key but reports
-    `unknown`, so we substitute desktop-<host-os> using the runtime os name (still
+    exposed through the `firmware` control. Desktop: its firmware names the release's program
+    (`desktop-macos-arm64`), and its metrics key is this host's, desktop-<host-os> (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
 
@@ -240,7 +239,7 @@ def _detect_target(state: dict, local: bool = True) -> str:
                 firmware = c.get("value")
             elif m.get("type") == "SystemModule" and c.get("name") == "deviceModel":
                 model = c.get("value")
-    if firmware and firmware != "unknown":
+    if firmware and firmware != "unknown" and not firmware.startswith("desktop-"):
         return firmware
     if not local:
         return "desktop-" + str(model or "remote").strip().lower().replace(" ", "-")
@@ -470,17 +469,9 @@ def _restore_controls(client, prior: dict) -> int:
 def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
     """Restart the device and wait for it to answer again, so a scenario can prove what survives.
 
-    On a board this is the reboot the endpoint performs. On a desktop the same endpoint EXITS the
-    process and nothing restarts it, so the runner relaunches the binary itself, with the data
-    directory the exiting instance was using: a restart that came back on different files would
-    prove nothing about persistence. Returns "" on success, or the reason it did not come back.
+    Every device restarts itself on the endpoint, a board by rebooting and a desktop by starting its program again, in place,
+    on the same data directory. Returns "" on success, or the reason it did not come back.
     """
-    data_dir = os.environ.get("MM_DATA_DIR")
-    # Only a desktop build on THIS machine is relaunched from here. One on another host is brought
-    # back by whatever runs it there, a container's restart policy or a service manager, and
-    # launching a local binary for it would start a second, unrelated device on this machine.
-    is_desktop = target.startswith("desktop-") and client.local
-
     # Uptime before the restart, so the recovered instance can be told from the one still running.
     # Without it the first answering /api/state is accepted, which on a board is routinely the OLD
     # instance replying before it goes down: every persistence assertion after that proves nothing.
@@ -494,22 +485,6 @@ def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
         return f"/api/reboot returned HTTP {re_.code}"
     except Exception:
         pass                  # the device goes away mid-response, which is the expected shape
-
-    if is_desktop:
-        # The same resolver run_desktop.py uses, which picks the NEWEST candidate rather than the
-        # first that exists: picking by existence served a stale build whose changes read as no-ops,
-        # and it names the per-host directory, so this works on Linux and Windows too.
-        sys.path.insert(0, str(ROOT / "moondeck" / "run"))
-        from run_desktop import _resolve_executable            # noqa: E402
-        binary = _resolve_executable()
-        if not binary.exists():
-            return f"no desktop binary to relaunch (looked for {binary})"
-        time.sleep(1.0)       # let the old process release the port before the new one binds it
-        env = dict(os.environ)
-        if data_dir:
-            env["MM_DATA_DIR"] = data_dir
-        subprocess.Popen([str(binary)], cwd=str(ROOT), env=env,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Evidence of a restart, not merely of an answer: either the device went away and came back, or
     # it answers with an uptime lower than before. One of the two must hold before this reports success.

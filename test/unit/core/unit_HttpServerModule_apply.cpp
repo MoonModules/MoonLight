@@ -798,7 +798,7 @@ TEST_CASE("the frame walker hands a Ping and a Close to the control callback, in
     CHECK(seen[2] == "8:\x03\xe8");
 }
 
-TEST_CASE("/api/system carries the summary a peer's map shows: identity, board, signal, light outputs and effects") {
+TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, identity, board, signal, light outputs and effects") {
     PatchTree t;
     struct Lights final : mm::test::FakeLightOutput {} lights;
     lights.outputs_ = "{\"driver\":\"LedDriver\",\"lights\":300}";
@@ -810,6 +810,8 @@ TEST_CASE("/api/system carries the summary a peer's map shows: identity, board, 
         t.http.writeDeviceSummaryForTest(sink);
     }
     const std::string doc = std::string("{") + buf + "\"end\":0}";
+    // The mode itself is pinned in unit_platform_update.cpp; here only that the summary names one.
+    CHECK(doc.find("\"update\":\"") != std::string::npos);
     CHECK(doc.find("\"mac\":\"") != std::string::npos);
     CHECK(doc.find("\"board\":") != std::string::npos);
     CHECK(doc.find("\"chip\":") != std::string::npos);

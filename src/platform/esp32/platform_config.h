@@ -261,9 +261,6 @@ constexpr EthPinConfig ethConfigDefault =
                                 /*miso*/ -1, /*mosi*/ -1, /*sck*/ -1, /*cs*/ -1, /*irq*/ -1 };
 #endif  // CONFIG_ETH_USE_OPENETH
 
-/// True on every ESP32 build, the partition layout reserving both app slots unconditionally.
-constexpr bool hasOta = true;
-
 /// True on every ESP32: the serial RPC channel is always there, so the listener always runs.
 constexpr bool hasImprov = true;
 

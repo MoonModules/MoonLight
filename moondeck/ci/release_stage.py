@@ -19,6 +19,7 @@ A step's outputs go to $GITHUB_OUTPUT when it is set, and always to stdout as ke
     image-name     the lowercase container image path
     container-context   the Docker build context holding the release .debs
     smoke-images   run each container image before anything is published
+    smoke-update   a desktop program installs itself through its Firmware route and restarts on it
     pages-site     the installer and its assets, staged for Pages
     merge-docs     the rendered docs site, copied into the Pages root beside the installer
 
@@ -32,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -60,7 +62,7 @@ RUN apt-get update \\
  && mkdir -p /deps \\
  && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \\
  && test -n "$pulse" \\
- && { ldd /rootfs/usr/bin/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \\//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\\+\\+|libgcc_s)\\.so' | xargs -I{} cp -L {} /deps/
+ && { ldd /rootfs/usr/lib/moonlight/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \\//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\\+\\+|libgcc_s)\\.so' | xargs -I{} cp -L {} /deps/
 # Both binaries are built on Ubuntu 22.04 and need glibc 2.35 at most, which
 # check_glibc_floor.py enforces, so debian13 (2.41) runs them. See ../../Dockerfile.
 # Pinned by digest, not by tag: `cc-debian13` is mutable, so an unpinned base means two
@@ -69,7 +71,7 @@ RUN apt-get update \\
 # This digest is the multi-arch INDEX, not one platform's manifest, so the same pin serves
 # amd64 and arm64; buildx resolves the right manifest per platform.
 FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd5e2225236735cca0070ed11c78
-COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
+COPY --from=fetch /rootfs/usr/lib/moonlight/MoonLight /usr/bin/MoonLight
 # The libraries the loader resolved, collected in the fetch stage. Without them the
 # container dies at startup on "libcurl.so.4: cannot open shared object file", which the
 # run before publishing now catches.
@@ -92,10 +94,11 @@ def emit(key: str, value: str) -> None:
 
 
 def resolve_tag(input_tag: str, ref: str, ref_name: str) -> str:
-    """The release channel tag: the dispatch input wins, a push to main is `latest`, any other ref is its own name."""
+    """The release channel tag: the dispatch input wins, a push to main is `latest`, a pull request builds as the next `latest`
+    (a -dev version, as the merge would ship it), any other ref is its own name."""
     if input_tag:
         return input_tag
-    return "latest" if ref == "refs/heads/main" else ref_name
+    return "latest" if ref == "refs/heads/main" or ref.startswith("refs/pull/") else ref_name
 
 
 def shipping(registry: dict, keep) -> list[str]:
@@ -259,6 +262,73 @@ def smoke_images() -> None:
     print("the arm64 image runs")
 
 
+def system_info(base: str) -> dict | None:
+    """The program's /api/system, or None while it does not answer."""
+    try:
+        with urllib.request.urlopen(f"{base}/api/system", timeout=3) as r:
+            return json.loads(r.read())
+    except (OSError, ValueError):
+        return None
+
+
+def wait_for_system(base: str, accept, seconds: int = 60) -> dict | None:
+    """The first /api/system answer `accept` takes within `seconds`, or None."""
+    for _ in range(seconds * 2):
+        info = system_info(base)
+        if info and accept(info):
+            return info
+        time.sleep(0.5)
+    return None
+
+
+def check_beside(work: Path, program: str) -> None:
+    """The old program kept as .prev, the new one marked .pending, and no image left half-written."""
+    files = sorted(p.name for p in work.iterdir() if p.is_file())
+    print(f"beside the program: {files}")
+    missing = [kept for kept in (program + ".prev", program + ".pending") if kept not in files]
+    if missing or "MoonLight.next" in files:
+        raise SystemExit(f"beside the program: {', '.join(missing) or 'MoonLight.next'} {'missing' if missing else 'left behind'}")
+
+
+def smoke_update(program: Path) -> None:
+    """A desktop installs a program through POST /api/firmware/upload as a board installs an image, and restarts on it: the new run answers from
+    a fresh uptime, the old program waits beside it as .prev and the new one is marked .pending. The program is its own image, a copy in a
+    folder of its own standing in for an installed one, so this runs on each runner the release builds a desktop on."""
+    port = 18081
+    base = f"http://127.0.0.1:{port}"
+    work = Path(tempfile.mkdtemp(prefix="mm-smoke-update-"))
+    # A name of its own, so the Windows cleanup by name stops this run and no MoonLight the machine runs besides.
+    installed = work / ("MoonLight-smoke.exe" if os.name == "nt" else "MoonLight-smoke")
+    shutil.copy2(program, installed)
+    log_path = work / "run.log"
+    with log_path.open("wb") as log:
+        run = subprocess.Popen([str(installed), "--port", str(port), "--no-browser"], stdout=log, stderr=subprocess.STDOUT, cwd=work,
+                               env={**os.environ, "MM_DATA_DIR": str(work / "data")})
+    try:
+        # Up a few seconds first, so the new run's uptime reads lower than the old one's.
+        before = wait_for_system(base, lambda info: info.get("uptime", 0) >= 5)
+        if not before or before.get("update") != "self":
+            raise SystemExit(f"the program did not answer as one that updates itself: {before}")
+        upload = urllib.request.Request(f"{base}/api/firmware/upload", data=installed.read_bytes(), method="POST",
+                                        headers={"Content-Type": "application/octet-stream"})
+        with urllib.request.urlopen(upload, timeout=120) as r:
+            print(f"upload: {r.status} {r.read().decode(errors='replace')}")
+        after = wait_for_system(base, lambda info: info.get("uptime", 0) < before["uptime"])
+        if not after:
+            raise SystemExit("no new run answered within 60 s")
+        print(f"restarted: uptime {before['uptime']} s -> {after['uptime']} s")
+        check_beside(work, installed.name)
+        print("the program installed itself and restarted on it")
+    finally:
+        # A POSIX restart is the same process, exec'd in place; a Windows restart is a new process, found by its name.
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/IM", installed.name], capture_output=True)
+        run.kill()
+        run.wait()
+        print(tail(log_path.read_text(encoding="utf-8", errors="replace")))
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def pages_site() -> None:
     """The installer page, the picker modules and the board images a deviceModels.json entry references, under pages/install/."""
     install = ROOT / "pages" / "install"
@@ -300,6 +370,8 @@ def gcc_version() -> str:
 
 
 def main() -> int:
+    # UTF-8 whatever the runner's console: a Windows runner's cp1252 cannot print the program's own log, which says "→".
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     tag = sub.add_parser("tag", help="Emit tag=<release channel tag>.")
@@ -326,6 +398,8 @@ def main() -> int:
     image.add_argument("--repo", required=True, help="owner/name")
     sub.add_parser("container-context", help="Write ctx/ with the .debs and the release Dockerfile.")
     sub.add_parser("smoke-images", help="Run the amd64 and arm64 smoke images.")
+    smoke = sub.add_parser("smoke-update", help="Install a desktop program through its own Firmware route and check it restarts on it.")
+    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-desktop-<os>-<arch>-v<version>.bin")
     sub.add_parser("pages-site", help="Stage the installer under pages/install/.")
     docs = sub.add_parser("merge-docs", help="Copy the rendered docs site into pages/.")
     docs.add_argument("--site-dir", required=True, type=Path)
@@ -355,6 +429,8 @@ def main() -> int:
         container_context()
     elif args.command == "smoke-images":
         smoke_images()
+    elif args.command == "smoke-update":
+        smoke_update(args.program)
     elif args.command == "pages-site":
         pages_site()
     else:

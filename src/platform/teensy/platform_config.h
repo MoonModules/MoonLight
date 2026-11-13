@@ -101,9 +101,6 @@ constexpr EthPinConfig ethConfigDefault{ ethW5500, 0, -1, -1, -1, -1, false, 12,
 /// False: no WiFi co-processor.
 constexpr bool hasWifiCoprocessor = false;
 
-/// True: an uploaded image is staged above the program and copied over it at the reboot.
-constexpr bool hasOta = true;
-
 /// True: the USB serial port takes the installer's state documents (APPLY_OP); there is no WiFi to provision.
 constexpr bool hasImprov = true;
 

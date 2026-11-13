@@ -191,11 +191,7 @@ processes:
           curl -fsSL -o moonlight.deb "$url" && sudo apt install -y ./moonlight.deb
           ```
 
-          `latest` is the rolling build from main; for the newest tagged release, use `releases/latest`. Or unpack the `.tar.gz` and run it in place. To start it on every boot: [Keep MoonLight running on a Linux board](moonwalk.md#run-linux-board).
-      - id: run-linux
-        say: Start MoonLight.
-        given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "MoonLight" } }
+          `latest` is the rolling build from main; for the newest tagged release, use `releases/latest`. The package runs MoonLight as a service, updated from the Devices map: [the service](reference/installing-on-linux.md#the-service). Or unpack the `.tar.gz` and run it in place.
       - id: docker-run
         section: Run the container
         say: Run the published image.
@@ -228,7 +224,7 @@ processes:
         detail: |
           ![MoonLight running: the web interface with a live 3D preview and the Effects panel](assets/tutorials/windows-05-running.png)
 
-          The window MoonLight runs in, a console on Windows or your terminal, **is** the application. It shows the log, and closing it stops MoonLight. The line that matters on a first run is `MoonLight is running: http://localhost:8080/`. The address printed below it is the same interface, reachable from your phone or another machine on your network.
+          On Windows and macOS the window MoonLight runs in, a console or your terminal, **is** the application. It shows the log, and closing it stops MoonLight. A first run prints `MoonLight is running: http://localhost:8080/`. On Linux it runs as a service, its log in `journalctl -u moonlight`. The same interface answers on the machine's address, from your phone too.
 
           On a first install you get a default grid and a running effect, enough to confirm everything works. [How MoonLight works](explanation/how-moonlight-works.md) explains the Layouts, Effects and Drivers down the left-hand side.
 
@@ -253,7 +249,7 @@ processes:
           | Teensy | In 1 MB of the program flash. |
           | Windows | `%LOCALAPPDATA%\MoonLight`: paste it into Explorer's address bar. Uninstalling leaves it. |
           | macOS | `~/Library/Application Support/MoonLight`. |
-          | Linux | `~/.local/share/MoonLight`, or under `$XDG_DATA_HOME` when it is set. |
+          | Linux | `/var/lib/moonlight/MoonLight` for the package's service; `~/.local/share/MoonLight`, or `$XDG_DATA_HOME`, run by hand. |
           | Docker | The `moonlight-data` volume; without it, every `docker rm` starts over. |
       - id: update
         section: Updating
@@ -266,11 +262,11 @@ processes:
           A Teensy has no TLS, so the browser downloads the release's `.bin` and uploads it. Power lost right after **Rebooting…** leaves it dark until a USB install with the program button, which keeps the settings.
       - id: update-app
         section: Updating
-        say: Install the new build.
+        say: Update from the ⬆ badge.
         given: [{ input: platform, in: [Windows, macOS, Linux] }]
-        when: { manual: "The ⬆ badge in the top bar opens its release page." }
+        when: { manual: "It opens the Firmware card, or the release page for a program updated by hand." }
         detail: |
-          The badge lights when a newer stable release ships for your OS. A running program cannot replace its own executable, so updating is the download and the install again, in about a minute. Your settings stay.
+          It lights for a newer stable release; your settings stay. A program in a folder it can write installs it and restarts, as a board does; otherwise, download and install it again.
       - id: update-docker
         section: Updating
         say: Recreate the container from the new image.
@@ -414,35 +410,13 @@ processes:
       - id: install
         say: Install the package on the board.
         when: { process: install }
-      - id: unit
-        say: Write a systemd unit for MoonLight.
-        when: { manual: "Save it as /etc/systemd/system/moonlight.service." }
         detail: |
-          ```ini
-          [Unit]
-          Description=MoonLight
-          After=network-online.target
-          Wants=network-online.target
-
-          [Service]
-          ExecStart=/usr/bin/MoonLight
-          Restart=always
-          RestartSec=5
-          User=pi
-
-          [Install]
-          WantedBy=multi-user.target
-          ```
-
-          `Restart=always` covers a crash as well as a reboot. Adjust `User`, and the path for a source build: where you built, such as `/home/pi/MoonLight/build/linux/MoonLight`. For HDMI out, that user is in the `video` group (`sudo usermod -aG video <user>`), which Raspberry Pi OS's first user already is. A container does this with `--restart unless-stopped` instead.
-      - id: enable
-        say: Enable the service at boot.
-        when: { run: { command: "sudo systemctl enable --now moonlight" } }
+          The package installs `moonlight.service`, enables it and starts it. `Restart=always` brings it back after a crash as well as a reboot, and a new version installed from the Devices map starts the same way. A container does this with `--restart unless-stopped` instead.
       - id: status
         say: Check the service runs.
         when: { run: { command: "systemctl status moonlight" } }
         detail: |
-          `sudo systemctl stop moonlight` stops MoonLight cleanly, its drivers releasing their outputs. To stop the board: `sudo shutdown now`, since an SD card cut off mid-write can corrupt the filesystem. The service comes back at the next boot.
+          `journalctl -u moonlight` shows its log. `sudo systemctl stop moonlight` stops MoonLight cleanly, its drivers releasing their outputs. To stop the board: `sudo shutdown now`, since an SD card cut off mid-write can corrupt the filesystem. The service comes back at the next boot.
   - id: container-overlay-root
     title: Start the container on an overlay root
     actor: user

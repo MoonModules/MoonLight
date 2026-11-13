@@ -70,11 +70,13 @@ TEST_CASE("FirmwareUpdateModule OTA status routes through the status slot") {
 }
 
 namespace {
-const char* readOnly(mm::FirmwareUpdateModule& fw, const char* name) {
+/// A control's storage by its name, so a test reads and sets it whatever controls come before it.
+void* controlPtr(mm::FirmwareUpdateModule& fw, const char* name) {
     for (uint8_t i = 0; i < fw.controls().count(); i++)
-        if (std::strcmp(fw.controls()[i].name, name) == 0) return static_cast<const char*>(fw.controls()[i].ptr);
+        if (std::strcmp(fw.controls()[i].name, name) == 0) return fw.controls()[i].ptr;
     return nullptr;
 }
+const char* readOnly(mm::FirmwareUpdateModule& fw, const char* name) { return static_cast<const char*>(controlPtr(fw, name)); }
 }  // namespace
 
 // MoonBase's `<version>+<build id>` splits into its version and build rows; a mismatch with the app warns between installs and is published for the UI's signals.
@@ -90,7 +92,8 @@ TEST_CASE("a MoonBase that does not match the app says so, and only then") {
     CHECK(std::strcmp(readOnly(fw, "appVersion"), mm::kVersion) == 0);
     REQUIRE(readOnly(fw, "moonbaseMismatch") != nullptr);
     CHECK(std::strcmp(readOnly(fw, "moonbaseMismatch"), "0.0.1") == 0);
-    *static_cast<uint8_t*>(fw.controls()[2].ptr) = 1;   // the MoonBase tab: appVersion, moonbaseMismatch, image
+    REQUIRE(controlPtr(fw, "image") != nullptr);
+    *static_cast<uint8_t*>(controlPtr(fw, "image")) = 1;   // the MoonBase tab
     fw.rebuildControls();
     CHECK(std::strcmp(readOnly(fw, "version"), "0.0.1") == 0);
     CHECK(std::strcmp(readOnly(fw, "build"), "abc12345+ · Oct  4 2026 10:31:00") == 0);

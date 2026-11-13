@@ -27,6 +27,10 @@ def test_a_push_to_main_releases_as_latest():
     assert rs.resolve_tag("", "refs/heads/main", "main") == "latest"
 
 
+def test_a_pull_request_builds_as_the_next_latest_never_as_a_stable_version():
+    assert rs.resolve_tag("", "refs/pull/250/merge", "250/merge") == "latest"
+
+
 def test_a_version_tag_push_releases_under_its_own_name():
     assert rs.resolve_tag("", "refs/tags/v7.1.0-rc1", "v7.1.0-rc1") == "v7.1.0-rc1"
 

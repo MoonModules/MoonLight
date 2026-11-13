@@ -8,7 +8,7 @@ MoonLight trusts its local network. Every client that reaches a device can read 
 
 ## The trust boundary is the network
 
-A device serves one plain HTTP port: 80 on a board, 8080 on a desktop. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client on the network. A client can set any control, add or delete modules, read and write files, install firmware, reboot the device and reset it to factory settings. The routes: [the REST API](../reference/api.md).
+A device serves one plain HTTP port: 80 on a board, 8080 on a desktop. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client on the network. A client can set any control, add or delete modules, read and write files, install firmware (on a desktop, a program that then runs as the user running MoonLight), reboot the device and reset it to factory settings. The routes: [the REST API](../reference/api.md).
 
 A web page from outside the network is refused. A browser names the page a request comes from in its `Origin` header, and a device answers 403, the WebSocket included, when that page's host is not on the network: a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or a name without a dot; a page the device served, called under the name it was opened by, passes as well. So a site from the internet cannot use a browser on the network against a device.
 

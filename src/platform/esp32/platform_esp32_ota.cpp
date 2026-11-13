@@ -291,7 +291,7 @@ void otaTask(void* arg) {
 bool http_fetch_to_ota(const char* url,
                        char* statusBuf, size_t statusBufLen,
                        uint32_t* bytesReadOut, uint32_t* bytesTotalOut,
-                       const char* fallbackUrl) {
+                       const char* fallbackUrl, const char* /*sha256Hex*/) {   // the image closes with its own SHA-256, which the update checks
     if (!url || !statusBuf || statusBufLen == 0 || !bytesReadOut || !bytesTotalOut) {
         return false;
     }

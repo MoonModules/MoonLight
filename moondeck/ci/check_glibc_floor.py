@@ -27,7 +27,7 @@ import tarfile
 from pathlib import Path
 
 FLOOR = (2, 35)   # docs/reference/installing-on-linux.md
-BINARY = "usr/bin/MoonLight"
+BINARY = "usr/lib/moonlight/MoonLight"
 
 
 def ar_members(data: bytes):

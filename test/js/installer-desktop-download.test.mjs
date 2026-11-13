@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseFirmwaresFromAssets, isCompatible } from "../../src/ui/install-picker.js";
+import { parseFirmwaresFromAssets, isCompatible, pickedEntry, DESKTOP_DOWNLOAD } from "../../src/ui/install-picker.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
@@ -122,11 +122,11 @@ test("an ESP32 device is never offered a desktop archive to flash", () => {
     }
 });
 
-test("a desktop is never offered an ESP32 firmware as its update", () => {
-    // A desktop build has no ESP32 variant to name, so it reports "unknown". Whichever OS
-    // the page runs on, no ESP32 image is ever a desktop upgrade.
+test("a desktop is offered desktop programs alone, downloading or updating itself", () => {
+    // Whichever OS the page runs on, no ESP32 image is a desktop's download or its update.
     for (const key of ["esp32", "esp32s3-n16r8", "esp32p4", "esp32-eth"]) {
-        assert.equal(isCompatible("unknown", key), false, `unknown must reject ${key}`);
+        assert.equal(isCompatible(DESKTOP_DOWNLOAD, key), false, `download mode must reject ${key}`);
+        assert.equal(isCompatible("desktop-linux-arm64", key), false, `a desktop must reject ${key}`);
     }
 });
 
@@ -135,7 +135,7 @@ test("a desktop is offered exactly one archive: the one built for its own OS", (
     // of them: exactly one of the three desktop keys matches, never two, never none. That
     // is what stops a Mac being offered the Windows .zip.
     const keys = ["desktop-macos-arm64", "desktop-windows-x64", "desktop-linux-x64"];
-    const matched = keys.filter(k => isCompatible("unknown", k));
+    const matched = keys.filter(k => isCompatible(DESKTOP_DOWNLOAD, k));
     assert.equal(matched.length, 1, `expected exactly one match, got ${matched}`);
 });
 
@@ -158,4 +158,15 @@ test("a release with only an archive still offers it, for every platform it has"
     const got = parseFirmwaresFromAssets(OLD_RELEASE, "v3.0.0");
     assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.tar\.gz$/);
     assert.match(got.find(f => f.firmware === "desktop-windows-x64").binaryUrl, /\.zip$/);
+});
+
+test("installing a desktop's own program installs the program, and downloading it downloads the package, both in one release", () => {
+    // The package and the program share the key desktop-linux-x64; the install takes the one of the kind on offer.
+    const firmwares = parseFirmwaresFromAssets([...RELEASE, asset("firmware-desktop-linux-x64-v3.0.0.bin")]);
+    const program = pickedEntry(firmwares, "desktop-linux-x64", "desktop-linux-x64");
+    assert.equal(program.binaryUrl, "https://gh/firmware-desktop-linux-x64-v3.0.0.bin");
+    assert.ok(!program.isDesktop);
+    const download = pickedEntry(firmwares, "desktop-linux-x64", DESKTOP_DOWNLOAD);
+    assert.ok(download.isDesktop);
+    assert.ok(download.assets.some(a => a.name.endsWith(".deb")));
 });

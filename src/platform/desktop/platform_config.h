@@ -117,9 +117,6 @@ constexpr EthPinConfig ethConfigDefault{ ethNone, 0, -1, -1, -1, -1, false, -1, 
 /// False: no separate WiFi co-processor, so its read-out and control compile out.
 constexpr bool hasWifiCoprocessor = false;
 
-/// False: no OTA partition to write, so the firmware routes answer a stub instead.
-constexpr bool hasOta = false;
-
 /// False: no UART and no WiFi stack, so the provisioning listener is never installed.
 constexpr bool hasImprov = false;
 
