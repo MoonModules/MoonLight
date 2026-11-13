@@ -927,6 +927,10 @@ private:
     static constexpr size_t kMaxImageUrl = 255;
     /// Read the image URL from `body`, the release's matching radio-chip image when `coprocessorDefault` and none is named; false after answering 400.
     bool readImageUrl(platform::TcpConnection& conn, const char* body, char (&url)[kMaxImageUrl + 2], bool coprocessorDefault);
+    /// A SHA-256 written out with one character to spare and the terminator.
+    static constexpr size_t kDigestText = 66;
+    /// Read the image's digest from `body`, which a desktop checks before it installs its new program, empty when none is named; false after answering 400.
+    bool readDigest(platform::TcpConnection& conn, const char* body, char (&sha256)[kDigestText]);
     /// Stage `url` for MoonBase and reboot into it, which installs it and boots the app again.
     void installThroughMoonBase(platform::TcpConnection& conn, const char* url);
     /// Install an uploaded image, the application's (`POST /api/firmware/upload`) or MoonBase's (`POST /api/firmware/moonbase-update`), through a transfer slot.

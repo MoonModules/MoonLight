@@ -156,6 +156,25 @@ TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 4
     http.release();
 }
 
+// A digest in another form than GitHub's 64 hex digits is refused before the download, rather than failing the install after it.
+TEST_CASE("a firmware URL whose sha256 is no 64 hex digits is refused with 400"
+          * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    for (const char* digest : {"sha256:0123", "zz", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"}) {
+        mm::platform::TcpConnection client;
+        REQUIRE(connectAndAccept(http, client, kTestPort));
+        const std::string req = withBody("POST /api/firmware/url", std::string("{\"url\":\"https://example.com/p.bin\",\"sha256\":\"") + digest + "\"}");
+        REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size()));
+        const std::string reply = readUntilClosed(http, client);
+        client.close();
+        CHECK_MESSAGE(reply.rfind("HTTP/1.1 400", 0) == 0, digest);
+        CHECK_MESSAGE(reply.find("sha256 must be 64 hex digits") != std::string::npos, digest);
+    }
+    http.release();
+}
+
 // A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
 TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
     RackServer server;

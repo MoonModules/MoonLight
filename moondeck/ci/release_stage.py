@@ -297,7 +297,8 @@ def smoke_update(program: Path) -> None:
     port = 18081
     base = f"http://127.0.0.1:{port}"
     work = Path(tempfile.mkdtemp(prefix="mm-smoke-update-"))
-    installed = work / ("MoonLight.exe" if os.name == "nt" else "MoonLight")
+    # A name of its own, so the Windows cleanup by name stops this run and no MoonLight the machine runs besides.
+    installed = work / ("MoonLight-smoke.exe" if os.name == "nt" else "MoonLight-smoke")
     shutil.copy2(program, installed)
     log_path = work / "run.log"
     with log_path.open("wb") as log:
@@ -369,6 +370,8 @@ def gcc_version() -> str:
 
 
 def main() -> int:
+    # UTF-8 whatever the runner's console: a Windows runner's cp1252 cannot print the program's own log, which says "→".
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     tag = sub.add_parser("tag", help="Emit tag=<release channel tag>.")

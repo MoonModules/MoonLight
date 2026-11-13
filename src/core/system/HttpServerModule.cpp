@@ -18,6 +18,7 @@
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
+#include "core/util/sha256.h"   // kSha256DigestSize: the digest a desktop's install names
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
@@ -2092,6 +2093,14 @@ bool HttpServerModule::readImageUrl(platform::TcpConnection& conn, const char* b
     return false;
 }
 
+// One character past the 64 digits, so a longer value shows rather than reading as cut to fit.
+bool HttpServerModule::readDigest(platform::TcpConnection& conn, const char* body, char (&sha256)[kDigestText]) {
+    mm::json::parseString(body, "sha256", sha256, sizeof(sha256));
+    if (!sha256[0] || isHexDigits(sha256, kSha256DigestSize * 2)) return true;
+    sendError(conn, 400, "sha256 must be 64 hex digits");
+    return false;
+}
+
 // A MoonBase device runs from its one app slot, so the URL is staged in NVS and the device reboots into MoonBase to install; 202 with {"moonbase":true} marks this flow.
 void HttpServerModule::installThroughMoonBase(platform::TcpConnection& conn, const char* url) {
     if (!platform::moonbaseStageInstallUrl(url)) {
@@ -2123,6 +2132,8 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
 
     char url[kMaxImageUrl + 2] = {};
     if (!readImageUrl(conn, body, url, false)) return;
+    char sha256[kDigestText] = {};
+    if (!readDigest(conn, body, sha256)) return;
     // A device without TLS has no firmware fetcher at all, so it says so before starting: the UI then fetches the image itself and uploads it.
     if (!platform::httpsAvailable()) {
         sendResponse(conn, 501, "application/json",
@@ -2141,11 +2152,8 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
     g_otaBytesTotal = 0;
     FilesystemModule::flushPending();   // the install ends in a restart, which drops settings still waiting for their debounce
 
-    // The image's digest, which a desktop checks before it installs its new program; a board's image carries its own.
-    char sha256[65] = {};
-    mm::json::parseString(body, "sha256", sha256, sizeof(sha256));
     if (!platform::http_fetch_to_ota(url, g_otaStatus, sizeof(g_otaStatus),
-                                     &g_otaBytesRead, &g_otaBytesTotal, nullptr, sha256[0] ? sha256 : nullptr)) {
+                                     &g_otaBytesRead, &g_otaBytesTotal, nullptr, sha256)) {
         sendError(conn, 500, g_otaStatus[0] ? g_otaStatus : "ota start failed");   // the platform's own reason when it wrote one
         return;
     }

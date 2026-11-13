@@ -7,7 +7,8 @@
 
 #include "host_update.h"
 #include "platform/platform.h"
-#include "core/util/ProgramImage.h"   // the header a new program is vetted by, as a board vets its image's
+#include "ProgramImage.h"             // the header a new program is vetted by, as a board vets its image's
+#include "core/util/hex.h"            // isHexDigits: a digest's form
 #include "core/util/sha256.h"         // the digest a fetch is checked against
 
 #include <cctype>
@@ -25,7 +26,7 @@
 #include <windows.h>
 #else
 #include <csignal>      // pthread_sigmask: the new program starts with every signal open
-#include <unistd.h>     // access, execv
+#include <unistd.h>     // access, execv, geteuid
 #endif
 #ifdef __APPLE__
 #include <crt_externs.h>    // _NSGetArgc, _NSGetArgv: the command line the restart repeats
@@ -39,6 +40,9 @@ namespace mm::platform {
 namespace {
 
 fs::path g_testProgram;   // a test's stand-in for the running program, empty for the real one
+
+/// The largest image a desktop takes, some 80 times its program: a URL serving more fills the disk before its header could refuse it.
+constexpr uint32_t kMaxProgramBytes = 256u * 1024 * 1024;
 
 /// The system and processor this build runs on, which a new program must be built for.
 constexpr ProgramSystem kThisSystem =
@@ -86,7 +90,7 @@ std::vector<uint8_t> readHead(const fs::path& path) {
 
 /// Whether the file's SHA-256 is the one the release names, compared case-insensitively.
 bool digestMatches(const fs::path& path, const char* expectedHex) {
-    if (std::strlen(expectedHex) != kSha256DigestSize * 2) return false;
+    if (!isHexDigits(expectedHex, kSha256DigestSize * 2)) return false;
     std::error_code ec;
     const auto fileBytes = fs::file_size(path, ec);
     if (ec) return false;
@@ -136,6 +140,10 @@ const char* swapIn(const fs::path& next, const fs::path& program) {
     fs::permissions(next, fs::perms::owner_all | fs::perms::group_read | fs::perms::group_exec | fs::perms::others_read | fs::perms::others_exec, ec);
     // The running program keeps a second name, so the rollback has it to put back and the program's own name holds a whole program at every moment.
     fs::create_hard_link(program, prev, ec);
+    if (ec) {   // a file system without hard links (FAT, exFAT, SMB) keeps a copy instead
+        ec.clear();
+        fs::copy_file(program, prev, ec);
+    }
     if (ec) return "error: cannot keep the running program as .prev";
     fs::rename(next, program, ec);   // rename(2), atomic: the name moves from the old program to the new one in one step
 #endif
@@ -151,9 +159,18 @@ struct ProgramWrite {
     size_t statusLen = 0;
     uint32_t* bytesOut = nullptr;
     uint32_t expected = 0;   ///< the image's size once known, for the progress line
+    const uint32_t* total = nullptr;   ///< a download's size as its headers name it, where `expected` is unknown up front
     uint32_t written = 0;
     std::string sha256;      ///< the digest a fetch names, empty for an upload
 };
+
+/// The progress line, "of N" once the image's size is known, from the upload's length or the download's headers.
+void sayProgress(const ProgramWrite& img) {
+    if (!img.status || !img.statusLen) return;
+    const uint32_t expected = img.expected ? img.expected : (img.total ? *img.total : 0);
+    if (expected) std::snprintf(img.status, img.statusLen, "flashing: %u of %u bytes", static_cast<unsigned>(img.written), static_cast<unsigned>(expected));
+    else std::snprintf(img.status, img.statusLen, "flashing: %u bytes", static_cast<unsigned>(img.written));
+}
 
 /// Drop an image that will not be installed.
 void abandon(OtaWrite& w) {
@@ -194,6 +211,7 @@ void fetchTask(const std::string& url, const std::string& fallbackUrl, const std
         OtaWrite w;
         if (!otaBegin(w, OtaTarget::App, 0, status, statusLen, bytesRead)) return;
         static_cast<ProgramWrite*>(w.impl)->sha256 = sha256Hex;
+        static_cast<ProgramWrite*>(w.impl)->total = bytesTotal;
         const int httpStatus = httpDownload(from->c_str(), 10 * 60 * 1000,
                                             [](void* user, const char* data, size_t n) {
                                                 return otaWrite(*static_cast<OtaWrite*>(user), reinterpret_cast<const uint8_t*>(data), n);
@@ -241,8 +259,16 @@ void setTestProgramPath(const fs::path& path) { g_testProgram = path; }
 
 UpdateMode updateMode() {
     if (inContainer()) return UpdateMode::Host;
-    const fs::path program = programPath();
-    return !program.empty() && folderWritable(program.parent_path()) ? UpdateMode::Self : UpdateMode::Manual;
+    const auto modeOf = [](const fs::path& program) {
+#ifndef _WIN32
+        // Root writes every folder, the package's seed among them, so a program run as root is updated by hand, never on a request from the network.
+        if (::geteuid() == 0) return UpdateMode::Manual;
+#endif
+        return !program.empty() && folderWritable(program.parent_path()) ? UpdateMode::Self : UpdateMode::Manual;
+    };
+    if (!g_testProgram.empty()) return modeOf(g_testProgram);
+    static const UpdateMode installed = modeOf(programPath());   // once, as the Firmware card shows it: Windows asks its folder with a probe file
+    return installed;
 }
 
 bool putProgramInPlace(const fs::path& next, const fs::path& program, const char* sha256Hex, char* status, size_t statusLen) {
@@ -292,6 +318,10 @@ bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf,
         say(statusBuf, statusBufLen, "error: this program is updated by its host or by hand");
         return false;
     }
+    if (contentLen > kMaxProgramBytes) {
+        say(statusBuf, statusBufLen, "error: the image is too large for a program");
+        return false;
+    }
     auto img = std::unique_ptr<ProgramWrite>(new (std::nothrow) ProgramWrite);
     if (!img) { say(statusBuf, statusBufLen, "error: out of memory"); return false; }
     img->program = programPath();
@@ -310,17 +340,17 @@ bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf,
 bool otaWrite(OtaWrite& w, const uint8_t* data, size_t len) {
     auto* img = static_cast<ProgramWrite*>(w.impl);
     if (!img) return false;
-    if (std::fwrite(data, 1, len, img->file) != len) {
-        say(img->status, img->statusLen, "error: cannot write the new program");
+    const char* failure = len > kMaxProgramBytes - img->written ? "error: the image is too large for a program"
+                          : std::fwrite(data, 1, len, img->file) != len ? "error: cannot write the new program"
+                                                                       : nullptr;
+    if (failure) {
+        say(img->status, img->statusLen, failure);
         abandon(w);
         return false;
     }
     img->written += static_cast<uint32_t>(len);
     if (img->bytesOut) *img->bytesOut = img->written;
-    if (img->status && img->statusLen) {
-        if (img->expected) std::snprintf(img->status, img->statusLen, "flashing: %u of %u bytes", static_cast<unsigned>(img->written), static_cast<unsigned>(img->expected));
-        else std::snprintf(img->status, img->statusLen, "flashing: %u bytes", static_cast<unsigned>(img->written));
-    }
+    sayProgress(*img);
     return true;
 }
 

@@ -4,7 +4,7 @@
 ///
 /// ## One slot, so the copy waits for the reboot
 ///
-/// An ESP32 writes its update into a second app slot; the Teensy's program flash holds one image, so the upload goes into the erased space above it, where nothing runs.
+/// An ESP32 writes its update into a second app slot; the Teensy's program flash holds one image, so the upload goes into the erased space above it, idle until the reboot.
 ///
 /// The copy over the program happens in `reboot()`, after the HTTP answer is out, in 64 KB blocks, the flash's largest erase, skipping every block the new image shares with the running one.
 ///

@@ -913,7 +913,7 @@ constexpr const char* updateModeName(UpdateMode m) {
 /// How this device takes a new version: a board installs its own images, a desktop installs itself when its program sits in a folder it may write, a container is its host's.
 UpdateMode updateMode();
 
-/// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a desktop checks `sha256Hex`, a board's image its own.
+/// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a desktop checks `sha256Hex` when it is non-empty, a board's image its own.
 bool http_fetch_to_ota(const char* url,
                        char* statusBuf, size_t statusBufLen,
                        uint32_t* bytesReadOut, uint32_t* bytesTotalOut,

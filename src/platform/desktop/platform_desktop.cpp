@@ -651,7 +651,7 @@ bool httpsAvailable() MM_NONBLOCKING {
     // Windows needs no libcurl: WinHTTP ships with the OS, so the send path is always compiled in.
     return true;
 #else
-    return false;   // built without libcurl: httpFetch can never succeed
+    return false;   // a build lacking libcurl: httpFetch fails every time
 #endif
 }
 
@@ -861,7 +861,7 @@ int httpDownload(const char* url, uint32_t timeoutMs, DownloadChunkFn take, void
     return transportFetch("GET", url, nullptr, timeoutMs, sink, true);
 #else
     (void)timeoutMs; (void)user; (void)total;
-    return 0;   // built without libcurl: a download fails, visibly
+    return 0;   // a build lacking libcurl: the download fails, visibly
 #endif
 }
 
@@ -3634,6 +3634,8 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
             esWake_[0] = esWake_[1] = -1;
             return true;   // the encoder runs; only the frames this thread would publish are absent
         }
+        close_on_exec(esWake_[0]);
+        close_on_exec(esWake_[1]);
 #endif
         {
             std::lock_guard<std::mutex> lk(esMutex_);

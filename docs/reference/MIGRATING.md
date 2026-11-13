@@ -39,11 +39,12 @@ A desktop build names its firmware `desktop-<os>-<arch>`, such as `desktop-linux
 
 The package now installs and starts `moonlight.service`, run as its own `moonlight` user from `/var/lib/moonlight/bin`, a folder that user owns, so the Devices map updates it like a board. The program moves from `/usr/bin/MoonLight` to `/usr/lib/moonlight/MoonLight`, the copy the service starts from, and the menu entry opens `http://localhost:8080/`.
 
-A hand-written `/etc/systemd/system/moonlight.service` overrides the packaged one and names the old path, so remove it before upgrading:
+A hand-written `/etc/systemd/system/moonlight.service`, or a drop-in in `/etc/systemd/system/moonlight.service.d/` that sets `ExecStart`, overrides the packaged one and names the old path, so remove it before upgrading:
 
 ```
 sudo systemctl disable --now moonlight
 sudo rm /etc/systemd/system/moonlight.service
+sudo rm -r /etc/systemd/system/moonlight.service.d   # where a drop-in sets ExecStart
 ```
 
 Settings now live in `/var/lib/moonlight/MoonLight/`. Copy the old user's across once, `pi` here, after the upgrade:

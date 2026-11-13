@@ -122,7 +122,7 @@ test("an ESP32 device is never offered a desktop archive to flash", () => {
     }
 });
 
-test("a desktop is never offered an ESP32 firmware, downloading or updating itself", () => {
+test("a desktop is offered desktop programs alone, downloading or updating itself", () => {
     // Whichever OS the page runs on, no ESP32 image is a desktop's download or its update.
     for (const key of ["esp32", "esp32s3-n16r8", "esp32p4", "esp32-eth"]) {
         assert.equal(isCompatible(DESKTOP_DOWNLOAD, key), false, `download mode must reject ${key}`);

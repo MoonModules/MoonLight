@@ -97,8 +97,17 @@ struct Scratch {
     }
 };
 
-/// A container's program is its host's to replace, so the self-update cases run on a native host only.
-const auto kSelfUpdating = doctest::skip(platform::inContainer());
+/// Whether this test runs as root, whose program is updated by hand.
+bool runningAsRoot() {
+#ifdef _WIN32
+    return false;
+#else
+    return ::geteuid() == 0;
+#endif
+}
+
+/// A container's program is its host's to replace and root's is updated by hand, so the self-update cases run as a native user only.
+const auto kSelfUpdating = doctest::skip(platform::inContainer() || runningAsRoot());
 
 }  // namespace
 
@@ -106,11 +115,8 @@ TEST_CASE("a native program in a folder it can write updates itself, one in a fo
     Scratch s("mode");
     CHECK(platform::updateMode() == platform::UpdateMode::Self);
 #ifndef _WIN32
-    // Root may write any folder whatever its mode, so this half holds for an ordinary user only.
-    if (::geteuid() != 0) {
-        fs::permissions(s.dir, fs::perms::owner_read | fs::perms::owner_exec);
-        CHECK(platform::updateMode() == platform::UpdateMode::Manual);
-    }
+    fs::permissions(s.dir, fs::perms::owner_read | fs::perms::owner_exec);
+    CHECK(platform::updateMode() == platform::UpdateMode::Manual);
 #endif
     CHECK(std::string(platform::updateModeName(platform::UpdateMode::Self)) == "self");
     CHECK(std::string(platform::updateModeName(platform::UpdateMode::Host)) == "host");
@@ -165,4 +171,14 @@ TEST_CASE("a desktop has one program: MoonBase and the radio chip are refused") 
     CHECK_FALSE(platform::otaBegin(w, platform::OtaTarget::MoonBase, 0, status, sizeof(status), &written));
     CHECK_FALSE(platform::otaBegin(w, platform::OtaTarget::Coprocessor, 0, status, sizeof(status), &written));
     CHECK(std::string(status).rfind("error:", 0) == 0);
+}
+
+TEST_CASE("an image larger than a program could be is refused before a byte is written" * kSelfUpdating) {
+    Scratch s("too_large");
+    char status[64] = {};
+    uint32_t written = 0;
+    platform::OtaWrite w;
+    CHECK_FALSE(platform::otaBegin(w, platform::OtaTarget::App, size_t{1} << 30, status, sizeof(status), &written));
+    CHECK(std::string(status).find("too large") != std::string::npos);
+    CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
 }
