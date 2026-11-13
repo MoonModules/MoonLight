@@ -183,7 +183,7 @@ All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang/GCC (macO
 **A clean local build is not proof the Windows build passes.** MSVC's `/W4` flags things Clang/GCC's `-Wall -Wextra` don't, most commonly **signed/unsigned mismatch in comparisons** (C4389), e.g. `(x & 1) == 1u` where the left side is signed: harmless logically, fatal under `/WX`. This has slipped past the macOS gate and broken Windows CI more than once. So:
 
 - In a comparison, keep both sides the same signedness, don't mix a signed expression with an unsigned literal (`== 1`, not `== 1u`, when the other side is signed). Watch `& `, `%`, and subtraction results, which carry the signedness of their operands.
-- A change that only built+passed on macOS/Linux is **not** verified for Windows. The Windows CI job (`release.yml`) is the real gate for MSVC-only warnings; let it run before considering a `src/`-touching change done, or build with MSVC locally if you have it.
+- A change that only built+passed on macOS/Linux is **not** verified for Windows. The Windows CI job (`release.yml`, on every pull request touching `src/` as well as on main) is the real gate for MSVC-only warnings; let it run before considering a `src/`-touching change done, or build with MSVC locally if you have it.
 
 Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is [Set up the editor](../moonwalk.md#setup-editor).
 

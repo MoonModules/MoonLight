@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <new>      // std::nothrow_t, for InternalRamObject's allocation
-#include "platform_config.h"  // hasOta / hasPsram / …: flags this header's contract refers to
+#include "platform_config.h"  // hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
 
 /// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
@@ -904,11 +904,20 @@ LookupStep resolveHostStep(const char* name, uint8_t ip[4]);
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
 
-/// Fetch a firmware image from `url` and flash it to the next OTA partition, returning at once; `fallbackUrl` is tried where the first cannot be opened.
+/// How this device takes a new version: it installs one itself, the host replaces it (a container), or someone does by hand (a program started from a terminal or an app).
+enum class UpdateMode : uint8_t { Self, Host, Manual };
+/// The mode's name, as `/api/system` reports it.
+constexpr const char* updateModeName(UpdateMode m) {
+    return m == UpdateMode::Self ? "self" : m == UpdateMode::Host ? "host" : "manual";
+}
+/// How this device takes a new version: a board installs its own images, a desktop installs itself when its program sits in a folder it may write, a container is its host's.
+UpdateMode updateMode();
+
+/// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a desktop checks `sha256Hex`, a board's image its own.
 bool http_fetch_to_ota(const char* url,
                        char* statusBuf, size_t statusBufLen,
                        uint32_t* bytesReadOut, uint32_t* bytesTotalOut,
-                       const char* fallbackUrl = nullptr);
+                       const char* fallbackUrl = nullptr, const char* sha256Hex = nullptr);
 
 /// An image written as its bytes arrive, which whoever receives it pushes a chunk at a time.
 struct OtaWrite { void* impl = nullptr; };

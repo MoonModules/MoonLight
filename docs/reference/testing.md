@@ -243,7 +243,7 @@ Assert those through a scalar the list drives rather than through the list itsel
 { "name": "it-survived", "op": "expect_control", "id": "System", "key": "deviceName", "equals": "MM-Bench" }
 ```
 
-On a board that is the reboot the endpoint performs. On a desktop the endpoint exits the process and nothing restarts it, so the live runner relaunches the binary with the data directory the exiting instance was using: a restart that came back on different files would prove nothing. In-process the op skips, because the scheduler is the process and exiting it would end the run.
+Every device restarts itself on the endpoint: a board reboots, and a desktop starts its program again in place, on the same data directory, so what survives the restart is what was saved. In-process the op skips, because the scheduler is the process and restarting it would end the run.
 
 ### Walking first setup, with the computer as the phone
 

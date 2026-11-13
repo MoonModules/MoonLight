@@ -43,6 +43,17 @@ on:
       - 'docs/**'
       - 'mooninstaller/**'
       - 'mkdocs.yml'
+  # A pull request builds the desktop programs and uploads them as workflow artifacts, to install through a device's Firmware card before the
+  # merge; the release, container and Pages jobs run on main and tags only, so a pull request publishes nothing. The ESP32 matrix is built
+  # locally and the Teensy by test.yml, so they stay off pull requests.
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'moondeck/ci/**'
+      - 'CMakeLists.txt'
+      - 'library.json'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
       tag:
@@ -58,7 +69,8 @@ on:
 # their own concurrency group so a tag and a branch can build in parallel.
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  # A newer push to a pull request replaces its running build; a release always finishes.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Minimal default permissions for every job (read-only). The release job
 # overrides this locally with the write/id-token scopes it needs to publish
@@ -101,6 +113,7 @@ jobs:
   # standard bridge. This is the ONLY firmware list in CI, and the chip is the IDF target.
   firmwares:
     needs: verify-version
+    if: github.event_name != 'pull_request'   # and build-esp32 with it, which needs this list
     runs-on: ubuntu-latest
     outputs:
       list: ${{ steps.gen.outputs.list }}
@@ -432,6 +445,7 @@ jobs:
   # The Teensy 4.1 firmware, a HEX for teensy_loader_cli or PJRC's Teensy app; test.yml builds it on every PR as well.
   build-teensy:
     needs: verify-version
+    if: github.event_name != 'pull_request'   # test.yml builds the Teensy firmwares on a pull request
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

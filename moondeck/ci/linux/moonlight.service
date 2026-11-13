@@ -1,0 +1,34 @@
+# MoonLight as a service: installed and started by the .deb, run as its own user from a folder that user owns, so it installs its own
+# new version (POST /api/firmware/url) and restarts on it in place; Restart= brings it back after a crash. https://moonmodules.org/MoonLight/reference/installing-on-linux/
+[Unit]
+Description=MoonLight
+Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux/
+After=network-online.target
+Wants=network-online.target
+# Three starts in two minutes end in the failed state, which starts the rollback: a new program that keeps failing before it has run a minute gives way to the one before it.
+StartLimitIntervalSec=120
+StartLimitBurst=3
+OnFailure=moonlight-rollback.service
+
+[Service]
+User=moonlight
+Group=moonlight
+StateDirectory=moonlight
+WorkingDirectory=/var/lib/moonlight
+Environment=XDG_DATA_HOME=/var/lib/moonlight
+ExecStart=/var/lib/moonlight/bin/MoonLight
+Restart=always
+RestartSec=5
+# systemd.exec's standard confinement: the firmware routes are open to the LAN, so the program gets no privilege, one capability and no write
+# access beyond its own folder. /dev stays open for HDMI out through /dev/dri, and writable executable memory for the MoonLive compiler.
+NoNewPrivileges=yes
+# CAP_NET_RAW alone, for the raw Ethernet frames a ColorLight card takes; ambient, so it survives the in-place restart.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+ProtectSystem=strict
+ReadWritePaths=/var/lib/moonlight
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -129,6 +129,7 @@
 #include "platform/usbvideo_frames.h"   // areaMean: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
 #include "core/util/H264Bitstream.h"  // where the encoder's frames begin and end
+#include "host_update.h"              // inContainer: the label and the update mode both read it
 
 #include <algorithm>
 #include <chrono>
@@ -252,9 +253,11 @@ inline void no_sigpipe(int fd) {
     (void)fd;
 #endif
 }
+// Closed when the program restarts in place (execv), so the new one binds the same port; every descriptor that outlives a call takes it.
+inline void close_on_exec(int fd) { ::fcntl(fd, F_SETFD, FD_CLOEXEC); }
 inline int open_sock(int domain, int type, int protocol) {
     const int fd = ::socket(domain, type, protocol);
-    if (fd >= 0) no_sigpipe(fd);
+    if (fd >= 0) { no_sigpipe(fd); close_on_exec(fd); }
     return fd;
 }
 inline int make_nonblocking(int fd) {
@@ -655,14 +658,25 @@ bool httpsAvailable() MM_NONBLOCKING {
 namespace {
 std::atomic<HttpFetchFn> testHttpFetch{nullptr};
 
-/// Where an answer collects as it arrives, refusing what would not fit rather than truncating it.
+/// Where an answer collects as it arrives, refusing what would not fit rather than truncating it, or a stream handing each chunk on.
 struct FetchSink {
     char*  body;
     size_t cap;
     size_t len = 0;
     bool   tooBig = false;
-    /// Take `n` more bytes, false once they would not fit with the terminator.
+    bool   refused = false;             ///< the stream turned a chunk down, which ends the transfer as failed
+    DownloadChunkFn stream = nullptr;   ///< a download's receiver, which takes the answer a chunk at a time
+    void*  user = nullptr;
+    uint32_t* total = nullptr;          ///< where a download learns the answer's size, once its headers name it
+    /// Whether the answer was cut short, by a body too big for the caller or a chunk the stream refused.
+    bool failed() const { return tooBig || refused; }
+    /// Take `n` more bytes, false once they would not fit with the terminator or the stream refuses them.
     bool take(const char* data, size_t n) {
+        if (stream) {
+            if (stream(user, data, n)) return true;
+            refused = true;
+            return false;
+        }
         if (!body || cap == 0) return true;   // a caller that keeps no answer
         if (len + n + 1 > cap) { tooBig = true; return false; }
         std::memcpy(body + len, data, n);
@@ -685,8 +699,22 @@ bool tlsRoom(const char* url) {
 namespace {
 
 #ifdef _WIN32
+/// The answer's body into `sink`, its size into `sink.total` when asked; a download takes a 200's body alone.
+void readAnswer(HINTERNET request, DWORD status, FetchSink& sink) {
+    DWORD contentLength = 0, lengthSize = sizeof(contentLength);
+    if (sink.total && WinHttpQueryHeaders(request, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
+                                          &contentLength, &lengthSize, WINHTTP_NO_HEADER_INDEX))
+        *sink.total = contentLength;
+    if (sink.stream && status != 200u) return;   // DWORD: an unsigned literal keeps MSVC's /W4 quiet
+    char chunk[1024];
+    DWORD got = 0;
+    while (WinHttpReadData(request, chunk, sizeof(chunk), &got) && got > 0)
+        if (!sink.take(chunk, got)) break;
+}
+
 /// One request over WinHTTP into `sink`; the status, or 0.
-int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink) {
+int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink,
+                   bool followRedirects = false) {
     // The system's own transport and certificate store, nothing vendored; the URL is split by WinHTTP's own splitter, never by hand.
     const int wideLen = MultiByteToWideChar(CP_UTF8, 0, url, -1, nullptr, 0);
     if (wideLen <= 0) return 0;
@@ -722,10 +750,10 @@ int transportFetch(const char* method, const char* url, const char* reqBody, uin
                                                    WINHTTP_NO_REFERER,
                                                    WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                    secure ? WINHTTP_FLAG_SECURE : 0)) {
-            // No redirect following: a server moving the request somewhere the caller never named is refused.
+            // A request stays at the address the caller named, a redirect refused; a download follows one, its digest proving the file.
             DWORD noRedirects = WINHTTP_DISABLE_REDIRECTS;
-            WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE,
-                             &noRedirects, sizeof(noRedirects));
+            if (!followRedirects)
+                WinHttpSetOption(request, WINHTTP_OPTION_DISABLE_FEATURE, &noRedirects, sizeof(noRedirects));
 
             const char* payload = reqBody ? reqBody : "";
             const DWORD payloadLen = static_cast<DWORD>(std::strlen(payload));
@@ -741,10 +769,7 @@ int transportFetch(const char* method, const char* url, const char* reqBody, uin
                                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &statusSize,
                                         WINHTTP_NO_HEADER_INDEX)) {
                     result = static_cast<int>(status);
-                    char chunk[1024];
-                    DWORD got = 0;
-                    while (WinHttpReadData(request, chunk, sizeof(chunk), &got) && got > 0)
-                        if (!sink.take(chunk, got)) break;
+                    readAnswer(request, status, sink);
                 }
             }
             WinHttpCloseHandle(request);
@@ -752,11 +777,35 @@ int transportFetch(const char* method, const char* url, const char* reqBody, uin
         WinHttpCloseHandle(connection);
     }
     WinHttpCloseHandle(session);
-    return sink.tooBig ? 0 : result;
+    return sink.failed() ? 0 : result;
 }
 #elif defined(MM_HAVE_CURL)
+/// A download's options, when `download` asks for them: redirects followed, on https only when it starts there, an error page refused, the size to `sink.total`.
+void followAsDownload(CURL* curl, const char* url, FetchSink& sink, bool download) {
+    if (!download) return;
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+    // A redirect stays on https, as WinHTTP's default policy keeps it; the string option arrived in libcurl 7.85, the bitmask before it.
+    if (std::strncmp(url, "https://", 8) == 0) {
+#if LIBCURL_VERSION_NUM >= 0x075500
+        curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+#else
+        curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, static_cast<long>(CURLPROTO_HTTPS));
+#endif
+    }
+    if (!sink.total) return;
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &sink);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, +[](void* user, curl_off_t downloadTotal, curl_off_t, curl_off_t, curl_off_t) -> int {
+        *static_cast<FetchSink*>(user)->total = static_cast<uint32_t>(downloadTotal);
+        return 0;
+    });
+}
+
 /// One request over libcurl into `sink`; the status, or 0.
-int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink) {
+int transportFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs, FetchSink& sink,
+                   bool followRedirects = false) {
     // The library's global init is not thread-safe and must run once, so a function-local static does it: the first call initializes and every later one skips.
     static const bool inited = (curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK);
     if (!inited) return 0;
@@ -772,8 +821,8 @@ int transportFetch(const char* method, const char* url, const char* reqBody, uin
     // Both verifications are the defaults, set explicitly so a future edit cannot turn them off quietly: without them the transport proves nothing about who answered.
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
-    // No redirect following: a server moving the request somewhere the caller never named is refused.
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+    // A request stays at the address the caller named, a redirect refused; a download follows one, its digest proving the file.
+    followAsDownload(curl, url, sink, followRedirects);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);   // no SIGALRM in a threaded process
 
     struct curl_slist* headers = reqBody ? curl_slist_append(nullptr, "Content-Type: application/json") : nullptr;
@@ -792,11 +841,25 @@ int transportFetch(const char* method, const char* url, const char* reqBody, uin
 
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-    return rc == CURLE_OK && !sink.tooBig ? static_cast<int>(status) : 0;
+    return rc == CURLE_OK && !sink.failed() ? static_cast<int>(status) : 0;
 }
 #endif
 
 }  // namespace
+
+int httpDownload(const char* url, uint32_t timeoutMs, DownloadChunkFn take, void* user, uint32_t* total) {
+    if (!url || !*url || !take) return 0;
+#if defined(_WIN32) || defined(MM_HAVE_CURL)
+    FetchSink sink{nullptr, 0};
+    sink.stream = take;
+    sink.user = user;
+    sink.total = total;
+    return transportFetch("GET", url, nullptr, timeoutMs, sink, true);
+#else
+    (void)timeoutMs; (void)user; (void)total;
+    return 0;   // built without libcurl: a download fails, visibly
+#endif
+}
 
 int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t timeoutMs,
               char* body, size_t bodyLen) {
@@ -814,16 +877,24 @@ int httpFetch(const char* method, const char* url, const char* reqBody, uint32_t
 #endif
 }
 
+bool inContainer() {
+#if defined(__linux__)
+    // The marker the runtime itself creates, checked once, since a process cannot move in or out of a container while it runs.
+    static const bool inside = std::filesystem::exists("/.dockerenv");
+    return inside;
+#else
+    return false;
+#endif
+}
+
 const char* hostPlatform() {
     // The release packaging's names, so a breakdown lines up with the downloads. A container reports as one, since that changes how it behaves.
 #if defined(__linux__)
-    // The marker the runtime itself creates, checked once, since a process cannot move in or out of a container while it runs.
-    static const bool inContainer = std::filesystem::exists("/.dockerenv");
     // The architecture rides along, since a container on a small board and one on a server are different deployments that the label alone made one slice.
   #if defined(__aarch64__)
-    if (inContainer) return "docker-arm64";
+    if (inContainer()) return "docker-arm64";
   #else
-    if (inContainer) return "docker-x64";
+    if (inContainer()) return "docker-x64";
   #endif
   #if defined(__aarch64__)
     // Every small arm board lands here, and the breakdown exists to count them: naming the other architecture would report each one as a PC.
@@ -1694,7 +1765,7 @@ bool ethBindRawInterface(const char* ifName) {
     if (!ifName || !ifName[0]) return true;   // explicit return to capture mode
 
 #if defined(__linux__)
-    const int fd = ::socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    const int fd = ::socket(AF_PACKET, SOCK_RAW | SOCK_CLOEXEC, htons(ETH_P_ALL));
     if (fd < 0) return false;
     const unsigned idx = if_nametoindex(ifName);
     if (idx == 0) { ::close(fd); return false; }
@@ -1707,7 +1778,7 @@ bool ethBindRawInterface(const char* ifName) {
     for (int i = 0; i < 99; i++) {
         char dev[24];
         std::snprintf(dev, sizeof(dev), "/dev/bpf%d", i);
-        const int fd = ::open(dev, O_RDWR);
+        const int fd = ::open(dev, O_RDWR | O_CLOEXEC);
         if (fd < 0) continue;              // busy or no permission, try the next
         ifreq ifr = {};
         std::snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", ifName);
@@ -2106,28 +2177,6 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
 LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
-// No update partition here, and the route guards on the capability, so this stub exists for compile coverage only.
-bool http_fetch_to_ota(const char* /*url*/,
-                       char* statusBuf, size_t statusBufLen,
-                       uint32_t* bytesReadOut, uint32_t* bytesTotalOut,
-                       const char* /*fallbackUrl*/) {
-    if (statusBuf && statusBufLen > 0) {
-        std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    }
-    if (bytesReadOut) *bytesReadOut = 0;
-    if (bytesTotalOut) *bytesTotalOut = 0;
-    return false;
-}
-
-// No OTA partition on desktop, call sites guard with `if constexpr (mm::platform::hasOta)`.
-bool otaBegin(OtaWrite&, OtaTarget, size_t, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
-    if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
-    if (bytesOut) *bytesOut = 0;
-    return false;
-}
-bool otaWrite(OtaWrite&, const uint8_t*, size_t) { return false; }
-bool otaEnd(OtaWrite&, bool) { return false; }
-
 // No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
 static const char* testMoonBaseVersion_ = nullptr;
 static const char* testMoonBaseBuilt_ = nullptr;
@@ -2277,13 +2326,6 @@ bool improvProvisioningInit(const ImprovDeviceInfo& /*info*/,
 }
 void improvPoll() MM_NONBLOCKING {}
 
-void reboot() {
-    // The device is the host process, so exit cleanly and let the supervisor restart it, which matches what the browser's reconnect expects.
-    std::printf("platform::reboot(): exiting\n");
-    std::fflush(stdout);
-    // Exiting is the reboot here, there being no firmware to restart into; the thread-safety warning describes exactly the abrupt teardown a reboot models. NOLINTNEXTLINE(concurrency-mt-unsafe)
-    std::exit(0);
-}
 
 // UdpSocket
 
@@ -2575,6 +2617,7 @@ TcpConnection TcpServer::accept() {
     int clientFd = ::accept(fd_, nullptr, nullptr);
     if (clientFd < 0) return TcpConnection();
     no_sigpipe(clientFd);
+    close_on_exec(clientFd);
     // A non-blocking client socket, since a blocking read's timeout froze the loop when the bytes had not landed on accept. The request is read across a few rapid retries.
     make_nonblocking(clientFd);
 #endif

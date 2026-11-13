@@ -12,6 +12,25 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 - **The card is a fine home for it.** MoonLight writes to disk only when settings change; the risk is the operating system's own writes.
 - **HDMI out** works on any machine whose kernel drives its HDMI port, a Pi, a Rockchip board or an Intel or AMD mini PC, through the kernel's display interface (DRM/KMS). Two conditions: no desktop holds the screen, so a Lite or server install, or a desktop install set to boot to the console (`sudo systemctl set-default multi-user.target`), and the user running MoonLight is in the `video` group, which Raspberry Pi OS's first user already is. The first connected HDMI port is the one shown.
 
+## The service
+
+The package installs MoonLight as `moonlight.service` and starts it, so the machine runs MoonLight from boot on, and the Devices map updates it as it updates a board.
+
+| | |
+|---|---|
+| **Program** | `/var/lib/moonlight/bin/MoonLight`, copied from `/usr/lib/moonlight/MoonLight` on every install |
+| **User** | `moonlight`, an unprivileged system user in the `video` group for HDMI out |
+| **Rights** | Writes its own folder alone and holds one capability, `CAP_NET_RAW`, for the raw Ethernet frames a ColorLight card takes |
+| **Config** | `/var/lib/moonlight/MoonLight/.config/` |
+| **Logs** | `journalctl -u moonlight` |
+| **Page** | `http://localhost:8080/`, which the menu entry opens |
+
+**Updating, as a board updates.** The service owns the folder its program runs from, so it installs a new version of itself through the same routes, Firmware card and map as a board, from the release's `firmware-desktop-linux-<arch>-v….bin`. It checks the image is a program for this processor and, from the map, against the SHA-256 GitHub publishes for it; it keeps the running program as `MoonLight.prev`, puts the new one in its place and restarts on it in place, the same process systemd started. Its `/api/system` says `update: self`. A package-managed program that updates itself is uncommon on Linux, where the textbook is an APT repository; that needs root to update from the map, and the network-facing service stays unprivileged, so the service owns a copy of the program the package seeds, as Syncthing does.
+
+**Rolling back.** A new program stays pending, marked by `MoonLight.pending`, until it has run a minute. A pending program that fails three starts within two minutes gives way to `MoonLight.prev`, through `moonlight-rollback.service`; a confirmed one stays in place through any number of restarts. An `apt install` is the administrator's choice: it puts the package's program in place, older or newer, and drops `MoonLight.prev`.
+
+**Running it by hand**, to see its log in a terminal: `sudo systemctl stop moonlight`, then `/usr/lib/moonlight/MoonLight`, which keeps its settings in your own `~/.local/share/MoonLight/`. That copy sits in a folder only root writes, so it is updated by hand; the tarball unpacked in a folder of your own updates itself, restarting in its terminal window.
+
 ## Docker
 
 **Use `--network host`.** The web UI and unicast fixture output work through ordinary port mapping (`-p 8080:8080`). mDNS discovery and Art-Net's broadcast mode are multicast, and neither crosses a bridge network. Host networking is what lets a container find boards and be found by them. Verified on a NanoPi R28S driving a ColorLight card.
@@ -23,6 +42,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 | **Config** | `/data/MoonLight/.config/` in the volume (`XDG_DATA_HOME=/data`) |
 | **Identity** | `/data/MoonLight/.config/identity`, written on the first run |
 | **Logs** | standard output, so `docker logs` |
+| **Updates** | the host's, by Watchtower or Podman's auto-update; the Devices map says so rather than offering an update |
 | **Output** | Art-Net UDP 6454, DDP 4048 (set by `ddp_port`), E1.31 5568, all outbound |
 | **Capabilities** | none: it binds its port as an ordinary process |
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
@@ -34,8 +54,8 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 
 | | Package (`.deb`) | Docker |
 |---|---|---|
-| Updates | download the new `.deb` | `docker pull` and recreate |
-| Survives a reboot | needs a systemd unit | `--restart unless-stopped` |
+| Updates | from the Devices map, by itself | `docker pull` and recreate, or Watchtower |
+| Survives a reboot | the service it installs | `--restart unless-stopped` |
 | Runs on | Debian family, glibc 2.35+ | any Linux with Docker |
 | Disk | the binary plus libraries the system already has | an image carrying its own libraries |
 | Isolation | none: an ordinary program | its own filesystem and process space |

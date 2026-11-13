@@ -172,6 +172,26 @@ endif()
 if(MM_VERSION)
     set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
+# A desktop build names its firmware as the release names its program, firmware-desktop-<os>-<arch>-v<version>.bin (package_desktop.py),
+# so the Firmware card, the map and Home Assistant install it as they install a board, which takes its name from esp32/main/CMakeLists.txt.
+if(APPLE)
+    set(MM_DESKTOP_OS macos)
+elseif(WIN32)
+    set(MM_DESKTOP_OS windows)
+else()
+    set(MM_DESKTOP_OS linux)
+endif()
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" MM_DESKTOP_CPU)
+if(MM_DESKTOP_CPU MATCHES "^(arm64|aarch64)$")
+    set(MM_DESKTOP_CPU arm64)
+elseif(MM_DESKTOP_CPU MATCHES "^(x86_64|amd64)$")
+    set(MM_DESKTOP_CPU x64)
+else()
+    unset(MM_DESKTOP_CPU)   # a processor the release packages no program for: the name stays unknown
+endif()
+if(MM_DESKTOP_CPU)
+    set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="desktop-${MM_DESKTOP_OS}-${MM_DESKTOP_CPU}")
+endif()
 
 # Platform library (desktop). moonlive_emit.cpp is the desktop MoonLive backend (host-ISA
 # codegen) — it lives here because emitted machine code is platform/ISA-specific.
@@ -179,6 +199,7 @@ add_library(mm_platform
     src/platform/desktop/platform_desktop.cpp
     src/platform/desktop/platform_desktop_audio.cpp
     src/platform/desktop/platform_desktop_hdmi.cpp
+    src/platform/desktop/platform_desktop_update.cpp
     src/platform/desktop/moonlive_emit_noarch.cpp
     src/platform/desktop/moonlive_asm_noarch.cpp
     src/platform/desktop/moonlive_emit_arm64.cpp

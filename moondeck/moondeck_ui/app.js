@@ -1396,10 +1396,12 @@ function renderDevices() {
         const otaBtn = document.createElement("button");
         otaBtn.className = "device-inject";       // same compact style as inject
         const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
+        // A desktop's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
+        const isDesktop = otaFw.startsWith("desktop-");
         otaBtn.textContent = "OTA";
-        otaBtn.disabled = !otaFw;
-        otaBtn.title = otaFw
-            ? `Flash the local ${otaFw} build to this device over WiFi (no USB)`
+        otaBtn.disabled = !otaFw || isDesktop;
+        otaBtn.title = isDesktop ? "A desktop updates from its own Firmware card"
+            : otaFw ? `Flash the local ${otaFw} build to this device over WiFi (no USB)`
             : "OTA needs the device's firmware known (discover it first)";
         otaBtn.addEventListener("click", async (e) => {
             e.preventDefault();

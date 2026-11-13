@@ -4965,6 +4965,9 @@
     "appVersion": {
      "line": "The installed version."
     },
+    "update": {
+     "line": "How this device takes a new version: self, host or manual."
+    },
     "moonbaseMismatch": {
      "line": "The installed version."
     },

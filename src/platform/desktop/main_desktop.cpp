@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "stop_signal.h"   // stopOnSigterm
+#include "host_update.h"   // confirmProgramWhenStable
 #ifdef MM_MAC_SCREEN
 #include <atomic>
 #include <thread>
@@ -138,6 +139,7 @@ int main(int argc, char** argv) {
     // Unbuffer so every line lands in MoonLight.log before a crash.
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
+    mm::platform::confirmProgramWhenStable();   // a newly installed program proves itself by staying up, which ends its rollback window
 
 #ifdef _WIN32
     // Winsock is initialized by a static RAII guard in platform_desktop.cpp, so it covers test binaries too (they link mm_platform but have their own main()). Nothing to do here.

@@ -417,7 +417,7 @@ paths:
     post:
       tags: [Firmware]
       operationId: installFirmwareUrl
-      summary: Installs firmware the device fetches itself; with a MoonBase it reboots into MoonBase to install.
+      summary: Installs firmware the device fetches itself and restarts on it; with a MoonBase it reboots into MoonBase to install.
       requestBody: { $ref: "#/components/requestBodies/Url" }
       responses:
         "202":
@@ -521,7 +521,7 @@ paths:
             schema:
               type: object
               properties:
-                url: { type: string, description: "The image to install; omitted, the release's matching `shared-c6-slave-<version>.bin`." }
+                url: { type: string, maxLength: 255, description: "The image to install; omitted, the release's matching `shared-c6-slave-<version>.bin`." }
       responses:
         "202": { $ref: "#/components/responses/Ok" }
         "400": { $ref: "#/components/responses/Error" }
@@ -699,7 +699,8 @@ components:
             type: object
             required: [url]
             properties:
-              url: { type: string, pattern: "^https?://", description: The image to fetch. }
+              url: { type: string, pattern: "^https?://", maxLength: 255, description: The image to fetch. }
+              sha256: { type: string, pattern: "^[0-9a-fA-F]{64}$", description: "The image's SHA-256, which a desktop checks before it installs its new program; a board's image carries its own." }
     Image:
       required: true
       description: The binary image, sent with a Content-Length.
@@ -785,7 +786,11 @@ components:
       properties:
         version: { type: string, description: The firmware version. }
         build: { type: string, description: The build id. }
-        firmware: { type: string, description: "The firmware variant, unknown on a desktop." }
+        firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a desktop's desktop-<os>-<arch>." }
+        update:
+          type: string
+          enum: [self, host, manual]
+          description: "How it takes a new version: it installs one itself (a board, or a desktop whose program sits in a folder it can write), its host replaces it (a container), or someone does by hand (a program in a folder it cannot write)."
         mac: { type: string, description: "The MAC address, the device identity." }
         board: { type: string, description: "The board model tooling set, empty until set." }
         chip: { type: string }

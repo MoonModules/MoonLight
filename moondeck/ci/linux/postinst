@@ -1,0 +1,23 @@
+#!/bin/sh
+# The package's install: a service user, the program it runs in a folder that user owns, and the service running.
+set -e
+bin=/var/lib/moonlight/bin
+if [ "$1" = configure ]; then
+    getent passwd moonlight >/dev/null || useradd --system --user-group --home-dir /var/lib/moonlight --shell /usr/sbin/nologin moonlight
+    # HDMI out draws through the kernel's display devices, which the video group opens.
+    if getent group video >/dev/null; then usermod -a -G video moonlight; fi
+    install -d -o moonlight -g moonlight /var/lib/moonlight "$bin"
+    # An apt install is the administrator's choice and wins over a self-update, older or newer, so the copy the rollback would put back goes too.
+    install -o moonlight -g moonlight -m 755 /usr/lib/moonlight/MoonLight "$bin/MoonLight.next"
+    mv -f "$bin/MoonLight.next" "$bin/MoonLight"
+    rm -f "$bin/MoonLight.prev" "$bin/MoonLight.pending"
+    if [ -e /etc/systemd/system/moonlight.service ]; then
+        echo "moonlight: /etc/systemd/system/moonlight.service overrides the packaged service: remove it and run 'systemctl daemon-reload' (MIGRATING)" >&2
+    fi
+fi
+# Where systemd runs: a container build unpacks the package and runs none of this.
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl enable moonlight.service
+    systemctl restart moonlight.service
+fi

@@ -121,6 +121,7 @@ add_executable(mm_tests
     unit/core/unit_platform_hdmi.cpp
     unit/core/unit_platform_worker.cpp
     unit/core/unit_platform_httpfetch.cpp
+    unit/core/unit_platform_update.cpp
     unit/core/unit_HostList.cpp
     unit/core/unit_Addressing.cpp
     unit/core/unit_HostResolver.cpp
@@ -134,6 +135,7 @@ add_executable(mm_tests
     unit/core/unit_MoonCloudModule.cpp
     unit/core/unit_sha1.cpp
     unit/core/unit_sha256.cpp
+    unit/core/unit_ProgramImage.cpp
     unit/core/unit_MoonStatsReport.cpp
     unit/core/unit_SystemModule.cpp
     unit/core/unit_Services.cpp

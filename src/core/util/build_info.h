@@ -12,7 +12,7 @@ extern const char* const kVersion;
 extern const char* const kBuildDate;
 /// The short git hash it was built from, `+` when the tree was dirty, `nogit` without a checkout: what landed on a board.
 extern const char* const kBuildId;
-/// The compiled-binary variant (`MM_FIRMWARE_NAME`), such as `esp32-eth`, or `unknown` for a local desktop build.
+/// The compiled-binary variant (`MM_FIRMWARE_NAME`), such as `esp32-eth`, or `desktop-linux-arm64` for a desktop (CMakeLists.txt), `unknown` on a processor no release packages.
 extern const char* const kFirmwareName;
 /// The release channel it shipped on (`MM_RELEASE`), such as `latest` or `v1.0.0`, empty for a local build.
 extern const char* const kRelease;

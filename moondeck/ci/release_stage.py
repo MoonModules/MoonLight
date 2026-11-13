@@ -60,7 +60,7 @@ RUN apt-get update \\
  && mkdir -p /deps \\
  && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \\
  && test -n "$pulse" \\
- && { ldd /rootfs/usr/bin/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \\//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\\+\\+|libgcc_s)\\.so' | xargs -I{} cp -L {} /deps/
+ && { ldd /rootfs/usr/lib/moonlight/MoonLight; ldd "$pulse"; echo "libpulse.so.0 => $pulse (0)"; } | awk '/=> \\//{print $3}' | sort -u | grep -vE '/(libc|libm|libstdc\\+\\+|libgcc_s)\\.so' | xargs -I{} cp -L {} /deps/
 # Both binaries are built on Ubuntu 22.04 and need glibc 2.35 at most, which
 # check_glibc_floor.py enforces, so debian13 (2.41) runs them. See ../../Dockerfile.
 # Pinned by digest, not by tag: `cc-debian13` is mutable, so an unpinned base means two
@@ -69,7 +69,7 @@ RUN apt-get update \\
 # This digest is the multi-arch INDEX, not one platform's manifest, so the same pin serves
 # amd64 and arm64; buildx resolves the right manifest per platform.
 FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd5e2225236735cca0070ed11c78
-COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
+COPY --from=fetch /rootfs/usr/lib/moonlight/MoonLight /usr/bin/MoonLight
 # The libraries the loader resolved, collected in the fetch stage. Without them the
 # container dies at startup on "libcurl.so.4: cannot open shared object file", which the
 # run before publishing now catches.
@@ -92,10 +92,11 @@ def emit(key: str, value: str) -> None:
 
 
 def resolve_tag(input_tag: str, ref: str, ref_name: str) -> str:
-    """The release channel tag: the dispatch input wins, a push to main is `latest`, any other ref is its own name."""
+    """The release channel tag: the dispatch input wins, a push to main is `latest`, a pull request builds as the next `latest`
+    (a -dev version, as the merge would ship it), any other ref is its own name."""
     if input_tag:
         return input_tag
-    return "latest" if ref == "refs/heads/main" else ref_name
+    return "latest" if ref == "refs/heads/main" or ref.startswith("refs/pull/") else ref_name
 
 
 def shipping(registry: dict, keep) -> list[str]:

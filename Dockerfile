@@ -84,7 +84,7 @@ RUN apt-get update \
  && pulse=$(find /usr/lib -name libpulse.so.0 | head -1) \
  && test -n "$pulse" \
  # Captured first, so a failing ldd, or one naming a library it cannot find, stops the build here.
- && ldd /rootfs/usr/bin/MoonLight > /tmp/deps \
+ && ldd /rootfs/usr/lib/moonlight/MoonLight > /tmp/deps \
  && ldd "$pulse" >> /tmp/deps \
  && ! grep -q "not found" /tmp/deps \
  && echo "libpulse.so.0 => $pulse (0)" >> /tmp/deps \
@@ -108,7 +108,7 @@ RUN apt-get update \
 # up base updates (docker buildx imagetools inspect gcr.io/distroless/cc-debian13:latest).
 FROM gcr.io/distroless/cc-debian13@sha256:9b615fff20e1a4fad29c2b30562580b212c7dd5e2225236735cca0070ed11c78
 
-COPY --from=fetch /rootfs/usr/bin/MoonLight /usr/bin/MoonLight
+COPY --from=fetch /rootfs/usr/lib/moonlight/MoonLight /usr/bin/MoonLight
 # The libraries the loader resolved in the fetch stage, collected there rather than named here.
 # Without this the container starts and dies immediately on "libcurl.so.4: cannot open shared
 # object file"; the release runs each image before it publishes one.

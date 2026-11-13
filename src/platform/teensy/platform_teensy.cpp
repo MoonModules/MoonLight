@@ -363,6 +363,8 @@ const char* macString() {
 
 const char* chipModel() { return "i.MX RT1062"; }
 const char* hostPlatform() { return ""; }
+// The board installs an image it is handed, uploaded, having no TLS to fetch one.
+UpdateMode updateMode() { return UpdateMode::Self; }
 const char* psramType() { return ""; }
 // The radio, where a board has one, is native: no companion chip to report or update.
 const char* coprocessorWifi() { return ""; }

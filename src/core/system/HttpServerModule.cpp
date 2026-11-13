@@ -760,6 +760,12 @@ void HttpServerModule::sendResponse(platform::TcpConnection& conn, int status, c
     conn.write(reinterpret_cast<const uint8_t*>(body), bodyLen);
 }
 
+void HttpServerModule::sendError(platform::TcpConnection& conn, int status, const char* why) {
+    char msg[96];   // the longest reason, the OTA status, is 63 characters
+    std::snprintf(msg, sizeof(msg), "{\"error\":\"%s\"}", why);
+    sendResponse(conn, status, "application/json", msg);
+}
+
 // The /api/file endpoints: a file body is not a control value; parseFilePath vets the `path=<rel>` query (rejects "..", roots at the mount), the one traversal guard every filesystem entry shares.
 
 // Copy the `path=` query value into `out` (decoding %XX and '+'), rooted at the mount; false on a missing path or a ".." traversal.
@@ -1060,14 +1066,12 @@ static const char* imageUnavailable(platform::OtaTarget target) {
 // A firmware image moves through a transfer slot as a file upload does, its bytes pushed into the platform's writer as they arrive, so no frame waits on the sender.
 void HttpServerModule::handleFirmwareUpload(platform::TcpConnection& conn, platform::OtaTarget target, const char* initialBody,
                                             size_t initialLen, size_t contentLen) {
-    if constexpr (!platform::hasOta) {
-        sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
+    if (platform::updateMode() != platform::UpdateMode::Self) {
+        sendResponse(conn, 501, "application/json", "{\"error\":\"this device is updated by its host or by hand\"}");
         return;
     }
     if (const char* why = imageUnavailable(target)) {
-        char msg[96];
-        std::snprintf(msg, sizeof(msg), "{\"error\":\"%s\"}", why);
-        sendResponse(conn, 409, "application/json", msg);
+        sendError(conn, 409, why);
         return;
     }
     // One OTA at a time, as handleFirmwareUrl guards: both write g_ota* state.
@@ -1233,32 +1237,20 @@ static void matchingCoprocessorUrl(char* url, size_t len) {
 }
 
 void HttpServerModule::handleImageUrl(platform::TcpConnection& conn, const char* body, platform::OtaTarget target) {
-    if constexpr (!platform::hasOta) {
-        sendResponse(conn, 501, "application/json", "{\"error\":\"OTA not supported on this platform\"}");
+    if (platform::updateMode() != platform::UpdateMode::Self) {
+        sendResponse(conn, 501, "application/json", "{\"error\":\"this device is updated by its host or by hand\"}");
         return;
     }
     if (const char* why = imageUnavailable(target)) {
-        char msg[96];
-        std::snprintf(msg, sizeof(msg), "{\"error\":\"%s\"}", why);
-        sendResponse(conn, 409, "application/json", msg);
+        sendError(conn, 409, why);
         return;
     }
     if (otaInFlight()) {
         sendResponse(conn, 409, "application/json", "{\"error\":\"ota already in progress\"}");
         return;
     }
-    char url[512] = {};
-    mm::json::parseString(body, "url", url, sizeof(url));
-    if (url[0] == 0 && target == platform::OtaTarget::Coprocessor) matchingCoprocessorUrl(url, sizeof(url));
-    if (url[0] == 0) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"url required\"}");
-        return;
-    }
-    if (std::strncmp(url, "http://", 7) != 0 && std::strncmp(url, "https://", 8) != 0) {
-        sendResponse(conn, 400, "application/json",
-                     "{\"error\":\"url must start with http:// or https://\"}");
-        return;
-    }
+    char url[kMaxImageUrl + 2] = {};
+    if (!readImageUrl(conn, body, url, target == platform::OtaTarget::Coprocessor)) return;
     g_otaBytesRead = 0;
     g_otaBytesTotal = 0;
     // The radio chip's install ends in a restart, which drops settings still waiting for their debounce, so they are written now.
@@ -1482,9 +1474,9 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     sink.flush();
 }
 
-// Who the device is and what it runs, the part of the summary a peer's map shows: its MAC-derived identity, its board, its WiFi signal (0 off WiFi), its light outputs and its effects.
+// Who the device is and what it runs, the part of the summary a peer's map shows: its MAC-derived identity, how it takes a new version, its board, its WiFi signal (0 off WiFi), its light outputs and its effects.
 void HttpServerModule::writeDeviceSummary(JsonSink& sink) {
-    sink.append("\"mac\":");
+    sink.appendf("\"update\":\"%s\",\"mac\":", platform::updateModeName(platform::updateMode()));
     sink.writeJsonString(platform::macString());
     const MoonModule* sys = findModuleByName("System");
     sink.append(",\"board\":");
@@ -2086,10 +2078,39 @@ void HttpServerModule::handleReboot(platform::TcpConnection& conn) {
     platform::reboot();  // noreturn
 }
 
+// The buffer holds one character past the cap, so a value that fills it was cut short by the reader and is refused rather than fetched truncated.
+bool HttpServerModule::readImageUrl(platform::TcpConnection& conn, const char* body, char (&url)[kMaxImageUrl + 2],
+                                    bool coprocessorDefault) {
+    mm::json::parseString(body, "url", url, sizeof(url));
+    if (url[0] == 0 && coprocessorDefault) matchingCoprocessorUrl(url, sizeof(url));
+    const char* why = url[0] == 0                              ? "url required"
+                      : std::strlen(url) > kMaxImageUrl        ? "url too long (max 255)"
+                      : !http::isHttpUrl(url)                  ? "url must start with http:// or https://"
+                                                               : nullptr;
+    if (!why) return true;
+    sendError(conn, 400, why);
+    return false;
+}
+
+// A MoonBase device runs from its one app slot, so the URL is staged in NVS and the device reboots into MoonBase to install; 202 with {"moonbase":true} marks this flow.
+void HttpServerModule::installThroughMoonBase(platform::TcpConnection& conn, const char* url) {
+    if (!platform::moonbaseStageInstallUrl(url)) {
+        sendResponse(conn, 500, "application/json", "{\"error\":\"could not stage install url\"}");
+        return;
+    }
+    std::snprintf(g_otaStatus, sizeof(g_otaStatus), "rebooting");
+    FilesystemModule::flushPending();
+    sendResponse(conn, 202, "application/json", "{\"ok\":true,\"moonbase\":true}");
+    conn.close();
+    platform::delayMs(200);
+    platform::otaBootMoonBase();
+    platform::reboot();  // noreturn, boots MoonBase, which installs and reboots back
+}
+
 void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const char* body) {
-    if constexpr (!platform::hasOta) {
+    if (platform::updateMode() != platform::UpdateMode::Self) {
         sendResponse(conn, 501, "application/json",
-                     "{\"error\":\"OTA not supported on this platform\"}");
+                     "{\"error\":\"this device is updated by its host or by hand\"}");
         return;
     }
 
@@ -2100,17 +2121,8 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         return;
     }
 
-    char url[512] = {};
-    mm::json::parseString(body, "url", url, sizeof(url));
-    if (url[0] == 0) {
-        sendResponse(conn, 400, "application/json", "{\"error\":\"url required\"}");
-        return;
-    }
-    if (!http::isHttpUrl(url)) {
-        sendResponse(conn, 400, "application/json",
-                     "{\"error\":\"url must start with http:// or https://\"}");
-        return;
-    }
+    char url[kMaxImageUrl + 2] = {};
+    if (!readImageUrl(conn, body, url, false)) return;
     // A device without TLS has no firmware fetcher at all, so it says so before starting: the UI then fetches the image itself and uploads it.
     if (!platform::httpsAvailable()) {
         sendResponse(conn, 501, "application/json",
@@ -2118,26 +2130,9 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         return;
     }
 
-    // A MoonBase device runs from its one app slot, so stage the URL in NVS and reboot into MoonBase to install; 202 with {"moonbase":true} marks this flow.
     if (platform::otaHasMoonBase() && !platform::otaRunningMoonBase()) {
-        // The staged URL crosses into MoonBase through a 256-byte NVS read, so a longer one would fail silently and park the device in MoonBase; reject it here.
-        if (std::strlen(url) > 255) {
-            sendResponse(conn, 400, "application/json",
-                         "{\"error\":\"url too long for the MoonBase handoff (max 255)\"}");
-            return;
-        }
-        if (!platform::moonbaseStageInstallUrl(url)) {
-            sendResponse(conn, 500, "application/json",
-                         "{\"error\":\"could not stage install url\"}");
-            return;
-        }
-        std::snprintf(g_otaStatus, sizeof(g_otaStatus), "rebooting");
-        FilesystemModule::flushPending();
-        sendResponse(conn, 202, "application/json", "{\"ok\":true,\"moonbase\":true}");
-        conn.close();
-        platform::delayMs(200);
-        platform::otaBootMoonBase();
-        platform::reboot();  // noreturn, boots MoonBase, which installs and reboots back
+        installThroughMoonBase(conn, url);
+        return;
     }
 
     // Seed the shared globals so the first WS push shows "starting", not a prior failed attempt's error.
@@ -2146,13 +2141,12 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
     g_otaBytesTotal = 0;
     FilesystemModule::flushPending();   // the install ends in a restart, which drops settings still waiting for their debounce
 
+    // The image's digest, which a desktop checks before it installs its new program; a board's image carries its own.
+    char sha256[65] = {};
+    mm::json::parseString(body, "sha256", sha256, sizeof(sha256));
     if (!platform::http_fetch_to_ota(url, g_otaStatus, sizeof(g_otaStatus),
-                                     &g_otaBytesRead, &g_otaBytesTotal)) {
-        // The platform may have already written an error string; pass it through.
-        char err[128];
-        std::snprintf(err, sizeof(err),
-                      "{\"error\":\"%s\"}", g_otaStatus[0] ? g_otaStatus : "ota start failed");
-        sendResponse(conn, 500, "application/json", err);
+                                     &g_otaBytesRead, &g_otaBytesTotal, nullptr, sha256[0] ? sha256 : nullptr)) {
+        sendError(conn, 500, g_otaStatus[0] ? g_otaStatus : "ota start failed");   // the platform's own reason when it wrote one
         return;
     }
     // 202 Accepted: task running; UI polls FirmwareUpdate.update_status.

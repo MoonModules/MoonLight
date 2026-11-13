@@ -4,20 +4,22 @@
 ///
 /// ## One slot, so the copy waits for the reboot
 ///
-/// An ESP32 writes its update into a second app slot and flips a boot pointer. The Teensy's program flash holds one image, so the upload goes into the erased space above it, where nothing runs.
-/// The copy over the program happens in `reboot()`, after the HTTP answer is out. A power loss during the upload leaves the running image untouched.
-/// One during the copy, a few seconds, leaves the board to PJRC's bootloader chip and its program button, never a hard brick.
-/// Both sides work in 64 KB blocks, the flash's largest erase, and the copy skips every block the new image shares with the running one.
+/// An ESP32 writes its update into a second app slot; the Teensy's program flash holds one image, so the upload goes into the erased space above it, where nothing runs.
+///
+/// The copy over the program happens in `reboot()`, after the HTTP answer is out, in 64 KB blocks, the flash's largest erase, skipping every block the new image shares with the running one.
+///
+/// A power loss during the upload leaves the running image untouched; one during the copy, a few seconds, leaves the board to PJRC's bootloader chip and its program button.
 ///
 /// ## Why the copy masks every interrupt source
 ///
-/// The application executes from flash, and the copy erases it.
-/// The core's flash routines turn interrupts back on after every command. So the copy disables every interrupt source at the NVIC and stops SysTick instead, and nothing can fire into a half-erased image.
-/// It runs from ITCM, as the core's flash routines do. It passes each sector through RAM, since the flash cannot be read while it is being programmed.
+/// The application executes from flash, which the copy erases, and the core's flash routines turn interrupts back on after every command.
+///
+/// So the copy disables every interrupt source at the NVIC and stops SysTick, runs from ITCM, and passes each sector through RAM, since flash cannot be read while it is programmed.
 ///
 /// ## The image mark
 ///
 /// Every image carries its firmware name, and an upload must carry the running one's: another program would leave the board off the network until a USB flash.
+///
 /// The search reads its prefix from the mark itself, so the prefix occurs once per image, and that reference keeps the linker from collecting the mark.
 
 #include "platform/platform.h"
@@ -184,7 +186,7 @@ bool otaEnd(OtaWrite& w, bool commit) {
 }
 
 // GitHub serves release assets over HTTPS only, which this board cannot speak.
-bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut, const char*) {
+bool http_fetch_to_ota(const char*, char* statusBuf, size_t statusBufLen, uint32_t* bytesReadOut, uint32_t* bytesTotalOut, const char*, const char*) {
     if (statusBuf && statusBufLen) std::snprintf(statusBuf, statusBufLen, "error: no TLS on this board, upload the .bin instead");
     if (bytesReadOut) *bytesReadOut = 0;
     if (bytesTotalOut) *bytesTotalOut = 0;

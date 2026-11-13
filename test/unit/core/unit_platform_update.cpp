@@ -1,0 +1,164 @@
+/// @module platform
+
+/// Pins a desktop installing a new version of itself as a board does, each test over a scratch copy standing in for the running program.
+///
+/// An image written through `otaBegin`, `otaWrite` and `otaEnd` replaces a program of this system and processor, the old one kept as `.prev`, the new one `.pending`.
+///
+/// An image that is no program, misses its digest or is abandoned leaves the program as it was; a program in a folder it cannot write is updated by hand.
+
+#include "doctest.h"
+#include "platform/platform.h"
+#include "host_update.h"
+#include "core/util/sha256.h"
+
+#include <cstdio>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+#ifndef _WIN32
+#include <unistd.h>   // geteuid
+#endif
+
+using namespace mm;
+namespace fs = std::filesystem;
+
+namespace {
+
+// FILE rather than a stream: a stream's object takes more stack than the frame limit allows.
+std::vector<uint8_t> readBytes(const fs::path& path) {
+    std::vector<uint8_t> bytes;
+    std::FILE* file = std::fopen(path.string().c_str(), "rb");
+    if (!file) return bytes;
+    uint8_t chunk[256];
+    for (size_t n; (n = std::fread(chunk, 1, sizeof(chunk), file)) > 0;) bytes.insert(bytes.end(), chunk, chunk + n);
+    std::fclose(file);
+    return bytes;
+}
+
+void writeBytes(const fs::path& path, const std::vector<uint8_t>& bytes) {
+    std::FILE* file = std::fopen(path.string().c_str(), "wb");
+    REQUIRE(file != nullptr);
+    std::fwrite(bytes.data(), 1, bytes.size(), file);
+    std::fclose(file);
+}
+
+void writeText(const fs::path& path, const std::string& text) { writeBytes(path, std::vector<uint8_t>(text.begin(), text.end())); }
+
+std::string readText(const fs::path& path) {
+    const std::vector<uint8_t> bytes = readBytes(path);
+    return {bytes.begin(), bytes.end()};
+}
+
+/// The bytes' SHA-256 in capitals: GitHub writes lowercase, and either case is the same digest.
+std::string upperDigestOf(const std::vector<uint8_t>& bytes) {
+    char hex[kSha256DigestSize * 2 + 1];
+    sha256Hex(bytes.data(), bytes.size(), hex, kSha256DigestSize);
+    std::string upper(hex);
+    for (char& c : upper) c = static_cast<char>(c >= 'a' && c <= 'f' ? c - 'a' + 'A' : c);
+    return upper;
+}
+
+/// A folder holding a stand-in program, "old program", which every install in it replaces; the real program path comes back after the test.
+struct Scratch {
+    fs::path dir;
+    fs::path program;
+    std::vector<uint8_t> realProgram;   ///< this test binary's bytes: a program for this system and processor, the image a release would carry
+    explicit Scratch(const char* name) {
+        realProgram = readBytes(platform::programPath());
+        dir = fs::temp_directory_path() / (std::string("mm_update_") + name);
+        fs::remove_all(dir);
+        fs::create_directories(dir);
+        program = dir / "MoonLight";
+        writeText(program, "old program");
+        platform::setTestProgramPath(program);
+    }
+    ~Scratch() {
+        platform::setTestProgramPath({});
+        std::error_code ec;
+        fs::permissions(dir, fs::perms::owner_all, ec);
+        fs::remove_all(dir, ec);
+    }
+    Scratch(const Scratch&) = delete;
+    Scratch& operator=(const Scratch&) = delete;
+    /// Write `image` through the image writer in chunks, as the upload route does, and commit it or not.
+    bool install(const std::vector<uint8_t>& image, bool commit = true) const {
+        char status[64] = {};
+        uint32_t written = 0;
+        platform::OtaWrite w;
+        if (!platform::otaBegin(w, platform::OtaTarget::App, image.size(), status, sizeof(status), &written)) return false;
+        for (size_t at = 0; at < image.size(); at += 4096) {
+            const size_t n = image.size() - at < 4096 ? image.size() - at : 4096;
+            if (!platform::otaWrite(w, image.data() + at, n)) return false;
+        }
+        CHECK(written == image.size());
+        return platform::otaEnd(w, commit);
+    }
+};
+
+}  // namespace
+
+TEST_CASE("a native program in a folder it can write updates itself, one in a folder it cannot write is updated by hand") {
+    Scratch s("mode");
+    CHECK(platform::updateMode() == platform::UpdateMode::Self);
+#ifndef _WIN32
+    // Root may write any folder whatever its mode, so this half holds for an ordinary user only.
+    if (::geteuid() != 0) {
+        fs::permissions(s.dir, fs::perms::owner_read | fs::perms::owner_exec);
+        CHECK(platform::updateMode() == platform::UpdateMode::Manual);
+    }
+#endif
+    CHECK(std::string(platform::updateModeName(platform::UpdateMode::Self)) == "self");
+    CHECK(std::string(platform::updateModeName(platform::UpdateMode::Host)) == "host");
+    CHECK(std::string(platform::updateModeName(platform::UpdateMode::Manual)) == "manual");
+}
+
+TEST_CASE("an image written through the image writer replaces the program and keeps the old one as .prev, pending until it has run") {
+    Scratch s("install");
+    REQUIRE(s.install(s.realProgram));
+    CHECK(readBytes(s.program) == s.realProgram);
+    CHECK(readText(fs::path(s.program.string() + ".prev")) == "old program");
+    CHECK(fs::exists(s.program.string() + ".pending"));
+    CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
+}
+
+TEST_CASE("an image that is no program for this system leaves the program as it was") {
+    Scratch s("refused");
+    const std::string page = "<html>404 Not Found</html>";
+    CHECK_FALSE(s.install(std::vector<uint8_t>(page.begin(), page.end())));
+    CHECK(readText(s.program) == "old program");
+    CHECK_FALSE(fs::exists(s.program.string() + ".prev"));
+    CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
+}
+
+TEST_CASE("an abandoned image leaves the program as it was") {
+    Scratch s("abandoned");
+    CHECK_FALSE(s.install(s.realProgram, false));
+    CHECK(readText(s.program) == "old program");
+    CHECK_FALSE(fs::exists(s.dir / "MoonLight.next"));
+}
+
+TEST_CASE("an image missing the release's digest leaves the program as it was, and one matching it in either case is installed") {
+    Scratch s("digest");
+    const fs::path next = s.dir / "MoonLight.next";
+    writeBytes(next, s.realProgram);
+    char status[64] = {};
+    const std::string wrong(kSha256DigestSize * 2, 'a');
+    CHECK_FALSE(platform::putProgramInPlace(next, s.program, wrong.c_str(), status, sizeof(status)));
+    CHECK(std::string(status).find("digest") != std::string::npos);
+    CHECK(readText(s.program) == "old program");
+
+    writeBytes(next, s.realProgram);
+    CHECK(platform::putProgramInPlace(next, s.program, upperDigestOf(s.realProgram).c_str(), status, sizeof(status)));
+    CHECK(readBytes(s.program) == s.realProgram);
+}
+
+TEST_CASE("a desktop has one program: MoonBase and the radio chip are refused") {
+    Scratch s("target");
+    char status[64] = {};
+    uint32_t written = 0;
+    platform::OtaWrite w;
+    CHECK_FALSE(platform::otaBegin(w, platform::OtaTarget::MoonBase, 0, status, sizeof(status), &written));
+    CHECK_FALSE(platform::otaBegin(w, platform::OtaTarget::Coprocessor, 0, status, sizeof(status), &written));
+    CHECK(std::string(status).rfind("error:", 0) == 0);
+}

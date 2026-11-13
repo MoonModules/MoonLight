@@ -806,6 +806,8 @@ private:
     bool anyWsClientOnAccessPoint() const MM_NONBLOCKING;
     /// Answer a short reply, under 4 KB, written whole: it fits a fresh connection's empty send buffer, and a reboot route needs it out before the restart. A longer one goes through answerJson or answerBlock.
     void sendResponse(platform::TcpConnection& conn, int status, const char* contentType, const char* body);
+    /// Answer `{"error":"why"}` with `status`, `why` a reason of at most 63 characters.
+    void sendError(platform::TcpConnection& conn, int status, const char* why);
     /// Answer a refused document as `PATCH /api/state` does: the engine's error and where it is, with status 400.
     void sendRefusal(platform::TcpConnection& conn, const StateDocumentResult& r);
     /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
@@ -921,6 +923,12 @@ private:
     void handleBootMoonBase(platform::TcpConnection& conn);
     /// Take a firmware URL and answer at once, the install running on its own task. @xref{two-firmware-install-paths}
     void handleFirmwareUrl(platform::TcpConnection& conn, const char* body);
+    /// The longest image URL a device fetches, the MoonBase handoff's limit: its NVS read takes 256 bytes with the terminator.
+    static constexpr size_t kMaxImageUrl = 255;
+    /// Read the image URL from `body`, the release's matching radio-chip image when `coprocessorDefault` and none is named; false after answering 400.
+    bool readImageUrl(platform::TcpConnection& conn, const char* body, char (&url)[kMaxImageUrl + 2], bool coprocessorDefault);
+    /// Stage `url` for MoonBase and reboot into it, which installs it and boots the app again.
+    void installThroughMoonBase(platform::TcpConnection& conn, const char* url);
     /// Install an uploaded image, the application's (`POST /api/firmware/upload`) or MoonBase's (`POST /api/firmware/moonbase-update`), through a transfer slot.
     void handleFirmwareUpload(platform::TcpConnection& conn, platform::OtaTarget target, const char* initialBody,
                               size_t initialLen, size_t contentLen);

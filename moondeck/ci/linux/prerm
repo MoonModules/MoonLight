@@ -1,0 +1,6 @@
+#!/bin/sh
+# The service stopped before its program goes; an upgrade restarts it from postinst.
+set -e
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+    systemctl disable --now moonlight.service || true
+fi

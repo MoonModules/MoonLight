@@ -139,6 +139,22 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
 }
 
 // A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
+TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 400 rather than fetched cut short") {
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    const std::string longUrl = "https://example.com/" + std::string(300, 'a') + ".bin";
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const std::string req = withBody("POST /api/firmware/url", "{\"url\":\"" + longUrl + "\"}");
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size()));
+    const std::string reply = readUntilClosed(http, client);   // the whole answer: the reason follows the status line
+    client.close();
+    CHECK(reply.rfind("HTTP/1.1 400", 0) == 0);
+    CHECK(reply.find("url too long") != std::string::npos);
+    http.release();
+}
+
 TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
     RackServer server;
     mm::HttpServerModule& http = server.http;
