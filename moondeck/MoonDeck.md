@@ -182,7 +182,7 @@ Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — s
 
 ### release_stage
 
-The release's build and staging steps, one subcommand each, so `release.yml` calls a script for each and a release's assets stage locally too: `tag` and `version` for the release name, `firmwares` for the build matrix, `stage-esp32` and `stage-teensy` for the binaries, `gather`, `extras` and `manifests` for the release, `container-context` and `smoke-images` for the container, `pages-site` and `merge-docs` for the site. The upload, the `latest` tag, the registry push and Pages stay GitHub's own. The process: [CI on a release tag](https://moonmodules.org/MoonLight/moonwalk.html#ci-on-release).
+The release's build and staging steps, one subcommand each, so `release.yml` calls a script for each and a release's assets stage locally too: `tag` and `version` for the release name, `firmwares` for the build matrix, `stage-esp32` and `stage-teensy` for the binaries, `gather`, `extras` and `manifests` for the release, `container-context` and `smoke-images` for the container, `smoke-update` for a desktop program installing itself on each runner that builds one, `pages-site` and `merge-docs` for the site. The upload, the `latest` tag, the registry push and Pages stay GitHub's own. The process: [CI on a release tag](https://moonmodules.org/MoonLight/moonwalk.html#ci-on-release).
 
 ```bash
 uv run moondeck/ci/release_stage.py tag --input-tag v7.1.0 --ref refs/tags/v7.1.0 --ref-name v7.1.0

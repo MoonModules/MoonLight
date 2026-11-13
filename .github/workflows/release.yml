@@ -250,6 +250,10 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+      # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
+      - name: Install its own program and restart on it
+        shell: bash
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-macos
@@ -314,9 +318,14 @@ jobs:
           }
           Write-Host "NSIS present: $found"
       - name: Build + package Windows x64
+        shell: bash   # PowerShell would read "$VERSION" as its own, empty variable and package library.json's bare version
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+      # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
+      - name: Install its own program and restart on it
+        shell: bash
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
@@ -376,6 +385,10 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+      # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
+      - name: Install its own program and restart on it
+        shell: bash
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
@@ -435,6 +448,10 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+      # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
+      - name: Install its own program and restart on it
+        shell: bash
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4

@@ -19,6 +19,7 @@ A step's outputs go to $GITHUB_OUTPUT when it is set, and always to stdout as ke
     image-name     the lowercase container image path
     container-context   the Docker build context holding the release .debs
     smoke-images   run each container image before anything is published
+    smoke-update   a desktop program installs itself through its Firmware route and restarts on it
     pages-site     the installer and its assets, staged for Pages
     merge-docs     the rendered docs site, copied into the Pages root beside the installer
 
@@ -32,6 +33,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -260,6 +262,72 @@ def smoke_images() -> None:
     print("the arm64 image runs")
 
 
+def system_info(base: str) -> dict | None:
+    """The program's /api/system, or None while it does not answer."""
+    try:
+        with urllib.request.urlopen(f"{base}/api/system", timeout=3) as r:
+            return json.loads(r.read())
+    except (OSError, ValueError):
+        return None
+
+
+def wait_for_system(base: str, accept, seconds: int = 60) -> dict | None:
+    """The first /api/system answer `accept` takes within `seconds`, or None."""
+    for _ in range(seconds * 2):
+        info = system_info(base)
+        if info and accept(info):
+            return info
+        time.sleep(0.5)
+    return None
+
+
+def check_beside(work: Path, program: str) -> None:
+    """The old program kept as .prev, the new one marked .pending, and no image left half-written."""
+    files = sorted(p.name for p in work.iterdir() if p.is_file())
+    print(f"beside the program: {files}")
+    missing = [kept for kept in (program + ".prev", program + ".pending") if kept not in files]
+    if missing or "MoonLight.next" in files:
+        raise SystemExit(f"beside the program: {', '.join(missing) or 'MoonLight.next'} {'missing' if missing else 'left behind'}")
+
+
+def smoke_update(program: Path) -> None:
+    """A desktop installs a program through POST /api/firmware/upload as a board installs an image, and restarts on it: the new run answers from
+    a fresh uptime, the old program waits beside it as .prev and the new one is marked .pending. The program is its own image, a copy in a
+    folder of its own standing in for an installed one, so this runs on each runner the release builds a desktop on."""
+    port = 18081
+    base = f"http://127.0.0.1:{port}"
+    work = Path(tempfile.mkdtemp(prefix="mm-smoke-update-"))
+    installed = work / ("MoonLight.exe" if os.name == "nt" else "MoonLight")
+    shutil.copy2(program, installed)
+    log_path = work / "run.log"
+    with log_path.open("wb") as log:
+        run = subprocess.Popen([str(installed), "--port", str(port), "--no-browser"], stdout=log, stderr=subprocess.STDOUT, cwd=work,
+                               env={**os.environ, "MM_DATA_DIR": str(work / "data")})
+    try:
+        # Up a few seconds first, so the new run's uptime reads lower than the old one's.
+        before = wait_for_system(base, lambda info: info.get("uptime", 0) >= 5)
+        if not before or before.get("update") != "self":
+            raise SystemExit(f"the program did not answer as one that updates itself: {before}")
+        upload = urllib.request.Request(f"{base}/api/firmware/upload", data=installed.read_bytes(), method="POST",
+                                        headers={"Content-Type": "application/octet-stream"})
+        with urllib.request.urlopen(upload, timeout=120) as r:
+            print(f"upload: {r.status} {r.read().decode(errors='replace')}")
+        after = wait_for_system(base, lambda info: info.get("uptime", 0) < before["uptime"])
+        if not after:
+            raise SystemExit("no new run answered within 60 s")
+        print(f"restarted: uptime {before['uptime']} s -> {after['uptime']} s")
+        check_beside(work, installed.name)
+        print("the program installed itself and restarted on it")
+    finally:
+        # A POSIX restart is the same process, exec'd in place; a Windows restart is a new process, found by its name.
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/IM", installed.name], capture_output=True)
+        run.kill()
+        run.wait()
+        print(tail(log_path.read_text(encoding="utf-8", errors="replace")))
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def pages_site() -> None:
     """The installer page, the picker modules and the board images a deviceModels.json entry references, under pages/install/."""
     install = ROOT / "pages" / "install"
@@ -327,6 +395,8 @@ def main() -> int:
     image.add_argument("--repo", required=True, help="owner/name")
     sub.add_parser("container-context", help="Write ctx/ with the .debs and the release Dockerfile.")
     sub.add_parser("smoke-images", help="Run the amd64 and arm64 smoke images.")
+    smoke = sub.add_parser("smoke-update", help="Install a desktop program through its own Firmware route and check it restarts on it.")
+    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-desktop-<os>-<arch>-v<version>.bin")
     sub.add_parser("pages-site", help="Stage the installer under pages/install/.")
     docs = sub.add_parser("merge-docs", help="Copy the rendered docs site into pages/.")
     docs.add_argument("--site-dir", required=True, type=Path)
@@ -356,6 +426,8 @@ def main() -> int:
         container_context()
     elif args.command == "smoke-images":
         smoke_images()
+    elif args.command == "smoke-update":
+        smoke_update(args.program)
     elif args.command == "pages-site":
         pages_site()
     else:

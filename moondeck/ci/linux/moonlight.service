@@ -5,7 +5,8 @@ Description=MoonLight
 Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux/
 After=network-online.target
 Wants=network-online.target
-# Three starts in two minutes end in the failed state, which starts the rollback: a new program that keeps failing before it has run a minute gives way to the one before it.
+# A failed start starts the rollback, which acts on a pending program only: one that fails before it has run a minute gives way to the one before it.
+# Three starts in two minutes stop a program that keeps failing after that.
 StartLimitIntervalSec=120
 StartLimitBurst=3
 OnFailure=moonlight-rollback.service
