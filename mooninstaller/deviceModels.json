@@ -1964,6 +1964,66 @@
     }
   },
   {
+    "name": "Seeed XIAO ESP32S3 Sense",
+    "chip": "ESP32-S3",
+    "firmwares": [
+      "esp32s3-n8r8"
+    ],
+    "url": "https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/",
+    "description": "ESP32-S3R8 with 8 MB octal PSRAM and 8 MB flash, and the Sense board: a PDM microphone on 42 and 41, a camera, and a microSD slot that takes 7 to 9 and, in SPI mode, shares its chip select, 21, with the user LED; WiFi needs the u.FL antenna attached.",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Audio",
+      "Buttons",
+      "SD card"
+    ],
+    "planned": [
+      "Camera"
+    ],
+    "state": {
+      "System": {
+        "deviceModel": "Seeed XIAO ESP32S3 Sense"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "micMode": 1,
+          "wsPin": 42,
+          "sdPin": 41
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Custom",
+          "bus": 1,
+          "clkPin": 7,
+          "cmdPin": 9,
+          "d0Pin": 8,
+          "d3Pin": 21
+        }
+      }
+    }
+  },
+  {
     "name": "Adafruit MatrixPortal S3",
     "chip": "ESP32-S3",
     "image": "assets/deviceModels/esp32-s3-n8r2-adafruit-matrixportal-pinout.jpg",
