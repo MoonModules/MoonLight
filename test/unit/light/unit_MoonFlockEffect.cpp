@@ -21,8 +21,8 @@ struct KeysRig {
     bool listening;
     uint32_t now = 1000;
 
-    explicit KeysRig(uint8_t growth, mm::lengthType w = 32, mm::lengthType h = 32, uint8_t cpl = 3, bool listening = true)
-        : fx(w, h, 1, cpl), listening(listening) {
+    explicit KeysRig(uint8_t growth, mm::lengthType w = 32, mm::lengthType h = 32, uint8_t cpl = 3, bool hears = true)
+        : fx(w, h, 1, cpl), listening(hears) {
         if (listening) {
             audio.defineControls();
             audio.setup();
