@@ -1966,6 +1966,7 @@
   {
     "name": "Seeed XIAO ESP32S3 Sense",
     "chip": "ESP32-S3",
+    "image": "assets/deviceModels/esp32-s3-n8r8-seeed-xiao-sense.png",
     "firmwares": [
       "esp32s3-n8r8"
     ],
