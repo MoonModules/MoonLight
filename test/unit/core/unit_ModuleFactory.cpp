@@ -4,6 +4,8 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/MoonModule.h"
 
+#include <cstring>
+
 namespace {
 
 // Minimal per-role probes to exercise role discovery via the templated registerType<T>. Real domain types are excluded so this test stays a unit test of the factory itself.
@@ -29,7 +31,7 @@ class GenericStub : public mm::MoonModule {
 
 } // namespace
 
-// NOTE: ModuleFactory is a global singleton (static inline state). The doctest harness runs all tests in one process, so once registered, types persist across tests. To avoid cross-test contamination we use unique-name registrations per test case and check role/count properties rather than asserting an empty initial state.
+// ModuleFactory is a global singleton and doctest runs every test in one process, so registered types persist across cases: each case registers unique names and checks role and count properties rather than an empty initial state.
 
 // registerType<T>(name) instantiates a probe of T to read its role(), then stores name+role+constructor for later create() calls.
 TEST_CASE("ModuleFactory: registerType captures role via probe instance") {
@@ -81,6 +83,19 @@ TEST_CASE("ModuleFactory: create returns nullptr for unknown type") {
 }
 
 // typeName/typeRole with an out-of-range index returns nullptr / Generic safely (never UB).
+// A type's cards need the reader's mode as a control does: user until the build raises it, which names a registered type.
+TEST_CASE("ModuleFactory: a type's cards show to every reader until the build raises their mode") {
+    mm::ModuleFactory::registerType<EffectStub>("ModeStub");
+    uint8_t i = 0;
+    while (i < mm::ModuleFactory::typeCount() && std::strcmp(mm::ModuleFactory::typeName(i), "ModeStub") != 0) i++;
+    REQUIRE(i < mm::ModuleFactory::typeCount());
+    CHECK(mm::ModuleFactory::typeMinMode(i) == mm::kModeUser);
+    CHECK(mm::ModuleFactory::setTypeMinMode("ModeStub", mm::kModeDeveloper));
+    CHECK(mm::ModuleFactory::typeMinMode(i) == mm::kModeDeveloper);
+    CHECK_FALSE(mm::ModuleFactory::setTypeMinMode("NoSuchType", mm::kModeDeveloper));
+    CHECK(mm::ModuleFactory::typeMinMode(255) == mm::kModeUser);   // out of range reads as user
+}
+
 TEST_CASE("ModuleFactory: typeName / typeRole bounds-check") {
     const uint8_t count = mm::ModuleFactory::typeCount();
     // Out-of-range access returns null / Generic, not UB.
@@ -91,9 +106,7 @@ TEST_CASE("ModuleFactory: typeName / typeRole bounds-check") {
 
 // The factory grows its registry capacity dynamically, registering 10+ extra types past the initial size still works and every name stays discoverable.
 TEST_CASE("ModuleFactory: dynamic capacity grows past initial size") {
-    // Register enough types to force at least one capacity-doubling step beyond the initial 4 → 8 → 16 progression. We register 10 throwaway names with the Generic role to confirm they all land and remain accessible.
-    //
-    // The factory stores name pointers without copying, so the name buffer MUST have process lifetime, `static` makes the storage outlive the test. Stack-local names would dangle the moment this TEST_CASE returned, and subsequent tests walking typeName(i) would read freed memory.
+    // Ten throwaway Generic names force a capacity-doubling step beyond 4, 8, 16; they are `static` because the factory keeps the pointers, and stack-local names would dangle for a later case walking typeName(i).
     static char nameBuf[10][16];
     const uint8_t before = mm::ModuleFactory::typeCount();
     for (int i = 0; i < 10; i++) {

@@ -1092,6 +1092,14 @@ function uiMode() {
     return c ? (c.value | 0) : 0;
 }
 
+// A type's cards need the reader's mode as a control does (`minMode` on /api/types): a build previews
+// the cards of hardware it has none of in developer mode alone. The one rule for a card in the tree
+// and a row in the picker, so the two cannot disagree.
+function typeShown(t) { return ((t && t.minMode) | 0) <= uiMode(); }
+function shownChildren(mod) {
+    return (mod.children || []).filter(c => typeShown(availableTypes.find(t => t.name === c.type)));
+}
+
 function renderCards() {
     const main = document.getElementById("main");
     if (!main || !state) return;
@@ -1212,7 +1220,8 @@ function renderModuleTree(mod, parentEl, depth) {
     parentEl.appendChild(card);
     // Children render inside this card's .card-children wrapper, not as flat
     // siblings. childrenEl is null for modules that don't accept children.
-    if (!childrenEl || !mod.children || mod.children.length === 0) return;
+    const children = shownChildren(mod);
+    if (!childrenEl || children.length === 0) return;
 
     // One rule: a TOP-LEVEL module shows its children one at a time behind a tab strip, so its card
     // stays short however many children it has. Deeper levels stack as before. The tabs are derived
@@ -1225,7 +1234,7 @@ function renderModuleTree(mod, parentEl, depth) {
         renderChildTabs(mod, childrenEl, depth);
         return;
     }
-    for (const child of mod.children) {
+    for (const child of children) {
         renderModuleTree(child, childrenEl, depth + 1);
     }
 }
@@ -1300,7 +1309,8 @@ function updateTabDot(mod) {
 // Tab strip + the one selected child. `active` falls back to the first child whenever the remembered
 // tab is gone (the driver was deleted) or was never set, so the selection can never dangle.
 function renderChildTabs(mod, childrenEl, depth) {
-    const names = mod.children.map(c => c.name);
+    const children = shownChildren(mod);
+    const names = children.map(c => c.name);
     let active = selectedTabs[mod.name];
     if (!names.includes(active)) active = names[0];
 
@@ -1308,7 +1318,7 @@ function renderChildTabs(mod, childrenEl, depth) {
     strip.className = "tab-strip";
     strip.setAttribute("role", "tablist");
 
-    for (const child of mod.children) {
+    for (const child of children) {
         const tab = document.createElement("button");
         // Grey a disabled child's tab title (mirrors the card's card--disabled), so it reads as inactive
         // from the strip without opening it. Derived purely from child.enabled: no backend round-trip.
@@ -6798,7 +6808,7 @@ function openTypePicker(parentMod, anchorEl) {
     // "+" on Effects just adds a Layer. (Same filter openPicker uses, so the two can't disagree about
     // what the candidates are.) Counted over the TYPES alone: the scripts arrive asynchronously, and
     // a role with one type but many scripts is still a real choice, which the await below sees.
-    const candidates = availableTypes.filter(t => roles.includes(t.role));
+    const candidates = availableTypes.filter(t => roles.includes(t.role) && typeShown(t));
     mlScriptItems(roles).then((scripts) => {
         if (candidates.length === 1 && !scripts.length) {
             addModule(candidates[0].name, parentMod.name);
@@ -6821,7 +6831,7 @@ function openReplacePicker(targetMod, anchorEl) {
     // other makes the distinction visible again exactly where it should not be.
     mlScriptItems(roles).then((scripts) => {
         openPicker(anchorEl, {
-            items: [...availableTypes.filter(t => roles.includes(t.role)), ...scripts],
+            items: [...availableTypes.filter(t => roles.includes(t.role) && typeShown(t)), ...scripts],
             actionLabel: "replace",
             currentType: targetMod.type,
             commit: (name, item) => replacePickedType(targetMod, item),
@@ -6882,7 +6892,7 @@ function openPicker(anchorEl, opts) {
     // Sorting stays here so every picker is ordered the same way, and stays alphabetical by display
     // name so the list is scannable regardless of registration order (localeCompare:
     // case-insensitive, locale-aware).
-    const source = opts.items || availableTypes.filter(t => opts.roles.includes(t.role));
+    const source = opts.items || availableTypes.filter(t => opts.roles.includes(t.role) && typeShown(t));
     // Sorted on the NAME, not on any marker in front of it: a row prefixed with the cloud glyph is
     // still that script alphabetically, and prefixed rows would otherwise collect in a block of
     // their own instead of sitting where the reader looks for them.

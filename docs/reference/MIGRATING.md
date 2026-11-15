@@ -178,7 +178,7 @@ A driver's `start` and `count` are 32-bit, so a window starts or ends past light
 
 ### A module whose type was renamed is dropped at boot, and File Manager says so
 
-**Action: after an update over the air, when File Manager shows `skipped at boot`, take a Backup and Restore it before changing anything under the module named.**
+**Action: after an update over the air, when File Manager shows `skipped at boot`, look the module named up in the entries of the releases since the one the device ran; take a Backup and Restore it, before changing anything, only where the entry says so.**
 
 The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board built without one, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser.
 

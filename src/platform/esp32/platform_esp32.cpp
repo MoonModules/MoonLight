@@ -553,6 +553,7 @@ bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 bool wifiRadioReady() MM_NONBLOCKING { return true; }   // a native radio starts whenever asked
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
+const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 bool coprocessorConnect() { return false; }
 #endif
 

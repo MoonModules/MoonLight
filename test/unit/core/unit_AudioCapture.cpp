@@ -1,6 +1,6 @@
 /// @module AudioService
 
-/// The desktop OS-capture seam (platform_desktop_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture HARDWARE is not assumed: on a locked-down or headless host, init failing cleanly is correct behavior (miniaudio's null backend makes success the CI norm, delivering silence), so the lifecycle cases assert no-crash coherence around whichever outcome the host gives. First local run on macOS triggers the OS microphone permission prompt for the invoking terminal, expected, once.
+/// The desktop OS-capture seam (platform_desktop_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture hardware is not assumed: on a headless host init fails cleanly, and miniaudio's null backend makes success the CI norm, so the lifecycle cases assert coherence around either outcome. The first local run on macOS asks the OS microphone permission once.
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
@@ -25,7 +25,17 @@ TEST_CASE("audio capture enumeration offers 'default' first, from platform-owned
     CHECK(again == options);
 }
 
-// The capture device someone picks survives the device list changing under it. A loopback like BlackHole is deliberate routing, set up once, and the OS list it lives in is LIVE: unplug a webcam or let a Continuity Camera drop off and everything below it shifts up a slot, so a config that stored the INDEX silently starts naming a different device. Reported from the desktop bench 2026-08-29 ("I entered blackhole 2ch a few times but later I saw it was changed").
+// What ALSA adds to a list and a reader cannot use: its `null` device, described as discarding samples, and one description for `default` and `sysdefault`. Seen on a Raspberry Pi 5 with a USB microphone, 2026-11-15.
+TEST_CASE("audio capture enumeration lists no device twice and not ALSA's bit bucket") {
+    const char* const* options = nullptr;
+    const size_t n = mm::platform::audioCaptureDevices(&options);
+    for (size_t i = 0; i < n; i++) {
+        CHECK(std::strstr(options[i], "Discard all samples") == nullptr);
+        for (size_t k = i + 1; k < n; k++) CHECK(std::strcmp(options[i], options[k]) != 0);
+    }
+}
+
+// The capture device someone picks survives the device list changing under it: unplug a webcam and everything below it shifts up a slot, so a config that stored the index named another device. Reported from the desktop bench 2026-08-29 ("I entered blackhole 2ch a few times but later I saw it was changed").
 TEST_CASE("a picked audio device is remembered by name, not by its position in the list") {
     // The list as it was when the user picked: BlackHole sits at index 3.
     static constexpr const char* kBefore[] = {"default", "HD Pro Webcam C920", "NDI Audio",
@@ -61,7 +71,7 @@ TEST_CASE("a picked audio device is remembered by name, not by its position in t
     mm::ControlList gone;
     gone.addSelect("device", missing, kGone, 3);
     gone.setPersistLabel(gone.count() - 1);
-    // A label naming no current option LEAVES THE CONTROL ALONE (Control.cpp: "the driver keeps its default"), which is the contract that matters here: the saved pick must never be silently re-pointed at whatever now occupies its old index. Not an error under Clamp.
+    // A label naming no current option leaves the control alone (Control.cpp: "the driver keeps its default"): the saved pick is never re-pointed at whatever now occupies its old index. Not an error under Clamp.
     CHECK(mm::applyControlValue(gone[0], saved.c_str(), "device",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(missing == 2);                                        // untouched, not re-pointed
@@ -91,7 +101,7 @@ TEST_CASE("audio capture refuses an out-of-range device index") {
     mm::platform::audioMicDeinit(h);
 }
 
-// A capture device delivering silence must not raise the I2S wire diagnosis: on desktop there are no pins to check, and silence is a quiet room or an idle loopback (the flagship BlackHole case between songs). The verdict is compile-time-gated to hasI2sMic.
+// A capture device delivering silence must not raise the I2S wire diagnosis: on desktop there are no pins to check, and silence is a quiet room or an idle loopback between songs. The verdict is compile-time-gated to hasI2sMic.
 TEST_CASE("a silent capture device raises no I2S wire status") {
     static_assert(!mm::platform::hasI2sMic,
                   "this desktop-only case pins the desktop side of the gate");

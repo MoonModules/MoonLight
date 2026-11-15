@@ -2,8 +2,7 @@
 """Compute the semver string a build should carry, per build type.
 
 `library.json` holds the in-development version with a `-dev` prerelease suffix
-(e.g. `2.1.0-dev`). That's right for a local build, but a *published* build needs
-a precise, comparable version:
+(e.g. `2.1.0-dev`). A build needs a precise, comparable version:
 
   - Stable release (a `vX.Y.Z` tag): the CORE semver, suffix dropped: `2.1.0`.
     (The release ritual already bumps library.json to the core before tagging;
@@ -13,6 +12,9 @@ a precise, comparable version:
     (git-describe style). Successive `latest` builds get `…-dev.6`, `…-dev.7`, …
     which semver §11 orders numerically, so a device can tell it's behind the
     newest `latest`. Without N, every `latest` build claims the same version.
+  - Local build: the same `<next>-dev.<N>` as a `latest` build of that commit, so a
+    desktop built from main reports the version `latest` carries and its update badge
+    stays off; a dirty tree shows as the `+` on the build id, not in the version.
 
 N counts since the last `v*` tag specifically, NOT `git describe`'s nearest tag,
 which would pick the moving `latest` tag and give a meaningless count. With no
@@ -25,7 +27,7 @@ Usage:
   compute_version.py --tag latest              # auto → latest → <next>-dev.<N>, e.g. 6.1.0-dev.6 after v6.0.0
   compute_version.py --tag v2.1.0              # auto → stable → core, e.g. 2.1.0
   compute_version.py --tag v2.1.0-rc1          # auto → stable → the RC semver, e.g. 2.1.0-rc1
-  compute_version.py --channel local           # <next>-dev, e.g. 6.1.0-dev after v6.0.0
+  compute_version.py --channel local           # <next>-dev.<N>, as latest names this commit
 
 The release workflow passes only `--tag`; the channel is derived from it (the one
 place that mapping lives), so the build and release jobs can't disagree.
@@ -73,8 +75,8 @@ def last_release_core() -> str | None:
             ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"],
             cwd=ROOT, capture_output=True, text=True, check=True,
         ).stdout.strip()
-    except subprocess.CalledProcessError:
-        return None
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return None   # no release tag, or no git at all
     return core_version(tag[1:] if tag.startswith("v") else tag)
 
 
@@ -128,9 +130,11 @@ def compute(channel: str, tag: str = "") -> str:
             if "-" in t:  # has a prerelease identifier (rc, beta, …)
                 return t
         return core
-    if channel == "latest":
+    # Latest, and a local build of the same commit; a tree without git, a source archive, carries the channel without its count, as build_id falls back to "nogit".
+    try:
         return f"{development_core(version)}-dev.{commits_since_last_stable()}"
-    return f"{development_core(version)}-dev"   # local: never passes for a release
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return f"{development_core(version)}-dev"
 
 
 def main() -> int:

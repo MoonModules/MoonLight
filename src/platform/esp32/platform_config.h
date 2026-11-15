@@ -169,7 +169,7 @@ constexpr bool hasEthernet = true;
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
 
 /// False: the controls follow the hardware, so a board without Ethernet shows nothing to configure.
-constexpr bool previewsEthernetControls = false;
+constexpr bool previewsHardwareControls = false;
 
 // True only under emulation, where a saved type would otherwise select hardware that is not there.
 #ifdef CONFIG_ETH_USE_OPENETH

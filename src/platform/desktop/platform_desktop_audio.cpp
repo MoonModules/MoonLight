@@ -5,8 +5,8 @@
 /// ## Why it is vendored
 ///
 /// One permissively licensed header replaces three system backends and device enumeration, linking the system audio frameworks at run time, so the build needs no vendor kits. It stays untouched, outside the quality gates.
-
-// GCC cannot parse Apple's block syntax in those framework headers; that compile-proof build falls back to the null backend, the shipped clang build keeps CoreAudio.
+///
+/// GCC cannot parse Apple's block syntax in those framework headers, so that compile-proof build falls back to the null backend; the shipped clang build keeps CoreAudio.
 #if defined(__APPLE__) && defined(__GNUC__) && !defined(__clang__)
     #define MA_NO_COREAUDIO
 #endif
@@ -81,8 +81,10 @@ const char* namePtrs_[kMaxDevices];
 ma_device_id deviceIds_[kMaxDevices];   // parallel to nameBuf_ (entry 0 unused: default)
 size_t deviceCount_ = 0;
 
-bool ensureContext() {
-    if (ctxReady_) return true;
+// The context picks its backend when it is created, on Linux PulseAudio or PipeWire where a server answers and ALSA otherwise, so a server started after MoonLight is found by creating it anew, free while no device holds it.
+bool freshContext() {
+    if (deviceOpen_) return true;   // the open device holds this context
+    if (ctxReady_) { ma_context_uninit(&ctx_); ctxReady_ = false; }
     if (ma_context_init(nullptr, 0, nullptr, &ctx_) != MA_SUCCESS) return false;
     ctxReady_ = true;
     return true;
@@ -101,44 +103,67 @@ bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRa
 }
 void audioCodecDeinit() {}
 
+/// The list entry past the default called `name`, as the list truncates names, or 0 where there is none.
+static size_t indexNamed(const char* name) {
+    for (size_t k = 1; k < deviceCount_; k++)
+        if (std::strncmp(namePtrs_[k], name, kNameLen - 1) == 0) return k;
+    return 0;
+}
+
+/// What the OS lists and a reader cannot pick: ALSA's bit bucket, `null`, offered as a capture device, and a name already listed, as ALSA names `default` and `sysdefault` alike.
+static bool unlistable(const ma_device_info& info) {
+    if (ctx_.backend == ma_backend_alsa && std::strcmp(info.id.alsa, "null") == 0) return true;
+    return indexNamed(info.name) != 0;
+}
+
+/// Append what a fresh context lists past entry 0, the default.
+static void listDevices() {
+    if (!freshContext()) return;
+    ma_device_info* infos = nullptr;
+    ma_uint32 count = 0;
+    if (ma_context_get_devices(&ctx_, nullptr, nullptr, &infos, &count) != MA_SUCCESS) return;
+    for (ma_uint32 i = 0; i < count && deviceCount_ < kMaxDevices; i++) {
+        if (unlistable(infos[i])) continue;
+        // Truncation to kNameLen is intentional (long device names get cut for the dropdown); the explicit precision states it, which GCC's -Wformat-truncation requires under -Werror.
+        std::snprintf(nameBuf_[deviceCount_], kNameLen, "%.63s", infos[i].name);
+        namePtrs_[deviceCount_] = nameBuf_[deviceCount_];
+        deviceIds_[deviceCount_] = infos[i].id;
+        deviceCount_++;
+    }
+}
+
 size_t audioCaptureDevices(const char* const** optionsOut) {
     std::snprintf(nameBuf_[0], kNameLen, "default");
     namePtrs_[0] = nameBuf_[0];
     deviceCount_ = 1;
-    if (ensureContext()) {
-        ma_device_info* infos = nullptr;
-        ma_uint32 count = 0;
-        if (ma_context_get_devices(&ctx_, nullptr, nullptr, &infos, &count) == MA_SUCCESS) {
-            for (ma_uint32 i = 0; i < count && deviceCount_ < kMaxDevices; i++) {
-                // Truncation to kNameLen is intentional (long device names get cut for the dropdown); the explicit precision states it, which GCC's -Wformat-truncation requires under -Werror.
-                std::snprintf(nameBuf_[deviceCount_], kNameLen, "%.63s", infos[i].name);
-                namePtrs_[deviceCount_] = nameBuf_[deviceCount_];
-                deviceIds_[deviceCount_] = infos[i].id;
-                deviceCount_++;
-            }
-        }
-    }
+    listDevices();
     if (optionsOut) *optionsOut = namePtrs_;
     return deviceCount_;
 }
 
-bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRate) {
-    if (!ensureContext()) return false;
-    if (deviceOpen_) { audioMicDeinit(h); }
-    // Index 0 = OS default device (null id). A stale persisted index past the current list fails loudly here rather than opening some other device.
-    if (deviceIndex >= deviceCount_ && deviceIndex != 0) {
-        // The list may simply not have been enumerated yet this boot (e.g. a direct init).
-        audioCaptureDevices(nullptr);
-        if (deviceIndex >= deviceCount_) return false;
-    }
-
+/// A mono s32 capture at `sampleRate` from list entry `pick`, 0 the OS default: full-scale s32 is the seam's 24-bit-left-justified regime, and miniaudio converts from whatever the hardware runs natively.
+static ma_device_config captureConfig(size_t pick, uint32_t sampleRate) {
     ma_device_config cfg = ma_device_config_init(ma_device_type_capture);
-    if (deviceIndex > 0) cfg.capture.pDeviceID = &deviceIds_[deviceIndex];
-    // s32 mono at the service's rate: full-scale s32 IS the seam's 24-bit-left-justified regime, and miniaudio converts/resamples from whatever the hardware runs natively.
+    if (pick > 0) cfg.capture.pDeviceID = &deviceIds_[pick];
     cfg.capture.format = ma_format_s32;
     cfg.capture.channels = 1;
     cfg.sampleRate = sampleRate;
     cfg.dataCallback = captureCallback;
+    return cfg;
+}
+
+bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRate) {
+    if (deviceOpen_) { audioMicDeinit(h); }
+    // Index 0 = OS default device (null id). A stale persisted index past the current list fails loudly here rather than opening some other device.
+    if (deviceIndex >= deviceCount_) return false;
+    // The pick is the name at that index, as the service remembers it: a fresh context may hold another backend, in another order and with ids of its own, so the name finds its place in the new list or the pick fails loudly.
+    char want[kNameLen];
+    std::snprintf(want, kNameLen, "%s", namePtrs_[deviceIndex]);
+    audioCaptureDevices(nullptr);
+    if (!ctxReady_) return false;
+    const size_t pick = deviceIndex ? indexNamed(want) : 0;
+    if (deviceIndex && !pick) return false;
+    const ma_device_config cfg = captureConfig(pick, sampleRate);
 
     if (ma_device_init(&ctx_, &cfg, &device_) != MA_SUCCESS) return false;
     if (ma_device_start(&device_) != MA_SUCCESS) {

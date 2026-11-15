@@ -4187,7 +4187,7 @@
     },
     "mode": {
      "line": "How much of the UI is shown, cumulative.",
-     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones. Only the UI reads it."
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a desktop carries to exercise their settings. Only the UI reads it."
     },
     "factory reset": {
      "line": "Delete every setting and preset and restart as freshly installed.",

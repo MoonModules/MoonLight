@@ -284,6 +284,8 @@ const char* coprocessorLine() MM_NONBLOCKING;
 const char* coprocessorHostVersion();
 /// Whether the radio chip has settled on firmware that does not match the host's, the update the Firmware card offers.
 bool coprocessorOutdated() MM_NONBLOCKING;
+/// The wired link's name on the Network card: Ethernet on a board, and on a host the host's own network, whatever the OS routes through, unless a cabled adapter carries the link.
+const char* wiredLinkName() MM_NONBLOCKING;
 /// Whether the WiFi radio can start now: always on a native radio, and on a board whose radio is a separate chip once the link to it is up, since starting it before waits on the chip.
 bool wifiRadioReady() MM_NONBLOCKING;
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
@@ -742,6 +744,8 @@ void setTestEthSendFails(bool fail);
 void setTestEthLinkSpeed(uint16_t mbps);
 /// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
 void setTestEthIPv4(const uint8_t* ip);
+/// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a desktop; off in a host test that drives the cascade from nothing.
+void setTestHostNetwork(bool counts);
 /// Fake one address table entry, `ip` answering with `mac`, null `ip` removing it, so a host test can drive arpLookup.
 void setTestArpEntry(const uint8_t* ip, const uint8_t* mac);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.

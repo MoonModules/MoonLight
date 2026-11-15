@@ -120,6 +120,7 @@ struct ApNetwork {
     mm::AccessPointModule ap;
     ApNetwork() {
         mm::platform::setTestNowMs(1000);
+        mm::platform::setTestHostNetwork(false);   // the cascade is driven from nothing: the test machine's own network stays out
         mm::platform::setTestWifiStaAvailable(true);
         mm::platform::setTestWifiApAvailable(true);
         net.addChild(&wifi);
@@ -138,6 +139,7 @@ struct ApNetwork {
         mm::platform::setTestWifiStaIPv4(nullptr);
         mm::platform::setTestWifiScan(nullptr, 0);
         mm::platform::setTestNowMs(0);
+        mm::platform::setTestHostNetwork(true);
     }
     void opens(mm::AccessPointModule::Opens o) { *controlPtr<uint8_t>(ap, "opens") = static_cast<uint8_t>(o); }
     void at(uint32_t ms) { mm::platform::setTestNowMs(1000 + ms); net.tick1s(); }

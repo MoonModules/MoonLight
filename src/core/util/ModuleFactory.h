@@ -17,22 +17,20 @@ using CreateModuleFn = MoonModule*(*)();
 ///
 /// ## What a registration captures
 ///
-/// A single probe instance yields the type's size, its role, its tags and its dimensionality, so registering is one line at boot.
-/// It lives on the heap for the moment it is read, since a module can be kilobytes and the boot task's stack is not sized for one.
-/// The path to its documentation page rides along as a flash literal with no per-instance cost, and the interface builds a help link from it.
+/// A single probe instance yields the type's size, its role, its tags and its dimensionality, so registering is one line at boot; it lives on the heap for the moment it is read, since the boot task's stack is not sized for a module.
 ///
-/// Dimensionality is captured only when the type declares it, which the effect and modifier bases do and nothing else does.
-/// The probe detects the method and reduces its result to a byte rather than naming the return type, so a light-domain concept stays out of core.
+/// The documentation path rides along as a flash literal with no per-instance cost, and the interface builds a help link from it.
+///
+/// Dimensionality is captured only when the type declares it, as the effect and modifier bases do: the probe detects the method and reduces its result to a byte, so a light-domain concept stays out of core.
 ///
 /// ## Registering the same name twice is a no-op
 ///
-/// Production registers each type once at boot, but a test fixture registers per construction.
-/// Without that, the registry accumulated a duplicate set per test case until the capacity saturated and every later registration in the run failed.
+/// Production registers each type once at boot, but a test fixture registers per construction, which once accumulated a duplicate set per case until the capacity saturated and every later registration failed.
 ///
 /// ## The display name drops the role noun
 ///
-/// A card's label would otherwise repeat what the role chip already says, so the suffix naming the role is stripped.
-/// An effect, a modifier, a layout, a driver and a service each lose their own.
+/// A card's label would otherwise repeat what the role chip says, so the suffix naming the role is stripped: an effect, a modifier, a layout, a driver and a service each lose their own.
+///
 /// A name without the suffix is returned unchanged, and the type name itself stays intact for persistence and lookup.
 class ModuleFactory {
 public:
@@ -57,7 +55,8 @@ public:
                             docPath ? docPath : "",
                             probe->tags() ? probe->tags() : "",
                             dim,
-                            probe->acceptsChildRoles() ? probe->acceptsChildRoles() : ""};
+                            probe->acceptsChildRoles() ? probe->acceptsChildRoles() : "",
+                            0};
         delete probe;
         return true;
     }
@@ -71,7 +70,7 @@ public:
             if (std::strcmp(types_[i].name, typeName) == 0) return true;
         if (!grow()) return false;
         // A hand-built entry cannot probe an instance, so it accepts no children; no such type is a container today.
-        types_[count_++] = {typeName, fn, classSize, role, docPath ? docPath : "", tags ? tags : "", 0, ""};
+        types_[count_++] = {typeName, fn, classSize, role, docPath ? docPath : "", tags ? tags : "", 0, "", 0};
         return true;
     }
 
@@ -142,6 +141,14 @@ public:
     static uint8_t typeDim(uint8_t i) { return (types_ && i < count_) ? types_[i].dim : 0; }
     /// Which child roles this type accepts, empty for none, which is how the interface knows what may be added under it.
     static const char* typeAcceptsChildRoles(uint8_t i) { return (types_ && i < count_) ? types_[i].acceptsChildRoles : ""; }
+    /// The reader's mode a type's cards need, as a control's `minMode` (Control.h): user for every type until a build says otherwise.
+    static uint8_t typeMinMode(uint8_t i) { return (types_ && i < count_) ? types_[i].minMode : 0; }
+    /// Raise a type's cards to `mode`, for what a build carries without the hardware behind it; false for a type it has not registered.
+    static bool setTypeMinMode(const char* typeName, uint8_t mode) {
+        for (uint8_t i = 0; i < count_; i++)
+            if (std::strcmp(types_[i].name, typeName) == 0) { types_[i].minMode = mode; return true; }
+        return false;
+    }
 
 private:
     struct TypeEntry {
@@ -153,6 +160,7 @@ private:
         const char* tags;
         uint8_t dim;  // 0 = N/A; 1/2/3 for types whose probe.dimensions() returns a Dim
         const char* acceptsChildRoles;  // comma-separated roles this type accepts as children; "" = none
+        uint8_t minMode;                // the reader's mode its cards need, a control's kModeUser to kModeDeveloper
     };
 
     static inline TypeEntry* types_ = nullptr;

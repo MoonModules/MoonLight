@@ -5,11 +5,9 @@ Description=MoonLight
 Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux/
 After=network-online.target
 Wants=network-online.target
-# A failed start starts the rollback, which acts on a pending program only: one that fails before it has run a minute gives way to the one before it.
-# Three starts in two minutes stop a program that keeps failing after that.
+# Three starts in two minutes stop a program that keeps failing.
 StartLimitIntervalSec=120
 StartLimitBurst=3
-OnFailure=moonlight-rollback.service
 
 [Service]
 User=moonlight
@@ -18,6 +16,8 @@ StateDirectory=moonlight
 WorkingDirectory=/var/lib/moonlight
 Environment=XDG_DATA_HOME=/var/lib/moonlight
 ExecStart=/var/lib/moonlight/bin/MoonLight
+# After every stop, in this sandbox and as this user: a pending program whose start failed gives way to the one before it, which Restart= then starts.
+ExecStopPost=/usr/lib/moonlight/rollback
 Restart=always
 RestartSec=5
 # systemd.exec's standard confinement: the firmware routes are open to the LAN, so the program gets no privilege, one capability and no write

@@ -37,8 +37,7 @@ def test_the_program_is_a_seed_the_service_copies_into_its_own_folder(tmp_path, 
 
 def test_the_package_carries_the_service_its_rollback_and_the_scripts_that_install_them(tmp_path, monkeypatch):
     files = staged(tmp_path, monkeypatch)
-    for unit in ("usr/lib/systemd/system/moonlight.service", "usr/lib/systemd/system/moonlight-rollback.service"):
-        assert unit in files
+    assert "usr/lib/systemd/system/moonlight.service" in files
     for script in ("DEBIAN/postinst", "DEBIAN/prerm", "DEBIAN/postrm", "usr/lib/moonlight/rollback"):
         assert files[script] == 0o755, script
 
@@ -54,10 +53,17 @@ def test_the_service_runs_the_copy_its_user_owns_and_rolls_back_through_systemd(
     assert "ExecStart=/var/lib/moonlight/bin/MoonLight" in unit
     assert "User=moonlight" in unit
     assert "Restart=always" in unit
-    assert "OnFailure=moonlight-rollback.service" in unit
+    # The rollback is the service's own stop hook, run in its sandbox as its user; the script leaves a clean stop alone.
+    assert "ExecStopPost=/usr/lib/moonlight/rollback" in unit
+    rollback = (pd.LINUX_DIR / "rollback").read_text()
+    assert 'case "${SERVICE_RESULT:-}" in success|timeout) exit 0 ;; esac' in rollback
+    assert "systemctl" not in rollback
     for confinement in ("NoNewPrivileges=yes", "ProtectSystem=strict", "ReadWritePaths=/var/lib/moonlight"):
         assert confinement in unit, confinement
     # One capability, the raw frames a ColorLight card takes, granted and bounded alike.
     assert "AmbientCapabilities=CAP_NET_RAW\n" in unit and "CapabilityBoundingSet=CAP_NET_RAW\n" in unit
     postinst = (pd.LINUX_DIR / "postinst").read_text()
     assert "/usr/lib/moonlight/MoonLight" in postinst and "/var/lib/moonlight/bin" in postinst
+    # The two device groups: video for HDMI out, audio for the sound cards a microphone is read from.
+    for group in ("video", "audio"):
+        assert f"usermod -a -G {group} moonlight" in postinst, group

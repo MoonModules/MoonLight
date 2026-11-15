@@ -51,7 +51,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     REQUIRE(wifi->setListRowField(first, "ipSettings", "{\"value\":1}"));
     REQUIRE(wifi->setListRowField(first, "ip", "{\"value\":\"192.168.1.77\"}"));
     REQUIRE(wifi->setListRowField(first, "gateway", "{\"value\":\"192.168.1.1\"}"));
-    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsHardwareControls) {
         for (uint8_t i = 0; i < d.eth->controls().count(); i++) {
             auto& c = d.eth->controls()[i];
             if (std::strcmp(c.name, "ipSettings") == 0) *static_cast<uint8_t*>(c.ptr) = 1;
@@ -78,7 +78,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     mm::configscrape::findInt(content.c_str(), "txPowerSetting", &tx);
     CHECK(tx == 8);
     // The Ethernet wiring is there too where this build previews it.
-    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsHardwareControls) {
         int ethType = -2;
         mm::configscrape::findInt(content.c_str(), "ethType", &ethType);
         CHECK(ethType != -2);
@@ -88,7 +88,7 @@ TEST_CASE("the app's saved config carries every key MoonBase reads") {
     CHECK(row.usable());
     CHECK(row.ip[3] == 77);
     CHECK_FALSE(mm::configscrape::findNetworkIp(content.c_str(), 1).usable());
-    if constexpr (mm::platform::hasEthernet || mm::platform::previewsEthernetControls) {
+    if constexpr (mm::platform::hasEthernet || mm::platform::previewsHardwareControls) {
         const mm::configscrape::SavedIp eth = mm::configscrape::findChildIp(content.c_str(), "EthernetModule");
         CHECK(eth.usable());
         CHECK(eth.ip[3] == 211);

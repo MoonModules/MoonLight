@@ -44,6 +44,20 @@ struct TempRoot {
     /// Non-assignable, for the same reason.
     TempRoot& operator=(const TempRoot&) = delete;
 };
+
+/// A FilesystemModule and a Layer named "Layer" on `scheduler`, set up: the boot a saved Layer.json is read into.
+static void bootLayer(mm::Scheduler& scheduler, mm::FilesystemModule*& fs, mm::Layer*& layer) {
+    fs = new mm::FilesystemModule();
+    fs->setTypeName("FilesystemModule");
+    fs->setScheduler(&scheduler);
+    layer = new mm::Layer();
+    layer->setTypeName("Layer");
+    layer->setName("Layer");
+    scheduler.addModule(fs);
+    scheduler.addModule(layer);
+    scheduler.setup();
+}
+
 }  // namespace
 
 // The settings directory is created when the filesystem mounts, not left for the first save to discover. A shipped binary starts in a directory that has never held one, and before this the first WRITE was what failed, then every write after it, once per save, forever.
@@ -150,14 +164,12 @@ TEST_CASE("the storage mounts when persistence attaches, before any module binds
 }
 
 // Persistence round-trip: set deviceName → save → recreate Scheduler+modules → load → assert.
-// Uses fsSetRoot to isolate the test from any real /.config/ on disk.
-// A control change (deviceName) saved with flush() reappears on the next boot once a fresh Scheduler loads the same path.
+// Uses fsSetRoot to isolate the test from any real /.config/ on disk. A control change (deviceName) saved with flush() reappears on the next boot once a fresh Scheduler loads the same path.
 TEST_CASE("FilesystemModule round-trip") {
     TempRoot temp("persist_test");
     const char* tmpRoot = temp.path;
 
-    // Scheduler::release() deletes its modules, they must be heap-allocated.
-    // --- First run: set deviceName, save ---
+    // Scheduler::release() deletes its modules, they must be heap-allocated. --- First run: set deviceName, save ---
     {
         mm::Scheduler scheduler;
         auto* fs = new mm::FilesystemModule();
@@ -269,8 +281,7 @@ TEST_CASE("FilesystemModule structural load makes the live tree match the docume
 //
 // Setup: an on-disk file describes Layer with zero children.
 // Live tree has Layer with a RainbowEffect child that main.cpp would have wired and marked.
-// After scheduler.setup() runs the persistence load, the wired child must survive.
-// A code-wired child (markWiredByCode) survives a load from older JSON that doesn't mention it, new firmware additions aren't trimmed for existing users.
+// After scheduler.setup() runs the persistence load, the wired child must survive. A code-wired child (markWiredByCode) survives a load from older JSON that doesn't mention it, new firmware additions aren't trimmed for existing users.
 TEST_CASE("FilesystemModule preserves code-wired children when JSON predates them") {
     TempRoot temp("wired_test", /*withConfig=*/true);
     const char* tmpRoot = temp.path;
@@ -314,8 +325,7 @@ TEST_CASE("FilesystemModule preserves code-wired children when JSON predates the
 }
 
 // Companion to the wiredByCode case above: when the document names a different type under the name of a code-wired child, the replacement must NOT kill the code-wired child.
-// That member is skipped and the next save re-writes the file with the actual tree shape.
-// When the saved document wants a different type under a code-wired child's name, the load keeps the wired child.
+// That member is skipped and the next save re-writes the file with the actual tree shape. When the saved document wants a different type under a code-wired child's name, the load keeps the wired child.
 TEST_CASE("FilesystemModule does not replace code-wired child on type mismatch") {
     TempRoot temp("wired_replace_test", /*withConfig=*/true);
     const char* tmpRoot = temp.path;
@@ -359,11 +369,32 @@ TEST_CASE("FilesystemModule does not replace code-wired child on type mismatch")
     mm::platform::fsSetRoot(".");
 }
 
+// The board migrates nothing, so a module it cannot place is named with where to look, MIGRATING, which says per release whether a backup is worth taking; the board itself prescribes no remedy.
+TEST_CASE("the first module skipped at boot is named with its reason and a pointer to MIGRATING") {
+    TempRoot temp("skipped_at_boot_test", /*withConfig=*/true);
+
+    mm::ModuleFactory::registerType<mm::Layer>("Layer");
+    mm::ModuleFactory::registerType<mm::NoiseEffect>("NoiseEffect");
+
+    // Saved file: a child of a type this build does not carry, as a release that renamed it leaves behind.
+    std::ofstream(std::string(temp.path) + "/.config/Layer.json") << "{\"Layer\":{\"$patch\":\"replace\",\"enabled\":true,\"Old\":{\"type\":\"NoSuchEffectXyz\",\"enabled\":true},\"Noise\":{\"type\":\"NoiseEffect\",\"enabled\":true}}}";
+
+    mm::Scheduler scheduler;
+    mm::FilesystemModule* fs = nullptr;
+    mm::Layer* layer = nullptr;
+    bootLayer(scheduler, fs, layer);
+
+    REQUIRE(layer->childCount() == 1);   // the rest of the file applied
+    REQUIRE(fs->skippedAtBoot() != nullptr);
+    CHECK(std::strcmp(fs->skippedAtBoot(), "Layer.Old skipped at boot: unknown type; MIGRATING says what to do, before anything is saved") == 0);
+
+    scheduler.release();
+}
+
 // Round-trip persistence with children.
 // Write a Layer subtree that contains both controls and child modules with controls of their own, then read the file back as text and verify it parses as valid JSON.
 // Regresses a missing comma between a child's "type" field and that child's first member (e.g.
-// "type":"X""$patch":"replace" instead of "type":"X","$patch":"replace").
-// Saving a Layer with multiple children produces valid JSON, comma separators between a child's `type` and its first member are present.
+// "type":"X""$patch":"replace" instead of "type":"X","$patch":"replace"). Saving a Layer with multiple children produces valid JSON, comma separators between a child's `type` and its first member are present.
 TEST_CASE("FilesystemModule writes valid JSON with children") {
     TempRoot temp("write_test", /*withConfig=*/true);
     const char* tmpRoot = temp.path;
@@ -512,8 +543,7 @@ TEST_CASE("FilesystemModule singleton survives probe construct+destruct") {
     }
 
     // 3) After the probe died, noteDirty() must still reach the real singleton.
-    // We verify it indirectly: mark Layer dirty + flush, and observe that the Layer.json file appears on disk.
-    // If the singleton was lost, flush would be a no-op (flushPending() returns early when instance_ is null) and the file would not exist.
+    // We verify it indirectly: mark Layer dirty + flush, and observe that the Layer.json file appears on disk. If the singleton was lost, flush would be a no-op (flushPending() returns early when instance_ is null) and the file would not exist.
     layer->markDirty();
     mm::FilesystemModule::flushPending();
 
@@ -606,9 +636,7 @@ TEST_CASE("FilesystemModule restores a value-dependent control across reload (th
         scheduler.release();
     }
 
-    // --- Load: fresh module (mode defaults to 0, param bound to paramA=10). The reload must end with
-    //     mode=1 AND paramB=3, NOT paramB=10 (the bug: param landed on paramA, then the mode-1 rebuild
-    //     showed paramB at its default). ---
+    // --- Load: fresh module (mode defaults to 0, param bound to paramA=10). The reload must end with     mode=1 AND paramB=3, NOT paramB=10 (the bug: param landed on paramA, then the mode-1 rebuild     showed paramB at its default). ---
     {
         mm::Scheduler scheduler;
         auto* fs = new mm::FilesystemModule();
@@ -686,8 +714,7 @@ TEST_CASE("FilesystemModule restores a user module recorded after reordered code
     mm::platform::fsSetRoot(".");
 }
 
-// Regression: an UNKNOWN member BEFORE a boot-wired child must not spawn a DUPLICATE of the wired child.
-// The unknown member is skipped, and the member naming the wired child applies to the existing instance.
+// Regression: an UNKNOWN member BEFORE a boot-wired child must not spawn a DUPLICATE of the wired child. The unknown member is skipped, and the member naming the wired child applies to the existing instance.
 TEST_CASE("FilesystemModule: an unknown entry before a wired child does not duplicate the wired child") {
     TempRoot temp("wired_dup", /*withConfig=*/true);
     const char* tmpRoot = temp.path;
@@ -732,8 +759,7 @@ TEST_CASE("FilesystemModule: an unknown entry before a wired child does not dupl
 }
 
 // User-module reorder must round-trip: the drag-reorder UI (moveChildTo) permutes children, saves the new order, and on reboot the load must restore THAT order (user-module order is meaningful, render/composite order).
-// A document lists children in order, so a saved [B, A] loads as [B, A].
-// Two user effects, no code-wired children, saved in a non-boot order.
+// A document lists children in order, so a saved [B, A] loads as [B, A]. Two user effects, no code-wired children, saved in a non-boot order.
 TEST_CASE("FilesystemModule restores a user-module reorder in the saved order") {
     TempRoot temp("user_reorder", /*withConfig=*/true);
     const char* tmpRoot = temp.path;
@@ -773,8 +799,7 @@ TEST_CASE("FilesystemModule restores a user-module reorder in the saved order") 
 }
 
 // The EXACT shiffy scenario: an UNKNOWN/renamed type mid-list (a pre-consolidation MoonI80Peripheral that no longer registers) followed by a real USER module.
-// The renamed member must drop WITHOUT taking the user module after it, or the user's real driver vanishes on every reboot.
-// This is the dominant cause on shiffy (distinct from the code-wired-reorder case above), pinned here.
+// The renamed member must drop WITHOUT taking the user module after it, or the user's real driver vanishes on every reboot. This is the dominant cause on shiffy (distinct from the code-wired-reorder case above), pinned here.
 TEST_CASE("FilesystemModule skips an unknown type mid-list and keeps the user module after it") {
     TempRoot temp("unknown_midlist", /*withConfig=*/true);
     const char* tmpRoot = temp.path;

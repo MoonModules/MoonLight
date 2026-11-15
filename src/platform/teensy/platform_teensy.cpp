@@ -373,6 +373,7 @@ const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
 bool wifiRadioReady() MM_NONBLOCKING { return true; }
+const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot
 const char* hostIp() { return ""; }
 

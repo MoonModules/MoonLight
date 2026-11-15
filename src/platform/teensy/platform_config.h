@@ -60,7 +60,7 @@ constexpr bool hasWiFi = false;
 /// The on-board PHY, or on a board without one a W5500 on the SPI port, found at boot.
 constexpr bool hasEthernet = true;
 /// False: no Ethernet controls without an interface.
-constexpr bool previewsEthernetControls = false;
+constexpr bool previewsHardwareControls = false;
 /// False: one interface, so a raw sender names none.
 constexpr bool hasNamedNetInterfaces = false;
 

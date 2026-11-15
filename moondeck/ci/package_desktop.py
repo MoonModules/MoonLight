@@ -174,8 +174,7 @@ def package_deb(binary: Path, version: str) -> Path | None:
     shutil.copy2(LINUX_DIR / "rollback", lib / "rollback")
     units = stage / "usr" / "lib" / "systemd" / "system"
     units.mkdir(parents=True)
-    for unit in ("moonlight.service", "moonlight-rollback.service"):
-        shutil.copy2(LINUX_DIR / unit, units / unit)
+    shutil.copy2(LINUX_DIR / "moonlight.service", units / "moonlight.service")
     for script in ("postinst", "prerm", "postrm"):
         shutil.copy2(LINUX_DIR / script, stage / "DEBIAN" / script)
         (stage / "DEBIAN" / script).chmod(0o755)
