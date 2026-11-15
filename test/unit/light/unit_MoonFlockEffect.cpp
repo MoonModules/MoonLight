@@ -123,10 +123,20 @@ void checkKickReleases(KeysRig& rig) {
 
 }  // namespace
 
-// The trail plane (w*h*cpl) and the flock's own room, a boid of six floats for each of the 79 keys.
-TEST_CASE("MoonFlockEffect sizes the trail and room for a boid a key") {
+// The trail plane (w*h*cpl), the flock's own room, a boid of six floats for each of the 79 keys, and each key's state, all held from the prepare.
+TEST_CASE("MoonFlockEffect sizes the trail, a boid a key and each key's state") {
     KeysRig rig(64);
-    CHECK(rig.flock.dynamicBytes() == 32 * 32 * 3 + 79 * 6 * sizeof(float));
+    CHECK(rig.flock.dynamicBytes() == 32 * 32 * 3 + 79 * 6 * sizeof(float) + 79 * sizeof(mm::MoonFlockEffect::KeyState));
+}
+
+// Disabled, the effect holds its settings and none of its per-key state, as a module that does not run.
+TEST_CASE("MoonFlockEffect holds no per-key state once disabled") {
+    KeysRig rig(64);
+    rig.run(5, 20);
+    rig.flock.setEnabled(false);
+    rig.layer.applyState();
+    CHECK(rig.flock.dynamicBytes() == 0);
+    CHECK(sizeof(mm::MoonFlockEffect) < sizeof(mm::PianoNotesBase) + 79 * sizeof(float));
 }
 
 // The flock is one boid a key, each glowing dim until its key is played.
@@ -504,6 +514,27 @@ TEST_CASE("MoonFlockEffect's keyboard on a strip shows in silence") {
     REQUIRE(rig.flock.phaseForTest() == mm::MoonFlockEffect::kHolding);
     rig.run(200, 20);          // long after every trail has faded
     CHECK(litOf(rig) >= 79);
+}
+
+// On a strip held as a keyboard, with every key cold, a key whose band is loud shows brighter than a silent one of the same pitch class, along a strip lying down and one standing on end.
+TEST_CASE("MoonFlockEffect's keyboard on a strip shows a loud key brighter than a silent one") {
+    for (const bool standing : {false, true}) {
+        CAPTURE(standing);
+        KeysRig rig(64, standing ? 1 : 79, standing ? 79 : 1);
+        rig.flock.hold = 60;
+        formKeyboard(rig, 60);
+        REQUIRE(rig.flock.phaseForTest() == mm::MoonFlockEffect::kHolding);
+        rig.run(200, 20);          // long after every trail has faded
+        rig.loudBand(40);          // key 40, C sharp 4, loud; key 4, C sharp 1, silent
+        rig.audio.frameForTest().seq++;
+        rig.run(5, 20);
+        const uint8_t* px = rig.layer.buffer().data();
+        auto light = [&](uint8_t k) {   // a strip's 79 lights are its 79 keys: A0 at the left lying down, at the bottom standing
+            const size_t at = standing ? 78 - k : k;
+            return std::max({px[at * 3], px[at * 3 + 1], px[at * 3 + 2]});
+        };
+        CHECK(light(40) > light(4));
+    }
 }
 
 // A kick releases the keyboard: the bars shrink back to their boids at the flock's own pace, so at speed 0 the release holds still, and at speed 60 it ends with the boids flying.

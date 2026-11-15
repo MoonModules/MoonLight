@@ -96,23 +96,32 @@ public:
         controls_.addSelect("dock", dock, kDockOptions, kDockCount);
     }
 
-    /// Size and clear the trail, size the flock, seed every boid, and find each key's band.
+    /// What the effect knows of one key while it runs, held from the prepare so a disabled effect holds none of it.
+    struct KeyState {
+        float heat;        ///< the key's heat, 0 to 255
+        float spectrum;    ///< the key's band as its bar shows it, rising at once and falling as a meter
+        float barLights;   ///< the bar's length as the keyboard releases, in lights
+        uint8_t third;     ///< the third-octave band the key sounds in
+        bool placed;       ///< whether its boid has landed on its place this keyboard
+    };
+
+    /// Hold each key's state, size and clear the trail, size the flock, seed every boid, and find each key's band.
     void prepare() override {
         PianoNotesBase::prepare();
+        if (!keys_.resize(kAudioNoteKeys)) {
+            setStatus(boids::kNoMemory, Severity::Warning);
+            return;
+        }
         if (!flock_.prepare(*this, width(), height(), channelsPerLight(), kAudioNoteKeys)) return;
         gridW_ = std::max<lengthType>(1, width());
         gridH_ = std::max<lengthType>(1, height());
         rng_ = Random8{boids::kSeed};                      // every prepare starts the same flight
         for (uint8_t k = 0; k < kAudioNoteKeys; k++) {
             boids::seed(flock_.boids[k], rng_);
-            third_[k] = thirdOf(k);
+            keys_[k] = KeyState{0.0f, 0.0f, 0.0f, thirdOf(k), false};
         }
-        std::fill_n(heat_, kAudioNoteKeys, 0.0f);
-        std::fill_n(spectrum_, kAudioNoteKeys, 0.0f);
         std::fill_n(glow_, kRanges, 0.0f);
         std::fill_n(glowHalfLifeMs_, kRanges, kOnsetHalfLifeMs);
-        std::fill_n(barLights_, kAudioNoteKeys, 0.0f);
-        std::fill_n(placed_, kAudioNoteKeys, false);
         hands_ = hands::PianoHands{};
         hunter_ = boids::kNone;
         heardSeq_ = AudioService::latestFrame()->seq;
@@ -125,7 +134,7 @@ public:
     /// Hear the frame, move the phases on, run the steps this tick owes within its time, copy the trail's colors to the layer, and draw the keyboard and the flock over them as they are now.
     void tick() MM_NONBLOCKING override {
         const std::optional<boids::Plane> trail = flock_.plane(width(), height(), channelsPerLight());
-        if (!trail) return;   // a resize outran the prepare: the frame waits for it
+        if (!trail || !keys_) return;   // a resize outran the prepare, or memory ran out: the frame waits for it
         gridW_ = std::max<lengthType>(1, trail->w());   // the grid this tick draws on, read each tick
         gridH_ = std::max<lengthType>(1, trail->h());
 
@@ -158,7 +167,7 @@ public:
     /// Where the keyboard forms this time, a `Dock` other than random, for tests.
     uint8_t edgeForTest() const { return edge_; }
     /// Key `k`'s heat, for tests.
-    float heatForTest(uint8_t k) const { return heat_[k]; }
+    float heatForTest(uint8_t k) const { return keys_[k].heat; }
     /// Key `k`'s pitch class across the palette, for tests.
     static uint8_t pitchHueForTest(uint8_t k) { return pitchHue(k); }
     /// The third-octave band key `k` sounds in, for tests.
@@ -215,12 +224,8 @@ private:
     };
 
     boids::Flock flock_{*this};                 ///< boid k is key k, and the trail
-    float heat_[kAudioNoteKeys] = {};           ///< each key's heat, 0 to 255
-    float spectrum_[kAudioNoteKeys] = {};       ///< each key's band as its bar shows it, rising at once and falling as a meter
-    float barLights_[kAudioNoteKeys] = {};      ///< each bar's length as the keyboard releases, in lights
-    bool placed_[kAudioNoteKeys] = {};          ///< which boids have landed on their places this keyboard
-    uint8_t third_[kAudioNoteKeys] = {};        ///< the third-octave band each key sounds in
-    float glow_[kRanges] = {};                  ///< each drum range's glow, from its last hit, fading
+    ScratchBuffer<KeyState> keys_{*this};       ///< key k's state
+    float glow_[kRanges] = {};                ///< each drum range's glow, from its last hit, fading
     uint32_t glowHalfLifeMs_[kRanges] = {};     ///< how fast each glow fades, set by its hit's strength
     uint8_t hunter_ = boids::kNone;             ///< the boid that is the predator
     uint8_t phase_ = kFlying;                   ///< flying, forming the keyboard, holding it or releasing it
@@ -238,7 +243,7 @@ private:
     // --- Listening -------------------------------------------------------------------------------
 
     /// The drum range key `k` lives in.
-    Range rangeOf(uint8_t k) const { return static_cast<Range>(rangeOfThird(third_[k])); }
+    Range rangeOf(uint8_t k) const { return static_cast<Range>(rangeOfThird(keys_[k].third)); }
 
     /// The third-octave band key `k` sounds in: band 17 is 1 kHz, a third apart each.
     static uint8_t thirdOf(uint8_t k) {
@@ -277,9 +282,9 @@ private:
     /// Cool every key's heat and every drum's glow by `dt` milliseconds, and free the predator's slot once its key is under half the `trigger`.
     void cool(uint32_t dt) {
         const float left = survives(dt, fade * 1000.0f);
-        for (float& heat : heat_) heat *= left;
+        for (uint8_t k = 0; k < kAudioNoteKeys; k++) keys_[k].heat *= left;
         for (uint8_t r = 0; r < kRanges; r++) glow_[r] *= survives(dt, static_cast<float>(glowHalfLifeMs_[r]));
-        if (hunter_ != boids::kNone && heat_[hunter_] < trigger / 2.0f) hunter_ = boids::kNone;
+        if (hunter_ != boids::kNone && keys_[hunter_].heat < trigger / 2.0f) hunter_ = boids::kNone;
     }
 
     /// Each key's spectrum bar rises with its band in frame `f` at once and falls by `dt` milliseconds of @xref{the-spectrum|a meter's fall}.
@@ -287,9 +292,10 @@ private:
         const AudioBars bands = barsOf(f, kBandsThirds);
         const float fall = survives(dt, kSpectrumFallMs);
         for (uint8_t k = 0; k < kAudioNoteKeys; k++) {
-            const uint8_t band = bands.scale == kBandsThirds ? third_[k] : kNearestSixteen[third_[k]];
+            KeyState& key = keys_[k];
+            const uint8_t band = bands.scale == kBandsThirds ? key.third : kNearestSixteen[key.third];
             const float loud = band < bands.n ? bands.mag[band] : 0.0f;
-            spectrum_[k] = std::max(loud, spectrum_[k] * fall);
+            key.spectrum = std::max(loud, key.spectrum * fall);
         }
     }
 
@@ -307,9 +313,10 @@ private:
 
     /// Add `gain` to key `k`'s heat; crossing `trigger` makes its boid the predator, and the previous one rejoins the flock. Of keys crossing in one frame, the highest takes the slot.
     void heatKey(uint8_t k, float gain) {
-        const bool below = heat_[k] < trigger;
-        heat_[k] = std::min(255.0f, heat_[k] + gain);
-        if (below && heat_[k] >= trigger) hunter_ = k;
+        float& heat = keys_[k].heat;
+        const bool below = heat < trigger;
+        heat = std::min(255.0f, heat + gain);
+        if (below && heat >= trigger) hunter_ = k;
     }
 
     // --- Drawing ---------------------------------------------------------------------------------
@@ -319,14 +326,14 @@ private:
 
     /// Key `k`'s color: its pitch class, as bright as the key is hot, from a cold glow up, plus `glow`.
     RGB keyColor(const Palette& pal, uint8_t k, float glow) const {
-        const float level = kColdLevel + (255 - kColdLevel) * heat_[k] / 255.0f + glow;
+        const float level = kColdLevel + (255 - kColdLevel) * keys_[k].heat / 255.0f + glow;
         return colorFromPalette(pal, pitchHue(k), static_cast<uint8_t>(std::min(255.0f, level)));
     }
 
     /// How wide key `k`'s boid is drawn before any flash, as a radius: one light when cold, growing to the `size` radius at full heat.
     float heatRadius(uint8_t k, lengthType w, lengthType h) const {
         const float full = boids::radius(size, w, h);
-        return 0.5f + (full - 0.5f) * heat_[k] / 255.0f;
+        return 0.5f + (full - 0.5f) * keys_[k].heat / 255.0f;
     }
 
     /// How much a glow swells a boid: up to `kFlashSwell` wider at a full one, measured against `onsetGlow` so the swell is the same at any brightness, at most a full one's.
@@ -345,12 +352,13 @@ private:
         trail.trace(from.x, from.y, b.x, b.y, keyColor(pal, k, glow), heatRadius(k, trail.w(), trail.h()) * swell(glow));
     }
 
-    /// Every boid drawn as it is now, the flying predator with its mouth.
+    /// Every boid drawn as it is now, the flying predator with its mouth; a boid on its place where a bar is one light is that bar, which carries its band's loudness, so it draws no head over it.
     void heads(const boids::Plane& layer) const {
         const Palette& pal = *Palettes::active();
         const bool mouthed = phase_ == kFlying && hunter_ != boids::kNone;
+        const bool barIsBoid = phase_ != kFlying && reach() <= 1;
         for (uint8_t k = 0; k < kAudioNoteKeys; k++)
-            if (!mouthed || k != hunter_) head(layer, pal, k);
+            if ((!mouthed || k != hunter_) && !(barIsBoid && placed(k))) head(layer, pal, k);
         if (!mouthed) return;
         const boids::Boid& p = flock_.boids[hunter_];
         const uint8_t bass = AudioService::latestFrame()->bass;
@@ -442,15 +450,19 @@ private:
         return b;
     }
     /// Whether key `k`'s boid stands on its place.
-    bool placed(uint8_t k) const { return placed_[k]; }
+    bool placed(uint8_t k) const { return keys_[k].placed; }
     /// Put key `k`'s boid on its place, at rest.
     void land(uint8_t k) {
         flock_.boids[k] = placeOf(k);
-        placed_[k] = true;
+        keys_[k].placed = true;
+    }
+    /// Lift every boid off its place.
+    void unplaceAll() {
+        for (uint8_t k = 0; k < kAudioNoteKeys; k++) keys_[k].placed = false;
     }
 
     /// Key `k`'s bar length in lights while the keyboard holds: as far as its band is loud, at least one light.
-    float liveBar(uint8_t k) const { return 1.0f + spectrum_[k] * (reach() - 1) / 255.0f; }
+    float liveBar(uint8_t k) const { return 1.0f + keys_[k].spectrum * (reach() - 1) / 255.0f; }
 
     /// Move the phases on: a flight that has lasted its wait forms the keyboard at a new place, a keyboard with every boid placed holds, and a hold of at least `hold` seconds starts its release on a bass hit, or once it has lasted another wait beyond them.
     void pacePhase(uint32_t now) {
@@ -472,7 +484,7 @@ private:
         if (!formEvery || age < waitMs()) return;
         enter(kForming, now);
         edge_ = pickEdge();
-        std::fill_n(placed_, kAudioNoteKeys, false);
+        unplaceAll();
     }
 
     /// A keyboard forming for `age` milliseconds holds once every boid is placed, the stragglers landing at once past `kFormMaxMs`.
@@ -492,7 +504,7 @@ private:
     void paceHold(uint32_t now, uint32_t age) {
         const uint32_t held = hold * 1000u;
         if (!(kicked_ && age >= held) && age < held + waitMs()) return;
-        for (uint8_t k = 0; k < kAudioNoteKeys; k++) barLights_[k] = liveBar(k);
+        for (uint8_t k = 0; k < kAudioNoteKeys; k++) keys_[k].barLights = liveBar(k);
         enter(kReleasing, now);
     }
 
@@ -526,8 +538,9 @@ private:
         bool down = true;
         for (uint8_t k = 0; k < kAudioNoteKeys; k++) {
             const float boid = std::max(1.0f, 2 * heatRadius(k, trail.w(), trail.h()));
-            barLights_[k] = std::min(barLights_[k], std::max(boid, barLights_[k] - shrink));   // a bar only shrinks, a short one waiting at its length
-            down = down && barLights_[k] <= boid;
+            float& length = keys_[k].barLights;
+            length = std::min(length, std::max(boid, length - shrink));   // a bar only shrinks, a short one waiting at its length
+            down = down && length <= boid;
         }
         if (!down) return;
         for (uint8_t k = 0; k < kAudioNoteKeys; k++) {
@@ -536,7 +549,7 @@ private:
             flock_.boids[k].vx = f.dx * boids::kBoid.maxSpeed - f.dy * spread;
             flock_.boids[k].vy = f.dy * boids::kBoid.maxSpeed + f.dx * spread;
         }
-        std::fill_n(placed_, kAudioNoteKeys, false);
+        unplaceAll();
         flyFor(now);
     }
 
@@ -546,8 +559,8 @@ private:
         const float span = reach();
         for (uint8_t k = 0; k < kAudioNoteKeys; k++) {
             if (!placed(k)) continue;
-            const float lights = phase_ == kReleasing ? barLights_[k] : liveBar(k);
-            const uint8_t level = span > 1 ? 255 : static_cast<uint8_t>(std::max<float>(spectrum_[k], kColdLevel));
+            const float lights = phase_ == kReleasing ? keys_[k].barLights : liveBar(k);
+            const uint8_t level = span > 1 ? 255 : static_cast<uint8_t>(std::max<float>(keys_[k].spectrum, kColdLevel));
             bar(layer, k, colorFromPalette(pal, pitchHue(k), level), static_cast<lengthType>(std::ceil(lights)));
         }
     }
