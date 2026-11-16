@@ -231,7 +231,7 @@ An effect that misses its frame time on the target device is a design to rethink
 
 The project's anti-stalling rule applies hardest here, because a picture always suggests one more plausible tweak. Two attempts that do not fix it mean the diagnosis is wrong, not the parameters.
 
-### Pin the behavior, not the pixels
+### Pin the behavior a viewer sees
 
 A golden-hash test passes on an all-black frame. A hash pins *which* pixels light; it says nothing about whether any of them do.
 

@@ -31,6 +31,7 @@ on:
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
       # manual dispatch because only moondeck/ci changed).
       - 'moondeck/ci/**'
+      - 'android/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'
@@ -51,6 +52,7 @@ on:
       - 'src/**'
       - 'test/**'
       - 'moondeck/ci/**'
+      - 'android/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'
@@ -148,7 +150,7 @@ jobs:
             ~/.espressif
             ~/esp/esp-idf
           # Bump the suffix when changing the IDF version to invalidate.
-          key: esp-idf-v6.1-${{ runner.os }}-v1
+          key: esp-idf-v6.1.1-${{ runner.os }}-v1
 
       # The staging step's MoonBase block runs `uv run python` on the RUNNER (the ESP-IDF
       # docker action only provides Python inside its container), so uv must exist there.
@@ -191,7 +193,7 @@ jobs:
         uses: espressif/esp-idf-ci-action@v1
         with:
           # The espressif/idf Docker tag of the local pin (PINNED_IDF_COMMIT in build_esp32.py), a fixed release tag rather than the rolling `release-v6.1`, so CI and local build the same tree; v5.x lacks the v6 APIs platform_esp32.cpp uses, and moving the pin is a re-test pass (the bump-idf process in moonwalk/09-plan-setup.yaml).
-          esp_idf_version: v6.1
+          esp_idf_version: v6.1.1
           # The IDF target is the firmware's declared chip, carried by the matrix from firmwares.json.
           target: ${{ matrix.chip }}
           path: 'esp32'
@@ -459,6 +461,47 @@ jobs:
           name: desktop-linux-arm64
           path: dist/
 
+  # The Android app: the desktop program built with the NDK, packed by Gradle with its Kotlin shell (android/), signed with the
+  # release key from the repository's secrets so a newer APK installs over an older one; a fork without the key builds it debug-signed.
+  build-android-arm64:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: uv run moondeck/ci/release_stage.py tag --input-tag "$INPUT_TAG" --ref "$GITHUB_REF" --ref-name "$GITHUB_REF_NAME"
+      - name: Compute version
+        id: ver
+        shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
+      # build_android.py installs its pinned NDK where the runner lacks it, and unpacks the release key from its secret.
+      - name: Build the APK
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          MM_ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          MM_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MM_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          MM_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: uv run moondeck/build/build_android.py --apk --version "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64
+          path: dist/
+
   # The Teensy 4.1 firmware, a HEX for teensy_loader_cli or PJRC's Teensy app; test.yml builds it on every PR as well.
   build-teensy:
     needs: verify-version
@@ -510,7 +553,7 @@ jobs:
     # Plain branch push without matching paths is filtered by the top-level `paths:`
     # so the build jobs already won't run; this condition is the belt to their braces.
     if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    needs: [build-esp32, build-teensy, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64]
+    needs: [build-esp32, build-teensy, build-macos-arm64, build-windows-x64, build-linux-x64, build-linux-arm64, build-android-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write     # softprops/action-gh-release needs this
@@ -652,6 +695,7 @@ jobs:
             dist/MoonLight-*.dmg
             dist/MoonLight-*-setup.exe
             dist/moonlight_*.deb
+            dist/MoonLight-android-*.apk
 
   # Publish the container image to the GitHub Container Registry, one per release.
   #

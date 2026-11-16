@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### An install by URL takes https only
+
+**Action: *nothing* for updates from the Firmware card; host the image on https, or upload it, where a script or an MQTT command named an `http://` address.**
+
+`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
+
 ### A desktop updates itself as a board does, and the Debian package installs a service
 
 **Action: *nothing* on most desktops; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
@@ -72,7 +78,7 @@ A browser request whose page comes from beyond the local network, by its `Origin
 
 ### Discovery moves from Network to Devices
 
-**Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*.**
+**Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*. File Manager's `Network.Devices skipped at boot` clears once Network saves: change any Network setting, such as MQTT's port, and set it back.**
 
 The device list is the Discovery card in a top-level Devices container, where it was a card under Network. The device reads Discovery's settings from the Devices file, so `addressing` starts at its default, multicast and broadcast. The list itself is not saved: it fills within seconds of boot as devices announce themselves, and a saved `devices` entry is ignored. It has no fixed size: it holds as many devices as memory allows, where it stopped at 32.
 
@@ -180,7 +186,7 @@ A driver's `start` and `count` are 32-bit, so a window starts or ends past light
 
 **Action: after an update over the air, when File Manager shows `skipped at boot`, find the module it names in the entries of the releases since the one the device ran. Where that entry asks for it, take a Backup and Restore it before changing anything.**
 
-The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board built without one, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser.
+Migration happens in the browser's Restore, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board whose build leaves it out, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser. Until then File Manager names it at every boot; any change to that module saves it and clears the line.
 
 ### The StadBeest autopilot builds its looks, a layer each
 

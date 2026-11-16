@@ -18,7 +18,7 @@ namespace {
 
 void wire(mm::ParallelLedDriver& d, mm::GpioDmaPeripheral& peripheral, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
-    mm::test::wireParallel(d, peripheral, src, corr, lights, "19,18,14,15,40,41,17,16");
+    mm::wireParallel(d, peripheral, src, corr, lights, "19,18,14,15,40,41,17,16");
 }
 
 } // namespace
@@ -44,7 +44,7 @@ TEST_CASE("GpioDmaPeripheral slices lanes and sizes the frame by the longest") {
     CHECK(d.laneStart(1) == 50);
     CHECK(d.laneStart(2) == 70);
     CHECK(d.maxLaneLights() == 50);
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(50, 3));
 }
 
 // Above 8 lanes the slots widen to 16 bits, which the platform then widens again to the port's 32.
@@ -58,7 +58,7 @@ TEST_CASE("GpioDmaPeripheral 16 lanes double the frame (16-bit slots)") {
     wire(d, peripheral, src, corr, 800);
 
     REQUIRE(d.laneCount() == 16);
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3, 2));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(50, 3, 2));
     CHECK(d.severity() != mm::MoonModule::Severity::Error);
 }
 
@@ -104,7 +104,7 @@ TEST_CASE("GpioDmaPeripheral frees its frame buffer as soon as the transfer star
 }
 
 TEST_CASE("GpioDmaPeripheral allocates a real host bus the driver can encode into") {
-    mm::test::checkHostBusAllocates<mm::GpioDmaPeripheral>();
+    mm::checkHostBusAllocates<mm::GpioDmaPeripheral>();
 }
 
 // The readout shows what the bus reports holding, which on the Teensy includes the wider copy.
@@ -124,11 +124,11 @@ TEST_CASE("GpioDmaPeripheral counts its bus in the driver's memory readout") {
 }
 
 TEST_CASE("GpioDmaPeripheral setup/release is repeatable") {
-    mm::test::checkSetupReleaseRepeatable<mm::GpioDmaPeripheral>("18,14", 2);
+    mm::checkSetupReleaseRepeatable<mm::GpioDmaPeripheral>("18,14", 2);
 }
 
 TEST_CASE("GpioDmaPeripheral loopbackTxPin tracks the loopbackTest toggle") {
-    mm::test::checkLoopbackTxPinTracksTest<mm::GpioDmaPeripheral>();
+    mm::checkLoopbackTxPinTracksTest<mm::GpioDmaPeripheral>();
 }
 
 // On a Teensy the W5500's SPI pins are refused, and making one an input would take the network down.

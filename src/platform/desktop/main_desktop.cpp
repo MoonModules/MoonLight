@@ -2,17 +2,20 @@
 ///
 /// Everything a host gives a program and a device does not, kept here so the firmware itself is the same code on both.
 
+#include <atomic>    // the stop flag
 #include <csignal>
 #include <cstdint>   // mm_main() takes uint16_t; <unistd.h> used to pull this in on POSIX
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <initializer_list>   // sentSignal's SI_ codes
+#include <iterator>   // std::size: the crash signals' count from their one array
 
+#include "main.h"          // mm_main
 #include "stop_signal.h"   // stopOnSigterm
 #include "host_update.h"   // confirmProgramWhenStable
 #ifdef MM_MAC_SCREEN
-#include <atomic>
 #include <thread>
 #include "main_thread.h"   // runMainThread
 #endif
@@ -23,10 +26,10 @@
 #include <unistd.h>
 #endif
 
-extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
 
-// sig_atomic_t: the one type a signal handler may write and the main thread read.
-static volatile std::sig_atomic_t running = 1;
+// A lock-free atomic, which a signal handler may store ([support.signal]) and the app thread reads race-free, where a volatile sig_atomic_t holds within one thread only.
+static std::atomic<bool> running{true};
+static_assert(std::atomic<bool>::is_always_lock_free);
 static bool cleanExit = false;
 
 // Write a string literal to the error stream from a signal handler, its length taken from the array bound so it can never drift from the text.
@@ -49,7 +52,13 @@ static void safeWrite(const char* s, size_t len) {
 template <size_t N>
 static void safeWrite(const char (&s)[N]) { safeWrite(s, N - 1); }   // N-1: drop the NUL
 
-static void crashHandler(int sig) {
+#ifndef _WIN32
+// The handlers installed before ours, restored before the re-raise, so the OS's own reporter still runs: Android's debuggerd writes its tombstone, elsewhere the previous one is the default and dumps core.
+static const int kCrashSignals[] = {SIGSEGV, SIGFPE, SIGBUS, SIGABRT};
+static struct sigaction previousCrashAction[std::size(kCrashSignals)];
+#endif
+
+static void reportCrash(int sig) {
     // Name and length together: safeWrite takes an explicit length (strlen is not async-signal-safe), and these names are not all the same width.
     const char* name = "SIGNAL"; size_t nameLen = 6;
     if (sig == SIGSEGV)      { name = "SIGSEGV"; nameLen = 7; }
@@ -61,9 +70,33 @@ static void crashHandler(int sig) {
     safeWrite("\n*** CRASH: ");
     safeWrite(name, nameLen);
     safeWrite(" ***\n");
-    // SA_RESETHAND (POSIX) or signal() one-shot semantics (Windows) already restored SIG_DFL; re-raise for OS coredump.
+}
+
+#ifdef _WIN32
+// Windows' signal() is one-shot and already restored SIG_DFL, so the re-raise is the OS's crash report.
+static void crashHandler(int sig) {
+    reportCrash(sig);
     raise(sig);
 }
+#else
+// Whether no faulting instruction will raise the signal again on return: a sent one (POSIX's SI_ codes, which Linux numbers 0 and below and Darwin from 0x10001) or an asynchronous hardware report, as Linux's early memory-failure SIGBUS.
+static bool nothingToRepeat(const siginfo_t* info) {
+    if (info == nullptr || info->si_code <= 0) return true;
+    for (int code : {SI_USER, SI_QUEUE, SI_TIMER, SI_ASYNCIO, SI_MESGQ})
+        if (info->si_code == code) return true;
+#ifdef BUS_MCEERR_AO
+    if (info->si_signo == SIGBUS && info->si_code == BUS_MCEERR_AO) return true;
+#endif
+    return false;
+}
+// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; any other signal is raised again.
+static void crashHandler(int sig, siginfo_t* info, void*) {
+    reportCrash(sig);
+    for (size_t i = 0; i < std::size(kCrashSignals); i++)
+        if (kCrashSignals[i] == sig) sigaction(sig, &previousCrashAction[i], nullptr);   // sigaction is async-signal-safe
+    if (nothingToRepeat(info)) raise(sig);
+}
+#endif
 
 // Local time as an ISO-8601 stamp, thread-safely: `std::localtime` shares one static tm across threads (clang-tidy concurrency-mt-unsafe, CodeQL critical), and the reentrant form is spelled per platform, hence the branch.
 static void isoTimestamp(char* out, size_t n) {
@@ -149,21 +182,18 @@ int main(int argc, char** argv) {
     signal(SIGFPE,  crashHandler);
     signal(SIGABRT, crashHandler);
     // signal() is one-shot on Windows, so the handler is already reset after the first Ctrl+C and a second one force-quits: the same escalation SA_RESETHAND gives the POSIX branch below.
-    signal(SIGINT,  [](int) { running = 0; });
+    signal(SIGINT,  [](int) { running = false; });
 #else
     struct sigaction sa{};
-    sa.sa_handler = crashHandler;
+    sa.sa_sigaction = crashHandler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESETHAND;
-    sigaction(SIGSEGV, &sa, nullptr);
-    sigaction(SIGFPE,  &sa, nullptr);
-    sigaction(SIGBUS,  &sa, nullptr);
-    sigaction(SIGABRT, &sa, nullptr);
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    for (size_t i = 0; i < std::size(kCrashSignals); i++) sigaction(kCrashSignals[i], &sa, &previousCrashAction[i]);
 
     // The first interrupt asks for a clean stop and restores the default handler, so a second kills a wedged shutdown outright rather than leaving the key dead and another terminal the only way out.
     struct sigaction saInt{};
     saInt.sa_handler = [](int) {
-        running = 0;
+        running = false;
         // Say so, because the first press otherwise looks ignored while teardown runs. safeWrite, not printf: only async-signal-safe calls are legal in a handler.
         safeWrite("\nStopping. Press Ctrl+C again to force quit.\n");
     };

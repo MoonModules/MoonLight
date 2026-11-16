@@ -307,6 +307,21 @@ def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_co
     assert c.double_findings("src/core/A.h", ['const char* s = "a double test"; // a double comment\n']) == []
     assert c.double_findings("src/platform/desktop/p.cpp", ["double v;\n"]) == []   # the host's own code is not firmware
     assert [r[1] for r in c.double_findings("src/core/A.h", ['const char* u = "http://a"; double v;\n'])] == [c.FIRMWARE_DOUBLE], "a // inside a string is no comment"
+    assert c.double_findings("src/core/A.h", ["/* the old\n", "   double here\n", "*/ int v;\n"]) == [], "a block comment is no code, across its lines"
+    assert [r[1] for r in c.double_findings("src/core/A.h", ["/* a */ double v;\n"])] == [c.FIRMWARE_DOUBLE], "code after a closed block comment counts"
+    assert [r[1] for r in c.double_findings("src/core/A.h", ['/* " */ double value; const char* unit = "mm";\n'])] == [c.FIRMWARE_DOUBLE], "a quote inside a comment opens no string"
+    assert c.double_findings("src/core/A.h", ['char q = \'"\'; // a double here is comment\n']) == [], "a quote character literal opens no string"
+
+
+def test_a_finding_of_a_rule_swept_to_zero_fails_the_check_whatever_the_committed_counts_say():
+    double = ("src/core/A.h", check_code.FIRMWARE_DOUBLE, "line 1: double v;", 1)
+    complex_fn = ("src/core/B.cpp", "complex function", "f", 12)
+    assert check_code.errors_in([double, complex_fn]) == [double]
+
+
+def test_every_rule_held_as_an_error_is_at_zero_in_the_recorded_counts():
+    counts = _ratchet.current_counts(check_code.COUNTS) or {}
+    assert {r: counts[r] for r in check_code.ERROR_RULES if counts.get(r)} == {}
 
 
 def test_every_rule_the_coding_standards_say_check_code_checks_is_a_rule_it_reports():

@@ -68,6 +68,7 @@ const LS_THEME     = "mm_theme";
 const LS_TABS      = "mm_selectedTabs";   // { [containerName]: childName }: the open tab per container
 const LS_EXPANDED  = "mm_expanded";       // [moduleName, …]: modules whose "controls" <details> is open
 const LS_TA_SIZE   = "mm_textareaSizes";  // { "<module>:<control>": heightPx }: user-dragged textarea heights
+const LS_CHIPS     = "mm_pickerChips";    // { [role]: [emoji, …] }: the type picker's active chips per role
 
 // The open tab per container, persisted so a reload doesn't dump you back on the first child.
 let selectedTabs = {};
@@ -81,14 +82,31 @@ const tabScroll = {};
 // all come from the backend, so those need no client persistence.
 let expandedSet = new Set();
 try { expandedSet = new Set(JSON.parse(lsRead(LS_EXPANDED, "[]")) || []); } catch { expandedSet = new Set(); }
-function saveExpanded() { localStorage.setItem(LS_EXPANDED, JSON.stringify([...expandedSet])); }
+function saveExpanded() { safeLocalSet(LS_EXPANDED, JSON.stringify([...expandedSet])); }
 
 // The height a user dragged each textarea to: again VIEW-ONLY state the backend doesn't own (like the tab
 // and expander state above), keyed by "<module>:<control>". Persisting it means a resized script/config box
 // keeps its size across a full-state rebuild and a page reload instead of snapping back to the 2-row default.
 let textareaSizes = {};
 try { textareaSizes = JSON.parse(lsRead(LS_TA_SIZE, "{}")) || {}; } catch { textareaSizes = {}; }
-function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; localStorage.setItem(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
+// The type picker's chip filter per role, so a filter set once holds for every effect switched after it: view state again.
+let pickerChips = {};
+try { pickerChips = JSON.parse(lsRead(LS_CHIPS, "{}")) || {}; } catch { pickerChips = {}; }
+
+// The chips a picker for `roles` opens with: each role's remembered ones.
+function stickyChips(roles) {
+    const chips = [...new Set(roles.flatMap(r => pickerChips[r] || []))];
+    // Scripted and compiled exclude each other (chipsMatch), so two roles remembering one each would open the picker empty: the pair cancels.
+    return chips.includes(SCRIPTED_EMOJI) && chips.includes(COMPILED_EMOJI) ? chips.filter(c => c !== SCRIPTED_EMOJI && c !== COMPILED_EMOJI) : chips;
+}
+
+// Remember `active` for each of `roles`, keeping a remembered chip this picker lacks, so a filter survives a picker of other types.
+function rememberChips(roles, present, active) {
+    for (const r of roles) pickerChips[r] = [...new Set([...(pickerChips[r] || []).filter(e => !present.includes(e)), ...active])];
+    safeLocalSet(LS_CHIPS, JSON.stringify(pickerChips));
+}
+
+function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; safeLocalSet(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
 
 function lsRead(key, defaultVal) {
     // Blocked storage (a private window, a policy) reads as unset rather than throwing, for every caller.
@@ -299,7 +317,7 @@ async function init() {
         // The local source runs MoonWalk's script from this computer's preview server inside the device's page, and a link switches it on, so it asks once, when the link arrives, and the yes is the stored source.
         if (helpSource === "local" && lsRead(LS_HELP_SOURCE, "") !== "local"
             && confirm("Help and MoonWalk's script will load from this computer's preview server (localhost:8421) and run inside this device's page, with access to the device. Load them from there?"))
-            localStorage.setItem(LS_HELP_SOURCE, "local");
+            safeLocalSet(LS_HELP_SOURCE, "local");
         else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
     } catch { /* storage blocked: the published help */ }
     // What the installer vouches for in the device link (`?walked=install`): kept until MoonWalk opens and records it in its own marks.
@@ -795,11 +813,12 @@ async function listSetField(moduleName, ctrlName, id, field, value) {
 /// A caller that wants a fresh module reads the absence of a name as "taken" and asks again with another.
 /// Returns null on an empty `type`, a refusal or a failed request. When `why` is given, a refusal is
 /// described in it ({status, error}) so the caller can tell a taken name (409) from any other refusal.
-async function addModule(type, parentName, id, why) {
+async function addModule(type, parentName, id, why, base) {
     if (!type) return null;
     const body = {type: type};
     if (parentName) body.parent_id = parentName;
     if (id) body.id = id;
+    else if (base) body.name = base;   // the device makes it free, shortened and numbered to fit
     let name = null;
     try {
         const r = await fetch("/api/modules", {
@@ -825,7 +844,7 @@ async function addModule(type, parentName, id, why) {
     // is added out of sight.
     if (name && parentName) {
         selectedTabs[parentName] = name;
-        localStorage.setItem(LS_TABS, JSON.stringify(selectedTabs));   // persist like the tab-click path
+        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));   // persist like the tab-click path
     }
     await refetchState();
     if (name) focusModule(name);
@@ -1033,7 +1052,7 @@ function selectModule(name) {
     // a re-render of the SAME surface (a pad click) does not.
     if (name !== selectedModule) surfaceDemoShownFor = null;
     selectedModule = name;
-    localStorage.setItem(LS_SELECTED, name);
+    safeLocalSet(LS_SELECTED, name);
     document.querySelectorAll(".nav-item").forEach((el) => {
         el.classList.toggle("active", el.dataset.module === name);
     });
@@ -1350,7 +1369,7 @@ function renderChildTabs(mod, childrenEl, depth) {
         attachTabDragHandlers(tab, child, mod);
         tab.addEventListener("click", () => {
             selectedTabs[mod.name] = child.name;
-            localStorage.setItem(LS_TABS, JSON.stringify(selectedTabs));
+            safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
             renderCards();
         });
         strip.appendChild(tab);
@@ -1692,7 +1711,7 @@ function uploadWithProgress(route, file, ui, signal) {
             // else carries the device's own reason in the JSON body.
             if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
             let msg = `HTTP ${xhr.status}`;
-            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
+            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) { msg = xhr.responseText || msg; }   // MoonBase answers in plain text
             reject(new Error(msg));
         });
         xhr.addEventListener("error", () => reject(new Error("the connection dropped")));
@@ -1828,12 +1847,9 @@ async function moonbaseUpdateFlow(opts) {
             const uploadCtl = new AbortController();
             ui.setUpload(uploadCtl);
             try {
-                const r = await fetch("/api/firmware/upload", {
-                    method: "POST", headers: { "Content-Type": "application/octet-stream" },
-                    body: opts.file, signal: uploadCtl.signal });
-                if (!r.ok) throw new Error(await r.text());
+                await uploadWithProgress("/api/firmware/upload", opts.file, ui, uploadCtl.signal);
             } catch (err) {
-                if (err instanceof Error && err.name === "AbortError") {
+                if (uploadCtl.signal.aborted) {
                     // The user's cancel, not a failure: the dropped connection aborts the
                     // write on the device, which stays waiting in MoonBase.
                     ui.fail("Install canceled: the device is waiting in MoonBase.");
@@ -1930,9 +1946,13 @@ function surfaceBank(ctrl) {
     return ctrl.switchRow ? "switch" : ctrl.encoder ? "encoder" : ctrl.fader ? "fader" : null;
 }
 
-function surfaceBreak() {
+// A bank's help is one line under the bank, written on the member array its strips publish (gen_help names it after that array), since eight narrow strips have no room for a line each.
+const BANK_HELP_KEY = { switch: "switches", encoder: "encoders", fader: "faders" };
+
+function surfaceBreak(moduleType, bank) {
     const br = document.createElement("div");
     br.className = "surface-break";
+    controlHelp(br, helpFor(moduleType)?.controls?.[BANK_HELP_KEY[bank]]);
     return br;
 }
 
@@ -2010,6 +2030,56 @@ function setStatusText(valEl, mod) {
     setText(valEl, text);
 }
 
+// Turn a card's name into a field: Enter or leaving it renames the module in place, Escape keeps the name.
+function startRename(nameEl, oldName) {
+    const field = document.createElement("input");
+    field.className = "card-name-field";
+    field.value = oldName;
+    field.maxLength = 15;   // a module name's limit, MoonModule::kNameLen less its terminator
+    let done = false;
+    const finish = async (commit) => {
+        if (done) return;
+        done = true;
+        const wanted = field.value.trim();
+        field.replaceWith(nameEl);
+        if (!commit || !wanted || wanted === oldName) return;
+        await flushPendingSends(oldName + ":");   // a debounced control write still names the old module, so it goes first
+        const res = await fetch(`/api/modules/${encodeURIComponent(oldName)}`, {
+            method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: wanted}),
+        }).catch(() => null);
+        if (!res || !res.ok) {
+            alert(`could not rename ${oldName}: ${res ? await errorMessage(res) : "the device did not answer"}`);
+            return;
+        }
+        const newName = (await res.json()).name || wanted;   // the device's final name, as an add answers
+        renameViewKeys(oldName, newName);
+        nameEl.textContent = newName;
+        await refetchState();
+    };
+    field.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+    });
+    field.addEventListener("blur", () => finish(true));
+    nameEl.replaceWith(field);
+    field.focus();
+    field.select();
+}
+
+// The view state the page keeps by module name follows a rename, so the open tab, the open controls and a resized textarea stay as they were.
+function renameViewKeys(from, to) {
+    for (const [parent, child] of Object.entries(selectedTabs)) if (child === from) selectedTabs[parent] = to;
+    if (from in selectedTabs) { selectedTabs[to] = selectedTabs[from]; delete selectedTabs[from]; }
+    safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+    if (expandedSet.delete(from)) { expandedSet.add(to); saveExpanded(); }
+    for (const key of Object.keys(textareaSizes)) {
+        if (!key.startsWith(from + ":")) continue;
+        textareaSizes[to + key.slice(from.length)] = textareaSizes[key];
+        delete textareaSizes[key];
+    }
+    safeLocalSet(LS_TA_SIZE, JSON.stringify(textareaSizes));
+}
+
 function createCard(mod, depth) {
     const card = document.createElement("div");
     card.className = "card";
@@ -2076,6 +2146,20 @@ function createCard(mod, depth) {
     const name = document.createElement("span");
     name.className = "card-name";
     name.textContent = mod.name;
+    // A module the user may delete or replace is theirs to name: a click turns the name into a field.
+    if (isUserEditableChild(mod, depth)) {
+        name.classList.add("card-name--renameable");
+        name.title = "Click to rename";
+        // A button to the keyboard as well: focusable, and Enter or Space opens the field.
+        name.tabIndex = 0;
+        name.setAttribute("role", "button");
+        name.addEventListener("click", () => startRename(name, mod.name));
+        name.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            startRename(name, mod.name);
+        });
+    }
     title.appendChild(name);
 
     // Emoji tags (role + curated) shown after the name: same set used by the
@@ -2227,7 +2311,7 @@ function createCard(mod, depth) {
         for (const ctrl of mod.controls) {
             if (!controlRendersGenerically(mod, ctrl)) continue;
             const kind = surfaceBank(ctrl);
-            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak());
+            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak(mod.type, bank));
             bank = kind;
             const row = createControl(mod.name, mod.type, ctrl);
             if (row) controlsHost.appendChild(row);
@@ -2446,8 +2530,8 @@ function createCard(mod, depth) {
         const urlField = document.createElement("input");
         urlField.type = "url";
         urlField.className = "fw-url-field";
-        urlField.placeholder = kind === "moonbase" ? "http://…/shared-moonbase-<chip>.bin"
-            : kind === "coprocessor" ? "http://…/shared-c6-slave-<version>.bin" : "http://…/firmware.bin";
+        urlField.placeholder = kind === "moonbase" ? "https://…/shared-moonbase-<chip>.bin"
+            : kind === "coprocessor" ? "https://…/shared-c6-slave-<version>.bin" : "https://…/firmware.bin";
         const urlBtn = document.createElement("button");
         urlBtn.className = "fm-tool";
         urlBtn.textContent = "Install";
@@ -5998,15 +6082,16 @@ function relativeAge(sec) {
 ///
 /// Typing is debounced, so anything that ACTS on the typed value (Enter, a send button) has to land
 /// the text first or it acts on what the device held a keystroke ago.
-// Send now whatever a key under `prefix` still holds back, so an action that follows acts on what was typed.
+// Send now whatever a key under `prefix` still holds back, every one taken before the first is awaited, so a debounce firing during that wait finds its send already gone.
 async function flushPendingSends(prefix) {
+    const sends = [];
     for (const key of Object.keys(pendingSends)) {
         if (!key.startsWith(prefix)) continue;
         clearTimeout(dragTimers[key]);
-        const send = pendingSends[key];
+        sends.push(pendingSends[key]);
         delete pendingSends[key];
-        await send();
     }
+    for (const send of sends) await send();
 }
 
 function appendResetButton(row, moduleName, ctrl, def, applyVisually, write = (name, value) => sendControl(moduleName, name, value)) {
@@ -6371,7 +6456,7 @@ function syncVisibleControls(mod) {
         const kind = surfaceBank(c);
         const row = host.querySelector(`:scope > .control-row[data-key="${cssEscape(c.name)}"]`);
         if (!row) continue;
-        if (bank && kind !== bank) host.insertBefore(surfaceBreak(), row);
+        if (bank && kind !== bank) host.insertBefore(surfaceBreak(mod.type, bank), row);
         bank = kind;
     }
     return true;
@@ -6804,23 +6889,14 @@ async function addPickedType(item, parentName) {
     if (!await mlEnsureLocal(item)) return;
     // The cloud marker is a property of the row, not of the name the card takes.
     const base = item.displayName.replace(/^\u2601\s*/, "");
-    for (let n = 1; n <= 20; n++) {
-        const id = n === 1 ? base : `${base}-${n}`;
-        const why = {};
-        const created = await addModule(type, parentName, id, why);
-        if (created) {
-            await setCardScript(created, item.script);
-            return created;
-        }
-        // Only a taken name (409) is worth retrying with a suffix: any other refusal (a name too long, an unknown type, a missing parent) fails the same way with -2, so the add stops at the first and shows the server's own reason.
-        if (why.status !== 409) {
-            alert(`could not add ${base}: ${why.error || "the device refused"}`);
-            return;
-        }
+    const why = {};
+    const created = await addModule(type, parentName, undefined, why, base);   // the device names it, as a compiled type's add
+    if (!created) {
+        alert(`could not add ${base}: ${why.error || "the device refused"}`);
+        return;
     }
-    // Twenty siblings of one name, all taken. Unlikely, but silence would leave the user clicking
-    // create and watching nothing happen, which is the one outcome worse than an error.
-    alert(`could not add ${base}: twenty modules of that name already exist here`);
+    await setCardScript(created, item.script);
+    return created;
 }
 
 function openTypePicker(parentMod, anchorEl) {
@@ -6838,6 +6914,7 @@ function openTypePicker(parentMod, anchorEl) {
         openPicker(anchorEl, {
             items: [...candidates, ...scripts],
             actionLabel: "create",
+            stickyRoles: roles,
             commit: (name, item) => addPickedType(item, parentMod.name),
         });
     });
@@ -6855,6 +6932,7 @@ function openReplacePicker(targetMod, anchorEl) {
             items: [...availableTypes.filter(t => roles.includes(t.role) && typeShown(t)), ...scripts],
             actionLabel: "replace",
             currentType: targetMod.type,
+            stickyRoles: roles,
             commit: (name, item) => replacePickedType(targetMod, item),
         });
     });
@@ -6945,6 +7023,8 @@ function openPicker(anchorEl, opts) {
 
     // Emoji chip filter row: every distinct emoji across the role-filtered types.
     // Toggling chips narrows the list (AND: a type must carry all active chips).
+    // A type picker opens with its roles' remembered chips and remembers what is toggled: `stickyRoles` names them.
+    const sticky = opts.stickyRoles || [];
     let activeChips = new Set();
     const chipSeen = new Set();
     const present = [];
@@ -6959,7 +7039,21 @@ function openPicker(anchorEl, opts) {
     if (chipSeen.has(SCRIPTED_EMOJI) && filtered.some(t => !emojiTagsFor(t).includes(SCRIPTED_EMOJI))) {
         present.push(COMPILED_EMOJI);
     }
-    if (present.length > 0) picker.appendChild(emojiChipRow(present, (a) => { activeChips = a; refresh(); }));
+    let chipRow = null;
+    if (present.length > 0) {
+        const initial = stickyChips(sticky).filter(e => present.includes(e));
+        activeChips = new Set(initial);
+        chipRow = emojiChipRow(present, (a) => {
+            activeChips = a;
+            if (sticky.length) rememberChips(sticky, present, a);
+            refresh();
+        }, undefined, initial);
+        picker.appendChild(chipRow);
+    }
+    // While chips filter the list, a line says how much they hide and clears them in one click, so a remembered filter always shows.
+    const filterNote = document.createElement("div");
+    filterNote.className = "type-picker-filter-note";
+    picker.appendChild(filterNote);
 
     const list = document.createElement("div");
     list.className = "type-picker-list";
@@ -6999,6 +7093,17 @@ function openPicker(anchorEl, opts) {
     function refresh() {
         const matches = currentMatches();
         list.innerHTML = "";
+        filterNote.replaceChildren();
+        filterNote.hidden = activeChips.size === 0;
+        if (activeChips.size) {
+            filterNote.append(`${matches.length} of ${filtered.length} shown · `);
+            const clear = document.createElement("button");
+            clear.type = "button";
+            clear.className = "type-picker-filter-clear";
+            clear.textContent = "✕ clear filter";
+            clear.addEventListener("click", () => chipRow && chipRow.clearChips());
+            filterNote.appendChild(clear);
+        }
         // Highlight the module's current type if it's in the list (replace mode lands the cursor
         // on what's already there); otherwise the first row.
         let selIdx = opts.currentType ? matches.findIndex(t => t.name === opts.currentType) : -1;
@@ -7175,7 +7280,7 @@ function attachDragHandlers(card, mod) {
     // drag at mousedown when the grab landed on a control, re-enable on
     // mouseup so the next click on the card body can still drag.
     const gate = (e) => {
-        card.draggable = !e.target.closest(".control-row, .card-controls-collapse > summary");
+        card.draggable = !e.target.closest(".control-row, .card-controls-collapse > summary, .card-name-field");
     };
     card.addEventListener("mousedown", gate, true);   // capture: runs before the input
     card.addEventListener("touchstart", gate, {capture: true, passive: true});
@@ -7240,6 +7345,13 @@ function attachDragHandlers(card, mod) {
 
 // The browser saves a file the page made: the anchor is attached for Firefox, and the URL is revoked late, since Safari drops a download whose URL goes at once.
 function saveBlob(blob, name) {
+    // An app's WebView saves what `<a download>` offers to no file, so the Android app lends the page a save of its own (MainActivity.kt).
+    if (window.MoonLightApp) {
+        const reader = new FileReader();
+        reader.onload = () => window.MoonLightApp.save(name, blob.type || "application/octet-stream", String(reader.result).split(",")[1] || "");
+        reader.readAsDataURL(blob);
+        return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -8120,6 +8232,8 @@ function renderMoonCloudStats(host, mod) {
 // ---------------------------------------------------------------------------------------------
 
 const GALLERY_RAW = "https://raw.githubusercontent.com/MoonModules/MoonLight-Gallery/main/";
+// The gallery's help is the module guide's section of this title, shown under the gallery it explains.
+const GALLERY_GUIDE = "The gallery";
 const GALLERY_SCRIPT_EXT = [".mle", ".mll", ".mlm", ".mls", ".mlp"];
 // An accepted entry shows the next time anyone opens the Gallery; the 30 s only stops a card re-render from fetching again, since GitHub limits raw requests per address.
 const GALLERY_TTL_MS = 30 * 1000;
@@ -8272,6 +8386,8 @@ function renderGallery(host, mod) {
     box.open = galleryOpen;
     const summary = document.createElement("summary");
     summary.textContent = "Gallery";
+    const galleryGuide = helpFor(mod.type)?.guide?.find(g => g.title === GALLERY_GUIDE);
+    controlHelp(summary, galleryGuide && { line: galleryGuide.text });
     box.appendChild(summary);
     const status = document.createElement("div");
     status.className = "gallery-status";
@@ -8880,7 +8996,12 @@ function renderFileManager(mod, host) {
                 dl.title = "download";
                 dl.href = "/api/file?path=" + encodeURIComponent(childPath);
                 dl.setAttribute("download", entry.name);
-                dl.addEventListener("click", (ev) => ev.stopPropagation());   // don't select/open
+                dl.addEventListener("click", (ev) => {
+                    ev.stopPropagation();   // don't select/open
+                    if (!window.MoonLightApp) return;   // a browser saves the link itself; the app saves through saveBlob
+                    ev.preventDefault();
+                    fetch(dl.href).then(async r => { if (!r.ok) throw new Error(await errorMessage(r)); return r.blob(); }).then(b => saveBlob(b, entry.name)).catch(e => alert("could not download " + entry.name + ": " + e.message));
+                });
                 rowEl.appendChild(dl);
             }
 

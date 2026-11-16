@@ -13,9 +13,10 @@
 #include "light/effects/SolidEffect.h"        // a running effect, for the summary's effects
 #include "light/layers/Effects.h"
 #include "core/util/JsonSink.h"
-#include "correction_presets.h"                  // mm::test::rebuildFromPreset
-#include "../core/conditional_controls.h"   // mm::test::setControlValue
+#include "correction_presets.h"                  // mm::rebuildFromPreset
+#include "../core/conditional_controls.h"   // mm::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstring>
 #include <filesystem>
@@ -133,7 +134,7 @@ TEST_CASE("Drivers::on gates the correction LUT without clobbering brightness") 
     drivers.addChild(&drv);
     drv.defineControls();
     // Linear keeps the expected numbers literal; a perceptual curve would turn each into a lookup.
-    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
+    mm::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                       // seeds drv's own correction_ from on(true)+brightness
 
     drivers.brightness = 200;
@@ -164,12 +165,12 @@ TEST_CASE("Drivers: a localBrightness change re-scales the driver's correction L
     drivers.on = true;
     drv.defineControls();                           // bind the correction controls (localBrightness etc.)
     // LINEAR, so the arithmetic below reads as the multiplication it is testing. What this pins is that BOTH sliders reach the LUT, which a perceptual curve would leave true but express as table lookups nobody can check by eye. The curve has its own tests.
-    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
+    mm::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();                                // seeds the driver's correction (global 200, local 255)
     CHECK(drv.correctionForTest().briLut[255] == 200);   // global 200 × local 255/255 = 200
 
     // Halve the driver's LOCAL brightness, its own control change must re-bake the LUT to global × local = 200 × 128/255 ≈ 100. This is the path the bug missed.
-    mm::test::setControlValue<uint8_t>(drv, "localBrightness", 128);
+    mm::setControlValue<uint8_t>(drv, "localBrightness", 128);
     drv.onControlChanged("localBrightness");
     CHECK(drv.correctionForTest().briLut[255] == 100);   // (200 * 128) / 255 == 100
 
@@ -243,7 +244,7 @@ TEST_CASE("a saved script palette's name resolves when the file is applied, befo
     mm::LivePalettes::clear();
     mm::Drivers drivers;
     drivers.defineControls();
-    const int i = mm::test::controlIndex(drivers, "palette");
+    const int i = mm::controlIndex(drivers, "palette");
     REQUIRE(i >= 0);
     char json[96];
     std::snprintf(json, sizeof(json), "{\"value\":\"%s\"}", mm::moonlive::kPaletteCatalog[0]);
@@ -256,7 +257,7 @@ TEST_CASE("a saved script palette's name resolves when the file is applied, befo
 TEST_CASE("clearing the palette script leaves the Drivers card without an error") {
     mm::Drivers drivers;
     drivers.defineControls();
-    const int i = mm::test::controlIndex(drivers, "paletteScript");
+    const int i = mm::controlIndex(drivers, "paletteScript");
     REQUIRE(i >= 0);
     CHECK(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], "{\"value\":\"\"}", "value",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
@@ -354,7 +355,7 @@ TEST_CASE("Drivers: three sibling NetworkSendDrivers each own their buffer, and 
     drivers.addChild(&last);
     for (auto* d : {&first, &middle, &last}) {
         d->setSourceBuffer(&source);
-        mm::test::rebuildFromPreset(d->correctionForTest(), 255, mm::test::PresetOrder::RGB);
+        mm::rebuildFromPreset(d->correctionForTest(), 255, mm::PresetOrder::RGB);
         d->applyState();
     }
 
@@ -389,7 +390,7 @@ TEST_CASE("Drivers: three sibling NetworkSendDrivers each own their buffer, and 
 // A user sees power, brightness and the look; the wiring an installer sets once waits for expert mode, and the firmware's own bench self-test for developer mode.
 TEST_CASE("Drivers: relay pins and double buffering are expert settings, and the loopback test a developer one") {
     auto modeOf = [](mm::MoonModule& m, const char* name) {
-        const int i = mm::test::controlIndex(m, name);
+        const int i = mm::controlIndex(m, name);
         REQUIRE(i >= 0);
         return m.controls()[static_cast<uint8_t>(i)].minMode;
     };
@@ -438,11 +439,10 @@ uint8_t paletteOptions(mm::Drivers& d) {
 
 // Regression: every brightness change listed both script folders to rebuild the palette picker, 100 ms on an S3, so a desk fader froze the LEDs.
 TEST_CASE("a brightness change does not rescan the palette scripts; a palette file written through the API does") {
-    char root[64];
-    std::snprintf(root, sizeof(root), "/tmp/mm_palette_scan_%u", static_cast<unsigned>(mm::platform::millis()));
+    const std::string root = mm::systemTempDir() + "/mm_palette_scan_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(root);
     struct RootAfter { std::string prev = mm::platform::fsRootPath(); ~RootAfter() { mm::platform::fsSetRoot(prev.c_str()); } } rootAfter;
-    mm::platform::fsSetRoot(root);
+    mm::platform::fsSetRoot(root.c_str());
     mm::platform::fsMkdir("/moonlive");
     mm::Drivers drivers;
     drivers.defineControls();
@@ -548,7 +548,7 @@ TEST_CASE("the running palette script compiles again when its file changes") {
     REQUIRE(mm::platform::fsWriteAtomic("/moonlive/unit-live.mlp", good, std::strlen(good)));
     mm::Drivers drivers;
     drivers.defineControls();
-    const int i = mm::test::controlIndex(drivers, "paletteScript");
+    const int i = mm::controlIndex(drivers, "paletteScript");
     REQUIRE(i >= 0);
     REQUIRE(mm::applyControlValue(drivers.controls()[static_cast<uint8_t>(i)], "{\"value\":\"unit-live.mlp\"}",
                                   "value", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
@@ -572,7 +572,7 @@ TEST_CASE("identify blinks the lights twice a second for five seconds at their o
     CorrectionCapturingDriver drv;
     drivers.addChild(&drv);
     drv.defineControls();
-    mm::test::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
+    mm::setControlValue<uint8_t>(drv, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear));
     drivers.setup();
     drivers.brightness = 200;
     drivers.onControlChanged("brightness");

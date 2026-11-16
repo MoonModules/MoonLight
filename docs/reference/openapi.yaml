@@ -158,7 +158,8 @@ paths:
               properties:
                 type: { type: string, description: "The module type, as /api/types names it." }
                 parent_id: { type: string, description: The parent module's name. }
-                id: { type: string, maxLength: 15, description: The name to give it; the type's default name when absent. }
+                id: { type: string, maxLength: 15, description: "The name to give it, exactly: up to 15 bytes of UTF-8, so fewer characters where they take more than one byte; refused when taken or longer." }
+                name: { type: string, description: "A name to start from when `id` is absent, made free as the type's default is: shortened and numbered to fit, as `NetworkReceiv-2`. The type's default name when both are absent." }
             example: { type: RainbowEffect, parent_id: Layer }
       responses:
         "200":
@@ -187,6 +188,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Module" }
         "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Modules]
+      operationId: renameModule
+      summary: Renames a module in place, its controls and children kept; a top-level module and one the user cannot remove keep their names.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 15, description: The new name, which no other module holds. }
+      responses:
+        "200":
+          description: Renamed; `name` is the module's name now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  name: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
     delete:
       tags: [Modules]
       operationId: deleteModule
@@ -699,7 +726,7 @@ components:
             type: object
             required: [url]
             properties:
-              url: { type: string, pattern: "^https?://", maxLength: 255, description: The image to fetch. }
+              url: { type: string, pattern: "^https://", maxLength: 255, description: "The image to fetch, over https only: nothing authenticates an image fetched over plain http." }
               sha256: { type: string, pattern: "^[0-9a-fA-F]{64}$", description: "The image's SHA-256, which a desktop checks before it installs its new program; a board's image carries its own." }
     Image:
       required: true

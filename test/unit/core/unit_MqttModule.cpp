@@ -65,6 +65,7 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <filesystem>
 
@@ -78,7 +79,7 @@ using namespace mm;
 namespace {
 
 // Stands in for Drivers, named so setControl("Drivers", …) resolves to it, and is the light output so the color mapping is exact.
-struct FakeDrivers : public MoonModule, public mm::test::FakeLightOutput {
+struct FakeDrivers : public MoonModule, public mm::FakeLightOutput {
     bool on = true;
     uint8_t brightness = 100;
     uint8_t palette = 0;
@@ -348,13 +349,13 @@ struct PresetRig : Rig {
     FilesystemModule* fs = nullptr;
     ControlModule* control = nullptr;
     MoonModule* layers = nullptr;
-    char root_[256] = {};   // fixture-private fs root; restored in the destructor
+    std::string root_;   // fixture-private fs root; restored in the destructor
 
     PresetRig() {
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_mqtt_preset_%u", ++seq);
+        root_ = mm::systemTempDir() + "/mm_mqtt_preset_" + std::to_string(++seq);
         std::filesystem::remove_all(root_);
-        platform::fsSetRoot(root_);
+        platform::fsSetRoot(root_.c_str());
 
         ModuleFactory::registerType<Effects>("Effects");
         ModuleFactory::registerType<Layer>("Layer");

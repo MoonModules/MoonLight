@@ -9,7 +9,7 @@
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "../core/conditional_controls.h"   // mm::test::controlIndex
+#include "../core/conditional_controls.h"   // mm::controlIndex
 
 namespace {
 
@@ -229,12 +229,12 @@ TEST_CASE("AudioSpectrumEffect marks the dominant frequency a bar wide along its
 TEST_CASE("AudioSpectrumEffect shows its speed only for the sweep") {
     Spectrum s(W, H, mm::AudioSpectrumEffect::kColorSweep, false);
     s.effect.rebuildControls();
-    const int i = mm::test::controlIndex(s.effect, "speed");
+    const int i = mm::controlIndex(s.effect, "speed");
     REQUIRE(i >= 0);
     CHECK_FALSE(s.effect.controls()[static_cast<uint8_t>(i)].hidden);
     s.effect.colorMode = mm::AudioSpectrumEffect::kColorHeight;
     s.effect.rebuildControls();
-    CHECK(s.effect.controls()[static_cast<uint8_t>(mm::test::controlIndex(s.effect, "speed"))].hidden);
+    CHECK(s.effect.controls()[static_cast<uint8_t>(mm::controlIndex(s.effect, "speed"))].hidden);
 }
 
 // The notes are the piano's keys, one bar a semitone; without them, as while the notes do not run, the third octaves draw instead.

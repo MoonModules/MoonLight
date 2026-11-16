@@ -356,7 +356,7 @@ void wireShift(MockRingDriver& d, MockRingPeripheral& peripheral, mm::Buffer& sr
     // Source must hold EVERY configured strand's `lights`, one strand per pin × the '595 fan-out (outputsPerPin), not a fixed ×8. A "1,2" 2-pin config is 2×8=16 strands, so 16×lights; under-sizing would clamp the window and silently test fewer strands than configured.
     const int pinCount = 1 + static_cast<int>(std::count(pins, pins + std::strlen(pins), ','));
     REQUIRE(src.allocate(lights * pinCount * 8, 3) == true);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -878,7 +878,7 @@ TEST_CASE("MoonI80 ring: snapshot keeps the whole window when outCh > srcCh (RGB
     mm::Correction corr;
     wireShift(d, peripheral, src, corr, 200, "1,2");            // 16 strands × 200, RGB source (srcCh=3)
     // Swap in an RGBW correction (outCh=4) so outCh > the source's 3 channels, the failing condition.
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::RGBW);
     d.correctionForTest() = corr;
     d.applyState();
     REQUIRE(corr.outChannels == 4);

@@ -17,18 +17,9 @@
 namespace mm::json {
 
 int parseInt(const char* json, const char* key) {
-    if (!json || !key) return 0;
-    char search[kSearchLen];
-    if (!buildKeyPattern(search, key, ":")) return 0;       // key too long → treat as absent
-    const char* start = std::strstr(json, search);
-    if (!start) {
-        if (!buildKeyPattern(search, key, ": ")) return 0;
-        start = std::strstr(json, search);
-    }
-    if (!start) return 0;
+    const char* v = valueAfterKey(json, key);
+    if (!v) return 0;
     // A quoted number reads as the number, so "24" and "0x18" mean what they say rather than 0.
-    const char* v = start + std::strlen(search);
-    while (*v == ' ') v++;
     if (*v == '"') v++;
     return parseIntStr(v);
 }

@@ -227,6 +227,29 @@ def test_a_control_without_a_member_takes_the_comment_behind_its_add_line(demo):
     assert gen_help.controls_of(demo)["presets"] == "The saved looks, newest first."
 
 
+BANK = """
+struct Controls { void addControl(const char*, bool&) {} void addText(const char*, char*, int) {} };
+class Desk {
+    static constexpr const char* kNames[2] = {"sw1", "sw2"};
+    /// The switch row: each switch turns the control it drives on or off.
+    bool switches_[2] = {};
+    char targets_[2][8] = {};
+    char targetNames_[2][8] = {};
+    Controls controls_;
+    void defineControls() {
+        for (int i = 0; i < 2; i++) controls_.addControl(kNames[i], switches_[i]);
+        for (int i = 0; i < 2; i++) controls_.addText(targetNames_[i], targets_[i], 8);
+    }
+};
+"""
+
+
+def test_a_bank_declared_in_a_loop_is_documented_once_by_the_member_array_it_publishes(tmp_path):
+    ci, tu = parsed(tmp_path / "Desk.h", BANK)
+    cls = next(c for c in tu.cursor.walk_preorder() if c.kind == ci.CursorKind.CLASS_DECL and c.spelling == "Desk")
+    assert gen_help.controls_of(cls) == {"switches": "The switch row: each switch turns the control it drives on or off."}
+
+
 def test_a_control_with_no_comment_anywhere_has_an_empty_line(demo):
     controls = gen_help.controls_of(demo)
     assert list(controls) == ["damping", "restart", "presets", "bare", "fps"]
@@ -512,8 +535,8 @@ def test_a_source_file_outside_the_modules_credits_by_its_attribution_line():
 
 def test_a_link_to_the_same_page_becomes_its_anchor():
     import mkdocs_hooks
-    md = "[here](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#sine)"
-    assert mkdocs_hooks._site_relative(md, "moonmodules/light/effects.md") == "[here](#sine)"
+    md = "[Sine](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#sine)"
+    assert mkdocs_hooks._site_relative(md, "moonmodules/light/effects.md") == "[Sine](#sine)"
 
 
 def test_an_absolute_link_or_picture_stays_as_written(tmp_path, monkeypatch):

@@ -58,7 +58,7 @@ struct Rig {
     // Open the port with a linear, full-brightness correction, so a frame's values read straight.
     void open() {
         mm::Correction correction;
-        mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+        mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
         driver.correctionForTest() = correction;
         driver.applyState();
         driver.prepare();

@@ -330,13 +330,15 @@ public:
         Refused,         ///< the state engine refused the document, its reason in the result the caller passed
     };
     /// Create a module named `id`, refused when that name is in use, or without an id named after its type with a free suffix; `outName` receives the name. @xref{the-apply-core-the-rest-api-callable-in-process}
-    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr);
+    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr, const char* base = nullptr);
     /// Write one control, the single path every transport's control write ends in.
     OpResult applySetControl(const char* moduleName, const char* controlName, const char* valueJson);
     /// Remove a module and everything under it; a top-level or non-editable one is refused.
     OpResult applyDeleteModule(const char* moduleName, StateDocumentResult* refusal = nullptr);
     /// Swap a module for a fresh one of `typeName` in its place, named `wantName`, else its custom name, else the new type's default, made free.
     OpResult applyReplaceModule(const char* moduleName, const char* typeName, const char* wantName, StateDocumentResult* refusal = nullptr);
+    /// Rename a module in place, its controls and children kept, refused when the name is taken or the module keeps its name; `outName` receives the name.
+    OpResult applyRenameModule(const char* moduleName, const char* newName, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr);
 
     /// A file changed, so ask the tree to re-derive whatever was built from it.
     void applyFileChanged(const char* path);
@@ -897,6 +899,7 @@ private:
     void handleAddModule(platform::TcpConnection& conn, const char* body);
     void handleDeleteModule(platform::TcpConnection& conn, const char* path);
     void handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body);
+    void handleRenameModule(platform::TcpConnection& conn, const char* path, const char* body);
     /// Every registered type with its defaults, a type at a time from a send slot; a browser holding this binary's list is answered 304 and nothing is built. @xref{the-type-list-is-fixed-per-binary}
     void serveTypes(platform::TcpConnection& conn, const char* ifNoneMatch);
     /// One registered type's entry, led by a comma unless it is the first.

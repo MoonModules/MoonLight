@@ -8,7 +8,7 @@ the tree holds thousands of pre-existing violations and a whole-file gate would 
 until a sweep larger than any change. Converting as files are touched reaches the same end state
 without that.
 
-An ERROR (em-dash, spelling, "e.g.") blocks; a warning or suggestion informs. Wired as a
+An ERROR (em-dash, spelling, "e.g.", a dating word, a link reading "here", a negated heading, a phrase of tone) blocks; a warning or suggestion informs. Wired as a
 write-time hook (hook_prose.py) so a fix happens while the sentence is still in mind, and again
 at the commit gate. Without vale on PATH the check skips with a notice rather than failing.
 

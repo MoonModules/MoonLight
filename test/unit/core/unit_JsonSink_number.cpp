@@ -1,11 +1,11 @@
 /// @module JsonSink
 
-/// Pins that every value writeNumber emits is parseable JSON.
+/// Pins that every value writeJsonNumber emits is parseable JSON.
 ///
 /// JSON has no NaN and no infinity, and the whole-value test casts to long long, which is undefined behavior for those and for any magnitude past what a long long holds. A document carrying `nan` or `inf` is rejected wholesale by a browser's parser, so one bad reading would lose the entire state frame rather than the one field that produced it.
 
 #include "doctest.h"
-#include "core/util/JsonSink.h"
+#include "unit/json_number.h"
 
 #include <cmath>
 #include <limits>
@@ -13,7 +13,7 @@
 
 static std::string written(double v) {
     mm::JsonSink sink;
-    sink.writeNumber(v);
+    mm::writeJsonNumber(sink, v);
     return std::string(sink.data(), sink.size());
 }
 

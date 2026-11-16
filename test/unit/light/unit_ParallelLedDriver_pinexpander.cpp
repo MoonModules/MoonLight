@@ -93,7 +93,7 @@ void wire(MockShiftDriver& d, MockPeripheral& peripheral, mm::Buffer& src, mm::C
     // These tests exercise the SINGLE-buffer expander/ring path. MockPeripheral::busInit ignores the double-buffer request (busBuffer(1) is always null), so run the driver in single-buffer mode EXPLICITLY rather than relying on a silent fallback, the coverage is honest about which path runs.
     d.doubleBuffer = false;
     REQUIRE(src.allocate(lights, 3) == (lights > 0));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -611,7 +611,7 @@ TEST_CASE("a full-width bus still refuses a WR or DC pin wired to flash") {
     d.latchPin = -1;
     d.doubleBuffer = false;
     REQUIRE(src.allocate(8, 3));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;

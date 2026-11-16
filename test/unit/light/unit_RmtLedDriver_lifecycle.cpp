@@ -18,7 +18,7 @@ namespace {
 void wire(mm::RmtLedDriver& d, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights = 64) {
     REQUIRE(src.allocate(lights, 3));   // a masked alloc failure would fail cases downstream
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);   // 3 out-channels
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);   // 3 out-channels
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -156,7 +156,7 @@ TEST_CASE("RmtLedDriver: a DISABLED driver does not acquire through the boot swe
     mm::Buffer src;
     mm::Correction corr;
     REQUIRE(src.allocate(64, 3));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setEnabled(false);          // persisted-disabled at boot
     d.setSourceBuffer(&src);
@@ -177,7 +177,7 @@ TEST_CASE("RmtLedDriver setup/release is repeatable with no residual state") {
     mm::Buffer src;
     mm::Correction corr;
     src.allocate(64, 3);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
 
     for (int cycle = 0; cycle < 4; cycle++) {
@@ -199,9 +199,9 @@ TEST_CASE("RmtLedDriver loopbackRxPin tracks the loopbackTest toggle") {
     mm::RmtLedDriver d;
     d.defineControls();
     auto setTest = [&](bool on) {
-        mm::test::setControlValue<bool>(d, "loopbackTest", on);
+        mm::setControlValue<bool>(d, "loopbackTest", on);
     };
-    mm::test::checkConditionalControl(d, "loopbackRxPin", setTest, /*visibleWhenTrue=*/true);
+    mm::checkConditionalControl(d, "loopbackRxPin", setTest, /*visibleWhenTrue=*/true);
 }
 
 // loopbackTxPin is the optional TX override (transmit on it instead of pins[0] during the self-test). Like loopbackRxPin it's a conditional control: always bound (so a saved override loads), shown only while loopbackTest is on. The override's effect on the transmitted pin is hardware-only (rmtTxChannels==0 on desktop), but the conditional-visibility contract is host-testable here.
@@ -209,9 +209,9 @@ TEST_CASE("RmtLedDriver loopbackTxPin tracks the loopbackTest toggle") {
     mm::RmtLedDriver d;
     d.defineControls();
     auto setTest = [&](bool on) {
-        mm::test::setControlValue<bool>(d, "loopbackTest", on);
+        mm::setControlValue<bool>(d, "loopbackTest", on);
     };
-    mm::test::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
+    mm::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
 }
 
 // Editing `pins` while the loopback test is ON must refresh the parsed config before the self-test runs, onControlChanged fires before the prepareTree sweep re-parses, so without the in-branch parseConfig() the test would transmit on the OLD pin and show a verdict for it. Mirrors the fix in ParallelLedDriver; this pins the RMT sibling that the dedup left behind. Host-observable via pinCount(): the refresh re-parses to the new pin set even though the platform loopback itself is inert.
@@ -220,7 +220,7 @@ TEST_CASE("RmtLedDriver loopback re-parses pins before testing (no stale-pin ver
     mm::Buffer src;
     mm::Correction corr;
     src.allocate(64, 3);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     std::strcpy(d.pins, "18");
     d.defineControls();
     d.setSourceBuffer(&src);
@@ -229,7 +229,7 @@ TEST_CASE("RmtLedDriver loopback re-parses pins before testing (no stale-pin ver
     REQUIRE(d.pinCount() == 1);
 
     // Turn the test on, then edit pins to a 3-pin set and fire the pin update the way the control framework does (write the buffer, then onControlChanged). The config must already reflect 3 pins by the time the self-test reads pinList_.
-    mm::test::setControlValue<bool>(d, "loopbackTest", true);
+    mm::setControlValue<bool>(d, "loopbackTest", true);
     std::strcpy(d.pins, "18,17,16");
     d.onControlChanged("pins");
     CHECK(d.pinCount() == 3);   // refreshed before the test, not the stale 1

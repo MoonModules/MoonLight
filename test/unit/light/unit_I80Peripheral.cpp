@@ -19,7 +19,7 @@ namespace {
 
 void wire(mm::ParallelLedDriver& d, mm::I80Peripheral& peripheral, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
-    mm::test::wireParallel(d, peripheral, src, corr, lights, "1,2,4,5,6,7,8,9");
+    mm::wireParallel(d, peripheral, src, corr, lights, "1,2,4,5,6,7,8,9");
 }
 
 } // namespace
@@ -43,7 +43,7 @@ TEST_CASE("I80Peripheral slices lanes and sizes the frame by the longest") {
     CHECK(d.laneStart(1) == 50);
     CHECK(d.laneStart(2) == 70);
     CHECK(d.maxLaneLights() == 50);
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(50, 3));
 }
 
 // Empty ledsPerPin splits evenly, same PinList semantics the RMT driver uses.
@@ -58,7 +58,7 @@ TEST_CASE("I80Peripheral even split over the default 8 lanes") {
     CHECK(d.laneLightCount(0) == 32);
     CHECK(d.laneLightCount(7) == 32);
     CHECK(d.maxLaneLights() == 32);
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(32, 3));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(32, 3));
 }
 
 // An RGB→RGBW preset toggle grows the frame (32 vs 24 slot bytes per light).
@@ -69,12 +69,12 @@ TEST_CASE("I80Peripheral frame grows on RGBW preset") {
     mm::Correction corr;
     std::strcpy(d.ledsPerPin, "50,50");   // lanes 2..7 idle
     wire(d, peripheral, src, corr, 100);
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 3));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(50, 3));
 
     // The driver owns its Correction, so mutate that copy (not the external one).
-    mm::test::rebuildFromPreset(d.correctionForTest(), 255, mm::test::PresetOrder::GRBW);
+    mm::rebuildFromPreset(d.correctionForTest(), 255, mm::PresetOrder::GRBW);
     d.onCorrectionChanged();
-    CHECK(d.frameBytes() == mm::test::expectParallelFrame(50, 4));
+    CHECK(d.frameBytes() == mm::expectParallelFrame(50, 4));
 }
 
 // A whole-frame driver with a bounded DMA (the classic ESP32 i80 = internal-RAM-only I2S, no ring) must REFUSE cleanly when the frame won't fit, never choke the bus init (which can busy-wait to a watchdog reset on hardware). On desktop / PSRAM chips the budget is 0 (no bound), so the frame-fit gate NEVER triggers regardless of grid size: a large frame is never rejected for its size here (the classic-i80 branch is compiled out). Pins the "budget 0 = no bound" contract, the gate is inert off the classic chip, so this refactor changes nothing on every non-classic target. The hardware behavior (a too-big frame on the real classic i80 idles with the clear "over DMA" status) is proven on the Olimex.
@@ -136,7 +136,7 @@ TEST_CASE("I80Peripheral with the empty default pins idles cleanly") {
     d.setPeripheralForTest(&peripheral);
     REQUIRE(d.pins[0] == '\0');           // the empty default, not a bench guess
     REQUIRE(src.allocate(64, 3));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -160,9 +160,9 @@ TEST_CASE("I80Peripheral drives any pin count; the bus rounds up around it") {
         wire(d, peripheral, src, corr, 64);
         CHECK(d.laneCount() == 3);
         CHECK(d.severity() != mm::MoonModule::Severity::Error);
-        // 64 lights over 3 lanes → the longest is 22. ≤8 pins → the 8-bit bus → 1-byte slots, which is what mm::test::expectParallelFrame() assumes, so a plain expectFrame match IS the "bus stayed 8-bit" assertion.
+        // 64 lights over 3 lanes → the longest is 22. ≤8 pins → the 8-bit bus → 1-byte slots, which is what mm::expectParallelFrame() assumes, so a plain expectFrame match IS the "bus stayed 8-bit" assertion.
         CHECK(d.maxLaneLights() == 22);
-        CHECK(d.frameBytes() == mm::test::expectParallelFrame(22, 3));
+        CHECK(d.frameBytes() == mm::expectParallelFrame(22, 3));
     }
     {   // 16 pins → the full 16-bit bus, nothing parked. clock/dc moved clear of the data set
         // (defaults 10/11 would collide with data pins 10/11 → the collision guard). clockPin/dcPin live on the I80Peripheral backend, so set them via the control API ParallelLedDriver binds (defineDriverControls -> peripheral_->addBusControls) rather than a direct member.
@@ -170,14 +170,14 @@ TEST_CASE("I80Peripheral drives any pin count; the bus rounds up around it") {
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-        mm::test::setControlValue<int8_t>(d, "dcPin", 21);
+        mm::setControlValue<int8_t>(d, "clockPin", 20);
+        mm::setControlValue<int8_t>(d, "dcPin", 21);
         std::strcpy(d.pins, "1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17");
         wire(d, peripheral, src, corr, 64);
         CHECK(d.laneCount() == 16);
         CHECK(d.severity() != mm::MoonModule::Severity::Error);
         CHECK(d.maxLaneLights() == 4);
-        CHECK(d.frameBytes() == mm::test::expectParallelFrame(4, 3, /*slotBytes=*/2));   // 16 pins → the 16-bit bus
+        CHECK(d.frameBytes() == mm::expectParallelFrame(4, 3, /*slotBytes=*/2));   // 16 pins → the 16-bit bus
     }
     {   // 10 pins — the case the old "exactly 8 or 16" rule rejected outright. It is a perfectly good
         // config: 10 data lanes on the 16-bit bus, the other 6 parked. This is the point of the change.
@@ -185,8 +185,8 @@ TEST_CASE("I80Peripheral drives any pin count; the bus rounds up around it") {
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-        mm::test::setControlValue<int8_t>(d, "dcPin", 21);
+        mm::setControlValue<int8_t>(d, "clockPin", 20);
+        mm::setControlValue<int8_t>(d, "dcPin", 21);
         std::strcpy(d.pins, "1,2,4,5,6,7,8,9,12,13");
         wire(d, peripheral, src, corr, 64);
         CHECK(d.laneCount() == 10);
@@ -194,7 +194,7 @@ TEST_CASE("I80Peripheral drives any pin count; the bus rounds up around it") {
         // 64 over 10 lanes → 6 each, the last taking the remainder (PinList's even-split rule) → 10.
         // >8 pins → the 16-bit bus → 2-byte slots.
         CHECK(d.maxLaneLights() == 10);
-        CHECK(d.frameBytes() == mm::test::expectParallelFrame(10, 3, /*slotBytes=*/2));
+        CHECK(d.frameBytes() == mm::expectParallelFrame(10, 3, /*slotBytes=*/2));
     }
     // (0 pins → idles: covered by "I80Peripheral with the empty default pins idles cleanly" above.)
 }
@@ -207,10 +207,10 @@ TEST_CASE("I80Peripheral idles with a named status when DC is unset, on every ch
     mm::Correction corr;
     d.setPeripheralForTest(&peripheral);
     REQUIRE(src.allocate(64, 3));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
-    mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-    mm::test::setControlValue<int8_t>(d, "dcPin", -1);
+    mm::setControlValue<int8_t>(d, "clockPin", 20);
+    mm::setControlValue<int8_t>(d, "dcPin", -1);
     std::strcpy(d.pins, "1,2,4");
     wire(d, peripheral, src, corr, 64);
     CHECK(d.severity() == mm::MoonModule::Severity::Error);
@@ -225,10 +225,10 @@ TEST_CASE("I80Peripheral on an LCD_CAM chip idles with a named status when WR is
     mm::Correction corr;
     d.setPeripheralForTest(&peripheral);
     REQUIRE(src.allocate(64, 3));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
-    mm::test::setControlValue<int8_t>(d, "clockPin", -1);
-    mm::test::setControlValue<int8_t>(d, "dcPin", 21);
+    mm::setControlValue<int8_t>(d, "clockPin", -1);
+    mm::setControlValue<int8_t>(d, "dcPin", 21);
     std::strcpy(d.pins, "1,2,4");
     wire(d, peripheral, src, corr, 64);
     CHECK(d.severity() == mm::MoonModule::Severity::Error);
@@ -247,10 +247,10 @@ TEST_CASE("I80Peripheral refuses a WR/DC pin this chip package does not have") {
         mm::Correction corr;
         d.setPeripheralForTest(&peripheral);
         REQUIRE(src.allocate(64, 3));
-        mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+        mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-        mm::test::setControlValue<int8_t>(d, "dcPin", 21);
+        mm::setControlValue<int8_t>(d, "clockPin", 20);
+        mm::setControlValue<int8_t>(d, "dcPin", 21);
         std::strcpy(d.pins, "1,2,4");
         wire(d, peripheral, src, corr, 64);
         CHECK(d.severity() == mm::MoonModule::Severity::Error);
@@ -277,8 +277,8 @@ TEST_CASE("I80Peripheral warns (does not idle) when a data pin is on clockPin/dc
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 12);
-        mm::test::setControlValue<int8_t>(d, "dcPin", 13);
+        mm::setControlValue<int8_t>(d, "clockPin", 12);
+        mm::setControlValue<int8_t>(d, "dcPin", 13);
         std::strcpy(d.pins, "18,5,6,7,8,9,10,11");
         wire(d, peripheral, src, corr, 64);
         CHECK(d.laneCount() == 8);
@@ -292,8 +292,8 @@ TEST_CASE("I80Peripheral warns (does not idle) when a data pin is on clockPin/dc
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-        mm::test::setControlValue<int8_t>(d, "dcPin", 20);   // same as clockPin
+        mm::setControlValue<int8_t>(d, "clockPin", 20);
+        mm::setControlValue<int8_t>(d, "dcPin", 20);   // same as clockPin
         std::strcpy(d.pins, "1,2,3,4,5,6,7,8");
         wire(d, peripheral, src, corr, 64);
         REQUIRE(d.status() != nullptr);
@@ -307,8 +307,8 @@ TEST_CASE("I80Peripheral warns (does not idle) when a data pin is on clockPin/dc
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", -1);   // unset
-        mm::test::setControlValue<int8_t>(d, "dcPin", 21);
+        mm::setControlValue<int8_t>(d, "clockPin", -1);   // unset
+        mm::setControlValue<int8_t>(d, "dcPin", 21);
         std::strcpy(d.pins, "1,2,3,4,5,6,7,8");
         wire(d, peripheral, src, corr, 64);
         REQUIRE(d.status() != nullptr);
@@ -321,8 +321,8 @@ TEST_CASE("I80Peripheral warns (does not idle) when a data pin is on clockPin/dc
         mm::ParallelLedDriver d;
         d.setPeripheralForTest(&peripheral);
         d.defineControls();
-        mm::test::setControlValue<int8_t>(d, "clockPin", 20);
-        mm::test::setControlValue<int8_t>(d, "dcPin", -1);      // unset
+        mm::setControlValue<int8_t>(d, "clockPin", 20);
+        mm::setControlValue<int8_t>(d, "dcPin", -1);      // unset
         std::strcpy(d.pins, "1,2,3,4,5,6,7,8");
         wire(d, peripheral, src, corr, 64);
         REQUIRE(d.status() != nullptr);
@@ -349,7 +349,7 @@ TEST_CASE("I80Peripheral tolerates a zero-light buffer") {
 
 // setup/release cycles leave no residue (status clean, ASAN-checked heap).
 TEST_CASE("I80Peripheral setup/release is repeatable") {
-    mm::test::checkSetupReleaseRepeatable<mm::I80Peripheral>("1,2,4,5,6,7,8,9", 8);
+    mm::checkSetupReleaseRepeatable<mm::I80Peripheral>("1,2,4,5,6,7,8,9", 8);
 }
 
 // loopbackRxPin is bound always, visible only while loopbackTest is on.
@@ -370,7 +370,7 @@ TEST_CASE("I80Peripheral loopbackRxPin tracks the loopbackTest toggle") {
 
 // loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (lcdLanes==0 on desktop); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
 TEST_CASE("I80Peripheral loopbackTxPin tracks the loopbackTest toggle") {
-    mm::test::checkLoopbackTxPinTracksTest<mm::I80Peripheral>();
+    mm::checkLoopbackTxPinTracksTest<mm::I80Peripheral>();
 }
 
 // The pinExpander switch is HIDDEN where the silicon can't host the '595 (supportsPinExpander() false: the classic ESP32 i80 = the I2S peripheral, whose DMA can't read PSRAM, so the ×8 expander frame has nowhere to live). Desktop has lcdLanes==0 too, so the control is hidden here, the same compile-time gate the classic build takes. On the LCD_CAM chips (S3/P4) the flag is true and the control shows; that path is exercised on-device. Turning it on where unsupported only ever yields a config error, so not offering the switch is the honest UI. (Before this, the toggle was shown on every chip.)
@@ -397,13 +397,13 @@ TEST_CASE("I80Peripheral hides pinExpander where the chip can't host it") {
 
 // The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on desktop, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.
 TEST_CASE("I80Peripheral allocates a real host bus the driver can encode into") {
-    mm::test::checkHostBusAllocates<mm::I80Peripheral>();
+    mm::checkHostBusAllocates<mm::I80Peripheral>();
 }
 
 TEST_CASE("I80Peripheral gives the host bus two distinct buffers when asked") {
-    mm::test::checkHostBusDoubleBuffer<mm::I80Peripheral>();
+    mm::checkHostBusDoubleBuffer<mm::I80Peripheral>();
 }
 
 TEST_CASE("I80Peripheral counts the DMA buffers in its memory readout") {
-    mm::test::checkHostBusCountedInHeapReadout<mm::I80Peripheral>();
+    mm::checkHostBusCountedInHeapReadout<mm::I80Peripheral>();
 }

@@ -47,13 +47,17 @@ Its shape is the module tree, not the interface schema `GET /api/state` returns;
 - A new or re-pointed script declares its controls when it compiles, so the document sets them after that rebuild. The answer counts them as `deferred`.
 - Past 16 new or re-pointed modules in one document, an unknown control on a script module is deferred as well, and the device log names it after the rebuild.
 - A root key starting with `$` is the file's own, such as a preset's `$slot` (its pad), so a preset file applies as it is.
+- `"$name": "<new>"` in a module's object renames that module in place: its controls, its children and its place stay, and a control surface binding to it follows the new name.
+  It takes a module you can remove or replace, below the top level, and a name of 1 to 15 characters no other module holds.
+  A preset, a gallery look or a backup saved before the rename still names the old one, so applying it brings that module back under its old name.
 
 The answer is `{"ok":true,"changes":N}`, or a 400 naming the first failure and where it is, such as `{"error":"no such control","at":"Effects.Layer.Swirl.nope","changes":2}`.
 A failure only writing finds, such as a value out of range, leaves what came before it applied.
 A document is at most 32 KB, and a larger one is refused with a 413.
 `POST /api/state` takes the same document, for a client that cannot send `PATCH`.
 `PATCH /api/state?live=1` applies a document that drives rather than configures, as a show building its look on another device does. It is checked and applied the same way, and nothing it changes is marked to save, so a reboot returns the device to its saved state.
-Adding, replacing and removing a module through `/api/modules` applies a one-member document, so the same rules hold on both paths.
+Adding, replacing, renaming and removing a module through `/api/modules` applies a one-member document, so the same rules hold on both paths.
+`PATCH /api/modules/<name>` with `{"name":"<new>"}` renames, answering `{"ok":true,"name":"<new>"}`, or a 409 when another module holds the name.
 
 `GET /api/modules/<name>/document` reads a module back as a document, its path from the top level around it, and a card's `{ }` button shows the same.
 A secret stays out of every document, and applying one leaves the secret as it is.

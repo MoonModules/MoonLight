@@ -18,6 +18,7 @@
 /// A loop that skips missing files and asserts nothing reports green either way, which looks exactly like a test that ran.
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 
 #include "core/util/FirmwareImage.h"
 
@@ -33,7 +34,7 @@ namespace {
 
 std::filesystem::path repoRoot() {
     // test/unit/core/<this file> -> repo root
-    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
+    return mm::sourceRoot();
 }
 
 /// A synthetic image head: magic, chip id, and a descriptor naming a project.

@@ -187,6 +187,18 @@
         "^moonlight_.+_arm64\\.deb$",
         "^MoonLight-linux-arm64-v.+\\.tar\\.gz$"
       ]
+    },
+    {
+      "name": "desktop-android-arm64",
+      "platform": "desktop",
+      "chip": "android-arm64",
+      "eth_only": false,
+      "ships": true,
+      "description": "MoonLight for Android arm64, downloaded and run on a phone, a tablet or a headset.",
+      "label": "Android arm64",
+      "assets": [
+        "^MoonLight-android-arm64-v.+\\.apk$"
+      ]
     }
   ]
 }

@@ -18,7 +18,7 @@ TEST_CASE("NetworkSendDriver sizes corrected_ in prepare, not in tick") {
     REQUIRE(source.allocate(64, 3));
 
     mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
 
     mm::NetworkSendDriver driver;
     driver.setSourceBuffer(&source);
@@ -49,7 +49,7 @@ TEST_CASE("NetworkSendDriver grows corrected_ in onCorrectionChanged on RGB → 
     REQUIRE(source.allocate(32, 3));
 
     mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
 
     mm::NetworkSendDriver driver;
     driver.setSourceBuffer(&source);
@@ -59,7 +59,7 @@ TEST_CASE("NetworkSendDriver grows corrected_ in onCorrectionChanged on RGB → 
     REQUIRE(driver.correctedBuffer().channelsPerLight() == 3);
 
     // Simulate a preset change. Drivers normally drives this; we call directly. The driver owns its Correction, so mutate that copy (not the external one).
-    mm::test::rebuildFromPreset(driver.correctionForTest(), 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(driver.correctionForTest(), 255, mm::PresetOrder::RGBW);
     driver.onCorrectionChanged();
 
     CHECK(driver.correctedBuffer().count() == 32);
@@ -72,7 +72,7 @@ TEST_CASE("NetworkSendDriver onCorrectionChanged is a no-op when outChannels unc
     REQUIRE(source.allocate(48, 3));
 
     mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
 
     mm::NetworkSendDriver driver;
     driver.setSourceBuffer(&source);
@@ -83,7 +83,7 @@ TEST_CASE("NetworkSendDriver onCorrectionChanged is a no-op when outChannels unc
     REQUIRE(dataBefore != nullptr);
 
     // Brightness change: outChannels stays 3, so the existing allocation fits. The driver owns its Correction, so mutate that copy (not the external one).
-    mm::test::rebuildFromPreset(driver.correctionForTest(), 128, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(driver.correctionForTest(), 128, mm::PresetOrder::RGB);
     driver.onCorrectionChanged();
 
     // Same backing allocation, the resize short-circuited.

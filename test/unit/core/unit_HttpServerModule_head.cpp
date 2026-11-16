@@ -155,14 +155,15 @@ TEST_CASE("a query parameter matches whole: a value is found by its own name onl
     CHECK_FALSE(queryHas("live=", "live", "1"));
 }
 
-TEST_CASE("a device fetches only an http or https URL, never a file, a relative path or another scheme") {
-    using mm::http::isHttpUrl;
-    CHECK(isHttpUrl("http://192.168.1.10/fw.bin"));
-    CHECK(isHttpUrl("https://github.com/MoonModules/MoonLight/releases/download/v7.0.0/firmware-esp32.bin"));
-    CHECK_FALSE(isHttpUrl("file:///etc/passwd"));
-    CHECK_FALSE(isHttpUrl("//evil.example/fw.bin"));
-    CHECK_FALSE(isHttpUrl("ftp://host/fw.bin"));
-    CHECK_FALSE(isHttpUrl(""));
+TEST_CASE("a device installs only from an https URL, never plain http, a file, a relative path or another scheme") {
+    using mm::http::isHttpsUrl;
+    CHECK(isHttpsUrl("https://github.com/MoonModules/MoonLight/releases/download/v7.0.0/firmware-esp32.bin"));
+    CHECK(isHttpsUrl("https://192.168.1.10/fw.bin"));
+    CHECK_FALSE(isHttpsUrl("http://192.168.1.10/fw.bin"));
+    CHECK_FALSE(isHttpsUrl("file:///etc/passwd"));
+    CHECK_FALSE(isHttpsUrl("//evil.example/fw.bin"));
+    CHECK_FALSE(isHttpsUrl("ftp://host/fw.bin"));
+    CHECK_FALSE(isHttpsUrl(""));
 }
 
 TEST_CASE("a page's Origin is trusted when it names this network, an address or a local name, and refused when it names the internet") {

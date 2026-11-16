@@ -5,7 +5,7 @@
 #include "doctest.h"
 #include "audio_effect_test.h"
 #include "light/effects/KeyboardEffect.h"
-#include "../core/conditional_controls.h"   // mm::test::controlIndex
+#include "../core/conditional_controls.h"   // mm::controlIndex
 
 using namespace mm;
 
@@ -340,15 +340,15 @@ TEST_CASE("under notes hands auto, octave and octaves hide, and notes sits above
     Keys keys;
     keys.e.notes = AudioNotesBase::kNotesHands;
     keys.e.defineControls();
-    auto hidden = [&](const char* name) { return keys.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(keys.e, name))].hidden; };
-    CHECK(mm::test::controlIndex(keys.e, "notes") < mm::test::controlIndex(keys.e, "auto"));
+    auto hidden = [&](const char* name) { return keys.e.controls()[static_cast<uint8_t>(mm::controlIndex(keys.e, name))].hidden; };
+    CHECK(mm::controlIndex(keys.e, "notes") < mm::controlIndex(keys.e, "auto"));
     CHECK(hidden("auto"));
     CHECK(hidden("octave"));
     CHECK(hidden("octaves"));
     Keys all;   // notes all, the octaves layout
     all.e.defineControls();
-    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(all.e, "auto"))].hidden);
-    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::test::controlIndex(all.e, "octaves"))].hidden);
+    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::controlIndex(all.e, "auto"))].hidden);
+    CHECK_FALSE(all.e.controls()[static_cast<uint8_t>(mm::controlIndex(all.e, "octaves"))].hidden);
 }
 
 // Under hands with chord, a hand holding three keys or more plays a chord and snaps to it, a hand holding one or two plays a line and keeps its notes.

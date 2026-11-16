@@ -92,7 +92,7 @@ void wire(mm::ParallelLedDriver& d, MockPeripheral& peripheral, mm::Buffer& src,
     d.doubleBuffer = async;
     std::strcpy(d.pins, "1,2,3,4");
     REQUIRE(src.allocate(lights, 3) == (lights > 0));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;

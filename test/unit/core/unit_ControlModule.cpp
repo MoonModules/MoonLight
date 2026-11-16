@@ -22,6 +22,7 @@
 #include "light/layers/Effects.h"
 #include "light/drivers/Drivers.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -37,14 +38,14 @@ struct Device {
     mm::ControlModule* control = nullptr;
     mm::MoonModule* layers = nullptr;
     mm::MoonModule* drivers = nullptr;
-    char root_[256] = {};
+    std::string root_;
 
     Device() {
         // A monotonic counter, not millis(): two fixtures constructed in the same millisecond would otherwise share a root and see each other's preset files.
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_preset_test_%u", ++seq);
+        root_ = mm::systemTempDir() + "/mm_preset_test_" + std::to_string(++seq);
         std::filesystem::remove_all(root_);
-        mm::platform::fsSetRoot(root_);
+        mm::platform::fsSetRoot(root_.c_str());
 
         mm::ModuleFactory::registerType<mm::Effects>("Effects");
         mm::ModuleFactory::registerType<mm::Layer>("Layer");
@@ -668,7 +669,7 @@ TEST_CASE("ControlModule empties its pads when the preset folder goes") {
     d.setText("name", "one");
     d.press("save");
     REQUIRE(d.control->listRowCount() == 1);
-    std::filesystem::remove_all(std::string(d.root_) + mm::ControlModule::kPresetDir);
+    std::filesystem::remove_all(d.root_ + mm::ControlModule::kPresetDir);
     d.scheduler.notifyFileChanged(mm::ControlModule::kPresetDir);
     CHECK(d.control->listRowCount() == 0);
 }

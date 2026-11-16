@@ -12,13 +12,13 @@ import build_esp32  # noqa: E402
 import build_teensy  # noqa: E402
 
 
-def _desktop(label: str, assets: list[str]) -> dict:
-    """A desktop build, downloaded rather than flashed. `assets` are the release-asset name patterns (regexes) package_desktop.py writes, the installer's own form first."""
+def _desktop(label: str, assets: list[str], runs_on: str = "the computer") -> dict:
+    """A desktop build, downloaded rather than flashed. `assets` are the release-asset name patterns (regexes) package_desktop.py and build_android.py write, the installer's own form first."""
     return {"chip": label.lower().replace(" ", "-"), "label": label, "eth_only": False, "ships": True, "assets": assets,
-            "description": f"MoonLight for {label}, downloaded and run on the computer."}
+            "description": f"MoonLight for {label}, downloaded and run on {runs_on}."}
 
 
-# The desktop slice: one row per platform package_desktop.py builds (the release's desktop jobs). The name is `desktop-<chip>`, the key the installer's download list carries.
+# The desktop slice: one row per platform the release's desktop jobs build, package_desktop.py's and build_android.py's. The name is `desktop-<chip>`, the key the installer's download list carries.
 _DESKTOP = {
     f"desktop-{spec['chip']}": spec
     for spec in (
@@ -26,6 +26,7 @@ _DESKTOP = {
         _desktop("Windows x64", [r"^MoonLight-windows-x64-v.+-setup\.exe$", r"^MoonLight-windows-x64-v.+\.zip$"]),
         _desktop("Linux x64", [r"^moonlight_.+_amd64\.deb$", r"^MoonLight-linux-x64-v.+\.tar\.gz$"]),
         _desktop("Linux arm64", [r"^moonlight_.+_arm64\.deb$", r"^MoonLight-linux-arm64-v.+\.tar\.gz$"]),
+        _desktop("Android arm64", [r"^MoonLight-android-arm64-v.+\.apk$"], "a phone, a tablet or a headset"),
     )
 }
 

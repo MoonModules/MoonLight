@@ -107,7 +107,7 @@ TEST_CASE("DevicesModule: a disabled module reports nothing") {
 TEST_CASE("DevicesModule: this device's row names what drives its lights, while a light output runs") {
     Rig rig;
     CHECK(std::strstr(detailFor(*rig.dev, "192.0.2.1").c_str(), "\"outputs\"") == nullptr);   // no light output, no outputs
-    struct Lights final : test::FakeLightOutput {} lights;
+    struct Lights final : mm::FakeLightOutput {} lights;
     lights.outputs_ = "{\"driver\":\"Hub75Driver\",\"lights\":4096}";
     lights.outputSeat_.claim();
     const std::string self = detailFor(*rig.dev, "192.0.2.1");

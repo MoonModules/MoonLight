@@ -6,6 +6,7 @@
 #include "core/services/AudioService.h"
 #include "core/util/JsonSink.h"   // the device-Select persistence case writes a control value out
 #include "platform/platform.h"
+#include "unit/host_android.h"
 
 #include <cstring>
 #include <string>
@@ -26,7 +27,7 @@ TEST_CASE("audio capture enumeration offers 'default' first, from platform-owned
 }
 
 // The backend the host holds is named, so a card read over the network, or a terminal, says which one has the devices, the Null backend meaning the audio libraries were missing.
-TEST_CASE("audio capture names its backend once the list is read") {
+TEST_CASE("audio capture names its backend once the list is read" * doctest::skip(mm::kHostIsAndroid)) {
     mm::platform::audioCaptureDevices(nullptr);
     const char* backend = mm::platform::audioCaptureBackend();
     CHECK(backend != nullptr);

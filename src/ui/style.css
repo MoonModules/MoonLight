@@ -681,6 +681,13 @@ body.panel-resizing.corner { cursor: nesw-resize; }
 .card-title .card-name {
     color: var(--accent);
 }
+.card-title .card-name--renameable { cursor: text; }
+.card-title .card-name--renameable:hover { text-decoration: underline dotted; }
+.card-title .card-name-field {
+    width: 15ch;
+    font: inherit;
+    color: var(--accent);
+}
 .card-name-emoji {
     /* Tighten the gap to the name (the .card-title flex gap is 8px). */
     margin-left: -4px;
@@ -768,6 +775,20 @@ details.control-helper[open] > summary::before { content: "▾"; }
     color: var(--fg-subtle);
 }
 .control-helper-more { margin: 2px 0 0 1em; }
+/* A help text's blocks sit close to the text around them: helpMarkdown leaves no blank line around a block, so its margin is the whole gap. */
+.card-helpbox ul, .control-helper ul { margin: 4px 0; padding-left: 1.4em; }
+.card-helpbox pre, .control-helper pre,
+.card-helpbox h4, .card-helpbox h5, .card-helpbox h6 { margin: 6px 0 4px; }
+/* A row whose label sits above its control (a list) puts its help right under the label, so it reads before the grid it explains; it and a row with no label (the display strip, a bank's break, the gallery's title) start at the card's edge, since no label column sits beside them. */
+.control-list-row > .control-label { order: -2; }
+.control-list-row > .control-helper { order: -1; }
+.control-list-row > .control-helper,
+.control-display-strip > .control-helper,
+.surface-break > .control-helper,
+.gallery > summary > .control-helper { padding-left: 0; white-space: normal; }
+/* A bank's break grows from the 8px seam to hold its help line. */
+.surface-break.has-help { height: auto; padding: 4px 0 6px; }
+.gallery > summary > .control-helper { font-weight: normal; }
 /* The status bar's ⓘ hides every help line; dimmed while help is off. */
 body.help-hidden .card-helpbox,
 body.help-hidden .control-helper { display: none; }
@@ -1809,6 +1830,19 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 6px;
+}
+.type-picker-filter-note {
+    font-size: 0.85em;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+}
+.type-picker-filter-clear {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    cursor: pointer;
+    font: inherit;
 }
 .type-picker-chip {
     background: var(--bg-0);

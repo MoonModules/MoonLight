@@ -97,7 +97,7 @@ processes:
         detail: |
           The request ends with no HTTP status (curl reports 000): the device reboots into the new image as the write completes. That is success. Without MoonBase the app takes the image itself on the same route.
 
-          **413** means the request reached the app rather than MoonBase, which did not take over; `GET /moonbase` tells them apart. **`incomplete request body`** means the body did not arrive in time: send with `--http1.1 -H "Expect:"`, so it starts without waiting for a `100 Continue`. On a weak WiFi link a pushed image can abort; install by URL instead, `POST /api/firmware/url` with the address of a [served image](../moondeck/MoonDeck.md#serve_firmware) as `{"url": ...}`, and the board downloads it itself.
+          **413** means the request reached the app rather than MoonBase, which did not take over; `GET /moonbase` tells them apart. **`incomplete request body`** means the body did not arrive in time: send with `--http1.1 -H "Expect:"`, so it starts without waiting for a `100 Continue`.
       - id: confirm
         say: Read the new build back.
         when: { run: { command: "curl -s http://<device>/api/modules/Firmware" } }

@@ -97,8 +97,8 @@ Each MoonModule renders as a card, with **child cards nested inside their parent
   (µs under 1 ms, ms above), omitted when the module has no measured loop time. Memory is the C++ object size (`classSize`); the `+ <dynamic>` part (`dynamicBytes`, heap) shows only when the module allocated heap. The line shows from expert mode up, and holding it peeks at the rate on every card, the password field's gesture: a tick time inverts to a figure that reads as a frame rate and is not one, so the rate is a press away rather than a mode the cards sit in.
 - **Reorder is drag-and-drop** (HTML5 DnD) on the whole card, desktop and mobile. A drag starting on
   an interactive control is canceled in `dragstart` so the control's own gesture wins; a drag is accepted only when source and target share the same `.card-children` container (true siblings).
-- **Replace (✎) / Delete (🗑) / drag-reorder** apply to *user-managed children*, a module whose role a
-  container accepts (`acceptsChildRoles`) and that hasn't opted out via `userEditable: false`. Replace swaps for another type at the same position (picker filtered to the module's role; replacement starts at its own defaults). Delete is press-twice confirm. A `userEditable: false` child (e.g.
+- **Rename / Replace (✎) / Delete (🗑) / drag-reorder** apply to *user-managed children*, a module whose role a
+  container accepts (`acceptsChildRoles`) and that hasn't opted out via `userEditable: false`. A click on the card's name turns it into a field: Enter or leaving it renames the module in place through `PATCH /api/modules/{name}`, Escape keeps the name, and the open tab, the open controls and a resized textarea follow the new name. Replace swaps for another type at the same position (picker filtered to the module's role; replacement starts at its own defaults). Delete is press-twice confirm. A `userEditable: false` child (e.g.
   PreviewDriver) shows none of these, it's fixed-shape like a code-wired child.
 - **`+`** renders in a parent's footer when its type declares a non-empty
   `acceptsChildRoles`, titled with those roles ("add effect / modifier"); it opens the [type picker](#type-picker) filtered to those roles.
@@ -145,6 +145,7 @@ One picker serves **add** (`+`) and **replace** (the ✎ button), a modal anchor
 - **Emoji tag chips.** A row of toggle chips above the list, one per distinct emoji across the filtered
   types (sources + meanings: [the tag emoji legend](../../explanation/architecture/index.md#tag-emoji-legend)).
   The UI treats `tags` as opaque, splits it into grapheme clusters, one chip each. Toggling narrows with **AND** logic (a type shows only if it carries every active chip).
+  The add and replace pickers remember the active chips per role, so a filter set once opens with every later effect switch, and a driver picker keeps its own. While chips filter, a line under them says how many types show of how many and clears the filter in one click.
 - **Search box**: substring match on type name; combines with chips (both must match).
 - **Keyboard nav**: type to filter, ↓ to enter list, ↑↓ to move, Enter to confirm, Esc to cancel.
 - **Confirm / Cancel** at the bottom (confirm reads `create` or `replace`); double-click a row to
@@ -193,7 +194,7 @@ The endpoints, the `/ws` frame shape, and the streaming state sink are owned by 
 **browser-side** socket behavior the server doesn't dictate:
 
 - URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.
-- After an add, delete, move or replace, `refetchState()` sends `{"resync":n}` and resolves when the document ending in `"resync":n` has rendered: the view alone, never the whole tree. Only the diagnostics download, the control-surface target picker and a config restore read `/api/state`, since each needs every module.
+- After an add, delete, move, replace or rename, `refetchState()` sends `{"resync":n}` and resolves when the document ending in `"resync":n` has rendered: the view alone, never the whole tree. Only the diagnostics download, the control-surface target picker and a config restore read `/api/state`, since each needs every module.
 - Client sends `"ping"` every 25 s as keepalive (Safari kills idle sockets otherwise).
 - Auto-reconnect on close with exponential backoff (500 ms → 5 s ceiling).
 - Pause on `document.visibilityState === 'hidden'`, resume on `pageshow` (Safari bfcache survival).
@@ -206,6 +207,7 @@ mm_theme            "dark" | "light"                            (default: "dark"
 mm_selectedTabs     the open tab per container                  ({ container: child })
 mm_expanded         modules whose "controls" disclosure is open ([name, …])
 mm_textareaSizes    user-dragged textarea heights               ({ "module:control": px })
+mm_pickerChips      the type picker's active chips per role     ({ role: [emoji, …] })
 mm_cardsWidth       dragged width of the docked card column     (px)
 mm_help             the last help.json fetched and its address  ({url, text})
 mm_helpShown        "1" | "0": help lines shown or hidden       (default: "0")

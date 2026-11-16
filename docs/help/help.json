@@ -4303,11 +4303,15 @@
    "guide": [
     {
      "title": "The surface",
-     "text": "Each switch, encoder and fader drives any control you assign; right-click an encoder to see its binding. The first switch drives the master on/off and the first fader the global brightness.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
+     "text": "Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
     },
     {
      "title": "Presets",
-     "text": "Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [Presets](https://moonmodules.org/MoonLight/reference/presets.html) has the rest."
+     "text": "Saving, applying and arranging them: [Presets](https://moonmodules.org/MoonLight/reference/presets.html)."
+    },
+    {
+     "title": "The gallery",
+     "text": "Presets and scripts people shared, added with a click: a preset to a free pad, a script to this device. The browser fetches them, so the device needs no internet."
     },
     {
      "title": "Home Assistant",
@@ -4320,9 +4324,18 @@
      "line": "The strip above the desk: what the surface last touched, in words.",
      "more": "Five seconds after a touch it shows MoonLight, and five more the device's name."
     },
+    "switches": {
+     "line": "Each switch turns what it drives on or off; the first one is the master on/off."
+    },
+    "encoders": {
+     "line": "Each knob turns what it drives up or down, endlessly, as a desk's encoders do."
+    },
+    "faders": {
+     "line": "Each fader sets what it drives; the first one sets the global brightness."
+    },
     "presets": {
-     "line": "One pad per preset file. Click applies, right-click names, drag rearranges.",
-     "more": "Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14.",
+     "line": "Click a pad to apply it, right-click or hold to edit it, drag to move it.",
+     "more": "Kinds: Effects (violet), the look, any board; Layouts (blue), geometry; Drivers (green), pins; Services (amber). Right-click an empty pad to save; a card's `{}` saves one module; a palette alone is a file in `/.config/presets/`.",
      "fields": {
       "name": {
        "line": "The preset's name, shown on its pad."

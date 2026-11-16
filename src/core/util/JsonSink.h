@@ -3,7 +3,6 @@
 #include "core/util/JsonEscape.h"   // jsonEscape: a string as a literal's contents, control characters included
 #include "platform/platform.h"
 
-#include <cmath>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
@@ -32,10 +31,6 @@
 /// Once tripped, later appends do nothing, so a caller sees one consistent state. A caller that ships the buffer anyway sends a truncated document, indistinguishable from a whole one at the far end.
 ///
 /// The fixed mode never allocates, its capacity being the caller's slice on purpose, since an allocation there would succeed even when the slice is too small.
-///
-/// ## The number writer takes a double, and firmware must not call it
-///
-/// Its only caller is the test runner's bridge, which stores numerics that way to keep precision parsing fixtures. A double runs in software emulation on one architecture, so production paths use the typed serializers instead.
 namespace mm {
 
 class JsonSink {
@@ -124,17 +119,6 @@ public:
         va_end(ap2);
     }
 
-    /// Write one syntactically correct value: @xref{the-number-writer-takes-a-double-and-firmware-must-not-call-it|why firmware uses the typed serializers instead}.
-    void writeNumber(double v) {
-        // JSON has no NaN or infinity, and the cast below is undefined for them.
-        if (!std::isfinite(v)) { append("null"); return; }
-        // A whole value renders as an integer; the range test guards the cast the test itself uses.
-        if (v >= -9.2e18 && v <= 9.2e18 && v == static_cast<double>(static_cast<long long>(v))) {
-            appendf("%lld", static_cast<long long>(v));
-        } else {
-            appendf("%g", v);
-        }
-    }
     /// Write a boolean literal.
     void writeBool(bool v) { append(v ? "true" : "false"); }
     /// Write a string as a quoted literal, escaping what the standard requires.

@@ -191,6 +191,9 @@ constexpr bool hasHeavyCompute = MM_HEAVY_COMPUTE;
 /// False: one MAC per chip, so a raw sender has nothing to choose and the control would do nothing.
 constexpr bool hasNamedNetInterfaces = false;
 
+/// True: a build with the Ethernet MAC sends a ColorLight panel card's raw frames through it, where MM_PANEL_CARDS links the driver.
+constexpr bool hasRawEthernet = true;
+
 /// False on every ESP32, and not by choice: the runtime is a closed binary for Intel and ARM alone.
 constexpr bool hasNdi = false;
 

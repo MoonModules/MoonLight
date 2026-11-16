@@ -29,7 +29,7 @@ RULES = {"tagline out of step": {"reason": "A front page does not carry the cano
 
 # The canonical sentence. Changing it here is the whole edit: the check then names every file
 # that still carries the old wording.
-TAGLINE = "One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux."
+TAGLINE = "One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows, Linux and Android."
 
 # Every file that states it. A new front page belongs in this list on the day it is written; the site's home embeds README, so it carries README's sentence rather than its own.
 FILES = ("README.md", "CLAUDE.md")

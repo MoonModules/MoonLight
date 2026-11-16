@@ -192,3 +192,13 @@ Kind: Bug · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&i
   **What the user sees.** Switching to one of these leaves the old frame underneath for a moment — an audio effect with no signal yet, or a simulation still seeding, paints nothing and inherits whatever was there. Owning the background is each effect's job ([Layer.h](../../../src/light/layers/Layer.h)).
 
   **Why it waits.** It is fourteen effects' worth of change across audio-reactive and simulation families, each needing its own judgement about whether to clear, fade, or seed differently — not a mechanical sweep. `unit_Effects_gridsweep.cpp` already measures it (`afterFirst`) and asserts only the settled frame, so the number is visible without blocking.
+
+### Receivers share one listener per protocol, split by universe
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306872079)
+
+**Seen.** 2026-11-16 on the desktop: two NetworkReceive effects both on protocol "all"; the second shows "UDP bind failed, port in use?", since Art-Net's 6454 and E1.31's 5568 bind once per device.
+
+**Why.** Art-Net 4 and E1.31 fix their ports, and senders send there without asking, so a second port is no answer. A multi-port Art-Net node runs one listener and splits by the universe in each packet.
+
+**What.** Core opens one listener per fixed port, first receiver in and last out, and hands each packet to the receivers whose `universe_start` range covers it; E1.31 joins the union of their multicast groups; DDP stays per receiver on its `ddp_port`. Overlapping ranges show a status naming the other receiver. The hard part: one task writing into several receivers' buffers without breaking each one's render copy. Removes the "a port binds once per device" rule from the NetworkReceive guide. About 200 to 300 lines plus tests.

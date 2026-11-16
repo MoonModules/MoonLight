@@ -20,6 +20,7 @@
 
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include "core/moonlive/MoonLiveScriptFile.h"   // the role extensions the sweep filters on
+#include "unit/light/moonlive_script_files.h"   // scriptRoot, scriptsPresent: the shipped scripts this sweep reads
 
 #include <filesystem>
 #include <fstream>
@@ -318,12 +319,10 @@ TEST_CASE("a returned value reaches the return register on " MM_ISA_NAME) {
 // Read from moonlive/ rather than copied inline: a copy is a second source of truth that drifts the
 // first time a script is edited, and it is exactly the widest scripts — the ones worth checking —
 // that would silently stop being the ones under test.
-TEST_CASE("every shipped script compiles for " MM_ISA_NAME) {
+TEST_CASE("every shipped script compiles for " MM_ISA_NAME * doctest::skip(!scriptsPresent())) {
     int checked = 0;
     {
-        const std::filesystem::path dir =
-            std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() / "moonlive";
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(scriptRoot())) {
             if (!entry.is_regular_file() || !mmIsScript(entry.path())) continue;
             // The light roles, by extension, wherever they sit: a service or a palette compiles against another table.
             const std::string ext = entry.path().extension().string();

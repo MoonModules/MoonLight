@@ -3,7 +3,7 @@
 
 #include "doctest.h"
 #include "light/drivers/Hub75Driver.h"
-#include "../core/conditional_controls.h"   // mm::test::controlIndex
+#include "../core/conditional_controls.h"   // mm::controlIndex
 #include "core/system/PinsModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
@@ -78,7 +78,7 @@ TEST_CASE("Hub75Driver offers the clock edge, defaults to rising, and re-inits o
     // Some panel chips sample the clock on the falling edge; driven on the rising one every pixel lands a column over. A fact about the panel, so it sits beside the pins and a change re-inits the port.
     mm::Hub75Driver d;
     d.defineControls();
-    const int i = mm::test::controlIndex(d, "clockEdge");
+    const int i = mm::controlIndex(d, "clockEdge");
     REQUIRE(i >= 0);
     CHECK(d.clockEdgeSel == mm::Hub75Driver::kEdgeRising);
     CHECK(d.affectsPrepare("clockEdge"));

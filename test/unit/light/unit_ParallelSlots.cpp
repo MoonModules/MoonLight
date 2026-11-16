@@ -81,7 +81,7 @@ TEST_CASE("LCD encoder: empty mask emits all-zero slots") {
 // Channel order comes from Correction (logical red → GRB wire {0,255,0}); the encoder is order-agnostic.
 TEST_CASE("LCD encoder: GRB ordering via Correction") {
     mm::Correction corr;
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     const uint8_t rgb[3] = {255, 0, 0};   // logical red
     uint8_t wire[8 * 4] = {};
     corr.apply(rgb, wire, 3);                 // lane 0 wire = {0, 255, 0}
@@ -98,7 +98,7 @@ TEST_CASE("LCD encoder: GRB ordering via Correction") {
 // RGBW rows emit 4 channels × 8 bits × 3 slots = 96 bytes.
 TEST_CASE("LCD encoder: RGBW row is 96 slot bytes") {
     mm::Correction corr;
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRBW);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRBW);
     const uint8_t rgb[3] = {10, 10, 10};
     uint8_t wire[8 * 4] = {};
     corr.apply(rgb, wire, 3);

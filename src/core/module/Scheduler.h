@@ -50,6 +50,9 @@ public:
     /// Tell every module in the tree that `owner`'s list rows changed, so one resolving from that list re-resolves.
     void notifyListChanged(const MoonModule& owner);
 
+    /// Tell every module in the tree that a module was renamed, so one keeping the old name rewrites it.
+    void notifyModuleRenamed(const char* from, const char* to);
+
     /// Register a top-level module, which the boot then walks in declared order; false, with a log line, when the array is full.
     bool addModule(MoonModule* mod);
     /// Run the boot phases over every registered module.
@@ -103,7 +106,7 @@ public:
     /// Release and delete a whole subtree, children first.
     static void deleteTree(MoonModule* mod);
 
-    /// `base`, or the first of `base-2`, `base-3`... no module holds, into `out`; false when none fits a name.
+    /// `base`, or the first of `base-2`, `base-3`... no module holds, into `out`, the base shortened where the name would not fit; false for an empty base or past `base-99`.
     bool freeName(const char* base, char* out, size_t cap);
 
     /// The first module in tree-walk order with this name, or null.

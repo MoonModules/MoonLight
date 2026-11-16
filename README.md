@@ -1,10 +1,10 @@
 # MoonLight
 
-Drive large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
+Drive large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows, Linux and Android.
 
 [![Every effect as a card in the effects deck, each animating](docs/assets/light/effects-deck.gif)](https://moonmodules.org/MoonLight/moonmodules/light/effects.html)
 
-**Start on whatever device you have.** The [web installer](https://moonmodules.org/MoonLight/install/) flashes an ESP32 from Chrome or Edge in under a minute. A Teensy takes it too, the [desktop build](https://github.com/MoonModules/MoonLight/releases/latest) runs on Windows, Linux and macOS, and a container runs it anywhere. Every device runs the same interface and light pipeline, and several work together as one installation, driving LEDs and DMX fixtures over Art-Net, DDP and E1.31. [Install MoonLight](https://moonmodules.org/MoonLight/moonwalk.html#install) covers each platform step by step, and [Show an effect on your lights](https://moonmodules.org/MoonLight/moonwalk.html#first-light-show) takes it from there.
+**Start on whatever device you have.** The [web installer](https://moonmodules.org/MoonLight/install/) flashes an ESP32 from Chrome or Edge in under a minute. A Teensy takes it too, the [desktop build](https://github.com/MoonModules/MoonLight/releases/latest) runs on Windows, Linux and macOS, an Android app on a phone, a tablet or a Meta Quest, and a container runs it anywhere. Every device runs the same interface and light pipeline, and several work together as one installation, driving LEDs and DMX fixtures over Art-Net, DDP and E1.31. [Install MoonLight](https://moonmodules.org/MoonLight/moonwalk.html#install) covers each platform step by step, and [Show an effect on your lights](https://moonmodules.org/MoonLight/moonwalk.html#first-light-show) takes it from there.
 
 ## Find your way
 

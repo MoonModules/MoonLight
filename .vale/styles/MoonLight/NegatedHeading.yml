@@ -2,7 +2,7 @@
 # reader no shape at all. Headings only: inside prose a real constraint may legitimately negate.
 extends: existence
 message: "A heading in negative form: name what the section IS."
-level: warning
+level: error
 scope: heading
 ignorecase: true
 tokens:

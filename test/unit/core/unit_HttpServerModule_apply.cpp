@@ -54,7 +54,7 @@ struct Tag : public mm::MoonModule {
 };
 
 // Stands in for the Drivers the WLED shim drives, by name, and is the light output a test claims when it reaches the palettes.
-struct FakeDrivers : public mm::MoonModule, public mm::test::FakeLightOutput {
+struct FakeDrivers : public mm::MoonModule, public mm::FakeLightOutput {
     bool on = true;
     uint8_t brightness = 20;
     uint8_t palette = 0;
@@ -163,7 +163,13 @@ TEST_CASE("apply-core: an add creates a child and refuses a name some module hol
     CHECK(http.applyAddModule("Knob", "Y", "NoSuchParent") == OpResult::ModuleNotFound);
     CHECK(http.applyAddModule("Knob", "Z", "") == OpResult::BadRequest);
     CHECK(http.applyAddModule("Knob", "SixteenCharsLong", "Root") == OpResult::BadRequest);
-    CHECK(root->childCount() == 1);
+    // A base to start from, such as a script's name, is made free as the type's default is: shortened and numbered to fit.
+    char made[mm::MoonModule::kNameLen] = {};
+    CHECK(http.applyAddModule("Knob", nullptr, "Root", made, sizeof(made), nullptr, "AVeryLongScriptName") == OpResult::Ok);
+    CHECK(std::string(made) == "AVeryLongScript");
+    CHECK(http.applyAddModule("Knob", nullptr, "Root", made, sizeof(made), nullptr, "AVeryLongScriptName") == OpResult::Ok);
+    CHECK(std::string(made) == "AVeryLongScri-2");
+    CHECK(root->childCount() == 3);   // K and the two made free; every refusal above added nothing
 
     s.deleteTree(root);
 }
@@ -173,19 +179,29 @@ namespace {
 struct Fixed : public mm::MoonModule {
     bool userEditable() const override { return false; }
 };
+
+// A top-level Root holding a Fixed child the user cannot remove, served by an apply core: the setup the delete and rename cases share.
+struct EditTree {
+    mm::Scheduler s;
+    Box* root = new Box();
+    Fixed* fixed = new Fixed();
+    mm::HttpServerModule http;
+    EditTree() {
+        registerTestTypes();
+        root->setName("Root");
+        s.addModule(root);
+        fixed->setName("F");
+        root->addChild(fixed);
+        http.setScheduler(&s);
+    }
+    ~EditTree() { s.deleteTree(root); }
+};
 }  // namespace
 
 TEST_CASE("apply-core: a delete removes the module, and refuses a top-level one or one the user cannot remove") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* root = new Box();
-    root->setName("Root");
-    s.addModule(root);
-    auto* fixed = new Fixed();
-    fixed->setName("F");
-    root->addChild(fixed);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
+    EditTree t;
+    auto& http = t.http;
+    auto* root = t.root;
     using OpResult = mm::HttpServerModule::OpResult;
 
     REQUIRE(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
@@ -195,9 +211,29 @@ TEST_CASE("apply-core: a delete removes the module, and refuses a top-level one 
     CHECK(http.applyDeleteModule("Nope") == OpResult::ModuleNotFound);
     CHECK(http.applyDeleteModule("Root") == OpResult::BadRequest);
     CHECK(http.applyDeleteModule("F") == OpResult::ReadOnly);
-    CHECK(childNamed(root, "F") == fixed);
+    CHECK(childNamed(root, "F") == t.fixed);
+}
 
-    s.deleteTree(root);
+TEST_CASE("apply-core: a rename keeps the module and answers its name, and refuses a taken name, a top-level module and one the user cannot rename") {
+    EditTree t;
+    auto& http = t.http;
+    auto* root = t.root;
+    using OpResult = mm::HttpServerModule::OpResult;
+
+    REQUIRE(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
+    mm::MoonModule* knob = childNamed(root, "K");
+    char name[mm::MoonModule::kNameLen] = {};
+    CHECK(http.applyRenameModule("K", "Dial", name, sizeof(name)) == OpResult::Ok);
+    CHECK(std::string(name) == "Dial");
+    CHECK(childNamed(root, "Dial") == knob);
+
+    CHECK(http.applyRenameModule("Dial", "F") == OpResult::NameInUse);
+    CHECK(http.applyRenameModule("Nope", "X") == OpResult::ModuleNotFound);
+    CHECK(http.applyRenameModule("Root", "X") == OpResult::BadRequest);
+    CHECK(http.applyRenameModule("F", "X") == OpResult::ReadOnly);
+    CHECK(http.applyRenameModule("Dial", "") == OpResult::BadRequest);
+    CHECK(http.applyRenameModule("Dial", "ANameLongerThanFifteen") == OpResult::Refused);
+    CHECK(childNamed(root, "Dial") == knob);
 }
 
 TEST_CASE("apply-core: a replace swaps the type in the same place, named by the caller, its custom name or the new type") {
@@ -800,7 +836,7 @@ TEST_CASE("the frame walker hands a Ping and a Close to the control callback, in
 
 TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, identity, board, signal, light outputs and effects") {
     PatchTree t;
-    struct Lights final : mm::test::FakeLightOutput {} lights;
+    struct Lights final : mm::FakeLightOutput {} lights;
     lights.outputs_ = "{\"driver\":\"LedDriver\",\"lights\":300}";
     lights.effects_ = "\"Noise\",\"Lines\"";
     lights.outputSeat_.claim();

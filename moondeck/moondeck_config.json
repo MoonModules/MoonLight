@@ -9,6 +9,33 @@
       "script": "build/build_desktop.py"
     },
     {
+      "id": "build_android",
+      "tab": "desktop",
+      "group": "build",
+      "label": "Build Android",
+      "help": "build_android",
+      "script": "build/build_android.py",
+      "args": [
+        "--apk"
+      ]
+    },
+    {
+      "id": "run_android",
+      "tab": "desktop",
+      "group": "run",
+      "label": "Run on Android",
+      "help": "run_android",
+      "script": "run/run_android.py"
+    },
+    {
+      "id": "test_android",
+      "tab": "repo",
+      "group": "test",
+      "label": "Unit Test on Android",
+      "help": "test_android",
+      "script": "test/test_android.py"
+    },
+    {
       "id": "compile_tests",
       "tab": "repo",
       "group": "test",
@@ -413,17 +440,6 @@
       "needs_port": true,
       "needs_firmware": true,
       "pass_port_device_model": true
-    },
-    {
-      "id": "serve_firmware",
-      "tab": "esp32",
-      "group": "flash",
-      "label": "Serve for OTA",
-      "help": "serve_firmware",
-      "script": "run/serve_firmware.py",
-      "needs_firmware": true,
-      "long_running": true,
-      "process_name": "serve_firmware.py"
     },
     {
       "id": "check_encodings",

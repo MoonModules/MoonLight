@@ -75,7 +75,7 @@ So: **run a control check that MUST fire.** After reaching 0, enabling a deliber
 
 A tool's *default* output is not its verdict, either. Evaluating an analyzer without a curated check list measures the configuration, not the tool: an unconfigured clang-tidy run here gave 6,073 findings, two thirds of them from one check that every comparable project disables by name. The curated config takes it to 30.
 
-### A passing test is not evidence until it can fail
+### A passing test is evidence once it can fail
 
 A test written to pin a fix is shaped by that fix, so it agrees with the fix whether or not either is right. Three in one session ran, passed, and could not have failed: a MoonLive indexing test that still passed with the emitted shift sabotaged from `<<2` to `<<3` (one array cannot show a wrong offset, because every wrong offset lands on something that array wrote); three scenarios green while their scripts failed to compile, placed no lights, and recorded 0 on every measure; and a golden that pinned a length rather than a behavior, freezing a broken encoding as correct for two weeks.
 
@@ -92,7 +92,7 @@ Two rules close that, and they are properties of the runner rather than of any s
 - **A skip is counted as a skip.** The summary reads `N scenario(s), P passed, F failed, S skipped`, so a suite that stopped covering something says so.
 - **A scenario that asserts nothing fails.** Zero checks is indistinguishable from every step silently doing nothing, so the runner fails it and names the step count.
 
-### A test that does not reproduce the user's conditions proves nothing
+### A test proves what it reproduces of the user's conditions
 
 A green result means something only if the test could have gone red.
 An agent's shell is a bad witness: it routinely runs with policies, permissions and paths no user has.
@@ -512,7 +512,7 @@ A report rather than a test: [bench_tempo](../../moondeck/MoonDeck.md#bench_temp
 
 All live scenarios pass on both desktop and ESP32. Steps to verify on boards: [Run a live verification on boards](../moonwalk.md#live-verification). Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
 
-### ESP32: classic, no PSRAM (measured on an Olimex ESP32-Gateway Rev G)
+### ESP32: classic, internal RAM only (measured on an Olimex ESP32-Gateway Rev G)
 
 - 128×128 grid (16,384 lights), all live scenarios pass.
 - Memory tracking verified: mirror toggle shows heap changes, returns to baseline (no leaks).

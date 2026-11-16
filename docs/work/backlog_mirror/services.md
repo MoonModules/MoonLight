@@ -123,3 +123,13 @@ So phase 1 is OBD-II only, which genuinely works on any car and needs no per-veh
 **What is NOT available, and it shapes the design.** [awesome-automotive-can-id](https://github.com/iDoka/awesome-automotive-can-id), the main community collection, carries VW data for the MQB platform, Golf, Polo, Touran and e-Up, but **nothing for the Transporter and no lighting signals for any VW**: its coverage is drivetrain and engine management, not body control. So tier 2 starts from an empty database however much searching precedes it, which is exactly why the frame IDs belong in configuration a user discovers and shares rather than in a compiled-in table. (T6 owner forums do report the reverse signal traveling over CAN, so the body signals exist on a bus; they are simply not publicly documented.)
 
 **Related:** a convoy light show across several cars needs nothing from this. That is MoonSync (planned, not built) synchronizing timebase and effect state between devices, with each car rendering locally through whatever driver it has. The two compose for free and neither blocks the other.
+
+### An Android device hears all the audio it plays, any app's, as a source it can send
+
+Kind: Feature · Platform: Android · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=307226459)
+
+**Seen.** 2026-11-16, the Android app on a Meta Quest 3: the Audio card hears the microphone (local audio), receives another device's audio sync, or simulates; the audio the device itself plays, Spotify, a video or any other app's, it cannot hear.
+
+**Why.** At a party the phone is often the music source. Hearing whatever it plays lets its effects follow the music exactly, with no room noise, and the Audio card's audio sync then sends that analysis to every board on the network, so the phone drives a whole installation from the music it plays, as it already can from its microphone.
+
+**What.** The device's whole audio as the Audio card's input: the microphone, or Android's playback capture (`AudioPlaybackCaptureConfiguration`, Android 10 and later) of every app that plays. The app asks for the MediaProjection consent in Kotlin, hands the capture to the program, and the card offers the sources side by side. Android hears only apps that allow capture (most music apps do; some video apps do not), and asks for the consent again after each restart. No iOS equivalent.

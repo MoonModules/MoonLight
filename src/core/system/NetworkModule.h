@@ -719,7 +719,7 @@ private:
         }
 
         updateStatusIP();
-        std::printf("NetworkModule: Connected via %s: %s\n", to == State::ConnectedEth ? platform::wiredLinkName() : "WiFi STA", statusBuf_);
+        std::printf("NetworkModule: Connected, %s\n", statusBuf_);   // the status line names the link: "Host: …", "Ethernet: …" or "WiFi: …"
 
         syncMdns();
 

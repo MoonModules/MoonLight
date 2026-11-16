@@ -50,17 +50,31 @@ inline bool buildKeyPattern(char (&buf)[kSearchLen], const char* key, const char
     return n > 0 && static_cast<size_t>(n) < sizeof(buf);
 }
 
-inline void parseString(const char* json, const char* key, char* out, size_t maxLen) {
-    if (!json || !key || !out || maxLen == 0) return;
+/// JSON's whitespace, which may stand on either side of a member's colon.
+inline bool isJsonSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+/// Where a key's value starts: past `"key"`, the colon and the whitespace around it, so `{"name" :\n "x"}` reads as `{"name":"x"}`; null when the key is absent or too long. The key's text inside a string value has no colon after it, and is passed over.
+inline const char* valueAfterKey(const char* json, const char* key) {
+    if (!json || !key) return nullptr;
     char search[kSearchLen];
-    if (!buildKeyPattern(search, key, ":\"")) return;      // key too long → treat as absent
-    const char* start = std::strstr(json, search);
-    if (!start) {
-        if (!buildKeyPattern(search, key, ": \"")) return;
-        start = std::strstr(json, search);
+    if (!buildKeyPattern(search, key, "")) return nullptr;   // key too long → treat as absent
+    const size_t len = std::strlen(search);
+    for (const char* at = std::strstr(json, search); at; at = std::strstr(at + 1, search)) {
+        const char* p = at + len;
+        while (isJsonSpace(*p)) p++;
+        if (*p != ':') continue;
+        p++;
+        while (isJsonSpace(*p)) p++;
+        return p;
     }
-    if (!start) return;
-    start += std::strlen(search);
+    return nullptr;
+}
+
+inline void parseString(const char* json, const char* key, char* out, size_t maxLen) {
+    if (!out || maxLen == 0) return;
+    const char* start = valueAfterKey(json, key);
+    if (!start || *start != '"') return;
+    start++;
     // Copy to the real closing quote, decoding our own writer's escapes: a bare search stops at an escaped one inside the value.
     size_t oi = 0;
     for (const char* p = start; *p && oi + 1 < maxLen; p++) {
@@ -94,28 +108,14 @@ inline void parseString(const char* json, const char* key, char* out, size_t max
 }
 
 /// Whether the key is present at all: @xref{an-absent-key-is-not-a-zero|why a reader cannot tell one from a zero}.
-inline bool hasKey(const char* json, const char* key) {
-    if (!json || !key) return false;
-    char search[kSearchLen];
-    if (!buildKeyPattern(search, key, ":")) return false;   // key too long → treat as absent
-    return std::strstr(json, search) != nullptr;
-}
+inline bool hasKey(const char* json, const char* key) { return valueAfterKey(json, key) != nullptr; }
 
 /// A key's integer value, quoted or not, decimal or 0x-prefixed hex; 0 when absent or not a number (parse.h).
 int parseInt(const char* json, const char* key);
 
 inline bool parseBool(const char* json, const char* key) {
-    if (!json || !key) return false;
-    char search[kSearchLen];
-    if (!buildKeyPattern(search, key, ":")) return false;   // key too long → treat as absent
-    const char* start = std::strstr(json, search);
-    if (!start) {
-        if (!buildKeyPattern(search, key, ": ")) return false;
-        start = std::strstr(json, search);
-    }
-    if (!start) return false;
-    const char* val = start + std::strlen(search);
-    while (*val == ' ') val++;
+    const char* val = valueAfterKey(json, key);
+    if (!val) return false;
     // Both the literal and a numeric one, since device models wrote numbers for flags that are now boolean controls, and some clients still send them.
     return std::strncmp(val, "true", 4) == 0 || *val == '1';
 }

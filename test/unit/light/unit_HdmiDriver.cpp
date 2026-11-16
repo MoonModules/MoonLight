@@ -28,8 +28,8 @@ struct Bench {
     HdmiSeamGuard seam;
     mm::Buffer source;
     mm::HdmiDriver driver;
-    mm::test::Wall wall{4, 2};
-    Bench() { mm::test::wire(driver, source, wall, 8); }
+    mm::Wall wall{4, 2};
+    Bench() { mm::wire(driver, source, wall, 8); }
 };
 
 }  // namespace
@@ -70,14 +70,14 @@ struct LayoutWall {
     HdmiSeamGuard seam;
     mm::Buffer source;
     mm::HdmiDriver driver;
-    mm::test::LayoutFace<LayoutT> face;
+    mm::LayoutFace<LayoutT> face;
     uint32_t nowMs = 1000;   ///< each frame a second after the last, past the fps ceiling
     void build() {
         face.build();
         wireDriver();
     }
     // The driver onto the built layer: its first prepare, so a case can refuse memory between the layer and the driver.
-    void wireDriver() { mm::test::wire(driver, source, face.layer, face.layout.lightCount()); }
+    void wireDriver() { mm::wire(driver, source, face.layer, face.layout.lightCount()); }
     // Light `i` painted (10, 20, 30), one frame shown: the screen pixel index it lands on, or -1 when nowhere.
     int pixelOf(mm::nrOfLightsType i) {
         uint8_t* p = source.data() + static_cast<size_t>(i) * 3;
@@ -97,7 +97,7 @@ struct LayoutWall {
 // `across` panels of `w` by `h` in a row, snaked inside each when `snake`.
 std::unique_ptr<LayoutWall<mm::PanelsLayout>> panelWall(uint16_t across, uint16_t w, uint16_t h, bool snake) {
     auto wall = std::make_unique<LayoutWall<mm::PanelsLayout>>();
-    mm::test::shapePanels(wall->face.layout, across, w, h, snake);
+    mm::shapePanels(wall->face.layout, across, w, h, snake);
     wall->build();
     return wall;
 }
@@ -105,9 +105,9 @@ std::unique_ptr<LayoutWall<mm::PanelsLayout>> panelWall(uint16_t across, uint16_
 // One 64x32 panel, its layer built with room, then its driver wired while every allocation above a frame of the face is refused: only the picture's table, four bytes a pixel against three, meets the refusal.
 struct NoRoomWall {
     std::unique_ptr<LayoutWall<mm::PanelsLayout>> w = std::make_unique<LayoutWall<mm::PanelsLayout>>();
-    std::optional<mm::test::RefuseAbove> refuse;
+    std::optional<mm::RefuseAbove> refuse;
     explicit NoRoomWall(bool snake) {
-        mm::test::shapePanels(w->face.layout, 1, 64, 32, snake);
+        mm::shapePanels(w->face.layout, 1, 64, 32, snake);
         w->face.build();
         refuse.emplace(64 * 32 * 3);
         w->wireDriver();
@@ -130,7 +130,7 @@ TEST_CASE("HdmiDriver places a snaked layout's lights where the layout puts them
 }
 
 TEST_CASE("HdmiDriver leaves a light placed outside the box off the screen, without touching another pixel") {
-    auto w = std::make_unique<LayoutWall<mm::test::LeftOfBox>>();
+    auto w = std::make_unique<LayoutWall<mm::LeftOfBox>>();
     w->build();
     CHECK(w->pixelOf(0) == -1);   // at (-1, 1): no pixel
     std::memset(w->source.data(), 0, 3);   // light 0 dark again, so the next frame shows only light 4

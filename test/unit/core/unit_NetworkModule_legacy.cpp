@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include "core/util/WledNetworks.h"   // the document the migration image writes
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -33,7 +34,7 @@ const void* controlPtr(mm::MoonModule& m, const char* name) {
     return nullptr;
 }
 
-using Device = mm::test::NetworkDevice;
+using Device = mm::NetworkDevice;
 
 std::string readConfig(const std::string& root) {
     std::ifstream in(root + "/.config/NetworkModule.json");
@@ -41,7 +42,7 @@ std::string readConfig(const std::string& root) {
 }
 
 std::string freshRoot(const char* json) {
-    const std::string root = "/tmp/mm_network_legacy_" + std::to_string(mm::platform::millis());
+    const std::string root = mm::systemTempDir() + "/mm_network_legacy_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root + "/.config");
     std::ofstream(root + "/.config/NetworkModule.json") << json;

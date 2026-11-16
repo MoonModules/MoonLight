@@ -1180,6 +1180,45 @@ function setupNetworkBar() {
     if (pwInput) pwInput.addEventListener("blur", saveWifi);
 }
 
+// Each device's OTA install as MoonDeck reports it, by ip: {stage, pct, done, ok, error}.
+const otaStatus = {};
+
+// The OTA button's text for an install: its stage while it runs, its outcome once it ends.
+function otaLabel(ota) {
+    if (!ota) return "OTA";
+    if (ota.done) return ota.ok ? "flashed ✓" : "failed ✗";
+    if (ota.stage === "uploading" && ota.pct != null) return `uploading ${ota.pct}%`;
+    return `${ota.stage || "starting"}…`;
+}
+
+// Repaint the OTA button of one device in place, between full redraws of the rows.
+function showOta(ip) {
+    const btn = document.querySelector(`button[data-ota-ip="${CSS.escape(ip)}"]`);
+    if (!btn) return;
+    const ota = otaStatus[ip];
+    btn.textContent = otaLabel(ota);
+    btn.disabled = !!(ota && !ota.done);
+    btn.title = ota && ota.error ? ota.error : "Flash the local build to this device over WiFi (no USB)";
+}
+
+// Poll MoonDeck for one install until it ends, or past the longest one MoonDeck runs (MoonBase's 120 s and the upload's 180 s); the outcome stays on the button for a minute.
+async function followOta(ip) {
+    const deadline = Date.now() + 330000;
+    for (;;) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (Date.now() > deadline) { otaStatus[ip] = {done: true, ok: false, error: "MoonDeck lost the install: check the device"}; showOta(ip); break; }
+        try {
+            const res = await fetch(`/api/ota-status?ip=${encodeURIComponent(ip)}`, {signal: timeoutSignal(5000)});
+            const st = await res.json();
+            if (st.stage || st.done) otaStatus[ip] = st;
+        } catch { continue; }   // MoonDeck busy for a moment: ask again
+        showOta(ip);
+        if (otaStatus[ip].done) break;
+    }
+    const finished = otaStatus[ip];   // this install's record, so a later install's survives this one's clearing
+    setTimeout(() => { if (otaStatus[ip] === finished) { delete otaStatus[ip]; showOta(ip); } }, 60000);
+}
+
 function renderDevices() {
     const el = document.getElementById("device-list");
     const active = getActiveNetwork();
@@ -1390,24 +1429,28 @@ function renderDevices() {
             });
         });
 
-        // "OTA" — wireless flash of the local build for this device's firmware. MoonDeck serves
-        // the app image in build/esp32-<fw>/ and hands the device its URL (POST /api/ota); the device
-        // pulls + flashes over WiFi. No USB. Needs a local build for the device's firmware.
+        // "OTA": wireless flash of the local build for this device's firmware. MoonDeck uploads
+        // the app image in build/esp32-<fw>/ to the device (POST /api/ota), through MoonBase where the
+        // variant has it. No USB. Needs a local build for the device's firmware. The install's state
+        // lives in otaStatus, so a redraw of the rows keeps showing it.
         const otaBtn = document.createElement("button");
         otaBtn.className = "device-inject";       // same compact style as inject
         const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
         // A desktop's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
         const isDesktop = otaFw.startsWith("desktop-");
-        otaBtn.textContent = "OTA";
-        otaBtn.disabled = !otaFw || isDesktop;
-        otaBtn.title = isDesktop ? "A desktop updates from its own Firmware card"
+        const ota = otaStatus[device.ip];
+        otaBtn.textContent = otaLabel(ota);
+        otaBtn.disabled = !otaFw || isDesktop || (ota && !ota.done);
+        otaBtn.title = ota && ota.error ? ota.error
+            : isDesktop ? "A desktop updates from its own Firmware card"
             : otaFw ? `Flash the local ${otaFw} build to this device over WiFi (no USB)`
             : "OTA needs the device's firmware known (discover it first)";
+        otaBtn.dataset.otaIp = device.ip;
         otaBtn.addEventListener("click", async (e) => {
             e.preventDefault();
             if (!otaFw) return;
-            otaBtn.disabled = true;
-            otaBtn.textContent = "OTA…";
+            otaStatus[device.ip] = {stage: "starting", done: false};
+            showOta(device.ip);
             try {
                 const res = await fetch("/api/ota", {
                     method: "POST", headers: {"Content-Type": "application/json"},
@@ -1415,11 +1458,13 @@ function renderDevices() {
                     signal: timeoutSignal(15000),
                 });
                 const j = await res.json();
-                otaBtn.textContent = j.ok ? "flashing ✓" : "failed ✗";
+                if (!j.ok) { otaStatus[device.ip] = {done: true, ok: false, error: j.error || `HTTP ${res.status}`}; showOta(device.ip); return; }
             } catch (err) {
-                otaBtn.textContent = "failed ✗";
+                otaStatus[device.ip] = {done: true, ok: false, error: String(err)};
+                showOta(device.ip);
+                return;
             }
-            setTimeout(() => { otaBtn.textContent = "OTA"; otaBtn.disabled = !otaFw; }, 2500);
+            followOta(device.ip);
         });
 
         const removeBtn = document.createElement("button");

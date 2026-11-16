@@ -14,6 +14,7 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -27,14 +28,14 @@ struct Tree {
     mm::Scheduler scheduler;
     mm::FilesystemModule* fs = nullptr;
     mm::MoonModule* layers = nullptr;
-    char root_[256] = {};
+    std::string root_;
 
     Tree() {
         // A private root per fixture, by a counter rather than millis(), so the boot load never reads this machine's own /.config files or another fixture's.
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_subtree_test_%u", ++seq);
+        root_ = mm::systemTempDir() + "/mm_subtree_test_" + std::to_string(++seq);
         std::filesystem::remove_all(root_);
-        mm::platform::fsSetRoot(root_);
+        mm::platform::fsSetRoot(root_.c_str());
 
         mm::ModuleFactory::registerType<mm::Effects>("Effects");
         mm::ModuleFactory::registerType<mm::Layer>("Layer");

@@ -9,7 +9,8 @@
 #include "core/util/JsonSink.h"
 #include "core/moonlive/MoonLiveScriptFile.h"
 #include "platform/platform.h"
-#include "../core/conditional_controls.h"   // mm::test::controlIndex
+#include "../core/conditional_controls.h"   // mm::controlIndex
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -26,12 +27,10 @@ constexpr const char* kPaletteSrc = "void setup() {}\n";
 
 /// An empty filesystem root per test, so a count assertion ignores whatever palettes the developer's own device directory carries.
 struct IsolatedFs {
-    char root[256];
-    explicit IsolatedFs(const char* tag) {
-        std::snprintf(root, sizeof(root), "/tmp/mm_palettes_%s_%u", tag,
-                      static_cast<unsigned>(platform::millis()));
+    std::string root;
+    explicit IsolatedFs(const char* tag) : root(mm::systemTempDir() + "/mm_palettes_" + tag + "_" + std::to_string(platform::millis())) {
         std::filesystem::remove_all(root);
-        platform::fsSetRoot(root);
+        platform::fsSetRoot(root.c_str());
         REQUIRE(platform::fsMount());
     }
     ~IsolatedFs() {
@@ -50,7 +49,7 @@ void writePalette(const char* dir, const char* name) {
 
 /// The highest index the `palette` control ACCEPTS: its `max`, above which a value is refused with "value out of range".
 int32_t paletteMax(Drivers& drv) {
-    const int i = test::controlIndex(drv, "palette");
+    const int i = mm::controlIndex(drv, "palette");
     REQUIRE(i >= 0);
     return drv.controls()[static_cast<uint8_t>(i)].max;
 }
@@ -120,7 +119,7 @@ TEST_CASE("a palette added while running becomes selectable without a reboot") {
 namespace {
 /// The palette control's value as the device saves and reports it.
 std::string savedPalette(Drivers& drv) {
-    const int i = test::controlIndex(drv, "palette");
+    const int i = mm::controlIndex(drv, "palette");
     REQUIRE(i >= 0);
     JsonSink out;
     writeControlValue(out, drv.controls()[static_cast<uint8_t>(i)]);
@@ -129,7 +128,7 @@ std::string savedPalette(Drivers& drv) {
 
 /// Apply a saved palette value the way the boot load does.
 void applyPalette(Drivers& drv, const std::string& value) {
-    const int i = test::controlIndex(drv, "palette");
+    const int i = mm::controlIndex(drv, "palette");
     REQUIRE(i >= 0);
     const std::string json = "{\"palette\":" + value + "}";
     CHECK(applyControlValue(drv.controls()[static_cast<uint8_t>(i)], json.c_str(), "palette",

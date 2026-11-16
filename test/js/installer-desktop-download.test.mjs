@@ -32,6 +32,7 @@ const RELEASE = [
     asset("moonlight_3.0.0_amd64.deb"),
     asset("MoonLight-linux-arm64-v3.0.0.tar.gz"),
     asset("moonlight_3.0.0_arm64.deb"),
+    asset("MoonLight-android-arm64-v3.0.0.apk"),
 ];
 
 test("a desktop archive is offered for download even though it has no manifest", () => {
@@ -47,7 +48,7 @@ test("a desktop archive is offered for download even though it has no manifest",
 test("each desktop platform is offered once, however many archives it ships", () => {
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0").filter(f => f.isDesktop);
     assert.deepEqual(got.map(f => f.firmware).sort(),
-        ["desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]);
+        ["desktop-android-arm64", "desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]);
 });
 
 test("a platform shipping both an installer and a tarball offers the installer", () => {
@@ -70,6 +71,7 @@ test("every shipped desktop asset is recognized under its own platform, and an u
         "desktop-windows-x64": ["MoonLight-windows-x64-v3.0.0-setup.exe", "MoonLight-windows-x64-v3.0.0.zip"],
         "desktop-linux-x64": ["moonlight_3.0.0_amd64.deb", "MoonLight-linux-x64-v3.0.0.tar.gz"],
         "desktop-linux-arm64": ["moonlight_3.0.0_arm64.deb", "MoonLight-linux-arm64-v3.0.0.tar.gz"],
+        "desktop-android-arm64": ["MoonLight-android-arm64-v3.0.0.apk"],
     };
     for (const [key, names] of Object.entries(SHIPPED)) {
         const got = parseFirmwaresFromAssets(names.map(asset), "v3.0.0");
@@ -169,4 +171,23 @@ test("installing a desktop's own program installs the program, and downloading i
     const download = pickedEntry(firmwares, "desktop-linux-x64", DESKTOP_DOWNLOAD);
     assert.ok(download.isDesktop);
     assert.ok(download.assets.some(a => a.name.endsWith(".deb")));
+});
+
+// A phone or tablet says Android in its browser's identity, and a Quest's browser names the headset while calling itself Linux, so both are offered the APK rather than a Linux package.
+test("a phone, a tablet and a Quest are offered the Android app, not a Linux package", () => {
+    const real = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    const as = (platform, userAgent) => Object.defineProperty(globalThis, "navigator", { value: { platform, userAgent }, configurable: true });
+    try {
+        for (const [platform, ua] of [
+            ["Linux armv81", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36"],
+            ["Linux x86_64", "Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 OculusBrowser/35.3 Chrome/130 VR Safari/537.36"],
+        ]) {
+            as(platform, ua);
+            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-android-arm64"), true, ua);
+            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-linux-x64"), false, ua);
+            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-linux-arm64"), false, ua);
+        }
+    } finally {
+        if (real) Object.defineProperty(globalThis, "navigator", real); else delete globalThis.navigator;
+    }
 });

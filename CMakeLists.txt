@@ -175,7 +175,9 @@ if(MM_VERSION)
 endif()
 # A desktop build names its firmware as the release names its program, firmware-desktop-<os>-<arch>-v<version>.bin (package_desktop.py),
 # so the Firmware card, the map and Home Assistant install it as they install a board, which takes its name from esp32/main/CMakeLists.txt.
-if(APPLE)
+if(ANDROID)   # before the Linux default: Android is Linux underneath, and the NDK's toolchain sets ANDROID
+    set(MM_DESKTOP_OS android)
+elseif(APPLE)
     set(MM_DESKTOP_OS macos)
 elseif(WIN32)
     set(MM_DESKTOP_OS windows)
@@ -404,6 +406,15 @@ if(APPLE)
     add_custom_command(TARGET MoonLight POST_BUILD
         COMMAND codesign --force --sign - --identifier org.moonmodules.moonlight $<TARGET_FILE:MoonLight>
         COMMENT "Signing MoonLight as org.moonmodules.moonlight" VERBATIM)
+endif()
+
+# The Android app's library: the same program as MoonLight, entered through main_android.cpp's JNI calls rather than main(), written where the app's Gradle build packs it (android/app/build.gradle.kts).
+if(ANDROID)
+    add_library(moonlight SHARED src/main.cpp src/module_types.cpp src/platform/desktop/main_android.cpp)
+    target_include_directories(moonlight PRIVATE src/)
+    target_link_libraries(moonlight PRIVATE mm_core mm_platform log)
+    add_dependencies(moonlight ui_embed build_info_gen moonlive_catalog)
+    set_target_properties(moonlight PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/jniLibs/${ANDROID_ABI}")
 endif()
 
 # Tests

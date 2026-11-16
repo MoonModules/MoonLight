@@ -312,13 +312,13 @@ TEST_CASE("NetworkReceiveEffect: a second receiver in one device listens for DDP
 TEST_CASE("NetworkReceiveEffect: ddp_port shows only while the receiver listens for DDP") {
     mm::NetworkReceiveEffect fx;
     fx.defineControls();
-    CHECK(mm::test::isVisible(fx, "ddp_port"));   // all, the default
+    CHECK(mm::isVisible(fx, "ddp_port"));   // all, the default
     fx.protocol = mm::NetworkReceiveEffect::kProtoArtNet;
     fx.rebuildControls();
-    CHECK(mm::test::isHidden(fx, "ddp_port"));
+    CHECK(mm::isHidden(fx, "ddp_port"));
     fx.protocol = mm::NetworkReceiveEffect::kProtoDdp;
     fx.rebuildControls();
-    CHECK(mm::test::isVisible(fx, "ddp_port"));
+    CHECK(mm::isVisible(fx, "ddp_port"));
 }
 
 // --- mapped by: the receiver against the sender ------------------------------

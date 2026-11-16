@@ -2,6 +2,7 @@
 /// Rules come from the ESP-IDF partition-table format: partitions may not overlap, must sit inside the flash the table is written for, must not start before the table itself ends, and an APP partition must be 64 KB aligned (the MMU maps app code in 64 KB pages).
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -46,7 +47,7 @@ uint32_t declaredFlashBytes(const std::string& file) {
 
 std::filesystem::path partitionDir() {
     // test/unit/core/<this file> -> repo root -> esp32/partitions
-    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
+    return mm::sourceRoot()
            / "esp32" / "partitions";
 }
 
@@ -127,7 +128,7 @@ TEST_CASE("the CSV number parser rejects signed and uint32-overflowing values") 
     CHECK(v == 512u * 1024u);
 }
 
-TEST_CASE("every partition table describes a layout that fits its flash without overlaps") {
+TEST_CASE("every partition table describes a layout that fits its flash without overlaps" * doctest::skip(!mm::sourceTreePresent())) {
     const auto tables = allTables();
     REQUIRE(tables.size() >= 3);   // esp32dev, esp32s3_n8r8, ota_16mb at time of writing
 
@@ -157,7 +158,7 @@ TEST_CASE("every partition table describes a layout that fits its flash without 
     }
 }
 
-TEST_CASE("app partitions are 64 KB aligned, as the MMU requires") {
+TEST_CASE("app partitions are 64 KB aligned, as the MMU requires" * doctest::skip(!mm::sourceTreePresent())) {
     for (const auto& t : allTables()) {
         CAPTURE(t.file);
         for (const auto& p : t.parts) {
@@ -168,7 +169,7 @@ TEST_CASE("app partitions are 64 KB aligned, as the MMU requires") {
     }
 }
 
-TEST_CASE("a table carries either two OTA slots or one slot plus a recovery app, never a mix") {
+TEST_CASE("a table carries either two OTA slots or one slot plus a recovery app, never a mix" * doctest::skip(!mm::sourceTreePresent())) {
     // Dual-OTA (ota_0 + ota_1) buys a power-fail rollback at the cost of holding two copies of the firmware. The safeboot shape (factory + ota_0) spends that space on the app instead and recovers through the factory image. Both are valid; a table that has ota_1 AND a factory partition would be paying for both and is a mistake.
     for (const auto& t : allTables()) {
         CAPTURE(t.file);
@@ -186,7 +187,7 @@ TEST_CASE("a table carries either two OTA slots or one slot plus a recovery app,
     }
 }
 
-TEST_CASE("every MoonBase factory slot can be erased and holds a MoonBase image") {
+TEST_CASE("every MoonBase factory slot can be erased and holds a MoonBase image" * doctest::skip(!mm::sourceTreePresent())) {
     // The app installs a new MoonBase by erasing this partition and streaming into it, and esp_partition_erase_range works in whole 4 KB sectors: an offset or size that is not a multiple would erase past the slot or leave a tail behind. Both are 64 KB aligned today (the app-alignment rule above), which satisfies this, but the erase depends on the weaker property and should say so rather than inherit it by luck.
     constexpr uint32_t kSector = 4096;
     constexpr uint32_t kImageBytes = 743 * 1024;   // the built image, which the slot must hold

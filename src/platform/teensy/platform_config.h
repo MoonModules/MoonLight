@@ -64,6 +64,9 @@ constexpr bool previewsHardwareControls = false;
 /// False: one interface, so a raw sender names none.
 constexpr bool hasNamedNetInterfaces = false;
 
+/// False: the panel card driver (MM_PANEL_CARDS) links into ESP32 and desktop builds alone.
+constexpr bool hasRawEthernet = false;
+
 /// No NDI, HLS or RTSP source.
 constexpr bool hasNdi = false;
 /// No H.264 encoder.

@@ -14,6 +14,7 @@
 #include "core/system/FilesystemModule.h"
 #include "core/module/StateDocument.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -37,15 +38,15 @@ struct Rig {
     FilesystemModule* fs = new FilesystemModule();
     FakeControl* control = new FakeControl();
     MoonLiveService* svc = new MoonLiveService();
-    char root_[64];
+    std::string root_;
     Rig() {
         // Its own filesystem root, the pattern every file-touching test here uses.
         // The suite leaves the root pointing wherever the last test set it, so a write to a shared root fails on a directory that no longer exists.
         // A monotonic counter rather than millis(), so two rigs built in the same millisecond cannot share one.
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_mls_test_%u", ++seq);
+        root_ = mm::systemTempDir() + "/mm_mls_test_" + std::to_string(++seq);
         std::filesystem::remove_all(root_);
-        platform::fsSetRoot(root_);
+        platform::fsSetRoot(root_.c_str());
 
         platform::clearTestGpioLevel();
         fs->setName("Filesystem");

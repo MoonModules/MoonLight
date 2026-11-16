@@ -60,6 +60,9 @@
 
 #include <cstdio>
 #include <cstring>
+#ifndef _WIN32
+#include <unistd.h>   // getuid: a process Android's shell started
+#endif
 
 namespace mm::platform {
 
@@ -81,11 +84,20 @@ const char* namePtrs_[kMaxDevices];
 ma_device_id deviceIds_[kMaxDevices];   // parallel to nameBuf_ (entry 0 unused: default)
 size_t deviceCount_ = 0;
 
+// miniaudio's own backend order, except in a process Android's shell started (`adb shell`, uid 2000): lacking an app identity, it makes AAudio crash, so it runs with no sound device.
+static ma_result initContext(ma_context* ctx) {
+#ifdef __ANDROID__
+    constexpr uid_t kAndroidShellUid = 2000;   // AID_SHELL, from a header the NDK does not ship
+    if (::getuid() == kAndroidShellUid) return MA_NO_BACKEND;
+#endif
+    return ma_context_init(nullptr, 0, nullptr, ctx);
+}
+
 // The context picks its backend when it is created, on Linux PulseAudio or PipeWire where a server answers and ALSA otherwise, so a server started after MoonLight is found by creating it anew, free while no device holds it.
 bool freshContext() {
     if (deviceOpen_) return true;   // the open device holds this context
     if (ctxReady_) { ma_context_uninit(&ctx_); ctxReady_ = false; }
-    if (ma_context_init(nullptr, 0, nullptr, &ctx_) != MA_SUCCESS) return false;
+    if (initContext(&ctx_) != MA_SUCCESS) return false;
     ctxReady_ = true;
     return true;
 }
@@ -118,16 +130,16 @@ static bool unlistable(const ma_device_info& info) {
 
 /// The context a list is read through: a fresh one, or, while a device holds the context, `scratch`, so a server started since shows in the list; null where neither comes up. The pick recreates the context before it opens anything.
 static ma_context* listContext(ma_context& scratch) {
-    if (deviceOpen_) return ma_context_init(nullptr, 0, nullptr, &scratch) == MA_SUCCESS ? &scratch : nullptr;
+    if (deviceOpen_) return initContext(&scratch) == MA_SUCCESS ? &scratch : nullptr;
     return freshContext() ? &ctx_ : nullptr;
 }
 
-/// Say the backend once per change, so a terminal shows which one the host holds, the Null backend naming a system whose audio libraries were missing.
+/// Say the backend once per change on stderr, the diagnostics stream, so a terminal shows which one the host holds (Null: no audio libraries) and mm_tempo's stdout stays its data.
 static void sayBackend(ma_backend backend) {
     static ma_backend said = ma_backend_null;
     static bool once = false;
     if (once && said == backend) return;
-    std::printf("audio: %s backend, %u capture device(s)\n", ma_get_backend_name(backend), static_cast<unsigned>(deviceCount_ - 1));
+    std::fprintf(stderr, "audio: %s backend, %u capture device(s)\n", ma_get_backend_name(backend), static_cast<unsigned>(deviceCount_ - 1));
     said = backend;
     once = true;
 }

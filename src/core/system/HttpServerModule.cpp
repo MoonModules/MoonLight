@@ -695,6 +695,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
             handleApplyState(conn, body, queryStart && http::queryHas(queryStart + 1, "live", "1"));
         } else if (std::strncmp(path, "/api/list/", 10) == 0 && body) {
             handleListPatchRow(conn, path + 10, body);
+        } else if (std::strncmp(path, "/api/modules/", 13) == 0 && !std::strchr(path + 13, '/') && body) {
+            // PATCH /api/modules/<name> with {"name":N} renames the module in place.
+            handleRenameModule(conn, path + 13, body);
         } else {
             sendResponse(conn, 404, "text/plain", "Not found");
         }
@@ -1533,7 +1536,7 @@ static void writeTypedMember(JsonSink& sink, const char* name, const char* typeN
 }
 
 HttpServerModule::OpResult HttpServerModule::applyAddModule(const char* typeName, const char* id, const char* parentId,
-                                                            char* outName, size_t outNameLen, StateDocumentResult* refusal) {
+                                                            char* outName, size_t outNameLen, StateDocumentResult* refusal, const char* base) {
     if (!typeName || typeName[0] == 0 || !scheduler_) return OpResult::BadRequest;
     // The top level is the fixed set main.cpp wires, so an add names a parent.
     if (!parentId || parentId[0] == 0) return OpResult::BadRequest;
@@ -1545,9 +1548,10 @@ HttpServerModule::OpResult HttpServerModule::applyAddModule(const char* typeName
         std::snprintf(name, sizeof(name), "%s", id);
         if (std::strlen(id) >= sizeof(name)) return OpResult::BadRequest;   // the document's name rule, said before it truncates
     } else {
-        const char* base = ModuleFactory::defaultNameOf(typeName);
-        if (!base) return OpResult::UnknownType;
-        if (!scheduler_->freeName(base, name, sizeof(name))) return OpResult::NameInUse;
+        // The base the caller names, such as a script's, or the type's default, made free: shortened and numbered to fit.
+        const char* want = base && base[0] ? base : ModuleFactory::defaultNameOf(typeName);
+        if (!want) return OpResult::UnknownType;
+        if (!scheduler_->freeName(want, name, sizeof(name))) return OpResult::NameInUse;
     }
     JsonSink body;
     writeTypedMember(body, name, typeName);
@@ -1560,14 +1564,16 @@ void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char
     char typeName[32] = {};
     char id[32] = {};
     char parentId[32] = {};
+    char base[64] = {};   // longer than a name holds, since it is shortened to fit
     mm::json::parseString(body, "type", typeName, sizeof(typeName));
     mm::json::parseString(body, "id", id, sizeof(id));
     mm::json::parseString(body, "parent_id", parentId, sizeof(parentId));
+    mm::json::parseString(body, "name", base, sizeof(base));
 
     // The created module's name rides back so the UI can select and focus it; written through writeJsonString, since a client-supplied `id` may hold a quote.
     char createdName[MoonModule::kNameLen] = {};
     StateDocumentResult why;
-    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName), &why)) {
+    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName), &why, base)) {
         case OpResult::Ok: {
             // A 15-character name fully \uXXXX-escaped plus the wrapper.
             char resp[128];
@@ -1632,6 +1638,51 @@ void HttpServerModule::handleDeleteModule(platform::TcpConnection& conn, const c
     }
 }
 
+// A rename is the document `"<old>":{"$name":"<new>"}` applied at the parent, so the route and a document follow the same rules.
+HttpServerModule::OpResult HttpServerModule::applyRenameModule(const char* moduleName, const char* newName, char* outName, size_t outNameLen,
+                                                               StateDocumentResult* refusal) {
+    if (!newName || newName[0] == 0) return OpResult::BadRequest;
+    MoonModule* mod = nullptr;
+    const OpResult r = editableChild(moduleName, mod);
+    if (r != OpResult::Ok) return r;
+    if (MoonModule* holder = findModuleByName(newName); holder && holder != mod) return OpResult::NameInUse;
+    JsonSink body;
+    body.writeJsonString(mod->name());
+    body.append(":{\"$name\":");
+    body.writeJsonString(newName);
+    body.append("}");
+    const OpResult applied = opResultOf(applyStateAt(*scheduler_, *mod->parent(), body.data()), refusal);
+    if (applied == OpResult::Ok && outName && outNameLen > 0) std::snprintf(outName, outNameLen, "%s", mod->name());
+    return applied;
+}
+
+void HttpServerModule::handleRenameModule(platform::TcpConnection& conn, const char* path, const char* body) {
+    char moduleName[MoonModule::kNameLen] = {};
+    if (!routeModuleName(path, moduleName)) {
+        sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
+        return;
+    }
+    // One byte past a name, so a name too long arrives too long and is refused rather than cut to fit.
+    char newName[MoonModule::kNameLen + 1] = {};
+    mm::json::parseString(body, "name", newName, sizeof(newName));
+    StateDocumentResult why;
+    switch (applyRenameModule(moduleName, newName, newName, sizeof(newName), &why)) {
+        case OpResult::Ok: {
+            JsonSink sink;   // on the heap: a rename is rare, and a buffer here would make this frame large
+            sink.append("{\"ok\":true,\"name\":");
+            sink.writeJsonString(newName);
+            sink.append("}");
+            sendResponse(conn, 200, "application/json", sink.data());
+            return;
+        }
+        case OpResult::Refused: sendRefusal(conn, why); return;
+        case OpResult::ModuleNotFound: sendResponse(conn, 404, "application/json", "{\"error\":\"module not found\"}"); return;
+        case OpResult::NameInUse: sendResponse(conn, 409, "application/json", "{\"error\":\"that name is used elsewhere in the tree\"}"); return;
+        case OpResult::ReadOnly: sendResponse(conn, 400, "application/json", "{\"error\":\"this module keeps its name\"}"); return;
+        default: sendResponse(conn, 400, "application/json", newName[0] ? "{\"error\":\"a top-level module keeps its name\"}" : "{\"error\":\"missing name\"}"); return;
+    }
+}
+
 /// The name for a replaced module: the caller's request, else a custom current name, else null for the new type's default (never an empty string).
 const char* HttpServerModule::replacementName(const char* requested, const char* current,
                                               const char* oldDefault) {
@@ -1679,8 +1730,8 @@ HttpServerModule::OpResult HttpServerModule::applyReplaceModule(const char* modu
 void HttpServerModule::handleReplaceModule(platform::TcpConnection& conn, const char* moduleName, const char* body) {
     char typeName[32] = {};
     mm::json::parseString(body, "type", typeName, sizeof(typeName));
-    // An optional name for the replacement, the counterpart of `id` on create.
-    char wantName[32] = {};
+    // An optional name for the replacement, the counterpart of `id` on create; one byte past a name, so a name too long arrives too long and is refused.
+    char wantName[MoonModule::kNameLen + 1] = {};
     mm::json::parseString(body, "name", wantName, sizeof(wantName));
     StateDocumentResult why;
     switch (applyReplaceModule(moduleName, typeName, wantName, &why)) {
@@ -2087,7 +2138,7 @@ bool HttpServerModule::readImageUrl(platform::TcpConnection& conn, const char* b
     if (url[0] == 0 && coprocessorDefault) matchingCoprocessorUrl(url, sizeof(url));
     const char* why = url[0] == 0                              ? "url required"
                       : std::strlen(url) > kMaxImageUrl        ? "url too long (max 255)"
-                      : !http::isHttpUrl(url)                  ? "url must start with http:// or https://"
+                      : !http::isHttpsUrl(url)                 ? "url must start with https://"
                                                                : nullptr;
     if (!why) return true;
     sendError(conn, 400, why);

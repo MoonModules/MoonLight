@@ -283,6 +283,8 @@ constexpr uint32_t kTailBufs = 1;
 
 // The group divider, restated rather than included because its header is private; kept identical to the sibling's so both produce the same waveform.
 constexpr uint32_t kClockPreScale = 2;
+// The LCD_CAM group the clock calls name: the chips carry one.
+constexpr int kLcdGroup = 0;
 
 // Max bytes one descriptor carries, so a full frame's chain costs a few hundred bytes: the chain is free.
 constexpr size_t kDmaNodeMaxBytes = kRingNodeMaxBytes;
@@ -597,9 +599,9 @@ bool initPeripheral(MoonI80State* st, uint32_t pclkHz) {
 
     PERIPH_RCC_ATOMIC() {
         lcd_ll_enable_clock(dev, true);
-        lcd_ll_select_clk_src(dev, LCD_CLK_SRC_DEFAULT);
+        lcd_ll_select_clk_src(kLcdGroup, LCD_CLK_SRC_DEFAULT);
         // Integer division only (0/0 for the fractional part), a fractional group divider adds clock jitter, which on a self-clocked WS2812 stream is bit error.
-        lcd_ll_set_group_clock_coeff(dev, static_cast<int>(kClockPreScale), 0, 0);
+        lcd_ll_set_group_clock_coeff(kLcdGroup, static_cast<int>(kClockPreScale), 0, 0);
     }
 
     lcd_ll_reset(dev);
@@ -658,6 +660,15 @@ void configureGpio(MoonI80State* st, const uint16_t* dataPins, uint8_t laneCount
 // The transfer channel and its descriptor chain, replicating the sibling's setup with two deliberate differences.
 // Owner-checking is off: @xref{the-chain-is-ours-so-the-owner-check-protects-nothing|why it only fails here}.
 // And the completion callback is the engine's own rather than a peripheral interrupt.
+// The channel's buffer alignment for internal and for external memory, the external one the encrypted-PSRAM worst case ESP-IDF names as the safe default.
+bool dmaAlignment(MoonI80State* st, size_t& intAlign, size_t& extAlign) {
+    gdma_channel_alignment_info_t info = {};
+    if (gdma_get_channel_alignment_constraints(st->dma, &info) != ESP_OK) return false;
+    intAlign = info.int_mem_alignment;
+    extAlign = info.ext_enc_mem_alignment;
+    return true;
+}
+
 bool initDma(MoonI80State* st, size_t bufferBytes) {
     gdma_channel_alloc_config_t chanCfg = {};
     // The S3's LCD hangs off the AHB GDMA, the P4's off the AXI one, and the descriptor alignment differs with the bus. Same selection esp_lcd makes (esp_lcd_panel_io_i80.c:19-27), including its `defined(...) &&` guard, on a chip with no AXI GDMA the AXI symbol is simply absent, and an unguarded `== SOC_GDMA_BUS_AXI` would compare against the preprocessor's 0 and match.
@@ -681,7 +692,7 @@ bool initDma(MoonI80State* st, size_t bufferBytes) {
     if (gdma_config_transfer(st->dma, &transfer) != ESP_OK) return false;
 
     size_t intAlign = 0, extAlign = 0;
-    if (gdma_get_alignment_constraints(st->dma, &intAlign, &extAlign) != ESP_OK) return false;
+    if (!dmaAlignment(st, intAlign, extAlign)) return false;
     const size_t bufAlign = intAlign > extAlign ? intAlign : extAlign;
 
     gdma_link_list_config_t linkCfg = {};
@@ -695,11 +706,11 @@ bool initDma(MoonI80State* st, size_t bufferBytes) {
     return gdma_register_tx_event_callbacks(st->dma, &cbs, st) == ESP_OK;
 }
 
-// Allocate one DMA-capable frame buffer, honouring the GDMA's alignment constraints (both the address and the length must be a cache-line multiple on the P4 / on PSRAM, or the cache write-back before a transfer would touch neighboring allocations).
+// Allocate one DMA-capable frame buffer, honoring the GDMA's alignment constraints (both the address and the length must be a cache-line multiple on the P4 / on PSRAM, or the cache write-back before a transfer would touch neighboring allocations).
 uint8_t* allocFrame(MoonI80State* st, size_t bufferBytes, bool psram) {
 
     size_t intAlign = 0, extAlign = 0;
-    gdma_get_alignment_constraints(st->dma, &intAlign, &extAlign);
+    dmaAlignment(st, intAlign, extAlign);
     const size_t align = psram ? extAlign : intAlign;
     const uint32_t caps = MALLOC_CAP_8BIT | MALLOC_CAP_DMA
                         | (psram ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL);
@@ -946,7 +957,7 @@ bool initRingDma(MoonI80State* st) {
     if (gdma_config_transfer(st->dma, &transfer) != ESP_OK) return false;
 
     size_t intAlign = 0, extAlign = 0;
-    if (gdma_get_alignment_constraints(st->dma, &intAlign, &extAlign) != ESP_OK) return false;
+    if (!dmaAlignment(st, intAlign, extAlign)) return false;
 
     st->nSlices = (st->totalRows + st->rowsPerBuf - 1) / st->rowsPerBuf;
 

@@ -8,6 +8,7 @@
 /// That routing is what these pin: a script reaches the same channels a compiled effect writes, and does nothing on a light with no motion channels, so one script runs on a moving head and on a plain strip.
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -30,7 +31,7 @@ namespace {
 const char* shipScript(const char* name) {
     // Found by name in any subfolder, since a script's name is unique and its folder only groups it.
     const std::filesystem::path effects =
-        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()
+        mm::sourceRoot()
         / "moonlive" / "effects";
     std::filesystem::path src = effects / name;
     for (const auto& e : std::filesystem::recursive_directory_iterator(effects))
@@ -145,7 +146,7 @@ TEST_CASE("setPan past the last light is ignored") {
 }
 
 // The two SHIPPED motion scripts, run on a real head rig: the reference a user reads to learn setPan/setTilt, so "it compiles" is not enough. Mh-aim.mle puts every head where its sliders say; mh-sweep.mle moves them and differs between formations.
-TEST_CASE("mh-aim.mle points every head where its sliders say") {
+TEST_CASE("mh-aim.mle points every head where its sliders say" * doctest::skip(!mm::sourceTreePresent())) {
     HeadRig rig;
     rig.effect.setScript(shipScript("mh-aim.mle"));
     rig.layouts.applyState();
@@ -164,7 +165,7 @@ TEST_CASE("mh-aim.mle points every head where its sliders say") {
     CHECK(rig.channel(0, rig.fc.pan) == 128);
 }
 
-TEST_CASE("mh-sweep.mle moves the rig and its formations differ") {
+TEST_CASE("mh-sweep.mle moves the rig and its formations differ" * doctest::skip(!mm::sourceTreePresent())) {
     auto aimsFor = [](uint8_t formation) {
         HeadRig rig;
         rig.effect.setScript(shipScript("mh-sweep.mle"));

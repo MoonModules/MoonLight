@@ -21,6 +21,7 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Process detection**: on page load, MoonDeck checks whether MoonLight or idf.py is running and shows Stop.
 - **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
 - **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+- **OTA button** on each device row: uploads the local build for the device's firmware (`build/esp32-<firmware>/`) over WiFi, rebooting the device into MoonBase first where its variant has it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand; see `_ota_upload` in [moondeck.py](moondeck.py).
 
 ## Desktop Tab
 
@@ -37,6 +38,28 @@ uv run moondeck/build/build_desktop.py --configure   # configure and generate bu
 ```
 
 Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary, not the ~130-file test suite, so the "give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
+
+### build_android
+
+Build MoonLight for Android arm64 with the NDK, as the fourth desktop OS: the program, the unit tests, or the app.
+
+```bash
+uv run moondeck/build/build_android.py          # the MoonLight program, run from adb shell
+uv run moondeck/build/build_android.py --tests  # mm_tests, which test_android runs on a device
+uv run moondeck/build/build_android.py --apk    # the app: build/android-arm64/MoonLight.apk
+```
+
+Configures `build/android-arm64/` with the NDK's CMake toolchain for Android 9 and later (API 28). `--apk` builds `libmoonlight.so`, the same program entered through `main_android.cpp`, makes the launcher icon from the installer's favicon, and has the Gradle wrapper in `android/` pack them with the Kotlin shell, debug-signed. It needs the NDK, found through `ANDROID_NDK_HOME`, `ANDROID_HOME` or Android Studio's default SDK folder, and a JDK 17. What the app does: [Running MoonLight on Android](../docs/reference/installing-on-android.md).
+
+### run_android
+
+Install the app `build_android --apk` made on the attached Android device, a phone, a tablet or a Meta Quest in developer mode, and open it.
+
+```bash
+uv run moondeck/run/run_android.py
+```
+
+`adb install -r` keeps the app's settings when the installed app carries the same signing key and a version no newer; over a release, which the release key signs, it says to back up, uninstall and restore. Its log: `adb logcat -s MoonLight`.
 
 ### run_desktop
 
@@ -170,6 +193,17 @@ uv run moondeck/build/build_desktop.py --tests
 
 Builds `mm_tests`, `mm_scenarios` and `mm_tempo` (the `--tests` target set of `build_desktop.py`), in the same per-host build dir. Separate from `build_desktop` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_desktop` (unit) and `scenario_pipeline` (scenarios).
 
+### test_android
+
+Run the unit tests on the attached Android device over adb.
+
+```bash
+uv run moondeck/test/test_android.py
+uv run moondeck/test/test_android.py -tc='*MoonLive*'   # doctest's own filters pass through
+```
+
+Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, in a `repo` folder beside it), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_desktop`'s.
+
 ### test_desktop
 
 Run the desktop test suite.
@@ -179,6 +213,8 @@ uv run moondeck/test/test_desktop.py
 ```
 
 Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — same per-host build dir as the desktop build above.
+
+**The network stays quiet on the light protocols' ports while it runs.** The NetworkReceive tests open the real Art-Net, E1.31 and DDP sockets, which test more than a stand-in would, so they count every packet arriving there: a MoonLight on the same machine holding a receiver, or any device broadcasting Art-Net on the network, a NetworkSend driver set to broadcast included, makes their counts fail.
 
 ### release_stage
 
@@ -610,7 +646,7 @@ Attribution comes from DWARF (`nm --line-numbers`), so a symbol is credited to t
 
 ### check_code
 
-The code check: counts that only fall, kept as check_docgen and check_prose keep theirs, for code.
+The code check: counts that only fall, as in check_docgen and check_prose.
 
 ```bash
 uv run moondeck/check/check_code.py                   # record the counts and findings, exit 1 if any count rose
@@ -618,9 +654,9 @@ uv run moondeck/check/check_code.py --module Control  # one module's findings, n
 uv run moondeck/check/check_code.py --account         # this change's account for its commit message
 ```
 
-Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow over 3 levels deep. **Long parameter list** is over 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere, found by [jscpd](https://github.com/kucherenko/jscpd) (through npx) among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it. Lizard tokenizes rather than parses, so it needs no build.
+Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow over 3 levels deep. **Long parameter list** is over 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere, found by [jscpd](https://github.com/kucherenko/jscpd) among the code files the file-length rule counts. A clone counts under both its files. Lizard tokenizes rather than parses, so it needs no build.
 
-The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own findings, as CLAUDE.md says for docgen.
+The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A rule swept to zero (`ERROR_RULES`) is an error: one finding fails the run. A touched file clears its own findings.
 
 `repo_health` and `collect_kpi` count the function rules through the same two functions this script uses; the clones and the file sizes are this check's alone, too slow a pass for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 
@@ -1036,27 +1072,6 @@ Between releases `library.json` holds the next version with a `-dev` suffix, and
 After a release, `next` moves development to the next minor; when the coming release is a major instead, `major` moves it there before tagging.
 A forgotten `next` cannot misorder the builds: `compute_version.py` gives a build after the last tag the next minor, so it always ranks above that release.
 The script never touches git, since the commit and the tag stay yours.
-
-### serve_firmware
-
-Serve a built firmware over HTTP so a board can install it by URL. Long-running: the **Serve for OTA** card on the ESP32 tab serves the selected firmware until Stop.
-
-```bash
-uv run moondeck/run/serve_firmware.py --firmware esp32 --port 8099
-uv run moondeck/run/serve_firmware.py --firmware build/moonbase-esp32/MoonLight-moonbase.bin --port 8098
-```
-
-For a device MoonDeck lists, the **OTA** button on its Live row does the same in one click: MoonDeck serves the image itself and hands the device the URL. The card is for a device it does not list, MoonBase's own page, or a board on another network.
-
-Takes a firmware name (resolved to the app image in `build/esp32-<name>/`) or a path to any `.bin`, and
-prints the LAN URL to paste into the Firmware card or MoonBase's own page. The file is re-read per
-request, so a rebuild needs no restart.
-
-**It exists because `python -m http.server` speaks HTTP/1.0**, whose default is no keep-alive and a
-body that ends at connection close rather than at Content-Length. `esp_https_ota` asks for
-keep-alive and a 32 KB receive buffer, and against a 1.0 server the transfer crawls and then fails
-with `0xffffffff` partway through. That cost two failed OTA attempts on a bench board before the
-`HTTP/1.0` in the response line was spotted, while the same URL from GitHub worked first time.
 
 ### monitor_esp32
 

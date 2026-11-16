@@ -78,7 +78,7 @@ TEST_CASE("a light's channels go out in wire-byte order, 8 bits each") {
 TEST_CASE("GRB ordering comes from Correction: the driver ships whatever bytes it produced") {
     // Correction with GRB preset turns logical RGB into wire GRB; the encoder then just emits the bytes it's handed. Logical red (255,0,0) → wire GRB (0,255,0): green byte first. So the FIRST 8 symbols (wire byte 0 = G = 0x00) are all 0s, and the SECOND 8 (wire byte 1 = R = 0xFF) are all 1s.
     mm::Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::GRB);   // full brightness, GRB
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::GRB);   // full brightness, GRB
     const uint8_t logicalRed[3] = {255, 0, 0};
     uint8_t wire[4] = {};
     c.apply(logicalRed, wire, 3);              // -> GRB: {0, 255, 0}
@@ -93,7 +93,7 @@ TEST_CASE("GRB ordering comes from Correction: the driver ships whatever bytes i
 
 TEST_CASE("an RGBW preset puts four bytes per light on the wire") {
     mm::Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::GRBW);  // 4 output channels
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::GRBW);  // 4 output channels
     CHECK(c.outChannels == 4);
     const uint8_t logical[3] = {10, 20, 30};
     uint8_t wire[4] = {};
