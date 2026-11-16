@@ -309,6 +309,8 @@ def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_co
     assert [r[1] for r in c.double_findings("src/core/A.h", ['const char* u = "http://a"; double v;\n'])] == [c.FIRMWARE_DOUBLE], "a // inside a string is no comment"
     assert c.double_findings("src/core/A.h", ["/* the old\n", "   double here\n", "*/ int v;\n"]) == [], "a block comment is no code, across its lines"
     assert [r[1] for r in c.double_findings("src/core/A.h", ["/* a */ double v;\n"])] == [c.FIRMWARE_DOUBLE], "code after a closed block comment counts"
+    assert [r[1] for r in c.double_findings("src/core/A.h", ['/* " */ double value; const char* unit = "mm";\n'])] == [c.FIRMWARE_DOUBLE], "a quote inside a comment opens no string"
+    assert c.double_findings("src/core/A.h", ['char q = \'"\'; // a double here is comment\n']) == [], "a quote character literal opens no string"
 
 
 def test_a_finding_of_a_rule_swept_to_zero_fails_the_check_whatever_the_committed_counts_say():

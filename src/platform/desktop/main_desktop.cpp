@@ -79,19 +79,22 @@ static void crashHandler(int sig) {
     raise(sig);
 }
 #else
-// Whether a signal was sent (a kill, a raise, an abort) rather than raised by a faulting instruction: POSIX's SI_ codes, which Linux numbers 0 and below and Darwin from 0x10001.
-static bool sentSignal(const siginfo_t* info) {
+// Whether no faulting instruction will raise the signal again on return: a sent one (POSIX's SI_ codes, which Linux numbers 0 and below and Darwin from 0x10001) or an asynchronous hardware report, as Linux's early memory-failure SIGBUS.
+static bool nothingToRepeat(const siginfo_t* info) {
     if (info == nullptr || info->si_code <= 0) return true;
     for (int code : {SI_USER, SI_QUEUE, SI_TIMER, SI_ASYNCIO, SI_MESGQ})
         if (info->si_code == code) return true;
+#ifdef BUS_MCEERR_AO
+    if (info->si_signo == SIGBUS && info->si_code == BUS_MCEERR_AO) return true;
+#endif
     return false;
 }
-// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; a sent signal is sent again.
+// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; any other signal is raised again.
 static void crashHandler(int sig, siginfo_t* info, void*) {
     reportCrash(sig);
     for (size_t i = 0; i < std::size(kCrashSignals); i++)
         if (kCrashSignals[i] == sig) sigaction(sig, &previousCrashAction[i], nullptr);   // sigaction is async-signal-safe
-    if (sentSignal(info)) raise(sig);
+    if (nothingToRepeat(info)) raise(sig);
 }
 #endif
 

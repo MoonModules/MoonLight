@@ -278,7 +278,8 @@ def controls_of(cls) -> dict:
             # A bank declared in a loop, `addControl(kNames[i], values_[i])`, is documented once, by the member array it publishes, under that member's name.
             bank = _referenced_field(args[1]) if callee.startswith("add") and len(args) > 1 else None
             if bank is not None and bank.type.kind.name == "CONSTANTARRAY" and bank.raw_comment:
-                controls.setdefault(bank.spelling.rstrip("_"), comment_text(bank.raw_comment))
+                text = comment_text(bank.raw_comment)
+                controls.setdefault(bank.spelling.rstrip("_"), expand_fields(text, node.translation_unit.cursor) if "@fields" in text else text)
                 return
             method = own(node)
             if method is not None and method.hash not in entered:

@@ -74,10 +74,11 @@ class MainActivity : Activity() {
         }
         if (requestCode == SAVE_FILE) {
             saving = false
-            val staged = File(cacheDir, STAGED_SAVE)
+            val staged = File(filesDir, STAGED_SAVE)
             val place = data?.data
             try {
-                if (resultCode == RESULT_OK && place != null && staged.exists()) {
+                if (resultCode == RESULT_OK && place != null) {
+                    if (!staged.exists()) throw IOException("the file to save is gone")
                     val out = contentResolver.openOutputStream(place) ?: throw IOException("the destination opened no stream")
                     out.use { it.write(staged.readBytes()) }
                 }
@@ -109,14 +110,14 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), ASK_PERMISSIONS)
     }
 
-    /** The page's save: the bytes staged in the app's cache, which outlives the activity being recreated while the dialog is open, then the system's dialog for where they go, as a browser asks where a download goes. */
+    /** The page's save: the bytes staged in the app's own files, which outlive the activity being recreated while the dialog is open and which Android keeps until the app removes them, then the system's dialog for where they go, as a browser asks where a download goes. */
     inner class SaveBridge {
         @JavascriptInterface fun save(name: String, mime: String, base64: String) {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
             runOnUiThread {
                 if (saving) return@runOnUiThread   // one dialog at a time, so its place receives its own file
                 saving = true
-                File(cacheDir, STAGED_SAVE).writeBytes(bytes)
+                File(filesDir, STAGED_SAVE).writeBytes(bytes)
                 val ask = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name)
                 startActivityForResult(ask, SAVE_FILE)
             }

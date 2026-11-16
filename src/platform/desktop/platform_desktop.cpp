@@ -980,22 +980,25 @@ static bool routeAddress(sockaddr_in& local) {
     close_sock(fd);
     return got;
 }
-/// The host's LAN address (host_address.h), walking the interfaces only when the route's address changes, as a VPN coming up changes it, since the render loop reads hostIp().
+/// The host's LAN address (host_address.h), walking the interfaces when the route's address changes, as a VPN coming up changes it, or ten seconds on, as a network change behind a VPN needs, since the render loop reads hostIp().
 static bool hostAddress(in_addr& out) {
     sockaddr_in route{};
     out.s_addr = routeAddress(route) ? route.sin_addr.s_addr : 0;
 #ifndef _WIN32
-    static uint32_t walkedRoute = 0, picked = 0;
+    static uint32_t walkedRoute = 0, picked = 0, walkedAt = 0;
     static bool walked = false;
-    if (walked && out.s_addr == walkedRoute) { out.s_addr = picked; return picked != 0; }
+    constexpr uint32_t kRewalkMs = 10000;
+    const uint32_t now = millis();
+    if (walked && out.s_addr == walkedRoute && now - walkedAt < kRewalkMs) { out.s_addr = picked; return picked != 0; }
     walkedRoute = out.s_addr;
+    walkedAt = now;
     walked = true;
     HeldAddress held[16];
     size_t count = 0;
     eachInterface([&](const ifaddrs& a) {
         if (count == std::size(held) || !a.ifa_addr || a.ifa_addr->sa_family != AF_INET) return;
         const HeldAddress h{reinterpret_cast<const sockaddr_in*>(a.ifa_addr)->sin_addr.s_addr, a.ifa_flags, virtualInterface(a.ifa_name)};
-        if (reachesLan(h) || h.addr == out.s_addr) held[count++] = h;   // only the candidates, so tunnels and bridges never crowd the LAN out
+        if (reachesLan(h) || h.addr == out.s_addr) held[count++] = h;   // only the candidates, so the LAN keeps a slot whatever tunnels and bridges the host has
     });
     out.s_addr = picked = lanAddress(out.s_addr, held, count);
 #endif

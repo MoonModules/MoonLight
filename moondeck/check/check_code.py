@@ -400,25 +400,39 @@ def _firmware(rel: str) -> bool:
     return rel.startswith("src/") and rel.endswith((".h", ".cpp"))
 
 
+_CHAR_LITERAL_RE = re.compile(r"'(?:\\.|[^\\'])'")
+
+
 def _code_lines(lines) -> list:
-    """Each line's code: its strings emptied first, so a `//` or `/*` inside one is no comment, then its comments cut, a block comment across every line it spans."""
+    """Each line's code, read in one lexical pass as a compiler does: a string or a character literal emptied, a comment cut, a block comment across every line it spans, so a quote inside a comment opens nothing and a `/*` inside a string opens nothing."""
     out, in_block = [], False
     for line in lines:
-        s, code, i = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line), "", 0
-        while i < len(s):
+        code, i, n = [], 0, len(line)
+        while i < n:
             if in_block:
-                end = s.find("*/", i)
-                in_block, i = end < 0, len(s) if end < 0 else end + 2
+                end = line.find("*/", i)
+                in_block, i = end < 0, n if end < 0 else end + 2
                 continue
-            block, rest = s.find("/*", i), s.find("//", i)
-            if rest >= 0 and (block < 0 or rest < block):
-                code += s[i:rest]
+            if line.startswith("//", i):
                 break
-            if block < 0:
-                code += s[i:]
-                break
-            code, in_block, i = code + s[i:block], True, block + 2
-        out.append(code)
+            if line.startswith("/*", i):
+                in_block, i = True, i + 2
+                continue
+            literal = _CHAR_LITERAL_RE.match(line, i) if line[i] == "'" else None
+            if literal:
+                code.append("''")
+                i = literal.end()
+                continue
+            if line[i] == '"':
+                j = i + 1
+                while j < n and line[j] != '"':
+                    j += 2 if line[j] == "\\" else 1
+                code.append('""')
+                i = j + 1
+                continue
+            code.append(line[i])
+            i += 1
+        out.append("".join(code))
     return out
 
 

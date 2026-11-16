@@ -43,7 +43,7 @@ test("a remembered chip the picker does not offer survives that picker, and clea
     assert.deepEqual(c.stickyChips(["effect"]), ["🧊"]);
 });
 
-test("a scripted chip remembered by one role and a compiled chip by another cancel, so the add picker never opens empty", () => {
+test("a scripted chip remembered by one role and a compiled chip by another cancel, so the add picker opens with rows to pick", () => {
     const c = chipsWith({ effect: ["📝", "🔥"], modifier: ["📦"] });
     assert.deepEqual(c.stickyChips(["effect", "modifier"]), ["🔥"]);
     assert.deepEqual(c.stickyChips(["effect"]), ["📝", "🔥"]);

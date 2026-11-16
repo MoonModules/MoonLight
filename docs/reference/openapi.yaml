@@ -158,7 +158,7 @@ paths:
               properties:
                 type: { type: string, description: "The module type, as /api/types names it." }
                 parent_id: { type: string, description: The parent module's name. }
-                id: { type: string, maxLength: 15, description: "The name to give it, exactly: refused when taken or too long." }
+                id: { type: string, maxLength: 15, description: "The name to give it, exactly: up to 15 bytes of UTF-8, so fewer characters where they take more than one byte; refused when taken or longer." }
                 name: { type: string, description: "A name to start from when `id` is absent, made free as the type's default is: shortened and numbered to fit, as `NetworkReceiv-2`. The type's default name when both are absent." }
             example: { type: RainbowEffect, parent_id: Layer }
       responses:
