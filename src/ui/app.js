@@ -793,8 +793,9 @@ async function listSetField(moduleName, ctrlName, id, field, value) {
 ///
 /// `id` names the new module, and the device refuses a name some module already holds (409, no `name`).
 /// A caller that wants a fresh module reads the absence of a name as "taken" and asks again with another.
-/// Returns null when nothing was created, for either reason.
-async function addModule(type, parentName, id) {
+/// Returns null on an empty `type`, a refusal or a failed request. When `why` is given, a refusal is
+/// described in it ({status, error}) so the caller can tell a taken name (409) from any other refusal.
+async function addModule(type, parentName, id, why) {
     if (!type) return null;
     const body = {type: type};
     if (parentName) body.parent_id = parentName;
@@ -806,8 +807,15 @@ async function addModule(type, parentName, id) {
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(body)
         });
-        name = (await r.json()).name || null;   // the created module's final name; absent if taken
-    } catch {}
+        const answer = await r.json();
+        name = answer.name || null;   // the created module's final name; absent if taken
+        // A refusal still carries the server's reason ({error}), and the status says which kind:
+        // 409 is a taken name, anything else (a name too long, an unknown type, a missing parent)
+        // would fail the same way under another name, so the caller needs both to decide.
+        if (why && !name) { why.status = r.status; why.error = answer.error || null; }
+    } catch (e) {
+        if (why) { why.status = 0; why.error = e && e.message ? e.message : String(e); }
+    }
     // A name already in use: the caller decides whether to retry, and re-fetching state here would
     // cost a round trip per attempt.
     if (id && !name) return null;
@@ -6798,10 +6806,16 @@ async function addPickedType(item, parentName) {
     const base = item.displayName.replace(/^\u2601\s*/, "");
     for (let n = 1; n <= 20; n++) {
         const id = n === 1 ? base : `${base}-${n}`;
-        const created = await addModule(type, parentName, id);
+        const why = {};
+        const created = await addModule(type, parentName, id, why);
         if (created) {
             await setCardScript(created, item.script);
             return created;
+        }
+        // Only a taken name (409) is worth retrying with a suffix: any other refusal (a name too long, an unknown type, a missing parent) fails the same way with -2, so the add stops at the first and shows the server's own reason.
+        if (why.status !== 409) {
+            alert(`could not add ${base}: ${why.error || "the device refused"}`);
+            return;
         }
     }
     // Twenty siblings of one name, all taken. Unlikely, but silence would leave the user clicking

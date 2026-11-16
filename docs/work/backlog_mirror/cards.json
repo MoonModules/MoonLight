@@ -1300,6 +1300,16 @@
   "number": null
  },
  {
+  "title": "A desktop paces its render loop, so its web server answers in time",
+  "area": "Platform",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306747019",
+  "number": null
+ },
+ {
   "title": "A flashable SD image with MoonLight already on it (robwomp, 2026-09-08)",
   "area": "Platform",
   "module": "",
