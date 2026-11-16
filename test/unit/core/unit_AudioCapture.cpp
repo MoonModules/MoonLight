@@ -80,7 +80,7 @@ TEST_CASE("a picked audio device is remembered by name, not by its position in t
     mm::ControlList gone;
     gone.addSelect("device", missing, kGone, 3);
     gone.setPersistLabel(gone.count() - 1);
-    // A label naming no current option leaves the control alone (Control.cpp: "the driver keeps its default"): the saved pick is never re-pointed at whatever now occupies its old index. Not an error under Clamp.
+    // A label naming no current option leaves the control alone (Control.cpp: "the driver keeps its default"): the saved pick stays itself instead of whatever now occupies its old index. Not an error under Clamp.
     CHECK(mm::applyControlValue(gone[0], saved.c_str(), "device",
                                 mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
     CHECK(missing == 2);                                        // untouched, not re-pointed
