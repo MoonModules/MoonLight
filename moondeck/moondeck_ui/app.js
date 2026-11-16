@@ -1215,7 +1215,8 @@ async function followOta(ip) {
         showOta(ip);
         if (otaStatus[ip].done) break;
     }
-    setTimeout(() => { delete otaStatus[ip]; showOta(ip); }, 60000);
+    const finished = otaStatus[ip];   // this install's record, so a later install's survives this one's clearing
+    setTimeout(() => { if (otaStatus[ip] === finished) { delete otaStatus[ip]; showOta(ip); } }, 60000);
 }
 
 function renderDevices() {

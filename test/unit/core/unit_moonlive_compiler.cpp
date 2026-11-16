@@ -1,6 +1,7 @@
 /// @module MoonLive
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 #include <sstream>
 #include <fstream>
 #include <filesystem>
@@ -1324,7 +1325,7 @@ TEST_CASE("toFixed refuses a literal outside the fixed range") {
 }
 
 // Every script this project SHIPS compiles on the host. The device codegen tests sweep the same folder for Xtensa and RISC-V, but not the host backend every desktop runs; read from disk so the check cannot drift from what ships.
-TEST_CASE("every shipped script compiles") {
+TEST_CASE("every shipped script compiles" * doctest::skip(!mm::sourceTreePresent())) {
     // A layout places lights, a modifier transforms coordinates, an effect draws: three different sets of system variables, so each folder compiles against its own.
     const moonlive::SysVarTable& layout = moonlive::layoutSysVars();
     const moonlive::SysVarTable& effect = moonlive::effectSysVars();
@@ -1336,7 +1337,7 @@ TEST_CASE("every shipped script compiles") {
     };
     // Located from __FILE__, not the working directory: the gate runs this binary from build/, where a relative path finds nothing and the test would pass while checking zero scripts.
     const std::filesystem::path repo =
-        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
+        mm::sourceRoot();
     int checked = 0;
     for (const auto& role : kRoles) {
         const std::filesystem::path dir = repo / "moonlive" / role.dir;

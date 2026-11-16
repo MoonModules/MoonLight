@@ -9,6 +9,33 @@
       "script": "build/build_desktop.py"
     },
     {
+      "id": "build_android",
+      "tab": "desktop",
+      "group": "build",
+      "label": "Build Android",
+      "help": "build_android",
+      "script": "build/build_android.py",
+      "args": [
+        "--apk"
+      ]
+    },
+    {
+      "id": "run_android",
+      "tab": "desktop",
+      "group": "run",
+      "label": "Run on Android",
+      "help": "run_android",
+      "script": "run/run_android.py"
+    },
+    {
+      "id": "test_android",
+      "tab": "repo",
+      "group": "test",
+      "label": "Unit Test on Android",
+      "help": "test_android",
+      "script": "test/test_android.py"
+    },
+    {
       "id": "compile_tests",
       "tab": "repo",
       "group": "test",

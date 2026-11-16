@@ -78,18 +78,35 @@ constexpr bool previewsHardwareControls = true;
 /// True: a host has several NICs, so a raw sender must name the one it binds.
 constexpr bool hasNamedNetInterfaces = true;
 
+#ifdef __ANDROID__
+/// False: an Android app has no NDI runtime to load.
+constexpr bool hasNdi = false;
+/// False: an Android app has no ffmpeg to pipe frames to.
+constexpr bool hasHls = false;
+/// False: RTSP ships what ffmpeg encodes, which an Android app has no ffmpeg for.
+constexpr bool hasRtsp = false;
+#else
 /// True: a host can be an NDI video source.
 constexpr bool hasNdi = true;
-
 /// True: the host streams H.264 by piping frames to the ffmpeg on PATH, a dependency of the user's.
 constexpr bool hasHls = true;
+/// True: ffmpeg encodes the elementary stream and MoonLight's own RTSP server ships it.
+constexpr bool hasRtsp = true;
+#endif
+#ifdef __ANDROID__
+/// False: Android opens the kernel's display device (DRM) to no app; a screen backend of its own (a SurfaceView behind screen.h) would make it true.
+constexpr bool hasHdmi = false;
+/// False: Android gives no app a raw socket (CAP_NET_RAW), which a ColorLight panel card's frames need.
+constexpr bool hasRawEthernet = false;
+#else
 /// True: Linux drives a card's HDMI port through DRM/KMS, and macOS and Windows cover a second display with a full-screen window.
 constexpr bool hasHdmi = true;
+/// True: a desktop sends a ColorLight panel card's raw Ethernet frames through the adapter it names.
+constexpr bool hasRawEthernet = true;
+#endif
 /// False: a desktop's display has no bridge chip to read back, so the driver hides its readout.
 constexpr bool hasHdmiBridge = false;
 
-/// True: ffmpeg encodes the elementary stream and MoonLight's own RTSP server ships it.
-constexpr bool hasRtsp = true;
 /// False: a desk on the computer reaches the MIDI service through the browser.
 constexpr bool hasUsbMidiHost = false;
 /// False: no grabber on a computer, so only the tests drive the stand-in, as USB MIDI does.

@@ -4,8 +4,10 @@
 /// The two contracts between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, and the install routes both images serve.
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 #include "core/util/ConfigScrape.h"
 #include "network_device.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -25,7 +27,7 @@ char* textControl(mm::MoonModule& m, const char* name) {
 // The keys MoonBase scrapes are in the files the app writes, read by the scraper MoonBase itself runs.
 TEST_CASE("the app's saved config carries every key MoonBase reads") {
     char tmpRoot[256];
-    std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_moonbase_contract_%u",
+    std::snprintf(tmpRoot, sizeof(tmpRoot), "%s/mm_moonbase_contract_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(tmpRoot);
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
@@ -179,10 +181,10 @@ TEST_CASE("the config scraper reads each interface's IP settings, by the app's r
 }
 
 // The page keeps calling the same paths across the hand-over to MoonBase, which shares no sources, so a renamed route fails only on a device mid-update.
-TEST_CASE("the two boot images serve the OTA routes under the same names") {
+TEST_CASE("the two boot images serve the OTA routes under the same names" * doctest::skip(!mm::sourceTreePresent())) {
     // Resolved from this file rather than the working directory: ctest runs the binary from the build tree, where a relative path finds nothing.
     const std::filesystem::path repo =
-        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
+        mm::sourceRoot();
     const auto read = [&](const char* rel) {
         std::ifstream f(repo / rel);
         REQUIRE_MESSAGE(f.good(), "cannot open " << rel);

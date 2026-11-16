@@ -32,9 +32,9 @@ processes:
     inputs:
       type: object
       properties:
-        platform: { type: string, enum: [ESP32, Teensy, Windows, macOS, Linux, Docker], description: "Where does MoonLight run?" }
+        platform: { type: string, enum: [ESP32, Teensy, Windows, macOS, Linux, Docker, Android], description: "Where does MoonLight run?" }
     intro: |
-      MoonLight runs on an ESP32 or a Teensy 4.1 board driving the lights directly, or on your computer. There it drives Art-Net, DMX and LED panel cards over the network. Pick where it runs. The interface, your settings and updating work the same everywhere.
+      MoonLight runs on an ESP32 or Teensy 4.1 board driving the lights, or on a computer, phone or headset driving Art-Net, DMX and LED panel cards over the network. Pick where it runs. The interface, your settings and updating work the same everywhere.
 
       MoonLight is provided as is, without warranty: like any software it has bugs, and you use it at your own risk.
     steps:
@@ -177,6 +177,32 @@ processes:
           ```
           xattr -dr com.apple.quarantine /Applications/MoonLight.app
           ```
+      - id: download-apk
+        section: Download it
+        say: Download the APK from the release.
+        given: [{ input: platform, equals: Android }]
+        when: { open: { url: "https://github.com/MoonModules/MoonLight/releases/latest" } }
+        detail: |
+          `MoonLight-android-arm64-vX.Y.Z.apk`, on the phone or tablet itself, or on a computer for a headset. What the app needs and does: [Running MoonLight on Android](reference/installing-on-android.md).
+      - id: install-apk
+        section: Install and start it
+        say: Open the APK and allow the install.
+        given: [{ input: platform, equals: Android }]
+        when: { manual: "Tap the download; Android asks once to allow installs from that app." }
+        detail: |
+          On a Meta Quest, from a computer with the headset in developer mode, connected by USB, and its "Allow USB debugging" prompt accepted:
+
+          ```
+          adb install MoonLight-android-arm64-vX.Y.Z.apk
+          ```
+
+          SideQuest does the same with a drag of the file.
+      - id: open-app
+        say: Open MoonLight from the app list.
+        given: [{ input: platform, equals: Android }]
+        when: { manual: "Allow the microphone when it asks, for the Audio card." }
+        detail: |
+          A notification shows MoonLight running, with **Stop**. On a Quest the app is in the library under Unknown Sources, and opens as a wide panel you can resize.
       - id: install-deb
         section: Install and start it
         say: Install the .deb package.
@@ -267,6 +293,13 @@ processes:
         when: { manual: "It opens the Firmware card, or the release page for a program updated by hand." }
         detail: |
           It lights for a newer stable release; your settings stay. A program in a folder it can write installs it and restarts, as a board does; otherwise, download and install it again.
+      - id: update-android
+        section: Updating
+        say: Install the next APK over the app.
+        given: [{ input: platform, equals: Android }]
+        when: { manual: "Download the newer release's APK and install it as the first one; your settings stay." }
+        detail: |
+          The app reports `update: host`, so the ⬆ badge names the newer release rather than installing it.
       - id: update-docker
         section: Updating
         say: Recreate the container from the new image.

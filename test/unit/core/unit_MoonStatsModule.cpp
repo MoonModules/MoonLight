@@ -5,6 +5,7 @@
 #include "core/system/MoonCloudModule.h"
 #include "core/system/MoonStatsModule.h"
 #include "core/module/Scheduler.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -247,7 +248,7 @@ TEST_CASE("saying yes, then no, then yes again sends only the first report") {
 /// Pinned through the FILE, because the flag is private and the file is what a reboot reads.
 TEST_CASE("a report schedules the save that records it") {
     char tmpRoot[256];
-    std::snprintf(tmpRoot, sizeof(tmpRoot), "/tmp/mm_stats_save_%u",
+    std::snprintf(tmpRoot, sizeof(tmpRoot), "%s/mm_stats_save_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(tmpRoot);
     mm::platform::fsSetRoot(tmpRoot);

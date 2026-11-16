@@ -258,6 +258,9 @@ fs::path programPath() {
 void setTestProgramPath(const fs::path& path) { g_testProgram = path; }
 
 UpdateMode updateMode() {
+#ifdef __ANDROID__
+    return UpdateMode::Host;   // the program is the package the OS installed, and the next APK installs over it
+#endif
     if (inContainer()) return UpdateMode::Host;
     const auto modeOf = [](const fs::path& program) {
 #ifndef _WIN32

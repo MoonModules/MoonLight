@@ -12,6 +12,7 @@
 #include "core/util/JsonFetch.h"
 #include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -59,12 +60,12 @@ struct Rig {
     JmControl* control = new JmControl();
     JmBox* effects = new JmBox();
     MoonLiveService* svc = new MoonLiveService();
-    char root_[64];
+    char root_[256];
     Rig() {
         static bool registered = false;
         if (!registered) { ModuleFactory::registerType<JmKnob>("JmKnob"); registered = true; }
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_mls_json_%u", ++seq);
+        std::snprintf(root_, sizeof(root_), "%s/mm_mls_json_%u", mm::systemTempDir().c_str(), ++seq);
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_);
         net = Net{};

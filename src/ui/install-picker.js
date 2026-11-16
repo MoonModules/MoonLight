@@ -341,6 +341,7 @@ const DESKTOP_BUILDS = [
     {"key": "desktop-windows-x64", "label": "Windows x64", "assets": ["^MoonLight-windows-x64-v.+-setup\\.exe$", "^MoonLight-windows-x64-v.+\\.zip$"]},
     {"key": "desktop-linux-x64", "label": "Linux x64", "assets": ["^moonlight_.+_amd64\\.deb$", "^MoonLight-linux-x64-v.+\\.tar\\.gz$"]},
     {"key": "desktop-linux-arm64", "label": "Linux arm64", "assets": ["^moonlight_.+_arm64\\.deb$", "^MoonLight-linux-arm64-v.+\\.tar\\.gz$"]},
+    {"key": "desktop-android-arm64", "label": "Android arm64", "assets": ["^MoonLight-android-arm64-v.+\\.apk$"]},
 ];
 // </generated:desktop-builds>
 const DESKTOP_LABEL = Object.fromEntries(DESKTOP_BUILDS.map(b => [b.key, b.label]));
@@ -350,6 +351,8 @@ const DESKTOP_LABEL = Object.fromEntries(DESKTOP_BUILDS.map(b => [b.key, b.label
 function desktopKeyForThisHost() {
     const p = (navigator.platform || "") + " " + (navigator.userAgent || "");
     if (/Win/i.test(p)) return "desktop-windows-x64";
+    // Before Linux, which both carry: a phone or tablet says Android, a Quest's browser names the headset.
+    if (/Android|Quest|OculusBrowser/i.test(p)) return "desktop-android-arm64";
     if (/Mac/i.test(p)) return "desktop-macos-arm64";
     if (/Linux|X11/i.test(p)) return /aarch64|arm64/i.test(p) ? "desktop-linux-arm64" : "desktop-linux-x64";
     return null;

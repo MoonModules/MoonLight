@@ -12,8 +12,8 @@ from generate_firmwares import PICKER, build_doc, picker_source  # noqa: E402
 DESKTOP = {name: spec for name, spec in FIRMWARES.items() if spec["platform"] == "desktop"}
 
 
-def test_every_desktop_platform_package_desktop_builds_is_a_row():
-    assert sorted(DESKTOP) == ["desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]
+def test_every_desktop_platform_the_release_builds_is_a_row():
+    assert sorted(DESKTOP) == ["desktop-android-arm64", "desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]
 
 
 def test_each_desktop_row_matches_the_assets_its_platform_ships():
@@ -22,6 +22,7 @@ def test_each_desktop_row_matches_the_assets_its_platform_ships():
         "desktop-windows-x64": ["MoonLight-windows-x64-v1.2.3-setup.exe", "MoonLight-windows-x64-v1.2.3.zip"],
         "desktop-linux-x64": ["moonlight_1.2.3_amd64.deb", "MoonLight-linux-x64-v1.2.3.tar.gz"],
         "desktop-linux-arm64": ["moonlight_1.2.3_arm64.deb", "MoonLight-linux-arm64-v1.2.3.tar.gz"],
+        "desktop-android-arm64": ["MoonLight-android-arm64-v1.2.3.apk"],
     }
     for name, names in shipped.items():
         patterns = [re.compile(p) for p in DESKTOP[name]["assets"]]

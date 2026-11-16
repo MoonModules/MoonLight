@@ -65,6 +65,7 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <filesystem>
 
@@ -352,7 +353,7 @@ struct PresetRig : Rig {
 
     PresetRig() {
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_mqtt_preset_%u", ++seq);
+        std::snprintf(root_, sizeof(root_), "%s/mm_mqtt_preset_%u", mm::systemTempDir().c_str(), ++seq);
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_);
 

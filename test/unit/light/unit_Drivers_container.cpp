@@ -16,6 +16,7 @@
 #include "correction_presets.h"                  // mm::test::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::test::setControlValue
 #include "platform/platform.h"                 // gpioRead: the desktop reads back what gpioWrite put there
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstring>
 #include <filesystem>
@@ -438,8 +439,8 @@ uint8_t paletteOptions(mm::Drivers& d) {
 
 // Regression: every brightness change listed both script folders to rebuild the palette picker, 100 ms on an S3, so a desk fader froze the LEDs.
 TEST_CASE("a brightness change does not rescan the palette scripts; a palette file written through the API does") {
-    char root[64];
-    std::snprintf(root, sizeof(root), "/tmp/mm_palette_scan_%u", static_cast<unsigned>(mm::platform::millis()));
+    char root[256];
+    std::snprintf(root, sizeof(root), "%s/mm_palette_scan_%u", mm::systemTempDir().c_str(), static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(root);
     struct RootAfter { std::string prev = mm::platform::fsRootPath(); ~RootAfter() { mm::platform::fsSetRoot(prev.c_str()); } } rootAfter;
     mm::platform::fsSetRoot(root);

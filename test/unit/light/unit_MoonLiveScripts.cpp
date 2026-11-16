@@ -11,6 +11,7 @@
 /// This test walks the folder, so a new script is covered by adding it.
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 #include "../core/moonlive_script_wrap.h"
 #include "core/moonlive/MoonLive.h"
 #include "platform/platform.h"
@@ -53,7 +54,7 @@ std::vector<std::filesystem::path> allScripts() {
 
 }  // namespace
 
-TEST_CASE("every script in moonlive/ compiles") {
+TEST_CASE("every script in moonlive/ compiles" * doctest::skip(!scriptsPresent())) {
     int checked = 0;
     // services included: it compiles against its own table, which the isService branch below picks.
     {
@@ -93,7 +94,7 @@ TEST_CASE("every script in moonlive/ compiles") {
 }
 
 // The catalog is what a DEVICE knows about: it carries these names and fetches a script's text the first time someone picks it. A script in the repo but not in the catalog is invisible on every device, and nothing else would notice, since the build succeeds and the file is right there.
-TEST_CASE("the shipped catalog names every script in moonlive/") {
+TEST_CASE("the shipped catalog names every script in moonlive/" * doctest::skip(!scriptsPresent())) {
     std::vector<std::string> onDisk;
     for (const auto& f : allScripts()) onDisk.push_back(f.filename().string());
     std::sort(onDisk.begin(), onDisk.end());
@@ -139,7 +140,7 @@ TEST_CASE("the shipped catalog names every script in moonlive/") {
 }
 
 // The UI fetches a script from the folder the catalog names, so a wrong folder index sends every device to a file that is not there.
-TEST_CASE("every catalog entry's folder is where its script lives in moonlive/") {
+TEST_CASE("every catalog entry's folder is where its script lives in moonlive/" * doctest::skip(!scriptsPresent())) {
     const auto at = [](const unsigned char* folder, const char* const* names, size_t count) {
         for (size_t i = 0; i < count; i++) {
             const auto p = scriptRoot() / moonlive::kCatalogFolders[folder[i]] / names[i];
@@ -384,7 +385,7 @@ TEST_CASE("sequential loops reuse the same register, so a script is not billed p
 // The language gained declared return types and every example in four files went stale at once, which is exactly the drift this catches.
 //
 // Read from the .md files rather than pasted here: a pasted copy stops being the documented one the first time someone edits the real page.
-TEST_CASE("every compile error fits the status line whole, its position included") {
+TEST_CASE("every compile error fits the status line whole, its position included" * doctest::skip(!mm::sourceTreePresent())) {
     // A failure reaches the UI as ONE string, "<message> @<offset>": the sentence a user reads and the position the editor marks the failing line from.
     // MoonLiveScript formats it into a fixed buffer, so a message longer than that buffer loses its explanation, and a slightly longer one eats the offset and the line marking silently stops working.
     // Both happened.
@@ -392,7 +393,7 @@ TEST_CASE("every compile error fits the status line whole, its position included
     // Read from the SOURCE rather than a list kept here.
     // A hand-kept copy would agree with the buffer while the compiler moved on, which is the drift this exists to prevent.
     const std::filesystem::path repo =
-        std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
+        mm::sourceRoot();
     size_t longest = 0;
     const char* longestText = "";
     for (const char* rel : {"src/core/moonlive/MoonLiveCompiler.cpp",
@@ -427,8 +428,8 @@ TEST_CASE("every compile error fits the status line whole, its position included
     (void)longestText;
 }
 
-TEST_CASE("every script example in the docs compiles") {
-    const std::filesystem::path repo = scriptRoot().parent_path();
+TEST_CASE("every script example in the docs compiles" * doctest::skip(!mm::sourceTreePresent())) {
+    const std::filesystem::path repo = mm::sourceRoot();
     const std::filesystem::path pages[] = {
         repo / "moonlive" / "README.md",
         // The language reference; a layout's or a modifier's examples are the shipped scripts in moonlive/, compiled by the test above.

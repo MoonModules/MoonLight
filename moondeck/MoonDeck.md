@@ -39,6 +39,28 @@ uv run moondeck/build/build_desktop.py --configure   # configure and generate bu
 
 Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary, not the ~130-file test suite, so the "give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
 
+### build_android
+
+Build MoonLight for Android arm64 with the NDK, as the fourth desktop OS: the program, the unit tests, or the app.
+
+```bash
+uv run moondeck/build/build_android.py          # the MoonLight program, run from adb shell
+uv run moondeck/build/build_android.py --tests  # mm_tests, which test_android runs on a device
+uv run moondeck/build/build_android.py --apk    # the app: build/android-arm64/MoonLight.apk
+```
+
+Configures `build/android-arm64/` with the NDK's CMake toolchain for Android 9 and later (API 28). `--apk` builds `libmoonlight.so`, the same program entered through `main_android.cpp`, makes the launcher icon from the installer's favicon, and has the Gradle wrapper in `android/` pack them with the Kotlin shell, debug-signed. It needs the NDK, found through `ANDROID_NDK_HOME`, `ANDROID_HOME` or Android Studio's default SDK folder, and a JDK 17. What the app does: [Running MoonLight on Android](../docs/reference/installing-on-android.md).
+
+### run_android
+
+Install the app `build_android --apk` made on the attached Android device, a phone, a tablet or a Meta Quest in developer mode, and open it.
+
+```bash
+uv run moondeck/run/run_android.py
+```
+
+`adb install -r` keeps the app's settings, as installing a release over it does. Its log: `adb logcat -s MoonLight`.
+
 ### run_desktop
 
 Launch the desktop executable as a detached background process and exit. The app keeps running across other MoonDeck scripts and outlives MoonDeck itself, the way a flashed ESP32 runs independently of this console.
@@ -171,6 +193,17 @@ uv run moondeck/build/build_desktop.py --tests
 
 Builds `mm_tests`, `mm_scenarios` and `mm_tempo` (the `--tests` target set of `build_desktop.py`), in the same per-host build dir. Separate from `build_desktop` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_desktop` (unit) and `scenario_pipeline` (scenarios).
 
+### test_android
+
+Run the unit tests on the attached Android device over adb.
+
+```bash
+uv run moondeck/test/test_android.py
+uv run moondeck/test/test_android.py -tc='*MoonLive*'   # doctest's own filters pass through
+```
+
+Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, found through `MM_SOURCE_ROOT`), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_desktop`'s.
+
 ### test_desktop
 
 Run the desktop test suite.
@@ -180,6 +213,8 @@ uv run moondeck/test/test_desktop.py
 ```
 
 Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — same per-host build dir as the desktop build above.
+
+**The network stays quiet on the light protocols' ports while it runs.** The NetworkReceive tests open the real Art-Net, E1.31 and DDP sockets, which test more than a stand-in would, so they count every packet arriving there: a MoonLight on the same machine holding a receiver, or any device broadcasting Art-Net on the network, a NetworkSend driver set to broadcast included, makes their counts fail.
 
 ### release_stage
 

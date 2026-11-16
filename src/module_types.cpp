@@ -360,7 +360,8 @@ void mm::registerModuleTypes() {
         mm::ModuleFactory::registerType<mm::HdmiDriver>("HdmiDriver", "light/drivers.md#hdmi");
     // Same firmware gate as the include above.
 #if defined(MM_PANEL_CARDS) || MM_LINKS_ALL_LED_DRIVERS
-    mm::ModuleFactory::registerType<mm::PanelCardDriver>("PanelCardDriver", "light/drivers.md#panelcard");
+    if constexpr (mm::platform::hasRawEthernet)   // a panel card needs a raw socket, which Android withholds from an app
+        mm::ModuleFactory::registerType<mm::PanelCardDriver>("PanelCardDriver", "light/drivers.md#panelcard");
 #endif
     // Same silicon gate as the include above.
 #if defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || defined(CONFIG_SOC_PARLIO_SUPPORTED) || \

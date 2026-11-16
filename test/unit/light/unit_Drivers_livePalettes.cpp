@@ -10,6 +10,7 @@
 #include "core/moonlive/MoonLiveScriptFile.h"
 #include "platform/platform.h"
 #include "../core/conditional_controls.h"   // mm::test::controlIndex
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -28,7 +29,7 @@ constexpr const char* kPaletteSrc = "void setup() {}\n";
 struct IsolatedFs {
     char root[256];
     explicit IsolatedFs(const char* tag) {
-        std::snprintf(root, sizeof(root), "/tmp/mm_palettes_%s_%u", tag,
+        std::snprintf(root, sizeof(root), "%s/mm_palettes_%s_%u", mm::systemTempDir().c_str(), tag,
                       static_cast<unsigned>(platform::millis()));
         std::filesystem::remove_all(root);
         platform::fsSetRoot(root);

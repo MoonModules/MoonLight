@@ -4,6 +4,7 @@
 /// A scripted particle pool: its buffers live in ScratchBuffers the binding owns, outside the 64-byte arena, and a script calls whole-pool operations.
 
 #include "doctest.h"
+#include "unit/source_tree.h"
 #include "MoonLiveEffectScene.h"
 #include "../core/moonlive_script_wrap.h"
 #include "platform/platform.h"   // setTestNowMs: particle physics runs on elapsed time
@@ -180,10 +181,9 @@ TEST_CASE("two scripted effects each get their own particles") {
 }
 
 // Through the real binding, a fountain reaches a steady state where sparks are emitted, fly and die at one rate, rather than filling the pool once.
-TEST_CASE("the fountain example keeps emitting once its pool has cycled") {
+TEST_CASE("the fountain example keeps emitting once its pool has cycled" * doctest::skip(!mm::sourceTreePresent())) {
     // The SHIPPED file, staged into the test filesystem: this drives the real example rather than a copy that could drift from it.
-    const std::filesystem::path src = std::filesystem::path(__FILE__).parent_path()
-        .parent_path().parent_path().parent_path() / "moonlive" / "effects" / "particles" / "fountain.mle";
+    const std::filesystem::path src = mm::sourceRoot() / "moonlive" / "effects" / "particles" / "fountain.mle";
     std::ifstream in(src);
     REQUIRE(in.good());
     std::stringstream ss; ss << in.rdbuf();

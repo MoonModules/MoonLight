@@ -32,6 +32,12 @@ constexpr uint8_t kMaxDeferred = 64;   // far past a script's controls; more is 
 Deferred* g_deferred = nullptr;
 uint8_t g_deferredCount = 0;
 
+// A write waiting for a script's rebuild names the script, so a rename moves the waiting writes with it.
+void retargetDeferred(const char* from, const char* to) {
+    for (uint8_t i = 0; i < g_deferredCount; i++)
+        if (std::strcmp(g_deferred[i].module, from) == 0) std::snprintf(g_deferred[i].module, sizeof(g_deferred[i].module), "%s", to);
+}
+
 // Free the table once nothing waits in it.
 void releaseDeferredTable() {
     if (g_deferredCount) return;
@@ -217,10 +223,17 @@ struct Applier {
         return validateNewName(member);
     }
 
+    // Why a name a request gives cannot name a module, or null: the length, the dot a control binding reads as its separator (`Module.control`), and the keys a document reserves.
+    static const char* nameRefusal(const char* name) {
+        if (!nameFits(name)) return kNameRule;
+        if (std::strchr(name, '.')) return "a module name holds no dot, which a control binding reads as its separator";
+        return reserved(name) ? "a module name is no reserved key: no leading $, and not type" : nullptr;
+    }
+
     // Names are unique across the tree, so a new one is free only if the document names it once and the prune pass frees any module holding it.
     bool validateNewName(const JsonNode* member) {
         const char* name = member->key;
-        if (!nameFits(name)) return fail(kNameRule);
+        if (const char* why = nameRefusal(name)) return fail(why);
         if (typedElsewhere(member, name)) return fail("that name is used twice in the document");
         MoonModule* holder = s.firstByName(name);
         if (holder && survivesPrune(holder)) return fail("that name is used elsewhere in the tree");
@@ -245,7 +258,7 @@ struct Applier {
         if (to->type != JsonType::String) return "$name takes a string";
         if (std::strcmp(to->str, m->name()) == 0) return nullptr;
         if (!m->parent() || !m->userEditable()) return "this module keeps its name";
-        return nameFits(to->str) ? nullptr : kNameRule;
+        return nameRefusal(to->str);
     }
 
     // Whether another `$name` in the document gives the same name as `here`.
@@ -398,7 +411,7 @@ struct Applier {
         for (const JsonNode* member = first(obj); member; member = next(member))
             if (!reserved(member->key) && isChildMember(member) && !applyMember(m, member)) return false;
         if (replacesChildren(obj)) reorder(m, obj);
-        return true;
+        return renameChildren(m, obj);
     }
 
     // One pass over the value members, `changed` holding a bit per member in document order; past 64 members a value reacts to the second pass alone.
@@ -491,11 +504,22 @@ struct Applier {
 
     // Apply a module object's members to `m`, in document order, once prune() has removed what goes.
     bool apply(MoonModule* m, const JsonNode* obj) {
-        if (!rename(m, obj)) return false;
         if (stored()) return applyStored(m, obj);
         for (const JsonNode* member = first(obj); member; member = next(member))
             if (!reserved(member->key) && !applyMember(m, member)) return false;
         if (replacesChildren(obj)) reorder(m, obj);
+        return renameChildren(m, obj);
+    }
+
+    // `$name` renames a child once the order is set, so the order still finds it under the key the document gives it.
+    bool renameChildren(MoonModule* m, const JsonNode* obj) {
+        for (const JsonNode* member = first(obj); member; member = next(member)) {
+            if (reserved(member->key) || member->type != JsonType::Object) continue;
+            MoonModule* child = childNamed(m, member->key);
+            const size_t at = push(member->key);
+            if (child && !rename(child, member) && !(stored() && skip())) return false;
+            pop(at);
+        }
         return true;
     }
 
@@ -536,6 +560,7 @@ struct Applier {
         char from[MoonModule::kNameLen];
         std::snprintf(from, sizeof(from), "%s", m->name());
         m->setName(to->str);
+        retargetDeferred(from, m->name());
         s.notifyModuleRenamed(from, m->name());
         finishStructure(m->parent());
         return true;

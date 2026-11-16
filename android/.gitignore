@@ -1,0 +1,4 @@
+# Gradle and the Android build tools write here.
+.gradle/
+build/
+local.properties

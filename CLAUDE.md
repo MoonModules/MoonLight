@@ -2,7 +2,7 @@
 
 The rules that bind every change. What the system is: [README.md](README.md). How it is shaped: [the architecture](docs/explanation/architecture/index.md). How code is written: [coding-standards.md](docs/contributing/coding-standards.md). How prose is written: [documentation-standards.md](docs/contributing/documentation-standards.md).
 
-A high-performance system driving large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows and Linux.
+A high-performance system driving large LED installations and DMX fixtures. One source tree drives ESP32, Teensy, Raspberry Pi, macOS, Windows, Linux and Android.
 
 **Read on every task**: this file. **Read when the task touches them**: the architecture, the two standards pages, and the header of the module being changed. Everything else is linked from where it applies.
 

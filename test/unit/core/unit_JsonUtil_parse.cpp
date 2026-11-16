@@ -185,3 +185,18 @@ TEST_CASE("parseString decodes the standard JSON string escapes (symmetric with 
     CHECK(std::strchr(out, '\n') != nullptr);          // real newline, so the // comment ends
     CHECK(std::strstr(out, "setRGB") != nullptr);      // the statement survives on its own line
 }
+
+// JSON allows whitespace around a member's colon, newlines included, so every simple reader finds its key however a client formats the body.
+TEST_CASE("the simple readers find a key with any whitespace around its colon, and pass over its text inside a value") {
+    char out[16] = {};
+    json::parseString("{\"name\":\n\t\"Dial\"}", "name", out, sizeof(out));
+    CHECK(std::string(out) == "Dial");
+    json::parseString("{\"name\" : \"Knob\"}", "name", out, sizeof(out));
+    CHECK(std::string(out) == "Knob");
+    CHECK(json::parseInt("{\"to\" :\r\n 3}", "to") == 3);
+    CHECK(json::parseBool("{\"on\"\n:\ntrue}", "on"));
+    CHECK(json::hasKey("{\"id\" : null}", "id"));
+    // "name" as a value's text, before the member that holds it, is no key
+    json::parseString("{\"label\":\"name\",\"name\":\"Lamp\"}", "name", out, sizeof(out));
+    CHECK(std::string(out) == "Lamp");
+}

@@ -1,8 +1,9 @@
 #pragma once
 
-/// The FilesystemModule tests' fixture: a settings folder of its own per test, `/tmp/mm_<tag>_<millis>`, with the filesystem pointed at it for the test's life and removed after.
+/// The FilesystemModule tests' fixture: a settings folder of its own per test, `<temp>/mm_<tag>_<millis>`, with the filesystem pointed at it for the test's life and removed after.
 
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <filesystem>
@@ -10,10 +11,10 @@
 
 namespace {
 struct TempRoot {
-    char path[256];   ///< the folder, `/tmp/mm_<tag>_<millis>`
+    char path[256];   ///< the folder, `<temp>/mm_<tag>_<millis>`
     /// Make the folder, `/.config` in it when `withConfig`, and point the filesystem at it.
     explicit TempRoot(const char* tag, bool withConfig = false) {
-        std::snprintf(path, sizeof(path), "/tmp/mm_%s_%u", tag, static_cast<unsigned>(mm::platform::millis()));
+        std::snprintf(path, sizeof(path), "%s/mm_%s_%u", mm::systemTempDir().c_str(), tag, static_cast<unsigned>(mm::platform::millis()));
         std::filesystem::remove_all(path);
         if (withConfig) std::filesystem::create_directories(std::string(path) + "/.config");
         mm::platform::fsSetRoot(path);

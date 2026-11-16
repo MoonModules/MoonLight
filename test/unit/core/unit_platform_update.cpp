@@ -9,6 +9,7 @@
 #include "doctest.h"
 #include "platform/platform.h"
 #include "host_update.h"
+#include "unit/host_android.h"
 #include "core/util/sha256.h"
 
 #include <cstdio>
@@ -106,8 +107,8 @@ bool runningAsRoot() {
 #endif
 }
 
-/// A container's program is its host's to replace and root's is updated by hand, so the self-update cases run as a native user only.
-const auto kSelfUpdating = doctest::skip(platform::inContainer() || runningAsRoot());
+/// A container's program is its host's to replace, root's is updated by hand and an Android app is updated by its next APK, so the self-update cases run as a native user on a desktop only.
+const auto kSelfUpdating = doctest::skip(platform::inContainer() || runningAsRoot() || mm::kHostIsAndroid);
 
 }  // namespace
 

@@ -82,7 +82,7 @@ const tabScroll = {};
 // all come from the backend, so those need no client persistence.
 let expandedSet = new Set();
 try { expandedSet = new Set(JSON.parse(lsRead(LS_EXPANDED, "[]")) || []); } catch { expandedSet = new Set(); }
-function saveExpanded() { localStorage.setItem(LS_EXPANDED, JSON.stringify([...expandedSet])); }
+function saveExpanded() { safeLocalSet(LS_EXPANDED, JSON.stringify([...expandedSet])); }
 
 // The height a user dragged each textarea to: again VIEW-ONLY state the backend doesn't own (like the tab
 // and expander state above), keyed by "<module>:<control>". Persisting it means a resized script/config box
@@ -104,7 +104,7 @@ function rememberChips(roles, present, active) {
     safeLocalSet(LS_CHIPS, JSON.stringify(pickerChips));
 }
 
-function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; localStorage.setItem(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
+function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; safeLocalSet(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
 
 function lsRead(key, defaultVal) {
     // Blocked storage (a private window, a policy) reads as unset rather than throwing, for every caller.
@@ -315,7 +315,7 @@ async function init() {
         // The local source runs MoonWalk's script from this computer's preview server inside the device's page, and a link switches it on, so it asks once, when the link arrives, and the yes is the stored source.
         if (helpSource === "local" && lsRead(LS_HELP_SOURCE, "") !== "local"
             && confirm("Help and MoonWalk's script will load from this computer's preview server (localhost:8421) and run inside this device's page, with access to the device. Load them from there?"))
-            localStorage.setItem(LS_HELP_SOURCE, "local");
+            safeLocalSet(LS_HELP_SOURCE, "local");
         else if (helpSource === "published") localStorage.removeItem(LS_HELP_SOURCE);
     } catch { /* storage blocked: the published help */ }
     // What the installer vouches for in the device link (`?walked=install`): kept until MoonWalk opens and records it in its own marks.
@@ -841,7 +841,7 @@ async function addModule(type, parentName, id, why) {
     // is added out of sight.
     if (name && parentName) {
         selectedTabs[parentName] = name;
-        localStorage.setItem(LS_TABS, JSON.stringify(selectedTabs));   // persist like the tab-click path
+        safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));   // persist like the tab-click path
     }
     await refetchState();
     if (name) focusModule(name);
@@ -1049,7 +1049,7 @@ function selectModule(name) {
     // a re-render of the SAME surface (a pad click) does not.
     if (name !== selectedModule) surfaceDemoShownFor = null;
     selectedModule = name;
-    localStorage.setItem(LS_SELECTED, name);
+    safeLocalSet(LS_SELECTED, name);
     document.querySelectorAll(".nav-item").forEach((el) => {
         el.classList.toggle("active", el.dataset.module === name);
     });
@@ -1366,7 +1366,7 @@ function renderChildTabs(mod, childrenEl, depth) {
         attachTabDragHandlers(tab, child, mod);
         tab.addEventListener("click", () => {
             selectedTabs[mod.name] = child.name;
-            localStorage.setItem(LS_TABS, JSON.stringify(selectedTabs));
+            safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
             renderCards();
         });
         strip.appendChild(tab);
@@ -2036,6 +2036,7 @@ function startRename(nameEl, oldName) {
         const wanted = field.value.trim();
         field.replaceWith(nameEl);
         if (!commit || !wanted || wanted === oldName) return;
+        await flushPendingSends(oldName + ":");   // a debounced control write still names the old module, so it goes first
         const res = await fetch(`/api/modules/${encodeURIComponent(oldName)}`, {
             method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: wanted}),
         }).catch(() => null);
@@ -2142,7 +2143,15 @@ function createCard(mod, depth) {
     if (isUserEditableChild(mod, depth)) {
         name.classList.add("card-name--renameable");
         name.title = "Click to rename";
+        // A button to the keyboard as well: focusable, and Enter or Space opens the field.
+        name.tabIndex = 0;
+        name.setAttribute("role", "button");
         name.addEventListener("click", () => startRename(name, mod.name));
+        name.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            startRename(name, mod.name);
+        });
     }
     title.appendChild(name);
 

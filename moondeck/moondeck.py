@@ -401,8 +401,10 @@ def _ota_upload(ip: str, image: bytes, report=lambda stage, pct=None: None):
     try:
         resp = conn.getresponse()
         status, text = resp.status, resp.read().decode(errors="replace")
-    except (http.client.HTTPException, OSError):
-        return {"ok": True}, 200   # the reboot into the new image cut the answer
+    except (http.client.RemoteDisconnected, ConnectionResetError, ConnectionAbortedError):
+        return {"ok": True}, 200   # the device drops the connection as it reboots into the new image
+    except (http.client.HTTPException, OSError) as e:
+        return {"error": f"no answer after the upload: {e}"}, 502   # a timeout or a garbled answer is no reboot
     finally:
         conn.close()
     return ({"ok": True}, 200) if status == 200 else ({"error": f"device refused the image (HTTP {status}): {text}"}, 502)
@@ -1656,12 +1658,22 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not bin_path.exists():
                 self._send_json({"error": f"no build for {firmware!r} — run Build first"}, 404)
                 return
+            try:
+                image = bin_path.read_bytes()   # read before the record is taken, so a failure here leaves no install marked running
+            except OSError as e:
+                self._send_json({"error": f"cannot read the build: {e}"}, 500)
+                return
             with _ota_progress_lock:
                 if _ota_progress.get(ip, {"done": True}).get("done") is False:
                     self._send_json({"error": "an install to this device is already running"}, 409)
                     return
                 _ota_progress[ip] = {"stage": "starting", "pct": None, "done": False, "ok": False, "error": ""}
-            threading.Thread(target=_ota_run, args=(ip, bin_path.read_bytes()), daemon=True).start()
+            try:
+                threading.Thread(target=_ota_run, args=(ip, image), daemon=True).start()
+            except RuntimeError as e:
+                _ota_report(ip, done=True, ok=False, error=f"cannot start the install: {e}")
+                self._send_json({"error": f"cannot start the install: {e}"}, 500)
+                return
             self._send_json({"ok": True, "started": True}, 202)
 
         elif self.path == "/api/push-device":

@@ -22,6 +22,7 @@
 #include "light/layers/Effects.h"
 #include "light/drivers/Drivers.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -42,7 +43,7 @@ struct Device {
     Device() {
         // A monotonic counter, not millis(): two fixtures constructed in the same millisecond would otherwise share a root and see each other's preset files.
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_preset_test_%u", ++seq);
+        std::snprintf(root_, sizeof(root_), "%s/mm_preset_test_%u", mm::systemTempDir().c_str(), ++seq);
         std::filesystem::remove_all(root_);
         mm::platform::fsSetRoot(root_);
 

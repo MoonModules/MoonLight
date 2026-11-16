@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <iterator>   // std::size: the crash signals' count from their one array
 
 #include "stop_signal.h"   // stopOnSigterm
 #include "host_update.h"   // confirmProgramWhenStable
@@ -49,7 +50,13 @@ static void safeWrite(const char* s, size_t len) {
 template <size_t N>
 static void safeWrite(const char (&s)[N]) { safeWrite(s, N - 1); }   // N-1: drop the NUL
 
-static void crashHandler(int sig) {
+#ifndef _WIN32
+// The handlers installed before ours, restored before the re-raise, so the OS's own reporter still runs: Android's debuggerd writes its tombstone, elsewhere the previous one is the default and dumps core.
+static const int kCrashSignals[] = {SIGSEGV, SIGFPE, SIGBUS, SIGABRT};
+static struct sigaction previousCrashAction[std::size(kCrashSignals)];
+#endif
+
+static void reportCrash(int sig) {
     // Name and length together: safeWrite takes an explicit length (strlen is not async-signal-safe), and these names are not all the same width.
     const char* name = "SIGNAL"; size_t nameLen = 6;
     if (sig == SIGSEGV)      { name = "SIGSEGV"; nameLen = 7; }
@@ -61,9 +68,23 @@ static void crashHandler(int sig) {
     safeWrite("\n*** CRASH: ");
     safeWrite(name, nameLen);
     safeWrite(" ***\n");
-    // SA_RESETHAND (POSIX) or signal() one-shot semantics (Windows) already restored SIG_DFL; re-raise for OS coredump.
+}
+
+#ifdef _WIN32
+// Windows' signal() is one-shot and already restored SIG_DFL, so the re-raise is the OS's crash report.
+static void crashHandler(int sig) {
+    reportCrash(sig);
     raise(sig);
 }
+#else
+// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; a signal that was sent (si_code <= 0: a kill, a raise, an abort) is sent again.
+static void crashHandler(int sig, siginfo_t* info, void*) {
+    reportCrash(sig);
+    for (size_t i = 0; i < std::size(kCrashSignals); i++)
+        if (kCrashSignals[i] == sig) sigaction(sig, &previousCrashAction[i], nullptr);   // sigaction is async-signal-safe
+    if (info == nullptr || info->si_code <= 0) raise(sig);
+}
+#endif
 
 // Local time as an ISO-8601 stamp, thread-safely: `std::localtime` shares one static tm across threads (clang-tidy concurrency-mt-unsafe, CodeQL critical), and the reentrant form is spelled per platform, hence the branch.
 static void isoTimestamp(char* out, size_t n) {
@@ -152,13 +173,10 @@ int main(int argc, char** argv) {
     signal(SIGINT,  [](int) { running = 0; });
 #else
     struct sigaction sa{};
-    sa.sa_handler = crashHandler;
+    sa.sa_sigaction = crashHandler;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESETHAND;
-    sigaction(SIGSEGV, &sa, nullptr);
-    sigaction(SIGFPE,  &sa, nullptr);
-    sigaction(SIGBUS,  &sa, nullptr);
-    sigaction(SIGABRT, &sa, nullptr);
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    for (size_t i = 0; i < std::size(kCrashSignals); i++) sigaction(kCrashSignals[i], &sa, &previousCrashAction[i]);
 
     // The first interrupt asks for a clean stop and restores the default handler, so a second kills a wedged shutdown outright rather than leaving the key dead and another terminal the only way out.
     struct sigaction saInt{};

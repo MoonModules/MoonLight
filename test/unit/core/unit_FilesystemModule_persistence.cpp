@@ -15,6 +15,7 @@
 #include "light/drivers/FixtureProfilesModule.h"
 #include "platform/platform.h"
 #include "filesystem_fixture.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstdlib>
@@ -43,7 +44,7 @@ void bootLayer(mm::Scheduler& scheduler, mm::FilesystemModule*& fs, mm::Layer*& 
 // The settings directory is created when the filesystem mounts, not left for the first save to discover. A shipped binary starts in a directory that has never held one, and before this the first WRITE was what failed, then every write after it, once per save, forever.
 TEST_CASE("A settings directory that does not exist yet is created when the filesystem mounts") {
     char root[256];
-    std::snprintf(root, sizeof(root), "/tmp/mm_root_new_%u",
+    std::snprintf(root, sizeof(root), "%s/mm_root_new_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(root);
     REQUIRE_FALSE(std::filesystem::exists(root));
@@ -61,7 +62,7 @@ TEST_CASE("A settings directory that does not exist yet is created when the file
 // A root that exists and is a directory can still reject writes, which is the case the probe exists for and the one a read-only extraction produces. A DIRECTORY where the probe file belongs blocks its creation while leaving the root itself perfectly valid, so this reaches the probe instead of failing earlier at the is_directory check the case above covers.
 TEST_CASE("A settings directory that rejects a write fails the mount, not just a missing one") {
     char root[256];
-    std::snprintf(root, sizeof(root), "/tmp/mm_root_probe_%u",
+    std::snprintf(root, sizeof(root), "%s/mm_root_probe_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(root);
     std::error_code ec;
@@ -85,7 +86,7 @@ TEST_CASE("MM_DATA_DIR chooses the settings directory over any other rule") {
     const std::string saved = prior ? prior : "";
 
     char want[256];
-    std::snprintf(want, sizeof(want), "/tmp/mm_root_env_%u",
+    std::snprintf(want, sizeof(want), "%s/mm_root_env_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
 #ifdef _WIN32
     _putenv_s("MM_DATA_DIR", want);
@@ -112,7 +113,7 @@ TEST_CASE("MM_DATA_DIR chooses the settings directory over any other rule") {
 // An unusable location is refused at mount, which is what lets the caller say "persistence disabled" once instead of emitting a failed save per module per change. A plain file where the directory belongs stands in for the real cases (a read-only extraction, a protected folder, a directory owned by someone else): every one of them accepts the path and rejects the writes.
 TEST_CASE("A settings location that cannot be written to fails the mount, not every later save") {
     char root[256];
-    std::snprintf(root, sizeof(root), "/tmp/mm_root_blocked_%u",
+    std::snprintf(root, sizeof(root), "%s/mm_root_blocked_%u", mm::systemTempDir().c_str(),
                   static_cast<unsigned>(mm::platform::millis()));
     std::filesystem::remove_all(root);
     // ofstream does not create parents, and on Windows "/tmp" is <drive>:\tmp, which need not exist. Without this the case depends on another test having created it first.

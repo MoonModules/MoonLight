@@ -35,7 +35,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 **Action: *nothing* for updates from the Firmware card; host the image on https, or upload it, where a script or an MQTT command named an `http://` address.**
 
-`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build.
+`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
 
 ### A desktop updates itself as a board does, and the Debian package installs a service
 

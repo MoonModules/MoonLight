@@ -619,3 +619,36 @@ TEST_CASE("renaming a module to its own name changes nothing") {
     REQUIRE(r.ok);
     CHECK(r.changes == 0);
 }
+
+// A control binding reads `Module.control` up to its first dot, and a document's reserved keys belong to the document, so a name holds no dot and no reserved key.
+TEST_CASE("a name with a dot or a reserved key is refused, for a new module and a rename alike") {
+    Tree t;
+    seedRename(t);
+    for (const char* doc : {R"({"Effects": {"Layer": {"Knob": {"$name": "Dial.v2"}}}})",
+                            R"({"Effects": {"Layer": {"Knob": {"$name": "$hidden"}}}})",
+                            R"({"Effects": {"Layer": {"Knob": {"$name": "type"}}}})",
+                            R"({"Effects": {"A.b": {"type": "SdKnob"}}})"}) {
+        CHECK_FALSE_MESSAGE(t.apply(doc).ok, doc);
+    }
+    CHECK(t.find("Knob") != nullptr);
+    CHECK(t.find("A.b") == nullptr);
+}
+
+// The order a replace sets names the children by the document's keys, which a rename in the same document must not lose.
+TEST_CASE("a child renamed in a replace takes the place the document gives it") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}, "B": {"type": "SdKnob"}}})").ok);
+    REQUIRE(t.apply(R"({"Effects": {"$patch": "replace", "B": {"$name": "C"}, "A": {}}})").ok);
+    CHECK(t.children(t.effects) == "C,A");
+}
+
+// A script's control waits for the rebuild under the script's name, so a rename before that rebuild moves the waiting write with it.
+TEST_CASE("a script's waiting control lands after a rename that came before the rebuild") {
+    Tree t;
+    auto r = t.apply(R"({"Effects": {"Script": {"type": "SdScript", "source": "a", "late": 42}}})");
+    REQUIRE(r.deferred == 1);
+    REQUIRE(t.apply(R"({"Effects": {"Script": {"$name": "Renamed"}}})").ok);
+    t.s.prepareTree();
+    REQUIRE(t.find("Renamed") != nullptr);
+    CHECK(static_cast<SdScript*>(t.find("Renamed"))->late == 42);
+}

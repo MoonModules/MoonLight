@@ -230,6 +230,7 @@ nav:
       # What the steps of MoonWalk's processes rest on, grouped by what the reader is doing: running it, connecting it, keeping it working.
       - Using it:
           - Running on a Linux machine: reference/installing-on-linux.md
+          - Running on Android: reference/installing-on-android.md
           - Presets: reference/presets.md
           - Back up and restore: reference/backup-and-restore.md
           - Migrating over the air: reference/migrating-over-the-air.md

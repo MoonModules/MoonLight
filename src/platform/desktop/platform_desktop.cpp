@@ -136,6 +136,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>   // std::is_pointer_v: pthread_t is a pointer on macOS, an integer elsewhere
 #include <random>      // the stored identity is generated once, see getMacAddress
 #include <fstream>
 #ifdef MM_HAVE_CURL
@@ -194,6 +195,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #endif
 #endif
 #include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
+#include "host_mdns.h"   // the responder a host lends the mDNS calls
 
 namespace mm::platform {
 
@@ -314,12 +316,21 @@ uint32_t millis() MM_NONBLOCKING {
     );
 }
 
+#ifndef _WIN32
+// A pthread_t as an integer: a pointer on macOS, an integer on glibc and Bionic, so the cast is chosen by the type, in a template where the other branch is discarded.
+template <class T>
+uintptr_t threadIdBits(T id) {
+    if constexpr (std::is_pointer_v<T>) return reinterpret_cast<uintptr_t>(id);
+    else return static_cast<uintptr_t>(id);
+}
+#endif
+
 // The OS thread id as an integer, from each platform's own call since std::this_thread::get_id() does not convert. The +1 keeps it non-zero so callers can treat 0 as none.
 uintptr_t currentThreadId() MM_NONBLOCKING {
 #ifdef _WIN32
     return static_cast<uintptr_t>(GetCurrentThreadId()) + 1;
 #else
-    return reinterpret_cast<uintptr_t>(pthread_self()) + 1;
+    return threadIdBits(pthread_self()) + 1;
 #endif
 }
 
@@ -892,35 +903,26 @@ bool inContainer() {
 }
 
 const char* hostPlatform() {
-    // The release packaging's names, so a breakdown lines up with the downloads. A container reports as one, since that changes how it behaves.
-#if defined(__linux__)
-    // The architecture rides along, since a container on a small board and one on a server are different deployments that the label alone made one slice.
-  #if defined(__aarch64__)
-    if (inContainer()) return "docker-arm64";
-  #else
-    if (inContainer()) return "docker-x64";
-  #endif
-  #if defined(__aarch64__)
-    // Every small arm board lands here, and the breakdown exists to count them: naming the other architecture would report each one as a PC.
-    return "linux-arm64";
-  #else
-    return "linux-x64";
-  #endif
+    // The release packaging's names, the system then the architecture, so a breakdown lines up with the downloads and counts the small arm boards apart from the PCs.
+#if defined(__ANDROID__)   // before Linux, which Android also defines: a phone, a tablet or a headset is its own deployment
+    const char* system = "android";
+#elif defined(__linux__)
+    const char* system = inContainer() ? "docker" : "linux";   // a container reports as one, since that changes how it behaves
 #elif defined(__APPLE__)
-  #if defined(__aarch64__)
-    return "macos-arm64";
-  #else
-    return "macos-x64";
-  #endif
+    const char* system = "macos";
 #elif defined(_WIN32)
-  #if defined(_M_ARM64)
-    return "windows-arm64";
-  #else
-    return "windows-x64";
-  #endif
+    const char* system = "windows";
 #else
-    return "";
+    const char* system = nullptr;
 #endif
+    constexpr bool arm64 =
+#if defined(__aarch64__) || defined(_M_ARM64)
+        true;
+#else
+        false;
+#endif
+    static const std::string label = system ? std::string(system) + (arm64 ? "-arm64" : "-x64") : std::string();
+    return label.c_str();
 }
 
 uint8_t currentCore() { return 0; }
@@ -2002,7 +2004,7 @@ namespace {
 bool posixIfLink(const char* ifname, uint16_t& mbps) MM_NONBLOCKING {
     mbps = 0;
     if (!ifname || !*ifname) return false;
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)   // SELinux denies an Android app /sys/class/net, and Android has no raw-L2 path
     // The kernel's own word for the carrier, which a virtual interface leaves unknown; only up counts.
     char path[128];
     std::snprintf(path, sizeof(path), "/sys/class/net/%s/operstate", ifname);
@@ -2220,18 +2222,29 @@ void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits
 uint32_t testMdnsInitCount() { return testMdnsInits_; }
 static const char* testMdnsFailure_ = nullptr;   // a reason a test makes mdnsInit fail with
 void setTestMdnsFailure(const char* why) { testMdnsFailure_ = why; }
-bool mdnsInit(const char* /*deviceName*/) { return testMdns_ && !testMdnsFailure_ && ++testMdnsInits_; }
+// The responder a host lends, such as the Android app's NsdManager; without one the services are only remembered, which is what a test reads back.
+static HostMdns hostMdns_;
+void setHostMdns(const HostMdns& responder) { hostMdns_ = responder; }
+bool mdnsInit(const char* deviceName) {
+    if (hostMdns_.begin) return hostMdns_.begin(deviceName);
+    return testMdns_ && !testMdnsFailure_ && ++testMdnsInits_;
+}
 const char* mdnsError() { return testMdnsFailure_ ? testMdnsFailure_ : ""; }
-void mdnsStop() {}
-// The host announces nothing over mDNS, so the services are only remembered, which is what a test reads back.
+void mdnsStop() { if (hostMdns_.end) hostMdns_.end(); }
 static std::map<std::string, uint16_t> mdnsServices_;
-void mdnsAdvertise(const char* type, const char* proto, uint16_t port) { mdnsServices_[std::string(type) + "." + proto] = port; }
-void mdnsWithdraw(const char* type, const char* proto) { mdnsServices_.erase(std::string(type) + "." + proto); }
+void mdnsAdvertise(const char* type, const char* proto, uint16_t port) {
+    mdnsServices_[std::string(type) + "." + proto] = port;
+    if (hostMdns_.advertise) hostMdns_.advertise(type, proto, port);
+}
+void mdnsWithdraw(const char* type, const char* proto) {
+    mdnsServices_.erase(std::string(type) + "." + proto);
+    if (hostMdns_.withdraw) hostMdns_.withdraw(type, proto);
+}
 uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
     const auto it = mdnsServices_.find(std::string(type) + "." + proto);
     return it == mdnsServices_.end() ? 0 : it->second;
 }
-void mdnsShutdown() {}
+void mdnsShutdown() { if (hostMdns_.end) hostMdns_.end(); }
 
 // The system resolver answers `.local` too on macOS and Windows, and on Linux with nss-mdns, so one call covers both kinds of name.
 bool resolveHost(const char* name, uint8_t ip[4]) {
@@ -3622,7 +3635,9 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
     rc = ::posix_spawnp(&pid, argv[0], &fa, &attr, const_cast<char* const*>(argv), environ);
     posix_spawnattr_destroy(&attr);
 #else
+#ifndef __ANDROID__   // a glibc extension Bionic lacks; an Android app has no encoder binary to spawn, so the spawn fails there regardless
     posix_spawn_file_actions_addclosefrom_np(&fa, 3);
+#endif
     rc = ::posix_spawnp(&pid, argv[0], &fa, nullptr, const_cast<char* const*>(argv), environ);
 #endif
     posix_spawn_file_actions_destroy(&fa);

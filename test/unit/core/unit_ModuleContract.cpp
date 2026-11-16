@@ -21,8 +21,8 @@
 
 namespace {
 
-// `hostDependent` marks a type whose result depends on the host: it is listed because it breaks where it is measurable, and passing elsewhere is no reason to leave the list.
-struct Known { const char* type; const char* reason; bool hostDependent = false; };
+// `hostDependent`: the result depends on the host, so passing elsewhere keeps the entry; `registersHere`: false where a capability flag keeps the type off this host.
+struct Known { const char* type; const char* reason; bool hostDependent = false; bool registersHere = true; };
 
 // Types that cannot be placed on a desktop run, each skipped for the reason given.
 const std::vector<Known> kNotPlaced = {
@@ -54,7 +54,7 @@ const std::vector<Known> kHoldsAllocation = {
     {"Layer", "its pixel buffer_ is a plain Buffer that release() does not free"},
     {"RandomMapModifier", "the permutation is taken with a raw platform::alloc and freed only in the destructor"},
     {"NetworkSendDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
-    {"PanelCardDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
+    {"PanelCardDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees", false, mm::platform::hasRawEthernet},
 };
 
 // Types leaving an allocation behind once removed.
@@ -67,8 +67,8 @@ const std::vector<Known> kTooBig = {
     {"RadialSpectrumEffect", "the beats_ and fade_ history arrays of 128 entries each sit inline"},
     {"MoonLiveEffect", "the MoonLiveScript member holds the script state inline"},
     {"NetworkSendDriver", "two 32-entry destination tables (dest and dest_) sit inline"},
-    {"RtspDriver", "the request, SDP and reply buffers (512 and 1024 bytes) sit inline"},
-    {"PanelCardDriver", "the packet_ frame buffer sits inline, sized to the largest card frame"},
+    {"RtspDriver", "the request, SDP and reply buffers (512 and 1024 bytes) sit inline", false, mm::platform::hasRtsp},
+    {"PanelCardDriver", "the packet_ frame buffer sits inline, sized to the largest card frame", false, mm::platform::hasRawEthernet},
     {"ParallelLedDriver", "the pin and strand text fields and the in-flight state sit inline"},
     {"HttpServerModule", "the eight WebSocket client connections sit inline"},
     {"ControlModule", "the surface, touch and resend tables sit inline"},
@@ -200,7 +200,7 @@ void enforce(const std::vector<Known>& list, const char* what, Pass pass) {
     for (const Known& k : list) {
         bool registered = false;
         for (const Row& r : survey()) registered = registered || r.type == k.type;
-        CHECK_MESSAGE(registered, k.type << " is listed but not registered");
+        CHECK_MESSAGE((registered || !k.registersHere), k.type << " is listed but not registered");
     }
 }
 

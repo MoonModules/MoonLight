@@ -124,7 +124,13 @@ TEST_CASE("a module whose name holds a space is moved, replaced, renamed and del
     CHECK(request(http, withBody("POST /api/modules/Dial%20B/replace", "{\"type\":\"RouteDial\",\"name\":\"Dial C\"}")).rfind("HTTP/1.1 200", 0) == 0);
     CHECK(childNamed(rack, "Dial C") != nullptr);
     mm::MoonModule* c = childNamed(rack, "Dial C");
-    const std::string renamed = request(http, withBody("PATCH /api/modules/Dial%20C", "{\"name\":\"Dial D\"}"));
+    // The whole answer, read until the server closes, since the name is in the body that can arrive after the status line.
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const std::string patch = withBody("PATCH /api/modules/Dial%20C", "{\"name\":\"Dial D\"}");
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(patch.data()), patch.size()));
+    const std::string renamed = readUntilClosed(http, client);
+    client.close();
     CHECK(renamed.rfind("HTTP/1.1 200", 0) == 0);
     CHECK(renamed.find("\"name\":\"Dial D\"") != std::string::npos);
     CHECK(childNamed(rack, "Dial D") == c);

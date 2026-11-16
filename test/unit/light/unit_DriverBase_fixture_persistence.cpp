@@ -11,6 +11,7 @@
 #include "light/drivers/FixtureProfilesModule.h"
 #include "light/drivers/NetworkSendDriver.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <filesystem>
 #include <fstream>
@@ -75,7 +76,8 @@ std::string readDrivers(const char* root) {
 
 // An older config saved the row number beside the name, and the number now points elsewhere: the name wins, on the wire as on the card.
 TEST_CASE("A driver's fixture profile survives a reboot by name") {
-    const char* root = "/tmp/mm_fixture_by_name";
+    const std::string rootDir = mm::systemTempDir() + "/mm_fixture_by_name";
+    const char* root = rootDir.c_str();
     writeDrivers(root, R"("fixture":4,"fixtureRef":"GRBW")");   // row 4 of the built-in list is GBR
     CHECK(bootFixture(root, true) == kGrbw);
     CHECK(readDrivers(root).find(R"("fixture":"GRBW")") != std::string::npos);   // the name, never the row number
@@ -88,7 +90,8 @@ TEST_CASE("A driver's fixture profile survives a reboot by name") {
 
 // A backup from before this release, restored on a running device, takes effect by name at once and saves the name.
 TEST_CASE("A restored older backup applies its fixture profile by name") {
-    const char* root = "/tmp/mm_fixture_restore";
+    const std::string rootDir = mm::systemTempDir() + "/mm_fixture_restore";
+    const char* root = rootDir.c_str();
     writeDrivers(root, R"("fixture":"RGB")");
     const char* backup = R"({"Drivers":{"$patch":"replace","enabled":true,"FixtureProfiles":{"type":"FixtureProfilesModule","enabled":true},"NetworkSend":{"type":"NetworkSendDriver","enabled":true,"fixture":4,"fixtureRef":"GRBW"}}})";
     CHECK(bootFixture(root, true, backup) == kGrbw);

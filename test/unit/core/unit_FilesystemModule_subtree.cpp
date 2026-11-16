@@ -14,6 +14,7 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "platform/platform.h"
+#include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
 #include <cstring>
@@ -32,7 +33,7 @@ struct Tree {
     Tree() {
         // A private root per fixture, by a counter rather than millis(), so the boot load never reads this machine's own /.config files or another fixture's.
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "/tmp/mm_subtree_test_%u", ++seq);
+        std::snprintf(root_, sizeof(root_), "%s/mm_subtree_test_%u", mm::systemTempDir().c_str(), ++seq);
         std::filesystem::remove_all(root_);
         mm::platform::fsSetRoot(root_);
 
