@@ -60,8 +60,8 @@ object Mdns {
         nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
     }
 
-    /** Register [type] again, unless a withdraw, an end or a newer registration replaced [failed] since. */
-    @Synchronized private fun retry(type: String, failed: NsdManager.RegistrationListener, attempt: Int) {
+    /** Register [type] again, unless a withdraw, an end or a newer registration replaced [failed] since; static like them, so it takes their lock. */
+    @JvmStatic @Synchronized private fun retry(type: String, failed: NsdManager.RegistrationListener, attempt: Int) {
         if (listeners[type] !== failed) return
         listeners.remove(type)   // a failed registration holds nothing to unregister
         ports[type]?.let { register(type, it, attempt) }

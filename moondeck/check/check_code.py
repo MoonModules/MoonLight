@@ -68,7 +68,7 @@ DEFINE_CONSTANT = "#define used as a constant"
 RTTI = "dynamic_cast or typeid in firmware"
 RELATIVE_INCLUDE = "relative include path"
 # The rules swept to zero, where one finding fails the check outright rather than waiting for the ratchet to notice a rise.
-ERROR_RULES = {FIRMWARE_DOUBLE}
+ERROR_RULES = {PLATFORM, NO_PRAGMA, HEADER_USING, FIRMWARE_DOUBLE, RTTI, RELATIVE_INCLUDE}
 
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
@@ -400,9 +400,26 @@ def _firmware(rel: str) -> bool:
     return rel.startswith("src/") and rel.endswith((".h", ".cpp"))
 
 
-def _code(line: str) -> str:
-    """A line's code: its strings emptied first, so a `//` inside one is no comment, then its comment cut."""
-    return re.sub(r'"(?:[^"\\]|\\.)*"', '""', line).split("//")[0]
+def _code_lines(lines) -> list:
+    """Each line's code: its strings emptied first, so a `//` or `/*` inside one is no comment, then its comments cut, a block comment across every line it spans."""
+    out, in_block = [], False
+    for line in lines:
+        s, code, i = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line), "", 0
+        while i < len(s):
+            if in_block:
+                end = s.find("*/", i)
+                in_block, i = end < 0, len(s) if end < 0 else end + 2
+                continue
+            block, rest = s.find("/*", i), s.find("//", i)
+            if rest >= 0 and (block < 0 or rest < block):
+                code += s[i:rest]
+                break
+            if block < 0:
+                code += s[i:]
+                break
+            code, in_block, i = code + s[i:block], True, block + 2
+        out.append(code)
+    return out
 
 
 def header_findings(rel: str, text: str) -> list:
@@ -412,8 +429,8 @@ def header_findings(rel: str, text: str) -> list:
     rows = []
     if "#pragma once" not in text or _GUARD_RE.search(text):
         rows.append((rel, NO_PRAGMA, "guards with #ifndef or not at all", 1))
-    for n, line in enumerate(text.splitlines(), 1):
-        if _USING_RE.match(_code(line)):
+    for n, (line, code) in enumerate(zip(text.splitlines(), _code_lines(text.splitlines())), 1):
+        if _USING_RE.match(code):
             rows.append((rel, HEADER_USING, f"line {n}: {line.strip()[:60]}", 1))
     return rows
 
@@ -423,8 +440,7 @@ def double_findings(rel: str, lines) -> list:
     if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
         return []
     rows = []
-    for n, line in enumerate(lines, 1):
-        code = _code(line)   # a word in a string or a comment is no type
+    for n, code in enumerate(_code_lines(lines), 1):   # a word in a string or a comment is no type
         if _DOUBLE_RE.search(code):
             rows.append((rel, FIRMWARE_DOUBLE, f"line {n}: {code.strip()[:60]}", 1))
     return rows
@@ -461,7 +477,7 @@ def rtti_findings(rel: str, lines) -> list:
     """Every `dynamic_cast` or `typeid` in one firmware file; the build has no runtime type information."""
     if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
         return []
-    return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, line in enumerate(lines, 1) if _RTTI_RE.search(_code(line))]
+    return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, (line, code) in enumerate(zip(lines, _code_lines(lines)), 1) if _RTTI_RE.search(code)]
 
 
 def relative_include_findings(rel: str, lines) -> list:

@@ -27,13 +27,17 @@ namespace mm {
 ///
 /// ## The surface
 ///
-/// Each switch, encoder and fader drives any control you assign; right-click an encoder to see its binding. The first switch drives the master on/off and the first fader the global brightness.
+/// Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives.
 ///
 /// From the second slot on, an unassigned slot follows the effect enabled last.
 ///
 /// ## Presets
 ///
-/// Click a pad to apply its preset, drag to rearrange. A pad is tinted by its role: layout blue, effects violet, driver green, service amber. [Presets](https://moonmodules.org/MoonLight/reference/presets.html) has the rest.
+/// Saving, applying and arranging them: [Presets](https://moonmodules.org/MoonLight/reference/presets.html).
+///
+/// ## The gallery
+///
+/// Presets and scripts people shared, added with a click: a preset to a free pad, a script to this device. The browser fetches them, so the device needs no internet.
 ///
 /// ## Home Assistant
 ///
@@ -311,10 +315,10 @@ public:
             controls_.setFader(controls_.count() - 1, true, surfaceTarget(i));
             controls_.setLive(controls_.count() - 1);
         }
-        /// One pad per preset file. Click applies, right-click names, drag rearranges.
+        /// Click a pad to apply it, right-click or hold to edit it, drag to move it.
         /// @field name The preset's name, shown on its pad.
         /// @field captures Which containers the preset sets: Layouts, Effects, Drivers or Services.
-        /// @guide Right-click a pad to rename it, delete it or save over it. A pad is a position: slot 14 stays slot 14.
+        /// @guide Kinds: Effects (violet), the look, any board; Layouts (blue), geometry; Drivers (green), pins; Services (amber). Right-click an empty pad to save; a card's `{}` saves one module; a palette alone is a file in `/.config/presets/`.
         controls_.addList("presets", *this);
         // The save form: input for the next save rather than configuration, so none of it is written to flash.
         controls_.addText("name", name_, sizeof(name_), validPresetName);
@@ -1285,7 +1289,9 @@ private:
     uint32_t stripWrittenMs_ = 0;
     /// Whether a settle sequence is running.
     bool     stripActive_ = true;
+    /// Each fader sets what it drives; the first one sets the global brightness.
     uint8_t faders_[kFaderCount] = {};
+    /// Each knob turns what it drives up or down, endlessly, as a desk's encoders do.
     uint8_t encoders_[kEncoderCount] = {};
     /// What each attached surface was last SENT, so a value it already has is not echoed back.
     uint8_t sentEncoders_[kEncoderCount] = {};
@@ -1338,7 +1344,7 @@ private:
             if (MoonModule* f = firstEnabledEffect(m->child(i))) return f;
         return nullptr;
     }
-    /// bool, not uint8:
+    /// Each switch turns what it drives on or off; the first one is the master on/off.
     bool switches_[kSwitchCount] = {};
     /// Which pad the next save fills, set by the surface popup.
     static constexpr uint8_t kNoSlot = 0xFF;

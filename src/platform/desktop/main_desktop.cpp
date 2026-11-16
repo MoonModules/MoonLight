@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <cstring>
+#include <initializer_list>   // sentSignal's SI_ codes
 #include <iterator>   // std::size: the crash signals' count from their one array
 
 #include "main.h"          // mm_main
@@ -26,7 +27,7 @@
 #endif
 
 
-// A lock-free atomic, which a signal handler may store ([support.signal]) and the app thread reads without a data race, as a volatile sig_atomic_t only promises within one thread.
+// A lock-free atomic, which a signal handler may store ([support.signal]) and the app thread reads race-free, where a volatile sig_atomic_t holds within one thread only.
 static std::atomic<bool> running{true};
 static_assert(std::atomic<bool>::is_always_lock_free);
 static bool cleanExit = false;

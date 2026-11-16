@@ -23,9 +23,13 @@ test("paragraphs stay apart", () => {
     assert.equal(helpMarkdown("One.\n\nTwo."), "One.<br><br>Two.");
 });
 
+test("a list sits between its paragraphs with its own margin, and no blank line doubles it", () => {
+    assert.equal(helpMarkdown("Kinds:\n\n- One\n- Two\n\nPick one."), "Kinds:<ul><li>One</li><li>Two</li></ul>Pick one.");
+});
+
 test("a table renders with its first row as the head, its cells formatted", () => {
     assert.equal(helpMarkdown("Pick one.\n\n| Want | Use |\n|---|---|\n| Many strands | `i80` |"),
-        "Pick one.<br><br><table><tr><th>Want</th><th>Use</th></tr><tr><td>Many strands</td><td><code>i80</code></td></tr></table>");
+        "Pick one.<table><tr><th>Want</th><th>Use</th></tr><tr><td>Many strands</td><td><code>i80</code></td></tr></table>");
 });
 
 test("a table without a separator row keeps every body row", () => {
@@ -139,7 +143,7 @@ test("a star inside code or a link's address stays literal, and a link's text ma
 });
 
 test("a heading renders one level under the view's own", () => {
-    assert.equal(helpMarkdown("## What you built\n\nA layout."), "<h4>What you built</h4><br><br>A layout.");
+    assert.equal(helpMarkdown("## What you built\n\nA layout."), "<h4>What you built</h4>A layout.");
 });
 
 test("a clip on its own line plays with its poster, a picture shows, and anything not https stays text", () => {
@@ -157,7 +161,7 @@ test("a fenced block keeps its text as written, escaped and unformatted", () => 
 });
 
 test("a fenced block with a blank line inside stays one block", () => {
-    assert.equal(helpMarkdown("Run:\n\n```\nfirst\n\nsecond\n```"), "Run:<br><br><pre><code>first\n\nsecond</code></pre>");
+    assert.equal(helpMarkdown("Run:\n\n```\nfirst\n\nsecond\n```"), "Run:<pre><code>first\n\nsecond</code></pre>");
 });
 
 test("a NUL in the text cannot pose as a code block", () => {

@@ -163,7 +163,13 @@ TEST_CASE("apply-core: an add creates a child and refuses a name some module hol
     CHECK(http.applyAddModule("Knob", "Y", "NoSuchParent") == OpResult::ModuleNotFound);
     CHECK(http.applyAddModule("Knob", "Z", "") == OpResult::BadRequest);
     CHECK(http.applyAddModule("Knob", "SixteenCharsLong", "Root") == OpResult::BadRequest);
-    CHECK(root->childCount() == 1);
+    // A base to start from, such as a script's name, is made free as the type's default is: shortened and numbered to fit.
+    char made[mm::MoonModule::kNameLen] = {};
+    CHECK(http.applyAddModule("Knob", nullptr, "Root", made, sizeof(made), nullptr, "AVeryLongScriptName") == OpResult::Ok);
+    CHECK(std::string(made) == "AVeryLongScript");
+    CHECK(http.applyAddModule("Knob", nullptr, "Root", made, sizeof(made), nullptr, "AVeryLongScriptName") == OpResult::Ok);
+    CHECK(std::string(made) == "AVeryLongScri-2");
+    CHECK(root->childCount() == 3);   // K and the two made free; every refusal above added nothing
 
     s.deleteTree(root);
 }

@@ -330,7 +330,7 @@ public:
         Refused,         ///< the state engine refused the document, its reason in the result the caller passed
     };
     /// Create a module named `id`, refused when that name is in use, or without an id named after its type with a free suffix; `outName` receives the name. @xref{the-apply-core-the-rest-api-callable-in-process}
-    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr);
+    OpResult applyAddModule(const char* typeName, const char* id, const char* parentId, char* outName = nullptr, size_t outNameLen = 0, StateDocumentResult* refusal = nullptr, const char* base = nullptr);
     /// Write one control, the single path every transport's control write ends in.
     OpResult applySetControl(const char* moduleName, const char* controlName, const char* valueJson);
     /// Remove a module and everything under it; a top-level or non-editable one is refused.

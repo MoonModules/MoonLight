@@ -95,7 +95,9 @@ try { pickerChips = JSON.parse(lsRead(LS_CHIPS, "{}")) || {}; } catch { pickerCh
 
 // The chips a picker for `roles` opens with: each role's remembered ones.
 function stickyChips(roles) {
-    return [...new Set(roles.flatMap(r => pickerChips[r] || []))];
+    const chips = [...new Set(roles.flatMap(r => pickerChips[r] || []))];
+    // Scripted and compiled exclude each other (chipsMatch), so two roles remembering one each would open the picker empty: the pair cancels.
+    return chips.includes(SCRIPTED_EMOJI) && chips.includes(COMPILED_EMOJI) ? chips.filter(c => c !== SCRIPTED_EMOJI && c !== COMPILED_EMOJI) : chips;
 }
 
 // Remember `active` for each of `roles`, keeping a remembered chip this picker lacks, so a filter survives a picker of other types.
@@ -811,11 +813,12 @@ async function listSetField(moduleName, ctrlName, id, field, value) {
 /// A caller that wants a fresh module reads the absence of a name as "taken" and asks again with another.
 /// Returns null on an empty `type`, a refusal or a failed request. When `why` is given, a refusal is
 /// described in it ({status, error}) so the caller can tell a taken name (409) from any other refusal.
-async function addModule(type, parentName, id, why) {
+async function addModule(type, parentName, id, why, base) {
     if (!type) return null;
     const body = {type: type};
     if (parentName) body.parent_id = parentName;
     if (id) body.id = id;
+    else if (base) body.name = base;   // the device makes it free, shortened and numbered to fit
     let name = null;
     try {
         const r = await fetch("/api/modules", {
@@ -1943,9 +1946,13 @@ function surfaceBank(ctrl) {
     return ctrl.switchRow ? "switch" : ctrl.encoder ? "encoder" : ctrl.fader ? "fader" : null;
 }
 
-function surfaceBreak() {
+// A bank's help is one line under the bank, written on the member array its strips publish (gen_help names it after that array), since eight narrow strips have no room for a line each.
+const BANK_HELP_KEY = { switch: "switches", encoder: "encoders", fader: "faders" };
+
+function surfaceBreak(moduleType, bank) {
     const br = document.createElement("div");
     br.className = "surface-break";
+    controlHelp(br, helpFor(moduleType)?.controls?.[BANK_HELP_KEY[bank]]);
     return br;
 }
 
@@ -2304,7 +2311,7 @@ function createCard(mod, depth) {
         for (const ctrl of mod.controls) {
             if (!controlRendersGenerically(mod, ctrl)) continue;
             const kind = surfaceBank(ctrl);
-            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak());
+            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak(mod.type, bank));
             bank = kind;
             const row = createControl(mod.name, mod.type, ctrl);
             if (row) controlsHost.appendChild(row);
@@ -6449,7 +6456,7 @@ function syncVisibleControls(mod) {
         const kind = surfaceBank(c);
         const row = host.querySelector(`:scope > .control-row[data-key="${cssEscape(c.name)}"]`);
         if (!row) continue;
-        if (bank && kind !== bank) host.insertBefore(surfaceBreak(), row);
+        if (bank && kind !== bank) host.insertBefore(surfaceBreak(mod.type, bank), row);
         bank = kind;
     }
     return true;
@@ -6882,23 +6889,14 @@ async function addPickedType(item, parentName) {
     if (!await mlEnsureLocal(item)) return;
     // The cloud marker is a property of the row, not of the name the card takes.
     const base = item.displayName.replace(/^\u2601\s*/, "");
-    for (let n = 1; n <= 20; n++) {
-        const id = n === 1 ? base : `${base}-${n}`;
-        const why = {};
-        const created = await addModule(type, parentName, id, why);
-        if (created) {
-            await setCardScript(created, item.script);
-            return created;
-        }
-        // Only a taken name (409) is worth retrying with a suffix: any other refusal (a name too long, an unknown type, a missing parent) fails the same way with -2, so the add stops at the first and shows the server's own reason.
-        if (why.status !== 409) {
-            alert(`could not add ${base}: ${why.error || "the device refused"}`);
-            return;
-        }
+    const why = {};
+    const created = await addModule(type, parentName, undefined, why, base);   // the device names it, as a compiled type's add
+    if (!created) {
+        alert(`could not add ${base}: ${why.error || "the device refused"}`);
+        return;
     }
-    // Twenty siblings of one name, all taken. Unlikely, but silence would leave the user clicking
-    // create and watching nothing happen, which is the one outcome worse than an error.
-    alert(`could not add ${base}: twenty modules of that name already exist here`);
+    await setCardScript(created, item.script);
+    return created;
 }
 
 function openTypePicker(parentMod, anchorEl) {
@@ -8234,6 +8232,8 @@ function renderMoonCloudStats(host, mod) {
 // ---------------------------------------------------------------------------------------------
 
 const GALLERY_RAW = "https://raw.githubusercontent.com/MoonModules/MoonLight-Gallery/main/";
+// The gallery's help is the module guide's section of this title, shown under the gallery it explains.
+const GALLERY_GUIDE = "The gallery";
 const GALLERY_SCRIPT_EXT = [".mle", ".mll", ".mlm", ".mls", ".mlp"];
 // An accepted entry shows the next time anyone opens the Gallery; the 30 s only stops a card re-render from fetching again, since GitHub limits raw requests per address.
 const GALLERY_TTL_MS = 30 * 1000;
@@ -8386,6 +8386,8 @@ function renderGallery(host, mod) {
     box.open = galleryOpen;
     const summary = document.createElement("summary");
     summary.textContent = "Gallery";
+    const galleryGuide = helpFor(mod.type)?.guide?.find(g => g.title === GALLERY_GUIDE);
+    controlHelp(summary, galleryGuide && { line: galleryGuide.text });
     box.appendChild(summary);
     const status = document.createElement("div");
     status.className = "gallery-status";

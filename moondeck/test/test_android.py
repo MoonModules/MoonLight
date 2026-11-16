@@ -12,7 +12,7 @@ import argparse
 import shlex
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
@@ -60,8 +60,9 @@ def main():
     adb("push", str(stripped), f"{DEVICE_DIR}/mm_tests", check=True, stdout=subprocess.DEVNULL)
     adb("shell", f"chmod 755 {DEVICE_DIR}/mm_tests", check=True)
     for rel in SOURCE_FILES:
-        adb("shell", f"mkdir -p {DEVICE_DIR}/repo/{Path(rel).parent}", check=True)
-        adb("push", str(ROOT / rel), f"{DEVICE_DIR}/repo/{Path(rel).parent}/", check=True, stdout=subprocess.DEVNULL)
+        remote = f"{DEVICE_DIR}/repo/{PurePosixPath(rel).parent}"   # the device's path, POSIX whatever the computer is
+        adb("shell", f"mkdir -p {remote}", check=True)
+        adb("push", str(ROOT / rel), f"{remote}/", check=True, stdout=subprocess.DEVNULL)
     quoted = shlex.join(doctest_flags + args.doctest_args)   # a filter may hold an apostrophe, as test names do
     run = (f"cd {DEVICE_DIR} && TMPDIR={DEVICE_DIR}/tmp MM_DATA_DIR={DEVICE_DIR}/data HOME={DEVICE_DIR}/data "
            f"./mm_tests {quoted}; echo \"exit $?\"")

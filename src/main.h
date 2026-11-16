@@ -5,5 +5,5 @@
 #include <atomic>
 #include <cstdint>
 
-/// Build the module tree, serve the UI on `httpPort`, and run the render loop while `keepRunning` holds; a board never clears it, a desktop's signal handler or the Android service does.
+/// Build the module tree, serve the UI on `httpPort`, and run the render loop while `keepRunning` holds: a board leaves it set, a desktop's signal handler or the Android service clears it.
 void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort);

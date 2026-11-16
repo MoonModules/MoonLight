@@ -18,7 +18,6 @@
 #include <string>
 #include <thread>
 
-
 namespace {
 
 std::atomic<bool> running{true};   // the service thread clears it, the program thread reads it; once per process, so a stop before the start holds

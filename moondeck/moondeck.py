@@ -1550,8 +1550,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
 
         elif self.path.startswith("/api/doc-asset/"):
             self._serve_doc_asset()
-
-
         elif self.path.split("?", 1)[0] == "/api/ota-status":
             # The OTA button's progress: one device's install, by ip, or {} when none ran.
             ip = urllib.parse.parse_qs(self.path.partition("?")[2]).get("ip", [""])[0]

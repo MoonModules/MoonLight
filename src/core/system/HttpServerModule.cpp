@@ -1536,7 +1536,7 @@ static void writeTypedMember(JsonSink& sink, const char* name, const char* typeN
 }
 
 HttpServerModule::OpResult HttpServerModule::applyAddModule(const char* typeName, const char* id, const char* parentId,
-                                                            char* outName, size_t outNameLen, StateDocumentResult* refusal) {
+                                                            char* outName, size_t outNameLen, StateDocumentResult* refusal, const char* base) {
     if (!typeName || typeName[0] == 0 || !scheduler_) return OpResult::BadRequest;
     // The top level is the fixed set main.cpp wires, so an add names a parent.
     if (!parentId || parentId[0] == 0) return OpResult::BadRequest;
@@ -1548,9 +1548,10 @@ HttpServerModule::OpResult HttpServerModule::applyAddModule(const char* typeName
         std::snprintf(name, sizeof(name), "%s", id);
         if (std::strlen(id) >= sizeof(name)) return OpResult::BadRequest;   // the document's name rule, said before it truncates
     } else {
-        const char* base = ModuleFactory::defaultNameOf(typeName);
-        if (!base) return OpResult::UnknownType;
-        if (!scheduler_->freeName(base, name, sizeof(name))) return OpResult::NameInUse;
+        // The base the caller names, such as a script's, or the type's default, made free: shortened and numbered to fit.
+        const char* want = base && base[0] ? base : ModuleFactory::defaultNameOf(typeName);
+        if (!want) return OpResult::UnknownType;
+        if (!scheduler_->freeName(want, name, sizeof(name))) return OpResult::NameInUse;
     }
     JsonSink body;
     writeTypedMember(body, name, typeName);
@@ -1563,14 +1564,16 @@ void HttpServerModule::handleAddModule(platform::TcpConnection& conn, const char
     char typeName[32] = {};
     char id[32] = {};
     char parentId[32] = {};
+    char base[64] = {};   // longer than a name holds, since it is shortened to fit
     mm::json::parseString(body, "type", typeName, sizeof(typeName));
     mm::json::parseString(body, "id", id, sizeof(id));
     mm::json::parseString(body, "parent_id", parentId, sizeof(parentId));
+    mm::json::parseString(body, "name", base, sizeof(base));
 
     // The created module's name rides back so the UI can select and focus it; written through writeJsonString, since a client-supplied `id` may hold a quote.
     char createdName[MoonModule::kNameLen] = {};
     StateDocumentResult why;
-    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName), &why)) {
+    switch (applyAddModule(typeName, id, parentId, createdName, sizeof(createdName), &why, base)) {
         case OpResult::Ok: {
             // A 15-character name fully \uXXXX-escaped plus the wrapper.
             char resp[128];

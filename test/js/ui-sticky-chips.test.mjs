@@ -11,6 +11,8 @@ function chipsWith(pickerChips) {
     const scope = {
         pickerChips,
         LS_CHIPS: "chips",
+        SCRIPTED_EMOJI: "📝",
+        COMPILED_EMOJI: "📦",
         safeLocalSet: (key, value) => { stored[key] = JSON.parse(value); },
     };
     const api = new Function(...Object.keys(scope),
@@ -39,4 +41,10 @@ test("a remembered chip the picker does not offer survives that picker, and clea
     const c = chipsWith({ effect: ["🧊", "🎵"] });
     c.rememberChips(["effect"], ["🎵", "🔥"], new Set());   // a list that omits the cube chip: the cube stays remembered
     assert.deepEqual(c.stickyChips(["effect"]), ["🧊"]);
+});
+
+test("a scripted chip remembered by one role and a compiled chip by another cancel, so the add picker never opens empty", () => {
+    const c = chipsWith({ effect: ["📝", "🔥"], modifier: ["📦"] });
+    assert.deepEqual(c.stickyChips(["effect", "modifier"]), ["🔥"]);
+    assert.deepEqual(c.stickyChips(["effect"]), ["📝", "🔥"]);
 });

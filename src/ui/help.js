@@ -53,8 +53,12 @@ export function helpMarkdown(text) {
     const code = [];
     const held = esc.replace(/\u0000/g, "").trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/gm, (_, body) => `\u0000${code.push(body) - 1}\u0000`);
     // Trimmed, so the text's last line is a block like any other.
-    return held.split(/\n\n+/).map(p => /^\u0000(\d+)\u0000$/.test(p) ? `<pre><code>${code[+p.slice(1, -1)]}</code></pre>` : block(p)).join("<br><br>");
+    const parts = held.split(/\n\n+/).map(p => /^\u0000(\d+)\u0000$/.test(p) ? `<pre><code>${code[+p.slice(1, -1)]}</code></pre>` : block(p));
+    // A blank line between two paragraphs of text; a list, a table, code or a heading brings its own margin (style.css), so no break doubles it.
+    return parts.reduce((out, p, i) => out + (i && !isBlockHtml(parts[i - 1]) && !isBlockHtml(p) ? "<br><br>" : "") + p, "");
 }
+
+const isBlockHtml = html => /^<(ul|table|pre|h\d)\b/.test(html);
 
 // A URL taken from help.json, only when it is https and cannot leave its attribute; anything else is no link at all.
 export function safeUrl(u) {

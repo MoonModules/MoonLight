@@ -186,7 +186,7 @@ A driver's `start` and `count` are 32-bit, so a window starts or ends past light
 
 **Action: after an update over the air, when File Manager shows `skipped at boot`, find the module it names in the entries of the releases since the one the device ran. Where that entry asks for it, take a Backup and Restore it before changing anything.**
 
-The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board whose build leaves it out, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser. Until then File Manager names it at every boot; any change to that module saves it and clears the line.
+Migration happens in the browser's Restore, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board whose build leaves it out, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser. Until then File Manager names it at every boot; any change to that module saves it and clears the line.
 
 ### The StadBeest autopilot builds its looks, a layer each
 

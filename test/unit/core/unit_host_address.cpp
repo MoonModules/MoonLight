@@ -5,6 +5,8 @@
 #include "doctest.h"
 #include "platform/desktop/host_address.h"
 
+#include <initializer_list>   // the names a case loops over
+
 #ifndef _WIN32
 
 using mm::platform::HeldAddress;

@@ -16,6 +16,9 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import java.io.File
+import java.io.IOException
 
 /**
  * MoonLight's page, served by the program the service runs, in a WebView: the whole front end, as a browser shows it on a desktop.
@@ -24,7 +27,7 @@ class MainActivity : Activity() {
 
     private lateinit var web: WebView
     private var pickedFiles: ValueCallback<Array<Uri>>? = null
-    private var pendingSave: ByteArray? = null   // the file the system's save dialog is choosing a place for
+    private var saving = false   // a save dialog is open, so a second save waits for it
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,10 +73,19 @@ class MainActivity : Activity() {
             pickedFiles = null
         }
         if (requestCode == SAVE_FILE) {
-            val bytes = pendingSave
-            pendingSave = null
+            saving = false
+            val staged = File(cacheDir, STAGED_SAVE)
             val place = data?.data
-            if (resultCode == RESULT_OK && bytes != null && place != null) contentResolver.openOutputStream(place)?.use { it.write(bytes) }
+            try {
+                if (resultCode == RESULT_OK && place != null && staged.exists()) {
+                    val out = contentResolver.openOutputStream(place) ?: throw IOException("the destination opened no stream")
+                    out.use { it.write(staged.readBytes()) }
+                }
+            } catch (e: Exception) {   // a destination gone or a full disk: said, rather than ending the app
+                Toast.makeText(this, "Could not save: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                staged.delete()
+            }
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
@@ -97,13 +109,14 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), ASK_PERMISSIONS)
     }
 
-    /** The page's save: the bytes, then the system's dialog for where they go, as a browser asks where a download goes. */
+    /** The page's save: the bytes staged in the app's cache, which outlives the activity being recreated while the dialog is open, then the system's dialog for where they go, as a browser asks where a download goes. */
     inner class SaveBridge {
         @JavascriptInterface fun save(name: String, mime: String, base64: String) {
             val bytes = Base64.decode(base64, Base64.DEFAULT)
             runOnUiThread {
-                if (pendingSave != null) return@runOnUiThread   // one dialog at a time, so its place receives its own file
-                pendingSave = bytes
+                if (saving) return@runOnUiThread   // one dialog at a time, so its place receives its own file
+                saving = true
+                File(cacheDir, STAGED_SAVE).writeBytes(bytes)
                 val ask = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name)
                 startActivityForResult(ask, SAVE_FILE)
             }
@@ -114,5 +127,6 @@ class MainActivity : Activity() {
         private const val PICK_FILES = 1
         private const val ASK_PERMISSIONS = 2
         private const val SAVE_FILE = 3
+        private const val STAGED_SAVE = "save-in-progress"
     }
 }
