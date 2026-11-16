@@ -841,6 +841,7 @@ components:
         tags: { type: string }
         dim: { type: integer }
         acceptsChildRoles: { type: string }
+        minMode: { type: integer, description: "The reader's mode the type's cards need: 0 user, 1 expert, 2 developer." }
         defaults: { type: object, description: Control name to default value. }
     ScriptCatalog:
       type: object

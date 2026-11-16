@@ -19,10 +19,11 @@ struct WiFiNetwork {
     mm::NetworkModule net;
     mm::WiFiModule wifi;
     WiFiNetwork() {
+        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&wifi);
         net.setWiFi(&wifi);
     }
-    ~WiFiNetwork() { net.removeChild(&wifi); }   // the child is a member, not the tree's to free
+    ~WiFiNetwork() { net.removeChild(&wifi); mm::platform::setTestHostNetwork(true); }   // the child is a member, not the tree's to free
 };
 }  // namespace
 
@@ -75,8 +76,9 @@ TEST_CASE("NetworkModule::setWifiCredentials accepts long SSID without crash") {
     CHECK(std::strlen(w.wifi.ssidAt(0)) == 32);
 }
 
-// The mode control names the cascade state; on desktop every init stub fails, so it reads Idle.
+// The mode control names the cascade state; with the host's network out, every init stub fails, so it reads Idle.
 TEST_CASE("NetworkModule mode control reflects current state") {
+    mm::platform::setTestHostNetwork(false);
     mm::NetworkModule net;
     net.setup();
     // Clears before building, so the controls setup() already built are not duplicated.
@@ -93,6 +95,7 @@ TEST_CASE("NetworkModule mode control reflects current state") {
         }
     }
     CHECK(foundMode);
+    mm::platform::setTestHostNetwork(true);
 }
 
 // parseDottedQuad (in Control.h) is the validator on every IPv4 write, over both the HTTP API and persistence. Pin the contract.
@@ -685,7 +688,7 @@ TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins a
         WiFiNetwork w;
         w.wifi.remember("coproc-home", "pw");
         w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi, which refuses
-        CHECK(std::strstr(w.net.status(), "waiting for the WiFi coproc") != nullptr);
+        CHECK(std::strstr(w.net.status(), "waiting for the WiFi radio") != nullptr);
         CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") != 0);
         mm::platform::setTestNowMs(1000 + 5000);
         w.net.tick1s();   // still waiting: the radio refuses every join
@@ -699,6 +702,26 @@ TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins a
     mm::platform::setTestWifiStaAvailable(false);
 }
 
+// A host's own network, whatever the OS routes through, is its wired link: the cascade connects on it at boot, names it with its address, and tries no known WiFi network beside it, so a restored board backup brings no retry a minute (issue 247).
+TEST_CASE("a host's own network is its wired link") {
+    uint8_t ip[4];
+    mm::platform::ethGetIPv4(ip);
+    if (!(ip[0] | ip[1] | ip[2] | ip[3])) return;   // the case needs the test machine's own address
+    FrozenClock clock;
+    WiFiNetwork w;
+    mm::platform::setTestHostNetwork(true);   // the fixture keeps it out; this case is about it
+    w.wifi.remember("host-only", "pw");   // a name no other case joins, so the seam's last SSID tells in any order
+    w.net.setup();
+    w.net.rebuildControls();
+    w.net.tick1s();
+    CHECK(std::string(modeOf(w.net)) == "Host");
+    CHECK(std::strncmp(w.net.status(), "Host: ", 6) == 0);
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "host-only") != 0);
+    mm::platform::setTestNowMs(1000 + 61000);   // past the retry interval: still carried by the host
+    w.net.tick1s();
+    CHECK(std::strcmp(mm::platform::testLastStaSsid(), "host-only") != 0);
+}
+
 // With no network known, the access point is how a user reaches the device, so it opens the tick the WiFi coproc's radio is ready.
 TEST_CASE("with no network known, the access point opens the tick a waiting WiFi coproc answers") {
     FrozenClock clock;
@@ -707,7 +730,7 @@ TEST_CASE("with no network known, the access point opens the tick a waiting WiFi
     {
         WiFiNetwork w;
         w.net.setup();
-        CHECK(std::strstr(w.net.status(), "waiting for the WiFi coproc") != nullptr);
+        CHECK(std::strstr(w.net.status(), "waiting for the WiFi radio") != nullptr);
         mm::platform::setTestWifiRadioReady(true);
         mm::platform::setTestNowMs(1000 + 3000);
         w.net.tick1s();

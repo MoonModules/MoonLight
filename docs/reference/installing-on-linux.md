@@ -19,7 +19,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | | |
 |---|---|
 | **Program** | `/var/lib/moonlight/bin/MoonLight`, copied from `/usr/lib/moonlight/MoonLight` on every install |
-| **User** | `moonlight`, an unprivileged system user in the `video` group for HDMI out |
+| **User** | `moonlight`, an unprivileged system user in the `video` group for HDMI out and the `audio` group for the sound cards |
 | **Rights** | Writes its own folder alone and holds one capability, `CAP_NET_RAW`, for the raw Ethernet frames a ColorLight card takes |
 | **Config** | `/var/lib/moonlight/MoonLight/.config/` |
 | **Logs** | `journalctl -u moonlight` |
@@ -27,9 +27,11 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 
 **Updating, as a board updates.** The service owns the folder its program runs from, so it installs a new version of itself through the same routes, Firmware card and map as a board, from the release's `firmware-desktop-linux-<arch>-v….bin`. It checks the image is a program for this processor and, from the map, against the SHA-256 GitHub publishes for it; it keeps the running program as `MoonLight.prev`, puts the new one in its place and restarts on it in place, the same process systemd started. Its `/api/system` says `update: self`. A package-managed program that updates itself is uncommon on Linux, where the textbook is an APT repository; that needs root to update from the map, and the network-facing service stays unprivileged, so the service owns a copy of the program the package seeds, as Syncthing does.
 
-**Rolling back.** A new program stays pending, marked by `MoonLight.pending`, until it has run a minute. A pending program whose start fails gives way to `MoonLight.prev`, through `moonlight-rollback.service`; a confirmed one stays in place through its restarts, and three failed starts within two minutes stop the service until `sudo systemctl reset-failed moonlight && sudo systemctl start moonlight`. An `apt install` is the administrator's choice: it puts the package's program in place, older or newer, and drops `MoonLight.prev`.
+**Rolling back.** A new program stays pending, marked by `MoonLight.pending`, until it has run a minute. A pending program whose start fails gives way to `MoonLight.prev`, by the service's own `ExecStopPost` hook, run in its sandbox as its user; a confirmed one stays in place through its restarts, and five starts within two minutes stop the service until `sudo systemctl reset-failed moonlight && sudo systemctl start moonlight`. An `apt install` is the administrator's choice: it puts the package's program in place, older or newer, and drops `MoonLight.prev`.
 
-**Running it by hand**, to see its log in a terminal: `sudo systemctl stop moonlight`, then `/usr/lib/moonlight/MoonLight`, which keeps its settings in your own `~/.local/share/MoonLight/`. That copy sits in a folder only root writes, so it is updated by hand; the tarball unpacked in a folder of your own updates itself, restarting in its terminal window.
+**Audio input.** PipeWire and PulseAudio serve a user's session, which a system service has none of, so the server admits the service over TCP, as it admits a container ([Set up audio input](../moonwalk.md#audio-input)), and a drop-in names it: `sudo systemctl edit moonlight`, then `[Service]` and `Environment=PULSE_SERVER=tcp:127.0.0.1:4713`, then `sudo systemctl restart moonlight`, since a drop-in reaches the process at its next start. A server that starts after MoonLight is found the next time the Audio card's device list is read.
+
+**Running it by hand**, to see its log in a terminal: `sudo systemctl stop moonlight`, then `/usr/lib/moonlight/MoonLight`, which keeps its settings in your own `~/.local/share/MoonLight/`. A workstation that runs it by hand alone keeps the program for this with `sudo systemctl disable --now moonlight`. The Audio card's `cpu` line and the terminal's first audio line name the backend the program holds, PulseAudio, ALSA, or Null where the system's audio libraries are missing. That copy sits in a folder only root writes, so it is updated by hand; the tarball unpacked in a folder of your own updates itself, restarting in its terminal window.
 
 ## Docker
 

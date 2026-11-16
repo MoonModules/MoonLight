@@ -373,6 +373,7 @@ const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
 bool wifiRadioReady() MM_NONBLOCKING { return true; }
+const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot
 const char* hostIp() { return ""; }
 
@@ -890,6 +891,7 @@ bool irRead(uint16_t, uint32_t&) { return false; }
 void irStop() {}
 bool irChannelReady(uint16_t) { return false; }
 size_t audioCaptureDevices(const char* const** optionsOut) { if (optionsOut) *optionsOut = nullptr; return 0; }
+const char* audioCaptureBackend() MM_NONBLOCKING { return "none"; }
 bool audioCaptureInit(AudioMicHandle&, uint8_t, uint32_t) { return false; }
 bool audioMicInit(AudioMicHandle&, uint16_t, uint16_t, uint16_t, int16_t, uint32_t, MicMode) { return false; }
 size_t audioMicRead(AudioMicHandle&, int32_t*, size_t, uint32_t) { return 0; }

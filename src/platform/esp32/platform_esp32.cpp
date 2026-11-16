@@ -556,6 +556,8 @@ bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
 #endif
 
+const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
+
 namespace {
 constexpr const char* kBootNamespace = "mm";
 constexpr const char* kPowerOnsKey = "powerOns";

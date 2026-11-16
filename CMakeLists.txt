@@ -164,7 +164,8 @@ endif()
 
 # The computed semver (compute_version.py): the core for a stable tag, <core>-dev.<N> for a
 # moving latest build. Only the release pipeline sets it (package_desktop.py --version); a local
-# build falls through to build_info.cpp's #ifndef default (library.json). The same override the
+# build falls through to build_info.cpp's #ifndef default, the same <core>-dev.<N> computed into
+# build_id.h, so a desktop built from main reports the version latest carries. The same override the
 # ESP32 build has (esp32/main/CMakeLists.txt), so a desktop binary reports the same precise
 # version its release assets are named with, which is what lets the UI's update badge compare
 # a running desktop against the `latest` channel at all. On build_info.cpp alone, so a new

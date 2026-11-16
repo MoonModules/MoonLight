@@ -939,24 +939,58 @@ const char* cpuInfo() {
     return buf;
 }
 
-const char* hostIp() {
-    // Resolve the outbound address: connecting a datagram socket sends nothing and merely selects the route, so the socket then names this host's address.
-    static char ip[INET_ADDRSTRLEN] = {};
-    if (ip[0]) return ip;
-    int fd = open_sock(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) return "";
+#ifndef _WIN32
+/// Call `f` with every entry of the host's interface list, one per interface and address family, as getifaddrs gives them.
+template <typename F>
+static void eachInterface(F f) {
+    ifaddrs* list = nullptr;
+    if (::getifaddrs(&list) != 0) return;
+    for (const ifaddrs* a = list; a; a = a->ifa_next) f(*a);
+    ::freeifaddrs(list);
+}
+#endif
+static char hostIf_[32] = {};   ///< the interface that holds hostIp()'s address, empty where none does
+/// Name in hostIf_ the interface holding `addr`, whose link the Network card describes; empty where none does.
+static void findHostIf(const in_addr& addr) {
+    hostIf_[0] = 0;
+#ifndef _WIN32
+    eachInterface([&](const ifaddrs& a) {
+        if (!a.ifa_addr || a.ifa_addr->sa_family != AF_INET || !a.ifa_name || hostIf_[0]) return;
+        if (reinterpret_cast<const sockaddr_in*>(a.ifa_addr)->sin_addr.s_addr != addr.s_addr) return;
+        std::snprintf(hostIf_, sizeof(hostIf_), "%s", a.ifa_name);
+    });
+#else
+    (void)addr;
+#endif
+}
+/// The route's own address, as a datagram socket connected toward the internet names it: no packet is sent.
+static bool routeAddress(sockaddr_in& local) {
+    const int fd = open_sock(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) return false;
     sockaddr_in probe{};
     probe.sin_family = AF_INET;
     probe.sin_port = htons(80);
     inet_pton(AF_INET, "8.8.8.8", &probe.sin_addr);
-    if (::connect(sock(fd), reinterpret_cast<sockaddr*>(&probe), sizeof(probe)) == 0) {
-        sockaddr_in local{};
-        socklen_t len = sizeof(local);
-        if (::getsockname(sock(fd), reinterpret_cast<sockaddr*>(&local), &len) == 0) {
-            inet_ntop(AF_INET, &local.sin_addr, ip, sizeof(ip));
-        }
-    }
+    socklen_t len = sizeof(local);
+    const bool got = ::connect(sock(fd), reinterpret_cast<sockaddr*>(&probe), sizeof(probe)) == 0
+                  && ::getsockname(sock(fd), reinterpret_cast<sockaddr*>(&local), &len) == 0;
     close_sock(fd);
+    return got;
+}
+const char* hostIp() {
+    // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; the interface lookup, which walks the interface list, runs only when the address changed.
+    static char ip[INET_ADDRSTRLEN] = {};
+    static uint32_t resolvedAt = 0;
+    const uint32_t now = millis();
+    if (resolvedAt && now - resolvedAt < 1000) return ip;
+    resolvedAt = now ? now : 1;
+    char was[INET_ADDRSTRLEN];
+    std::memcpy(was, ip, sizeof(was));
+    sockaddr_in local{};
+    const bool got = routeAddress(local);
+    if (got) inet_ntop(AF_INET, &local.sin_addr, ip, sizeof(ip));
+    else ip[0] = 0;
+    if (std::strcmp(was, ip) != 0) findHostIf(local.sin_addr);   // cleared with the address, since no interface holds none
     return ip;
 }
 
@@ -1437,7 +1471,18 @@ void ethStop() {}                           // no eth on desktop
 static uint8_t testEthIp_[4] = {};
 static bool testEthFaked() MM_NONBLOCKING { return testEthIp_[0] || testEthIp_[1] || testEthIp_[2] || testEthIp_[3]; }
 void setTestEthIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testEthIp_[i] = ip ? ip[i] : 0; }
-bool ethInit() { return testEthFaked(); }
+// The host's own network is the desktop's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test turns it off to drive the cascade on the fakes alone.
+static bool testHostNetwork_ = true;
+void setTestHostNetwork(bool counts) { testHostNetwork_ = counts; }
+/// What carries the desktop's wired link: see wiredLink() below.
+enum class WiredLink : uint8_t { Faked, Host, Adapter, None };
+static bool hostLinkUp() MM_NONBLOCKING {
+    if (!testHostNetwork_) return false;
+    uint8_t ip[4];
+    ethGetIPv4(ip);
+    return (ip[0] | ip[1] | ip[2] | ip[3]) != 0;
+}
+bool ethInit() { return testEthFaked() || hostLinkUp(); }
 
 // Raw-frame capture, the host half of the send seam: the host records what the driver emitted, with fixed capacity and counted overflow. @xref{the-raw-frame-capture-ring|why}.
 namespace {
@@ -1933,12 +1978,23 @@ bool winAdapterLink(uint16_t& mbps) {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked()) return true; uint16_t m = 0; return winAdapterLink(m); }
+/// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
+static WiredLink wiredLink() MM_NONBLOCKING {
+    if (testEthFaked()) return WiredLink::Faked;
+    if (hostLinkUp()) return WiredLink::Host;
+    uint16_t m = 0;
+    return winAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
+}
+bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
+const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Host ? "Host" : "Ethernet"; }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
-    if (winAdapterLink(m) && m) return m;
-    return ethTestLinkSpeed_;   // unbound, or a speed Windows would not state
+    switch (wiredLink()) {
+        case WiredLink::Faked:   return ethTestLinkSpeed_;
+        case WiredLink::Adapter: return winAdapterLink(m) ? m : 0;
+        default: return 0;   // the host's route, whose rate Windows states nowhere here
+    }
 }
 #else
 namespace {
@@ -1975,7 +2031,8 @@ bool posixIfLink(const char* ifname, uint16_t& mbps) MM_NONBLOCKING {
     bool up = false;
     if (::ioctl(fd, SIOCGIFMEDIA, &req) == 0 && (req.ifm_status & IFM_ACTIVE)) {
         up = true;
-        switch (IFM_SUBTYPE(req.ifm_active)) {
+        // The subtype numbers are per media type, 802.11's 54 Mbit sharing its number with 1000BASE-T, so a rate is read for Ethernet alone and WiFi states none.
+        if (IFM_TYPE(req.ifm_active) == IFM_ETHER) switch (IFM_SUBTYPE(req.ifm_active)) {
             case IFM_10_T:   mbps = 10;    break;
             case IFM_100_TX: mbps = 100;   break;
             case IFM_1000_T: mbps = 1000;  break;
@@ -2001,13 +2058,24 @@ bool posixAdapterLink(uint16_t& mbps) MM_NONBLOCKING {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked()) return true; uint16_t m = 0; return posixAdapterLink(m); }
+/// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
+static WiredLink wiredLink() MM_NONBLOCKING {
+    if (testEthFaked()) return WiredLink::Faked;
+    if (hostLinkUp()) return WiredLink::Host;
+    uint16_t m = 0;
+    return posixAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
+}
+bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
+const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Host ? "Host" : "Ethernet"; }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
-    if (posixAdapterLink(m)) return m;   // bound and up: the OS's answer, 0 included
-    // Only when nothing is bound: a real adapter that states no rate reports none, since inventing one is worse than admitting it is unknown.
-    return ethTestLinkSpeed_;
+    switch (wiredLink()) {
+        case WiredLink::Host:    posixIfLink(hostIf_, m); return m;      // the route interface's rate, which WiFi leaves unstated
+        case WiredLink::Adapter: posixAdapterLink(m); return m;          // bound and up: the OS's answer, 0 included
+        case WiredLink::Faked:   return ethTestLinkSpeed_;
+        default: return 0;   // a rate the OS states is the one shown, since inventing one is worse than admitting it is unknown
+    }
 }
 #endif
 
@@ -2113,10 +2181,10 @@ void wifiStaBssid(uint8_t out[6]) { std::memset(out, 0, 6); }
 int wifiStaChannel() { return 0; }
 
 // No access point on a host: a test seam stands in, keeping copies of what it was given.
-static bool testApAvailable_ = false;
 static bool testApUp_ = false;
 static uint32_t testApClients_ = 0;
 void setTestWifiApClients(uint32_t n) { testApClients_ = n; }
+static bool testApAvailable_ = false;
 static char testApName_[33] = {}, testApPassword_[64] = {};
 static WifiApConfig testApConfig_{testApName_, "", testApPassword_};
 void setTestWifiApAvailable(bool available) {
@@ -3934,23 +4002,17 @@ size_t rawInterfaces(const char* const** optionsOut) {
             }
             return false;
         };
-        ifaddrs* addrs = nullptr;
-        if (::getifaddrs(&addrs) == 0 && addrs) {
-            for (const ifaddrs* a = addrs; a; a = a->ifa_next) {
-                if (!a->ifa_name || !(a->ifa_flags & IFF_UP)) continue;
-                if ((a->ifa_flags & IFF_LOOPBACK) || isVirtual(a->ifa_name)) continue;
-                bool seen = false;
-                for (size_t i = 1; i < rawIfCount_; i++)
-                    if (std::strcmp(rawIfNames_[i], a->ifa_name) == 0) { seen = true; break; }
-                if (seen) continue;   // getifaddrs lists one row per address family
-                // Label carries the speed, bind name does not: the name is the adapter's identity and the speed changes when a link renegotiates (platform.h § raw interfaces). Same "NAME, N Gb" shape as the Windows branch.
-                char label[64];
-                std::snprintf(label, sizeof(label), "%s", a->ifa_name);
-                appendLinkSpeed(label, sizeof(label), linkMbps(a->ifa_name));
-                rawIfPush(label, a->ifa_name);
-            }
-            ::freeifaddrs(addrs);
-        }
+        eachInterface([&](const ifaddrs& a) {
+            if (!a.ifa_name || !(a.ifa_flags & IFF_UP)) return;
+            if ((a.ifa_flags & IFF_LOOPBACK) || isVirtual(a.ifa_name)) return;
+            for (size_t i = 1; i < rawIfCount_; i++)
+                if (std::strcmp(rawIfNames_[i], a.ifa_name) == 0) return;   // getifaddrs lists one row per address family
+            // Label carries the speed, bind name does not: the name is the adapter's identity and the speed changes when a link renegotiates (platform.h § raw interfaces). Same "NAME, N Gb" shape as the Windows branch.
+            char label[64];
+            std::snprintf(label, sizeof(label), "%s", a.ifa_name);
+            appendLinkSpeed(label, sizeof(label), linkMbps(a.ifa_name));
+            rawIfPush(label, a.ifa_name);
+        });
 #endif
     }
     for (size_t i = 0; i < rawIfCount_; i++) rawIfOptions_[i] = rawIfLabels_[i];

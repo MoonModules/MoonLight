@@ -203,6 +203,7 @@ size_t audioCaptureDevices(const char* const** optionsOut) {
     if (optionsOut) *optionsOut = nullptr;
     return 0;
 }
+const char* audioCaptureBackend() MM_NONBLOCKING { return "I2S"; }
 bool audioCaptureInit(AudioMicHandle& /*h*/, uint8_t /*deviceIndex*/, uint32_t /*sampleRate*/) {
     return false;
 }
