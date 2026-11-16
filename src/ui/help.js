@@ -262,7 +262,7 @@ export function typeDisplayName(type) {
 }
 
 // The filter chips for the emoji present, grouped as the legend reads (kind, role, dimension, origin, listening, power functions, then anything unclassified, so a new emoji still shows), each with its tooltip from `labels`; `onToggle` gets the active set.
-export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL) {
+export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL, initial = []) {
     const CHIP_GROUPS = [
         [SCRIPTED_EMOJI, COMPILED_EMOJI],
         Object.values(ROLE_EMOJI),
@@ -274,9 +274,10 @@ export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL) {
     const groups = CHIP_GROUPS.map(g => present.filter(e => g.includes(e)));
     const classified = new Set(CHIP_GROUPS.flat());
     groups.push(present.filter(e => !classified.has(e)));
-    const active = new Set();
+    const active = new Set(initial.filter(e => present.includes(e)));
     const row = document.createElement("div");
     row.className = "type-picker-chips";
+    const chips = [];
     let first = true;
     for (const group of groups) {
         if (!group.length) continue;
@@ -290,7 +291,7 @@ export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL) {
         for (const emoji of group) {
             const chip = document.createElement("button");
             chip.type = "button";
-            chip.className = "type-picker-chip";
+            chip.className = "type-picker-chip" + (active.has(emoji) ? " active" : "");
             chip.textContent = emoji;
             const label = labels[emoji];
             if (label) { chip.title = label; chip.setAttribute("aria-label", label); }
@@ -299,9 +300,16 @@ export function emojiChipRow(present, onToggle, labels = EMOJI_LABEL) {
                 else { active.add(emoji); chip.classList.add("active"); }
                 onToggle(active);
             });
+            chips.push(chip);
             row.appendChild(chip);
         }
     }
+    // Every chip off at once, for the picker's "clear".
+    row.clearChips = () => {
+        active.clear();
+        for (const chip of chips) chip.classList.remove("active");
+        onToggle(active);
+    };
     return row;
 }
 

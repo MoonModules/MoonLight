@@ -21,6 +21,7 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Process detection**: on page load, MoonDeck checks whether MoonLight or idf.py is running and shows Stop.
 - **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
 - **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+- **OTA button** on each device row: uploads the local build for the device's firmware (`build/esp32-<firmware>/`) over WiFi, rebooting the device into MoonBase first where its variant has it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand; see `_ota_upload` in [moondeck.py](moondeck.py).
 
 ## Desktop Tab
 
@@ -1036,27 +1037,6 @@ Between releases `library.json` holds the next version with a `-dev` suffix, and
 After a release, `next` moves development to the next minor; when the coming release is a major instead, `major` moves it there before tagging.
 A forgotten `next` cannot misorder the builds: `compute_version.py` gives a build after the last tag the next minor, so it always ranks above that release.
 The script never touches git, since the commit and the tag stay yours.
-
-### serve_firmware
-
-Serve a built firmware over HTTP so a board can install it by URL. Long-running: the **Serve for OTA** card on the ESP32 tab serves the selected firmware until Stop.
-
-```bash
-uv run moondeck/run/serve_firmware.py --firmware esp32 --port 8099
-uv run moondeck/run/serve_firmware.py --firmware build/moonbase-esp32/MoonLight-moonbase.bin --port 8098
-```
-
-For a device MoonDeck lists, the **OTA** button on its Live row does the same in one click: MoonDeck serves the image itself and hands the device the URL. The card is for a device it does not list, MoonBase's own page, or a board on another network.
-
-Takes a firmware name (resolved to the app image in `build/esp32-<name>/`) or a path to any `.bin`, and
-prints the LAN URL to paste into the Firmware card or MoonBase's own page. The file is re-read per
-request, so a rebuild needs no restart.
-
-**It exists because `python -m http.server` speaks HTTP/1.0**, whose default is no keep-alive and a
-body that ends at connection close rather than at Content-Length. `esp_https_ota` asks for
-keep-alive and a 32 KB receive buffer, and against a 1.0 server the transfer crawls and then fails
-with `0xffffffff` partway through. That cost two failed OTA attempts on a bench board before the
-`HTTP/1.0` in the response line was spotted, while the same URL from GitHub worked first time.
 
 ### monitor_esp32
 

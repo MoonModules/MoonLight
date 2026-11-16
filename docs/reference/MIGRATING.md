@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### An install by URL takes https only
+
+**Action: *nothing* for updates from the Firmware card; host the image on https, or upload it, where a script or an MQTT command named an `http://` address.**
+
+`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build.
+
 ### A desktop updates itself as a board does, and the Debian package installs a service
 
 **Action: *nothing* on most desktops; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**

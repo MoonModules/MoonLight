@@ -452,6 +452,8 @@ Compiling the co-processor in costs roughly **4× per request and 2× on through
 
 Measured on IDF v6.1-rc1; the remaining penalty is tracked in [backlog/platform](https://github.com/MoonModules/MoonLight/issues/220).
 
+Over WiFi, with the C6 on ESP-Hosted 2.12.13, the request tail matches a native radio: 300 fetches on a P4 over WiFi took a median of 37.6 ms, p99 68 ms, none past 100 ms, against 41.8 ms and p99 66 ms on an S3 at the same signal strength (2026-11-12, 64 lights). At rest the link costs the render loop about 50 µs a frame; continuous fetching adds about 1 ms a frame.
+
 ## State over the WebSocket (`teensy41`)
 
 A `/ws` client receives the roots it views in full and an outline of the rest ([Web UI, side navigation](../moonmodules/core/ui.md#side-navigation)). Measured 2026-10-13 on the Teensy 4.1, one client for 30 seconds per row, subscribing as the page does (the root plus System, FirmwareUpdate, MoonCloud, PreviewDriver and MidiService). The first row is the firmware before it, which sent the whole tree to every client.

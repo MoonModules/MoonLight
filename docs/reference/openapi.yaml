@@ -187,6 +187,32 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Module" }
         "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [Modules]
+      operationId: renameModule
+      summary: Renames a module in place, its controls and children kept; a top-level module and one the user cannot remove keep their names.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 15, description: The new name, which no other module holds. }
+      responses:
+        "200":
+          description: Renamed; `name` is the module's name now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  name: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
     delete:
       tags: [Modules]
       operationId: deleteModule
@@ -699,7 +725,7 @@ components:
             type: object
             required: [url]
             properties:
-              url: { type: string, pattern: "^https?://", maxLength: 255, description: The image to fetch. }
+              url: { type: string, pattern: "^https://", maxLength: 255, description: "The image to fetch, over https only: nothing authenticates an image fetched over plain http." }
               sha256: { type: string, pattern: "^[0-9a-fA-F]{64}$", description: "The image's SHA-256, which a desktop checks before it installs its new program; a board's image carries its own." }
     Image:
       required: true

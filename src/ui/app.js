@@ -68,6 +68,7 @@ const LS_THEME     = "mm_theme";
 const LS_TABS      = "mm_selectedTabs";   // { [containerName]: childName }: the open tab per container
 const LS_EXPANDED  = "mm_expanded";       // [moduleName, …]: modules whose "controls" <details> is open
 const LS_TA_SIZE   = "mm_textareaSizes";  // { "<module>:<control>": heightPx }: user-dragged textarea heights
+const LS_CHIPS     = "mm_pickerChips";    // { [role]: [emoji, …] }: the type picker's active chips per role
 
 // The open tab per container, persisted so a reload doesn't dump you back on the first child.
 let selectedTabs = {};
@@ -88,6 +89,21 @@ function saveExpanded() { localStorage.setItem(LS_EXPANDED, JSON.stringify([...e
 // keeps its size across a full-state rebuild and a page reload instead of snapping back to the 2-row default.
 let textareaSizes = {};
 try { textareaSizes = JSON.parse(lsRead(LS_TA_SIZE, "{}")) || {}; } catch { textareaSizes = {}; }
+// The type picker's chip filter per role, so a filter set once holds for every effect switched after it: view state again.
+let pickerChips = {};
+try { pickerChips = JSON.parse(lsRead(LS_CHIPS, "{}")) || {}; } catch { pickerChips = {}; }
+
+// The chips a picker for `roles` opens with: each role's remembered ones.
+function stickyChips(roles) {
+    return [...new Set(roles.flatMap(r => pickerChips[r] || []))];
+}
+
+// Remember `active` for each of `roles`, keeping a remembered chip this picker lacks, so a filter survives a picker of other types.
+function rememberChips(roles, present, active) {
+    for (const r of roles) pickerChips[r] = [...new Set([...(pickerChips[r] || []).filter(e => !present.includes(e)), ...active])];
+    safeLocalSet(LS_CHIPS, JSON.stringify(pickerChips));
+}
+
 function saveTextareaSize(key, heightPx) { textareaSizes[key] = heightPx; localStorage.setItem(LS_TA_SIZE, JSON.stringify(textareaSizes)); }
 
 function lsRead(key, defaultVal) {
@@ -1684,7 +1700,7 @@ function uploadWithProgress(route, file, ui, signal) {
             // else carries the device's own reason in the JSON body.
             if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
             let msg = `HTTP ${xhr.status}`;
-            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
+            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) { msg = xhr.responseText || msg; }   // MoonBase answers in plain text
             reject(new Error(msg));
         });
         xhr.addEventListener("error", () => reject(new Error("the connection dropped")));
@@ -1820,12 +1836,9 @@ async function moonbaseUpdateFlow(opts) {
             const uploadCtl = new AbortController();
             ui.setUpload(uploadCtl);
             try {
-                const r = await fetch("/api/firmware/upload", {
-                    method: "POST", headers: { "Content-Type": "application/octet-stream" },
-                    body: opts.file, signal: uploadCtl.signal });
-                if (!r.ok) throw new Error(await r.text());
+                await uploadWithProgress("/api/firmware/upload", opts.file, ui, uploadCtl.signal);
             } catch (err) {
-                if (err instanceof Error && err.name === "AbortError") {
+                if (uploadCtl.signal.aborted) {
                     // The user's cancel, not a failure: the dropped connection aborts the
                     // write on the device, which stays waiting in MoonBase.
                     ui.fail("Install canceled: the device is waiting in MoonBase.");
@@ -2002,6 +2015,55 @@ function setStatusText(valEl, mod) {
     setText(valEl, text);
 }
 
+// Turn a card's name into a field: Enter or leaving it renames the module in place, Escape keeps the name.
+function startRename(nameEl, oldName) {
+    const field = document.createElement("input");
+    field.className = "card-name-field";
+    field.value = oldName;
+    field.maxLength = 15;   // a module name's limit, MoonModule::kNameLen less its terminator
+    let done = false;
+    const finish = async (commit) => {
+        if (done) return;
+        done = true;
+        const wanted = field.value.trim();
+        field.replaceWith(nameEl);
+        if (!commit || !wanted || wanted === oldName) return;
+        const res = await fetch(`/api/modules/${encodeURIComponent(oldName)}`, {
+            method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: wanted}),
+        }).catch(() => null);
+        if (!res || !res.ok) {
+            alert(`could not rename ${oldName}: ${res ? await errorMessage(res) : "the device did not answer"}`);
+            return;
+        }
+        const newName = (await res.json()).name || wanted;   // the device's final name, as an add answers
+        renameViewKeys(oldName, newName);
+        nameEl.textContent = newName;
+        await refetchState();
+    };
+    field.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") finish(true);
+        else if (e.key === "Escape") finish(false);
+    });
+    field.addEventListener("blur", () => finish(true));
+    nameEl.replaceWith(field);
+    field.focus();
+    field.select();
+}
+
+// The view state the page keeps by module name follows a rename, so the open tab, the open controls and a resized textarea stay as they were.
+function renameViewKeys(from, to) {
+    for (const [parent, child] of Object.entries(selectedTabs)) if (child === from) selectedTabs[parent] = to;
+    if (from in selectedTabs) { selectedTabs[to] = selectedTabs[from]; delete selectedTabs[from]; }
+    safeLocalSet(LS_TABS, JSON.stringify(selectedTabs));
+    if (expandedSet.delete(from)) { expandedSet.add(to); saveExpanded(); }
+    for (const key of Object.keys(textareaSizes)) {
+        if (!key.startsWith(from + ":")) continue;
+        textareaSizes[to + key.slice(from.length)] = textareaSizes[key];
+        delete textareaSizes[key];
+    }
+    safeLocalSet(LS_TA_SIZE, JSON.stringify(textareaSizes));
+}
+
 function createCard(mod, depth) {
     const card = document.createElement("div");
     card.className = "card";
@@ -2068,6 +2130,12 @@ function createCard(mod, depth) {
     const name = document.createElement("span");
     name.className = "card-name";
     name.textContent = mod.name;
+    // A module the user may delete or replace is theirs to name: a click turns the name into a field.
+    if (isUserEditableChild(mod, depth)) {
+        name.classList.add("card-name--renameable");
+        name.title = "Click to rename";
+        name.addEventListener("click", () => startRename(name, mod.name));
+    }
     title.appendChild(name);
 
     // Emoji tags (role + curated) shown after the name: same set used by the
@@ -2438,8 +2506,8 @@ function createCard(mod, depth) {
         const urlField = document.createElement("input");
         urlField.type = "url";
         urlField.className = "fw-url-field";
-        urlField.placeholder = kind === "moonbase" ? "http://…/shared-moonbase-<chip>.bin"
-            : kind === "coprocessor" ? "http://…/shared-c6-slave-<version>.bin" : "http://…/firmware.bin";
+        urlField.placeholder = kind === "moonbase" ? "https://…/shared-moonbase-<chip>.bin"
+            : kind === "coprocessor" ? "https://…/shared-c6-slave-<version>.bin" : "https://…/firmware.bin";
         const urlBtn = document.createElement("button");
         urlBtn.className = "fm-tool";
         urlBtn.textContent = "Install";
@@ -6824,6 +6892,7 @@ function openTypePicker(parentMod, anchorEl) {
         openPicker(anchorEl, {
             items: [...candidates, ...scripts],
             actionLabel: "create",
+            stickyRoles: roles,
             commit: (name, item) => addPickedType(item, parentMod.name),
         });
     });
@@ -6841,6 +6910,7 @@ function openReplacePicker(targetMod, anchorEl) {
             items: [...availableTypes.filter(t => roles.includes(t.role) && typeShown(t)), ...scripts],
             actionLabel: "replace",
             currentType: targetMod.type,
+            stickyRoles: roles,
             commit: (name, item) => replacePickedType(targetMod, item),
         });
     });
@@ -6931,6 +7001,8 @@ function openPicker(anchorEl, opts) {
 
     // Emoji chip filter row: every distinct emoji across the role-filtered types.
     // Toggling chips narrows the list (AND: a type must carry all active chips).
+    // A type picker opens with its roles' remembered chips and remembers what is toggled: `stickyRoles` names them.
+    const sticky = opts.stickyRoles || [];
     let activeChips = new Set();
     const chipSeen = new Set();
     const present = [];
@@ -6945,7 +7017,21 @@ function openPicker(anchorEl, opts) {
     if (chipSeen.has(SCRIPTED_EMOJI) && filtered.some(t => !emojiTagsFor(t).includes(SCRIPTED_EMOJI))) {
         present.push(COMPILED_EMOJI);
     }
-    if (present.length > 0) picker.appendChild(emojiChipRow(present, (a) => { activeChips = a; refresh(); }));
+    let chipRow = null;
+    if (present.length > 0) {
+        const initial = stickyChips(sticky).filter(e => present.includes(e));
+        activeChips = new Set(initial);
+        chipRow = emojiChipRow(present, (a) => {
+            activeChips = a;
+            if (sticky.length) rememberChips(sticky, present, a);
+            refresh();
+        }, undefined, initial);
+        picker.appendChild(chipRow);
+    }
+    // While chips filter the list, a line says how much they hide and clears them in one click, so a remembered filter always shows.
+    const filterNote = document.createElement("div");
+    filterNote.className = "type-picker-filter-note";
+    picker.appendChild(filterNote);
 
     const list = document.createElement("div");
     list.className = "type-picker-list";
@@ -6985,6 +7071,17 @@ function openPicker(anchorEl, opts) {
     function refresh() {
         const matches = currentMatches();
         list.innerHTML = "";
+        filterNote.replaceChildren();
+        filterNote.hidden = activeChips.size === 0;
+        if (activeChips.size) {
+            filterNote.append(`${matches.length} of ${filtered.length} shown · `);
+            const clear = document.createElement("button");
+            clear.type = "button";
+            clear.className = "type-picker-filter-clear";
+            clear.textContent = "✕ clear filter";
+            clear.addEventListener("click", () => chipRow && chipRow.clearChips());
+            filterNote.appendChild(clear);
+        }
         // Highlight the module's current type if it's in the list (replace mode lands the cursor
         // on what's already there); otherwise the first row.
         let selIdx = opts.currentType ? matches.findIndex(t => t.name === opts.currentType) : -1;
@@ -7161,7 +7258,7 @@ function attachDragHandlers(card, mod) {
     // drag at mousedown when the grab landed on a control, re-enable on
     // mouseup so the next click on the card body can still drag.
     const gate = (e) => {
-        card.draggable = !e.target.closest(".control-row, .card-controls-collapse > summary");
+        card.draggable = !e.target.closest(".control-row, .card-controls-collapse > summary, .card-name-field");
     };
     card.addEventListener("mousedown", gate, true);   // capture: runs before the input
     card.addEventListener("touchstart", gate, {capture: true, passive: true});

@@ -872,9 +872,9 @@ void serveOne(int sock) {
             const size_t urlLen = prefixLen < contentLen ? prefixLen : contentLen;
             std::memcpy(stagedUrlTask_, head + headLen, urlLen);
             stagedUrlTask_[urlLen] = '\0';
-            if (!mm::http::isHttpUrl(stagedUrlTask_)) {
+            if (!mm::http::isHttpsUrl(stagedUrlTask_)) {
                 stagedUrlTask_[0] = '\0';   // the retry field stays empty
-                sendResponse(sock, "400 Bad Request", "text/plain", "error: url must start with http:// or https://");
+                sendResponse(sock, "400 Bad Request", "text/plain", "error: url must start with https://");
             } else {
                 std::snprintf(status_, sizeof(status_), "starting the install");
                 cancelRequested_ = false;   // a /cancel racing the previous task's exit must not latch

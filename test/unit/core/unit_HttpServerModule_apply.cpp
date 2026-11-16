@@ -173,19 +173,29 @@ namespace {
 struct Fixed : public mm::MoonModule {
     bool userEditable() const override { return false; }
 };
+
+// A top-level Root holding a Fixed child the user cannot remove, served by an apply core: the setup the delete and rename cases share.
+struct EditTree {
+    mm::Scheduler s;
+    Box* root = new Box();
+    Fixed* fixed = new Fixed();
+    mm::HttpServerModule http;
+    EditTree() {
+        registerTestTypes();
+        root->setName("Root");
+        s.addModule(root);
+        fixed->setName("F");
+        root->addChild(fixed);
+        http.setScheduler(&s);
+    }
+    ~EditTree() { s.deleteTree(root); }
+};
 }  // namespace
 
 TEST_CASE("apply-core: a delete removes the module, and refuses a top-level one or one the user cannot remove") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* root = new Box();
-    root->setName("Root");
-    s.addModule(root);
-    auto* fixed = new Fixed();
-    fixed->setName("F");
-    root->addChild(fixed);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
+    EditTree t;
+    auto& http = t.http;
+    auto* root = t.root;
     using OpResult = mm::HttpServerModule::OpResult;
 
     REQUIRE(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
@@ -195,9 +205,29 @@ TEST_CASE("apply-core: a delete removes the module, and refuses a top-level one 
     CHECK(http.applyDeleteModule("Nope") == OpResult::ModuleNotFound);
     CHECK(http.applyDeleteModule("Root") == OpResult::BadRequest);
     CHECK(http.applyDeleteModule("F") == OpResult::ReadOnly);
-    CHECK(childNamed(root, "F") == fixed);
+    CHECK(childNamed(root, "F") == t.fixed);
+}
 
-    s.deleteTree(root);
+TEST_CASE("apply-core: a rename keeps the module and answers its name, and refuses a taken name, a top-level module and one the user cannot rename") {
+    EditTree t;
+    auto& http = t.http;
+    auto* root = t.root;
+    using OpResult = mm::HttpServerModule::OpResult;
+
+    REQUIRE(http.applyAddModule("Knob", "K", "Root") == OpResult::Ok);
+    mm::MoonModule* knob = childNamed(root, "K");
+    char name[mm::MoonModule::kNameLen] = {};
+    CHECK(http.applyRenameModule("K", "Dial", name, sizeof(name)) == OpResult::Ok);
+    CHECK(std::string(name) == "Dial");
+    CHECK(childNamed(root, "Dial") == knob);
+
+    CHECK(http.applyRenameModule("Dial", "F") == OpResult::NameInUse);
+    CHECK(http.applyRenameModule("Nope", "X") == OpResult::ModuleNotFound);
+    CHECK(http.applyRenameModule("Root", "X") == OpResult::BadRequest);
+    CHECK(http.applyRenameModule("F", "X") == OpResult::ReadOnly);
+    CHECK(http.applyRenameModule("Dial", "") == OpResult::BadRequest);
+    CHECK(http.applyRenameModule("Dial", "ANameLongerThanFifteen") == OpResult::Refused);
+    CHECK(childNamed(root, "Dial") == knob);
 }
 
 TEST_CASE("apply-core: a replace swaps the type in the same place, named by the caller, its custom name or the new type") {

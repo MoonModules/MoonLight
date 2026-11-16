@@ -52,11 +52,6 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../esp32/partitions/4mb_moonbase.csv"
 
-# Plain-HTTP install URLs allowed alongside HTTPS: GitHub releases stay TLS-verified via the cert
-# bundle, but a LAN source (MoonDeck serving a dev build) has no certificate and is inside the
-# user's own network. The staged-URL handoff writes whatever the app was asked to install.
-CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=y
-
 # The whole of MoonBase runs on the main task (app_main installs, then serves), and a GitHub
 # install rides mbedTLS: certificate-chain verification against the bundle peaks near 8 KB of
 # stack, which overflowed the 3.5 KB default the moment the TLS handshake ran (the plain-HTTP

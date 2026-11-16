@@ -228,6 +228,11 @@ void Scheduler::notifyListChanged(const MoonModule& owner) {
         if (modules_[i]) forEachInTree(modules_[i], [&owner](MoonModule& m) { m.onListChanged(owner); });
 }
 
+void Scheduler::notifyModuleRenamed(const char* from, const char* to) {
+    for (uint8_t i = 0; i < moduleCount_; i++)
+        if (modules_[i]) forEachInTree(modules_[i], [from, to](MoonModule& m) { m.onModuleRenamed(from, to); });
+}
+
 void Scheduler::deleteTree(MoonModule* mod) {
     if (!mod) return;
     for (uint8_t i = 0; i < mod->childCount(); i++) {
@@ -286,14 +291,29 @@ void Scheduler::tellProvidersOf(const char* provider) {
     for (uint8_t i = 0; i < moduleCount_; i++) if (modules_[i]) tellProviders(*modules_[i], provider);
 }
 
-// The separator is '-' because the name is a URL path segment; a suffix that would not fit is refused rather than truncated.
+// The separator is '-' because the name is a URL path segment. A base too long for a name, or for its suffix, is shortened to make room, as 8.3 file names shorten (PROGRA~1), so every type can be added again.
+namespace {
+// How many of `base`'s bytes fit in `room`, cut before a character rather than inside one, so a shortened name stays valid UTF-8.
+int fitBytes(const char* base, int room) {
+    int n = 0;
+    while (n <= room && base[n]) n++;
+    if (n <= room) return n;
+    n = room;
+    while (n > 0 && (static_cast<unsigned char>(base[n]) & 0xC0) == 0x80) n--;   // base[n] continues a character: start the cut before it
+    return n;
+}
+}  // namespace
+
 bool Scheduler::freeName(const char* base, char* out, size_t cap) {
-    if (!base || !base[0] || std::strlen(base) >= MoonModule::kNameLen || cap < MoonModule::kNameLen) return false;
+    if (!base || !base[0] || cap < MoonModule::kNameLen) return false;
+    constexpr int kMaxChars = MoonModule::kNameLen - 1;
     char candidate[MoonModule::kNameLen];
-    std::snprintf(candidate, sizeof(candidate), "%s", base);
+    std::snprintf(candidate, sizeof(candidate), "%.*s", fitBytes(base, kMaxChars), base);
     for (int suffix = 2; firstByName(candidate); suffix++) {
-        const int n = std::snprintf(candidate, sizeof(candidate), "%s-%d", base, suffix);
-        if (suffix >= 100 || n < 0 || n >= static_cast<int>(sizeof(candidate))) return false;
+        if (suffix >= 100) return false;
+        char tail[4];
+        const int t = std::snprintf(tail, sizeof(tail), "-%d", suffix);
+        std::snprintf(candidate, sizeof(candidate), "%.*s%s", fitBytes(base, kMaxChars - t), base, tail);
     }
     std::snprintf(out, cap, "%s", candidate);
     return true;

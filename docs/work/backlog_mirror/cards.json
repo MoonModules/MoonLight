@@ -1010,6 +1010,16 @@
   "number": null
  },
  {
+  "title": "Receivers share one listener per protocol, split by universe",
+  "area": "Effects",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306872079",
+  "number": null
+ },
+ {
   "title": "Speed up the fluid solver: 4 fps at 128x128, and it is not the divide (2026-09-05)",
   "area": "Effects",
   "module": "FluidEffect",
@@ -1297,6 +1307,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287082542",
+  "number": null
+ },
+ {
+  "title": "A desktop paces its render loop, so its web server answers in time",
+  "area": "Platform",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306747019",
   "number": null
  },
  {

@@ -346,6 +346,77 @@ def _deduce_device_model(firmware: str) -> str:
     return matches[0] if len(matches) == 1 else ""
 
 
+# Each device's OTA install while it runs and after it ends: ip -> {stage, pct, done, ok, error}, which GET /api/ota-status reads.
+_ota_progress = {}
+_ota_progress_lock = threading.Lock()
+
+
+def _ota_report(ip: str, **fields):
+    with _ota_progress_lock:
+        _ota_progress.setdefault(ip, {}).update(fields)
+
+
+def _ota_upload(ip: str, image: bytes, report=lambda stage, pct=None: None):
+    """Upload a local build to the device at `ip`, as the Firmware card's file picker does; returns (answer, status), and `report` hears each stage.
+
+    A MoonBase variant's app cannot write the slot it runs from, so it is rebooted into MoonBase first, which takes the image on the
+    same route; a device without MoonBase answers that reboot 409 and takes the image itself (the network update process,
+    moonwalk/11-hardware.yaml). The device reboots into the new image as the write completes, so a connection cut after the whole
+    image went out is success.
+    """
+    import http.client
+    import urllib.error
+    import urllib.request
+    try:
+        report("rebooting into MoonBase")
+        with urllib.request.urlopen(urllib.request.Request(f"http://{ip}/api/firmware/moonbase", method="POST"), timeout=5):
+            pass
+        deadline = time.monotonic() + 120
+        while True:
+            time.sleep(2)
+            try:
+                with urllib.request.urlopen(f"http://{ip}/moonbase", timeout=2.5):
+                    break   # MoonBase answers: its install window
+            except OSError:
+                if time.monotonic() > deadline:
+                    return {"error": "the device did not come back in MoonBase"}, 502
+    except urllib.error.HTTPError:
+        pass   # no MoonBase on this device, or it already runs: the image goes to whoever answers
+    except OSError as e:
+        return {"error": f"device unreachable: {e}"}, 502
+    conn = http.client.HTTPConnection(ip, 80, timeout=180)
+    try:
+        conn.putrequest("POST", "/api/firmware/upload")
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.putheader("Content-Length", str(len(image)))
+        conn.endheaders()
+        chunk = 16384
+        for i in range(0, len(image), chunk):
+            conn.send(image[i:i + chunk])
+            report("uploading", min(100, (i + chunk) * 100 // max(1, len(image))))
+        report("installing")
+    except OSError as e:
+        conn.close()
+        return {"error": f"the upload broke off: {e}"}, 502
+    try:
+        resp = conn.getresponse()
+        status, text = resp.status, resp.read().decode(errors="replace")
+    except (http.client.HTTPException, OSError):
+        return {"ok": True}, 200   # the reboot into the new image cut the answer
+    finally:
+        conn.close()
+    return ({"ok": True}, 200) if status == 200 else ({"error": f"device refused the image (HTTP {status}): {text}"}, 502)
+
+
+def _ota_run(ip: str, image: bytes):
+    """Run one install in the background, its stages and its outcome in _ota_progress."""
+    try:
+        answer, _ = _ota_upload(ip, image, lambda stage, pct=None: _ota_report(ip, stage=stage, pct=pct))
+    except Exception as e:   # whatever breaks the install still ends it, or the device would read as busy until MoonDeck restarts
+        answer = {"error": f"the install broke off: {e}"}
+    _ota_report(ip, done=True, ok=bool(answer.get("ok")), error=answer.get("error", ""))
+
+
 def _push_device(ip: str, model: str, full: bool = False) -> bool:
     """PATCH /api/state on the device with its deviceModel: the identity, or with `full` the catalog entry's whole `state`.
 
@@ -1478,8 +1549,12 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
         elif self.path.startswith("/api/doc-asset/"):
             self._serve_doc_asset()
 
-        elif self.path.startswith("/firmware/") and self.path.endswith(".bin"):
-            self._serve_firmware_bin()
+
+        elif self.path.split("?", 1)[0] == "/api/ota-status":
+            # The OTA button's progress: one device's install, by ip, or {} when none ran.
+            ip = urllib.parse.parse_qs(self.path.partition("?")[2]).get("ip", [""])[0]
+            with _ota_progress_lock:
+                self._send_json(dict(_ota_progress.get(ip, {})))
 
         # MoonWalk: the scripts' last runs, the map as the stage files are now, and the help's renderer the map imports.
         elif self.path.split("?", 1)[0] == "/api/gates":
@@ -1561,13 +1636,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                              "probed": probed})
 
         elif self.path == "/api/ota":
-            # Wireless flash of a LOCAL build: MoonDeck serves the app image in build/esp32-<fw>/ over
-            # its own HTTP (the GET /firmware/<fw>.bin route) and hands the device that URL via the
-            # device's POST /api/firmware/url — the device pulls + flashes it (esp_https_ota accepts
-            # the plain-http LAN URL). Same "flash my local build" as USB, over WiFi. Body: {ip, firmware}.
-            import urllib.request
-            import urllib.error
-            import re
+            # Wireless flash of a LOCAL build: the app image in build/esp32-<fw>/ uploaded to the device in the background, which GET /api/ota-status follows. Body: {ip, firmware}.
             body = self._read_body()
             params = json.loads(body) if body else {}
             ip = params.get("ip", "")
@@ -1575,10 +1644,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not ip or not firmware:
                 self._send_json({"error": "ip and firmware required"}, 400)
                 return
-            # Validate both inputs before they reach a filesystem path or an outbound POST. `firmware`
-            # is a build-dir name (same "/" + ".." guard _serve_firmware_bin uses); `ip` must be a
-            # bare host/IP (a device on the LAN), not an arbitrary URL/authority — this handler POSTs
-            # to `http://<ip>/…`, so an unchecked value would let a caller aim MoonDeck at any host.
+            # Validate both inputs before they reach a filesystem path or an outbound request. `firmware` is a build-dir name; `ip`
+            # must be a bare host/IP (a device on the LAN), not an arbitrary URL/authority, so a caller cannot aim MoonDeck at any host.
             if "/" in firmware or ".." in firmware:
                 self._send_json({"error": "bad firmware name"}, 400)
                 return
@@ -1589,24 +1656,13 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             if not bin_path.exists():
                 self._send_json({"error": f"no build for {firmware!r} — run Build first"}, 404)
                 return
-            host_ip = _lan_ip()
-            if not host_ip:
-                self._send_json({"error": "MoonDeck can't determine its LAN IP (offline?)"}, 502)
-                return
-            bin_url = f"http://{host_ip}:{PORT}/firmware/{firmware}.bin"
-            # POST the URL to the device; it fetches + flashes. The device 202/200s immediately and
-            # reboots on success — the ota status is polled from the device's Firmware module.
-            try:
-                req = urllib.request.Request(
-                    f"http://{ip}/api/firmware/url",
-                    data=json.dumps({"url": bin_url}).encode(),
-                    method="POST", headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    self._send_json({"ok": True, "url": bin_url, "device_status": resp.status})
-            except urllib.error.HTTPError as e:
-                self._send_json({"error": f"device rejected OTA (HTTP {e.code})"}, 502)
-            except (urllib.error.URLError, OSError) as e:
-                self._send_json({"error": f"device unreachable: {e}"}, 502)
+            with _ota_progress_lock:
+                if _ota_progress.get(ip, {"done": True}).get("done") is False:
+                    self._send_json({"error": "an install to this device is already running"}, 409)
+                    return
+                _ota_progress[ip] = {"stage": "starting", "pct": None, "done": False, "ok": False, "error": ""}
+            threading.Thread(target=_ota_run, args=(ip, bin_path.read_bytes()), daemon=True).start()
+            self._send_json({"ok": True, "started": True}, 202)
 
         elif self.path == "/api/push-device":
             # The user picked a deviceModel from the per-device dropdown, so the device gets the catalog entry's whole state.
@@ -2333,26 +2389,6 @@ code {{ background: transparent; color: #c0c0c0; padding: 0; }}
         data = asset_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mime or "application/octet-stream")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _serve_firmware_bin(self):
-        """Serve a local firmware image for a device OTA: GET /firmware/<fw>.bin →
-        the app image in build/esp32-<fw>/. The device (handed this URL by /api/ota) fetches it over
-        the LAN and flashes it. Only the exact <fw>.bin shape is served, mapped to the known build
-        dir — no arbitrary path, so this can't read outside build/esp32-*/."""
-        fw = self.path[len("/firmware/"):-len(".bin")]
-        if not fw or "/" in fw or ".." in fw:
-            self.send_error(400, "bad firmware name")
-            return
-        bin_path = ROOT / "build" / f"esp32-{fw}" / APP_BIN
-        if not bin_path.exists():
-            self.send_error(404, f"no build for {fw}")
-            return
-        data = bin_path.read_bytes()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

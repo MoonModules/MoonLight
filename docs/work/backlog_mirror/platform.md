@@ -308,21 +308,21 @@ The as-is state of each item is the table in [build-system.md § The v6 ecosyste
 
 **Per item, how and when:**
 
-- **EIM** — adopt any time. It shipped *in* v6.0 so it clears the v6.0-floor rule, and it has a headless CI mode. Add EIM as the **preferred** path in `setup_esp_idf.py` (`eim install`), keep `install.sh` as a documented fallback for one release. Keep the exact-commit pin: EIM's multi-version management helps reproducibility, it does not replace the pin.
+- **EIM** — adopt any time. It ships with the pinned release and has a headless CI mode. Add EIM as the **preferred** path in `setup_esp_idf.py` (`eim install`), keep `install.sh` as a documented fallback for one release. Keep the exact-commit pin: EIM's multi-version management helps reproducibility, it does not replace the pin.
 - **PSA Crypto** — nothing to migrate while we stay on high-level components. Watch only: if a feature needs hashing or signing directly (signed-OTA verification, a device identity), write it against the **PSA API** from the start, not legacy mbedTLS. Trigger: first direct crypto use.
-- **`network_provisioning`** — adopt to close the phone-app + SoftAP gap. It is in v6.0 (clears the floor) and is the IDF-native standard. Add it as a **sibling provisioning module** beside ImprovProvisioning (both wired-by-code System modules; a device offers whichever transports its chip supports), reusing the same WiFi-credential plumbing. Not a replacement for Improv: they cover different front-ends (browser vs phone-app) and a product can want either. Weigh the BLE-stack cost per chip. Spec before code.
+- **`network_provisioning`** — adopt to close the phone-app + SoftAP gap. It ships with the pinned release and is the IDF-native standard. Add it as a **sibling provisioning module** beside ImprovProvisioning (both wired-by-code System modules; a device offers whichever transports its chip supports), reusing the same WiFi-credential plumbing. Not a replacement for Improv: they cover different front-ends (browser vs phone-app) and a product can want either. Weigh the BLE-stack cost per chip. Spec before code.
 - **CMake Build System v2** — watch until GA, not while it is a preview: adopting a preview build system is the opposite of common-patterns-first. Trigger: v2 ships as the default. Then dry-run a build under v2, fix any `idf_component_register()` / Kconfig fallout, switch. Low risk given how little custom CMake we have.
 - **Built-in MCP server** — evaluate, do not default to it. The risk is a *second control path* bypassing the script policy, and it is ESP32-only (no desktop), so it cannot be the uniform path. If adopted, wrap it behind a script (`moondeck/run/idf_mcp.py`) so the policy layer still applies. Trigger: a concrete debug workflow the scripts cannot cover.
 
 **Sequence.** Close the v6.0 gaps one at a time as normal feature commits:
 
-1. **EIM installer** — rework `setup_esp_idf.py` to prefer `eim install`, keeping `install.sh` as a one-release fallback. Smallest and lowest-risk (build-path only, no firmware change, no hardware re-test), and EIM's multi-version management is what cleanly supports the v6.0-floor / v6.1-fallback juggling, so it sequences first as an enabler.
+1. **EIM installer** — rework `setup_esp_idf.py` to prefer `eim install`, keeping `install.sh` as a one-release fallback. Smallest and lowest-risk (build-path only, no firmware change, no hardware re-test), so it sequences first as an enabler.
 2. **`network_provisioning`** — the headline capability: the phone-app + SoftAP onboarding flow. Its own plan.
 3. The rest (PSA-native crypto, CMake v2, MCP) as their triggers fire.
 
 **The pin's drift, shown in MoonDeck.** The pin and its policy live in [build-system.md § ESP-IDF version](../../reference/build-system.md#esp-idf-version); its drift warning shows only while `setup_esp_idf.py` runs, so a MoonDeck banner or status dot surfacing the same drift is still to do.
 
-**Guardrails.** Platform-generic stays intact: these are ESP32-specific gains and none may regress Teensy or the desktop paths, which do not use ESP-IDF at all. An IDF feature is adopted *inside* the ESP32 platform layer / build tooling, never by leaking an IDF assumption into shared `src/` or the desktop build. And the v6.0 floor holds: adopt only what is in v6.0, so the v6.0 fallback keeps working.
+**Guardrails.** Platform-generic stays intact: these are ESP32-specific gains and none may regress Teensy or the desktop paths, which do not use ESP-IDF at all. An IDF feature is adopted *inside* the ESP32 platform layer / build tooling, never by leaking an IDF assumption into shared `src/` or the desktop build.
 
 ### ESP32-P4 Parlio: a real long WS2812 strip
 
@@ -462,3 +462,17 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A USB HDMI grabber (UVC) and an RK3588's HDMI input both appear on Linux as V4L2 capture devices. Platform: open the device, stream frames by mmap, YUYV first, since cheap grabbers' MJPEG at 1080p needs a JPEG decoder. Light domain: a Video In effect scaling the picture onto the layer, an HDMI source or a screen on the lights. Later: macOS (AVFoundation) and Windows (Media Foundation).
 
 Test with a USB grabber on the NanoPi R3S-LTS; an RK3588 board with HDMI in is in the community. Check whether the RK3588's HDMI input needs Rockchip's kernel or works on mainline Linux before promising it.
+
+### A desktop paces its render loop, so its web server answers in time
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306747019)
+
+**Seen.** 2026-11-16 on the Pi 5 service (.204) after its first self-update from a release: the program renders about 450 frames a second with no HDMI attached, one core at 92%, and four page requests took 3.4 s, 1.8 s, 0.3 s and 0.2 s. The install overlay's probe gives up at 2.5 s, read the late answers as silence and stayed on "Installing app…" after the update had finished.
+
+**Why.** A desktop renders as fast as it may, and the HTTP server answers from the same loop, so the frame rate sets the request latency. A board paces itself by its outputs; a desktop with no output faster than its drivers need has nothing to gain past that.
+
+**What.** The desktop render loop waits out the frame the fastest attached output needs, the preview's or the HDMI's rate, and a layer with no output settles at a rate the UI names, so a request is answered within a frame of a few milliseconds. The install overlay's probe timeout stays at 2.5 s; the fix is on the device, as the textbook says: a server that answers late is the defect, not the client that gives up.
+
+**Out.** The uncapped loop on a host, and the CPU it burns for frames nobody sees.
+
+**Size.** About half a day, with the tick matrix before and after.

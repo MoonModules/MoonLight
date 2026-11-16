@@ -100,6 +100,24 @@ struct Tree {
 
 uint8_t valueOf(mm::MoonModule* m) { return static_cast<SdKnob*>(m)->value; }
 
+// A module that keeps another module's name, as a control binding does, and hears a rename.
+struct SdWatcher : public mm::MoonModule {
+    std::string target = "Knob.value";
+    void onModuleRenamed(const char* from, const char* to) override {
+        const std::string prefix = std::string(from) + ".";
+        if (target.starts_with(prefix)) target = std::string(to) + "." + target.substr(prefix.size());
+    }
+};
+
+// The tree the rename cases start from: a Layer holding a Knob at 42, and a watcher keeping the Knob's name.
+SdWatcher* seedRename(Tree& t) {
+    auto* watcher = new SdWatcher();
+    watcher->setName("Watcher");
+    t.s.addModule(watcher);
+    REQUIRE(t.apply(R"({"Effects": {"Layer": {"type": "SdBox", "Knob": {"type": "SdKnob", "value": 42}}}})").ok);
+    return watcher;
+}
+
 }  // namespace
 
 TEST_CASE("a state document creates a module with its controls in one go") {
@@ -515,4 +533,89 @@ TEST_CASE("the live queue refuses a fifth document rather than growing") {
     char* again = static_cast<char*>(mm::platform::alloc(3));
     std::strcpy(again, "{}");
     CHECK(t.s.applyLive(again));
+}
+
+// A state document's `"$name"` renames a module in place: the same module, its controls and its children stay, and only the key it is saved under changes.
+TEST_CASE("a renamed module is the same module, with its controls and children, under the new name") {
+    Tree t;
+    seedRename(t);
+    mm::MoonModule* layer = t.find("Layer");
+    mm::MoonModule* knob = t.find("Knob");
+    REQUIRE(t.apply(R"({"Effects": {"Layer": {"$name": "Back"}}})").ok);
+    CHECK(t.find("Layer") == nullptr);
+    CHECK(t.find("Back") == layer);
+    CHECK(t.find("Knob") == knob);
+    CHECK(knob->parent() == layer);
+    CHECK(valueOf(knob) == 42);
+}
+
+TEST_CASE("a renamed module is saved under its new name") {
+    Tree t;
+    seedRename(t);
+    REQUIRE(t.apply(R"({"Effects": {"Layer": {"Knob": {"$name": "Dial"}}}})").ok);
+    CHECK(t.effects->child(0)->dirty());
+    mm::JsonSink sink;
+    mm::writeStateMember(sink, *t.effects);
+    const std::string saved = sink.data();
+    CHECK(saved.find("\"Dial\":{") != std::string::npos);
+    CHECK(saved.find("\"Knob\"") == std::string::npos);
+}
+
+TEST_CASE("a module keeping the old name hears the rename and follows it") {
+    Tree t;
+    SdWatcher* watcher = seedRename(t);
+    REQUIRE(t.apply(R"({"Effects": {"Layer": {"Knob": {"$name": "Dial"}}}})").ok);
+    CHECK(watcher->target == "Dial.value");
+}
+
+TEST_CASE("a rename sets the module's controls in the same document") {
+    Tree t;
+    seedRename(t);
+    REQUIRE(t.apply(R"({"Effects": {"Layer": {"Knob": {"value": 7, "$name": "Dial"}}}})").ok);
+    CHECK(valueOf(t.find("Dial")) == 7);
+}
+
+TEST_CASE("a rename is refused for a taken name, a name too long, a top-level module and a fixed one") {
+    Tree t;
+    seedRename(t);
+    auto r = t.apply(R"({"Effects": {"Layer": {"Knob": {"$name": "Layer"}}}})");
+    CHECK(std::string(r.error) == "that name is used elsewhere in the tree");
+    CHECK(t.find("Knob") != nullptr);
+
+    r = t.apply(R"({"Effects": {"Layer": {"Knob": {"$name": "ANameLongerThanFifteen"}}}})");
+    CHECK(std::string(r.error) == "a module name has 1 to 15 characters");
+
+    r = t.apply(R"({"Effects": {"$name": "Looks"}})");
+    CHECK(std::string(r.error) == "a top-level module keeps its name");
+    CHECK(t.find("Effects") == t.effects);
+
+    REQUIRE(t.apply(R"({"Effects": {"Fixed": {"type": "SdFixed"}}})").ok);
+    r = t.apply(R"({"Effects": {"Fixed": {"$name": "Moved"}}})");
+    CHECK(std::string(r.error) == "this module keeps its name");
+    CHECK(t.find("Fixed") != nullptr);
+}
+
+TEST_CASE("two renames to one name in a document are refused before either applies") {
+    Tree t;
+    seedRename(t);
+    REQUIRE(t.apply(R"({"Effects": {"Other": {"type": "SdKnob"}}})").ok);
+    auto r = t.apply(R"({"Effects": {"Other": {"$name": "Same"}, "Layer": {"Knob": {"$name": "Same"}}}})");
+    CHECK(std::string(r.error) == "that name is used twice in the document");
+    CHECK(t.find("Other") != nullptr);
+    CHECK(t.find("Knob") != nullptr);
+}
+
+TEST_CASE("$name on a module the document creates is refused, since a new module takes its key as its name") {
+    Tree t;
+    auto r = t.apply(R"({"Effects": {"Fresh": {"type": "SdKnob", "$name": "Other"}}})");
+    CHECK(std::string(r.error) == "$name renames a module that exists");
+    CHECK(t.find("Fresh") == nullptr);
+}
+
+TEST_CASE("renaming a module to its own name changes nothing") {
+    Tree t;
+    seedRename(t);
+    auto r = t.apply(R"({"Effects": {"Layer": {"$name": "Layer"}}})");
+    REQUIRE(r.ok);
+    CHECK(r.changes == 0);
 }

@@ -105,7 +105,7 @@ mm::MoonModule* childNamed(mm::MoonModule* parent, const char* name) {
 
 } // namespace
 
-TEST_CASE("a module whose name holds a space is moved, replaced and deleted through its percent-encoded path, as it is read") {
+TEST_CASE("a module whose name holds a space is moved, replaced, renamed and deleted through its percent-encoded path, as it is read") {
     static bool registered = false;
     if (!registered) { mm::ModuleFactory::registerType<Dial>("RouteDial"); registered = true; }
     mm::Scheduler s;
@@ -123,6 +123,11 @@ TEST_CASE("a module whose name holds a space is moved, replaced and deleted thro
     CHECK(rack->child(1) == childNamed(rack, "Dial A"));
     CHECK(request(http, withBody("POST /api/modules/Dial%20B/replace", "{\"type\":\"RouteDial\",\"name\":\"Dial C\"}")).rfind("HTTP/1.1 200", 0) == 0);
     CHECK(childNamed(rack, "Dial C") != nullptr);
+    mm::MoonModule* c = childNamed(rack, "Dial C");
+    const std::string renamed = request(http, withBody("PATCH /api/modules/Dial%20C", "{\"name\":\"Dial D\"}"));
+    CHECK(renamed.rfind("HTTP/1.1 200", 0) == 0);
+    CHECK(renamed.find("\"name\":\"Dial D\"") != std::string::npos);
+    CHECK(childNamed(rack, "Dial D") == c);
     CHECK(request(http, "DELETE /api/modules/Dial%20A HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 200", 0) == 0);
     CHECK(childNamed(rack, "Dial A") == nullptr);
 
@@ -156,6 +161,23 @@ TEST_CASE("an image URL longer than the MoonBase handoff takes is refused with 4
     http.release();
 }
 
+// Nothing authenticates an image fetched over plain http, so the route refuses it before any download, as ESP-IDF's esp_https_ota does.
+TEST_CASE("a firmware URL over plain http is refused with 400 rather than fetched"
+          * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
+    mm::HttpServerModule http;
+    http.port = kTestPort;
+    http.setup();
+    mm::platform::TcpConnection client;
+    REQUIRE(connectAndAccept(http, client, kTestPort));
+    const std::string req = withBody("POST /api/firmware/url", "{\"url\":\"http://192.168.1.10/fw.bin\"}");
+    REQUIRE(client.write(reinterpret_cast<const uint8_t*>(req.data()), req.size()));
+    const std::string reply = readUntilClosed(http, client);
+    client.close();
+    CHECK(reply.rfind("HTTP/1.1 400", 0) == 0);
+    CHECK(reply.find("url must start with https://") != std::string::npos);
+    http.release();
+}
+
 // A digest in another form than GitHub's 64 hex digits is refused before the download, rather than failing the install after it.
 TEST_CASE("a firmware URL whose sha256 is no 64 hex digits is refused with 400"
           * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
@@ -176,13 +198,14 @@ TEST_CASE("a firmware URL whose sha256 is no 64 hex digits is refused with 400"
 }
 
 // A name past what a module holds is refused on every route that names one, rather than cut short into a name that could match another module.
-TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, delete and read alike") {
+TEST_CASE("a module route whose name does not fit is refused with 400 on move, replace, rename, delete and read alike") {
     RackServer server;
     mm::HttpServerModule& http = server.http;
     const std::string longName(40, 'x');
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/move").c_str(), "{\"to\":0}")).rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, withBody(("POST /api/modules/" + longName + "/replace").c_str(), "{\"type\":\"RouteDial\"}")).rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, "DELETE /api/modules/" + longName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
+    CHECK(request(http, withBody(("PATCH /api/modules/" + longName).c_str(), "{\"name\":\"X\"}")).rfind("HTTP/1.1 400", 0) == 0);
     const std::string pastAName(mm::MoonModule::kNameLen + 4, 'y');   // fits the route, not a module's name
     CHECK(request(http, "GET /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);
     CHECK(request(http, "DELETE /api/modules/" + pastAName + " HTTP/1.1\r\n\r\n").rfind("HTTP/1.1 400", 0) == 0);

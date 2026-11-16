@@ -122,12 +122,12 @@ static ma_context* listContext(ma_context& scratch) {
     return freshContext() ? &ctx_ : nullptr;
 }
 
-/// Say the backend once per change, so a terminal shows which one the host holds, the Null backend naming a system whose audio libraries were missing.
+/// Say the backend once per change on stderr, the diagnostics stream, so a terminal shows which one the host holds (Null: no audio libraries) and mm_tempo's stdout stays its data.
 static void sayBackend(ma_backend backend) {
     static ma_backend said = ma_backend_null;
     static bool once = false;
     if (once && said == backend) return;
-    std::printf("audio: %s backend, %u capture device(s)\n", ma_get_backend_name(backend), static_cast<unsigned>(deviceCount_ - 1));
+    std::fprintf(stderr, "audio: %s backend, %u capture device(s)\n", ma_get_backend_name(backend), static_cast<unsigned>(deviceCount_ - 1));
     said = backend;
     once = true;
 }

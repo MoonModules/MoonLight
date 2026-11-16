@@ -34,15 +34,15 @@ IDF_SEARCH_PATHS = [
 ]
 
 # The ESP-IDF commit every target (classic ESP32, S3, P4, S31) has been
-# validated against; the `v6.1` tag, on the earliest IDF line that
-# carries the esp32s31 preview target. Kept here (not in setup_esp_idf.py) so
+# validated against; the `v6.1.1` tag, a bugfix release on the earliest IDF
+# line that carries the esp32s31 preview target. Kept here (not in setup_esp_idf.py) so
 # the pre-build drift check below can share the constant; a stale local IDF is
 # the single most common source of an "it built for me last week" ESP32 build
 # failure, so the check runs on every build_esp32 invocation, not just when the
 # user remembers to re-run setup_esp_idf.py. setup_esp_idf.py imports these
 # two constants.
-PINNED_IDF_COMMIT = "fff9895c82d744c7237be8847347bdd1b07c6643"
-PINNED_IDF_VERSION = "v6.1"
+PINNED_IDF_COMMIT = "051e4c4eb20346e043cdd47bc388fde75ff8af63"
+PINNED_IDF_VERSION = "v6.1.1"
 
 
 def installed_idf_commit(idf_path: Path) -> str:

@@ -179,6 +179,7 @@ struct Applier {
 
     // What would fail at creation, found before anything changes: a type this build lacks, a role the parent refuses, a name the tree cannot hold.
     bool validate(MoonModule* m, const JsonNode* obj) {
+        if (!validateRename(m, obj)) return false;
         for (const JsonNode* member = first(obj); member; member = next(member)) {
             if (reserved(member->key)) continue;
             if (member->type == JsonType::Object && !validateMember(m, member)) return false;
@@ -224,6 +225,36 @@ struct Applier {
         MoonModule* holder = s.firstByName(name);
         if (holder && survivesPrune(holder)) return fail("that name is used elsewhere in the tree");
         return true;
+    }
+
+    // `"$name"` renames a module in place: the user's own modules only, to a name that fits and that no other module holds or takes elsewhere in the document being applied.
+    bool validateRename(MoonModule* m, const JsonNode* obj) {
+        const JsonNode* to = json::member(doc, obj, "$name");
+        if (!to) return true;
+        if (!m) return fail("$name renames a module that exists");   // a module the document creates takes its key as its name
+        if (const char* why = renameRefusal(m, to)) return fail(why);
+        if (std::strcmp(to->str, m->name()) == 0) return true;
+        if (typedElsewhere(nullptr, to->str) || renamedTwice(to)) return fail("that name is used twice in the document");
+        MoonModule* holder = s.firstByName(to->str);
+        if (holder && survivesPrune(holder)) return fail("that name is used elsewhere in the tree");
+        return true;
+    }
+
+    // Why `m` cannot take the name `to` gives, or null when it can: the rules the validate pass and the apply pass both hold.
+    static const char* renameRefusal(const MoonModule* m, const JsonNode* to) {
+        if (to->type != JsonType::String) return "$name takes a string";
+        if (std::strcmp(to->str, m->name()) == 0) return nullptr;
+        if (!m->parent() || !m->userEditable()) return "this module keeps its name";
+        return nameFits(to->str) ? nullptr : kNameRule;
+    }
+
+    // Whether another `$name` in the document gives the same name as `here`.
+    bool renamedTwice(const JsonNode* here) const {
+        for (int i = 0; i < doc.count; i++) {
+            const JsonNode* n = doc.node(i);
+            if (n != here && n->type == JsonType::String && n->key && std::strcmp(n->key, "$name") == 0 && std::strcmp(n->str, here->str) == 0) return true;
+        }
+        return false;
     }
 
     // Whether the document holds `name` as a module, an object with a type, anywhere but at `here`.
@@ -460,6 +491,7 @@ struct Applier {
 
     // Apply a module object's members to `m`, in document order, once prune() has removed what goes.
     bool apply(MoonModule* m, const JsonNode* obj) {
+        if (!rename(m, obj)) return false;
         if (stored()) return applyStored(m, obj);
         for (const JsonNode* member = first(obj); member; member = next(member))
             if (!reserved(member->key) && !applyMember(m, member)) return false;
@@ -492,6 +524,21 @@ struct Applier {
         if (!child) child = create(m, member->key, type);
         else if (retyped) child = replace(m, child, type);
         return child && apply(child, member);
+    }
+
+    // Rename in place, so controls, children and the module itself stay; whatever keeps the old name hears it, and the parent saves under the new key.
+    bool rename(MoonModule* m, const JsonNode* obj) {
+        const JsonNode* to = json::member(doc, obj, "$name");
+        if (!to) return true;
+        if (const char* why = renameRefusal(m, to)) return fail(why);
+        if (std::strcmp(to->str, m->name()) == 0) return true;
+        if (s.firstByName(to->str)) return fail("that name is used elsewhere in the tree");
+        char from[MoonModule::kNameLen];
+        std::snprintf(from, sizeof(from), "%s", m->name());
+        m->setName(to->str);
+        s.notifyModuleRenamed(from, m->name());
+        finishStructure(m->parent());
+        return true;
     }
 
     // Unlisted children (those main.cpp wires) keep their places and listed ones fill theirs in document order, each moved only when out of place.
@@ -541,7 +588,7 @@ struct Applier {
         MoonModule* top = topNamed(member->key);
         if (!top) return fail("no such top-level module");
         if (member->type != JsonType::Object) return fail("a top-level module takes an object");
-        if (pass == 0) return validate(top, member);
+        if (pass == 0) return !json::member(doc, member, "$name") ? validate(top, member) : fail("a top-level module keeps its name");
         return pass == 1 ? prune(top, member) : apply(top, member);
     }
 

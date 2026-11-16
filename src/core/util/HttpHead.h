@@ -237,7 +237,7 @@ inline bool fromBeyondNetwork(const char* head, bool viaAccessPoint, const char*
     return host && !isOwnHost(host, hostLen, own);   // HTTP/1.0 names none
 }
 
-/// Whether `url` is one a device fetches: http or https only.
-inline bool isHttpUrl(const char* url) { return std::strncmp(url, "http://", 7) == 0 || std::strncmp(url, "https://", 8) == 0; }
+/// Whether `url` is one a device installs from: https only, since TLS is what authenticates an image in transit, and ESP-IDF's `esp_https_ota` refuses plain http too.
+inline bool isHttpsUrl(const char* url) { return std::strncmp(url, "https://", 8) == 0; }
 
 }  // namespace mm::http

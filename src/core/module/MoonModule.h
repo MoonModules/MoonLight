@@ -355,6 +355,9 @@ public:
     /// A list control's rows changed in `owner`; a module that resolves something from that list re-resolves it.
     virtual void onListChanged(const MoonModule& /*owner*/) {}
 
+    /// A module was renamed from `from` to `to`; a module that keeps another module's name, such as a control binding, rewrites it.
+    virtual void onModuleRenamed(const char* /*from*/, const char* /*to*/) {}
+
     /// Whether the user may delete or replace this module, which a load-bearing child declines.
     virtual bool userEditable() const { return true; }
 

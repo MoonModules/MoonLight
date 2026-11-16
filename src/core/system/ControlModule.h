@@ -580,6 +580,34 @@ public:
     /// Automap after every rebuild walk, which is when the focus and a script's controls can change.
     void onTreePrepared() override { refreshAutomap(); }
 
+    /// A binding names its module, so a rename rewrites every binding that named the old one, and the card saves them; one the new name makes too long says so.
+    void onModuleRenamed(const char* from, const char* to) override {
+        uint8_t moved = 0, tooLong = 0;
+        auto follow = [&](char* t) {
+            const Retarget r = retarget(t, from, to);
+            moved += r == Retarget::Moved;
+            tooLong += r == Retarget::TooLong;
+        };
+        for (auto& t : switchTargets_) follow(t);
+        for (auto& t : encoderTargets_) follow(t);
+        for (auto& t : faderTargets_) follow(t);
+        if (moved) markDirty();
+        if (tooLong) setStatusf(Severity::Warning, "%u binding(s) to %s no longer fit after its rename: assign them again", tooLong, to);
+    }
+
+    enum class Retarget : uint8_t { None, Moved, TooLong };
+
+    /// `target` as "<from>.<control>" becomes "<to>.<control>"; None when it names another module, TooLong when the new one does not fit and the binding stays as it was.
+    static Retarget retarget(char* target, const char* from, const char* to) {   // a kTargetLen buffer, declared below
+        const size_t n = std::strlen(from);
+        if (std::strncmp(target, from, n) != 0 || target[n] != '.') return Retarget::None;
+        char moved[kTargetLen];
+        const int len = std::snprintf(moved, sizeof(moved), "%s%s", to, target + n);
+        if (len < 0 || len >= static_cast<int>(sizeof(moved))) return Retarget::TooLong;
+        std::memcpy(target, moved, static_cast<size_t>(len) + 1);
+        return Retarget::Moved;
+    }
+
     /// Drives whatever `switchTarget` declares.
     void driveSwitch(uint8_t index) {
         if (index >= kSwitchCount) return;

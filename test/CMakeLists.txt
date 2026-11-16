@@ -67,6 +67,7 @@ add_executable(mm_tests
     unit/core/unit_FilesystemModule_persistence.cpp
     unit/core/unit_FilesystemModule_restore.cpp
     unit/core/unit_ControlModule.cpp
+    unit/core/unit_ControlModule_rename.cpp
     unit/core/unit_FilesystemModule_subtree.cpp
     unit/core/unit_FirmwareUpdateModule.cpp
     unit/core/unit_FirmwareImage.cpp

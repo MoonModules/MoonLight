@@ -4,9 +4,11 @@
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
 
-// Pins Scheduler::freeName and firstByName. The HTTP API and a state document use module names as identifiers, and firstByName returns the first DFS match, so a second module with the same name could never be addressed.
-//
-// A name that clashes takes the next free `-N` suffix, which is how a stored config file's module is placed when its name is already used elsewhere in the tree.
+#include <cstdio>
+#include <cstring>
+#include <string>
+
+// Module names are identifiers the API and documents address, so a clash takes the next free `-N` suffix, the base shortened to fit.
 
 namespace {
 
@@ -81,9 +83,9 @@ TEST_CASE("Scheduler::firstByName returns the first match in tree-walk order") {
     s.deleteTree(p);
 }
 
-// If the disambiguating suffix would overflow the 16-byte name buffer, freeName refuses rather than truncate.
-TEST_CASE("Scheduler::freeName refuses a suffix that does not fit a name") {
-    // MoonModule::name_ is 16 bytes (15 chars + NUL). A 13-char base name like "GlowParticles" reaches the buffer ceiling at suffix "10", "GlowParticles-10" is 16 chars, doesn't fit. freeName must report false rather than silently produce a different result than the caller asked for.
+// A name holds 15 characters, so a base whose suffix would not fit gives up its last characters to it, and the type can still be added again.
+TEST_CASE("Scheduler::freeName shortens the base so its suffix fits a name") {
+    // "GlowParticles" is 13 characters, so "GlowParticles-10" would be 16: the base drops one character for the longer suffix.
     mm::Scheduler s;
     auto* parent = new Stub();
     parent->setName("Effects");
@@ -102,17 +104,43 @@ TEST_CASE("Scheduler::freeName refuses a suffix that does not fit a name") {
         parent->addChild(m);
     }
 
-    char out[mm::MoonModule::kNameLen] = "untouched";
-    CHECK_FALSE(s.freeName("GlowParticles", out, sizeof(out)));
-    CHECK(std::strcmp(out, "untouched") == 0);
+    char out[mm::MoonModule::kNameLen];
+    REQUIRE(s.freeName("GlowParticles", out, sizeof(out)));
+    CHECK(std::string(out) == "GlowParticle-10");
 
     s.deleteTree(parent);
 }
 
-// A name that cannot be a module name at all is refused.
-TEST_CASE("Scheduler::freeName refuses an empty name and one too long for the buffer") {
+// The defect a user met: "NetworkReceive" is 14 characters, so a second receiver had no name that fit and the add was refused.
+TEST_CASE("Scheduler::freeName names a second module of a type whose name leaves no room for '-2'") {
+    mm::Scheduler s;
+    auto* parent = new Stub();
+    parent->setName("Layer");
+    s.addModule(parent);
+    auto* first = new Stub();
+    first->setName("NetworkReceive");
+    parent->addChild(first);
+
+    char out[mm::MoonModule::kNameLen];
+    REQUIRE(s.freeName("NetworkReceive", out, sizeof(out)));
+    CHECK(std::string(out) == "NetworkReceiv-2");
+
+    s.deleteTree(parent);
+}
+
+// An empty base names nothing; a base longer than a name keeps its first 15 characters, so a type with a long name is added at all.
+TEST_CASE("Scheduler::freeName refuses an empty name and shortens one too long for a name") {
     mm::Scheduler s;
     char out[mm::MoonModule::kNameLen];
     CHECK_FALSE(s.freeName("", out, sizeof(out)));
-    CHECK_FALSE(s.freeName("ThisNameIsFarTooLongForTheBuffer", out, sizeof(out)));
+    REQUIRE(s.freeName("ImprovProvisioning", out, sizeof(out)));
+    CHECK(std::string(out) == "ImprovProvision");
+}
+
+// A name holds bytes, and a character can take four: the cut lands before a character, never inside one, so the name stays valid UTF-8 for the JSON and the URL that carry it.
+TEST_CASE("Scheduler::freeName shortens a name between characters, never inside one") {
+    mm::Scheduler s;
+    char out[mm::MoonModule::kNameLen];
+    REQUIRE(s.freeName("Licht\xF0\x9F\x8C\x99\xF0\x9F\x8C\x99\xF0\x9F\x8C\x99", out, sizeof(out)));   // "Licht" and three moons, 17 bytes
+    CHECK(std::string(out) == "Licht\xF0\x9F\x8C\x99\xF0\x9F\x8C\x99");   // 13 bytes: the third moon does not fit whole, so it goes whole
 }
