@@ -346,10 +346,17 @@ async function init() {
     // would blow away a control the user is mid-edit (this fires ~1 s after first paint, so that's rare but
     // possible). Skip the re-render while an editable field is focused / a native select is open; the reset
     // buttons then appear on the next structural render instead of interrupting the edit.
+    loadTypes();
+}
+
+// The type catalog, retried a few times with a growing pause: without it the pickers list no type and the mode filter shows every card, so a lost first request is asked again rather than left until a reload. A render skipped for an edit in progress is marked pending, so the next focusout applies the filter.
+function loadTypes(attempt = 0) {
     fetch("/api/types").then(r => r.json()).then(j => {
         availableTypes = j.types || [];
-        if (state && !userIsEditing()) renderCards();
-    }).catch(() => {});
+        if (!state) return;
+        if (userIsEditing()) structuralRenderPending = true;
+        else renderCards();
+    }).catch(() => { if (attempt < 3) setTimeout(() => loadTypes(attempt + 1), 1000 << attempt); });
 }
 
 // The PREVIEW socket, a second connection, deliberately.

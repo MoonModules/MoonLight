@@ -5,9 +5,9 @@ Description=MoonLight
 Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux/
 After=network-online.target
 Wants=network-online.target
-# Three starts in two minutes stop a program that keeps failing.
+# Five starts in two minutes stop a program that keeps failing: an update's restart, its failed start and the rollback's start take three, so a second failure still fits before the limit.
 StartLimitIntervalSec=120
-StartLimitBurst=3
+StartLimitBurst=5
 
 [Service]
 User=moonlight

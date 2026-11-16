@@ -53,6 +53,7 @@ def test_the_service_runs_the_copy_its_user_owns_and_rolls_back_through_systemd(
     assert "ExecStart=/var/lib/moonlight/bin/MoonLight" in unit
     assert "User=moonlight" in unit
     assert "Restart=always" in unit
+    assert "StartLimitBurst=5" in unit   # an update's restart, a failed start and the rollback fit, twice
     # The rollback is the service's own stop hook, run in its sandbox as its user; the script leaves a clean stop alone.
     assert "ExecStopPost=/usr/lib/moonlight/rollback" in unit
     rollback = (pd.LINUX_DIR / "rollback").read_text()

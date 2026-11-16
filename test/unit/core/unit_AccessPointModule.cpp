@@ -120,7 +120,7 @@ struct ApNetwork {
     mm::AccessPointModule ap;
     ApNetwork() {
         mm::platform::setTestNowMs(1000);
-        mm::platform::setTestHostNetwork(false);   // the cascade is driven from nothing: the test machine's own network stays out
+        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         mm::platform::setTestWifiStaAvailable(true);
         mm::platform::setTestWifiApAvailable(true);
         net.addChild(&wifi);

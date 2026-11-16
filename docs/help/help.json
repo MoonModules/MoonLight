@@ -5254,7 +5254,7 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under The cascade in the header.",
+   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.\n\nA desktop builds the same cards over stubs, for developer mode. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",

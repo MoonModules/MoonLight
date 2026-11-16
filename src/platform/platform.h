@@ -744,7 +744,7 @@ void setTestEthSendFails(bool fail);
 void setTestEthLinkSpeed(uint16_t mbps);
 /// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
 void setTestEthIPv4(const uint8_t* ip);
-/// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a desktop; off in a host test that drives the cascade from nothing.
+/// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a desktop; off in a host test that drives the cascade on the fakes alone.
 void setTestHostNetwork(bool counts);
 /// Fake one address table entry, `ip` answering with `mac`, null `ip` removing it, so a host test can drive arpLookup.
 void setTestArpEntry(const uint8_t* ip, const uint8_t* mac);
@@ -1530,6 +1530,8 @@ constexpr bool hasAudioInput = hasI2sMic || hasAudioCapture;
 
 /// The OS capture devices, entry 0 being the default; 0 where the target has none.
 size_t audioCaptureDevices(const char* const** optionsOut);
+/// The capture backend the host holds, as its OS names it (PulseAudio, ALSA, Core Audio, WASAPI, or Null where the libraries are missing), "none" before any list is read; a board names its own input.
+const char* audioCaptureBackend() MM_NONBLOCKING;
 
 /// Open one capture device as mono samples at `sampleRate`, which the backend resamples to.
 bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRate);

@@ -32,6 +32,7 @@ Plan of 2026-11-13, a Feature, for approval. MoonLight runs on the phone or tabl
 - **The data folder is the app's files folder**, set through the environment the desktop already reads, so a backup from the phone restores on a desktop and back.
 - **Updates through the store the user chose.** The app reports `update: host`; the Firmware card and the map name the release's APK instead of installing it. The APK is a release asset, `MoonLight-v<version>.apk`, built and signed in CI; the installer page lists it with the other packages. A store listing is backlog.
 - **The tablet is the phone with a wider page**; the UI already lays itself out by width.
+- **A headset is an Android too.** A Meta Quest runs Horizon OS and a Pico its own, both Android on arm64, so the same APK runs there as a flat panel in front of the wearer, sideloaded in developer mode (SideQuest or `adb`); the store listing is a separate step, as on a phone. The Vision Pro runs visionOS, iOS's rules included, so it waits on the same MoonLive decision. What a headset adds, the lights drawn in the room around the wearer, is the UI's 3D preview on a WebXR page, backlog.
 
 ## Estimate
 
@@ -74,6 +75,7 @@ Plan of 2026-11-13, a Feature, for approval. MoonLight runs on the phone or tabl
 - A Play Store listing.
 - The phone's camera as a video input, which [Video in, LED walls out](Plan-20261024%20-%20Video%20in%2C%20LED%20walls%20out%20(0%20of%2010).md) would take as another source.
 - The phone's USB-C display output as the HDMI screen, a `SurfaceView` behind [screen.h](../../src/platform/desktop/screen.h)'s contract.
+- The 3D preview in a headset: the UI's existing 3D view on a WebXR page, so a Quest shows the lights in the room before they are built.
 - Android TV and the tablet in a dock as a permanent controller, which is the Linux board's role and needs only the service to start at boot.
 
 ## What it removes

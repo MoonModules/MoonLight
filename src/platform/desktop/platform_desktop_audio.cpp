@@ -116,12 +116,30 @@ static bool unlistable(const ma_device_info& info) {
     return indexNamed(info.name) != 0;
 }
 
-/// Append what a fresh context lists past entry 0, the default.
+/// The context a list is read through: a fresh one, or, while a device holds the context, `scratch`, so a server started since shows in the list; null where neither comes up. The pick recreates the context before it opens anything.
+static ma_context* listContext(ma_context& scratch) {
+    if (deviceOpen_) return ma_context_init(nullptr, 0, nullptr, &scratch) == MA_SUCCESS ? &scratch : nullptr;
+    return freshContext() ? &ctx_ : nullptr;
+}
+
+/// Say the backend once per change, so a terminal shows which one the host holds, the Null backend naming a system whose audio libraries were missing.
+static void sayBackend(ma_backend backend) {
+    static ma_backend said = ma_backend_null;
+    static bool once = false;
+    if (once && said == backend) return;
+    std::printf("audio: %s backend, %u capture device(s)\n", ma_get_backend_name(backend), static_cast<unsigned>(deviceCount_ - 1));
+    said = backend;
+    once = true;
+}
+
+/// Append what the OS lists past entry 0, the default.
 static void listDevices() {
-    if (!freshContext()) return;
+    static ma_context scratch;   // kilobytes, so static rather than a stack frame the render thread pays for
+    ma_context* use = listContext(scratch);
+    if (!use) return;
     ma_device_info* infos = nullptr;
     ma_uint32 count = 0;
-    if (ma_context_get_devices(&ctx_, nullptr, nullptr, &infos, &count) != MA_SUCCESS) return;
+    if (ma_context_get_devices(use, nullptr, nullptr, &infos, &count) != MA_SUCCESS) count = 0;
     for (ma_uint32 i = 0; i < count && deviceCount_ < kMaxDevices; i++) {
         if (unlistable(infos[i])) continue;
         // Truncation to kNameLen is intentional (long device names get cut for the dropdown); the explicit precision states it, which GCC's -Wformat-truncation requires under -Werror.
@@ -130,7 +148,11 @@ static void listDevices() {
         deviceIds_[deviceCount_] = infos[i].id;
         deviceCount_++;
     }
+    sayBackend(use->backend);
+    if (use == &scratch) ma_context_uninit(&scratch);
 }
+
+const char* audioCaptureBackend() MM_NONBLOCKING { return ctxReady_ ? ma_get_backend_name(ctx_.backend) : "none"; }
 
 size_t audioCaptureDevices(const char* const** optionsOut) {
     std::snprintf(nameBuf_[0], kNameLen, "default");
@@ -141,29 +163,43 @@ size_t audioCaptureDevices(const char* const** optionsOut) {
     return deviceCount_;
 }
 
-/// A mono s32 capture at `sampleRate` from list entry `pick`, 0 the OS default: full-scale s32 is the seam's 24-bit-left-justified regime, and miniaudio converts from whatever the hardware runs natively.
-static ma_device_config captureConfig(size_t pick, uint32_t sampleRate) {
-    ma_device_config cfg = ma_device_config_init(ma_device_type_capture);
-    if (pick > 0) cfg.capture.pDeviceID = &deviceIds_[pick];
+/// The id of the device called `name` in the context's own list, as the list truncates names, valid until the context goes; null where it lists none such.
+static const ma_device_id* findDevice(const char* name) {
+    ma_device_info* infos = nullptr;
+    ma_uint32 count = 0;
+    if (ma_context_get_devices(&ctx_, nullptr, nullptr, &infos, &count) != MA_SUCCESS) return nullptr;
+    for (ma_uint32 i = 0; i < count; i++)
+        if (std::strncmp(infos[i].name, name, kNameLen - 1) == 0) return &infos[i].id;
+    return nullptr;
+}
+
+/// The device entry `deviceIndex` names, on a fresh context: null for the OS default, else its id in the context's list; false for a stale index past the list or a name the fresh context lacks, which fail loudly rather than open another device.
+static bool resolvePick(uint8_t deviceIndex, const ma_device_id*& id) {
+    id = nullptr;
+    if (deviceIndex && deviceIndex >= deviceCount_) return false;
+    char want[kNameLen] = "default";
+    if (deviceIndex) std::snprintf(want, kNameLen, "%s", namePtrs_[deviceIndex]);   // the name at that index, as the service remembers it; the card's list stays as the card saw it
+    if (!freshContext()) return false;
+    if (deviceIndex) id = findDevice(want);
+    return !deviceIndex || id != nullptr;
+}
+
+/// Fill `cfg` for a mono s32 capture at `sampleRate` from the device `id`, the OS default where null: full-scale s32 is the seam's 24-bit-left-justified regime, and miniaudio converts from whatever the hardware runs natively.
+static void captureConfig(ma_device_config& cfg, const ma_device_id* id, uint32_t sampleRate) {
+    cfg = ma_device_config_init(ma_device_type_capture);
+    cfg.capture.pDeviceID = id;
     cfg.capture.format = ma_format_s32;
     cfg.capture.channels = 1;
     cfg.sampleRate = sampleRate;
     cfg.dataCallback = captureCallback;
-    return cfg;
 }
 
 bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRate) {
     if (deviceOpen_) { audioMicDeinit(h); }
-    // Index 0 = OS default device (null id). A stale persisted index past the current list fails loudly here rather than opening some other device.
-    if (deviceIndex >= deviceCount_) return false;
-    // The pick is the name at that index, as the service remembers it: a fresh context may hold another backend, in another order and with ids of its own, so the name finds its place in the new list or the pick fails loudly.
-    char want[kNameLen];
-    std::snprintf(want, kNameLen, "%s", namePtrs_[deviceIndex]);
-    audioCaptureDevices(nullptr);
-    if (!ctxReady_) return false;
-    const size_t pick = deviceIndex ? indexNamed(want) : 0;
-    if (deviceIndex && !pick) return false;
-    const ma_device_config cfg = captureConfig(pick, sampleRate);
+    const ma_device_id* id = nullptr;
+    if (!resolvePick(deviceIndex, id)) return false;
+    ma_device_config cfg;
+    captureConfig(cfg, id, sampleRate);
 
     if (ma_device_init(&ctx_, &cfg, &device_) != MA_SUCCESS) return false;
     if (ma_device_start(&device_) != MA_SUCCESS) {

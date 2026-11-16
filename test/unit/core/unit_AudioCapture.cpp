@@ -25,6 +25,15 @@ TEST_CASE("audio capture enumeration offers 'default' first, from platform-owned
     CHECK(again == options);
 }
 
+// The backend the host holds is named, so a card read over the network, or a terminal, says which one has the devices, the Null backend meaning the audio libraries were missing.
+TEST_CASE("audio capture names its backend once the list is read") {
+    mm::platform::audioCaptureDevices(nullptr);
+    const char* backend = mm::platform::audioCaptureBackend();
+    CHECK(backend != nullptr);
+    CHECK(std::strlen(backend) > 0);
+    CHECK(std::strcmp(backend, "none") != 0);
+}
+
 // What ALSA adds to a list and a reader cannot use: its `null` device, described as discarding samples, and one description for `default` and `sysdefault`. Seen on a Raspberry Pi 5 with a USB microphone, 2026-11-15.
 TEST_CASE("audio capture enumeration lists no device twice and not ALSA's bit bucket") {
     const char* const* options = nullptr;
@@ -35,7 +44,7 @@ TEST_CASE("audio capture enumeration lists no device twice and not ALSA's bit bu
     }
 }
 
-// The capture device someone picks survives the device list changing under it: unplug a webcam and everything below it shifts up a slot, so a config that stored the index named another device. Reported from the desktop bench 2026-08-29 ("I entered blackhole 2ch a few times but later I saw it was changed").
+// The capture device someone picks survives the device list changing under it: unplug a webcam and everything below it shifts up a slot, so a config that stored the index named another device. Reported from the desktop bench 2026-08-29.
 TEST_CASE("a picked audio device is remembered by name, not by its position in the list") {
     // The list as it was when the user picked: BlackHole sits at index 3.
     static constexpr const char* kBefore[] = {"default", "HD Pro Webcam C920", "NDI Audio",

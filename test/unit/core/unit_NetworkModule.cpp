@@ -19,7 +19,7 @@ struct WiFiNetwork {
     mm::NetworkModule net;
     mm::WiFiModule wifi;
     WiFiNetwork() {
-        mm::platform::setTestHostNetwork(false);   // the cascade is driven from nothing: the test machine's own network stays out
+        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&wifi);
         net.setWiFi(&wifi);
     }
@@ -702,7 +702,7 @@ TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins a
     mm::platform::setTestWifiStaAvailable(false);
 }
 
-// A host's own network, whatever the OS routes through, is its wired link: the cascade connects on it at boot, names it with its address, and tries no known WiFi network beside it, so a network restored from a board's backup brings no retry a minute. Reported from a Linux desktop, 2026-11-15 (issue 247).
+// A host's own network, whatever the OS routes through, is its wired link: the cascade connects on it at boot, names it with its address, and tries no known WiFi network beside it, so a restored board backup brings no retry a minute (issue 247).
 TEST_CASE("a host's own network is its wired link") {
     uint8_t ip[4];
     mm::platform::ethGetIPv4(ip);

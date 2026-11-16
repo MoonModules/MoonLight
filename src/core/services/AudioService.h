@@ -621,12 +621,13 @@ public:
         else
             mm::formatTo(dynStr_, sizeof(dynStr_), "no input analyzed here");   // the level path runs only on a local input, so a receiver's or a simulation's readout names that rather than an idle path's -120 dB
         // The bands' microseconds this second, ten thousand of them a percent of one core, the shares per chip in AudioAnalysis.h.
+        const char* backend = platform::hasAudioCapture ? platform::audioCaptureBackend() : "";   // on a host the backend too, PulseAudio, ALSA or Null, so a card read over the network says which one holds the device
         if (analysisOn_)
-            mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz",
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "bands %u.%u%%, %u Hz%s%s",
                          static_cast<unsigned>(bankUs / 10000), static_cast<unsigned>(bankUs / 1000 % 10),
-                         static_cast<unsigned>(micSamples));   // the samples the input delivered this second, its real rate
+                         static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);   // the samples the input delivered this second, its real rate
         else
-            mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz", static_cast<unsigned>(micSamples));
+            mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz%s%s", static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);
         sync_.refreshHosts(hosts);
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
@@ -704,7 +705,7 @@ private:
     AudioFrame frame_;
 
     char levelStr_[12] = {};
-    char cpuStr_[40] = {};
+    char cpuStr_[56] = {};
     char dynStr_[48] = {};
     std::atomic<uint32_t> bankUs1s_{0};   ///< microseconds the bands took in the current second, added by the audio task (UI only)
     char onsetStr_[20] = {};

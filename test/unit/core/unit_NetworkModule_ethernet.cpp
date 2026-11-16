@@ -134,7 +134,7 @@ struct WiredNetwork {
     mm::NetworkModule net;
     mm::EthernetModule eth;
     WiredNetwork() {
-        mm::platform::setTestHostNetwork(false);   // the cascade is driven from nothing: the test machine's own network stays out
+        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&eth);
         net.setEthernet(&eth);
     }

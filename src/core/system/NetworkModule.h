@@ -30,7 +30,9 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 /// Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.
 /// @card NetworkModule.png
 ///
-/// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under @xref{the-cascade|The cascade} in the header.
+/// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.
+///
+/// A desktop builds the same cards over stubs, for developer mode. The order is described under @xref{the-cascade|The cascade} in the header.
 ///
 /// @guide
 ///
@@ -575,7 +577,7 @@ private:
             state_ = State::Idle;
             radioReady_ = platform::wifiRadioReady();
             // A radio that is not ready, a WiFi coproc whose link is not up, refuses every join, and the wait is the reason rather than a failure.
-            const bool waiting = !platform::wifiRadioReady();
+            const bool waiting = !radioReady_;
             mm::formatTo(statusBuf_, sizeof(statusBuf_), waiting ? "No network: waiting for the WiFi radio"
                                                          : closed ? "No network: retrying, the access point was for the first setup only" : "No network");
             setStatus(statusBuf_, waiting || closed ? Severity::Warning : Severity::Error);

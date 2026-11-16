@@ -143,7 +143,7 @@ public:
     static const char* typeAcceptsChildRoles(uint8_t i) { return (types_ && i < count_) ? types_[i].acceptsChildRoles : ""; }
     /// The reader's mode a type's cards need, as a control's `minMode` (Control.h): user for every type until a build says otherwise.
     static uint8_t typeMinMode(uint8_t i) { return (types_ && i < count_) ? types_[i].minMode : 0; }
-    /// Raise a type's cards to `mode`, for what a build carries without the hardware behind it; false for a type it has not registered.
+    /// Raise a type's cards to `mode`, for what a build carries as a preview of hardware it lacks; false for a type it has not registered.
     static bool setTypeMinMode(const char* typeName, uint8_t mode) {
         for (uint8_t i = 0; i < count_; i++)
             if (std::strcmp(types_[i].name, typeName) == 0) { types_[i].minMode = mode; return true; }

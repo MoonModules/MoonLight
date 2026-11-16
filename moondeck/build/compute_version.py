@@ -75,7 +75,7 @@ def last_release_core() -> str | None:
             ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"],
             cwd=ROOT, capture_output=True, text=True, check=True,
         ).stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+    except (subprocess.CalledProcessError, OSError):
         return None   # no release tag, or no git at all
     return core_version(tag[1:] if tag.startswith("v") else tag)
 
@@ -130,10 +130,10 @@ def compute(channel: str, tag: str = "") -> str:
             if "-" in t:  # has a prerelease identifier (rc, beta, …)
                 return t
         return core
-    # Latest, and a local build of the same commit; a tree without git, a source archive, carries the channel without its count, as build_id falls back to "nogit".
+    # Latest, and a local build of the same commit; a source archive, which git cannot describe, carries the channel alone, as build_id falls back to "nogit".
     try:
         return f"{development_core(version)}-dev.{commits_since_last_stable()}"
-    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+    except (subprocess.CalledProcessError, OSError):
         return f"{development_core(version)}-dev"
 
 
@@ -143,7 +143,7 @@ def main() -> int:
         "--channel", choices=["stable", "latest", "local", "auto"], default="auto",
         help="auto (default) → derive from --tag (latest tag → latest, else stable); "
              "stable → core semver (or the tag's prerelease semver for an -rc tag); "
-             "latest → <next>-dev.<N>; local → <next>-dev, where <next> is library.json's core when "
+             "latest and local → <next>-dev.<N>, where <next> is library.json's core when "
              "ahead of the last vX.Y.Z tag, else the next minor",
     )
     parser.add_argument(

@@ -125,6 +125,8 @@ processes:
         say: Check the code's boundaries and complexity.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
+        detail: |
+          A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
       - id: build-desktop
         say: Build the desktop firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]

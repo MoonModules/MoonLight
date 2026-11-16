@@ -220,7 +220,7 @@ void FilesystemModule::loadSubtree(Scheduler& s, MoonModule* m) {
     const bool flat = flatToStateDocument(buf, *m, converted);
     const StateDocumentResult r = applyStateDocument(s, flat ? converted.data() : buf, StateSource::Boot);
     if (!r.ok) std::printf("FilesystemModule: %s not loaded: %s\n", path, r.error);
-    // The board migrates nothing, so the first module it drops is named until the next boot, and MIGRATING says per release whether its settings are worth a backup, which only the file before the next save holds. Allocated only then.
+    // The board leaves migration to MIGRATING: the first module it drops is named until the next boot, and the entry says per release whether its settings are worth a backup, which only the file before the next save holds. Allocated only then.
     constexpr size_t kSkippedLen = 192;   // the 64-byte path, the reason and the hint
     // The first skip is the one named, so a message that found no memory leaves the warning out rather than naming a later module.
     if (r.skipped && !skipSeen_) {

@@ -403,10 +403,10 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule", "core/system.md#wifi");
     mm::ModuleFactory::registerType<mm::AccessPointModule>("AccessPointModule", "core/system.md#access-point");
     mm::ModuleFactory::registerType<mm::FilesystemModule>("FilesystemModule", "core/system.md#filesystem");
-    // The cards a build carries without the hardware behind them, to exercise their settings on a desk, show in developer mode alone; HUB75 and the panel cards drive real hardware from a Linux board, so they stay.
+    // The cards a build carries as previews of hardware it lacks, to exercise their settings on a desk, show in developer mode alone; HUB75 and the panel cards drive real hardware from a Linux board, so they stay.
     if constexpr (mm::platform::previewsHardwareControls)
         for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "TasksModule", "I2cBusModule", "PinsModule", "RmtLedDriver", "PwmLightDriver", "ParallelLedDriver"})
-            mm::ModuleFactory::setTypeMinMode(type, mm::kModeDeveloper);
+            if (!mm::ModuleFactory::setTypeMinMode(type, mm::kModeDeveloper)) std::printf("module_types: preview type %s is not registered\n", type);
 }
 
 namespace {

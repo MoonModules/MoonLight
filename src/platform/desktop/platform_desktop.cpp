@@ -963,30 +963,34 @@ static void findHostIf(const in_addr& addr) {
     (void)addr;
 #endif
 }
+/// The route's own address, as a datagram socket connected toward the internet names it: no packet is sent.
+static bool routeAddress(sockaddr_in& local) {
+    const int fd = open_sock(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) return false;
+    sockaddr_in probe{};
+    probe.sin_family = AF_INET;
+    probe.sin_port = htons(80);
+    inet_pton(AF_INET, "8.8.8.8", &probe.sin_addr);
+    socklen_t len = sizeof(local);
+    const bool got = ::connect(sock(fd), reinterpret_cast<sockaddr*>(&probe), sizeof(probe)) == 0
+                  && ::getsockname(sock(fd), reinterpret_cast<sockaddr*>(&local), &len) == 0;
+    close_sock(fd);
+    return got;
+}
 const char* hostIp() {
-    // Connecting a datagram socket sends nothing and selects the route, so the socket names this host's address; kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one.
+    // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; the interface lookup, which walks the interface list, runs only when the address changed.
     static char ip[INET_ADDRSTRLEN] = {};
     static uint32_t resolvedAt = 0;
     const uint32_t now = millis();
     if (resolvedAt && now - resolvedAt < 1000) return ip;
     resolvedAt = now ? now : 1;
-    ip[0] = 0;
-    hostIf_[0] = 0;
-    int fd = open_sock(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) return "";
-    sockaddr_in probe{};
-    probe.sin_family = AF_INET;
-    probe.sin_port = htons(80);
-    inet_pton(AF_INET, "8.8.8.8", &probe.sin_addr);
-    if (::connect(sock(fd), reinterpret_cast<sockaddr*>(&probe), sizeof(probe)) == 0) {
-        sockaddr_in local{};
-        socklen_t len = sizeof(local);
-        if (::getsockname(sock(fd), reinterpret_cast<sockaddr*>(&local), &len) == 0) {
-            inet_ntop(AF_INET, &local.sin_addr, ip, sizeof(ip));
-            findHostIf(local.sin_addr);
-        }
-    }
-    close_sock(fd);
+    char was[INET_ADDRSTRLEN];
+    std::memcpy(was, ip, sizeof(was));
+    sockaddr_in local{};
+    const bool got = routeAddress(local);
+    if (got) inet_ntop(AF_INET, &local.sin_addr, ip, sizeof(ip));
+    else ip[0] = 0;
+    if (std::strcmp(was, ip) != 0) findHostIf(local.sin_addr);   // cleared with the address, since no interface holds none
     return ip;
 }
 
@@ -1467,9 +1471,11 @@ void ethStop() {}                           // no eth on desktop
 static uint8_t testEthIp_[4] = {};
 static bool testEthFaked() MM_NONBLOCKING { return testEthIp_[0] || testEthIp_[1] || testEthIp_[2] || testEthIp_[3]; }
 void setTestEthIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testEthIp_[i] = ip ? ip[i] : 0; }
-// The host's own network is the desktop's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test drives the cascade from nothing by turning it off.
+// The host's own network is the desktop's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test turns it off to drive the cascade on the fakes alone.
 static bool testHostNetwork_ = true;
 void setTestHostNetwork(bool counts) { testHostNetwork_ = counts; }
+/// What carries the desktop's wired link: see wiredLink() below.
+enum class WiredLink : uint8_t { Faked, Host, Adapter, None };
 static bool hostLinkUp() MM_NONBLOCKING {
     if (!testHostNetwork_) return false;
     uint8_t ip[4];
@@ -1972,13 +1978,23 @@ bool winAdapterLink(uint16_t& mbps) {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked() || hostLinkUp()) return true; uint16_t m = 0; return winAdapterLink(m); }
+/// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
+static WiredLink wiredLink() MM_NONBLOCKING {
+    if (testEthFaked()) return WiredLink::Faked;
+    if (hostLinkUp()) return WiredLink::Host;
+    uint16_t m = 0;
+    return winAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
+}
+bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
-const char* wiredLinkName() MM_NONBLOCKING { uint16_t m = 0; return testEthFaked() || winAdapterLink(m) ? "Ethernet" : "Host"; }
+const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Host ? "Host" : "Ethernet"; }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
-    if (winAdapterLink(m) && m) return m;
-    return ethTestLinkSpeed_;   // unbound, or a speed Windows would not state
+    switch (wiredLink()) {
+        case WiredLink::Faked:   return ethTestLinkSpeed_;
+        case WiredLink::Adapter: return winAdapterLink(m) ? m : 0;
+        default: return 0;   // the host's route, whose rate Windows states nowhere here
+    }
 }
 #else
 namespace {
@@ -2042,16 +2058,24 @@ bool posixAdapterLink(uint16_t& mbps) MM_NONBLOCKING {
 }
 }  // namespace
 
-bool ethLinkUp() MM_NONBLOCKING { if (testEthFaked() || hostLinkUp()) return true; uint16_t m = 0; return posixAdapterLink(m); }
+/// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
+static WiredLink wiredLink() MM_NONBLOCKING {
+    if (testEthFaked()) return WiredLink::Faked;
+    if (hostLinkUp()) return WiredLink::Host;
+    uint16_t m = 0;
+    return posixAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
+}
+bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
-const char* wiredLinkName() MM_NONBLOCKING { uint16_t m = 0; return testEthFaked() || posixAdapterLink(m) ? "Ethernet" : "Host"; }
+const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Host ? "Host" : "Ethernet"; }
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
-    // The host's route carries the link: its interface's rate, which WiFi leaves unstated.
-    if (!testEthFaked() && hostLinkUp() && hostIf_[0]) { posixIfLink(hostIf_, m); return m; }
-    if (posixAdapterLink(m)) return m;   // bound and up: the OS's answer, 0 included
-    // Only when nothing is bound: a real adapter that states no rate reports none, since inventing one is worse than admitting it is unknown.
-    return ethTestLinkSpeed_;
+    switch (wiredLink()) {
+        case WiredLink::Host:    posixIfLink(hostIf_, m); return m;      // the route interface's rate, which WiFi leaves unstated
+        case WiredLink::Adapter: posixAdapterLink(m); return m;          // bound and up: the OS's answer, 0 included
+        case WiredLink::Faked:   return ethTestLinkSpeed_;
+        default: return 0;   // a rate the OS states is the one shown, since inventing one is worse than admitting it is unknown
+    }
 }
 #endif
 
