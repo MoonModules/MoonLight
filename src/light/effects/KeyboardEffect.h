@@ -1,7 +1,6 @@
 #pragma once
 
-#include "light/effects/AudioNotesBase.h"
-#include "light/powerfunctions/playerHands.h"   // PianoHands: the keys two hands could play
+#include "light/effects/PianoNotesBase.h"
 
 #include <array>
 
@@ -37,7 +36,7 @@ constexpr uint8_t kPianoOctaves = (kAudioNoteKeys + 11) / 12;
 /// ## Geometry and hits
 ///
 /// Each ivory key takes an equal share of the width and the full half height; each ebony key sits over the boundary before it at three fifths of an ivory key's width and two thirds of its length. Bottom-half circles sit on fixed octave rows, always smaller than the key. The shared `NoteHits` keeps when each key was last struck, so a frame two ticks read is one hit, told by its `seq`.
-class KeyboardEffect : public AudioNotesBase {
+class KeyboardEffect : public PianoNotesBase {
 public:
     /// Catalog tags for the visual catalog.
     const char* tags() const override { return "💫🎶"; }
@@ -93,34 +92,8 @@ public:
         endNotes(a);
     }
 
-protected:
-    /// Two hands keep the keys they could play, as playerHands.h models them.
-    void playedBy(const AudioFrame& f, const uint8_t* hits, NoteSet& set, uint32_t ms) MM_NONBLOCKING override { hands_.filter(f.notes, set, ms, hits); }
-
-    /// Under `hands` a hand holding three keys or more plays a chord and snaps to it, while a hand holding one or two plays a line and keeps its notes, whose passing notes are rarely chord tones.
-    void snapToChord(const AudioFrame& f, NoteSet& set) MM_NONBLOCKING override {
-        if (notes != kNotesHands) { AudioNotesBase::snapToChord(f, set); return; }
-        for (uint8_t h = 0; h < 2; h++) {
-            const int16_t w = hands_.window[h];
-            if (w < 0 || keysIn(set, w) < kChordKeys) continue;
-            for (int16_t i = w; i <= w + hands::PianoHands::kSpan && i < kAudioNoteKeys; i++) {
-                const uint8_t k = static_cast<uint8_t>(i);
-                if (set.has(k) && !inChord(static_cast<uint8_t>((21 + k) % 12), f.chordRoot, f.chordQuality)) set.remove(k);
-            }
-        }
-    }
-
-    /// How many keys of `set` lie in the hand window from `w`.
-    static uint8_t keysIn(const NoteSet& set, int16_t w) MM_NONBLOCKING {
-        uint8_t n = 0;
-        for (int16_t i = w; i <= w + hands::PianoHands::kSpan && i < kAudioNoteKeys; i++) n += set.has(static_cast<uint8_t>(i));
-        return n;
-    }
-
 private:
-    hands::PianoHands hands_;   ///< where each hand is
     static constexpr uint8_t kGuideLevel = 72;   ///< how bright a chord tone glows when nobody plays it
-    static constexpr uint8_t kChordKeys = 3;   ///< the keys a hand holds when it plays a chord rather than a line
     static constexpr uint8_t kHandRest[2] = {15, 39};   ///< where each hand's half starts before it played: C2 and C4 as keys from A0
 
     /// The shown keys' layout across the width, worked out once a frame.
@@ -206,10 +179,7 @@ private:
     /// One keyboard half from row `y0`, `kh` tall: ivory keys across the width at the full height, ebony over the boundaries at two thirds of it.
     void drawKeyboard(const AudioScene& a, const Keys& k, lengthType y0, lengthType kh, bool circles, bool colorKeys) MM_NONBLOCKING {
         k.forEachIvory([&](uint8_t i, lengthType x0, lengthType kw) MM_NONBLOCKING {
-            const uint8_t g = hits_.glow(i, a.ms, a.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, level(*a.f, i), g}) : ivory;
-            const bool guide = colorKeys && chordGuide(*a.f, i, g);
-            if (lvl || guide) draw::fillRect(a.cv, x0, y0, kw, kh, guide ? guideColor(*a.pal, i) : colorKeys ? keyColor(*a.pal, i, lvl, g, false) : scale8(RGB{255, 255, 255}, ivory));
+            drawKey(a, i, x0, y0, kw, kh, colorKeys);
             if (circles) drawCircles(a, i, y0, kh, x0, kw);
         });
         drawEbony(a, k, y0, kh, circles, colorKeys);
@@ -226,13 +196,20 @@ private:
             const int32_t x0 = std::max<int32_t>(0, b - blackW / 2);
             const int32_t x1 = std::min<int32_t>(a.w, b + (blackW + 1) / 2);
             if (x1 <= x0) continue;
-            const uint8_t g = hits_.glow(i, a.ms, a.span);
-            const uint8_t lvl = colorKeys ? std::max({ivory, level(*a.f, i), g}) : ivory;
-            const bool guide = colorKeys && chordGuide(*a.f, i, g);
-            if (lvl || guide) draw::fillRect(a.cv, static_cast<lengthType>(x0), y0, static_cast<lengthType>(x1 - x0), blackH,
-                                             guide ? guideColor(*a.pal, i) : colorKeys ? keyColor(*a.pal, i, lvl, g, true) : scale8(RGB{255, 255, 255}, static_cast<uint8_t>(ivory / 4u)));
+            drawKey(a, i, static_cast<lengthType>(x0), y0, static_cast<lengthType>(x1 - x0), blackH, colorKeys);
             if (circles) drawCircles(a, i, y0, kh, static_cast<lengthType>(x0), static_cast<lengthType>(x1 - x0));
         }
+    }
+
+    /// Key `i` filling its rectangle: in the chord guide's color, as played, or plain, as `colorKeys` asks; a plain ebony key at a quarter of `ivory`.
+    void drawKey(const AudioScene& a, uint8_t i, lengthType x0, lengthType y0, lengthType w, lengthType h, bool colorKeys) MM_NONBLOCKING {
+        const bool ebony = detail::pianoIsBlack(i);
+        const uint8_t g = hits_.glow(i, a.ms, a.span);
+        const uint8_t lvl = colorKeys ? std::max({ivory, level(*a.f, i), g}) : ivory;
+        const bool guide = colorKeys && chordGuide(*a.f, i, g);
+        if (!lvl && !guide) return;
+        const RGB plain = scale8(RGB{255, 255, 255}, ebony ? static_cast<uint8_t>(ivory / 4u) : ivory);
+        draw::fillRect(a.cv, x0, y0, w, h, guide ? guideColor(*a.pal, i) : colorKeys ? keyColor(*a.pal, i, lvl, g, ebony) : plain);
     }
 
     /// One small circle per octave this pitch sounds in, stacked from the top of the key; always smaller than the key, so it drops on it.

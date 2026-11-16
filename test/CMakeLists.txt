@@ -276,6 +276,8 @@ add_executable(mm_tests
     unit/light/unit_RegionModifier_prepareScope.cpp
     unit/light/unit_PinwheelModifier.cpp
     unit/light/unit_ParticlesEffect.cpp
+    unit/light/unit_FlockEffect.cpp
+    unit/light/unit_MoonFlockEffect.cpp
     unit/light/unit_PlasmaEffect.cpp
     unit/light/unit_PreviewDriver.cpp
     unit/light/unit_RainbowEffect.cpp

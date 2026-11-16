@@ -114,6 +114,29 @@ struct PianoHands {
         set = kept;
     }
 
+
+    /// The keys a hand holds when it plays a chord rather than a line.
+    static constexpr uint8_t kChordKeys = 3;
+
+    /// Keep in `set` only the tones of the chord `root` and `quality` name under each hand holding `kChordKeys` keys or more, which plays the chord; a hand holding fewer plays a line and keeps its notes, whose passing notes are rarely chord tones.
+    void snapToChord(NoteSet& set, uint8_t root, uint8_t quality) const MM_NONBLOCKING {
+        for (uint8_t h = 0; h < 2; h++) {
+            const int16_t w = window[h];
+            if (w < 0 || keysIn(set, w) < kChordKeys) continue;
+            for (int16_t i = w; i <= w + kSpan && i < kAudioNoteKeys; i++) {
+                const uint8_t k = static_cast<uint8_t>(i);
+                if (set.has(k) && !inChord(static_cast<uint8_t>((21 + k) % 12), root, quality)) set.remove(k);
+            }
+        }
+    }
+
+    /// How many keys of `set` lie in the hand window from `w`.
+    static uint8_t keysIn(const NoteSet& set, int16_t w) MM_NONBLOCKING {
+        uint8_t n = 0;
+        for (int16_t i = w; i <= w + kSpan && i < kAudioNoteKeys; i++) n += set.has(static_cast<uint8_t>(i));
+        return n;
+    }
+
 private:
     static int16_t distance(int16_t a, int16_t b) MM_NONBLOCKING { return static_cast<int16_t>(a > b ? a - b : b - a); }
 

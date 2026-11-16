@@ -106,6 +106,8 @@
 #include "light/effects/SpectrumEffect.h"
 #include "light/effects/FireworksEffect.h"
 #include "light/effects/BallpitEffect.h"
+#include "light/effects/FlockEffect.h"
+#include "light/effects/MoonFlockEffect.h"
 #include "light/effects/FishTankEffect.h"
 #include "light/effects/FlyingToastersEffect.h"
 #include "light/effects/PongEffect.h"
@@ -254,6 +256,10 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::DrumKitEffect>("DrumKitEffect", "light/effects.md#drumkit");
     mm::ModuleFactory::registerType<mm::KeyboardEffect>("KeyboardEffect", "light/effects.md#keyboard");
     mm::ModuleFactory::registerType<mm::StringsEffect>("StringsEffect", "light/effects.md#strings");
+#if MM_HEAVY_COMPUTE   // float boids, only where the platform declares a hardware FPU, as boids.h says
+    mm::ModuleFactory::registerType<mm::MoonFlockEffect>("MoonFlockEffect", "light/effects.md#moonflock");
+    mm::ModuleFactory::registerType<mm::FlockEffect>("FlockEffect", "light/effects.md#flock");
+#endif
     mm::ModuleFactory::registerType<mm::BlurzEffect>("BlurzEffect", "light/effects.md#blurz");
     mm::ModuleFactory::registerType<mm::BouncingBallsEffect>("BouncingBallsEffect", "light/effects.md#bouncingballs");
     mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect", "light/effects.md#demoreel");

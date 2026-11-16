@@ -18,10 +18,12 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Bresenham](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm) File:Bresenham.svg | 🧮 | Lines and circles on integer grids. |
 | [Chebyshev distance](https://en.wikipedia.org/wiki/Chebyshev_distance) File:Minkowski_distance_examples.svg | 🧮 | The grid metric max(\|dx\|, \|dy\|). |
 | [Christophe Gagnier / Moustachauve](https://github.com/Moustachauve) | 🧑 | Author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let MoonLight devices appear in them. |
+| [Claude / Anthropic](https://www.anthropic.com/claude) | 🏢 | Anthropic's AI model, which wrote [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock) with James Hutchinson. |
 | [Conical spiral](https://en.wikipedia.org/wiki/Conical_spiral) File:Spiral-cone-arch-s.svg | 🧮 | A spiral wound up the surface of a cone. |
+| [Craig Reynolds / Boids](https://www.red3d.com/cwr/boids/) | 🧑🧮 | Craig Reynolds' flocking boids simulation (1986) and its paper, *Flocks, Herds, and Schools: A Distributed Behavioral Model* (SIGGRAPH '87): separation, alignment and cohesion, from which every boid of [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock) steers; and the arrival behavior of [*Steering Behaviors For Autonomous Characters*](https://www.red3d.com/cwr/steer/) (GDC 1999), by which MoonFlock's boids land on their keys. |
 | [Damian Schneider / DedeHai](https://github.com/DedeHai) | 🧑 | Author of the WLED Particle System, whose shape our [particle kernel](../moonmodules/light/power-functions.md#particles) follows in fixed point. |
 | [Dan Ellis / Ellis](https://www.ee.columbia.edu/~dpwe/pubs/Ellis07-beattrack.pdf) | 🧑🧮 | Beat tracking by dynamic programming (2007), whose autocorrelation tempo is the tempo harness's baseline. |
-| [Daniel Shiffman / Coding Train / Nature of Code](https://thecodingtrain.com) | 🧑 | The Coding Train's starfield, and The Nature of Code's cellular automata. |
+| [Daniel Shiffman / Coding Train / Nature of Code](https://thecodingtrain.com) | 🧑 | The Coding Train's starfield, and The Nature of Code's cellular automata and boids. |
 | [David Jupijn / Rising Step](https://github.com/risingstep) | 🧑 | The contributor the 🦅 tag credits on the effects he shaped. |
 | [DDP](http://www.3waylabs.com/ddp/) | 📜 | The Distributed Display Protocol, pixel data over UDP. |
 | Delphium | 🧑 | HUB75, OSC, HLS, RTSP, NDI, and Windows. |
@@ -49,6 +51,8 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter) File:VU_Meter.jpg | 📜 | VU meter ballistics, to the millisecond. |
 | [Improv Wi-Fi](https://github.com/improv-wifi) | 📜 | The open serial provisioning standard the web installer uses. |
 | [Iñigo Quilez](https://iquilezles.org/) | 🧑 | Distance functions and their operators, smooth minimum, cosine palettes. |
+| [James Hutchinson / AnjinMeili](https://github.com/AnjinMeili) | 🧑 | [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock), designed on his HUB75 wall: MoonFlock's boid for each piano key, its heat, the drums, the predator and the keyboard. |
+| [Jason Coon / Aurora](https://github.com/pixelmatix/aurora) | 🧑 | The Aurora pattern set for LED matrices, MIT licensed, whose Flock, by way of Marc Merlin's FastLED port and MatrixPrism's JavaScript translation, gives its numbers, its predator and its wind to [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock). |
 | [John Hart / Sphere tracing](https://en.wikipedia.org/wiki/Ray_marching) File:Visualization_of_SDF_ray_marching_algorithm.png | 🧑🧮 | Sphere tracing, the basis of raymarching. |
 | [Jos Stam / Stable Fluids](https://en.wikipedia.org/wiki/Jos_Stam) File:Jos_Stam_2005_-_by_Azam_Khan.jpg | 🧑🧮 | Stable Fluids, the solver behind the fluid effect. |
 | [Ken Perlin / Perlin noise](https://en.wikipedia.org/wiki/Perlin_noise) File:Perlin_noise_example.png | 🧑🧮 | Gradient noise, the field behind fire and clouds. |

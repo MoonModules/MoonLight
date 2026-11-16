@@ -902,6 +902,99 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/StringsEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#stringseffect"
   },
+  "MoonFlockEffect": {
+   "line": "A flock with a boid for each piano key: played keys glow and grow, the drums flash, the hottest key hunts, and now and then the flock becomes a spectrum.",
+   "summary": "Each of the 79 boids, A0 to D#7, takes its key's pitch class.\n\nCompare with [Flock](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#flock), the flock in the palette.",
+   "attribution": "[James Hutchinson](https://moonmodules.org/MoonLight/reference/attributions.html#james-hutchinson), [Claude](https://moonmodules.org/MoonLight/reference/attributions.html#claude), [Craig Reynolds](https://moonmodules.org/MoonLight/reference/attributions.html#craig-reynolds), [Daniel Shiffman](https://moonmodules.org/MoonLight/reference/attributions.html#daniel-shiffman), [Jason Coon](https://moonmodules.org/MoonLight/reference/attributions.html#jason-coon)",
+   "guide": [
+    {
+     "title": "Heat and the predator",
+     "text": "A key played heats its boid, drawn bigger and brighter, and the boid cools again as the key rests. The key heated past the threshold becomes the one predator: a disc with a mouth, two lights in radius at the least, swelling, brightening and opening wide with the bass."
+    },
+    {
+     "title": "The drums",
+     "text": "A drum hit flashes the boids of the keys in its range, a harder hit bigger and longer: the kick to C#3, the snare to C#7, the hats above. Only the keys played heat a boid, so only they make the predator."
+    },
+    {
+     "title": "The keyboard",
+     "text": "Now and then the boids fly to their keys along an edge or around a ring and become a spectrum, each bar as tall as its key's band is loud. After the hold a bass hit, or a longer wait, releases them: each bar shrinks back to its boid at the flock's pace, and the boids fly off."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonFlockEffect.gif",
+   "controls": {
+    "size": {
+     "line": "How many lights wide a hot boid is drawn, where 0 sizes it to the grid."
+    },
+    "speed": {
+     "line": "Steps a second, where 60 is the reference and 0 holds the picture."
+    },
+    "audioGain": {
+     "line": "How much loudness speeds the flock, up to double `speed`."
+    },
+    "notes": {
+     "line": "All notes heard, without overtones, or what hands could play."
+    },
+    "chord": {
+     "line": "Show the chord being played as a hand's shape.",
+     "more": "Tidier, but a guess: the shape lights chord tones nobody played and drops melody notes outside the chord. Leave it off to see what the player plays."
+    },
+    "growth": {
+     "line": "How much heat a key gains each time it is played, by how loud."
+    },
+    "fade": {
+     "line": "Seconds a key's heat takes to halve."
+    },
+    "trigger": {
+     "line": "The heat at which a key's boid becomes the predator."
+    },
+    "onsetGlow": {
+     "line": "How bright drum hits flash their keys, and the bass the predator.",
+     "more": "At 0 the boids keep their own glow and the predator its size; a kick still releases the keyboard."
+    },
+    "formEvery": {
+     "line": "About how many seconds the flock flies before forming the keyboard.",
+     "more": "Each wait is drawn within a quarter either side; at 0 the flock flies on."
+    },
+    "hold": {
+     "line": "Seconds the finished keyboard holds before a bass hit may release it."
+    },
+    "dock": {
+     "line": "Where the keyboard forms: random, an edge, or a ring."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#moonflock",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MoonFlockEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonflockeffect"
+  },
+  "FlockEffect": {
+   "line": "A flock of boids that steer by their neighbors and leave glowing trails, with one predator they flee.",
+   "summary": "Each boid steers toward the heading of the boids near it, toward their center, and away from any that crowd it. The predator hunts the flock, and a rare gust of wind nudges a boid off course.\n\nCompare with [MoonFlock](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#moonflock), the same flock with a boid for each piano key.",
+   "attribution": "[James Hutchinson](https://moonmodules.org/MoonLight/reference/attributions.html#james-hutchinson), [Claude](https://moonmodules.org/MoonLight/reference/attributions.html#claude), [Craig Reynolds](https://moonmodules.org/MoonLight/reference/attributions.html#craig-reynolds), [Daniel Shiffman](https://moonmodules.org/MoonLight/reference/attributions.html#daniel-shiffman), [Jason Coon](https://moonmodules.org/MoonLight/reference/attributions.html#jason-coon)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/FlockEffect.gif",
+   "controls": {
+    "count": {
+     "line": "How many boids fly, where 0 is a third of the width."
+    },
+    "size": {
+     "line": "How many lights wide a boid is drawn, where 0 sizes it to the grid."
+    },
+    "speed": {
+     "line": "Steps a second, where 60 is the reference and 0 holds the flock still."
+    },
+    "audioGain": {
+     "line": "How much loudness speeds the flock, up to double `speed`."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎵",
+   "dim": 2,
+   "doc": "light/effects.md#flock",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FlockEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#flockeffect"
+  },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
    "summary": "The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position. A band struck that frame flashes its dot white.",

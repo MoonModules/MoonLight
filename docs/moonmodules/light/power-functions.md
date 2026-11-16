@@ -1,6 +1,6 @@
 # Power functions
 
-The shared toolbox the light domain is built from: a small set of named, integer-only routines that [effects](effects.md) compose into a look. One home per idea, an effect that needs a distance, a bar, a noise field or a smooth follower calls the same one every other effect calls, so behavior is consistent, the cost is measured once, and a fix reaches everything at once.
+The shared toolbox the light domain is built from: a small set of named, integer-only routines that [effects](effects.md) compose into a look. The bounded exceptions are the headers that are float by nature, [raymarch.h](../../../src/light/powerfunctions/raymarch.h) and [boids.h](../../../src/light/powerfunctions/boids.h): each compiles only where the SoC declares a hardware FPU, a whole-header switch rather than a rule weakened in place. One home per idea, an effect that needs a distance, a bar, a noise field or a smooth follower calls the same one every other effect calls, so behavior is consistent, the cost is measured once, and a fix reaches everything at once.
 
 Three consumers share this vocabulary, and each uses a different slice of it:
 
@@ -257,7 +257,25 @@ A script reaches the same kernel through [the script vocabulary](moonlive.md#the
 | `collide` | Particles notice each other. The one non-linear part of the kernel, so it is opt-in | Ballpit | — |
 | `spawn`, `angleEmit`, `spray` | Emitters: one particle, a directed cone, or an undirected scatter | Fireworks, Ballpit | — |
 | `age`, `render` | Life counts down and brightness rides it, so a particle fades as it dies | Fireworks, Ballpit | — |
-| `FrameTime` | Converts elapsed time into a per-frame scale, so the same settings behave identically at 60 fps and at 5000 | Fireworks, Ballpit, Particles, Echo, BouncingBalls, Lissajous, Tetrix | — |
+| `FrameTime` | Converts elapsed time into a per-frame scale, so the same settings behave identically at 60 fps and at 5000 | Fireworks, Ballpit, Particles, Echo, BouncingBalls, Lissajous, Tetrix, Flock, MoonFlock | — |
+
+</div>
+
+## Boids
+
+**A flock: things that steer by their neighbors rather than move under forces.**
+
+Craig Reynolds' [boids](../../reference/attributions.md) in [boids.h](../../../src/light/powerfunctions/boids.h): separation, alignment, cohesion and flight, each a steering force as Daniel Shiffman's *The Nature of Code* teaches it, the desired velocity minus the current one, limited to the boid's force, gathered for every boid from one moment before any moves, with Shiffman's weights and Aurora's numbers cited as values. The flock lives in a 32 by 32 space in `float`, since a force of 0.015 on a 32-unit field is intrinsically fractional, and is scaled onto the grid as it is drawn, so it behaves the same on every panel. Every boid tests every other, so it is one of the bounded exceptions named at the top.
+
+<div class="mm-pf" markdown="1">
+
+| Power function | What it does | Effects | Modifiers |
+|---|---|---|---|
+| `Boid`, `Kind`, `kBoid`, `kPredator` | A boid's position, velocity and gathered acceleration, and the numbers for a boid and for a predator | Flock, MoonFlock | |
+| `look`, `gather`, `steerToward`, `move` | What a boid sees of the others the short way across the torus, its separation, alignment, cohesion and flight gathered as steering forces from one moment, then every boid's move | Flock, MoonFlock | |
+| `seed`, `gust`, `uniform`, `kSeed` | The random draws: a boid's start and heading, and the wind | Flock, MoonFlock | |
+| `pace`, `StepClock`, `runSteps` | Steps a second from a speed and the smoothed level; elapsed time turned into steps with the remainder kept; and the steps a tick runs within its time | Flock, MoonFlock | |
+| `Plane`, `mouthCovers` | A canvas a flock draws on, its trail kept apart from the layer for the reason boids.h gives: a per-step fade, the colors copied to the layer, soft dots, a boid's move as a streak, a boid as it is now, and a disc with a mouth | Flock, MoonFlock | |
 
 </div>
 
@@ -290,7 +308,7 @@ That inversion is why shaders compose so freely. There is no state to keep in st
 
 Raymarching is one technique a shader can use, for rendering 3D. A scene is described as a *function*: say how far the nearest surface is from any point, and the renderer walks a ray outward until it arrives. The world is arithmetic, geometry emerges from the distance function rather than being stored.
 
-[raymarch.h](../../../src/light/powerfunctions/raymarch.h) is compiled only where the SoC declares a hardware FPU, because a raymarch is per-pixel float by nature. That gate is the one bounded exception to the integer-only render path, and it is a whole-header switch rather than a rule weakened in place. Everything in `shader.h` stays fixed point and runs everywhere.
+[raymarch.h](../../../src/light/powerfunctions/raymarch.h) is compiled only where the SoC declares a hardware FPU, because a raymarch is per-pixel float by nature, one of the bounded exceptions named at the top. Everything in `shader.h` stays fixed point and runs everywhere.
 
 <div class="mm-pf" markdown="1">
 
