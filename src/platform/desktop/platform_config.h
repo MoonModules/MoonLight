@@ -72,8 +72,8 @@ constexpr bool hasWiFi = true;
 /// False, so shared code compiles its Ethernet controls out and seeds itself from the default below.
 constexpr bool hasEthernet = false;
 
-/// True: the Ethernet CONTROLS are built though no interface exists, so the board presets can be exercised without a device. A preview of a device-only card, tagged developer-mode and never consulted by a bring-up path, which stays keyed on hasEthernet.
-constexpr bool previewsEthernetControls = true;
+/// True: the cards of hardware this host has none of are built with no device behind them, so their settings can be exercised on a desk, in developer mode alone (module_types.cpp); a bring-up path stays keyed on hasEthernet and hasWiFi.
+constexpr bool previewsHardwareControls = true;
 
 /// True: a host has several NICs, so a raw sender must name the one it binds.
 constexpr bool hasNamedNetInterfaces = true;

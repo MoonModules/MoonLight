@@ -6,6 +6,8 @@ if [ "$1" = configure ]; then
     getent passwd moonlight >/dev/null || useradd --system --user-group --home-dir /var/lib/moonlight --shell /usr/sbin/nologin moonlight
     # HDMI out draws through the kernel's display devices, which the video group opens.
     if getent group video >/dev/null; then usermod -a -G video moonlight; fi
+    # Audio input reads the sound cards through ALSA, which the audio group opens; a PipeWire or Pulse server is named by a drop-in (installing-on-linux.md).
+    if getent group audio >/dev/null; then usermod -a -G audio moonlight; fi
     install -d -o moonlight -g moonlight /var/lib/moonlight "$bin"
     # An apt install is the administrator's choice and wins over a self-update, older or newer, so the copy the rollback would put back goes too.
     install -o moonlight -g moonlight -m 755 /usr/lib/moonlight/MoonLight "$bin/MoonLight.next"

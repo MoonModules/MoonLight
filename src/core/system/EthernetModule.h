@@ -55,10 +55,7 @@ public:
     void defineControls() override {
         MoonModule::defineControls();
         // Where a driver is compiled in, the type selecting which pin rows apply; a desktop builds the same rows with no interface behind them, to exercise the presets.
-        if constexpr (platform::hasEthernet || platform::previewsEthernetControls) {
-            // A preview configures nothing, so it is developer-mode only and says so on the card.
-            constexpr bool preview = !platform::hasEthernet;
-            const uint8_t firstEthControl = controls_.count();
+        if constexpr (platform::hasEthernet || platform::previewsHardwareControls) {
             buildEthPresetOptions();
             // A selection MOVED, so write its map. The restore path fires no onControlChanged, and this is what makes a saved `ethBoard` reach the pins; keyed on the move, or a rebuild would undo a Custom edit.
             if (ethPresetSel_ != ethPresetApplied_) applyEthPreset();
@@ -103,17 +100,11 @@ public:
             controls_.setHidden(controls_.count() - 1, !editable || !isSpi);
             controls_.addPin("ethSpiIrq", ethSpiIrq_);
             controls_.setHidden(controls_.count() - 1, !editable || !isSpi);
-            // Immediately before the fields it conditions, so the two stay adjacent.
-            const uint8_t firstIpControl = controls_.count();
             controls_.addSelect("ipSettings", ip_.mode, ipsettings::kOptions, 2);
             // Always bound so persistence can load them, with only their visibility conditional.
             for (uint8_t k = 0; k < 4; k++) {
                 controls_.addIPv4(ipsettings::kFields[k], ip_.address(k));
                 controls_.setHidden(controls_.count() - 1, !isStatic());
-            }
-            // One loop rather than a call beside every row: the wiring carries one tag, while the IP settings stay in view.
-            if constexpr (preview) {
-                for (uint8_t i = firstEthControl; i < firstIpControl; i++) controls_.setDeveloper(i);
             }
         }
     }

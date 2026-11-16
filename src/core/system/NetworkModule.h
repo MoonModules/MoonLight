@@ -30,7 +30,9 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 /// Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.
 /// @card NetworkModule.png
 ///
-/// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point. A desktop builds the same cards over stubs. The order is described under @xref{the-cascade|The cascade} in the header.
+/// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.
+///
+/// A desktop builds the same cards over stubs, for developer mode. The order is described under @xref{the-cascade|The cascade} in the header.
 ///
 /// @guide
 ///
@@ -158,7 +160,7 @@ public:
         startRequestedJoin(now);
         if (ethernet_ && ethernet_->syncIpLive(state_ == State::ConnectedEth)) {
             if (ethernet_->configuredIp()) updateStatusIP();
-            else beginRelease(now, "Ethernet");   // back to DHCP: the address is gone until the lease lands
+            else beginRelease(now, platform::wiredLinkName());   // back to DHCP: the address is gone until the lease lands
         }
         // After a join the card asked for, which restarts the clock, or that join reads as timed out at once.
         const uint32_t elapsed = now - stateChangeTime_;
@@ -573,10 +575,10 @@ private:
         } else {
             // Idle retries the known networks, so a device whose access point stays closed still rejoins.
             state_ = State::Idle;
-            // A WiFi coproc whose link is not up refuses the radio, and the wait is the reason rather than a failure.
-            const bool waiting = !platform::wifiRadioReady();
-            radioReady_ = !waiting;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), waiting ? "No network: waiting for the WiFi coproc"
+            radioReady_ = platform::wifiRadioReady();
+            // A radio that is not ready, a WiFi coproc whose link is not up, refuses every join, and the wait is the reason rather than a failure.
+            const bool waiting = !radioReady_;
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), waiting ? "No network: waiting for the WiFi radio"
                                                          : closed ? "No network: retrying, the access point was for the first setup only" : "No network");
             setStatus(statusBuf_, waiting || closed ? Severity::Warning : Severity::Error);
         }
@@ -684,6 +686,8 @@ private:
     /// Retry the known networks now and then from the fallback, while nobody is on the access point.
     void retryKnown(uint32_t now) {
         if (!hasKnown() || now - stateChangeTime_ <= kApRetryStaMs) return;
+        // A radio that is not ready refuses every join, and radioBecameReady() starts over the tick it answers, so no retry is spent on it.
+        if (!platform::wifiRadioReady()) return;
         if (apUp_ && platform::wifiApClientCount() > 0) return;
         std::printf("NetworkModule: retrying WiFi STA\n");
         stateChangeTime_ = now;   // init refused; wait out another interval
@@ -715,7 +719,7 @@ private:
         }
 
         updateStatusIP();
-        std::printf("NetworkModule: Connected via %s: %s\n", to == State::ConnectedEth ? "Ethernet" : "WiFi STA", statusBuf_);
+        std::printf("NetworkModule: Connected via %s: %s\n", to == State::ConnectedEth ? platform::wiredLinkName() : "WiFi STA", statusBuf_);
 
         syncMdns();
 
@@ -797,16 +801,16 @@ private:
         formatDottedQuad(ipStr, ip);
         if (state_ == State::ConnectedEth && isLinkLocalIPv4(ip)) {
             // Working, but the address says why it is unusual and the name says how to reach it: @xref{a-link-local-address-is-a-last-resort}.
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s (no DHCP), %s.local", ipStr, readDeviceName());
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s: %s (no DHCP), %s.local", platform::wiredLinkName(), ipStr, readDeviceName());
             setStatus(statusBuf_, Severity::Warning);
             return;
         }
         if (state_ == State::ConnectedEth) {
             // The negotiated speed too, since a link that fell back looks identical without it.
             const uint16_t mbps = platform::ethLinkSpeedMbps();
-            if (mbps > 0) mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s (%u Mbit)",
-                                        ipStr, static_cast<unsigned>(mbps));
-            else          mm::formatTo(statusBuf_, sizeof(statusBuf_), "Eth: %s", ipStr);
+            if (mbps > 0) mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s: %s (%u Mbit)",
+                                        platform::wiredLinkName(), ipStr, static_cast<unsigned>(mbps));
+            else          mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s: %s", platform::wiredLinkName(), ipStr);
         } else {
             mm::formatTo(statusBuf_, sizeof(statusBuf_), "WiFi: %s", ipStr);
         }
@@ -879,9 +883,9 @@ private:
     const char* modeLabel() const {
         switch (state_) {
             case State::Idle:         return "Idle";
-            case State::WaitingEth:   return "Ethernet (waiting)";
+            case State::WaitingEth:   return "Ethernet (waiting)";   // a host's wait is one tick, so the label stays the board's
             case State::WaitingSta:   return "WiFi STA (waiting)";
-            case State::ConnectedEth: return "Ethernet";
+            case State::ConnectedEth: return platform::wiredLinkName();
             case State::ConnectedSta: return "WiFi STA";
             case State::AP:           return "WiFi AP";
         }

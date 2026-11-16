@@ -1849,11 +1849,12 @@ void HttpServerModule::writeTypeJson(JsonSink& sink, uint8_t i, bool first) {
     char displayName[16];
     mm::formatTo(displayName, sizeof(displayName), "%s", ModuleFactory::displayNameFor(name, role));
     sink.appendf("%s{\"name\":\"%s\",\"displayName\":\"%s\",\"role\":\"%s\","
-                 "\"docPath\":\"%s\",\"tags\":\"%s\",\"dim\":%u,"
+                 "\"docPath\":\"%s\",\"tags\":\"%s\",\"dim\":%u,\"minMode\":%u,"
                  "\"acceptsChildRoles\":\"%s\",\"defaults\":{",
                  first ? "" : ",", name, displayName, roleName(role),
                  docPath ? docPath : "", tags ? tags : "",
                  static_cast<unsigned>(ModuleFactory::typeDim(i)),
+                 static_cast<unsigned>(ModuleFactory::typeMinMode(i)),
                  childRoles ? childRoles : "");
     writeTypeDefaults(sink, name);
     sink.append("}}");

@@ -4,8 +4,9 @@
 """compute_version tests — pins the per-channel version string.
 
 A stable build carries the core semver; a `latest` build carries a monotonic
-`<core>-dev.<N>` so successive latest builds are orderable; a local build is
-library.json verbatim. N counts since the last `v*` tag, with a tag-less fallback.
+`<core>-dev.<N>` so successive latest builds are orderable, and a local build the
+same string, so one built from main reports what `latest` carries and its update
+badge stays off. N counts since the last `v*` tag, with a tag-less fallback.
 
 Run: `uv run pytest test/python`.
 """
@@ -42,16 +43,26 @@ def test_latest_is_core_dev_n_when_library_json_is_ahead(monkeypatch, tmp_path):
     monkeypatch.setattr(cv, "last_release_core", lambda: "2.0.0")
     monkeypatch.setattr(cv, "commits_since_last_stable", lambda: 6)
     assert cv.compute("latest") == "2.1.0-dev.6"
-    assert cv.compute("local") == "2.1.0-dev"
+    assert cv.compute("local") == "2.1.0-dev.6"    # a local build of the commit latest was built from is that build
 
 
 # library.json still names the release it tagged, so a build after it takes the next minor: 6.0.0-dev.N would rank below 6.0.0 and a board on latest would be offered the older release.
+def test_a_tree_without_git_carries_the_channel_without_its_count(monkeypatch, tmp_path):
+    monkeypatch.setattr(cv, "LIBRARY_JSON", _lib(tmp_path, "2.1.0-dev"))
+
+    def no_git(*args, **kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(cv.subprocess, "run", no_git)
+    assert cv.compute("local") == "2.1.0-dev"
+
+
 def test_a_build_after_a_release_carries_the_next_minor(monkeypatch, tmp_path):
     monkeypatch.setattr(cv, "LIBRARY_JSON", _lib(tmp_path, "6.0.0"))
     monkeypatch.setattr(cv, "last_release_core", lambda: "6.0.0")
     monkeypatch.setattr(cv, "commits_since_last_stable", lambda: 18)
     assert cv.compute("latest") == "6.1.0-dev.18"
-    assert cv.compute("local") == "6.1.0-dev"       # a local build never passes for the release
+    assert cv.compute("local") == "6.1.0-dev.18"
     monkeypatch.setattr(cv, "last_release_core", lambda: None)   # before the first release: library.json as it is
     assert cv.compute("latest") == "6.0.0-dev.18"
 

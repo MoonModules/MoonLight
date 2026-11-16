@@ -30,8 +30,9 @@ TEST_CASE("Ethernet is opt-in: ethNone is the zero value (unset ethType → no P
     CHECK(mm::platform::ethNone == 0);   // an absent/zero ethType control resolves to None
 }
 
-// ethInit() returns false on desktop for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe when nothing runs.
+// With the host's own network out, ethInit() returns false on desktop for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe while the interface is down.
 TEST_CASE("Desktop Ethernet seam is a safe no-op") {
+    mm::platform::setTestHostNetwork(false);
     mm::platform::EthPinConfig w5500{ mm::platform::ethW5500, 1,
                                       -1, -1, -1, -1, false,
                                       /*miso*/ 5, /*mosi*/ 6, /*sck*/ 7, /*cs*/ 15, /*irq*/ 18 };
@@ -46,11 +47,12 @@ TEST_CASE("Desktop Ethernet seam is a safe no-op") {
     CHECK_FALSE(mm::platform::ethInit());
     CHECK_FALSE(mm::platform::ethConnected());
 
-    mm::platform::ethStop();   // safe even though nothing came up
+    mm::platform::ethStop();   // safe with the interface still down
     CHECK_FALSE(mm::platform::ethConnected());
 
     // Restore the platform default so later tests inherit no shared eth-config state.
     mm::platform::setEthConfig(mm::platform::ethConfigDefault);
+    mm::platform::setTestHostNetwork(true);
 }
 
 // Regression: ethPhyAddr is a signed int16 with min -1 (auto-detect), rendered as a number field; as a uint8 it clamped to 31 and the S31 RGMII never linked.
@@ -69,8 +71,9 @@ TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number 
     CHECK(phyAddr == -1);                        // the bound value still reads -1 through the int16 control
 }
 
-// Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and change nothing.
+// Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and leave it as it is.
 TEST_CASE("Desktop static-addressing seam is a safe no-op") {
+    mm::platform::setTestHostNetwork(false);
     const uint8_t ip[4]   = {192, 168, 1, 50};
     const uint8_t gw[4]   = {192, 168, 1, 1};
     const uint8_t mask[4] = {255, 255, 255, 0};
@@ -81,11 +84,13 @@ TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     mm::platform::netSetDhcp(mm::platform::NetIface::Sta);
     // Desktop reports no eth/sta connection regardless, the setters didn't fake one.
     CHECK_FALSE(mm::platform::ethConnected());
+    mm::platform::setTestHostNetwork(true);
 }
 
 // A known network set to Static pins its address during bring-up, since a DHCP-less network never fires a lease event.
 TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
     mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestHostNetwork(false);
     {
         mm::NetworkModule net;
         mm::WiFiModule wifi;
@@ -103,6 +108,7 @@ TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
         net.removeChild(&wifi);   // the child is a local, not the tree's to free
     }
     mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
+    mm::platform::setTestHostNetwork(true);
 }
 
 namespace {
@@ -128,10 +134,11 @@ struct WiredNetwork {
     mm::NetworkModule net;
     mm::EthernetModule eth;
     WiredNetwork() {
+        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&eth);
         net.setEthernet(&eth);
     }
-    ~WiredNetwork() { net.removeChild(&eth); }   // the child is a member, not the tree's to free
+    ~WiredNetwork() { net.removeChild(&eth); mm::platform::setTestHostNetwork(true); }   // the child is a member, not the tree's to free
 };
 
 // Set one control through the normal control-apply path.
@@ -149,7 +156,7 @@ const char* networkMode(mm::NetworkModule& net) {
 
 // The wired interface has its own IP settings, named as routers and phones name them, DHCP by default with the static fields hidden.
 TEST_CASE("Ethernet's IP settings: DHCP by default, Static reveals the fields") {
-    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
+    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsHardwareControls) return;
     mm::EthernetModule eth;
     eth.rebuildControls();
     const mm::ControlDescriptor* ipSettings = nullptr;
@@ -312,7 +319,7 @@ TEST_CASE("fixedPins never writes past the capacity it is given") {
 
 // Two bugs an Olimex found: a board whose pins ARE a preset's map opens on it, and one that chose nothing adopts no preset.
 TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
-    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
+    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsHardwareControls) return;
 
     auto boardOf = [](mm::EthernetModule& n) -> const char* {
         for (uint8_t i = 0; i < n.controls().count(); i++) {
@@ -386,7 +393,7 @@ TEST_CASE("each chip offers only the Ethernet boards it can wire") {
 
 // A chip whose filter leaves exactly ONE real preset opens on it, not on Custom: on a P4-NANO that is a configured interface versus none.
 TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
-    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsEthernetControls) return;
+    if constexpr (!mm::platform::hasEthernet && !mm::platform::previewsHardwareControls) return;
 
     mm::EthernetModule net;
     net.rebuildControls();

@@ -219,6 +219,23 @@ TEST_CASE("every registered module type is placed or listed as not placeable") {
     }
 }
 
+// A build that previews hardware it has none of shows those cards in developer mode alone; the drivers a Linux board drives for real stay in every mode.
+TEST_CASE("the cards of hardware a build previews need developer mode, the ones it drives need none") {
+    survey();   // registers the types
+    auto modeOf = [](const char* type) -> int {
+        for (uint8_t i = 0; i < mm::ModuleFactory::typeCount(); i++)
+            if (std::strcmp(mm::ModuleFactory::typeName(i), type) == 0) return mm::ModuleFactory::typeMinMode(i);
+        return -1;
+    };
+    const int preview = mm::platform::previewsHardwareControls ? mm::kModeDeveloper : mm::kModeUser;
+    for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "TasksModule", "I2cBusModule", "PinsModule", "PwmLightDriver", "ParallelLedDriver"}) {
+        REQUIRE_MESSAGE(modeOf(type) >= 0, type);   // a name the registry lacks would fail nowhere else
+        CHECK_MESSAGE(modeOf(type) == preview, type);
+    }
+    for (const char* type : {"Hub75Driver", "PanelCardDriver", "HdmiDriver", "NetworkSendDriver", "AudioService"})
+        if (modeOf(type) >= 0) CHECK_MESSAGE(modeOf(type) == mm::kModeUser, type);
+}
+
 // A disabled module holds no allocation beyond its own objects, however it was taken.
 TEST_CASE("a disabled module holds nothing beyond its objects") {
     enforce(kHoldsAllocation, "holds an allocation beyond its objects after a disable", [](const Row& r) { return !r.respects || r.heldAfterDisable <= 0; });
