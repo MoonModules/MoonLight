@@ -27,7 +27,7 @@ processes:
         say: Reproduce a bug in the test first.
         when: { manual: "The new test fails against the unfixed code, then passes with the fix." }
         detail: |
-          A test that passes against the bug proves nothing: see [A passing test is not evidence until it can fail](reference/testing.md#a-passing-test-is-not-evidence-until-it-can-fail). The test's description names the root cause, so the generated inventory keeps the link to the defect.
+          A test that passes against the bug proves nothing: see [A passing test is evidence once it can fail](reference/testing.md#a-passing-test-is-evidence-once-it-can-fail). The test's description names the root cause, so the generated inventory keeps the link to the defect.
       - id: unit
         say: Add a TEST_CASE to the module's unit file.
         given: [{ input: kind, equals: Module logic }]

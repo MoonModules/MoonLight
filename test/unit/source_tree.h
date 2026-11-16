@@ -2,14 +2,15 @@
 
 /// The repository on disk, for the tests that read a file it ships: its root and whether it is there.
 
-#include <cstdlib>
 #include <filesystem>
+
+#include "host_android.h"
 
 namespace mm {
 
-/// The repo root: MM_SOURCE_ROOT where set (a device pushed the folders tests read, test_android.py), else found from this header's own path, whatever the runner's working folder.
+/// The repo root: on a device the `repo` folder test_android.py pushes the files tests read into and runs beside, else found from this header's own path, whatever the runner's working folder.
 inline std::filesystem::path sourceRoot() {
-    if (const char* env = std::getenv("MM_SOURCE_ROOT"); env && *env) return env;
+    if constexpr (kHostIsAndroid) return "repo";
     return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
 }
 

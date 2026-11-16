@@ -43,13 +43,11 @@ void bootLayer(mm::Scheduler& scheduler, mm::FilesystemModule*& fs, mm::Layer*& 
 
 // The settings directory is created when the filesystem mounts, not left for the first save to discover. A shipped binary starts in a directory that has never held one, and before this the first WRITE was what failed, then every write after it, once per save, forever.
 TEST_CASE("A settings directory that does not exist yet is created when the filesystem mounts") {
-    char root[256];
-    std::snprintf(root, sizeof(root), "%s/mm_root_new_%u", mm::systemTempDir().c_str(),
-                  static_cast<unsigned>(mm::platform::millis()));
+    const std::string root = mm::systemTempDir() + "/mm_root_new_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(root);
     REQUIRE_FALSE(std::filesystem::exists(root));
 
-    mm::platform::fsSetRoot(root);
+    mm::platform::fsSetRoot(root.c_str());
     CHECK(mm::platform::fsMount());
     CHECK(std::filesystem::is_directory(root));
     // Reported back, so a failure can name the directory it actually tried.
@@ -61,9 +59,7 @@ TEST_CASE("A settings directory that does not exist yet is created when the file
 
 // A root that exists and is a directory can still reject writes, which is the case the probe exists for and the one a read-only extraction produces. A DIRECTORY where the probe file belongs blocks its creation while leaving the root itself perfectly valid, so this reaches the probe instead of failing earlier at the is_directory check the case above covers.
 TEST_CASE("A settings directory that rejects a write fails the mount, not just a missing one") {
-    char root[256];
-    std::snprintf(root, sizeof(root), "%s/mm_root_probe_%u", mm::systemTempDir().c_str(),
-                  static_cast<unsigned>(mm::platform::millis()));
+    const std::string root = mm::systemTempDir() + "/mm_root_probe_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(root);
     std::error_code ec;
     const auto blocker = std::filesystem::path(root) / ".mm-write-probe";
@@ -73,7 +69,7 @@ TEST_CASE("A settings directory that rejects a write fails the mount, not just a
     REQUIRE(std::filesystem::is_directory(root));
     REQUIRE(std::filesystem::is_directory(blocker));
 
-    mm::platform::fsSetRoot(root);
+    mm::platform::fsSetRoot(root.c_str());
     CHECK_FALSE(mm::platform::fsMount());
 
     mm::platform::fsSetRoot("");
@@ -85,13 +81,11 @@ TEST_CASE("MM_DATA_DIR chooses the settings directory over any other rule") {
     const char* prior = std::getenv("MM_DATA_DIR");
     const std::string saved = prior ? prior : "";
 
-    char want[256];
-    std::snprintf(want, sizeof(want), "%s/mm_root_env_%u", mm::systemTempDir().c_str(),
-                  static_cast<unsigned>(mm::platform::millis()));
+    const std::string want = mm::systemTempDir() + "/mm_root_env_" + std::to_string(mm::platform::millis());
 #ifdef _WIN32
-    _putenv_s("MM_DATA_DIR", want);
+    _putenv_s("MM_DATA_DIR", want.c_str());
 #else
-    setenv("MM_DATA_DIR", want, 1);
+    setenv("MM_DATA_DIR", want.c_str(), 1);
 #endif
     // Empty restores the DEFAULT, which is where the resolution rule is applied.
     mm::platform::fsSetRoot("");
@@ -112,9 +106,7 @@ TEST_CASE("MM_DATA_DIR chooses the settings directory over any other rule") {
 
 // An unusable location is refused at mount, which is what lets the caller say "persistence disabled" once instead of emitting a failed save per module per change. A plain file where the directory belongs stands in for the real cases (a read-only extraction, a protected folder, a directory owned by someone else): every one of them accepts the path and rejects the writes.
 TEST_CASE("A settings location that cannot be written to fails the mount, not every later save") {
-    char root[256];
-    std::snprintf(root, sizeof(root), "%s/mm_root_blocked_%u", mm::systemTempDir().c_str(),
-                  static_cast<unsigned>(mm::platform::millis()));
+    const std::string root = mm::systemTempDir() + "/mm_root_blocked_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(root);
     // ofstream does not create parents, and on Windows "/tmp" is <drive>:\tmp, which need not exist. Without this the case depends on another test having created it first.
     std::error_code ec;
@@ -122,7 +114,7 @@ TEST_CASE("A settings location that cannot be written to fails the mount, not ev
     { std::ofstream f(root); f << "a file, not a directory"; }
     REQUIRE(std::filesystem::is_regular_file(root));
 
-    mm::platform::fsSetRoot(root);
+    mm::platform::fsSetRoot(root.c_str());
     CHECK_FALSE(mm::platform::fsMount());
 
     mm::platform::fsSetRoot("");
@@ -148,7 +140,7 @@ TEST_CASE("the storage mounts when persistence attaches, before any module binds
 // Uses fsSetRoot to isolate the test from any real /.config/ on disk. A control change (deviceName) saved with flush() reappears on the next boot once a fresh Scheduler loads the same path.
 TEST_CASE("FilesystemModule round-trip") {
     TempRoot temp("persist_test");
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     // Scheduler::release() deletes its modules, so they are heap-allocated. First run: set deviceName, save.
     {
@@ -212,7 +204,7 @@ TEST_CASE("FilesystemModule round-trip") {
 // A document lists a module's children exactly (`$patch` replace), keyed by name.
 TEST_CASE("FilesystemModule structural load makes the live tree match the document") {
     TempRoot temp("struct_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     // ModuleFactory must know the types before reconciliation can construct them.
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
@@ -265,7 +257,7 @@ TEST_CASE("FilesystemModule structural load makes the live tree match the docume
 // After scheduler.setup() runs the persistence load, the wired child must survive. A code-wired child (markWiredByCode) survives a load from older JSON that doesn't mention it, new firmware additions aren't trimmed for existing users.
 TEST_CASE("FilesystemModule preserves code-wired children when JSON predates them") {
     TempRoot temp("wired_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -309,7 +301,7 @@ TEST_CASE("FilesystemModule preserves code-wired children when JSON predates the
 // That member is skipped and the next save re-writes the file with the actual tree shape. When the saved document wants a different type under a code-wired child's name, the load keeps the wired child.
 TEST_CASE("FilesystemModule does not replace code-wired child on type mismatch") {
     TempRoot temp("wired_replace_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -372,13 +364,38 @@ TEST_CASE("the first module skipped at boot is named with its reason and a point
     scheduler.release();
 }
 
+// The file keeps what boot skipped, for a backup to carry, until its module next saves; that save, after any one change, drops it, so the following boot names nothing.
+TEST_CASE("a module skipped at boot stays named at every boot until its module saves once") {
+    TempRoot temp("skipped_until_saved", /*withConfig=*/true);
+    mm::ModuleFactory::registerType<mm::Layer>("Layer");
+    mm::ModuleFactory::registerType<mm::NoiseEffect>("NoiseEffect");
+    const std::string file = temp.path + "/.config/Layer.json";
+    std::ofstream(file) << "{\"Layer\":{\"$patch\":\"replace\",\"enabled\":true,\"Old\":{\"type\":\"NoSuchEffectXyz\",\"enabled\":true},\"Noise\":{\"type\":\"NoiseEffect\",\"enabled\":true}}}";
+    auto boot = [](bool change) {
+        mm::Scheduler scheduler;
+        mm::FilesystemModule* fs = nullptr;
+        mm::Layer* layer = nullptr;
+        bootLayer(scheduler, fs, layer);
+        const bool named = fs->skippedAtBoot() != nullptr;
+        if (change) { layer->markDirty(); fs->flush(); }
+        scheduler.release();
+        return named;
+    };
+    CHECK(boot(false));
+    CHECK(boot(true));   // still in the file at the second boot, then the change saves the module
+    CHECK_FALSE(boot(false));
+    std::ifstream in(file);
+    const std::string saved((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(saved.find("NoSuchEffectXyz") == std::string::npos);
+}
+
 // Round-trip persistence with children.
 // Write a Layer subtree that contains both controls and child modules with controls of their own, then read the file back as text and verify it parses as valid JSON.
 // Regresses a missing comma between a child's "type" field and that child's first member (e.g.
 // "type":"X""$patch":"replace" instead of "type":"X","$patch":"replace"). Saving a Layer with multiple children produces valid JSON, comma separators between a child's `type` and its first member are present.
 TEST_CASE("FilesystemModule writes valid JSON with children") {
     TempRoot temp("write_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::NoiseEffect>("NoiseEffect");
@@ -429,7 +446,7 @@ TEST_CASE("FilesystemModule writes valid JSON with children") {
 // Built from a FixtureProfilesModule with many custom profiles, its persisted array of role wirings comfortably exceeds 2048 bytes, which the old fixed buffer would have silently dropped (returning false → nothing written → config lost on reboot).
 TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") {
     TempRoot temp("bigcfg_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
     mm::ModuleFactory::registerType<mm::FixtureProfilesModule>("FixtureProfilesModule");
 
     uint32_t markerId = 0;
@@ -496,7 +513,7 @@ TEST_CASE("FilesystemModule round-trips a config larger than the old 2 KB cap") 
 // This test catches that singleton-clear regression. /api/types factory-creates a temporary FilesystemModule probe; its destruction must NOT clear the static singleton (otherwise every later save silently no-ops).
 TEST_CASE("FilesystemModule singleton survives probe construct+destruct") {
     TempRoot temp("singleton_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::FilesystemModule>("FilesystemModule");
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
@@ -543,7 +560,7 @@ TEST_CASE("FilesystemModule singleton survives probe construct+destruct") {
 // Int16 controls (GridLayout width/height, RegionModifier start/end) preserve their saved value across load, no zero-clamping from uint8 min/max bounds.
 TEST_CASE("FilesystemModule Int16 controls round-trip preserves the saved value") {
     TempRoot temp("int16_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     // Hand-write a RegionModifier.json with non-zero Int16 values (including negatives, which are legal on the wire) so the load path is exercised without needing a save-side step.
     std::ofstream out(std::string(tmpRoot) + "/.config/RegionModifier.json");

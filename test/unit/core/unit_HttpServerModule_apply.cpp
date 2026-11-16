@@ -54,7 +54,7 @@ struct Tag : public mm::MoonModule {
 };
 
 // Stands in for the Drivers the WLED shim drives, by name, and is the light output a test claims when it reaches the palettes.
-struct FakeDrivers : public mm::MoonModule, public mm::test::FakeLightOutput {
+struct FakeDrivers : public mm::MoonModule, public mm::FakeLightOutput {
     bool on = true;
     uint8_t brightness = 20;
     uint8_t palette = 0;
@@ -830,7 +830,7 @@ TEST_CASE("the frame walker hands a Ping and a Close to the control callback, in
 
 TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, identity, board, signal, light outputs and effects") {
     PatchTree t;
-    struct Lights final : mm::test::FakeLightOutput {} lights;
+    struct Lights final : mm::FakeLightOutput {} lights;
     lights.outputs_ = "{\"driver\":\"LedDriver\",\"lights\":300}";
     lights.effects_ = "\"Noise\",\"Lines\"";
     lights.outputSeat_.claim();

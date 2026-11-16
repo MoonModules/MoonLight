@@ -12,10 +12,13 @@ the app (``--apk``): ``libmoonlight.so`` and the launcher icon, packed by Gradle
 """
 
 import argparse
+import base64
+import contextlib
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -51,19 +54,21 @@ def install_ndk() -> Path | None:
     return ndk_root()
 
 
-def release_keystore() -> str | None:
-    """The release key's file: MM_ANDROID_KEYSTORE when set, else MM_ANDROID_KEYSTORE_BASE64 (CI's secret) unpacked to a temporary file."""
+@contextlib.contextmanager
+def release_keystore():
+    """The release key's file for the build's duration: MM_ANDROID_KEYSTORE when set, else MM_ANDROID_KEYSTORE_BASE64 (CI's secret)
+    unpacked into a private temporary folder that goes with the build, so no copy of the key stays on disk; None for a debug-signed build."""
     if os.environ.get("MM_ANDROID_KEYSTORE"):
-        return os.environ["MM_ANDROID_KEYSTORE"]
+        yield os.environ["MM_ANDROID_KEYSTORE"]
+        return
     encoded = os.environ.get("MM_ANDROID_KEYSTORE_BASE64")
     if not encoded:
-        return None
-    import base64
-    import tempfile
-    fd, path = tempfile.mkstemp(suffix=".keystore")
-    with os.fdopen(fd, "wb") as f:
-        f.write(base64.b64decode(encoded))
-    return path
+        yield None
+        return
+    with tempfile.TemporaryDirectory() as folder:   # created readable by its owner alone
+        path = Path(folder) / "release.keystore"
+        path.write_bytes(base64.b64decode(encoded))
+        yield str(path)
 
 
 def ndk_tool(name: str) -> Path:
@@ -99,8 +104,6 @@ def build_apk(version: str | None) -> int:
     make_icons(ROOT / BUILD_DIR / "res")
     env = dict(os.environ)
     env.setdefault("ANDROID_HOME", str(sdk_root()))
-    if keystore := release_keystore():
-        env["MM_ANDROID_KEYSTORE"] = keystore   # what android/app/build.gradle.kts signs with
     if not env.get("JAVA_HOME") and Path("/opt/homebrew/opt/openjdk@17").exists():
         env["JAVA_HOME"] = "/opt/homebrew/opt/openjdk@17"   # Homebrew's JDK, which macOS does not put on the path
     gradlew = ROOT / "android" / ("gradlew.bat" if os.name == "nt" else "gradlew")
@@ -108,7 +111,10 @@ def build_apk(version: str | None) -> int:
     from compute_version import compute
     app_version = version or compute("local")
     props = [f"-PmmVersion={app_version}", f"-PmmVersionCode={version_code(app_version)}"]
-    r = subprocess.run([str(gradlew), "-p", str(ROOT / "android"), "assembleRelease", "-q", *props], env=env)
+    with release_keystore() as keystore:
+        if keystore:
+            env["MM_ANDROID_KEYSTORE"] = keystore   # what android/app/build.gradle.kts signs with
+        r = subprocess.run([str(gradlew), "-p", str(ROOT / "android"), "assembleRelease", "-q", *props], env=env)
     if r.returncode != 0:
         return r.returncode
     apk = ROOT / "android" / "app" / "build" / "outputs" / "apk" / "release" / "app-release.apk"

@@ -59,7 +59,7 @@ Install the app `build_android --apk` made on the attached Android device, a pho
 uv run moondeck/run/run_android.py
 ```
 
-`adb install -r` keeps the app's settings, as installing a release over it does. Its log: `adb logcat -s MoonLight`.
+`adb install -r` keeps the app's settings when the installed app carries the same signing key and a version no newer; over a release, which the release key signs, it says to back up, uninstall and restore. Its log: `adb logcat -s MoonLight`.
 
 ### run_desktop
 
@@ -202,7 +202,7 @@ uv run moondeck/test/test_android.py
 uv run moondeck/test/test_android.py -tc='*MoonLive*'   # doctest's own filters pass through
 ```
 
-Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, found through `MM_SOURCE_ROOT`), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_desktop`'s.
+Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, in a `repo` folder beside it), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_desktop`'s.
 
 ### test_desktop
 
@@ -646,7 +646,7 @@ Attribution comes from DWARF (`nm --line-numbers`), so a symbol is credited to t
 
 ### check_code
 
-The code check: counts that only fall, kept as check_docgen and check_prose keep theirs, for code.
+The code check: counts that only fall, as in check_docgen and check_prose.
 
 ```bash
 uv run moondeck/check/check_code.py                   # record the counts and findings, exit 1 if any count rose
@@ -654,9 +654,9 @@ uv run moondeck/check/check_code.py --module Control  # one module's findings, n
 uv run moondeck/check/check_code.py --account         # this change's account for its commit message
 ```
 
-Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow over 3 levels deep. **Long parameter list** is over 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere, found by [jscpd](https://github.com/kucherenko/jscpd) (through npx) among the code files the file-length rule counts. A clone counts under both of its files, so either file's edit clears it. Lizard tokenizes rather than parses, so it needs no build.
+Each rule is a textbook measure with a known tool, four of them counted by [lizard](https://github.com/terryyin/lizard). **Complex function** is cyclomatic complexity over 10. **Long function** is over 60 non-comment lines. **Deeply nested** is control flow over 3 levels deep. **Long parameter list** is over 7 parameters. **Large file** is over 1000 lines, counted by the script over every code file we own. **Duplicated block** is a run of 5 or more lines sharing 50 or more tokens with a run elsewhere, found by [jscpd](https://github.com/kucherenko/jscpd) among the code files the file-length rule counts. A clone counts under both its files. Lizard tokenizes rather than parses, so it needs no build.
 
-The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A touched file clears its own findings, as CLAUDE.md says for docgen.
+The [test page](../docs/reference/tests.md#check_code) shows each rule with its count and the move that solves it, and every file with its findings. The counts, `docs/reference/metrics/code.json`, are rewritten on every run and tracked, so their git history is the trend. **The committed counts are the number to beat**, per rule and in total: a run that raises either fails. A rule swept to zero, `double in firmware code` so far, is an error: one finding fails the run. A touched file clears its own findings.
 
 `repo_health` and `collect_kpi` count the function rules through the same two functions this script uses; the clones and the file sizes are this check's alone, too slow a pass for every KPI run. clang-tidy's `readability-function-*` checks stay off: one rule, one owner.
 

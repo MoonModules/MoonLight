@@ -7,9 +7,10 @@
 #include <unistd.h>
 
 #include "host_mdns.h"           // setHostMdns: Android's NsdManager as the platform's mDNS
+#include "main.h"                // mm_main
 #include "platform/platform.h"   // fsSetRoot
 
-#include <csignal>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,11 +18,10 @@
 #include <string>
 #include <thread>
 
-extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
 
 namespace {
 
-volatile std::sig_atomic_t running = 1;
+std::atomic<bool> running{true};   // the service thread clears it, the program thread reads it; once per process, so a stop before the start holds
 
 // stdout and stderr into logcat, a line at a time under the tag MoonLight, since an app has no terminal: what a desktop prints there, `adb logcat -s MoonLight` shows.
 void logToLogcat() {
@@ -136,11 +136,10 @@ extern "C" JNIEXPORT void JNICALL Java_org_moonmodules_moonlight_MoonLightServic
     env->ReleaseStringUTFChars(dataDir, dir);
     logToLogcat();
     lendMdns(env);
-    running = 1;
     mm_main(running, static_cast<uint16_t>(httpPort));
 }
 
 /// Ask run() to return: the loop ends at its next pass, as a desktop's Ctrl+C ends it.
 extern "C" JNIEXPORT void JNICALL Java_org_moonmodules_moonlight_MoonLightService_stop(JNIEnv*, jclass) {
-    running = 0;
+    running = false;
 }

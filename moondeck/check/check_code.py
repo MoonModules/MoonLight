@@ -67,6 +67,9 @@ FIRMWARE_DOUBLE = "double in firmware code"
 DEFINE_CONSTANT = "#define used as a constant"
 RTTI = "dynamic_cast or typeid in firmware"
 RELATIVE_INCLUDE = "relative include path"
+# The rules swept to zero, where one finding fails the check outright rather than waiting for the ratchet to notice a rise.
+ERROR_RULES = {FIRMWARE_DOUBLE}
+
 RULES = {"complex function": f"cyclomatic complexity > {MAX_CCN}",
          "long function": f"> {MAX_NLOC} lines of code",
          "deeply nested": f"control flow nested deeper than {MAX_NESTING}",
@@ -117,6 +120,11 @@ FIXES = {"complex function": "a chain on one value becomes a table; a switch on 
          DEFINE_CONSTANT: "constexpr: it has a type and a scope, and the preprocessor keeps #define for the flags it tests",
          RTTI: "a virtual method or a role check answers a base-to-derived question; the build has no runtime type information",
          RELATIVE_INCLUDE: "name the header from src/, as core/... or light/..., so each target's include root holds the boundaries"}
+
+
+def errors_in(rows) -> list:
+    """The rows of a rule in ERROR_RULES, each of which fails the check whatever the committed counts say."""
+    return [row for row in rows if row[1] in ERROR_RULES]
 
 
 def measure(extra=None):
@@ -590,7 +598,8 @@ def main() -> int:
     if _findings.is_real(COUNTS):
         measured = [r for r in RULES if hot is not None or r not in (HOT_PATH, STACK)]
         _findings.write("check_code", {r: {"reason": RULES[r], "fix": FIXES[r], "standard": STANDARD.get(r, STANDARDS + "#static-checks")} for r in measured},
-                        [{"rule": rule, "message": name, "file": file, "value": value} for file, rule, name, value in rows])
+                        [{"rule": rule, "message": name, "file": file, "value": value, "level": "error" if rule in ERROR_RULES else "warning"}
+                         for file, rule, name, value in rows])
     base = {k: v for k, v in (committed_counts() or {}).items() if k != DUPLICATED} or None
     if hot is None:
         # A host without Clang 20's -Wfunction-effects cannot count the hot path: every other rule still ratchets, and the counts keep the last full run rather than losing that rule.
@@ -607,8 +616,13 @@ def main() -> int:
         for rule, was, now in rose:
             print(f"  {rule}: {was} -> {now}")
         print("  Simplify what this change touched, or say in the commit why the rule itself changed.")
+    errors = errors_in(rows)
+    if errors:
+        print("\nERRORS. These fail the gate, since the rule stays at zero:")
+        for file, rule, name, _ in errors:
+            print(f"  {file}: {rule}: {name}  ({FIXES[rule]})")
     print("\nThe move per rule: " + "; ".join(f"{r}: {FIXES[r]}" for r in RULES) + ".\nRules: the check_code card on the test page, docs/reference/tests.md.")
-    return 1 if rose else 0
+    return 1 if rose or errors else 0
 
 
 if __name__ == "__main__":

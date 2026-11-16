@@ -78,7 +78,7 @@ A browser request whose page comes from beyond the local network, by its `Origin
 
 ### Discovery moves from Network to Devices
 
-**Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*.**
+**Action: *re-set a control* if you had changed Discovery's `addressing`; otherwise *nothing*. File Manager's `Network.Devices skipped at boot` clears once Network saves: change any Network setting, such as MQTT's port, and set it back.**
 
 The device list is the Discovery card in a top-level Devices container, where it was a card under Network. The device reads Discovery's settings from the Devices file, so `addressing` starts at its default, multicast and broadcast. The list itself is not saved: it fills within seconds of boot as devices announce themselves, and a saved `devices` entry is ignored. It has no fixed size: it holds as many devices as memory allows, where it stopped at 32.
 
@@ -186,7 +186,7 @@ A driver's `start` and `count` are 32-bit, so a window starts or ends past light
 
 **Action: after an update over the air, when File Manager shows `skipped at boot`, find the module it names in the entries of the releases since the one the device ran. Where that entry asks for it, take a Backup and Restore it before changing anything.**
 
-The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board built without one, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser.
+The board migrates nothing, so a module whose type a release renamed, such as `OscModule` becoming `OscService`, is skipped when its config file loads, and File Manager names the first one: `Services.Osc skipped at boot: unknown type`. The same line names a type this firmware does not carry at all, such as an SD card service on a board whose build leaves it out, which no restore brings back. The file still holds the module until that part of the tree is next saved, so a Backup taken first carries it, and Restore migrates it in the browser. Until then File Manager names it at every boot; any change to that module saves it and clears the line.
 
 ### The StadBeest autopilot builds its looks, a layer each
 

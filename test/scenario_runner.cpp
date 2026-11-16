@@ -88,6 +88,7 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/Control.h"
 #include "core/util/JsonSink.h"
+#include "unit/json_number.h"   // a fixture's double as a JSON number
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/GridBlacksLayout.h"
 #include "light/layouts/Layouts.h"
@@ -313,7 +314,7 @@ static bool applySetControl(mm::Scheduler& scheduler,
         mm::JsonSink wrapper;
         wrapper.append("{\"v\":");
         switch (value.type) {
-            case JsonVal::Number: wrapper.writeNumber(value.num); break;
+            case JsonVal::Number: mm::writeJsonNumber(wrapper, value.num); break;
             case JsonVal::Bool:   wrapper.writeBool(value.boolean); break;
             case JsonVal::String: wrapper.writeJsonString(value.str.c_str()); break;
             default:              wrapper.append("null"); break;

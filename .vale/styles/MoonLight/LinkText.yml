@@ -1,9 +1,10 @@
 # documentation-standards.md: "A link's text says what it reaches." "See here" does not tell the reader whether to follow
-# it. The words below, alone as the text of a link, name nothing.
+# it. The words below, alone as the text of a link, name nothing. The target is a link's (a web or mail address, a path, an anchor, a page),
+# so a C++ lambda capturing `[this](...)` reads as the code it is.
 extends: existence
 message: "A link reading '%s' does not say what it reaches: name the page or the thing."
-level: warning
+level: error
 ignorecase: true
 scope: raw
 raw:
-  - '\[(?:here|this|link|this link|click here|more|read more|page|this page)\]\('
+  - '\[(?:here|this|link|this link|click here|more|read more|page|this page)\]\((?:https?:|mailto:|\.{0,2}/|#|[^)\s]*\.(?:md|html?)\b)'

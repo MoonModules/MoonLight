@@ -309,6 +309,12 @@ def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_co
     assert [r[1] for r in c.double_findings("src/core/A.h", ['const char* u = "http://a"; double v;\n'])] == [c.FIRMWARE_DOUBLE], "a // inside a string is no comment"
 
 
+def test_a_double_in_firmware_fails_the_check_whatever_the_committed_counts_say():
+    double = ("src/core/A.h", check_code.FIRMWARE_DOUBLE, "line 1: double v;", 1)
+    complex_fn = ("src/core/B.cpp", "complex function", "f", 12)
+    assert check_code.errors_in([double, complex_fn]) == [double]
+
+
 def test_every_rule_the_coding_standards_say_check_code_checks_is_a_rule_it_reports():
     import re
     import check_code as c

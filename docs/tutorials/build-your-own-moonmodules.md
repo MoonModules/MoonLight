@@ -117,7 +117,7 @@ Notice we call `width()` and `height()` **inside** `tick()`, and loop exactly `0
 
 > **Rule of thumb:** read `width()`/`height()`/`depth()` each frame and iterate exactly those bounds. The buffer is sized to exactly `width × height × depth × channels`, so staying within the reported dimensions keeps every write in range.
 
-### Animating off *time*, not frames
+### Animating off *time*
 
 We build the moving `phase` from `elapsed()` (milliseconds since the show started), so motion tracks real time. A desktop renders thousands of frames per second and an ESP32 a few hundred; driving `phase` from `elapsed()` keeps the speed identical on both. (Driving it from a frame counter instead would tie the speed to the frame rate: fast on the desktop, slow on the chip.) `beat8(speed, elapsed())` is the ready-made helper: it returns a 0..255 value that rotates once per beat and handles the time math and overflow internally, so you write one line. There's a small family: `beatsin8` for a value that eases in and out like a wave, `sin8`/`cos8` for integer trig: all in `core/math8.h`.
 

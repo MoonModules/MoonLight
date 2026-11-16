@@ -21,7 +21,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace mm::test {
+namespace mm {
 
 /// Wire a driver to a peripheral declared before it, so it outlives the borrow, and a buffer of `lights`, on `benchPins` unless the case set its own.
 template <typename Peripheral>
@@ -32,7 +32,7 @@ inline void wireParallel(mm::ParallelLedDriver& d, Peripheral& peripheral, mm::B
     if (d.pins[0] == '\0') std::strcpy(d.pins, benchPins);
     // An empty buffer is wired on purpose for zero lights, so a masked allocation failure would fail cases downstream.
     REQUIRE(src.allocate(lights, 3) == (lights > 0));
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);   // 3 out-channels
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);   // 3 out-channels
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -55,7 +55,7 @@ inline void checkSetupReleaseRepeatable(const char* pins, uint8_t lanes) {
     mm::Correction corr;
     d.setPeripheralForTest(&peripheral);
     src.allocate(64, 3);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     std::strcpy(d.pins, pins);
     d.defineControls();
     for (int cycle = 0; cycle < 4; cycle++) {
@@ -76,8 +76,8 @@ inline void checkLoopbackTxPinTracksTest() {
     mm::ParallelLedDriver d;
     d.setPeripheralForTest(&peripheral);
     d.defineControls();
-    auto setTest = [&](bool on) { mm::test::setControlValue<bool>(d, "loopbackTest", on); };
-    mm::test::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
+    auto setTest = [&](bool on) { mm::setControlValue<bool>(d, "loopbackTest", on); };
+    mm::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
 }
 
 /// Pin the memory-backed bus contract for one peripheral type.
@@ -154,4 +154,4 @@ inline void checkHostBusDoubleBuffer() {
     CHECK(peripheral.busBuffer(1) == nullptr);
 }
 
-}  // namespace mm::test
+}  // namespace mm

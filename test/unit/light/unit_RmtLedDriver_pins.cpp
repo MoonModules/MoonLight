@@ -16,7 +16,7 @@ namespace {
 void wire(mm::RmtLedDriver& d, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
     REQUIRE(src.allocate(lights, 3));   // a masked alloc failure would fail cases downstream
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);   // 3 out-channels
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);   // 3 out-channels
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -414,7 +414,7 @@ TEST_CASE("RmtLedDriver window: a start past the buffer end yields an empty slic
 // tick() is a safe no-op across single-pin, multi-pin and zero-grid configs.
 TEST_CASE("RmtLedDriver tick is crash-safe for every pin configuration") {
     mm::Correction corr;
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
 
     SUBCASE("single pin, populated grid") {
         mm::RmtLedDriver d; mm::Buffer src;

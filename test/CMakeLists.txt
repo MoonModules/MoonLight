@@ -21,6 +21,7 @@ add_executable(mm_tests
     unit/core/unit_usbvideo_frames.cpp
     unit/core/unit_edid.cpp
     unit/core/unit_coprocessor_status.cpp
+    unit/core/unit_host_address.cpp
     unit/core/unit_stop_signal.cpp
     unit/core/unit_noise.cpp
     unit/core/unit_fields.cpp
@@ -355,7 +356,7 @@ set_tests_properties(unit_tests PROPERTIES
 # The same shared type registry the app compiles, so a scenario can name any module the
 # firmware has: src/module_types.cpp carries the reason.
 add_executable(mm_scenarios scenario_runner.cpp ${CMAKE_SOURCE_DIR}/src/module_types.cpp)
-target_include_directories(mm_scenarios PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(mm_scenarios PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})   # src/, and test/ for the helpers named from it
 target_link_libraries(mm_scenarios PRIVATE mm_core mm_platform)
 # A write_file step's `from` names a file in the repository, such as a shipped script.
 target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR}")

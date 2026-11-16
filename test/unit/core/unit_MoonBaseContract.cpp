@@ -26,13 +26,11 @@ char* textControl(mm::MoonModule& m, const char* name) {
 
 // The keys MoonBase scrapes are in the files the app writes, read by the scraper MoonBase itself runs.
 TEST_CASE("the app's saved config carries every key MoonBase reads") {
-    char tmpRoot[256];
-    std::snprintf(tmpRoot, sizeof(tmpRoot), "%s/mm_moonbase_contract_%u", mm::systemTempDir().c_str(),
-                  static_cast<unsigned>(mm::platform::millis()));
+    const std::string tmpRoot = mm::systemTempDir() + "/mm_moonbase_contract_" + std::to_string(mm::platform::millis());
     std::filesystem::remove_all(tmpRoot);
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
 
-    auto device = std::make_unique<mm::test::NetworkDevice>(tmpRoot);
+    auto device = std::make_unique<mm::NetworkDevice>(tmpRoot.c_str());
     auto& d = *device;
     auto* fs = d.fs;
     auto* sys = d.sys;

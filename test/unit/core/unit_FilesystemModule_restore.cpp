@@ -35,7 +35,7 @@ struct ModeDependentMock : public mm::MoonModule {
 
 TEST_CASE("FilesystemModule restores a value-dependent control across reload (the peripheral/clockPin bug)") {
     TempRoot temp("persist_modedep");
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
     mm::ModuleFactory::registerType<ModeDependentMock>("ModeDependentMock");
 
     // --- Save: set mode=1 (the non-default control set) AND param=3 on the mode-1 variable ---
@@ -88,7 +88,7 @@ TEST_CASE("FilesystemModule restores a value-dependent control across reload (th
 // Modeled with two code-wired effects (singletons per container, like Preview/FixtureProfiles) swapped vs. the file, plus a user effect after them.
 TEST_CASE("FilesystemModule restores a user module recorded after reordered code-wired siblings") {
     TempRoot temp("wired_reorder", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -141,7 +141,7 @@ TEST_CASE("FilesystemModule restores a user module recorded after reordered code
 // Regression: an UNKNOWN member BEFORE a boot-wired child must not spawn a DUPLICATE of the wired child. The unknown member is skipped, and the member naming the wired child applies to the existing instance.
 TEST_CASE("FilesystemModule: an unknown entry before a wired child does not duplicate the wired child") {
     TempRoot temp("wired_dup", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -186,7 +186,7 @@ TEST_CASE("FilesystemModule: an unknown entry before a wired child does not dupl
 // A document lists children in order, so a saved [B, A] loads as [B, A]. Two user effects, no code-wired children, saved in a non-boot order.
 TEST_CASE("FilesystemModule restores a user-module reorder in the saved order") {
     TempRoot temp("user_reorder", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -226,7 +226,7 @@ TEST_CASE("FilesystemModule restores a user-module reorder in the saved order") 
 // The renamed member must drop WITHOUT taking the user module after it, or the user's real driver vanishes on every reboot. This is the dominant cause on shiffy (distinct from the code-wired-reorder case above), pinned here.
 TEST_CASE("FilesystemModule skips an unknown type mid-list and keeps the user module after it") {
     TempRoot temp("unknown_midlist", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
@@ -293,7 +293,7 @@ public:
 
 TEST_CASE("FilesystemModule restores a control that only exists after prepare()") {
     TempRoot temp("lateschema");
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
     std::filesystem::create_directories(std::string(tmpRoot) + "/.config");
     {
         std::ofstream f(std::string(tmpRoot) + "/.config/LateSchemaModule.json");
@@ -333,7 +333,7 @@ struct SecretHolder : public mm::MoonModule {
 TEST_CASE("The device's own config file holds a secret, and a document written for sharing leaves it out") {
     // The config file is the device's own, so a reboot must bring the password back; a document is shown, copied and shared, so it carries none.
     TempRoot temp("secret");
-    const char* root = temp.path;
+    const char* root = temp.path.c_str();
 
     mm::Scheduler sched;
     auto* fs = new mm::FilesystemModule();
@@ -370,7 +370,7 @@ TEST_CASE("The device's own config file holds a secret, and a document written f
 // The boot load reads the flat file as the document it describes, names a code-wired child as main.cpp named it, keeps a saved `$name`, and saves the result as a document.
 TEST_CASE("A config file in the flat format older builds wrote loads at boot and is saved back as a document") {
     TempRoot temp("flat_convert_test", /*withConfig=*/true);
-    const char* tmpRoot = temp.path;
+    const char* tmpRoot = temp.path.c_str();
 
     mm::ModuleFactory::registerType<mm::Layer>("Layer");
     mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");

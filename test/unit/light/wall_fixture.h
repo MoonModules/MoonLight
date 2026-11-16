@@ -12,7 +12,7 @@
 
 #include <memory>
 
-namespace mm::test {
+namespace mm {
 
 /// A wall of `width` x `height`.
 struct Wall {
@@ -152,4 +152,4 @@ struct DriverOnPanels {
     }
 };
 
-}  // namespace mm::test
+}  // namespace mm

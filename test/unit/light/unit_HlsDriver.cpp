@@ -15,9 +15,9 @@
 #include <string>
 #include <vector>
 
-using mm::test::Wall;
-using mm::test::paintLight;
-using mm::test::wire;
+using mm::Wall;
+using mm::paintLight;
+using mm::wire;
 
 namespace {
 
@@ -45,8 +45,8 @@ const uint8_t* encodedFrame() { return mm::platform::encoderTestFrameCount() == 
 // A 64x32 snaked face streamed at 1:1 with the placement table refused: a frame of the face fits, the table, four bytes a pixel against three, does not.
 struct NoRoomStream {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
-    mm::test::DriverOnPanels<mm::HlsDriver> rig{1, 64, 32, true};
-    mm::test::RefuseAbove refuse{64 * 32 * 3};   // after the rig, so only what prepare() asks for meets it
+    mm::DriverOnPanels<mm::HlsDriver> rig{1, 64, 32, true};
+    mm::RefuseAbove refuse{64 * 32 * 3};   // after the rig, so only what prepare() asks for meets it
     NoRoomStream() {
         mm::platform::encoderTestClearFrames();
         mm::platform::setTestNowMs(1);
@@ -438,12 +438,12 @@ TEST_CASE("platform encoder is claimed by one module at a time") {
 // A snaked layout's second row runs back; the stream shows each light where the layout puts it, as one picture.
 TEST_CASE("HlsDriver streams each light where the layout puts it, so a snaked layout arrives as one picture") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
-    mm::test::DriverOnPanels<mm::HlsDriver> rig(1, 4, 2, true);
+    mm::DriverOnPanels<mm::HlsDriver> rig(1, 4, 2, true);
     mm::platform::encoderTestClearFrames();
     mm::platform::setTestNowMs(1);
     rig.driver->scale = 1;   // 1:1, so a light is one video pixel
     rig.driver->prepare();
-    mm::test::checkSnakedFrame(mm::test::frameAfterPainting(*rig.driver, *rig.source, 4, encodedFrame));
+    mm::checkSnakedFrame(mm::frameAfterPainting(*rig.driver, *rig.source, 4, encodedFrame));
 }
 
 TEST_CASE("HlsDriver without room to place the lights still streams them, in their own order, and warns why") {

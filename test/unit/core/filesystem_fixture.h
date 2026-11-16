@@ -11,13 +11,13 @@
 
 namespace {
 struct TempRoot {
-    char path[256];   ///< the folder, `<temp>/mm_<tag>_<millis>`
+    std::string path;   ///< the folder, `<temp>/mm_<tag>_<millis>`
     /// Make the folder, `/.config` in it when `withConfig`, and point the filesystem at it.
     explicit TempRoot(const char* tag, bool withConfig = false) {
-        std::snprintf(path, sizeof(path), "%s/mm_%s_%u", mm::systemTempDir().c_str(), tag, static_cast<unsigned>(mm::platform::millis()));
+        path = mm::systemTempDir() + "/mm_" + tag + "_" + std::to_string(mm::platform::millis());
         std::filesystem::remove_all(path);
-        if (withConfig) std::filesystem::create_directories(std::string(path) + "/.config");
-        mm::platform::fsSetRoot(path);
+        if (withConfig) std::filesystem::create_directories(path + "/.config");
+        mm::platform::fsSetRoot(path.c_str());
     }
     /// Point the filesystem back at its default and remove the folder.
     ~TempRoot() {

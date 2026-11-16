@@ -21,7 +21,7 @@ using mm::Correction;
 TEST_CASE("Correction brightness LUT: full brightness is identity") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     for (int v = 0; v < 256; v++) CHECK(c.briLut[v] == v);
 }
 
@@ -29,7 +29,7 @@ TEST_CASE("Correction brightness LUT: full brightness is identity") {
 TEST_CASE("Correction brightness LUT: half brightness halves each value (scale8)") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 128, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 128, mm::PresetOrder::RGB);
     CHECK(c.briLut[0] == 0);
     CHECK(c.briLut[255] == 128);   // (255*128)/255 = 128
     CHECK(c.briLut[128] == 64);    // (128*128)/255 = 64
@@ -40,7 +40,7 @@ TEST_CASE("Correction brightness LUT: half brightness halves each value (scale8)
 TEST_CASE("Correction RGB preset: apply is identity at full brightness") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     CHECK(c.outChannels == 3);
     CHECK(c.offWhite == Correction::kAbsent);   // no white channel for the RGB family
     const uint8_t src[3] = {10, 20, 30};
@@ -55,9 +55,9 @@ TEST_CASE("Correction RGB preset: apply is identity at full brightness") {
 // The fast path runs only for a strip of colors alone: any optional role sends the light through the full transform, which the preset tests below pin.
 TEST_CASE("Correction takes the plain-strip path for RGB orders only") {
     Correction rgb, grb, rgbw;
-    mm::test::rebuildFromPreset(rgb, 255, mm::test::PresetOrder::RGB);
-    mm::test::rebuildFromPreset(grb, 128, mm::test::PresetOrder::GRB);
-    mm::test::rebuildFromPreset(rgbw, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(rgb, 255, mm::PresetOrder::RGB);
+    mm::rebuildFromPreset(grb, 128, mm::PresetOrder::GRB);
+    mm::rebuildFromPreset(rgbw, 255, mm::PresetOrder::RGBW);
     CHECK(rgb.plainRgb);
     CHECK(grb.plainRgb);
     CHECK_FALSE(rgbw.plainRgb);
@@ -72,7 +72,7 @@ TEST_CASE("Correction takes the plain-strip path for RGB orders only") {
 TEST_CASE("Correction GRB preset: channels reordered, 3 output channels") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::GRB);
     CHECK(c.outChannels == 3);
     CHECK(c.offWhite == Correction::kAbsent);   // no white channel for the RGB family
     const uint8_t src[3] = {10, 20, 30};  // R=10 G=20 B=30
@@ -87,7 +87,7 @@ TEST_CASE("Correction GRB preset: channels reordered, 3 output channels") {
 TEST_CASE("Correction BGR preset: full reverse") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::BGR);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::BGR);
     const uint8_t src[3] = {10, 20, 30};
     uint8_t out[3] = {};
     c.apply(src, out, 3);
@@ -100,7 +100,7 @@ TEST_CASE("Correction BGR preset: full reverse") {
 TEST_CASE("Correction RGBW preset: 4 channels, white = min(r,g,b)") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     CHECK(c.outChannels == 4);
     CHECK(c.offWhite == 3);   // white derived into the 4th channel
     const uint8_t src[3] = {10, 20, 30};  // min = 10
@@ -116,7 +116,7 @@ TEST_CASE("Correction RGBW preset: 4 channels, white = min(r,g,b)") {
 TEST_CASE("Correction GRBW preset: reordered RGB + white") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::GRBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::GRBW);
     CHECK(c.outChannels == 4);
     const uint8_t src[3] = {10, 20, 30};
     uint8_t out[4] = {};
@@ -132,7 +132,7 @@ TEST_CASE("Correction: brightness applied BEFORE white derivation") {
     // White must be min of the *scaled* channels, not the raw ones.
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 128, mm::test::PresetOrder::RGBW);  // half brightness
+    mm::rebuildFromPreset(c, 128, mm::PresetOrder::RGBW);  // half brightness
     const uint8_t src[3] = {100, 200, 60};  // scaled: 50, 100, 30 → min = 30
     uint8_t out[4] = {};
     c.apply(src, out, 3);
@@ -146,11 +146,11 @@ TEST_CASE("Correction: brightness applied BEFORE white derivation") {
 TEST_CASE("Correction: rebuild switches output channel count RGB<->RGBW") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     CHECK(c.outChannels == 3);
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     CHECK(c.outChannels == 4);
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::GRB);
     CHECK(c.outChannels == 3);
     CHECK(c.offWhite == Correction::kAbsent);   // white dropped back to absent
 }
@@ -161,7 +161,7 @@ using mm::WhiteMode;
 TEST_CASE("Correction whiteMode None: white channel forced to 0, RGB intact") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     c.whiteMode = WhiteMode::None;
     const uint8_t src[3] = {10, 20, 30};
     uint8_t out[4] = {0, 0, 0, 77};   // pre-fill W with a stale value from a prior frame
@@ -177,7 +177,7 @@ TEST_CASE("Correction whiteMode None: white channel forced to 0, RGB intact") {
 TEST_CASE("Correction whiteMode Accurate: white subtracted from RGB") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     c.whiteMode = WhiteMode::Accurate;
     const uint8_t src[3] = {10, 20, 30};  // min = 10
     uint8_t out[4] = {};
@@ -472,7 +472,7 @@ TEST_CASE("Each moving-head formation aims the rig differently") {
 // CIE 1931 lightness (CIE 15 / ISO 11664-4) is the default because it models the thing actually being corrected: the eye's response to luminance. The endpoints are what a user notices first, and the shape between them is what makes a fade look even.
 TEST_CASE("The CIE curve keeps the endpoints and bends the middle down") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     c.curve = Correction::Curve::Cie;
     c.rebuildBrightness(255);
 
@@ -489,7 +489,7 @@ TEST_CASE("The CIE curve keeps the endpoints and bends the middle down") {
 TEST_CASE("A non-zero value never curves down to black") {
     for (auto curve : {Correction::Curve::Cie, Correction::Curve::Gamma22, Correction::Curve::Gamma28}) {
         Correction c;
-        mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+        mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
         c.curve = curve;
         c.rebuildBrightness(255);
         for (int v = 1; v < 256; v++) CHECK(c.briLut[v] >= 1);
@@ -499,7 +499,7 @@ TEST_CASE("A non-zero value never curves down to black") {
 // Linear is not a fallback: a downstream device that corrects its own output needs the value on the wire to mean duty cycle, or the picture is corrected twice.
 TEST_CASE("Linear is an exact identity at full brightness, for a device that corrects itself") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     c.curve = Correction::Curve::Linear;
     c.rebuildBrightness(255);
     for (int v = 0; v < 256; v++) CHECK(c.briLut[v] == v);
@@ -508,7 +508,7 @@ TEST_CASE("Linear is an exact identity at full brightness, for a device that cor
 // Brightness is a LINEAR pre-scale and the curve is applied last. Turning the slider down must not change the shape of the curve, only how far up it reaches.
 TEST_CASE("Brightness scales before the curve, so black stays black and the top tracks the slider") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     c.curve = Correction::Curve::Cie;
 
     c.rebuildBrightness(255);
@@ -525,7 +525,7 @@ TEST_CASE("Brightness scales before the curve, so black stays black and the top 
 // The white emitters are derived in LINEAR light and curved on the way out, so min() and the Accurate subtraction mean what they say. A curve applied before the subtraction would remove an amount that does not correspond to the light the white LED adds back.
 TEST_CASE("RGBW white is derived in linear light, then curved once") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     c.curve = Correction::Curve::Cie;
     c.rebuildBrightness(255);
     c.whiteMode = mm::WhiteMode::Accurate;
@@ -536,7 +536,7 @@ TEST_CASE("RGBW white is derived in linear light, then curved once") {
 
     // white = min(200,150,100) = 100 in LINEAR light, then curved.
     Correction ref;
-    mm::test::rebuildFromPreset(ref, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(ref, 255, mm::PresetOrder::RGB);
     ref.curve = Correction::Curve::Cie;
     ref.rebuildBrightness(255);
     CHECK(out[3] == ref.briLut[100]);
@@ -606,7 +606,7 @@ TEST_CASE("A 16-bit RGBW strip derives its white and writes it to 16 bits") {
 // An 8-bit profile never enters the 16-bit path, and a 16-bit one whose table is missing degrades to 8 bits rather than writing stale bytes.
 TEST_CASE("An 8-bit profile has no fine roles, and a missing table degrades to 8 bits") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     CHECK_FALSE(c.hasFine);
     Correction wide;
     wide.curve = Correction::Curve::Linear;
@@ -662,7 +662,7 @@ TEST_CASE("Correction gain: one channel's gain leaves the others untouched") {
     Gained g;
     g.wire(c);
     c.gainGreen = 128;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     const uint8_t src[3] = {200, 200, 200};   // the triple a green-cast strip renders wrong
     uint8_t out[3] = {};
     c.apply(src, out, 3);
@@ -677,7 +677,7 @@ TEST_CASE("Correction gain: an RGB gain does not reach the white die") {
     Gained g;
     g.wire(c);
     c.gainBlue = 128;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     const uint8_t src[3] = {200, 200, 200};
     uint8_t out[4] = {};
     c.apply(src, out, 3);
@@ -693,7 +693,7 @@ TEST_CASE("Correction gain: the curve and the gain compose to the gain's own rat
     Gained g;
     g.wire(c);
     c.gainBlue = 128;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGB);
     c.curve = Correction::Curve::Gamma22;
     c.rebuildBrightness(255);   // the same offsets, the tables refilled through the curve
     const uint8_t src[3] = {200, 200, 200};
@@ -706,7 +706,7 @@ TEST_CASE("Correction gain: the curve and the gain compose to the gain's own rat
 // Every built-in profile carries no gain, so it allocates nothing and every channel reads the one curve.
 TEST_CASE("Correction gain: a profile with no gain wants no tables") {
     Correction c;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     CHECK_FALSE(c.wantsGains());
     const uint8_t src[3] = {200, 160, 120};
     uint8_t out[4] = {};
@@ -722,7 +722,7 @@ TEST_CASE("Correction gainWhite: gains the white die without touching RGB") {
     const uint8_t src[3] = {200, 160, 120};   // the white component is the minimum, 120
 
     Correction full;
-    mm::test::rebuildFromPreset(full, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(full, 255, mm::PresetOrder::RGBW);
     uint8_t a[4] = {};
     full.apply(src, a, 3);
 
@@ -730,7 +730,7 @@ TEST_CASE("Correction gainWhite: gains the white die without touching RGB") {
     Gained g;
     g.wire(half);
     half.gainWhite = 128;
-    mm::test::rebuildFromPreset(half, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(half, 255, mm::PresetOrder::RGBW);
     uint8_t b[4] = {};
     half.apply(src, b, 3);
 
@@ -745,7 +745,7 @@ TEST_CASE("Correction gainWhite: zero puts the white die out") {
     Gained g;
     g.wire(c);
     c.gainWhite = 0;
-    mm::test::rebuildFromPreset(c, 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
     const uint8_t src[3] = {200, 160, 120};
     uint8_t out[4] = {};
     c.apply(src, out, 3);
@@ -759,7 +759,7 @@ TEST_CASE("Correction gain: a copied correction reads its own tables") {
     Gained g;
     g.wire(built);
     built.gainGreen = 128;
-    mm::test::rebuildFromPreset(built, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(built, 255, mm::PresetOrder::RGB);
 
     Correction copy = built;   // what a driver's assignment does
     const uint8_t src[3] = {200, 200, 200};

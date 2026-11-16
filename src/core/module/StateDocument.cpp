@@ -223,10 +223,10 @@ struct Applier {
         return validateNewName(member);
     }
 
-    // Why a name a request gives cannot name a module, or null: the length, the dot a control binding reads as its separator (`Module.control`), and the keys a document reserves.
+    // Why a name a request gives cannot name a module, or null: the length, the separators of a control binding (`Module.control`) and of a live patch's path (`Module/control`), and the keys a document reserves.
     static const char* nameRefusal(const char* name) {
         if (!nameFits(name)) return kNameRule;
-        if (std::strchr(name, '.')) return "a module name holds no dot, which a control binding reads as its separator";
+        if (std::strpbrk(name, "./")) return "a module name holds no dot or slash, which bindings and live updates read as separators";
         return reserved(name) ? "a module name is no reserved key: no leading $, and not type" : nullptr;
     }
 

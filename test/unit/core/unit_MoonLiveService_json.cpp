@@ -60,14 +60,14 @@ struct Rig {
     JmControl* control = new JmControl();
     JmBox* effects = new JmBox();
     MoonLiveService* svc = new MoonLiveService();
-    char root_[256];
+    std::string root_;
     Rig() {
         static bool registered = false;
         if (!registered) { ModuleFactory::registerType<JmKnob>("JmKnob"); registered = true; }
         static unsigned seq = 0;
-        std::snprintf(root_, sizeof(root_), "%s/mm_mls_json_%u", mm::systemTempDir().c_str(), ++seq);
+        root_ = mm::systemTempDir() + "/mm_mls_json_" + std::to_string(++seq);
         std::filesystem::remove_all(root_);
-        platform::fsSetRoot(root_);
+        platform::fsSetRoot(root_.c_str());
         net = Net{};
         platform::setTestHttpFetch(&standIn);
         fs->setName("Filesystem");

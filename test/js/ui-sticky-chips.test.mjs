@@ -37,6 +37,6 @@ test("a picker of another role keeps its own chips", () => {
 
 test("a remembered chip the picker does not offer survives that picker, and clearing what it offers clears only that", () => {
     const c = chipsWith({ effect: ["🧊", "🎵"] });
-    c.rememberChips(["effect"], ["🎵", "🔥"], new Set());   // a list without the cube chip: the cube stays remembered
+    c.rememberChips(["effect"], ["🎵", "🔥"], new Set());   // a list that omits the cube chip: the cube stays remembered
     assert.deepEqual(c.stickyChips(["effect"]), ["🧊"]);
 });

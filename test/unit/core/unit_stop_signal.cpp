@@ -5,6 +5,7 @@
 #include "doctest.h"
 #include "platform/desktop/stop_signal.h"
 
+#include <atomic>
 #include <csignal>
 
 TEST_CASE("SIGTERM clears the stop flag, and a second one is caught as well, since a service manager escalates itself") {
@@ -14,12 +15,12 @@ TEST_CASE("SIGTERM clears the stop flag, and a second one is caught as well, sin
         RestoreHandler() { sigaction(SIGTERM, nullptr, &old); }
         ~RestoreHandler() { sigaction(SIGTERM, &old, nullptr); }
     } restore;
-    volatile std::sig_atomic_t running = 1;
+    std::atomic<bool> running{true};
     mm::platform::stopOnSigterm(running);
     std::raise(SIGTERM);
-    CHECK(running == 0);
-    running = 1;
+    CHECK_FALSE(running);
+    running = true;
     std::raise(SIGTERM);   // not one-shot: the default action would end this process here
-    CHECK(running == 0);
+    CHECK_FALSE(running);
 #endif
 }

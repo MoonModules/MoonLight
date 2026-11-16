@@ -19,7 +19,7 @@
 #include <cstring>
 #include <cstdint>
 
-namespace mm::test {
+namespace mm {
 
 /// A control's index in the module's current list, or -1 when it is not bound at all.
 inline int controlIndex(mm::MoonModule& m, const char* name) {
@@ -72,4 +72,4 @@ inline void checkConditionalControl(mm::MoonModule& m, const char* dependent,
     CHECK(isVisible(m, dependent) == !visibleWhenTrue);
 }
 
-} // namespace mm::test
+} // namespace mm

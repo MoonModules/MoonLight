@@ -620,11 +620,12 @@ TEST_CASE("renaming a module to its own name changes nothing") {
     CHECK(r.changes == 0);
 }
 
-// A control binding reads `Module.control` up to its first dot, and a document's reserved keys belong to the document, so a name holds no dot and no reserved key.
-TEST_CASE("a name with a dot or a reserved key is refused, for a new module and a rename alike") {
+// A control binding reads `Module.control` up to its first dot, a live patch's path `Module/control` up to its first slash, and a document's reserved keys belong to the document.
+TEST_CASE("a name with a dot, a slash or a reserved key is refused, for a new module and a rename alike") {
     Tree t;
     seedRename(t);
     for (const char* doc : {R"({"Effects": {"Layer": {"Knob": {"$name": "Dial.v2"}}}})",
+                            R"({"Effects": {"Layer": {"Knob": {"$name": "Dial/v2"}}}})",
                             R"({"Effects": {"Layer": {"Knob": {"$name": "$hidden"}}}})",
                             R"({"Effects": {"Layer": {"Knob": {"$name": "type"}}}})",
                             R"({"Effects": {"A.b": {"type": "SdKnob"}}})"}) {

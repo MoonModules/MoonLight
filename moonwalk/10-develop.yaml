@@ -23,7 +23,7 @@ processes:
         say: Run it.
         when: { run: { script: moondeck/run/run_desktop.py } }
         detail: |
-          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced.
+          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced. One desktop runs at a time, on 8080: a check that needs a running device uses that one or the unit tests' own fixtures, and opens no instance on another port.
 
           The run detaches and outlives the script that started it, as a flashed board runs on its own. Open `http://localhost:8080`. A source checkout keeps its settings in `build/fs/`: [where the desktop keeps its settings](reference/build-system.md#where-the-desktop-keeps-its-settings).
 

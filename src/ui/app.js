@@ -6075,15 +6075,16 @@ function relativeAge(sec) {
 ///
 /// Typing is debounced, so anything that ACTS on the typed value (Enter, a send button) has to land
 /// the text first or it acts on what the device held a keystroke ago.
-// Send now whatever a key under `prefix` still holds back, so an action that follows acts on what was typed.
+// Send now whatever a key under `prefix` still holds back, every one taken before the first is awaited, so a debounce firing during that wait finds its send already gone.
 async function flushPendingSends(prefix) {
+    const sends = [];
     for (const key of Object.keys(pendingSends)) {
         if (!key.startsWith(prefix)) continue;
         clearTimeout(dragTimers[key]);
-        const send = pendingSends[key];
+        sends.push(pendingSends[key]);
         delete pendingSends[key];
-        await send();
     }
+    for (const send of sends) await send();
 }
 
 function appendResetButton(row, moduleName, ctrl, def, applyVisually, write = (name, value) => sendControl(moduleName, name, value)) {
@@ -7346,6 +7347,13 @@ function attachDragHandlers(card, mod) {
 
 // The browser saves a file the page made: the anchor is attached for Firefox, and the URL is revoked late, since Safari drops a download whose URL goes at once.
 function saveBlob(blob, name) {
+    // An app's WebView saves what `<a download>` offers to no file, so the Android app lends the page a save of its own (MainActivity.kt).
+    if (window.MoonLightApp) {
+        const reader = new FileReader();
+        reader.onload = () => window.MoonLightApp.save(name, blob.type || "application/octet-stream", String(reader.result).split(",")[1] || "");
+        reader.readAsDataURL(blob);
+        return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -8986,7 +8994,12 @@ function renderFileManager(mod, host) {
                 dl.title = "download";
                 dl.href = "/api/file?path=" + encodeURIComponent(childPath);
                 dl.setAttribute("download", entry.name);
-                dl.addEventListener("click", (ev) => ev.stopPropagation());   // don't select/open
+                dl.addEventListener("click", (ev) => {
+                    ev.stopPropagation();   // don't select/open
+                    if (!window.MoonLightApp) return;   // a browser saves the link itself; the app saves through saveBlob
+                    ev.preventDefault();
+                    fetch(dl.href).then(async r => { if (!r.ok) throw new Error(await errorMessage(r)); return r.blob(); }).then(b => saveBlob(b, entry.name)).catch(e => alert("could not download " + entry.name + ": " + e.message));
+                });
                 rowEl.appendChild(dl);
             }
 

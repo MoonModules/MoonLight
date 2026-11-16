@@ -196,6 +196,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #endif
 #include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
 #include "host_mdns.h"   // the responder a host lends the mDNS calls
+#include "platform/desktop/host_address.h"   // which held address is the LAN's
 
 namespace mm::platform {
 
@@ -979,8 +980,23 @@ static bool routeAddress(sockaddr_in& local) {
     close_sock(fd);
     return got;
 }
+/// The host's address on the LAN (host_address.h): the route's own address, unless a VPN holds the route and an interface that broadcasts holds the LAN's.
+static bool hostAddress(in_addr& out) {
+    sockaddr_in route{};
+    out.s_addr = routeAddress(route) ? route.sin_addr.s_addr : 0;
+#ifndef _WIN32
+    HeldAddress held[16];
+    size_t count = 0;
+    eachInterface([&](const ifaddrs& a) {
+        if (count < std::size(held) && a.ifa_addr && a.ifa_addr->sa_family == AF_INET)
+            held[count++] = {reinterpret_cast<const sockaddr_in*>(a.ifa_addr)->sin_addr.s_addr, a.ifa_flags, virtualInterface(a.ifa_name)};
+    });
+    out.s_addr = lanAddress(out.s_addr, held, count);
+#endif
+    return out.s_addr != 0;
+}
 const char* hostIp() {
-    // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; the interface lookup, which walks the interface list, runs only when the address changed.
+    // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; naming the interface runs only when the address changed.
     static char ip[INET_ADDRSTRLEN] = {};
     static uint32_t resolvedAt = 0;
     const uint32_t now = millis();
@@ -988,11 +1004,10 @@ const char* hostIp() {
     resolvedAt = now ? now : 1;
     char was[INET_ADDRSTRLEN];
     std::memcpy(was, ip, sizeof(was));
-    sockaddr_in local{};
-    const bool got = routeAddress(local);
-    if (got) inet_ntop(AF_INET, &local.sin_addr, ip, sizeof(ip));
+    in_addr local{};
+    if (hostAddress(local)) inet_ntop(AF_INET, &local, ip, sizeof(ip));
     else ip[0] = 0;
-    if (std::strcmp(was, ip) != 0) findHostIf(local.sin_addr);   // cleared with the address, since no interface holds none
+    if (std::strcmp(was, ip) != 0) findHostIf(local);   // cleared with the address, since no interface holds none
     return ip;
 }
 
@@ -2222,7 +2237,7 @@ void setTestMdnsAvailable(bool available) { testMdns_ = available; testMdnsInits
 uint32_t testMdnsInitCount() { return testMdnsInits_; }
 static const char* testMdnsFailure_ = nullptr;   // a reason a test makes mdnsInit fail with
 void setTestMdnsFailure(const char* why) { testMdnsFailure_ = why; }
-// The responder a host lends, such as the Android app's NsdManager; without one the services are only remembered, which is what a test reads back.
+// The responder a host lends, such as the Android app's NsdManager; with none lent, the services are remembered alone, which is what a test reads back.
 static HostMdns hostMdns_;
 void setHostMdns(const HostMdns& responder) { hostMdns_ = responder; }
 bool mdnsInit(const char* deviceName) {
@@ -3997,11 +4012,6 @@ size_t rawInterfaces(const char* const** optionsOut) {
             }
         }
 #else
-        // Loopback and the known virtual prefixes (VPN tunnels, AirDrop/AirPlay radios, debug, bridges, container veths) never reach a panel card and only bury the real NICs.
-        static constexpr const char* kVirtualPrefixes[] = {
-            "lo", "utun", "awdl", "llw", "anpi", "bridge", "gif", "stf", "ap", "pktap",
-            "veth", "docker", "br-", "virbr",
-        };
             // The negotiated speed rides in the label, or nothing when unstated, so the fast adapter is distinguishable from a tunnel. The shared helper discards the carrier.
             auto linkMbps = [](const char* ifname) -> unsigned {
                 uint16_t mbps = 0;
@@ -4009,17 +4019,9 @@ size_t rawInterfaces(const char* const** optionsOut) {
                 return mbps;
             };
 
-        auto isVirtual = [](const char* n) {
-            for (const char* p : kVirtualPrefixes) {
-                const size_t l = std::strlen(p);
-                if (std::strncmp(n, p, l) == 0 && (n[l] == 0 || (n[l] >= '0' && n[l] <= '9')))
-                    return true;
-            }
-            return false;
-        };
         eachInterface([&](const ifaddrs& a) {
             if (!a.ifa_name || !(a.ifa_flags & IFF_UP)) return;
-            if ((a.ifa_flags & IFF_LOOPBACK) || isVirtual(a.ifa_name)) return;
+            if ((a.ifa_flags & IFF_LOOPBACK) || virtualInterface(a.ifa_name)) return;   // they reach no panel card and bury the real NICs
             for (size_t i = 1; i < rawIfCount_; i++)
                 if (std::strcmp(rawIfNames_[i], a.ifa_name) == 0) return;   // getifaddrs lists one row per address family
             // Label carries the speed, bind name does not: the name is the adapter's identity and the speed changes when a link renegotiates (platform.h § raw interfaces). Same "NAME, N Gb" shape as the Windows branch.

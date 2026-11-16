@@ -9,6 +9,7 @@ device (platform_desktop_audio.cpp); the audio tests feed their own samples.
 """
 
 import argparse
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,7 @@ from build_android import BUILD_DIR, ndk_tool  # noqa: E402
 
 DEVICE_DIR = "/data/local/tmp/moonlight-tests"
 
-# The repo files the tests read from disk, pushed under DEVICE_DIR/src as MM_SOURCE_ROOT (test/unit/source_tree.h).
+# The repo files the tests read from disk, pushed under DEVICE_DIR/repo, where test/unit/source_tree.h looks on a device.
 # Built firmware images stay on the computer: their tests return early on a device, as on a tree that has built none.
 SOURCE_FILES = {
     "moonlive": "script sweeps, catalog, motion and particle examples, Xtensa codegen",
@@ -59,11 +60,10 @@ def main():
     adb("push", str(stripped), f"{DEVICE_DIR}/mm_tests", check=True, stdout=subprocess.DEVNULL)
     adb("shell", f"chmod 755 {DEVICE_DIR}/mm_tests", check=True)
     for rel in SOURCE_FILES:
-        adb("shell", f"mkdir -p {DEVICE_DIR}/src/{Path(rel).parent}", check=True)
-        adb("push", str(ROOT / rel), f"{DEVICE_DIR}/src/{Path(rel).parent}/", check=True, stdout=subprocess.DEVNULL)
-    quoted = " ".join(f"'{a}'" for a in doctest_flags + args.doctest_args)
+        adb("shell", f"mkdir -p {DEVICE_DIR}/repo/{Path(rel).parent}", check=True)
+        adb("push", str(ROOT / rel), f"{DEVICE_DIR}/repo/{Path(rel).parent}/", check=True, stdout=subprocess.DEVNULL)
+    quoted = shlex.join(doctest_flags + args.doctest_args)   # a filter may hold an apostrophe, as test names do
     run = (f"cd {DEVICE_DIR} && TMPDIR={DEVICE_DIR}/tmp MM_DATA_DIR={DEVICE_DIR}/data HOME={DEVICE_DIR}/data "
-           f"MM_SOURCE_ROOT={DEVICE_DIR}/src "
            f"./mm_tests {quoted}; echo \"exit $?\"")
     out = adb("shell", run, capture_output=True, text=True).stdout
     print(out)

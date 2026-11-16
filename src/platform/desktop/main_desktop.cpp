@@ -2,6 +2,7 @@
 ///
 /// Everything a host gives a program and a device does not, kept here so the firmware itself is the same code on both.
 
+#include <atomic>    // the stop flag
 #include <csignal>
 #include <cstdint>   // mm_main() takes uint16_t; <unistd.h> used to pull this in on POSIX
 #include <cstdio>
@@ -10,10 +11,10 @@
 #include <cstring>
 #include <iterator>   // std::size: the crash signals' count from their one array
 
+#include "main.h"          // mm_main
 #include "stop_signal.h"   // stopOnSigterm
 #include "host_update.h"   // confirmProgramWhenStable
 #ifdef MM_MAC_SCREEN
-#include <atomic>
 #include <thread>
 #include "main_thread.h"   // runMainThread
 #endif
@@ -24,10 +25,10 @@
 #include <unistd.h>
 #endif
 
-extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
 
-// sig_atomic_t: the one type a signal handler may write and the main thread read.
-static volatile std::sig_atomic_t running = 1;
+// A lock-free atomic, which a signal handler may store ([support.signal]) and the app thread reads without a data race, as a volatile sig_atomic_t only promises within one thread.
+static std::atomic<bool> running{true};
+static_assert(std::atomic<bool>::is_always_lock_free);
 static bool cleanExit = false;
 
 // Write a string literal to the error stream from a signal handler, its length taken from the array bound so it can never drift from the text.
@@ -77,12 +78,19 @@ static void crashHandler(int sig) {
     raise(sig);
 }
 #else
-// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; a signal that was sent (si_code <= 0: a kill, a raise, an abort) is sent again.
+// Whether a signal was sent (a kill, a raise, an abort) rather than raised by a faulting instruction: POSIX's SI_ codes, which Linux numbers 0 and below and Darwin from 0x10001.
+static bool sentSignal(const siginfo_t* info) {
+    if (info == nullptr || info->si_code <= 0) return true;
+    for (int code : {SI_USER, SI_QUEUE, SI_TIMER, SI_ASYNCIO, SI_MESGQ})
+        if (info->si_code == code) return true;
+    return false;
+}
+// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; a sent signal is sent again.
 static void crashHandler(int sig, siginfo_t* info, void*) {
     reportCrash(sig);
     for (size_t i = 0; i < std::size(kCrashSignals); i++)
         if (kCrashSignals[i] == sig) sigaction(sig, &previousCrashAction[i], nullptr);   // sigaction is async-signal-safe
-    if (info == nullptr || info->si_code <= 0) raise(sig);
+    if (sentSignal(info)) raise(sig);
 }
 #endif
 
@@ -170,7 +178,7 @@ int main(int argc, char** argv) {
     signal(SIGFPE,  crashHandler);
     signal(SIGABRT, crashHandler);
     // signal() is one-shot on Windows, so the handler is already reset after the first Ctrl+C and a second one force-quits: the same escalation SA_RESETHAND gives the POSIX branch below.
-    signal(SIGINT,  [](int) { running = 0; });
+    signal(SIGINT,  [](int) { running = false; });
 #else
     struct sigaction sa{};
     sa.sa_sigaction = crashHandler;
@@ -181,7 +189,7 @@ int main(int argc, char** argv) {
     // The first interrupt asks for a clean stop and restores the default handler, so a second kills a wedged shutdown outright rather than leaving the key dead and another terminal the only way out.
     struct sigaction saInt{};
     saInt.sa_handler = [](int) {
-        running = 0;
+        running = false;
         // Say so, because the first press otherwise looks ignored while teardown runs. safeWrite, not printf: only async-signal-safe calls are legal in a handler.
         safeWrite("\nStopping. Press Ctrl+C again to force quit.\n");
     };

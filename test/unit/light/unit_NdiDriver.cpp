@@ -14,9 +14,9 @@
 #include <memory>
 #include <string>
 
-using mm::test::Wall;
-using mm::test::paintLight;
-using mm::test::wire;
+using mm::Wall;
+using mm::paintLight;
+using mm::wire;
 
 namespace {
 
@@ -91,7 +91,7 @@ TEST_CASE("NdiDriver applies the driver's own brightness correction") {
     Wall wall(2, 1);
     setUp(driver, source, wall, 2);
     mm::Correction half;
-    mm::test::rebuildFromPreset(half, 128, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(half, 128, mm::PresetOrder::RGB);
     driver.correctionForTest() = half;
     driver.prepare();
 
@@ -197,22 +197,22 @@ TEST_CASE("NdiDriver blanks the tail when the layer is smaller than the frame") 
 // A snaked layout's second row runs back; a receiver sees each light where the layout puts it, as one picture.
 TEST_CASE("NdiDriver sends each light where the layout puts it, so a snaked layout arrives as one picture") {
     NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
-    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 4, 2, true);
+    mm::DriverOnPanels<mm::NdiDriver> rig(1, 4, 2, true);
     mm::platform::ndiTestClearFrames();
     rig.driver->prepare();
-    mm::test::checkSnakedFrame(mm::test::frameAfterPainting(*rig.driver, *rig.source, 4, sentFrame));
+    mm::checkSnakedFrame(mm::frameAfterPainting(*rig.driver, *rig.source, 4, sentFrame));
 }
 
 TEST_CASE("NdiDriver without room to place the lights still sends them, in their own order, and warns why") {
     NdiSeamGuard seam{mm::platform::NdiTestMode::ForceAvailable};
-    mm::test::DriverOnPanels<mm::NdiDriver> rig(1, 64, 32, true);
-    mm::test::RefuseAbove refuse(64 * 32 * 3);   // once the wall is built, a frame of the face: the table, four bytes a pixel against three, is refused
+    mm::DriverOnPanels<mm::NdiDriver> rig(1, 64, 32, true);
+    mm::RefuseAbove refuse(64 * 32 * 3);   // once the wall is built, a frame of the face: the table, four bytes a pixel against three, is refused
     mm::platform::ndiTestClearFrames();
     rig.driver->prepare();
     CHECK(rig.driver->severity() == mm::MoonModule::Severity::Warning);
     CHECK(std::string(rig.driver->status()).find("sending 64x32") == 0);
     CHECK(std::string(rig.driver->status()).find(", no memory to place the lights by the layout") != std::string::npos);
-    const uint8_t* f = mm::test::frameAfterPainting(*rig.driver, *rig.source, 70, sentFrame);
+    const uint8_t* f = mm::frameAfterPainting(*rig.driver, *rig.source, 70, sentFrame);
     REQUIRE(f != nullptr);
     CHECK(f[70 * 3] == 10);   // light 70 on pixel 70: the raster order
 }

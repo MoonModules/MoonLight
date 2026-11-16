@@ -4,12 +4,12 @@
 #include "esp_heap_caps.h"
 #include "nvs_flash.h"
 
-#include <csignal>   // sig_atomic_t: mm_main's stop flag
+#include <atomic>
 #include <cstdio>
 
-extern void mm_main(volatile std::sig_atomic_t& keepRunning, uint16_t httpPort);
+#include "main.h"   // mm_main
 
-static volatile std::sig_atomic_t running = 1;
+static std::atomic<bool> running{true};   // a board runs until it resets
 
 extern "C" void app_main() {
     // Initialize NVS (required by WiFi and other drivers)

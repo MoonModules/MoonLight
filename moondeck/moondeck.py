@@ -360,7 +360,7 @@ def _ota_upload(ip: str, image: bytes, report=lambda stage, pct=None: None):
     """Upload a local build to the device at `ip`, as the Firmware card's file picker does; returns (answer, status), and `report` hears each stage.
 
     A MoonBase variant's app cannot write the slot it runs from, so it is rebooted into MoonBase first, which takes the image on the
-    same route; a device without MoonBase answers that reboot 409 and takes the image itself (the network update process,
+    same route; every other variant answers that reboot 409 and takes the image itself (the network update process,
     moonwalk/11-hardware.yaml). The device reboots into the new image as the write completes, so a connection cut after the whole
     image went out is success.
     """

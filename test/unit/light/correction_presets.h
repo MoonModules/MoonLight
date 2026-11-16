@@ -11,7 +11,7 @@
 #include "light/drivers/Correction.h"
 #include "light/drivers/ChannelRole.h"
 
-namespace mm::test {
+namespace mm {
 
 /// The curated wire orders a test drives, mapped to role arrays in one place below.
 enum class PresetOrder : uint8_t { RGB, GRB, BGR, RGBW, GRBW };
@@ -30,4 +30,4 @@ inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder
     }
 }
 
-}  // namespace mm::test
+}  // namespace mm

@@ -7,7 +7,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
 import android.view.WindowInsets
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -22,6 +24,7 @@ class MainActivity : Activity() {
 
     private lateinit var web: WebView
     private var pickedFiles: ValueCallback<Array<Uri>>? = null
+    private var pendingSave: ByteArray? = null   // the file the system's save dialog is choosing a place for
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +49,8 @@ class MainActivity : Activity() {
                 return true
             }
         }
+        // A WebView saves what `<a download>` offers to no file, so the page saves a backup, a GIF or a file through this (saveBlob in app.js).
+        web.addJavascriptInterface(SaveBridge(), "MoonLightApp")
         // Android 15 draws an app edge to edge, so the page keeps clear of the status and navigation bars a phone has.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             web.setOnApplyWindowInsetsListener { view, insets ->
@@ -63,6 +68,12 @@ class MainActivity : Activity() {
         if (requestCode == PICK_FILES) {
             pickedFiles?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
             pickedFiles = null
+        }
+        if (requestCode == SAVE_FILE) {
+            val bytes = pendingSave
+            pendingSave = null
+            val place = data?.data
+            if (resultCode == RESULT_OK && bytes != null && place != null) contentResolver.openOutputStream(place)?.use { it.write(bytes) }
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
@@ -86,8 +97,22 @@ class MainActivity : Activity() {
         if (missing.isNotEmpty()) requestPermissions(missing.toTypedArray(), ASK_PERMISSIONS)
     }
 
+    /** The page's save: the bytes, then the system's dialog for where they go, as a browser asks where a download goes. */
+    inner class SaveBridge {
+        @JavascriptInterface fun save(name: String, mime: String, base64: String) {
+            val bytes = Base64.decode(base64, Base64.DEFAULT)
+            runOnUiThread {
+                if (pendingSave != null) return@runOnUiThread   // one dialog at a time, so its place receives its own file
+                pendingSave = bytes
+                val ask = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(mime).putExtra(Intent.EXTRA_TITLE, name)
+                startActivityForResult(ask, SAVE_FILE)
+            }
+        }
+    }
+
     companion object {
         private const val PICK_FILES = 1
         private const val ASK_PERMISSIONS = 2
+        private const val SAVE_FILE = 3
     }
 }

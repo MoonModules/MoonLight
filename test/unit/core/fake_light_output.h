@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace mm::test {
+namespace mm {
 
 /// A light output with twelve palettes thirty degrees of hue apart, so a core test's color mapping is exact; a fake Drivers derives from it and claims the seat.
 struct FakeLightOutput : public LightOutput {
@@ -38,4 +38,4 @@ protected:
     ~FakeLightOutput() = default;
 };
 
-}  // namespace mm::test
+}  // namespace mm

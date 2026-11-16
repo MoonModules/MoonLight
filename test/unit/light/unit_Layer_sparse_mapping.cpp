@@ -279,7 +279,7 @@ TEST_CASE("Layer: an all-black GridBlacks builds an empty LUT without crashing")
 
 // A light outside the box is not in box order, however its row-major index happens to come out: here light 3 sits at (-1, 1), whose index wraps to cell 3.
 TEST_CASE("Layer: a dense layout with a light outside the box is not natural order, so it takes the mapped path") {
-    mm::test::OneOutsideDense layout;
+    mm::OneOutsideDense layout;
     LayerRig rig(&layout);
     CHECK_FALSE(rig.layer.isNaturalOrder());
     CHECK(rig.layer.lut().hasLUT());   // the identity fast path would give light 3 the cell it does not sit in
@@ -287,7 +287,7 @@ TEST_CASE("Layer: a dense layout with a light outside the box is not natural ord
 
 // Placement skips a light outside the box, so the light that sits at a cell gets it, whichever arrives first.
 TEST_CASE("Layer: placeByLayout gives each cell the light that sits there, skipping a light outside the box") {
-    mm::test::LeftOfBox layout;   // light 0 at (-1, 1), then a 4x2 raster: light 4 at (3, 0)
+    mm::LeftOfBox layout;   // light 0 at (-1, 1), then a 4x2 raster: light 4 at (3, 0)
     LayerRig rig(&layout);
     std::vector<mm::nrOfLightsType> out(8);
     rig.layer.placeByLayout(out.data(), 8, {4, 2, 1});

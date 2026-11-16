@@ -31,6 +31,7 @@ on:
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
       # manual dispatch because only moondeck/ci changed).
       - 'moondeck/ci/**'
+      - 'android/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'
@@ -51,6 +52,7 @@ on:
       - 'src/**'
       - 'test/**'
       - 'moondeck/ci/**'
+      - 'android/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'

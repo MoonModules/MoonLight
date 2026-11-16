@@ -92,7 +92,7 @@ struct RegistryScope {
 
 // Drive the Scheduler control-change sequence for the `peripheral` Select: write the new index through the bound control pointer (as applyControlValue does), rebuild controls (swap #1, binds new backend), then fire onControlChanged (must be a no-op swap, not a second free-and-rebuild).
 void changePeripheralTo(mm::ParallelLedDriver& d, uint8_t index) {
-    int i = mm::test::controlIndex(d, "peripheral");
+    int i = mm::controlIndex(d, "peripheral");
     REQUIRE(i >= 0);
     *static_cast<uint8_t*>(d.controls()[static_cast<uint8_t>(i)].ptr) = index;
     d.rebuildControls();
@@ -103,7 +103,7 @@ void changePeripheralTo(mm::ParallelLedDriver& d, uint8_t index) {
 void wireDriver(mm::ParallelLedDriver& d, mm::Buffer& src, mm::Correction& corr) {
     std::strcpy(d.pins, "1,2");
     REQUIRE(src.allocate(64, 3) == true);
-    mm::test::rebuildFromPreset(corr, 255, mm::test::PresetOrder::GRB);
+    mm::rebuildFromPreset(corr, 255, mm::PresetOrder::GRB);
     d.defineControls();
     d.setSourceBuffer(&src);
     d.correctionForTest() = corr;
@@ -112,7 +112,7 @@ void wireDriver(mm::ParallelLedDriver& d, mm::Buffer& src, mm::Correction& corr)
 
 // The `peripheral` Select's index for a backend's label, or -1: the board-filtered option list in registry order, which a test does not hardcode. A Select keeps its options in aux and their count in max.
 int peripheralIndex(mm::ParallelLedDriver& d, const char* label) {
-    const int sel = mm::test::controlIndex(d, "peripheral");
+    const int sel = mm::controlIndex(d, "peripheral");
     if (sel < 0) return -1;
     const auto& c = d.controls()[static_cast<uint8_t>(sel)];
     const char* const* opts = reinterpret_cast<const char* const*>(c.aux);
@@ -209,17 +209,17 @@ TEST_CASE("ParallelLedDriver: switching the peripheral and back keeps the clockP
     REQUIRE(aIdx >= 0);
     REQUIRE(bIdx >= 0);
     changePeripheralTo(d, static_cast<uint8_t>(aIdx));
-    mm::test::setControlValue<int8_t>(d, "clockPin", 3);
-    mm::test::setControlValue<uint8_t>(d, "ringBufs", 20);
+    mm::setControlValue<int8_t>(d, "clockPin", 3);
+    mm::setControlValue<uint8_t>(d, "ringBufs", 20);
 
     changePeripheralTo(d, static_cast<uint8_t>(bIdx));
     changePeripheralTo(d, static_cast<uint8_t>(aIdx));
 
-    const int idx = mm::test::controlIndex(d, "clockPin");
+    const int idx = mm::controlIndex(d, "clockPin");
     REQUIRE(idx >= 0);
     CHECK(*static_cast<const int8_t*>(d.controls()[static_cast<uint8_t>(idx)].ptr) == 3);
     CHECK(d.clockPin == 3);
-    const int ring = mm::test::controlIndex(d, "ringBufs");
+    const int ring = mm::controlIndex(d, "ringBufs");
     REQUIRE(ring >= 0);
     CHECK(*static_cast<const uint8_t*>(d.controls()[static_cast<uint8_t>(ring)].ptr) == 20);
     CHECK(d.ringBufs == 20);
@@ -232,7 +232,7 @@ TEST_CASE("ParallelLedDriver: the ring's settings are declared, hidden, without 
     d.defineControls();
     for (const char* name : {"shiftOverclock", "useRing", "ringSnapshot", "ringAuto", "ringRows", "ringBufs", "ringPadUs"}) {
         CAPTURE(name);
-        const int idx = mm::test::controlIndex(d, name);
+        const int idx = mm::controlIndex(d, name);
         REQUIRE(idx >= 0);
         CHECK(d.controls()[static_cast<uint8_t>(idx)].hidden);
     }

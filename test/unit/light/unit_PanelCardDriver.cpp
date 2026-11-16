@@ -15,8 +15,8 @@
 #include "core/util/JsonSink.h"   // writeControlMetadata: the schema the UI parses
 #include <string>   // status() substring checks
 
-using mm::test::Wall;
-using mm::test::wire;
+using mm::Wall;
+using mm::wire;
 
 namespace {
 
@@ -291,7 +291,7 @@ TEST_CASE("PanelCardDriver sends the wall a PanelsLayout describes") {
     mm::Buffer source;
     REQUIRE(source.allocate(128 * 128, 3));
     mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
     mm::PanelCardDriver driver;
     driver.setLayer(&layer);
     driver.setSourceBuffer(&source);
@@ -334,7 +334,7 @@ TEST_CASE("PanelCardDriver widens the row when a PanelsLayout chains panels acro
     mm::Buffer source;
     REQUIRE(source.allocate(256 * 64, 3));
     mm::Correction correction;
-    mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+    mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
     mm::PanelCardDriver driver;
     driver.setLayer(&layer);
     driver.setSourceBuffer(&source);

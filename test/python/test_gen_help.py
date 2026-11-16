@@ -512,8 +512,8 @@ def test_a_source_file_outside_the_modules_credits_by_its_attribution_line():
 
 def test_a_link_to_the_same_page_becomes_its_anchor():
     import mkdocs_hooks
-    md = "[here](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#sine)"
-    assert mkdocs_hooks._site_relative(md, "moonmodules/light/effects.md") == "[here](#sine)"
+    md = "[Sine](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#sine)"
+    assert mkdocs_hooks._site_relative(md, "moonmodules/light/effects.md") == "[Sine](#sine)"
 
 
 def test_an_absolute_link_or_picture_stays_as_written(tmp_path, monkeypatch):

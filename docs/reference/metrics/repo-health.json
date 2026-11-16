@@ -1,7 +1,7 @@
 {
-  "commit": "29166d82",
+  "commit": "87ec969e",
   "flash": {
-    "esp32s3-n16r8": 2535056,
+    "esp32s3-n16r8": 2535248,
     "esp32": 2315424,
     "esp32p4rev1-eth": 2655776,
     "esp32p4rev1-eth-wifi": 2876672,
@@ -14,12 +14,12 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2489104,
-    "desktop-macos": 2662592,
+    "desktop-macos": 2663088,
     "desktop-windows": 1925120,
     "esp32c3": 2405632,
     "desktop-linux": 2548000,
     "esp32s3-n32r16": 2489792,
-    "teensy41": 1289160,
+    "teensy41": 1339336,
     "esp32p4rev3-eth-wifi": 2887488,
     "esp32s3-n8r2": 2247072
   },
@@ -40,7 +40,7 @@
     "esp32c3": "2026-11-12",
     "desktop-linux": "2026-10-12",
     "esp32s3-n32r16": "2026-11-10",
-    "teensy41": "2026-11-10",
+    "teensy41": "2026-11-16",
     "esp32-wrover": "2026-10-30",
     "esp32p4rev3-eth-wifi": "2026-11-16",
     "esp32s3-n8r2": "2026-10-30"
@@ -800,8 +800,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 8,
-      "fps": 125000,
+      "tick_us": 19,
+      "fps": 52631,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -841,16 +841,16 @@
     }
   },
   "loc": {
-    "core": 38018,
+    "core": 38002,
     "light": 36280,
-    "platform": 26320,
-    "ui": 14707,
-    "test": 88475,
-    "moondeck": 35867
+    "platform": 26387,
+    "ui": 14720,
+    "test": 88577,
+    "moondeck": 35888
   },
   "comments": {
     "core": {
-      "lines": 7446,
+      "lines": 7439,
       "ratio": 0.217
     },
     "light": {
@@ -858,24 +858,24 @@
       "ratio": 0.233
     },
     "platform": {
-      "lines": 4590,
+      "lines": 4596,
       "ratio": 0.195
     },
     "ui": {
-      "lines": 3646,
-      "ratio": 0.263
+      "lines": 3647,
+      "ratio": 0.262
     },
     "test": {
-      "lines": 8086,
+      "lines": 8092,
       "ratio": 0.105
     },
     "moondeck": {
-      "lines": 4524,
+      "lines": 4525,
       "ratio": 0.145
     }
   },
   "tests": {
-    "cases": 3364,
+    "cases": 3371,
     "scenarios": 37
   },
   "docs": {
@@ -887,7 +887,7 @@
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6481,
+    "functions": 6485,
     "over_threshold": 333,
     "worst_ccn": 128
   }

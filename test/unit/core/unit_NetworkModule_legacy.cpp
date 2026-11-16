@@ -34,7 +34,7 @@ const void* controlPtr(mm::MoonModule& m, const char* name) {
     return nullptr;
 }
 
-using Device = mm::test::NetworkDevice;
+using Device = mm::NetworkDevice;
 
 std::string readConfig(const std::string& root) {
     std::ifstream in(root + "/.config/NetworkModule.json");

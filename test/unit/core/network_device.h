@@ -10,7 +10,7 @@
 #include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
 
-namespace mm::test {
+namespace mm {
 
 /// A device booting on a config folder, with Network and its interface cards wired as main wires them: the interfaces first, so their keys come before any other child's.
 struct NetworkDevice {
@@ -54,4 +54,4 @@ struct NetworkDevice {
     ~NetworkDevice() { scheduler.release(); platform::setTestHostNetwork(true); }
 };
 
-}  // namespace mm::test
+}  // namespace mm

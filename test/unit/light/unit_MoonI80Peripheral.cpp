@@ -30,7 +30,7 @@ struct ExpanderMoonI80 : mm::MoonI80Peripheral {
 
 void wire(mm::ParallelLedDriver& d, mm::MoonI80Peripheral& peripheral, mm::Buffer& src, mm::Correction& corr,
           mm::nrOfLightsType lights) {
-    mm::test::wireParallel(d, peripheral, src, corr, lights, "1,2,4,5,6,7,8,9");
+    mm::wireParallel(d, peripheral, src, corr, lights, "1,2,4,5,6,7,8,9");
 }
 
 } // namespace
@@ -92,7 +92,7 @@ TEST_CASE("MoonI80Peripheral rejects a latchPin on WR") {
     d.setPeripheralForTest(&peripheral);
     d.defineControls();
     d.pinExpander = true;
-    const int idx = mm::test::controlIndex(d, "clockPin");
+    const int idx = mm::controlIndex(d, "clockPin");
     REQUIRE(idx >= 0);
     d.latchPin = *static_cast<int8_t*>(d.controls()[static_cast<uint8_t>(idx)].ptr);
     wire(d, peripheral, src, corr, 8 * 16);
@@ -109,7 +109,7 @@ TEST_CASE("MoonI80Peripheral shift mode requires a clockPin; direct mode does no
     d.defineControls();
     d.pinExpander = true;
     d.latchPin = 12;
-    mm::test::setControlValue<int8_t>(d, "clockPin", -1);   // unset
+    mm::setControlValue<int8_t>(d, "clockPin", -1);   // unset
     wire(d, peripheral, src, corr, 8 * 16);
     CHECK(d.severity() == mm::ParallelLedDriver::Severity::Error);
 
@@ -119,7 +119,7 @@ TEST_CASE("MoonI80Peripheral shift mode requires a clockPin; direct mode does no
     mm::Correction corr2;
     d2.setPeripheralForTest(&peripheral2);
     d2.defineControls();
-    mm::test::setControlValue<int8_t>(d2, "clockPin", -1);
+    mm::setControlValue<int8_t>(d2, "clockPin", -1);
     std::strcpy(d2.pins, "1,2,4,5,6,7,8,9");
     wire(d2, peripheral2, src2, corr2, 8 * 16);
     CHECK(d2.severity() != mm::ParallelLedDriver::Severity::Error);

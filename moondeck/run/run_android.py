@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Install the app build_android.py --apk made on the attached Android device and open it.
 
-``adb install -r`` keeps the app's settings, as installing a release's APK over it does, then the
-app starts and runs MoonLight; its log is ``adb logcat -s MoonLight``.
+``adb install -r`` keeps the app's settings over an app with the same signing key and a version no
+newer, then the app starts and runs MoonLight; its log is ``adb logcat -s MoonLight``.
 """
 
 import subprocess
@@ -23,13 +23,14 @@ def main():
     devices = subprocess.run(["adb", "devices"], capture_output=True, text=True).stdout.splitlines()[1:]
     if not any(line.endswith("\tdevice") for line in devices):
         sys.exit("No authorized Android device: connect it with USB debugging on and accept the prompt on its screen.")
-    # -d also installs over a newer version code, as a build from this checkout over a CI release is
-    install = subprocess.run(["adb", "install", "-r", "-d", str(apk)], capture_output=True, text=True)
+    install = subprocess.run(["adb", "install", "-r", str(apk)], capture_output=True, text=True)
     print(install.stdout.strip())
     if install.returncode != 0:
-        if "UPDATE_INCOMPATIBLE" in install.stdout + install.stderr:
-            sys.exit(f"The device holds MoonLight signed with another key, such as a release: uninstall it first (back up its settings), "
-                     f"`adb uninstall {PACKAGE}`, then run this again.")
+        said = install.stdout + install.stderr
+        # Both refusals keep the installed app, settings and all: Android replaces an app only with one signed by the same key and of a version code at least its own.
+        if "UPDATE_INCOMPATIBLE" in said or "VERSION_DOWNGRADE" in said:
+            why = "signed with another key, such as a release" if "UPDATE_INCOMPATIBLE" in said else "of a newer version"
+            sys.exit(f"The device holds MoonLight {why}: back up its settings, `adb uninstall {PACKAGE}`, run this again, then restore them.")
         sys.exit(install.stderr.strip() or install.returncode)
     for cmd in (["adb", "shell", "am", "force-stop", PACKAGE],
                 ["adb", "shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity"]):

@@ -297,7 +297,7 @@ TEST_CASE("NetworkSendDriver: each Art-Net universe carries exactly channels_per
         REQUIRE(rx.bind(mm::ARTNET_PORT));
         mm::NetworkSendDriver driver;
         mm::Correction correction;
-        mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+        mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
         driver.correctionForTest() = correction;
         driver.protocol = mm::NetworkSendDriver::kProtoArtNet;
         std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
@@ -406,7 +406,7 @@ struct PaceRig {
         REQUIRE(rx.bind(port));   // a running desktop app holds 4048: don't run it and the tests at once
         driver.ddpPort = port;
         mm::Correction correction;
-        mm::test::rebuildFromPreset(correction, 255, mm::test::PresetOrder::RGB);
+        mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
         driver.correctionForTest() = correction;
         driver.protocol = mm::NetworkSendDriver::kProtoDdp;
         std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
@@ -470,10 +470,10 @@ TEST_CASE("NetworkSendDriver: a packet gap of 0 sends the frame as one burst fro
 TEST_CASE("NetworkSendDriver: DDP sends to its ddp_port, shown only while the protocol is DDP") {
     mm::NetworkSendDriver d;
     d.defineControls();
-    CHECK(mm::test::isHidden(d, "ddp_port"));    // Art-Net, the default, has its registered port
+    CHECK(mm::isHidden(d, "ddp_port"));    // Art-Net, the default, has its registered port
     d.protocol = mm::NetworkSendDriver::kProtoDdp;
     d.rebuildControls();
-    CHECK(mm::test::isVisible(d, "ddp_port"));
+    CHECK(mm::isVisible(d, "ddp_port"));
 
     PaceRig r(10, 0, 50, 4049);   // a receiver on 4049 alone
     r.driver.tick();
@@ -571,7 +571,7 @@ TEST_CASE("NetworkSendDriver: a correction that grows the buffer under a paced s
     REQUIRE(r.driver.sendsInTask());
     r.driver.tick();
     REQUIRE(r.arrivals(1).size() == 1);
-    mm::test::rebuildFromPreset(r.driver.correctionForTest(), 255, mm::test::PresetOrder::RGBW);
+    mm::rebuildFromPreset(r.driver.correctionForTest(), 255, mm::PresetOrder::RGBW);
     r.driver.onCorrectionChanged();   // 400 lights at four channels: the buffer reallocates
     CHECK(r.driver.sendsInTask());
     CHECK(r.driver.correctedBuffer().channelsPerLight() == 4);

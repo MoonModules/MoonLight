@@ -12,8 +12,8 @@
 #include <string_view>
 #include <vector>
 
-using mm::test::LayoutFace;
-using mm::test::panelsFace;
+using mm::LayoutFace;
+using mm::panelsFace;
 
 namespace {
 
@@ -69,7 +69,7 @@ struct RefusedPicture {
     std::unique_ptr<Pictured> pictured = std::make_unique<Pictured>();                ///< the picture, refused its table
     bool placedFirst = true;                                                          ///< what the refused place() answered
     RefusedPicture() {
-        mm::test::RefuseAbove refuse(24);
+        mm::RefuseAbove refuse(24);
         placedFirst = pictured->picture.place(face->layer, 4, 2);
     }
 };
@@ -108,7 +108,7 @@ TEST_CASE("LayoutPicture shows each pixel the light the layout puts there, for a
 TEST_CASE("LayoutPicture ignores a light placed outside the face, leaving the pixel its index wraps to with its own light") {
     auto pictured = std::make_unique<Pictured>();
     mm::LayoutPicture& picture = pictured->picture;
-    auto left = std::make_unique<LayoutFace<mm::test::LeftOfBox>>();
+    auto left = std::make_unique<LayoutFace<mm::LeftOfBox>>();
     left->build();
     REQUIRE(picture.place(left->layer, 4, 2));
     CHECK(picture.lightAt(3) == 4);   // (3, 0) keeps its own light; light 0, left of the box, lands nowhere
@@ -179,7 +179,7 @@ TEST_CASE("LayoutPicture draws each pixel's light as a scale by scale block, bla
 TEST_CASE("LayoutPicture takes a table for a dense layout with a light outside the box, and leaves that light's pixel dark") {
     auto pictured = std::make_unique<Pictured>();
     mm::LayoutPicture& picture = pictured->picture;
-    auto f = std::make_unique<LayoutFace<mm::test::OneOutsideDense>>();
+    auto f = std::make_unique<LayoutFace<mm::OneOutsideDense>>();
     f->build();
     REQUIRE(picture.place(f->layer, 4, 2));
     CHECK(pictured->owner.dynamicBytes() == 8 * sizeof(mm::nrOfLightsType));
