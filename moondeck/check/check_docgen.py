@@ -796,7 +796,7 @@ def _header_rules(rel: str, text: str):
     # declaration, so 251 statements were reported as undocumented public members.
     #
     # The depth of a class body is NOT a constant: every header opens `namespace mm`, but
-    # a nested struct adds another level (Hub75Slots puts its class at 3 where the others
+    # a nested struct adds another level (a class can open at 3 where the others
     # are at 2). So remember WHICH depth the class opened at, rather than counting to a
     # number that is right for most files and wrong for the rest.
     # A STACK, not one depth: a nested type opens its own body and the enclosing class

@@ -2,8 +2,8 @@
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "light/drivers/DriverBase.h"
-#include "light/drivers/Hub75Slots.h"
 #include "light/layers/Layer.h"
+#include "platform/Hub75Encode.h"
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -26,9 +26,9 @@ namespace mm {
 ///
 /// @technical
 ///
-/// **Continuous output.** A HUB75 panel is lit only while clocked, so the platform arms one scan and re-sends the buffer forever. The driver writes the next frame into it between scans, so tick() transmits nothing. The wire format is Hub75Slots.h.
+/// **Continuous output.** A HUB75 panel is lit only while clocked, so the platform arms one scan and re-sends the buffer forever. The driver writes the next frame into it between scans, so tick() transmits nothing. The wire format is Hub75Encode.h.
 ///
-/// **Brightness.** Binary coded modulation lights plane `p` for 2^p time units. Each plane is stored once, since emitting it 2^p times costs 1,060,800 bytes at 8-bit on a 64x64 panel against 33,280.
+/// **Brightness.** Binary coded modulation lights plane `p` for 2^p time units. Each plane is stored once, not 2^p times: `Hub75Geometry::frameSlots()` has the sizes.
 ///
 /// **Pins.** The first definition fills them from the chip's first board; the members stay -1, since a blind guess lands on octal PSRAM, USB, UART0 or a strapping pin. WLED's pin array ends `...LAT,OE,CLK`, so a map transcribed as `...CLK,LAT,OE` swaps three lines silently.
 class Hub75Driver : public DriverBase {
@@ -53,7 +53,7 @@ public:
     int8_t oe = -1;    ///< Output enable, active LOW.
 
     /// The clock edges `clockEdgeSel` picks from, in kEdgeOptions order.
-    enum ClockEdge : uint8_t { kEdgeRising, kEdgeFalling, kEdgeCount };
+    enum : uint8_t { kEdgeRising, kEdgeFalling, kEdgeCount };
     /// The edge the chips sample on; every pixel one column over means the other.
     uint8_t clockEdgeSel = kEdgeRising;
     /// The panel's scan rate: 1/8, 1/16 or 1/32, read off the panel.
@@ -61,7 +61,7 @@ public:
     uint8_t scanSel = 1;
 
     /// Bit planes per frame: color levels against refresh and memory.
-    /// @guide Depth costs refresh and memory linearly. Brightness shortens each plane's lit time, so full white lights about a third of the time at 6-bit.
+    /// @guide Depth costs refresh and memory per plane, more on a layout 16 columns or less at 6-bit. Full white lights about a third of the time at 6-bit.
     uint8_t bitDepth = 6;
 
     /// The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.
@@ -105,7 +105,7 @@ public:
         buildBackendOptions();
         controls_.addSelect("peripheral", peripheralSel_, backendOptions_, backendOptionCount_);
         controls_.addSelect("scanRate", scanSel, kScanOptions, kScanCount);
-        controls_.addControl("bitDepth", bitDepth, 2, 6);
+        controls_.addControl("bitDepth", bitDepth, 2, kHub75PortMaxBitDepth);
         // The one knob a chip family changes. WLED exposes the same flag as its bus "reversed" box.
         controls_.addSelect("clockEdge", clockEdgeSel, kEdgeOptions, kEdgeCount);
 

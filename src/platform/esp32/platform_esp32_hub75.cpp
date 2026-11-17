@@ -71,7 +71,6 @@
 #include "freertos/task.h"
 
 #include <atomic>
-#include <cstring>
 #include <new>
 
 namespace mm::platform {
@@ -88,6 +87,8 @@ const char* g_lastError = nullptr;
 
 // The OE bit means lit and the panel's OE is active low, so the pin is re-routed inverted and an idle bus is dark (Hub75Bus.h, "The bus word").
 constexpr uint8_t kOeLane = Hub75Layout{}.oe;
+// The bus lanes the layout uses, bit 0 (R1) to bit 14 (OE); the 16-bit bus's bit 15 is a hole.
+constexpr size_t kBusLanes = 15;
 void invertOe(gpio_num_t oe, int signal) { esp_rom_gpio_connect_out_signal(oe, signal, true, false); }
 
 struct Hub75State : platform::InternalRamObject {
@@ -174,10 +175,10 @@ void destroyState(Hub75State* st) {
 }
 
 /// Every panel line in the bit order the layout declares; false when one is unset, such a port being dark rather than degraded.
-bool buildPinOrder(const Hub75Pins& p, uint8_t scanRate, gpio_num_t* out, size_t& count) {
+bool buildPinOrder(const Hub75Pins& p, uint8_t scanRate, gpio_num_t* out) {
     constexpr uint16_t kUnset = 0xFFFF;
-    // Bits 0-5: color. Bits 8-12: address. 13: latch. 14: OE. The gap at 6-7 is deliberate, because it matches Hub75Layout's defaults, so encoder and bus agree without either knowing the other.
-    const uint16_t order[15] = {
+    // Bits 0-5: color. Bits 8-12: address. 13: latch. 14: OE. The gap at 6-7 is deliberate, because it matches Hub75Layout, which the encoder reads, so encoder and bus agree on every bit.
+    const uint16_t order[kBusLanes] = {
         p.r1, p.g1, p.b1, p.r2, p.g2, p.b2,
         kUnset, kUnset,               // 6, 7: unused by the default layout
         p.a, p.b, p.c, p.d, p.e,
@@ -186,18 +187,15 @@ bool buildPinOrder(const Hub75Pins& p, uint8_t scanRate, gpio_num_t* out, size_t
     // How many address lines this panel's scan rate actually uses: a 1/8 panel leaves D and E unwired, and demanding them would refuse a perfectly good port.
     const uint8_t addrBits = (scanRate > 16) ? 5 : (scanRate > 8) ? 4 : 3;
 
-    count = 0;
-    for (size_t bit = 0; bit < 15; bit++) {
+    for (size_t bit = 0; bit < kBusLanes; bit++) {
         const bool isAddr = (bit >= 8 && bit <= 12);
         const bool needed = !isAddr || (bit - 8) < addrBits;
         if (!needed || order[bit] == kUnset) {
             // An unneeded or unwired line still occupies its bus position: the encoder puts data at fixed bit offsets, so a hole cannot shift the lines above it. NC parks it.
             out[bit] = GPIO_NUM_NC;
-            count = bit + 1;
             continue;
         }
         out[bit] = static_cast<gpio_num_t>(order[bit]);
-        count = bit + 1;
     }
 
     // The lines without which nothing lights.
@@ -243,35 +241,27 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     hub75Deinit(h);
     g_lastError = nullptr;
 
-    if (width == 0 || height == 0 || scanRate == 0) {
-        g_lastError = "set the panel size and scan rate";
-        return false;
-    }
-    // A real panel is 1/8, 1/16 or 1/32, and buildPinOrder derives the address width from it, so a config file's 3 would ask for an address no panel has.
+    // The port's own rule: a real panel is 1/8, 1/16 or 1/32, and buildPinOrder derives the address width from it, so a config file's 3 would ask for an address no panel has. The rest of the geometry is `valid()`'s, below.
     if (scanRate != 8 && scanRate != 16 && scanRate != 32) {
         g_lastError = "scan rate must be 1/8, 1/16 or 1/32";
         return false;
     }
-    if (height % scanRate != 0 || ((height / scanRate) % 2) != 0) {
-        g_lastError = "the scan rate does not divide the panel height into row pairs";
-        return false;
-    }
-
-    gpio_num_t busPins[16] = {};
-    size_t busCount = 0;
-    if (!buildPinOrder(pins, scanRate, busPins, busCount)) {
-        g_lastError = "a HUB75 line is unset: every color, address and control pin is required";
-        return false;
-    }
-    for (size_t i = 0; i < busCount; i++) gpioTake(busPins[i]);
 
     // The size comes from the encoder, which is the one home for the wire format. Recomputing it here is how the two silently disagreed: this must be the exact buffer hub75Encode writes, or a correct encode overruns the DMA frame.
     mm::Hub75Geometry geo;
     geo.width = width; geo.height = height; geo.scanRate = scanRate; geo.bitDepth = bitDepth;
-    if (!geo.valid()) {
-        g_lastError = "the panel size, scan rate or bit depth (2 to 6) cannot be encoded";
+    if (bitDepth > mm::kHub75PortMaxBitDepth || !geo.valid()) {
+        g_lastError = "the panel size, scan rate or bit depth is outside what the port encodes";
         return false;
     }
+
+    gpio_num_t busPins[kBusLanes] = {};
+    if (!buildPinOrder(pins, scanRate, busPins)) {
+        g_lastError = "a HUB75 line is unset: every color, address and control pin is required";
+        return false;
+    }
+    for (size_t i = 0; i < kBusLanes; i++) gpioTake(busPins[i]);
+
     const size_t frameBytesPre = geo.frameBytes();
     if (!hub75BackendAvailable(backend, frameBytesPre)) {
         // Named, never substituted: a user keeping LCD_CAM free for strips must hear that the panel does not fit Parlio.
@@ -298,7 +288,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
         cfg.clk_out_gpio_num = static_cast<gpio_num_t>(pins.clk);
         // Parlio ACCEPTS an NC data lane where the i80 layer rejects one, so the layout's holes (bits 6, 7 and 15) stay unparked here. The i80 branch below has to park them on WR instead.
         for (size_t i = 0; i < 16; i++) {
-            cfg.data_gpio_nums[i] = (i < busCount) ? busPins[i] : GPIO_NUM_NC;
+            cfg.data_gpio_nums[i] = (i < kBusLanes) ? busPins[i] : GPIO_NUM_NC;
         }
         cfg.output_clk_freq_hz = kPclkHz;
         cfg.trans_queue_depth = 1;
@@ -322,7 +312,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
 #endif
     } else {
 #if MM_HUB75_LCDCAM
-    // The bus is 16 bits wide because the layout puts OE at bit 14: the color and control lines do not fit in 8. A board is free to re-map them into the low byte (Hub75Layout allows it), but the default wiring is the one this must support.
+    // The bus is 16 bits wide because the layout puts OE at bit 14: the color and control lines do not fit in 8.
     esp_lcd_i80_bus_config_t busCfg = {};
     // The data-command line rides the write strobe and must be a real pin: @xref{both-control-lines-must-be-real-pins|why leaving it unset fails the whole bus}.
     busCfg.dc_gpio_num = static_cast<gpio_num_t>(pins.clk);
@@ -333,7 +323,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     for (size_t i = 0; i < ESP_LCD_I80_BUS_WIDTH_MAX; i++) {
         busCfg.data_gpio_nums[i] = (i < 16) ? static_cast<gpio_num_t>(pins.clk) : GPIO_NUM_NC;
     }
-    for (size_t i = 0; i < busCount && i < 16; i++) {
+    for (size_t i = 0; i < kBusLanes; i++) {
         if (busPins[i] != GPIO_NUM_NC) {
             busCfg.data_gpio_nums[i] = busPins[i];
         }
@@ -394,10 +384,6 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
 
 uint8_t* hub75Buffer(const Hub75Handle& h) MM_NONBLOCKING {
     return h.impl ? static_cast<Hub75State*>(h.impl)->frame : nullptr;
-}
-
-size_t hub75BufferCapacity(const Hub75Handle& h) MM_NONBLOCKING {
-    return h.impl ? static_cast<Hub75State*>(h.impl)->frameBytes : 0;
 }
 
 bool hub75Start(Hub75Handle& h) {
@@ -461,7 +447,7 @@ void hub75Deinit(Hub75Handle& h) {
 
 }  // namespace mm::platform
 
-#else   // no LCD_CAM i80 on this chip
+#else   // MM_HUB75_LCDCAM || MM_HUB75_PARLIO is false
 
 namespace mm::platform {
 
@@ -476,7 +462,6 @@ bool hub75Init(Hub75Handle&, Hub75Backend, const Hub75Pins&, uint16_t, uint16_t,
     return false;
 }
 uint8_t* hub75Buffer(const Hub75Handle&) MM_NONBLOCKING { return nullptr; }
-size_t hub75BufferCapacity(const Hub75Handle&) MM_NONBLOCKING { return 0; }
 bool hub75Start(Hub75Handle&) { return false; }
 uint16_t hub75RefreshHz(const Hub75Handle&) MM_NONBLOCKING { return 0; }
 const char* hub75Backend(const Hub75Handle&) { return nullptr; }
@@ -484,4 +469,4 @@ void hub75Deinit(Hub75Handle&) {}
 
 }  // namespace mm::platform
 
-#endif  // SOC_LCDCAM_I80_LCD_SUPPORTED
+#endif  // MM_HUB75_LCDCAM || MM_HUB75_PARLIO

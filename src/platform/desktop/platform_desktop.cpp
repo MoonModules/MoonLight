@@ -3016,20 +3016,20 @@ const char* hub75BackendLabel(Hub75Backend backend) {
 }
 bool hub75Init(Hub75Handle& /*h*/, Hub75Backend /*backend*/, const Hub75Pins& /*pins*/,
                uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
+    hub75TestFrame_.clear();   // closed first, as the ESP32 port deinits first, so a refused re-init leaves no frame behind
     if (!hub75TestOpen_) return false;
     Hub75Geometry geo;
     geo.width = width;
     geo.height = height;
     geo.scanRate = scanRate;
     geo.bitDepth = bitDepth;
-    if (!geo.valid()) return false;
+    if (bitDepth > kHub75PortMaxBitDepth || !geo.valid()) return false;   // the ESP32 port's refusal, so a test reaches it
     hub75TestFrame_.assign(geo.frameBytes(), 0);
     return true;
 }
 uint8_t* hub75Buffer(const Hub75Handle& /*h*/) MM_NONBLOCKING {
     return hub75TestFrame_.empty() ? nullptr : hub75TestFrame_.data();
 }
-size_t hub75BufferCapacity(const Hub75Handle& /*h*/) MM_NONBLOCKING { return hub75TestFrame_.size(); }
 bool hub75Start(Hub75Handle& /*h*/) { return !hub75TestFrame_.empty(); }
 uint16_t hub75RefreshHz(const Hub75Handle& /*h*/) MM_NONBLOCKING { return 0; }
 const char* hub75Backend(const Hub75Handle& /*h*/) { return hub75TestFrame_.empty() ? nullptr : "LCD_CAM"; }

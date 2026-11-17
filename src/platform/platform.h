@@ -1489,8 +1489,6 @@ const char* hub75LastError();
 
 /// The DMA frame buffer the driver encodes into; null before a successful init.
 uint8_t* hub75Buffer(const Hub75Handle& h) MM_NONBLOCKING;
-/// That buffer's capacity; 0 before a successful init.
-size_t   hub75BufferCapacity(const Hub75Handle& h) MM_NONBLOCKING;
 
 /// Arm the scan, which then runs forever from the same buffer.
 bool hub75Start(Hub75Handle& h);

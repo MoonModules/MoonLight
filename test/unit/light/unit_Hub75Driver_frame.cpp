@@ -5,7 +5,7 @@
 
 #include "doctest.h"
 #include "light/drivers/Hub75Driver.h"
-#include "light/drivers/Hub75Slots.h"
+#include "platform/Hub75Encode.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
 #include "light/layers/Buffer.h"
@@ -122,6 +122,19 @@ TEST_CASE("Hub75Driver on a desktop refuses with the cause, as on a chip without
     r->driver.prepare();
     CHECK(std::string(r->driver.status() ? r->driver.status() : "").find("ESP32") != std::string::npos);
     CHECK(mm::platform::hub75TestFrame(nullptr) == nullptr);
+}
+
+TEST_CASE("The HUB75 port opens at 6 bit planes and refuses 7, though the encoder reaches 8") {
+    // The port holds to its maximum depth: the encoder's range is wider, and the reason is at `kHub75PortMaxBitDepth`.
+    PortGuard guard;
+    mm::platform::Hub75Handle handle;
+    mm::platform::Hub75Pins pins;
+    CHECK(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth));
+    CHECK_FALSE(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth + 1));
+    // A refused re-init leaves the port closed, not on the frame it had: nothing to write into, nothing to start.
+    CHECK(mm::platform::hub75Buffer(handle) == nullptr);
+    CHECK_FALSE(mm::platform::hub75Start(handle));
+    mm::platform::hub75Deinit(handle);
 }
 
 TEST_CASE("Hub75Driver packs an RGB light into the panel's bit planes") {
