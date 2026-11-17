@@ -7,7 +7,7 @@ processes:
     actor: contributor
     goal: A bench board runs the change the desktop could not prove.
     systems: [MoonDeck]
-    dependsOn: [desktop-build-test]
+    dependsOn: [host-build-test]
     intro: |
       ESP-IDF directly, not the Arduino framework, at the pinned [ESP-IDF version](reference/build-system.md#esp-idf-version). The firmware variants and their keys: [Firmware variants](reference/build-system.md#firmware-variants).
 
@@ -147,7 +147,7 @@ processes:
     actor: contributor
     goal: A Teensy 4.1 runs the change.
     systems: [MoonDeck]
-    dependsOn: [desktop-build-test]
+    dependsOn: [host-build-test]
     intro: |
       One firmware, `teensy41`, uses the board's own Ethernet, or a W5500 module on the 4.1-NE, which has none, found at boot. Pins, wiring and power: [the Teensy 4.1 page](reference/hardware/teensy-4-1.md).
     steps:

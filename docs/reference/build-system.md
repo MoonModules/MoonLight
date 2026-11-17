@@ -1,6 +1,6 @@
 # Build system
 
-How the source tree maps onto CMake, where each build writes, and the facts a build depends on: the firmware variants and the pinned ESP-IDF. The steps to build are [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test); this is what to look up.
+How the source tree maps onto CMake, where each build writes, and the facts a build depends on: the firmware variants and the pinned ESP-IDF. The steps to build are [MoonWalk's contributor processes](../moonwalk.md#host-build-test); this is what to look up.
 
 CMake is the sole build system. The source tree is shared across every platform, but build entry points are separate because ESP-IDF wraps CMake with its own conventions (`idf_component_register()` instead of `add_library()`).
 

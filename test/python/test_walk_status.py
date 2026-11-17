@@ -203,12 +203,12 @@ def test_a_step_running_a_subprocess_reports_the_subprocess_steps_under_their_ow
 def test_a_calls_paths_guard_the_steps_it_calls_so_a_docs_change_runs_no_code_check(tmp_path):
     repo = repo_with(tmp_path)
     model = {"processes": {
-        "commit-code": {"steps": [{"id": "tests", "given": [{"changed": ["src/**"]}], "when": {"process": "desktop-tests"}}]},
-        "desktop-tests": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_host.py"}}}]},
+        "commit-code": {"steps": [{"id": "tests", "given": [{"changed": ["src/**"]}], "when": {"process": "host-tests"}}]},
+        "host-tests": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_host.py"}}}]},
     }}
     (repo / "docs/b.md").write_text("b2")
     assert not status(model, {}, root=repo)["commit-code"][0]["triggered"]
-    assert status(model, {}, root=repo)["desktop-tests"][0]["triggered"]   # called on its own, it has no guard
+    assert status(model, {}, root=repo)["host-tests"][0]["triggered"]   # called on its own, it has no guard
     (repo / "src/a.cpp").write_text("a2")
     assert status(model, {}, root=repo)["commit-code"][0]["triggered"]
 

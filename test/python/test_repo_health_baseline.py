@@ -184,3 +184,10 @@ def test_the_gains_section_shows_each_change_with_its_share():
     new["flash"]["teensy41"] = 1_172_440
     new["measured"]["teensy41"] = "2099-01-01"
     assert "| flash teensy41 | - | 1,145 KB | new |" in "\n".join(repo_health.render_gains(new, ref, "v6.0.0"))
+
+
+def test_a_snapshot_from_before_the_host_rename_reads_its_host_targets_as_host():
+    """A release snapshot names its host targets desktop-<os>; read as host-<os>, they carry forward and compare with the new ones."""
+    snap = repo_health._valid_snapshot({"perf": {"desktop-macos": {"tick_us": 7}}, "flash": {"desktop-macos": 1, "esp32s3": 2}}, "a test snapshot")
+    assert snap["perf"] == {"host-macos": {"tick_us": 7}}
+    assert snap["flash"] == {"host-macos": 1, "esp32s3": 2}

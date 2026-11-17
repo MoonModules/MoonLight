@@ -35,7 +35,7 @@ processes:
     actor: contributor
     goal: A commit whose every check the change triggers passed, reviewed and measured.
     systems: [MoonDeck]
-    dependsOn: [desktop-build-test, document]
+    dependsOn: [host-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
       The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. An applicable check skipped carries a one-line reason in the commit or pull request. A failure with a clear fix is fixed, and only its check reruns, with any check whose paths the fix touches; a failure that needs a decision is reported and waits.
@@ -136,7 +136,7 @@ processes:
       - id: tests
         say: Test the change on the desktop.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { process: desktop-tests }
+        when: { process: host-tests }
       - id: esp32-fresh
         say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/host/**"] }]

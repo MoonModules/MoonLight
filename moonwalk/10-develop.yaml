@@ -2,7 +2,7 @@
 stage: Develop
 summary: The change written and proven on the desktop.
 processes:
-  - id: desktop-build-test
+  - id: host-build-test
     title: Build, run and test on the desktop
     actor: contributor
     goal: A change is proven on the host before any board build.
@@ -30,8 +30,8 @@ processes:
           When the product owner can see or judge the result, hand it over, leave it running, and wait for their observation before moving on.
       - id: tests
         say: Test the change.
-        when: { process: desktop-tests }
-  - id: desktop-tests
+        when: { process: host-tests }
+  - id: host-tests
     title: Test the change on the desktop
     actor: contributor
     goal: The unit tests and the scenarios the change touches pass on the host.
@@ -54,7 +54,7 @@ processes:
     actor: contributor
     goal: A new effect, layout, modifier or driver that builds, runs on the desktop and is tested and documented.
     systems: [MoonCore, MoonLight, MoonDeck]
-    dependsOn: [desktop-build-test]
+    dependsOn: [host-build-test]
     intro: |
       You write what the module does; the core decides when to run it. Every module shares one lifecycle, so the steps are the same for each kind. For a guided first effect with the reasoning, follow the [Build your own MoonModules](tutorials/build-your-own-moonmodules.md) tutorial. The contract: [MoonModule](explanation/architecture/moonmodule.md).
     steps:
@@ -123,7 +123,7 @@ processes:
     actor: contributor
     goal: A new way for frames to reach the lights, proven on the desktop, then on a board.
     systems: [MoonLight, MoonDeck]
-    dependsOn: [desktop-build-test]
+    dependsOn: [host-build-test]
     page: reference/adding-a-stream-source.md
     intro: |
       A source fetches frames and hands them over, and everything after that is already written and tested. It comes from a capture device, a file format or a network protocol. Every source is one of two families, and each family has one place where its frames land: [Which family](reference/adding-a-stream-source.md#which-family).
@@ -242,7 +242,7 @@ processes:
     actor: contributor
     goal: The installable files for the host it runs on.
     systems: [MoonDeck]
-    dependsOn: [desktop-build-test]
+    dependsOn: [host-build-test]
     steps:
       - id: package
         say: Package the build for this host.

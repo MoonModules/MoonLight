@@ -4,7 +4,7 @@ How code in this repo is written. Hard rules live in [CLAUDE.md](../CLAUDE.md), 
 
 A rule here is applied and reviewed at the [MoonWalk](../moonwalk.md) step that links it, as [one home per rule](documentation-standards.md) describes.
 
-How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
+How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#host-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
 
 It runs from the smallest scale outward: the line you are typing, then naming and when to add a file, then values and the hot path they run in. After that the shape of a whole module, then the tooling that checks all of it, and last the method for when something breaks.
 

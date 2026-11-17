@@ -218,7 +218,7 @@ processes:
           The reviewer checks the same steps the author followed, so a rule lives once: [Write a MoonModule](moonwalk.md#write-module), [Add a test](moonwalk.md#add-test), [Document the change](moonwalk.md#document).
       - id: test
         say: Test the branch on the desktop.
-        when: { process: desktop-tests }
+        when: { process: host-tests }
         detail: |
           In a worktree of the pull request's head (`git fetch origin pull/<n>/head:pr<n>`, then `git worktree add`), so your own checkout and its index stay untouched. A fork's pull request may not run every CI job.
       - id: first-review

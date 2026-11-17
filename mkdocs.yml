@@ -114,7 +114,7 @@ plugins:
         reference/metrics/prose.md: reference/tests.md#check_prose
         tutorials/first-light-show.md: moonwalk.md#first-light-show
         how-to/installing-to-desktop.md: moonwalk.md#install
-        how-to/building.md: moonwalk.md#desktop-build-test
+        how-to/building.md: moonwalk.md#host-build-test
         gettingstarted.md: getting-started.md
         moonmodules/light/index.md: explanation/how-moonlight-works.md
         reference/hardware/small-boards.md: design/small-boards.md

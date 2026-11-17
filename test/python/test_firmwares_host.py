@@ -1,4 +1,4 @@
-"""The desktop rows of the firmware registry: one per platform package_desktop.py builds, projected to firmwares.json and to the install picker."""
+"""The desktop rows of the firmware registry: one per platform package_host.py builds, projected to firmwares.json and to the install picker."""
 
 import re
 import sys

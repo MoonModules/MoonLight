@@ -68,7 +68,7 @@ processes:
       - id: work
         say: Prove the change on the desktop.
         actor: contributor
-        when: { process: desktop-build-test }
+        when: { process: host-build-test }
         detail: |
           Keep each commit under about 100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep, such as em-dashes or a metrics refresh, is a commit of its own, apart from behavioral fixes, so both stay reviewable.
   - id: build-setup

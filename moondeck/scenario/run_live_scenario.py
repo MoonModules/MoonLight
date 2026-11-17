@@ -229,7 +229,7 @@ def _detect_target(state: dict, local: bool = True) -> str:
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
 
     A desktop build on ANOTHER machine is named after the platform it reports about itself
-    (`host-docker-arm64`), because this host's name says nothing about it: a NanoPi measured
+    (`host-docker-arm64`), because the measured machine is the one that reports it: a NanoPi measured
     from a Mac was recorded as `host-macos`, into the Mac's own figures.
     """
     firmware = model = None

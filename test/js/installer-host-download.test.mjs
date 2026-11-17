@@ -1,4 +1,4 @@
-// The host-download half of the install picker. The same picker offers two very
+// The host-download half of the install picker. The same picker offers two
 // different things: an ESP32 firmware that gets FLASHED onto a board, and a desktop
 // archive that gets DOWNLOADED to the computer viewing the page. These tests pin the
 // rule that keeps those apart, because mixing them up means offering a .dmg as
@@ -65,7 +65,7 @@ test("a platform shipping both an installer and a tarball offers the installer",
 });
 
 test("every shipped desktop asset is recognized under its own platform, and an unrelated asset is not", () => {
-    // The names package_desktop.py writes, one per file the release carries.
+    // The names package_host.py writes, one per file the release carries.
     const SHIPPED = {
         "host-macos-arm64": ["MoonLight-macos-arm64-v3.0.0.dmg", "MoonLight-macos-arm64-v3.0.0.tar.gz"],
         "host-windows-x64": ["MoonLight-windows-x64-v3.0.0-setup.exe", "MoonLight-windows-x64-v3.0.0.zip"],
@@ -134,9 +134,9 @@ test("a desktop is offered desktop programs alone, downloading or updating itsel
 
 test("a desktop is offered exactly one archive: the one built for its own OS", () => {
     // Which OS this runs on depends on the host, so assert the SHAPE that must hold on any
-    // of them: exactly one of the three desktop keys matches, never two, never none. That
+    // of them: exactly one of the host keys matches, never two, never none. That
     // is what stops a Mac being offered the Windows .zip.
-    const keys = ["host-macos-arm64", "host-windows-x64", "host-linux-x64"];
+    const keys = ["host-macos-arm64", "host-windows-x64", "host-linux-x64", "host-linux-arm64"];
     const matched = keys.filter(k => isCompatible(HOST_DOWNLOAD, k));
     assert.equal(matched.length, 1, `expected exactly one match, got ${matched}`);
 });

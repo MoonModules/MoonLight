@@ -66,7 +66,7 @@ The product owner is the critical success factor. They review every line before 
 
 ## Working rhythm
 
-**Desktop first, always**: [Build and test on the desktop](docs/moonwalk.md#desktop-build-test).
+**Host first, always**: [Build and test on the host](docs/moonwalk.md#host-build-test).
 
 **ESP32 build: when the work needs it. Flash: only when the product owner approves.** A build runs without asking when a gate finds the firmware stale or a platform change needs compiling for a board, never for an interesting measurement. Writing a board waits for the product owner's go, every time.
 
@@ -110,7 +110,7 @@ An agent reads the process before acting on it, and its memory points to the pro
 
 ### Build and test
 
-Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md), [desktop first](docs/moonwalk.md#desktop-build-test), then [on hardware](docs/moonwalk.md#esp32-build-flash). **Every task is one MoonDeck script, and the script is the contract**: [the desktop process](docs/moonwalk.md#desktop-build-test), the scripts in [MoonDeck.md](moondeck/MoonDeck.md). New behavior is pinned before it ships, and every discovered crash becomes a test: [Add a test](docs/moonwalk.md#add-test). **Scenarios record**, and a number that moves without a reason in the diff is explained before committing: [Run a scenario](docs/moonwalk.md#run-scenario).
+Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md), [host first](docs/moonwalk.md#host-build-test), then [on hardware](docs/moonwalk.md#esp32-build-flash). **Every task is one MoonDeck script, and the script is the contract**: [the host process](docs/moonwalk.md#host-build-test), the scripts in [MoonDeck.md](moondeck/MoonDeck.md). New behavior is pinned before it ships, and every discovered crash becomes a test: [Add a test](docs/moonwalk.md#add-test). **Scenarios record**, and a number that moves without a reason in the diff is explained before committing: [Run a scenario](docs/moonwalk.md#run-scenario).
 
 ### Document
 
