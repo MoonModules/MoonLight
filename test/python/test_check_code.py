@@ -83,6 +83,21 @@ def test_a_clone_counts_under_both_of_its_files_and_names_the_other():
     assert check_code.clone_rows({"duplicates": []}) == ([], (0.0, 0))
 
 
+def test_the_clone_check_reads_files_of_any_length(monkeypatch):
+    """jscpd skips a file over 1,000 lines unless told otherwise, which left the largest files uncompared (issue #252)."""
+    seen = {}
+    def run(args, **_kw):
+        if args[0] == "npx":
+            seen["args"] = args
+        return type("Proc", (), {"stdout": "", "stderr": "", "returncode": 0})()
+    monkeypatch.setattr(check_code.shutil, "which", lambda _name: "npx")
+    monkeypatch.setattr(check_code.subprocess, "run", run)
+    check_code.clones()
+    args = seen["args"]
+    assert int(args[args.index("--max-lines") + 1]) > 100_000
+    assert "--max-size" in args
+
+
 def test_a_commit_account_shows_what_it_added_and_what_it_saved():
     """The commit message carries its own account, so a subtraction shows as a saving in the commit that made it."""
     lines = {"src": [120, 340], "test": [60, 0]}

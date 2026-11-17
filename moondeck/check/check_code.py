@@ -190,8 +190,10 @@ def clones():
         print("jscpd needs npx (node), which the docs build needs as well", file=sys.stderr)
         return None
     with tempfile.TemporaryDirectory() as td:
+        # jscpd skips a file over 1,000 lines by default, which would leave the largest files uncompared; the caps lift so every owned file is read.
         proc = subprocess.run([npx, "--yes", "jscpd@4", *owned_files(),
                                "--min-lines", str(MIN_CLONE_LINES), "--min-tokens", str(MIN_CLONE_TOKENS),
+                               "--max-lines", "1000000", "--max-size", "100mb",
                                "--reporters", "json", "--output", td, "--silent"],
                               cwd=ROOT, capture_output=True, text=True, timeout=600)
         report = Path(td) / "jscpd-report.json"

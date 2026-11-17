@@ -223,7 +223,7 @@ void abandon(OtaWrite& w) {
     fs::remove(img->next, ec);
 }
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__ANDROID__)   // Windows restarts from its own command line, and Android's service starts the next run
 /// The command line this run started with, to start the next one the same way.
 std::vector<std::string> commandLine() {
     std::vector<std::string> args;
