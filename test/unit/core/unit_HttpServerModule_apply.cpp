@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
+#include "core/system/FirmwareUpdateModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "core/module/MoonModule.h"
@@ -849,8 +850,10 @@ TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, i
     // The mode itself is pinned in unit_platform_update.cpp; here only that the summary names one.
     CHECK(doc.find("\"update\":\"") != std::string::npos);
     CHECK(doc.find("\"mac\":\"") != std::string::npos);
+    CHECK(doc.find("\"name\":") != std::string::npos);
     CHECK(doc.find("\"board\":") != std::string::npos);
     CHECK(doc.find("\"chip\":") != std::string::npos);
+    CHECK(doc.find("\"mode\":") != std::string::npos);   // the reader's level, developer putting the device on the latest channel
     CHECK(doc.find("\"rssi\":") != std::string::npos);
     CHECK(doc.find("\"outputs\":[{\"driver\":\"LedDriver\",\"lights\":300}]") != std::string::npos);
     CHECK(doc.find("\"effects\":[\"Noise\",\"Lines\"]") != std::string::npos);
@@ -862,6 +865,38 @@ TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, i
         t.http.writeDeviceSummaryForTest(sink);
     }
     CHECK(std::strstr(none, "\"outputs\":[],\"effects\":[],") != nullptr);
+}
+
+// A peer's map offers a MoonBase update only while the device reports one behind its app, so the summary names it exactly then.
+TEST_CASE("/api/system names a MoonBase behind the app, and only while it is") {
+    std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
+    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr); } } noMoonBaseAfter;
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
+    mm::Scheduler s;
+    auto* fw = new mm::FirmwareUpdateModule();
+    fw->setTypeName("FirmwareUpdateModule");   // the factory key the summary finds it by, as the factory sets it
+    s.addModule(fw);
+    s.setup();
+    mm::HttpServerModule http;
+    http.setScheduler(&s);
+    char behind[512] = {};
+    {
+        mm::JsonSink sink(behind, sizeof(behind));
+        http.writeDeviceSummaryForTest(sink);
+    }
+    CHECK(std::strstr(behind, "\"moonbaseMismatch\":\"0.0.1\",") != nullptr);
+
+    mm::platform::setTestMoonBase(nullptr, nullptr);   // MoonBase brought level with the app, or none at all
+    fw->setup();
+    char level[512] = {};
+    {
+        mm::JsonSink sink(level, sizeof(level));
+        http.writeDeviceSummaryForTest(sink);
+    }
+    CHECK(std::strstr(level, "moonbaseMismatch") == nullptr);
+    CHECK(std::strstr(level, "coprocessorMismatch") == nullptr);   // no radio chip on the host
+    http.release();
+    s.deleteTree(fw);
 }
 
 TEST_CASE("each WLED API client is traffic into this device, Home Assistant named by its User-Agent, its rate a minute, the last whole one") {

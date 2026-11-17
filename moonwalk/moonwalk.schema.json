@@ -142,7 +142,10 @@
         },
         "asks": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "minItems": 1,
           "description": "What the person answers at this step in their own words, one question each: the headings of a pull request's description, the fields of an issue form."
         },
@@ -171,6 +174,10 @@
         },
         "detail": {
           "$ref": "#/$defs/markdown"
+        },
+        "ci": {
+          "type": "boolean",
+          "description": "CI runs this gate on every push, so a merge reads its result from the pull request's checks rather than running it (run_gates.py --process pre-merge)."
         }
       }
     },

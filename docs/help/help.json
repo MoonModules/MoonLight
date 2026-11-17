@@ -138,7 +138,7 @@
     },
     "multicore": {
      "line": "Run the output stage on the second core.",
-     "more": "It falls back to one core by itself when the extra frame buffer does not fit. The switch exists to compare the two."
+     "more": "It falls back to one core by itself when the extra frame buffer does not fit or the second core stalls, and tries two again, waiting at most about a minute between tries. The switch exists to compare the two."
     },
     "renderWait": {
      "line": "How long core 0 waited for core 1 at the frame boundary.",
@@ -4278,7 +4278,7 @@
     },
     "mode": {
      "line": "How much of the UI is shown, cumulative.",
-     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it."
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build lacks, and offers every new `latest` build as an update."
     },
     "factory reset": {
      "line": "Delete every setting and preset and restart as freshly installed.",

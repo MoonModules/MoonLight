@@ -1266,9 +1266,36 @@ def _ratchet(found) -> list:
     return ratchet.risen(base, _counts(found))
 
 
+def file_findings(paths) -> list:
+    """The per-file rules on `paths` alone: a header's documentation rules, a page's hard wraps; the whole-tree rules need the full run."""
+    headers = {rel.as_posix() for rel in _headers()}
+    out = []
+    for name in paths:
+        p = Path(name).resolve()
+        try:
+            rel = p.relative_to(ROOT).as_posix()
+        except ValueError:
+            continue
+        if not p.is_file():
+            continue
+        if rel in headers:
+            out.extend(_header_rules(rel, p.read_text(encoding="utf-8")))
+        elif rel.startswith("docs/") and rel.endswith(".md") and not rel.startswith("docs/work/"):
+            out.extend(_md_hard_wraps(rel.removeprefix("docs/"), p.read_text(encoding="utf-8")))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.parse_args()
+    ap.add_argument("--files", nargs="+", help="Report only these files' findings from the per-file rules, without recording counts: "
+                                               "the write-time hook's view and a commit round's quick look.")
+    args = ap.parse_args()
+    if args.files:
+        found = file_findings(args.files)
+        errors = [f for f in found if _blocks(f[0], f[1])]
+        if found:
+            _report(found, f"Docgen, {len(args.files)} file(s): {len(errors)} error(s), {len(found) - len(errors)} warning(s).")
+        return 1 if errors else 0
 
     try:
         fresh, measured = _help_freshness(), True

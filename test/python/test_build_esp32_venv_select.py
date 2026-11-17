@@ -1,4 +1,4 @@
-"""build_esp32.find_idf_python() must select the venv by IDF *version*, not mtime.
+"""idf_env.find_idf_python() must select the venv by IDF *version*, not mtime.
 
 ESP-IDF makes one Python venv per IDF version (`idf<major.minor>_py<X.Y>_env`) under
 `~/.espressif/python_env/`. With two IDFs installed — e.g. a 5.5 kept alongside 6.1 for
@@ -9,7 +9,7 @@ aborts with "The following Python requirements are not satisfied"). This pins th
 selection follows the *target* IDF version, so it's a function of what we build, not of
 what was last sourced.
 
-Imports the real function from moondeck/build/build_esp32.py (no ESP-IDF needed).
+Imports the real function from moondeck/build/idf_env.py (no ESP-IDF needed).
 Run: `uv run --with pytest pytest test/python -q`.
 """
 
@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 
-import build_esp32  # noqa: E402
+import idf_env  # noqa: E402
 
 
 def _make_venvs(home: Path, names_by_age: list[str]) -> None:
@@ -30,9 +30,9 @@ def _make_venvs(home: Path, names_by_age: list[str]) -> None:
     the LAST name is the newest (the mtime a naive picker would choose)."""
     venv_root = home / ".espressif" / "python_env"
     for i, name in enumerate(names_by_age):
-        d = venv_root / name / build_esp32._VENV_BIN
+        d = venv_root / name / idf_env._VENV_BIN
         d.mkdir(parents=True)
-        exe = d / build_esp32._PYTHON_EXE
+        exe = d / idf_env._PYTHON_EXE
         exe.write_text("#!fake python\n")
         # Stagger mtimes deterministically by index so the last name is newest.
         ts = 1_000_000 + i  # strictly increasing → last name is newest
@@ -51,10 +51,10 @@ def test_picks_matching_version_even_when_other_is_newer(tmp_path, monkeypatch):
     home = tmp_path / "home"
     # 6.1 venv created first (older), 5.5 venv created last (newest mtime).
     _make_venvs(home, ["idf6.1_py3.12_env", "idf5.5_py3.12_env"])
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
 
     idf61 = _make_idf(tmp_path / "esp-idf", "v6.1-dev-5215-g0d928780081")
-    picked = build_esp32.find_idf_python(idf61)
+    picked = idf_env.find_idf_python(idf61)
     assert picked is not None
     assert picked.name == "idf6.1_py3.12_env", (
         "must match the target IDF version (6.1), not the newest-mtime venv (5.5)"
@@ -66,10 +66,10 @@ def test_picks_matching_version_for_the_older_idf(tmp_path, monkeypatch):
     newer — proves it's version-driven, not just 'prefer 6.1'."""
     home = tmp_path / "home"
     _make_venvs(home, ["idf5.5_py3.12_env", "idf6.1_py3.12_env"])  # 6.1 newest
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
 
     idf55 = _make_idf(tmp_path / "esp-idf-v5.5", "v5.5.4")
-    picked = build_esp32.find_idf_python(idf55)
+    picked = idf_env.find_idf_python(idf55)
     assert picked is not None
     assert picked.name == "idf5.5_py3.12_env"
 
@@ -79,10 +79,10 @@ def test_newest_python_minor_wins_within_a_version(tmp_path, monkeypatch):
     wins (mtime is the tie-breaker only within the matched version)."""
     home = tmp_path / "home"
     _make_venvs(home, ["idf6.1_py3.12_env", "idf6.1_py3.13_env"])  # 3.13 newest
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
 
     idf61 = _make_idf(tmp_path / "esp-idf", "v6.1-dev-5215-g0d928780081")
-    picked = build_esp32.find_idf_python(idf61)
+    picked = idf_env.find_idf_python(idf61)
     assert picked is not None
     assert picked.name == "idf6.1_py3.13_env"
 
@@ -92,11 +92,11 @@ def test_falls_back_to_newest_when_no_version_match(tmp_path, monkeypatch):
     single-IDF setup (the common case) is unaffected."""
     home = tmp_path / "home"
     _make_venvs(home, ["idf6.1_py3.12_env", "idf6.1_py3.13_env"])
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
 
     # An IDF whose version doesn't match any venv prefix (e.g. a 5.4 with no venv).
     idf_other = _make_idf(tmp_path / "esp-idf-x", "v5.4.1")
-    picked = build_esp32.find_idf_python(idf_other)
+    picked = idf_env.find_idf_python(idf_other)
     assert picked is not None
     assert picked.name == "idf6.1_py3.13_env", "newest overall when nothing matches"
 
@@ -109,10 +109,10 @@ def test_version_prefix_does_not_collide_across_minor(tmp_path, monkeypatch):
     rather than wrongly treating idf6.10 as a 6.1 match."""
     home = tmp_path / "home"
     _make_venvs(home, ["idf6.1_py3.12_env", "idf6.10_py3.12_env"])  # 6.10 newest
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
 
     idf61 = _make_idf(tmp_path / "esp-idf", "v6.1-dev-5215-g0d928780081")
-    picked = build_esp32.find_idf_python(idf61)
+    picked = idf_env.find_idf_python(idf61)
     assert picked is not None
     # Must pick the exact idf6.1 venv, NOT idf6.10 (even though idf6.10 is newer).
     assert picked.name == "idf6.1_py3.12_env", (
@@ -123,6 +123,6 @@ def test_version_prefix_does_not_collide_across_minor(tmp_path, monkeypatch):
 def test_none_when_no_venvs(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / ".espressif" / "python_env").mkdir(parents=True)
-    monkeypatch.setattr(build_esp32.Path, "home", staticmethod(lambda: home))
+    monkeypatch.setattr(idf_env.Path, "home", staticmethod(lambda: home))
     idf61 = _make_idf(tmp_path / "esp-idf", "v6.1")
-    assert build_esp32.find_idf_python(idf61) is None
+    assert idf_env.find_idf_python(idf61) is None

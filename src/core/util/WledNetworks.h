@@ -258,7 +258,7 @@ inline int appendNetworks(char* doc, size_t cap, int n, const Network* nets, int
 /// The networks as the state document MoonLight saves them in, which MoonBase also reads: the Ethernet card when WLED's board maps, then the WiFi card with WLED's TX power limit and its networks; its length, or 0 when it does not fit.
 inline int networkDocument(char* doc, size_t cap, const Network* nets, int count, const Ethernet* eth, int txPower = 0) {
     int n = std::snprintf(doc, cap, "{\"Network\":{");
-    if (eth) n = appendEthernet(doc, cap, n, *eth);
+    if (eth && static_cast<size_t>(n) < cap) n = appendEthernet(doc, cap, n, *eth);
     if (static_cast<size_t>(n) < cap) n = appendNetworks(doc, cap, n, nets, count, txPower);
     if (static_cast<size_t>(n) < cap) n += std::snprintf(doc + n, cap - n, "]}}}");
     return static_cast<size_t>(n) < cap ? n : 0;

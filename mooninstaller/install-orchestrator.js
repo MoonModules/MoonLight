@@ -98,7 +98,7 @@ import {
 //   { name, version, builds: [{ chipFamily, parts: [{ path, offset }] }] }
 async function fetchManifest(manifestUrl) {
     // Resolve the manifest URL against the document so a relative path like
-    // "./releases/latest/manifest-esp32.json" (what toLocalUrl returns on the
+    // "./releases/latest/manifest-esp32.json" (what mirrorUrl returns on the
     // preview/Pages-hosted setup) becomes absolute. Without this, the
     // `new URL(".", manifestUrl)` below would throw "Invalid base URL" since
     // URL's two-arg form needs the second arg to be absolute.

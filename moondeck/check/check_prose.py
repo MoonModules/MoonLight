@@ -9,10 +9,10 @@ until a sweep larger than any change. Converting as files are touched reaches th
 without that.
 
 An ERROR (em-dash, spelling, "e.g.", a dating word, a link reading "here", a negated heading, a phrase of tone) blocks; a warning or suggestion informs. Wired as a
-write-time hook (hook_prose.py) so a fix happens while the sentence is still in mind, and again
+write-time hook (hook_written.py) so a fix happens while the sentence is still in mind, and again
 at the commit gate. Without vale on PATH the check skips with a notice rather than failing.
 
-TEMPORARY. This script and hook_prose.py exist only to keep the gate honest while the tree
+TEMPORARY. This script and the prose part of hook_written.py exist only to keep the gate honest while the tree
 holds inherited violations. Once `vale docs/ CLAUDE.md README.md` exits clean, delete both
 and let .github/workflows/prose.yml check whole files.
 
@@ -173,27 +173,20 @@ def count_tree():
     return by_rule, total
 
 
-def main():
-    # Against main when on a branch, else the working tree: the check means "what am I adding".
-    # A base given (CI passes the pull request's) is used as it is; without one, a checkout with no local main reads the working tree.
-    base = "main...HEAD" if len(sys.argv) < 2 else sys.argv[1]
-    if len(sys.argv) < 2 and subprocess.run(["git", "rev-parse", "--verify", "main"],
-                                            capture_output=True).returncode != 0:
-        base = "HEAD"
+def file_added_lines(path: str) -> list:
+    """The lines `path` adds against HEAD, read without touching the index: a tracked file's diff, a new file whole."""
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "--", path], capture_output=True).returncode == 0
+    if not tracked:
+        try:
+            return [(path, ln) for ln in open(path, encoding="utf-8").read().split("\n")]
+        except (OSError, UnicodeDecodeError):
+            return []
+    diff = subprocess.run(["git", "diff", "HEAD", "--unified=0", "--", path], capture_output=True, text=True).stdout
+    return [(path, ln[1:]) for ln in diff.split("\n") if ln.startswith("+") and not ln.startswith("+++")]
 
-    if shutil.which("vale") is None:
-        print("Prose check: vale is not installed (brew install vale); skipping.")
-        return 0
 
-    # Group added lines per file, so Vale sees each file's additions as one document and its
-    # per-file exemptions in .vale.ini apply. Line numbers reported are positions WITHIN the
-    # added text, not the file; the quoted text is what identifies the line.
-    by_path = {}
-    for path, text in added_lines(base) + added_lines("HEAD"):
-        if not path.endswith(SUFFIXES) or path.startswith(EXEMPT):
-            continue
-        by_path.setdefault(path, []).append(text)
-
+def vale_findings(by_path: dict) -> tuple[list, int]:
+    """Vale over each file's added lines as one document: (findings, errors)."""
     findings, errors = [], 0
     for path, lines in by_path.items():
         # Vale parses by extension; a .h or .py is fed as plain text so comment prose is checked
@@ -214,6 +207,52 @@ def main():
                     errors += 1
                 findings.append(f"{path}: {sev} {a.get('Check')}: {a.get('Message')}  "
                                 f"[{a.get('Match', '')[:40]}]")
+    return findings, errors
+
+
+def files_main(paths) -> int:
+    """`--files`: the named files' added lines alone, findings printed, nothing recorded: the write-time hook's view."""
+    if shutil.which("vale") is None:
+        return 0
+    by_path = {}
+    for name in paths:
+        rel = os.path.relpath(os.path.abspath(name), ROOT)
+        if rel.endswith(SUFFIXES) and not rel.startswith(EXEMPT):
+            for path, text in file_added_lines(rel):
+                by_path.setdefault(path, []).append(text)
+    findings, errors = vale_findings(by_path)
+    for path in sorted(by_path):
+        if path.endswith(".md") and not path.startswith(SECTION_EXEMPT) and os.path.exists(path):
+            findings += [f"{path}: warning {rule}: {msg}  [line {n}]" for rule, msg, n in section_findings(open(path, encoding="utf-8").read())]
+    for f in findings:
+        print(f"  {f}")
+    return 1 if errors else 0
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--files":
+        return files_main(sys.argv[2:])
+    # Against main when on a branch, else the working tree: the check means "what am I adding".
+    # A base given (CI passes the pull request's) is used as it is; without one, a checkout with no local main reads the working tree.
+    base = "main...HEAD" if len(sys.argv) < 2 else sys.argv[1]
+    if len(sys.argv) < 2 and subprocess.run(["git", "rev-parse", "--verify", "main"],
+                                            capture_output=True).returncode != 0:
+        base = "HEAD"
+
+    if shutil.which("vale") is None:
+        print("Prose check: vale is not installed (brew install vale); skipping.")
+        return 0
+
+    # Group added lines per file, so Vale sees each file's additions as one document and its
+    # per-file exemptions in .vale.ini apply. Line numbers reported are positions WITHIN the
+    # added text, not the file; the quoted text is what identifies the line.
+    by_path = {}
+    for path, text in added_lines(base) + added_lines("HEAD"):
+        if not path.endswith(SUFFIXES) or path.startswith(EXEMPT):
+            continue
+        by_path.setdefault(path, []).append(text)
+
+    findings, errors = vale_findings(by_path)
 
     # A section is measured whole on every page the change touches, since its length is the section's and not one line's.
     for path in sorted(by_path):

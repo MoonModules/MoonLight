@@ -13,9 +13,9 @@
 // would happily flash from any URL, but the manifest fetch + part
 // downloads via fetch() are subject to CORS). The release workflow
 // self-hosts the last N releases into pages/install/releases/<tag>/.
-// toLocalUrl rewrites the picker's absolute GitHub URLs to the local
+// The picker's mirrorUrl rewrites its absolute GitHub URLs to the local
 // copies before handing them to the orchestrator.
-import { installPicker } from "./install-picker.js";
+import { installPicker, mirrorUrl, chipFamilyOf, firmwareChip } from "./install-picker.js";
 import { myDevices }    from "./devices.js";
 import { installer, ESPTOOL_JS_VERSION } from "./install-orchestrator.js";
 import { TEENSY_FAMILY, requestHalfKay, requestTeensySerial } from "./teensy-writer.js";
@@ -109,18 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
     {
         const el = document.getElementById("esptool-version");
         if (el) el.textContent = ` v${ESPTOOL_JS_VERSION}`;
-    }
-
-    // Map a GitHub release-asset URL to its Pages-hosted mirror.
-    //   https://github.com/MoonModules/MoonLight/releases/download/<TAG>/<file>
-    //   → ./releases/<TAG>/<file>
-    function toLocalUrl(githubUrl) {
-      const m = /\/releases\/download\/([^/]+)\/([^/]+)$/.exec(githubUrl);
-      if (!m) return githubUrl;  // unrecognized shape: pass through unchanged
-      const [, tag, name] = m;
-      //   https://github.com/.../releases/download/<TAG>/<file>
-      //   → ./releases/<TAG>/<file>  (same-origin, served from this dir)
-      return `./releases/${tag}/${name}`;
     }
 
     // --- Install modal section toggling ---------------------------------
@@ -649,9 +637,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // the network cable. Append a defaults caveat only when the push actually didn't run.
         const defaultsNote = defaultsApplied
           ? ` ${device} defaults were applied.`
-          : (device && applyDefaults ? ` ${device} defaults weren't applied: apply them later from MoonDeck.` : "");
+          : (device && applyDefaults ? ` ${device} defaults weren't applied: apply them later with the Apply device defaults now button, or from the Devices map.` : "");
         note.textContent =
-          `Flashed. This is an Ethernet-only firmware — connect a network cable and the device comes online on its own (find it via its IP or <name>.local, or in MoonDeck).${defaultsNote}`;
+          `Flashed. This is an Ethernet-only firmware: connect a network cable and the device comes online on its own (find it via its IP or <name>.local, or on another device's Devices map).${defaultsNote}`;
         note.classList.add("install-done-note--notice");   // amber: flashed OK, action needed (plug in Ethernet)
         note.hidden = false;
         return;
@@ -659,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!url) {
         // No device URL (user skipped the IP prompt, or an eth-only/no-Improv device).
         // On that path no serial config push happened. If a model was picked, say so —
-        // it can be applied later from MoonDeck on the LAN — else just close.
+        // it can be applied later over USB with the installer's apply-only button or from the network map, else just close.
         if (device && applyDefaults) {
           showSection("done");
           // No device address → not online; don't claim "Device is online!" (the
@@ -669,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById("done-url").textContent = "";
           document.getElementById("done-url-mdns").hidden = true;
           document.getElementById("done-defaults").textContent =
-            `Flashed. ${device} defaults weren't applied (no device address): apply them later from MoonDeck on your network.`;
+            `Flashed. ${device} defaults weren't applied (no device address): apply them later with the Apply device defaults now button, or from the Devices map.`;
           document.getElementById("done-defaults").hidden = false;
           return;
         }
@@ -703,7 +691,7 @@ document.addEventListener('DOMContentLoaded', () => {
         note.textContent = `Applied ${device} defaults.`;
         note.hidden = false;
       } else if (device && applyDefaults) {
-        note.textContent = `Flashed, but ${device} defaults weren't applied: apply them from MoonDeck on your network.`;
+        note.textContent = `Flashed, but ${device} defaults weren't applied: apply them later with the Apply device defaults now button, or from the Devices map.`;
         note.hidden = false;
       } else if (device) {
         note.textContent = `Kept the device's existing config (device defaults not applied).`;
@@ -729,8 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // device is picked (OTA / generic flash). "" for an unrecognized key.
     function firmwareToChip(firmware) {
       if (/^teensy41/.test(String(firmware || ""))) return TEENSY_FAMILY;
-      const m = String(firmware || "").match(/^esp32(s31|s3|s2|p4|c\d+|h\d+)/);
-      return m ? (m[1] === "s31" ? "ESP32-S31" : "ESP32-" + m[1].toUpperCase()) : (firmware ? "ESP32" : "");
+      return firmware ? chipFamilyOf(firmwareChip(firmware)) : "";
     }
 
     function handleError(stage, error) {
@@ -1176,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // disabled for the install's duration) lives in openModal /
         // closeModal so the user can't reopen the monitor mid-flash.
         if (_monitor.port) await closeMonitor();
-        const localUrl = toLocalUrl(manifestUrl);
+        const localUrl = mirrorUrl(manifestUrl, "./");
         const device = installPicker.getSelectedDevice();
         const txPower = installPicker.getSelectedDeviceTxPower();
         // Which release, so a user sees whether this is a stable release or the moving latest build.

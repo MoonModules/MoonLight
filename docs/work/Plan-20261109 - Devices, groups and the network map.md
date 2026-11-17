@@ -131,7 +131,7 @@ What it teaches this plan: one deterministic path for every effect, never a sync
 
 Landed in: the [Devices page](../moonmodules/core/system.md) (its card, the map, growth and what memory refuses, from `DevicesModule.h`); the allocation rule and `platform::fitsWithReserve` in [moonmodule.md](../explanation/architecture/moonmodule.md); the list drawn as a graph, `ListSource::listAsGraph()` in [Control.h](../../src/core/module/Control.h); the ArtPoll reply named after the device in [NetworkReceiveEffect.h](../../src/light/effects/NetworkReceiveEffect.h); the move in [MIGRATING](../reference/MIGRATING.md) ("Discovery moves from Network to Devices").
 
-#### 2. This device's flows and services 🧪 (test: OSC, PanelCard, Hue and MQTT seen on the bench, no flashed board running them yet)
+#### 2. This device's flows and services ✅ (OSC, MQTT and Hue on the P4, PanelCard's ColorLight service on the NanoPi, 2026-11-17)
 
 - **Modules report, the socket counts nothing** (product owner, 2026-11-09). Each network module reports its services and its flows, protocol, direction, peer and rate, from the counters it already keeps for its status line, the way every module reports its memory and tick time. Counting at the UDP socket would have caught every module, but a per-peer table there runs on every packet from several tasks, needing a lock or an allocation in the send path; reporting adds nothing per packet. A module that sends without reporting stays off the map.
 - The services the device offers, from the modules that offer them: an RTP-MIDI session, Art-Net or DDP reception, the audio sync port, the web page.
@@ -211,7 +211,7 @@ Asked by the product owner (2026-11-12), after the desktops.
 - **Podman's auto-update** has no API and stays the host's, and so does a Kubernetes rollout (belrik runs both, Discord 2026-11-13).
 - **Verified by:** .156's container updated from another device's map through a Watchtower on the NanoPi, run with the Docker socket, `--http-api-update`, a token and its port mapped beside MoonLight's 8080; the container on `:latest`, since Watchtower follows the tag a container runs, an older image tagged `latest` locally so the test has somewhere to go.
 
-#### MoonBase and the WiFi coprocessor updated from the map ⏳
+#### MoonBase and the WiFi coprocessor updated from the map 🧪 (test: the coprocessor at the next ESP-Hosted bump, since a device refuses a radio image of another major.minor, so a C6 falls behind only when the app moves on; MoonBase verified on MM-BD3C, 2026-11-17)
 
 Asked by the product owner (2026-11-12), after the desktops.
 
@@ -234,7 +234,7 @@ Landed in: [Migrating over the air](../reference/migrating-over-the-air.md) (Tas
 
 Landed in: [moonbase.md](../explanation/architecture/moonbase.md) (its page installs through the picker loaded from the installer's site); the [retry step](../moonwalk.md#migrate-wled) of the migration process. Verified (2026-11-11): the P4 in MoonBase installing MoonLight from its own page.
 
-#### Every neighbor's MAC, by ARP 🚧 (missing: a Windows run)
+#### Every neighbor's MAC, by ARP ✅ (Windows run 2026-11-17: MM-Windows at .245 gave the Hue bridge at .143, an added address, its MAC 00:17:88:41:67:f0)
 
 - **What ARP is.** On a local network a packet travels by MAC address, the IP address being the logical name on top. A device about to send to an address asks the network who holds it, the holder answers with its MAC, and the sender keeps the pair in its address table for minutes: the Address Resolution Protocol, [RFC 826](https://www.rfc-editor.org/rfc/rfc826). Every operating system keeps that table, and lwIP does on the ESP32.
 - **What it gives the map.** After any exchange with a device on this subnet, its MAC is in this device's own table, so a device known only by its address, Tasmota or anything added by address, gets the identity a MoonLight board sends in its packet, without a firmware-specific API. Tasmota 16 refuses its status page to a request without its own page as Referer, a guard against cross-site requests, so ARP is the textbook source that leaves that guard alone.
@@ -255,7 +255,7 @@ Landed in: [security](../explanation/security.md) (the trust boundary and the `O
 
 The map now finds devices, reads their summary, installs firmware, moves other firmwares to MoonLight and applies a device model's defaults, which MoonDeck and the web installer each do in their own way. A review of both against it, looking first for what two of them do twice (the product owner, 2026-11-11). Candidates, each kept, merged or removed with its reason:
 
-- **Finding devices.** MoonDeck's network bar and its registry in `moondeck.json` against Discovery's list, which any device serves on `/api/list`; MoonDeck could read the list from one device instead of keeping its own.
+- **Finding devices.** MoonDeck's network bar and its registry in `moondeck.json` against Discovery's list, which any device serves through `GET /api/modules/Devices`, each row its name, address, type and MAC, with `/api/system` per MoonLight row for its firmware and board; MoonDeck could read the list from one device instead of keeping its own.
 - **Device models.** MoonDeck's deviceModel push after each discovery (`PATCH /api/state`), the installer's `APPLY_OP` over serial and the map's Apply device defaults: one document, three transports, and whether each still earns its place.
 - **Installing.** MoonDeck's network and USB flashing, the Firmware card, the installer and the map's Install all reach a release's firmware; the install picker is shared already, and the rest is checked for a second copy of release lookup, variant choice or progress reporting.
 - **Board details.** The map's popup (`/api/system`), MoonDeck's device panels and the installer's device report read the same facts; one reader, or each its own reason.
@@ -298,6 +298,41 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 - **First candidates**, each small and on paths that exist: *send my lights to this WLED* from the map, a NetworkSendDriver aimed at the node; *switch the supply with MoonLight*, a Tasmota or ESPHome plug following MoonLight's on and off; *a sensor drives a control*, a button, motion or lux reading mapped to a MoonLight control or preset over MQTT or the REST API.
 - **What stays theirs:** their own guards (Tasmota's Referer check, ESPHome's native API key), never bypassed; MoonLight talks to them through what each publishes, as the map already does.
 - **Verified by:** each first candidate on the bench, a WLED, an ESPHome and a Tasmota board each doing its part beside a MoonLight board on the map.
+
+#### The map marks a device behind its channel 🧪 (test: a bench board behind, on the desktop's map)
+
+Asked by the product owner (2026-11-17).
+
+- **One rule, the status bar's.** A device on an official release is behind when a newer official release ships; a device on a -dev build, or one in developer mode (System's `mode`, which `/api/system` and its own map row report), is behind when a newer official release or a newer `latest` ships, the official one first. A -dev device that installs an official release follows official releases from then on, unless it is in developer mode, its version and mode being what decide the channel.
+- **Built (2026-11-17).** `channelUpdate` in app.js is the rule, read by the status bar's badge, a node's popup and its mark, from the install picker's one release list; tests in `ui-update-asset.test.mjs`.
+- **On the node.** Each MoonLight row carries its version and firmware already, so the map applies the rule per node without a request: a node behind gets a mark of its own, an amber ring and a ⬆ beside its name, distinct from the red dashed ring that marks a peer not answering (`.graph-unreachable`). A MoonBase or a WiFi coprocessor behind its app, which the device's own row names (`moonbaseMismatch`, `coprocessorMismatch`), gets the same mark, its tooltip saying which.
+- **Verified by:** a bench board one release behind and one current, side by side on the map; the behind one updated from its popup, its mark gone.
+
+#### WLED, WLED-MM, Tasmota and ESPHome installed on a device 🚧 (built: the installer's section and the map's links, 2026-11-17; next: the way back through MoonBase for WLED, the MoonDeck action)
+
+Asked by the product owner (2026-11-17): the way back from MoonLight, and a bench that can set up any firmware the map moves.
+
+- **Over USB, or through MoonBase.** A device's own update route refuses an image that is not MoonLight's (`isAppImage`), and a board MoonLight moved carries MoonBase's partition table, which none of the four boots from, so no plain upload installs them.
+- **Through MoonBase, asked by the product owner (2026-11-17): the migration image run backwards.** The migration image (`moonbase/migrate/`, 387 lines) already moves a board from WLED's, Tasmota's or ESPHome's layout to MoonBase's, power-cut safe: it copies itself out of the slot it overwrites, writes the bootloader and table it carries, and carries the networks over. The way back is the same steps toward the target's layout: the target's app downloaded from its own release into a slot MoonBase is not running from, the target's table (WLED's 4 and 16 MB tables are in `esp32/partitions/` already, built for the migration image) and its bootloader, then the choice of app.
+    - *What it costs per firmware:* its table and bootloader per flash size, its release asset's name, and its networks written its own way (WLED's `wsec.json`, Tasmota's settings, ESPHome's preferences), then a power-cut round on each chip family, as the way in had.
+    - *What it loses:* MoonBase itself, since none of the four has a factory slot, so the way back to MoonLight is the migration image again, through the old firmware's update page.
+    - *Order:* WLED first, whose tables exist and whose settings the way in already reads; WLED-MM shares its layout; Tasmota's safeboot layout and ESPHome's later.
+- **The textbook source is each project's own installer.** WLED, WLED-MM, Tasmota and ESPHome each publish an ESP Web Tools installer that knows their builds, versions and partition layouts: [WLED](https://install.wled.me/), [WLED-MM](https://moonmodules.org/WLED-WebInstaller/), [Tasmota](https://tasmota.github.io/install/), [ESPHome](https://web.esphome.io/). Copying their images or manifests into MoonLight's installer would mean following four release schedules.
+- **Where it shows, by candidate:**
+    - *The web installer:* a short "Other firmware" section linking the four installers, the one place a user with a cable already is. The links move there from [migrating over the air](../reference/migrating-over-the-air.md), which then points to the section.
+    - *The map:* a move's confirm, which already says going back needs a cable, links that section, so the way back is one click from where the way in was chosen.
+    - *MoonDeck:* a bench action, a firmware per port, that writes WLED or Tasmota over esptool as `wled_migration_test.py`'s `as_wled` does, so a migration path is set up again in one click; for development, not a user path.
+- **A generic installer from releases, investigated (2026-11-17, asked by the product owner).** One mechanism reading a project's GitHub releases and their assets works when a release says where each part goes, and the ESP Web Tools manifest (`builds[].chipFamily`, `parts[]{path, offset}`, [the standard](https://esphome.github.io/esp-web-tools/)) is that description. Three rules, in order:
+    1. A `*.manifest.json` asset: use it. [ESPHome](https://firmware.esphome.io/esphome-web/manifest.json) publishes one, 19 builds, a merged `*.factory.bin` at offset 0 per ESP32 chip; [Tasmota's installer](https://tasmota.github.io/install/manifests.json) publishes static ones over `tasmota32<chip>.factory.bin`.
+    2. A `*.factory.bin` asset: flash it at 0, its chip read from the image header (byte 12's chip id, esptool's `IMAGE_CHIP_ID`) and its kind from the partition table's magic at 0x8000. Tasmota's own releases.
+    3. Otherwise a per-project table, data rather than code: the releases URL, a download mirror that sends CORS, an asset pattern with named groups (chip, flash size, variant), the app offset 0x10000, and the bootloader and partition table per chip and flash size. Only the WLED family needs it: [WLED](https://github.com/wled/WLED/releases), [WLED-MM](https://github.com/MoonModules/WLED-MM/releases) ship app images alone, and their installers keep the boot parts in their own `bin/boot/` (WLED-MM's `releases.js`, WLED's `app.js` `CHIP_CONFIG`).
+    - *The asset-to-partition mapping is the gap*, as the product owner suspected: neither a WLED release nor its image header names the bootloader, the table or the offsets. Their installers fill it, at stable addresses that send CORS: [install.wled.me](https://install.wled.me/)'s `bin/boot/` holds a bootloader per chip and a partition table per chip and flash size, its [README](https://github.com/wled/WLED-WebInstaller/blob/main/bin/boot/README.md) mapping each to its offset, and one bootloader serving several flash sizes with its flash-size header byte rewritten, as esptool's `--flash_size` does; [MoonModules' installer](https://moonmodules.org/WLED-WebInstaller/)'s `bin/boot/` holds one set per chip, and its `bin/Release/release_0_15_3/manifest.json` is a static ESP Web Tools manifest, bootloader and app with their offsets. So rule 3's table names the installer's boot files rather than carrying copies. The textbook fix is upstream: WLED's and WLED-MM's CI attaching a `*.factory.bin` or a manifest with the boot parts, as Tasmota and ESPHome do, after which rule 3 goes.
+    - *A browser needs a mirror*: GitHub's release downloads send no CORS header (the releases API does), so a page fetches through [download.wled.me](https://download.wled.me) (WLED and WLED-MM paths), tasmota.github.io or firmware.esphome.io; MoonDeck and a device fetch directly.
+    - *troyhacks' WLED* publishes no releases: its binaries are Actions artifacts that need a GitHub login, and its nightly release workflow fails ([its releases](https://api.github.com/repos/troyhacks/WLED/releases)), so it is out of reach until it publishes a release.
+    - *Where it lives*: the install picker, beside MoonLight's own releases, so the web installer, the map's way back through MoonBase and MoonDeck's bench action read one mechanism; ESP8266 images carry no chip id, so they stay out.
+- **Recommended:** the installer section and the map's link first, a few lines; the way back through MoonBase for WLED next, as its own step with its own power-cut rounds; the MoonDeck action for the bench.
+- **Removes:** the four links' second home on the migration page.
+- **Verified by:** each installer reached from the section; a bench board set to WLED from MoonDeck and moved back to MoonLight from the map.
 
 ### Act as a group
 

@@ -166,7 +166,7 @@ public:
     char relayPins[24] = "";
 
     /// Run the output stage on the second core.
-    /// @guide It falls back to one core by itself when the extra frame buffer does not fit. The switch exists to compare the two.
+    /// @guide It falls back to one core by itself when the extra frame buffer does not fit or the second core stalls, and tries two again, waiting at most about a minute between tries. The switch exists to compare the two.
     bool multicore = true;
     /// What effects sample from: a built-in palette or a scripted `.mlp` one.
     uint8_t palette = 0;
@@ -465,6 +465,7 @@ public:
         else                    mm::formatTo(renderWaitStr_, sizeof(renderWaitStr_), "—");
         renderWaitPeakUs_ = 0;   // start a fresh window
         updateMotionHold();
+        retrySplit();
         MoonModule::tick1s();
     }
 
@@ -585,6 +586,7 @@ public:
 
         const bool haveLights = out && out->physicalLightCount() > 0;
         const bool splitWanted = multicore && anyDriver() && haveLights;
+        splitWanted_ = splitWanted;
         const bool wantOutput = (needOutput && haveLights) || splitWanted;
 
         // A wedged worker may still be READING the buffer, so tear the task down before freeing.
@@ -708,6 +710,10 @@ private:
     bool renderSplitActive_ = false;   // the split is engaged (task spawned, boundary in effect)
     bool wiredLast_ = false;   ///< the last frame went out as a wiring-order copy, so the output already holds it
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
+    bool splitWanted_ = false;         // the last prepare wanted the split, so tick1s retries one that is off
+    uint8_t splitRetryDelayS_ = 1;     // seconds between attempts, doubling up to kSplitRetryCapS
+    uint8_t splitRetryInS_ = 0;        // seconds off since the last attempt
+    uint8_t splitEngagedS_ = 0;        // seconds engaged since the last attempt, which resets the delay at the cap
     uint32_t renderWaitUs_ = 0;                 // last frame's core-0 wait at the boundary (the tick-line KPI)
     uint32_t renderWaitPeakUs_ = 0;             // worst wait in the current 1 s window (what the control shows)
     /// How long core 0 waited for core 1 at the frame boundary.
@@ -729,6 +735,23 @@ private:
         platform::taskWdtUnsubscribe();   // leave the WDT clean before the task exits (no dangling entry)
     }
     static void encodeTrampoline(void* self) { static_cast<Drivers*>(self)->runEncodeLoop(); }
+
+    /// The longest wait between two attempts to re-engage the split, and how long it stays engaged before the next stall retries after 1 s again.
+    static constexpr uint8_t kSplitRetryCapS = 64;
+    /// Re-engage a split that is off while its buffer exists, through Drivers' own prepare on a back-off, so one stall costs the second core only until the next attempt.
+    void retrySplit() MM_NONBLOCKING {
+        if (!splitWanted_ || !outputBuffer_.data()) { splitRetryDelayS_ = 1; splitRetryInS_ = 0; splitEngagedS_ = 0; return; }
+        if (renderSplitActive_) {
+            splitRetryInS_ = 0;
+            if (splitRetryDelayS_ > 1 && ++splitEngagedS_ >= kSplitRetryCapS) { splitRetryDelayS_ = 1; splitEngagedS_ = 0; }
+            return;
+        }
+        splitEngagedS_ = 0;
+        if (++splitRetryInS_ < splitRetryDelayS_) return;
+        splitRetryInS_ = 0;
+        if (splitRetryDelayS_ < kSplitRetryCapS) splitRetryDelayS_ *= 2;
+        if (Scheduler* s = Scheduler::instance()) s->requestPrepareSelf(this);   // prepare decides, at the frame boundary
+    }
 
     /// How long to wait for a wedged worker before disengaging the split, slower but lit; far above any real encode (~50 ms at 16K lights).
     static constexpr uint32_t kQuiesceTimeoutMs = 500;

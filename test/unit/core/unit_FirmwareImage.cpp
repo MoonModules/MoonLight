@@ -21,8 +21,10 @@
 #include "unit/source_tree.h"
 
 #include "core/util/FirmwareImage.h"
+#include "core/system/FirmwareUpdateModule.h"   // g_otaStatus: the buffer a refusal is shown in
 
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
@@ -210,8 +212,10 @@ TEST_CASE("a radio chip image is refused for another chip, as another project, o
     const auto c6 = makeImage(kImageMagic, 0x000D, "network_adapter", "2.12.13");
     const auto info = identify(c6.data(), c6.size());
     CHECK(coprocessorRejection(info, ChipId::Esp32C5, "2.12.13") == std::string("image is for another chip"));
-    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "2.13.0") == std::string("image's ESP-Hosted version does not match this firmware's"));
-    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "") == std::string("image's ESP-Hosted version does not match this firmware's"));
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "2.13.0") == std::string("image's ESP-Hosted version differs from this firmware's"));
+    CHECK(coprocessorRejection(info, ChipId::Esp32C6, "") == std::string("image's ESP-Hosted version differs from this firmware's"));
+    // The refusal lands on the Firmware card after "error: " in its 64-byte status, so a longer one loses its end, as this one once lost its last letter.
+    CHECK(std::strlen("error: ") + std::strlen(coprocessorRejection(info, ChipId::Esp32C6, "2.13.0")) < sizeof(mm::g_otaStatus));
     const auto app = makeImage(kImageMagic, 0x000D, "MoonLight", "2.12.13");
     const auto appInfo = identify(app.data(), app.size());
     CHECK(coprocessorRejection(appInfo, ChipId::Esp32C6, "2.12.13") == std::string("not a radio chip image"));

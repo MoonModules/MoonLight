@@ -271,7 +271,7 @@ def collect_esp32():
     kpi["firmware"] = esp32_build.name[len("esp32-"):]
 
     try:
-        from build_esp32 import find_idf, idf_env, idf_cmd
+        from idf_env import find_idf, idf_env, idf_cmd
         idf_path = find_idf()
         if idf_path:
             env = idf_env(idf_path)

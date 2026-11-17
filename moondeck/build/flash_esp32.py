@@ -11,7 +11,6 @@ from yesterday vs an edit five minutes ago) is visible in the log.
 """
 
 import argparse
-import json
 import re
 import shutil
 import subprocess
@@ -23,7 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import find_idf, idf_env, idf_cmd, FIRMWARES, build_dir_for, APP_BIN
+from build_esp32 import FIRMWARES, build_dir_for, APP_BIN
+from idf_env import find_idf, idf_env, idf_cmd
 
 
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"

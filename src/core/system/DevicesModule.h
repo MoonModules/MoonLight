@@ -12,13 +12,14 @@
 #include "core/system/DeviceIdentify.h"   // DevType, devTypeStr (the device-kind enum + its labels)
 #include "core/system/DevicePlugin.h"     // the interop plugin seam + the bundled plugins
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
+#include "core/system/DeviceProbe.h"      // PageProbe: the request that names a device known only by its address
+#include "core/system/DeviceSummary.h"    // writeDeviceFacts: what this device's own row and its summary both carry
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
 #include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
 #include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
 #include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
 #include "core/util/ReceiverList.h"           // parseReceiverList: the added addresses, as every receiver list is read
-#include "core/util/HttpHead.h"           // findHeader: the probe reads a page's Server header as the server reads a request's
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -73,6 +74,8 @@ namespace mm {
 ///
 /// **The summary is `/api/system`.** A node's details read the device's own health endpoint, which leads with who it is and what it runs, the light outputs and effects through `LightOutput`. This device's row carries its outputs too, so a peer's map labels its node without a request per node. Identify presses the device's own Drivers `identify` button through `/api/control`.
 ///
+/// **Behind, and defaults.** A node whose app is behind its update channel, or whose MoonBase or WiFi coprocessor (`moonbaseMismatch`, `coprocessorMismatch`, which its own row carries) is behind its app, gets an amber ring, a ⬆ and an update button in its popup, which also offers Apply device defaults.
+///
 /// **The map's edges come from the modules.** Once a second every enabled module reports its services and traffic (NetworkUse). A peer gets a row, a group address one of kind group. This device's row carries its outbound flows and services, a peer's row its inbound flow. A flow from a peer is a sighting; one to a silent receiver is not, so a dead receiver ages out.
 ///
 /// **Growth, and what memory refuses.** The rows are one block that doubles when a device needs a row, checked against the heap's reserve, so N devices cost about log₂ N allocations. A refused growth replaces the least recently heard row of the lowest worth: other devices, then MoonLight boards, never this device.
@@ -116,18 +119,7 @@ public:
         }
         writeEdges(sink, d);
         if (d.self) {
-            // What this device runs, so a peer merging this graph shows it on this device's node.
-            sink.append(",\"version\":");
-            sink.writeJsonString(kVersion);
-            sink.append(",\"firmware\":");
-            sink.writeJsonString(kFirmwareName);
-            writeServices(sink);
-            // What drives its lights, which a peer's map shows under this device's name.
-            if (const LightOutput* out = LightOutput::active()) {
-                sink.append(",\"outputs\":[");
-                out->writeOutputs(sink);
-                sink.append("]");
-            }
+            writeSelfDetail(sink);
         } else if (d.version[0]) {
             sink.append(",\"version\":");   // what another ecosystem's device announced it runs
             sink.writeJsonString(d.version);
@@ -176,7 +168,7 @@ public:
         addedCount_ = err ? 0 : n;
         addedError_ = err;
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         probeTick_ = kProbeEverySec;   // ask the new list now
         refreshStatus();
     }
@@ -250,7 +242,7 @@ public:
         mdns_.close();
         mdnsOpen_ = false;
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         deviceCount_ = flowCount_ = serviceCount_ = 0;   // the base frees their blocks
         MoonModule::release();
     }
@@ -298,10 +290,10 @@ public:
     bool probeOpenForTest() const { return probe_.conn.valid(); }
     /// Test-only: the first added address's page arriving in pieces of `piece` bytes, as the probe's reads take it.
     void injectPageForTest(const char* page, size_t piece) {
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         const size_t len = std::strlen(page);
         for (size_t at = 0; at < len; at += piece)
-            if (scanPage(reinterpret_cast<const uint8_t*>(page) + at, len - at < piece ? len - at : piece)) break;
+            if (probe_.scan(reinterpret_cast<const uint8_t*>(page) + at, len - at < piece ? len - at : piece)) break;
         finishProbe();
     }
     /// Test-only: an mDNS reply arriving from `srcIp`, as the browse's read takes it.
@@ -369,22 +361,7 @@ private:
     Receiver    addedReceivers_[kMaxAdded] = {};
     uint8_t addedCount_ = 0;
     const char* addedError_ = nullptr;   // why `addedIps` was refused, kept in the status until it is fixed
-    /// One HTTP request for an added address's page: its Server header names the firmware, its first <h2> the name a Tasmota was given.
-    struct Probe {
-        platform::TcpConnection conn;   ///< the request's connection
-        uint8_t receiver = 0;  ///< which added address
-        uint8_t state = 0;     ///< 0 idle, 1 connecting, 2 sending, 3 reading
-        uint8_t sent = 0;      ///< how much of the request the socket took
-        uint8_t ticks = 0;     ///< ticks in this state, which bounds a silent address
-        uint8_t h2At = 0;      ///< how much of "<h2>" the page has matched across reads
-        bool    inH2 = false;  ///< inside the first <h2>, whose text is the name
-        char    server[40] = {};   ///< the Server header's value
-        char    h2[24] = {};       ///< the first <h2>'s text
-        uint8_t h2Len = 0;     ///< its length so far
-        char    line[48] = {}; ///< the header line being read, for the Server one
-        uint8_t lineLen = 0;   ///< its length so far
-        bool    body = false;  ///< past the headers
-    } probe_;
+    PageProbe probe_;   ///< the added-address request in flight
     uint32_t probeTick_ = 0;
     /// How often each added address is asked, in ticks, and how many ticks a probe waits for it.
     static constexpr uint32_t kProbeEverySec = 60;
@@ -515,6 +492,22 @@ private:
         return added;
     }
 
+    /// What this device runs, its mode and its images behind the app, its services and its outputs, so a peer merging this graph shows them on its node.
+    void writeSelfDetail(JsonSink& sink) const {
+        sink.append(",\"version\":");
+        sink.writeJsonString(kVersion);
+        sink.append(",\"firmware\":");
+        sink.writeJsonString(kFirmwareName);
+        writeDeviceFacts(sink);   // the mode and the images behind the app, as the device's summary carries them
+        writeServices(sink);
+        // What drives its lights, which a peer's map shows under this device's name.
+        if (const LightOutput* out = LightOutput::active()) {
+            sink.append(",\"outputs\":[");
+            out->writeOutputs(sink);
+            sink.append("]");
+        }
+    }
+
     /// A row's edges, the adjacency list the map draws: this device's outbound flows from its own row, a peer's inbound flow from the peer's row to this device.
     void writeEdges(JsonSink& sink, const Device& d) const {
         bool first = true;
@@ -643,7 +636,7 @@ private:
     /// Ask each added address for its page, one at a time and once a minute, never waiting: a connect and a read move one step a tick.
     void probeAdded() {
         if (!addedCount_) return;
-        Probe& p = probe_;
+        PageProbe& p = probe_;
         if (p.state == 0) {
             if (p.receiver == 0 && ++probeTick_ < kProbeEverySec) return;
             probeTick_ = 0;
@@ -676,45 +669,19 @@ private:
             const int n = p.conn.read(buf, sizeof(buf));
             if (n < 0) return;                       // nothing yet: next tick
             if (n == 0) { finishProbe(); return; }  // the page ended
-            if (scanPage(buf, static_cast<size_t>(n))) { finishProbe(); return; }
+            if (p.scan(buf, static_cast<size_t>(n))) { finishProbe(); return; }
         }
-    }
-
-    /// Read a piece of the page: the Server header among the headers, then the first <h2>'s text; true once that text is complete.
-    bool scanPage(const uint8_t* b, size_t n) {
-        Probe& p = probe_;
-        static constexpr char kH2[] = "<h2>";
-        for (size_t i = 0; i < n; i++) {
-            const char c = static_cast<char>(b[i]);
-            if (!p.body) {
-                if (c == '\n') {
-                    p.line[p.lineLen] = 0;
-                    if (p.lineLen == 0) p.body = true;   // the blank line ends the headers
-                    else if (const char* h = http::findHeader(p.line, "Server:")) mm::formatTo(p.server, sizeof(p.server), "%s", http::skipSpace(h + 7));
-                    p.lineLen = 0;
-                } else if (c != '\r' && p.lineLen + 1u < sizeof(p.line)) {
-                    p.line[p.lineLen++] = c;
-                }
-            } else if (p.inH2) {
-                if (c == '<') return true;
-                if (p.h2Len + 1u < sizeof(p.h2)) { p.h2[p.h2Len++] = c; p.h2[p.h2Len] = 0; }
-            } else {
-                p.h2At = (c == kH2[p.h2At]) ? p.h2At + 1 : (c == kH2[0] ? 1 : 0);
-                if (p.h2At == sizeof(kH2) - 1) p.inH2 = true;
-            }
-        }
-        return false;
     }
 
     /// What the page said about the device, its row named and versioned by it, and the next address.
     void finishProbe() {
-        Probe& p = probe_;
+        PageProbe& p = probe_;
         if (p.server[0]) {
             DiscoveredDevice found;
             const char* slash = std::strchr(p.server, '/');
             const bool tasmota = std::strncmp(p.server, "Tasmota/", 8) == 0;
             found.type = tasmota ? DevType::Tasmota : DevType::Generic;
-            setDeviceName(found, p.h2[0] ? p.h2 : "");
+            setDeviceName(found, p.name);
             const uint8_t* ip = addedReceivers_[p.receiver].ip;
             platform::arpLookup(ip, found.mac);   // the probe's connection put its MAC in the address table: the identity a page need not give
             upsertDevice(ip, found);
@@ -741,7 +708,7 @@ private:
     void nextAdded() {
         const uint8_t next = static_cast<uint8_t>((probe_.receiver + 1) % (addedCount_ ? addedCount_ : 1));
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         probe_.receiver = next;
     }
 

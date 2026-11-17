@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
+#include "core/module/Scheduler.h"
 #include "light/drivers/ParallelLedDriver.h"
 #include "light/layers/Effects.h"
 #include "light/layers/Layer.h"
@@ -423,23 +424,42 @@ TEST_CASE("render-split: the stall warning clears once the worker is healthy aga
 }
 
 namespace {
-// Wedges its first tick on the worker until let go, as a core starved by other load does; every later tick returns at once.
+// Wedges its first tick on the worker until let go, as a core starved by other load does; every later tick returns at once until the test arms the next stall.
 class StallingDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer* b) override { src_ = b; }
+    void prepare() override { prepares++; }   // how often the split's retry reaches the drivers
+    int prepares = 0;
     // DELIBERATELY blocking, despite MM_NONBLOCKING: the wait IS the stall this test needs, as SlowDriver's is.
     void tick() MM_NONBLOCKING override {
         std::unique_lock<std::mutex> lk(m_);
-        if (!stalled_) { stalled_ = true; cv_.notify_all(); cv_.wait_for(lk, 5s, [this] { return released_; }); }
+        if (!armed_) return;
+        armed_ = false;
+        inTick_ = true;
+        cv_.notify_all();
+        cv_.wait_for(lk, 5s, [this] { return released_; });
+        released_ = false;
+        inTick_ = false;
     }
-    /// True once the worker is inside its first tick, so the test opens the stall on demand rather than by timing.
-    bool waitEntered() { std::unique_lock<std::mutex> lk(m_); return cv_.wait_for(lk, 5s, [this] { return stalled_; }); }
+    /// True once the worker is inside a stalled tick, so the test opens the stall on demand rather than by timing.
+    bool waitEntered() { std::unique_lock<std::mutex> lk(m_); return cv_.wait_for(lk, 5s, [this] { return inTick_; }); }
     void letGo() { { std::scoped_lock<std::mutex> lk(m_); released_ = true; } cv_.notify_all(); }
+    /// Stall the next tick too, once the stalled one has unwound, polled so the tick needs no second notification.
+    void arm() {
+        for (int i = 0; i < 5000; i++) {
+            {
+                std::scoped_lock<std::mutex> lk(m_);
+                if (!inTick_) { armed_ = true; return; }
+            }
+            std::this_thread::sleep_for(1ms);
+        }
+    }
     mm::Buffer* src_ = nullptr;
 private:
     std::mutex m_;
     std::condition_variable cv_;
-    bool stalled_ = false;
+    bool armed_ = true;
+    bool inTick_ = false;
     bool released_ = false;
 };
 }  // namespace
@@ -477,4 +497,47 @@ TEST_CASE("render-split: after a stalled worker drops the split to inline, new f
     REQUIRE(d.src_->data());
     CHECK(d.src_->data()[0] == 0x42);                  // the drivers see it, rather than the frame from before the stall
     drivers.release();
+}
+
+// One stall must not cost the second core for good: a split that is wanted but off asks for a prepare on a back-off of 1, 2, 4 up to 64 seconds, counted on tick1s, and 64 seconds engaged bring the wait back to 1.
+TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer each time it stalls again") {
+    Rig r(16);
+    StallingDriver d;
+    r.drivers.addChild(&d);
+    mm::Scheduler s;                                   // the retry asks it for a prepare at the next frame boundary
+    s.addModule(&r.drivers);
+    s.setup();
+    s.preparePending();
+    REQUIRE(r.drivers.renderSplitActive());
+
+    const auto stall = [&] {
+        r.drivers.tick();                              // the worker wedges inside d.tick()
+        REQUIRE(d.waitEntered());
+        REQUIRE_FALSE(r.drivers.quiesceEncodeForTest());   // the boundary gives up and drops the split
+        d.letGo();
+        REQUIRE_FALSE(r.drivers.renderSplitActive());
+    };
+    const auto second = [&] { r.drivers.tick1s(); s.preparePending(); };   // one second: the 1 Hz tick, then the frame boundary
+
+    const int prepared = d.prepares;
+    stall();
+    second();
+    CHECK(r.drivers.renderSplitActive());              // back after 1 s
+    CHECK(d.prepares == prepared);                     // Drivers re-engaged alone: the driver kept its peripheral
+
+    d.arm();
+    stall();
+    second();
+    CHECK_FALSE(r.drivers.renderSplitActive());        // stalled again, so the wait doubled
+    second();
+    CHECK(r.drivers.renderSplitActive());              // back after 2 s
+
+    for (int i = 0; i < 64; i++) second();             // 64 s engaged: whatever caused the stalls has passed
+    REQUIRE(r.drivers.renderSplitActive());
+    d.arm();
+    stall();
+    second();
+    CHECK(r.drivers.renderSplitActive());              // so the next stall waits 1 s again
+
+    r.drivers.release();                               // joins the worker
 }

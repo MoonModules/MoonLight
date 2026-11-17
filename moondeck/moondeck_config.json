@@ -208,6 +208,14 @@
       "script": "check/check_specs.py"
     },
     {
+      "id": "run_gates",
+      "tab": "repo",
+      "group": "check",
+      "label": "Run Gates",
+      "help": "run_gates",
+      "script": "check/run_gates.py"
+    },
+    {
       "id": "check_prose",
       "tab": "repo",
       "group": "check",

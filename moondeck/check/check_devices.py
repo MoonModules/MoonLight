@@ -5,7 +5,7 @@
 # ///
 """Validate the installer device catalog (mooninstaller/deviceModels.json).
 
-The catalog is hand-maintained data three clients read alike, the web installer, the device UI's ?deviceModel= inject and MoonDeck, so a typo drifts silently: a broken image path, a name that no longer matches its System.deviceModel, a driver pin list on an entry with no driver. This is the catalog's counterpart to check_specs.py: a fast gate pinning what the clients assume.
+The catalog is hand-maintained data three clients read alike, the web installer, the device UI's map and MoonDeck, so a typo drifts silently: a broken image path, a name that no longer matches its System.deviceModel, a driver pin list on an entry with no driver. This is the catalog's counterpart to check_specs.py: a fast gate pinning what the clients assume.
 
 The catalog's shape, its fields, their types and their vocabularies, is mooninstaller/deviceModels.schema.json, validated first. What a schema cannot know is checked here, per entry:
   - the name is unique

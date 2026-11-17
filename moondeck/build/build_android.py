@@ -21,6 +21,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from build_host import build_jobs  # the one bound on compile jobs
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIR = "build/android-arm64"
 # Android 9, the floor the plan picked: old enough for a 2018 tablet, and raising it later is free.
@@ -152,7 +154,7 @@ def main():
     if r.returncode != 0:
         sys.exit(r.returncode)
     target = "mm_tests" if args.tests else "moonlight" if args.apk else "MoonLight"
-    r = subprocess.run(["cmake", "--build", BUILD_DIR, "--target", target], cwd=ROOT)
+    r = subprocess.run(["cmake", "--build", BUILD_DIR, "--target", target, "--parallel", str(build_jobs())], cwd=ROOT)
     if r.returncode != 0 or not args.apk:
         sys.exit(r.returncode)
     sys.exit(build_apk(args.version))

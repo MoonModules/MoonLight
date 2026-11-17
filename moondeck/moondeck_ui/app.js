@@ -1380,53 +1380,9 @@ function renderDevices() {
             if (deviceModel === val) opt.selected = true;
             deviceModelPicker.appendChild(opt);
         }
-        // Push a deviceModel's full deviceModels.json defaults to the device (POST
-        // /api/push-device → _push_device fans out controls.<Module>.<control>).
-        // `onDone(ok)` lets the explicit button below show success/failure; the picker
-        // change path passes nothing (fire-and-forget, recovered on next refresh).
-        const pushDevice = (deviceModel, onDone) => {
-            // Success is the device-side result in the JSON body ({"ok": bool} from
-            // _push_device) — HTTP 200 alone can wrap a failed push (a device
-            // timeout / non-2xx mid-fan-out), so r.ok would falsely report success.
-            // 10s AbortSignal timeout so a stalled request can't wedge the button forever.
-            fetch("/api/push-device", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ip: device.ip, deviceModel}),
-                signal: timeoutSignal(10000),
-            }).then(r => r.json()).then(j => onDone && onDone(!!j.ok))
-              .catch(() => onDone && onDone(false));
-        };
         deviceModelPicker.addEventListener("change", () => {
             device.deviceModel = deviceModelPicker.value;
-            saveState();
-            // Mirror the change to the device immediately. Without this, the
-            // device's SystemModule wouldn't hear about the picker until the
-            // next discover/refresh probe — and the user expects the device
-            // UI to update right after they pick. Fire-and-forget; failure
-            // (timeout / device offline) is recovered on the next refresh
-            // when discover/refresh's bulk push catches up.
-            pushDevice(deviceModelPicker.value);
-        });
-
-        // Explicit "inject" — re-push the SELECTED device model's full config on demand,
-        // without having to change the picker. Distinct intent from the implicit on-change
-        // push: re-apply after a reflash wiped config, or re-assert defaults a user edited
-        // away. Brief inline feedback so a no-op (timeout / offline) isn't silent.
-        const injectBtn = document.createElement("button");
-        injectBtn.className = "device-inject";
-        injectBtn.textContent = "inject";
-        injectBtn.title = "Push the selected device-model's deviceModels.json defaults to this device now";
-        injectBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            const deviceModel = deviceModelPicker.value;
-            if (!deviceModel) { injectBtn.textContent = "pick a device model"; setTimeout(() => injectBtn.textContent = "inject", 1500); return; }
-            injectBtn.disabled = true;
-            injectBtn.textContent = "injecting…";
-            pushDevice(deviceModel, (ok) => {
-                injectBtn.textContent = ok ? "injected ✓" : "failed ✗";
-                setTimeout(() => { injectBtn.textContent = "inject"; injectBtn.disabled = false; }, 1800);
-            });
+            saveState();   // MoonDeck's own record; the device takes its defaults from the Devices map or the web installer
         });
 
         // "OTA": wireless flash of the local build for this device's firmware. MoonDeck uploads
@@ -1434,7 +1390,7 @@ function renderDevices() {
         // variant has it. No USB. Needs a local build for the device's firmware. The install's state
         // lives in otaStatus, so a redraw of the rows keeps showing it.
         const otaBtn = document.createElement("button");
-        otaBtn.className = "device-inject";       // same compact style as inject
+        otaBtn.className = "device-action";
         const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
         // A host's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
         const isHost = otaFw.startsWith("host-");
@@ -1503,7 +1459,6 @@ function renderDevices() {
         const row3 = document.createElement("div");
         row3.className = "device-row devicemodel-row";
         row3.appendChild(deviceModelPicker);
-        row3.appendChild(injectBtn);
         row3.appendChild(otaBtn);
 
         label.appendChild(row1);

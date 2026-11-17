@@ -363,6 +363,17 @@ TEST_CASE("DevicesModule: an added address whose page says Tasmota is listed as 
     CHECK(dev.listRowCount() == 1);
 }
 
+// Any other page is named by its <title>, the document's own name, rather than a section heading: a Hue bridge's page has "Open Source" as its first <h2>.
+TEST_CASE("DevicesModule: an added address that is not a Tasmota is named by its page's title, whatever its headings say") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.105");
+    dev.onControlChanged("addedIps");
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n<html><head>\n<TITLE>\n  Hue Bridge\n</TITLE></head><body><h1>hue</h1><h2>Open Source</h2></body></html>", 5);
+    const std::string row = rowFor(dev, "192.0.2.105");
+    CHECK(std::strstr(row.c_str(), "\"name\":\"Hue Bridge\"") != nullptr);
+    CHECK(std::strstr(row.c_str(), "Open Source") == nullptr);
+}
+
 TEST_CASE("DevicesModule: an added address that is not a Tasmota is listed as generic, and a name is refused") {
     DevicesModule dev;
     std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.104");

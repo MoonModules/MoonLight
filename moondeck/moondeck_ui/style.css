@@ -405,7 +405,7 @@ select {
 .device-port-chip:hover { background: #243044; color: #a9cdf0; }
 .device-port-chip.active { background: #2d4a2d; color: #9fe09f; border-color: #3a5a3a; }
 
-/* Picker + inject button share the deviceModel row; the picker flexes, the button
+/* The picker and the OTA button share the deviceModel row; the picker flexes, the button
    stays its natural width. */
 .devicemodel-row { display: flex; gap: 6px; align-items: center; }
 .devicemodel-picker {
@@ -413,23 +413,23 @@ select {
     border: 1px solid #2a3548; border-radius: 3px; padding: 1px 4px;
     /* Flexes to fill the row; max-width/ellipsis clamp long labels (e.g.
        "Olimex ESP32-Gateway Rev G" = 26ch) so the dropdown text doesn't push
-       the inject button off the card's right edge. */
+       the OTA button off the card's right edge. */
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* The per-device inject button — dark, bordered, compact, sitting beside the deviceModel
+/* A per-device action button: dark, bordered, compact, sitting beside the deviceModel
    picker so the row reads as one control set rather than a styled dropdown + native button. */
-.device-inject {
+.device-action {
     flex: 0 0 auto;
     font-size: 11px; background: #1c2535; color: #8ab4f8;
     border: 1px solid #2a3548; border-radius: 3px; padding: 1px 6px;
     cursor: pointer; white-space: nowrap;
 }
-.device-inject:hover:not(:disabled) { border-color: #8ab4f8; }
-.device-inject:disabled { opacity: 0.6; cursor: default; }
+.device-action:hover:not(:disabled) { border-color: #8ab4f8; }
+.device-action:disabled { opacity: 0.6; cursor: default; }
 
 .device-remove {
     background: none; border: none; color: #666;

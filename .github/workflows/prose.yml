@@ -6,7 +6,7 @@ name: Prose
 # the check; warnings and suggestions land as inline annotations only.
 #
 # Two things are scheduled to change once the tree is swept clean (`vale docs/` exits 0): this
-# job drops `filter_mode` and checks whole files, and moondeck/check/{check_prose,hook_prose}.py
+# job drops `filter_mode` and checks whole files, and moondeck/check/check_prose.py and the prose part of hook_written.py
 # are deleted, since their only job was the added-lines scope this job then no longer needs.
 
 on:

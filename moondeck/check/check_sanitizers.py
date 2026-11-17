@@ -32,6 +32,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _findings  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
 
 RULES = {
     "address sanitizer": {"reason": "The unit suite fails under AddressSanitizer: a use-after-free or memory error.", "fix": "Run `check_sanitizers.py --kind address` and read the report.", "standard": "docs/contributing/coding-standards.md"},
@@ -105,7 +107,7 @@ def run_one(kind: str, filt: str | None, junit: Path | None = None) -> bool:
          f"-DCMAKE_CXX_FLAGS={flags}", f"-DCMAKE_EXE_LINKER_FLAGS=-fsanitize={kind}"],
         check=True, stdout=subprocess.DEVNULL,
     )
-    subprocess.run(["cmake", "--build", str(build), "--target", "mm_tests", f"-j{os.cpu_count() or 8}"],
+    subprocess.run(["cmake", "--build", str(build), "--target", "mm_tests", "--parallel", str(build_jobs())],
                    check=True, stdout=subprocess.DEVNULL)
 
     env = dict(os.environ)

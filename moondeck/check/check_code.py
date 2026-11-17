@@ -587,6 +587,7 @@ def _table(rows) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--module", help="Report only this module's source files, without recording anything.")
+    ap.add_argument("--files", nargs="+", help="Report only these source files' findings, without recording anything: the write-time hook's view.")
     ap.add_argument("--account", action="store_true", help="Print this change's account against the last commit, without measuring.")
     args = ap.parse_args()
     if args.account:
@@ -597,8 +598,9 @@ def main() -> int:
     if funcs is None:
         return 2
     # Clones are found repo-wide, so the module view leaves them to the full run rather than pay for that pass per module.
-    report = None if args.module else clones()
-    if report is None and not args.module:
+    partial = args.module or args.files
+    report = None if partial else clones()
+    if report is None and not partial:
         return 2
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
     types = registered_types()
@@ -606,7 +608,7 @@ def main() -> int:
             + raw_alloc_rows() + mutable_static_rows() + style_rows())
     # The hot path is a full rebuild, so the module view leaves it to the full run as it does clones; check_nonblocking --module is its detailed view.
     try:
-        warnings = None if args.module else build_warnings()
+        warnings = None if partial else build_warnings()
     except BuildMissing as e:
         print(e, file=sys.stderr)
         return 2
@@ -615,16 +617,20 @@ def main() -> int:
         hot = hotpath_rows(warnings)
         rows += hot + stack_rows(warnings)
 
-    if args.module:
-        import check_clang_query
-        only = check_clang_query.module_files(args.module)
+    if partial:
+        if args.files:
+            only = [str(Path(f).resolve().relative_to(ROOT)) if Path(f).is_absolute() else f for f in args.files]
+        else:
+            import check_clang_query
+            only = check_clang_query.module_files(args.module)
         if not only:
             print(f"No source files for module '{args.module}'.", file=sys.stderr)
             return 2
         rows = [r for r in rows if r[0] in only]
-        print(f"{args.module}: {len(rows)} finding(s) in {', '.join(only)}")
-        print(_table(rows))
-        return 0
+        if rows or args.module:
+            print(f"{args.module or 'Code'}: {len(rows)} finding(s) in {', '.join(only)}")
+            print(_table(rows))
+        return 1 if args.files and errors_in(rows) else 0
 
     # The findings in the one shape every check keeps, which the test page shows; a rule this host cannot measure is left out rather than recorded as zero.
     if _findings.is_real(COUNTS):

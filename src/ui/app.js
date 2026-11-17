@@ -3,7 +3,8 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker, HOST_DOWNLOAD } from "./install-picker.js";
+import { installPicker, HOST_DOWNLOAD, loadReleases, latestStable, releaseByTag, releaseAsset, firmwareAssetName, moonbaseAssetName,
+         migrateAssetName, mirrorUrl, chipKey } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
@@ -1815,14 +1816,23 @@ async function moonbaseHandoff() {
 const MOONBASE_SILENT_MSG = "MoonBase did not answer. If its WiFi fell back, join the " +
                             "MoonBase access point and open http://4.3.2.1";
 
+// Ask `read` every `everyMs` until `done` holds for its answer or `ms` pass, `onWait` hearing each other answer; that answer, or null. The one
+// wait for a device the Firmware card and the Devices map share.
+async function pollUntil(read, done, ms, everyMs = 3000, onWait = null) {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+        await fwSleep(everyMs);
+        const got = await read();
+        if (got && done(got)) return got;
+        if (got && onWait) await onWait(got);
+    }
+    return null;
+}
+
 // Poll until MoonBase serves (a 200 on the probe). False on deadline: the device never came up,
 // or came up unreachable (AP fallback).
 async function waitForMoonBase(deadline) {
-    while (Date.now() < deadline) {
-        await fwSleep(2000);
-        if ((await probeMoonBase()).state === "up") return true;
-    }
-    return false;
+    return !!(await pollUntil(probeMoonBase, (p) => p.state === "up", deadline - Date.now(), 2000));
 }
 
 async function moonbaseUpdateFlow(opts) {
@@ -2476,13 +2486,7 @@ function createCard(mod, depth) {
 
         // For a device without TLS the browser downloads the image and uploads it; a release asset comes from its Pages copy, since GitHub's refuses a cross-origin read.
         const installViaBrowser = async (url) => {
-            let source = url;
-            try {
-                const u = new URL(url);
-                const m = /^\/MoonModules\/MoonLight\/releases\/download\/([^/]+)\/([^/]+)$/.exec(u.pathname);
-                if (u.protocol === "https:" && u.hostname === "github.com" && m)
-                    source = `https://moonmodules.org/MoonLight/install/releases/${m[1]}/${m[2]}`;
-            } catch (_) { /* not a URL the page can parse: fetched as given, and its own error says so */ }
+            const source = mirrorUrl(url, INSTALLER_URL);
             const ui = showUpdateOverlay();
             // One controller for both transfers, so cancel stops the download and the upload that follows it.
             const ctl = new AbortController();
@@ -4773,6 +4777,23 @@ async function fetchPeerGraph(url, opts) {
     }
 }
 
+// What a MoonLight node has behind, for its mark and its tooltip: its app behind its channel, a MoonBase or a WiFi coprocessor behind its app; "" when all are current.
+function nodeBehind(row, releases) {
+    const u = channelUpdate(row, releases);
+    return [u ? `${u.label} available` : "", row.moonbaseMismatch ? "MoonBase behind the app" : "",
+            row.coprocessorMismatch ? "WiFi coprocessor behind the app" : ""].filter(Boolean).join(", ");
+}
+
+// The release list the map marks nodes behind their channel by, loaded at most once an hour and drawn into when it arrives; null until then.
+function graphReleases(container) {
+    const now = Date.now();
+    if (!container._releasesAt || now - container._releasesAt > UPDATE_TTL_MS) {
+        container._releasesAt = now;
+        loadReleases({ maxAgeMs: UPDATE_TTL_MS }).then(list => { container._releases = list; if (list) redrawGraph(container); });
+    }
+    return container._releases || null;
+}
+
 function redrawGraph(container) {
     if (container._graphPanning) return;   // the pan's end redraws
     const a = container._graphArgs;
@@ -4826,7 +4847,9 @@ function buildListGraph(container, rows, details, opts) {
             if (index.has(key)) {
                 if (row.self) {
                     const node = nodes[index.get(key)];
-                    node.row = Object.assign({}, node.row, { version: row.version, firmware: row.firmware, services: row.services, outputs: row.outputs });
+                    // Only what the peer reports: an older one sends fewer fields, and a key with an undefined value shows as an empty line.
+                    const own = ["version", "firmware", "mode", "moonbaseMismatch", "coprocessorMismatch", "services", "outputs"].filter(k => row[k] !== undefined);
+                    node.row = Object.assign({}, node.row, Object.fromEntries(own.map(k => [k, row[k]])));
                 }
                 continue;
             }
@@ -4915,18 +4938,28 @@ function buildListGraph(container, rows, details, opts) {
             svg.appendChild(t);
         }
     });
+    const releases = graphReleases(container);
     for (const node of nodes) {
         const p = pos.get(node.key);
         const g = document.createElementNS(NS, "g");
         const age = rowAgeClass(node.row);
+        const behind = node.row.type === "MoonLight" ? nodeBehind(node.row, releases) : "";
         g.setAttribute("class", "graph-node" + (node.self ? " graph-self" : "") +
                                 (age === "age-stale" ? " graph-faded" : "") +
+                                (behind ? " graph-behind" : "") +
                                 (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
         const kind = graphKind(node.row);
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
         dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_KIND_COLORS.generic);
         g.appendChild(dot);
+        if (behind) {
+            const mark = document.createElementNS(NS, "text");   // ⬆ beside the dot: its channel offers a newer version
+            mark.setAttribute("x", p.x + (node.self ? 9 : 7) + 2); mark.setAttribute("y", p.y - 4);
+            mark.setAttribute("class", "graph-behind-mark");
+            mark.textContent = "⬆";
+            g.appendChild(mark);
+        }
         let y = p.y + GRAPH_LABEL_DY;
         for (const [line, cls] of graphNodeLines(node.row, node.key, show)) {
             const text = document.createElementNS(NS, "text");
@@ -4938,7 +4971,7 @@ function buildListGraph(container, rows, details, opts) {
         }
         const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
         const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
-        const summary = [node.row.name, where, kind, node.row.version, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
+        const summary = [node.row.name, where, kind, node.row.version, behind, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
         const title = document.createElementNS(NS, "title");
         title.textContent = summary;
         g.appendChild(title);
@@ -5263,22 +5296,13 @@ async function peerFirmware(base) {
 // a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
 function updateAsset(rel, dev, version) {
     const installs = !!dev.firmware && (!dev.update || dev.update === "self");
-    const asset = installs ? (rel?.assets || []).find(a => a.name === `firmware-${dev.firmware}-v${version}.bin`) : null;
-    return { url: asset?.browser_download_url ?? null, sha256: asset?.digest?.replace(/^sha256:/, "") ?? null };
+    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version)) : { url: null, sha256: null };
 }
 
 // The release a device could move to and the asset that installs it, by the same checks the update badge makes for this device.
 async function peerUpdate(dev) {
-    const stable = await stableUpdate(dev, false);
-    if (stable) {
-        const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", false);
-        return { label: stable, ...updateAsset(rel, dev, stable.replace(/^v/, "")) };
-    }
-    if ((parse(dev.version)?.prerelease.length || 0) === 0) return null;   // a stable device is not nudged toward a -dev build
-    const v = await devUpdate(dev, false);
-    if (!v) return null;
-    const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", false);
-    return { label: `latest (${v})`, ...updateAsset(rel, dev, v) };
+    const u = channelUpdate(dev, await loadReleases({ maxAgeMs: UPDATE_TTL_MS }));
+    return u ? { label: u.label, ...updateAsset(u.rel, dev, u.version) } : null;
 }
 
 // The Ethernet boards of WLED's table the migration carries over, by WLED's `eth.type`, as kWledEthernet in WledNetworks.h maps them.
@@ -5295,8 +5319,8 @@ function wledEthernetNote(type) {
 
 // The chip a WLED's /json/info names, as MoonLight's files spell it: "esp32-c3" is esp32c3; null for one MoonLight does not build for.
 function wledChip(info) {
-    const arch = String(info?.arch || "").toLowerCase().replace(/-/g, "");
-    return /^esp32[a-z0-9]*$/.test(arch) ? arch : null;
+    const key = chipKey(info?.arch);
+    return /^esp32[a-z0-9]*$/.test(key) ? key : null;
 }
 
 // The migration image a WLED takes: its chip's, and on a P4 from revision 3 that revision line's, which WLED-MM's chip model names ("ESP32-P4 rev.301").
@@ -5308,9 +5332,22 @@ function wledFamily(info, chip) {
 // The web installer's Pages site, which serves its files cross-origin where GitHub's own downloads do not.
 const INSTALLER_URL = "https://moonmodules.org/MoonLight/install/";
 
+// The way back from MoonLight, which a move's confirm names: the firmware's own installer over USB, linked from the web installer's page.
+function goingBackLink(firmware) {
+    const line = document.createElement("div");
+    line.className = "graph-popup-note";
+    const a = document.createElement("a");
+    a.href = `${INSTALLER_URL}#other-firmware`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.textContent = `Going back to ${firmware}: its own installer, over USB`;
+    line.appendChild(a);
+    return line;
+}
+
 // Where the browser takes a release's migration image: the installer's mirror of the release.
 function migrateImageUrl(tag, chip) {
-    return `${INSTALLER_URL}releases/${tag}/shared-migrate-${chip}.bin`;
+    return `${INSTALLER_URL}releases/${tag}/${migrateAssetName(chip)}`;
 }
 
 // A WLED device's way to MoonLight without a cable, in one go: the install picker for its chip, a confirm that going back needs a cable,
@@ -5335,6 +5372,7 @@ function buildWledMigrate(row) {
         input.type = "file";
         input.accept = ".bin";
         file.append("Migration image, for a release without one ", input);
+        box.appendChild(goingBackLink("WLED"));
         mountMapPicker(box, base, chip, null, file, async (binaryUrl, tag, note) => {
             if (!confirm("Move this WLED device to MoonLight over the network? Going back to WLED needs a USB cable.")) return null;
             await wledToMoonBase(base, input.files[0] || migrateImageUrl(tag, wledFamily(info, chip)), tag, chip, note);
@@ -5475,6 +5513,7 @@ function buildTasmotaMigrate(row) {
         picker?.refresh();
         setTimeout(check, 3000);
     };
+    box.appendChild(goingBackLink("Tasmota"));
     mountMapPicker(box, base, row.chip, null, extra, async (binaryUrl, tag, note) => {
         if (!confirm("Move this Tasmota device to MoonLight over WiFi? Going back to Tasmota needs a USB cable.")) return null;
         await tasmotaToMoonBase(base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
@@ -5499,6 +5538,7 @@ function buildEsphomeMigrate(row) {
     input.accept = ".bin";
     file.append("Migration image, for a release without one ", input);
     const base = `http://${row.ip}`;
+    box.appendChild(goingBackLink("ESPHome"));
     mountMapPicker(box, base, row.chip, null, file, async (binaryUrl, tag, note) => {
         if (!confirm("Move this ESPHome device to MoonLight over WiFi? Going back to ESPHome needs a USB cable, or ESPHome's own tools.")) return null;
         await esphomeToMoonBase(row.ip, base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
@@ -5612,14 +5652,7 @@ async function moonBaseToMoonLight(base, binaryUrl, note) {
 
 // The board's /api/system every three seconds until `done` holds for it or `ms` pass, `onWait` hearing each other answer; the answer, or null.
 async function waitForSystem(base, done, ms, onWait) {
-    const deadline = Date.now() + ms;
-    while (Date.now() < deadline) {
-        await fwSleep(3000);
-        const sys = await fetchJsonWithin(`${base}/api/system`, 2500);
-        if (sys && done(sys)) return sys;
-        if (sys && onWait) await onWait(sys);
-    }
-    return null;
+    return pollUntil(() => fetchJsonWithin(`${base}/api/system`, 2500), done, ms, 3000, onWait);
 }
 
 // A device model's defaults onto the new MoonLight as one state document, the one the web installer sends over serial; WiFi and Ethernet
@@ -5632,6 +5665,36 @@ async function applyDeviceDefaults(base, model) {
     } catch (_) {
         return ` ${model.name}'s defaults did not reach it.`;
     }
+}
+
+// A running MoonLight takes a device model's defaults as a moved one does: the models its firmware runs on, the one it reports picked, pressed
+// twice since the defaults replace the modules they name. Offline, where the catalog does not load, the popup leaves the row out.
+async function offerDeviceDefaults(summary, base, fw) {
+    const support = await loadMapDeviceSupport();
+    const fits = ((support && await support.loadDevices()) || []).filter(m => m.state && (m.firmwares || []).includes(fw.firmware));
+    if (!fits.length) return;
+    const row = document.createElement("div");
+    row.className = "graph-popup-defaults";
+    const select = document.createElement("select");
+    for (const m of fits) {
+        const opt = document.createElement("option");
+        opt.value = opt.textContent = m.name;
+        opt.selected = m.name === fw.summary?.board;
+        select.appendChild(opt);
+    }
+    const btn = document.createElement("button");
+    btn.className = "graph-popup-update";
+    btn.textContent = "Apply device defaults";
+    btn.title = "Set this device model's recommended modules and settings, replacing the modules it names";
+    const note = document.createElement("div");
+    armPressTwice(btn, async () => {
+        btn.disabled = true;
+        note.textContent = "Applying…";
+        note.textContent = (await applyDeviceDefaults(base, fits.find(m => m.name === select.value))).trim();
+        btn.disabled = false;
+    }, { armedText: "✓ Apply device defaults" });
+    row.append(select, btn);
+    summary.append(row, note);
 }
 
 // A device's summary lines, each only when the device reports it: its board, identity, health, what
@@ -5692,11 +5755,12 @@ function buildPeerSummary(row) {
                 btn.addEventListener("click", () => identifyPeer(base, idNote));
                 summary.append(btn, idNote);
             }
+            offerDeviceDefaults(summary, base, fw);
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
         const update = fw.summary?.update;
-        const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update });
-        if (!u) { note.textContent = "Up to date."; return; }
+        const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update, mode: fw.summary?.mode });
+        if (!u) { note.textContent = "Up to date."; await offerImageUpdates(box, base, fw, note); return; }
         if (!u.url) {
             note.textContent = update === "container"
                 ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
@@ -5707,21 +5771,53 @@ function buildPeerSummary(row) {
         const btn = document.createElement("button");
         btn.className = "graph-popup-update";
         btn.textContent = `Update to ${u.label}`;
-        armPressTwice(btn, () => startPeerUpdate(base, u, fw.version, note, btn), { armedText: "✓ " + btn.textContent });
+        armPressTwice(btn, () => startPeerInstall(base, "/api/firmware/url", { url: u.url, sha256: u.sha256 }, {
+            starting: `Starting the update to ${u.label}…`, installing: "Installing: the device restarts when it is done…",
+            done: (now) => now.version !== fw.version ? `Updated to ${now.version}.` : null }, note, btn), { armedText: "✓ " + btn.textContent });
         box.appendChild(btn);
     })();
     return box;
 }
 
-// Hand the device the image's address and digest, as its own Firmware card does, and watch it come back on a
-// new version. A device without TLS answers 501 and installs from its own Firmware card instead.
-async function startPeerUpdate(base, u, oldVersion, note, btn) {
+// The image that brings a device's MoonBase level with its app, shared-moonbase-<chip>.bin of the release its app ships in, with the SHA-256 GitHub
+// names for it; a null url when that release carries none for the chip.
+function moonbaseAsset(rel, chip) {
+    return chip ? releaseAsset(rel, moonbaseAssetName(moonbaseAssetKeyFrom(chip))) : { url: null, sha256: null };
+}
+
+// With the app current, MoonBase and the WiFi coprocessor are each offered while the device reports them behind it, pressed twice like the app's
+// update. The coprocessor takes the image of the device's own release by itself; MoonBase takes the one the app's release carries for its chip.
+async function offerImageUpdates(box, base, fw, note) {
+    const sys = fw.summary || {};
+    const offers = [];
+    if (sys.moonbaseMismatch) {
+        const a = moonbaseAsset(releaseByTag(await loadReleases({ maxAgeMs: UPDATE_TTL_MS }), releaseTagOf(fw.version)), sys.chip);
+        if (a.url) offers.push({ label: "MoonBase", route: "/api/firmware/moonbase-update-url", body: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch",
+                                 installing: "Installing MoonBase: the app keeps running…" });
+    }
+    if (sys.coprocessorMismatch) offers.push({ label: "WiFi coprocessor", route: "/api/firmware/coprocessor-update-url", body: {}, flag: "coprocessorMismatch",
+                                                installing: "Installing the WiFi coprocessor: the device restarts when it is done…" });
+    if (!offers.length) return;
+    note.textContent = `The app is up to date; ${offers.map(o => o.label).join(" and ")} ${offers.length > 1 ? "are" : "is"} behind it.`;
+    for (const o of offers) {
+        const btn = document.createElement("button");
+        btn.className = "graph-popup-update";
+        btn.textContent = `Update ${o.label}`;
+        armPressTwice(btn, () => startPeerInstall(base, o.route, o.body, {
+            starting: `Starting the ${o.label} update…`, installing: o.installing,
+            done: (now) => now.summary && !now.summary[o.flag] ? `${o.label} matches the app.` : null }, note, btn), { armedText: "✓ " + btn.textContent });
+        box.appendChild(btn);
+    }
+}
+
+// Hand a device an install, as its own Firmware card does, and watch its summary until `say.done` reads the outcome from it: one path for the
+// app, MoonBase and the WiFi coprocessor. A device lacking TLS answers 501 and installs from its own Firmware card instead.
+async function startPeerInstall(base, route, body, say, note, btn) {
     btn.disabled = true;
-    note.textContent = `Starting the update to ${u.label}…`;
+    note.textContent = say.starting;
     let res = null;
     try {
-        res = await fetch(`${base}/api/firmware/url`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u.url, sha256: u.sha256 }) });
+        res = await fetch(`${base}${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     } catch (_) { /* a reboot can cut the reply off; the watch below sees the outcome */ }
     if (res && res.status === 501) {
         note.textContent = "This device has no TLS: open its page and install from its Firmware card.";
@@ -5732,14 +5828,9 @@ async function startPeerUpdate(base, u, oldVersion, note, btn) {
         btn.disabled = false;
         return;
     }
-    note.textContent = "Installing: the device restarts when it is done…";
-    const deadline = Date.now() + 300000;
-    while (Date.now() < deadline) {
-        await fwSleep(3000);
-        const fw = await peerFirmware(base);
-        if (fw && fw.version !== oldVersion) { note.textContent = `Updated to ${fw.version}.`; return; }
-    }
-    note.textContent = "No new version after five minutes: open the device's page to see where it stands.";
+    note.textContent = say.installing;
+    const now = await pollUntil(() => peerFirmware(base), (fw) => !!say.done(fw), 300000);
+    note.textContent = now ? say.done(now) : "No change after five minutes: open the device's page to see where it stands.";
 }
 
 function buildListEntries(container, rows, details, openSet, opts) {
@@ -7563,21 +7654,18 @@ function updateStatusBar() {
 // slow page load; a fresh check is forced when the Firmware card opens. Best-effort: any
 // failure hides the badge, never throws.
 
-const RELEASES_API = "https://api.github.com/repos/MoonModules/MoonLight/releases";
-const UPDATE_TTL_MS = 60 * 60 * 1000;                     // 1 h: best-effort, well under GitHub's rate limit
+const UPDATE_TTL_MS = 60 * 60 * 1000;                     // 1 h: the age of release list the update badge settles for
 const PICKER_RELEASE_KEY = "MoonLight.picker.releaseTag"; // install-picker restores from this on init
 
 function safeLocalGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
 function safeLocalSet(key, v) { try { localStorage.setItem(key, v); } catch (_) { /* ignore */ } }
 
-// In-flight fetches keyed by cache slot. updateStatusBar() calls checkFirmwareUpdate(false)
-// every WS tick (1 Hz); on a cold cache they'd each start a duplicate releases/latest request
-// before the first writes the cache. Share the pending promise so concurrent callers reuse it.
+// In-flight fetches keyed by cache slot: concurrent callers on a cold cache share one request.
 const inFlightFetches = {};
 
 // A cached JSON fetch: returns the parsed body, re-fetching only when the cache is older than
 // the TTL or `force` is set, and serving stale on a fetch failure. `key` is the cache slot.
-async function cachedJson(url, key, force, ttlMs = UPDATE_TTL_MS) {
+async function cachedJson(url, key, force, ttlMs) {
     if (!force) {
         const raw = safeLocalGet(key);
         if (raw) {
@@ -7600,7 +7688,7 @@ async function cachedJson(url, key, force, ttlMs = UPDATE_TTL_MS) {
             // console.debug, not warn: an update check failing is routine and not
             // actionable (the device may simply be offline, or GitHub rate-limited),
             // so keep it out of the default console: debug is hidden unless the user
-            // opts into verbose. Every caller reads GitHub (the releases API, the gallery index on
+            // opts into verbose. Its caller reads GitHub (the gallery index on
             // raw.githubusercontent.com), which sends Access-Control-Allow-Origin and so reads fine
             // from the device origin; the failure path here is for the no-network / rate-limit case.
             console.debug("[update] fetch failed:", url, e && e.message ? e.message : e);
@@ -7641,7 +7729,7 @@ function deviceFirmwareInfo() {
     const firmware = value(sys, "firmware");
     // "unknown" is what a host build older than its own firmware name reports, with no image to match.
     return version ? { version, firmware: firmware && firmware !== "unknown" ? firmware : null, update: value(fw, "update"),
-                       moonbase: value(fw, "moonbaseMismatch") || null } : null;
+                       moonbase: value(fw, "moonbaseMismatch") || null, mode: uiMode() } : null;
 }
 
 // The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
@@ -7686,37 +7774,31 @@ function showMoonBaseBadge(badge, dev) {
 // as a key nothing matches, which is the difference between a full list and a silently empty one.
 function moonbaseAssetKeyFrom(fw) {
     if (!fw) return null;
-    return /^ESP32/.test(fw) ? fw.toLowerCase().replace(/-/g, "") : fw;
+    return /^ESP32/.test(fw) ? chipKey(fw) : fw;
 }
 
 
-// Is there a newer STABLE release than the device's version, with a compatible .bin?
-// Returns the stable tag (e.g. "v2.1.0") or null. /latest excludes prereleases.
-async function stableUpdate(dev, force) {
-    const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", force);
-    if (!rel || !rel.tag_name) return null;
-    const assetNames = (rel.assets || []).map(a => a.name);
-    // A board or a host alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
-    const hasBinary = !!dev.firmware && assetNames.some(n => n === `firmware-${dev.firmware}-${rel.tag_name}.bin`);
-    return (isNewer(rel.tag_name, dev.version) && hasBinary) ? rel.tag_name : null;
+// The System mode that shows everything, and puts a device on the `latest` channel as a -dev build is.
+const MODE_DEVELOPER = 2;
+
+// Whether a device follows the moving `latest` build: one running a -dev build, or one its reader put in developer mode.
+function followsLatest(dev) {
+    return (parse(dev.version)?.prerelease.length || 0) > 0 || dev.mode === MODE_DEVELOPER;
 }
 
-// For a device already on a -dev build: is the moving `latest` release newer? Returns its
-// version string (e.g. "2.1.0-dev.7") or null. The latest release's tag is "latest"; its
-// version is published as the release `name` (release.yml), which the GitHub API exposes
-// CORS-readably: unlike the manifest-*.json asset, whose release-asset URL redirects to
-// release-assets.githubusercontent.com (no CORS header), so the device-hosted UI can't read it.
-// We also require the matching firmware .bin asset so the badge never points at a build the
-// device can't install.
-async function devUpdate(dev, force) {
-    if (!dev.firmware) return null;        // the firmware key names the asset
-    const rel = await cachedJson(`${RELEASES_API}/tags/latest`, "MoonLight.update.dev.v1", force);
-    const v = rel && rel.name;
-    if (!v) return null;
-    // Assets are versioned, not tagged: the `latest` release ships
-    // firmware-<fw>-v<version>.bin (release.yml stages PREFIX="firmware-...-v$V").
-    const hasBinary = (rel.assets || []).some(a => a.name === `firmware-${dev.firmware}-v${v}.bin`);
-    return (hasBinary && isNewer(v, dev.version)) ? v : null;
+// The update a device's channel offers from `releases`, or null. A newer official release, first, for every device; then, for a device that
+// follows `latest`, a newer `latest`. Only a release carrying the device's own image counts. The one rule behind the status bar's badge, a
+// node's popup and its mark on the map. `latest`'s version is its release name (release.yml), which GitHub's API serves cross-origin.
+function channelUpdate(dev, releases) {
+    if (!dev?.version || !dev.firmware) return null;
+    const ships = (rel, v) => !!releaseAsset(rel, firmwareAssetName(dev.firmware, v)).url;
+    const stable = latestStable(releases);
+    if (stable?.tag_name && isNewer(stable.tag_name, dev.version) && ships(stable, stable.tag_name.replace(/^v/, "")))
+        return { rel: stable, tag: stable.tag_name, label: stable.tag_name, version: stable.tag_name.replace(/^v/, "") };
+    if (!followsLatest(dev)) return null;
+    const latest = releaseByTag(releases, "latest");
+    const v = latest?.name;
+    return v && isNewer(v, dev.version) && ships(latest, v) ? { rel: latest, tag: "latest", label: `latest (${v})`, version: v } : null;
 }
 
 // Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` bypasses the cache (used when the Firmware card opens).
@@ -7727,20 +7809,9 @@ async function checkFirmwareUpdate(force) {
     const dev = deviceFirmwareInfo();
     if (!dev) { badge.hidden = true; return null; }
 
-    const stableTag = await stableUpdate(dev, force);
     const byHand = !!dev.update && dev.update !== "self";
-    if (stableTag) { showUpdateBadge(badge, stableTag, stableTag, byHand); return { tag: stableTag, label: stableTag }; }
-
-    // Only a prerelease (-dev…) build follows the moving latest channel; a stable device is
-    // not nudged toward an unreleased build.
-    const onPrerelease = (parse(dev.version)?.prerelease.length || 0) > 0;
-    if (onPrerelease) {
-        const devVer = await devUpdate(dev, force);
-        if (devVer) {
-            showUpdateBadge(badge, "latest", `latest (${devVer})`, byHand);
-            return { tag: "latest", label: `latest (${devVer})` };
-        }
-    }
+    const u = channelUpdate(dev, await loadReleases({ bypassCache: force, maxAgeMs: UPDATE_TTL_MS }));
+    if (u) { showUpdateBadge(badge, u.tag, u.label, byHand); return { tag: u.tag, label: u.label }; }
     if (dev.moonbase) { showMoonBaseBadge(badge, dev); return null; }
     badge.hidden = true;
     return null;

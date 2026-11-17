@@ -1,7 +1,7 @@
 {
  "#define used as a constant": 1,
  "(duplicated lines)": 3617,
- "(total)": 1732,
+ "(total)": 1733,
  "blocking call on the render path": 200,
  "complex function": 284,
  "deeply nested": 102,
@@ -12,6 +12,6 @@
  "long parameter list": 33,
  "module type in the UI": 90,
  "mutable static state": 44,
- "name spread": 22,
+ "name spread": 23,
  "raw allocation in light": 28
 }

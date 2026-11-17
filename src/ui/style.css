@@ -1214,7 +1214,9 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
 .list-graph .graph-faded { opacity: 0.35; }
 .list-graph .graph-link { cursor: pointer; }
 .list-graph .graph-edge-broken { stroke: var(--red); stroke-dasharray: 5 3; }
-.list-graph .graph-unreachable circle { stroke: var(--red); stroke-width: 2; stroke-dasharray: 2 2; }
+.list-graph .graph-behind circle { stroke: var(--yellow); stroke-width: 2; }   /* its channel offers a newer version */
+.list-graph .graph-behind-mark { fill: var(--yellow); font-size: 11px; }
+.list-graph .graph-unreachable circle { stroke: var(--red); stroke-width: 2; stroke-dasharray: 2 2; }   /* after .graph-behind: not answering outranks behind */
 
 /* A node's row in a popup: its detail, and for a MoonLight device its firmware and update. */
 dialog.graph-popup {

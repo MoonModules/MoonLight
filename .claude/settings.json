@@ -6,7 +6,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_prose.py\""
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_written.py\"",
+            "asyncRewake": true,
+            "timeout": 120
           }
         ]
       }

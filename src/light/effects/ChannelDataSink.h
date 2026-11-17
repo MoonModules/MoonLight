@@ -35,7 +35,9 @@ public:
     /// Size staging by logical cell, or by physical light for a sender-mapped frame. One the layer maps gets a placement by layout position, unless it goes straight to the output.
     void prepare(bool senderMapped) {
         const Layer* layer = owner_.layer();
-        senderMapped_ = senderMapped && layer;
+        // A parentless effect, as a probe is, has no layer to stage for.
+        if (!layer) { senderMapped_ = false; staging_.resize(0); placement_.resize(0); return; }
+        senderMapped_ = senderMapped;
         const size_t lights = senderMapped_ ? layer->physicalLightCount() : owner_.nrOfLights();
         staging_.resize(lights * owner_.channelsPerLight());
         const bool placed = senderMapped_ && layer->lut().hasLUT() && layer->wiringSource() != &owner_;

@@ -154,13 +154,19 @@ processes:
         when: { process: review-finding }
         detail: |
           The external review's and the Reviewer's alike. CodeRabbit reviews on request only, within its hourly budget, so the product owner asks for it on the pull request: `@coderabbitai review`.
-      - id: checks
+      - id: ci
         section: Checks
-        say: Run the commit checks over the branch.
+        say: Read CI's checks on the pull request.
+        actor: contributor
+        when: { run: { command: "gh pr checks" } }
+        detail: |
+          CI runs on every push what a merge gate would otherwise repeat: the host build and suite, the sanitizers, the Python and JavaScript tests, Teensy, the live restore, and the findings job's check_code, check_docgen, check_prose, check_specs, check_taglines, check_devices, check_firmwares and generated files. A green run is their gate, read rather than rerun.
+      - id: checks
+        say: Run the commit checks CI skips.
         actor: contributor
         when: { process: commit }
         detail: |
-          Their triggers read `git diff --name-only main...`, so they catch what a green series of commits hides.
+          The commit gates CI does not run, each marked `ci: true` where it does: the strict docs build, the backlog against the Project, the ESP32 firmware's freshness and Improv with a board attached. Their triggers read `git diff --name-only main...`, so they catch what a green series of commits hides.
       - id: gcc
         say: Build with GCC when CI asks.
         actor: contributor

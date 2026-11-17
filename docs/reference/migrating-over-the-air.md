@@ -47,7 +47,7 @@ Two moments need care: the image rewrites the bootloader, for under half a secon
 A power cut in exactly one of those windows leaves the device needing a USB cable to recover, which on a bulb means opening it.
 A power cut at any other moment comes back on its own: the image starts over, or MoonBase takes over.
 
-Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only. Each firmware's own web installer writes it back from Chrome or Edge: [WLED](https://install.wled.me/), [WLED-MM](https://wled-install.github.io/), [Tasmota](https://tasmota.github.io/install/) and [ESPHome](https://web.esphome.io/).
+Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only. Each firmware's own web installer writes it back from Chrome or Edge, linked under [Going back to another firmware](https://moonmodules.org/MoonLight/install/#other-firmware) on the installer page.
 
 **The migration is at your own risk.**
 It is tested on the devices named above, and another device can differ from them in ways the image cannot check.

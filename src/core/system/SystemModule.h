@@ -160,7 +160,7 @@ public:
         controls_.addReadOnly("sdk", const_cast<char*>(platform::sdkVersion()));
         /// Why the device last restarted.
         controls_.addReadOnly("bootReason", const_cast<char*>(platform::resetReason()));
-        // The UI honors this client-side, so nothing in the firmware reads it. A LEVEL rather than a switch, because a control names the audience it is for and one number decides which audience is reading.
+        // The UI honors this client-side and the device reports it, so a peer's map knows its update channel. A LEVEL rather than a switch, because a control names the audience it is for and one number decides which audience is reading.
         controls_.addSelect("mode", mode_, kModeOptions, 3);
         /// Delete every setting and preset and restart as freshly installed.
         /// @guide Press twice to confirm. Scripts and other files stay.
@@ -216,6 +216,8 @@ public:
 
     /// The physical-hardware identity (device-model catalog entry name), pushed by tooling.
     const char* deviceModel() const { return deviceModel_; }
+    /// How much of the UI the reader sees, 0 user, 1 expert, 2 developer, which also puts the device on the `latest` update channel.
+    uint8_t mode() const { return mode_; }
 
     /// Delete every setting and preset, so the next boot starts as freshly installed; scripts and other files stay.
     static bool factoryReset() { return FilesystemModule::removeTree(FilesystemModule::CONFIG_DIR); }
@@ -240,7 +242,7 @@ private:
     /// @guide Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick.
     char deviceName_[24] = {};
     /// How much of the UI is shown, cumulative.
-    /// @guide User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it.
+    /// @guide User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build lacks, and offers every new `latest` build as an update.
     uint8_t mode_ = 0;
     static constexpr const char* kModeOptions[3] = {"user", "expert", "developer"};
     /// Push the level to the logger, clamped so a corrupt value cannot index past the end.

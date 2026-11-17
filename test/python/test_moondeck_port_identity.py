@@ -62,7 +62,7 @@ def test_chip_from_usb_external_adapter_reveals_nothing():
 def test_firmware_to_chip():
     assert _firmware_to_chip("esp32p4rev1-eth") == "esp32-p4"
     assert _firmware_to_chip("esp32s3-n8r8") == "esp32-s3"
-    assert _firmware_to_chip("esp32s31") == "esp32-s3"        # S31 is an S3 variant
+    assert _firmware_to_chip("esp32s31") == "esp32-s31"       # its own family, as the build names it
     assert _firmware_to_chip("esp32") == "esp32 (classic)"
     assert _firmware_to_chip("") == ""
 
@@ -180,7 +180,7 @@ def test_resolve_prefers_probed_chip_over_firmware():
 
 def test_normalize_chip():
     assert _normalize_chip("ESP32-S3") == "esp32-s3"
-    assert _normalize_chip("ESP32-S31") == "esp32-s3"     # S31 is an S3 variant
+    assert _normalize_chip("ESP32-S31") == "esp32-s31"    # its own family, as the build names it
     assert _normalize_chip("ESP32-P4") == "esp32-p4"
     assert _normalize_chip("ESP32") == "esp32 (classic)"
     assert _normalize_chip("nonsense") == ""
@@ -192,7 +192,7 @@ def test_parse_esptool_probe():
            "Features:  Wi-Fi 6, BT 5.4 (LE), IEEE802.15.4\n"
            "MAC:                30:ed:a0:f3:d4:68\n"
            "MAC:                30:ed:a0:f3:d4:68\n")
-    assert _parse_esptool_probe(out) == {"chip": "esp32-s3", "mac": "30:ed:a0:f3:d4:68"}
+    assert _parse_esptool_probe(out) == {"chip": "esp32-s31", "mac": "30:ed:a0:f3:d4:68"}
 
 
 def test_apply_probe_caches_serial_and_chip():

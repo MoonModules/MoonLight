@@ -78,7 +78,7 @@ def build_target(name, quiet=False):
     bdir = str(ROOT / host_build_dir())
     out = subprocess.DEVNULL if quiet else None
     for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"],
-                ["cmake", "--build", bdir, "--target", name] + (["--config", "Release"] if platform.system() == "Windows" else [])):
+                ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
         rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
         if rc != 0:
             return rc
@@ -167,10 +167,12 @@ def main():
 
 
 def build_jobs() -> int:
-    """Compile jobs at once: CMAKE_BUILD_PARALLEL_LEVEL when set, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and nothing swaps."""
+    """Compile jobs at once, for every build a script starts: CMAKE_BUILD_PARALLEL_LEVEL when set, every core on CI, which runs nothing beside the build, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and nothing swaps."""
     level = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "")
     if level.isdigit() and int(level) > 0:
         return int(level)
+    if os.environ.get("CI"):
+        return os.cpu_count() or 2
     by_cores = (os.cpu_count() or 2) - 2
     return max(1, min(by_cores, memory_gb() - 4))
 

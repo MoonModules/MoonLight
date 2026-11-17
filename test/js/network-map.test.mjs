@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 
 import { src, fnSource } from "./app-source.mjs";
 import { typeDisplayName } from "../../src/ui/help.js";
+import { migrateAssetName, chipKey } from "../../src/ui/install-picker.js";
 
 // The map's constants, every top-level `const GRAPH_...` and `const PEER_...` line.
 const constants = src.split("\n").filter(l => /^const (GRAPH_|PEER_)/.test(l)).join("\n");
@@ -16,7 +17,7 @@ const graphKey = "const graphKey = (row) => String(row.ip ?? row.name);";
 
 function load(names, extra = "") {
     const body = `${constants}\n${graphKey}\n${extra}\n${names.map(fnSource).join("\n")}\nreturn { ${[...names, "GRAPH_W", "GRAPH_CELL_H", "GRAPH_KIND_COLORS"].join(", ")} };`;
-    return new Function("typeDisplayName", body)(typeDisplayName);
+    return new Function("typeDisplayName", "migrateAssetName", "chipKey", body)(typeDisplayName, migrateAssetName, chipKey);
 }
 
 const node = (name, extra = {}) => ({ key: name, self: !!extra.self, row: { name, ...extra } });

@@ -19,8 +19,8 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Destructive-action confirm**: scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
 - **Tab persistence**: the selected tab survives page refresh.
 - **Process detection**: on page load, MoonDeck checks whether MoonLight or idf.py is running and shows Stop.
-- **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
-- **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
+- **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`. **Discover** asks the first device that answers, a known one or this machine's own MoonLight, for its [Discovery](../docs/moonmodules/core/system.md) list, and reads each MoonLight row's `/api/system`; it sweeps the subnet's 254 addresses only when no device answers, as on a new network.
+- **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. It shows the model the device reports on its [SystemModule](../docs/moonmodules/core/SystemModule.md), else the one its firmware identifies (`esp32-eth` is the Olimex Gateway); where the firmware fits several models (`esp32`), the user picks. It is MoonDeck's own record: a device takes a model's defaults from Apply device defaults on the Devices map, or from the web installer. A model not in the catalog shows as `<key> (unknown)`.
 - **OTA button** on each device row: uploads the local build for the device's firmware (`build/esp32-<firmware>/`) over WiFi, rebooting the device into MoonBase first where its variant has it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand; see `_ota_upload` in [moondeck.py](moondeck.py).
 
 ## Host Tab
@@ -297,6 +297,18 @@ uv run moondeck/check/check_taglines.py
 ```
 
 The front pages are `README.md` and `CLAUDE.md`, listed in the script; the site's home embeds README, and a new front page joins that list the day it is written.
+
+### run_gates
+
+Run the gates a change triggers, once each, read from the [MoonWalk](../docs/moonwalk.md) trigger table: the commit gate by default, the merge gate with `--process pre-merge`.
+
+```bash
+uv run moondeck/check/run_gates.py             # the commit gates this diff triggers
+uv run moondeck/check/run_gates.py --list      # which would run and why, running none
+uv run moondeck/check/run_gates.py --only docgen,js --no-cache
+```
+
+A gate runs when a file its `given: changed:` globs name differs from HEAD (from the merge base for `pre-merge`), and a gate that passed is cached under a hash of its inputs, so a rerun runs only what moved. Builds and suites run one at a time in the process's order; the quick checks run beside them, as many at once as the machine's job budget (`moondeck/_budget.py`, GNU make's jobserver protocol) holds tokens, all niced; a build keeps its own job count. A merge (`--process pre-merge`) leaves out the gates marked `ci: true`, whose result it reads from the pull request's checks. It prints one line per gate and one each minute, lists the judgment steps for the reader, writes a record to `build/gates/`, and ends with improvements it proposes from the records: a ratchet that rose and the write-time check that would catch it, a gate grown slower, a gate that passes every run.
 
 ### check_prose
 

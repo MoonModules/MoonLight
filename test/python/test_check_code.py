@@ -179,7 +179,7 @@ def test_the_tree_is_read_from_every_files_saved_findings_after_an_incremental_b
     (tmp_path / "CMakeFiles/t.dir/gone.cpp.o.diag").write_text("stale [-Wfunction-effects]", encoding="utf-8")
     out = nb.build_output(tmp_path)
     assert "a.h:1:2" in out and "stale" not in out   # a source the build dropped leaves nothing behind
-    assert builds == [["cmake", "--build", str(tmp_path)]]   # incremental only
+    assert builds == [["cmake", "--build", str(tmp_path), "--parallel", str(nb.build_jobs())]]   # incremental only
 
 
 def test_a_build_from_before_the_launcher_is_rebuilt_clean_once(monkeypatch, tmp_path):
@@ -197,7 +197,7 @@ def test_a_build_running_another_launcher_is_told_to_reconfigure_without_a_clean
     (tmp_path / "CMakeFiles/t.dir").mkdir(parents=True)
     (tmp_path / "CMakeFiles/t.dir/build.make").write_text("ccache c++ -c a.cpp", encoding="utf-8")
     assert nb.build_output(tmp_path) is None
-    assert builds == [["cmake", "--build", str(tmp_path)]]   # minutes of clean rebuild that could never save a finding are skipped
+    assert builds == [["cmake", "--build", str(tmp_path), "--parallel", str(nb.build_jobs())]]   # minutes of clean rebuild that could save no finding are skipped
 
 
 def test_silence_with_the_warning_on_is_a_measured_zero_and_without_it_unmeasured(monkeypatch, tmp_path):

@@ -244,13 +244,6 @@ def _get_local_subnet():
     return ".".join(ip.split(".")[:3]) if ip else "192.168.1"
 
 
-def _walk_modules(modules):
-    """Yield every module in the tree (depth-first), including nested children."""
-    for m in modules or []:
-        yield m
-        yield from _walk_modules(m.get("children", []))
-
-
 def _device_sort_key(d):
     """Sort devices by name (case-insensitive), IP as tiebreaker — the same order the on-device
     DevicesModule uses (src/core/system/DevicesModule.h sortByName / ciLess), so MoonDeck's list and the
@@ -268,70 +261,56 @@ def _device_key(d):
     return (d.get("mac") or "").strip().lower()
 
 
-def _probe_device(ip, port=8080, timeout=0.4):
-    """Probe a single IP for /api/state. Returns device info or None.
+def _probe_device(ip, port=8080, timeout=0.4, name=""):
+    """Probe a single IP for /api/system, the summary a device leads with. Returns device info or None.
 
     Short timeout: on a LAN a live device answers in a few ms and a dead IP
     refuses the connection almost instantly; 0.4s only matters for IPs that
     silently drop packets (firewalled hosts), and a subnet scan should not
     stall seconds on those.
 
-    Returns: { ip, deviceName, firmware, deviceModel }
-    - `firmware` is the variant flashed (value of the `firmware` control on
-      SystemModule, set from kFirmwareName in build_info.h). Used to deduce
-      `deviceModel` when the device hasn't been told its model yet. See
-      docs/explanation/architecture/index.md § Firmware vs board.
-    - `deviceModel` is the physical-hardware identity (a catalog entry). Preferred source: the device's
-      own `deviceModel` control on SystemModule (the value MoonDeck pushed earlier
-      and the device persisted). Fall back to firmware-based deduction
-      (catalog lookup) when the device hasn't been told yet — then MoonDeck
-      pushes the deduced value on next discover, the device persists it,
-      and subsequent probes read it back from the device.
+    Returns: { mac, ip, deviceName, firmware, deviceModel }, the name `name` where the device's summary has none (firmware before it named itself there).
+    - `firmware` is the variant flashed (kFirmwareName in build_info.h). Used to deduce
+      `deviceModel` when the device has none. See docs/explanation/architecture/index.md § Firmware vs board.
+    - `deviceModel` is the physical-hardware identity (a catalog entry), the summary's `board`: the device's
+      own, which it persists once its defaults are applied (the web installer, or Apply device defaults on
+      the network map), else the one its firmware deduces.
     """
     import urllib.request
-    import urllib.error
-    url = f"http://{ip}:{port}/api/state"
     try:
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-            modules = data.get("modules", [])
-            device_name = ""
-            firmware = ""
-            device_model = ""
-            mac = ""
-            for m in _walk_modules(modules):
-                # deviceName, deviceModel (the board) and mac live on SystemModule; the flashed
-                # firmware-variant lives on FirmwareUpdateModule (`firmware`, alongside version/build).
-                if m.get("type") == "SystemModule":
-                    for c in m.get("controls", []):
-                        if c.get("name") == "deviceName":
-                            device_name = c.get("value", "") or ""
-                        elif c.get("name") == "deviceModel":
-                            device_model = c.get("value", "") or ""
-                        elif c.get("name") == "mac":
-                            mac = c.get("value", "") or ""
-                elif m.get("type") == "FirmwareUpdateModule":
-                    for c in m.get("controls", []):
-                        if c.get("name") == "firmware":
-                            firmware = c.get("value", "") or ""
-            return {
-                # `mac` is the stable device IDENTITY (per-chip, survives DHCP IP changes); the merge
-                # keys on it. `ip` is just the current location — omit the port when it's HTTP's
-                # default (80, the ESP32 devices), keep a non-default port (8080, the host build).
-                "mac": mac,
-                "ip": ip if port == 80 else f"{ip}:{port}",
-                "deviceName": device_name,
-                "firmware": firmware,
-                # `deviceModel` is the merged value (device-reported, else the firmware-deduced
-                # fallback). `_reportedModel` is what the DEVICE actually said (empty if it hasn't been
-                # told) — the merge compares against this to know whether to push the model to the
-                # device; using the already-deduced value would make them equal and skip the push.
-                "deviceModel": device_model or _deduce_device_model(firmware),
-                "_reportedModel": device_model,
-            }
+        with urllib.request.urlopen(f"http://{ip}:{port}/api/system", timeout=timeout) as resp:
+            summary = json.loads(resp.read())
     except Exception:
         return None
+    if not isinstance(summary, dict) or not summary.get("version"):
+        return None
+    firmware = summary.get("firmware", "") or ""
+    return {
+        # `mac` is the stable device IDENTITY (per-chip, survives DHCP IP changes); the merge
+        # keys on it. `ip` is just the current location — omit the port when it's HTTP's
+        # default (80, the ESP32 devices), keep a non-default port (8080, the host build).
+        "mac": summary.get("mac", "") or "",
+        "ip": ip if port == 80 else f"{ip}:{port}",
+        "deviceName": summary.get("name", "") or name,
+        "firmware": firmware,
+        "deviceModel": summary.get("board", "") or _deduce_device_model(firmware),
+    }
+
+
+def _discovery_rows(entry: str) -> list:
+    """The devices `entry` ("host" or "host:port") lists in its Discovery: each row's name, address, type, MAC and port; [] when it does not answer."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://{entry}/api/modules/Devices", timeout=1.5) as resp:
+            container = json.loads(resp.read())
+    except Exception:
+        return []
+    for child in container.get("children", []) if isinstance(container, dict) else []:
+        if child.get("type") == "DevicesModule":
+            for c in child.get("controls", []):
+                if c.get("name") == "devices":
+                    return c.get("detail") or c.get("value") or []
+    return []
 
 
 def _deduce_device_model(firmware: str) -> str:
@@ -419,71 +398,36 @@ def _ota_run(ip: str, image: bytes):
     _ota_report(ip, done=True, ok=bool(answer.get("ok")), error=answer.get("error", ""))
 
 
-def _push_device(ip: str, model: str, full: bool = False) -> bool:
-    """PATCH /api/state on the device with its deviceModel: the identity, or with `full` the catalog entry's whole `state`.
+def discover_devices(subnet="", known=()):
+    """The MoonLight devices on the network, each confirmed by its /api/system.
 
-    The identity, `{"System": {"deviceModel": name}}`, is what discovery and refresh push on every round.
-    The whole `state` goes only when the user picks a model, since its `"$patch":"replace"` containers would otherwise replace what the user built on each refresh.
-    A model without a catalog entry (a custom name, unknown firmware) sends the identity either way.
-
-    Returns True iff the request returned 200. False on any failure (timeout, non-2xx, network
-    error); the next refresh re-attempts.
-
-    `ip` is the "host:port" string from the device record (already includes the port discovery
-    picked). `model` is the catalog key MoonDeck wants the device to remember (empty string means
-    "clear": no push).
+    They come from the Discovery list of the first device that answers, a known one or this machine's own
+    MoonLight, since every device keeps that list already. Only when none answers, as on the first scan of a
+    new network, is the subnet swept, .1-.254 on port 80 (ESP32) and 8080 (host), plus localhost.
     """
-    import urllib.request
-    import urllib.error
-    if not model:
-        return True   # nothing to push; not a failure
-    # DEVICE_MODELS is loaded at module init and not re-read per push, so a tight
-    # discover-refresh cycle doesn't hammer the disk. Editing deviceModels.json needs a restart.
-    entry = next((b for b in DEVICE_MODELS if b.get("name") == model), None) if full else None
-    state = (entry or {}).get("state") or {"System": {"deviceModel": model}}
-    try:
-        req = urllib.request.Request(
-            f"http://{ip}/api/state",
-            data=json.dumps(state).encode(), method="PATCH",
-            headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=2) as resp:
-            return resp.status == 200
-    except (urllib.error.URLError, OSError):
-        return False
-
-
-def _push_devices_in_parallel(pushes):
-    """Fire _push_device for each (ip, deviceModel) tuple in parallel.
-
-    Discovery + refresh probe a /24, so the push count is bounded by the
-    device count (single digits in practice). A small thread pool keeps
-    total latency near the slowest single push instead of summing. Result
-    is fire-and-forget: callers don't act on the bool returned by each
-    push — failures are recoverable on the next refresh cycle.
-    """
-    if not pushes:
-        return
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        # list() forces all futures to start; the with-block waits for them.
-        list(pool.map(lambda p: _push_device(*p), pushes))
-
-
-def discover_devices(subnet=""):
-    """Scan subnet for devices responding to /api/state."""
     if not subnet:
         subnet = _get_local_subnet()
 
-    # .1-.254 on port 80 (ESP32) and 8080 (host), plus localhost.
-    targets = [(f"{subnet}.{i}", port)
-               for i in range(1, 255) for port in (80, 8080)]
-    targets.append(("localhost", 8080))
+    targets = None
+    from concurrent.futures import ThreadPoolExecutor
+    entries = [d.get("ip") for d in known if d.get("ip")][:6] + ["localhost:8080"]
+    with ThreadPoolExecutor(max_workers=len(entries)) as pool:   # asked at once, so offline known devices cost one timeout, not one each
+        lists = list(pool.map(_discovery_rows, entries))
+    for rows in lists:
+        # A row's detail names a port other than 80 inside its url, http://<ip>:8080/ for a host.
+        found = [(r["ip"], urllib.parse.urlsplit(r.get("url") or "").port or int(r.get("port") or 80), 0.4, r.get("name", ""))
+                 for r in rows if r.get("type") == "MoonLight" and r.get("ip")]
+        if found:
+            targets = found
+            break
+    if not targets:
+        targets = [(f"{subnet}.{i}", port)
+                   for i in range(1, 255) for port in (80, 8080)]
+        targets.append(("localhost", 8080))
 
     # Wide thread pool — the probes are I/O-bound (almost always blocked on the
-    # socket, not the CPU), so running all ~509 in one wave means the whole /24
-    # scan finishes in about one probe-timeout window (~0.4s) instead of
-    # batch-serializing. The pool still caps thread churn vs. raw thread spawns.
-    from concurrent.futures import ThreadPoolExecutor
+    # socket, not the CPU), so running them in one wave, a sweep's ~509 too, finishes
+    # in about one probe-timeout window (~0.4s) instead of batch-serializing.
     devices = []
     with ThreadPoolExecutor(max_workers=len(targets)) as pool:
         for result in pool.map(lambda t: _probe_device(*t), targets):
@@ -549,11 +493,11 @@ def refresh_devices(known_devices):
         ip = device.get("ip", "")
         if ":" in ip:
             host, port = ip.rsplit(":", 1)
-            fresh = _probe_device(host, int(port))
+            fresh = _probe_device(host, int(port), name=device.get("deviceName", ""))
         else:
             # A bare IP is a port-80 device (that's why it's stored without a port) — probe 80, NOT
             # _probe_device's 8080 default, or the ESP32 refresh would fail and mark it offline.
-            fresh = _probe_device(ip, 80)
+            fresh = _probe_device(ip, 80, name=device.get("deviceName", ""))
         if not fresh:
             return None
         # Merge: probe wins for live-readable fields; user-set / flash-tracked
@@ -842,13 +786,6 @@ def _active_network(state: dict) -> dict | None:
     return None
 
 
-def _strip_probe_transient(device: dict) -> dict:
-    """A copy of `device` without `_reportedModel` — the raw model string a probe attaches
-    for the push-compare, which must not be persisted to moondeck.json. One idiom for the
-    drop so discover and refresh can't diverge on which key(s) count as probe-transient."""
-    return {k: v for k, v in device.items() if k != "_reportedModel"}
-
-
 def _device_model_for_port(port: str) -> str:
     """The deviceModel of the device last flashed via `port`, or "" if none.
 
@@ -1110,14 +1047,10 @@ def _firmware_to_chip(firmware: str) -> str:
     """Best-effort ESP32 family from a registry firmware id (e.g.
     'esp32s3-n8r8' → 'esp32-s3', 'esp32p4rev1-eth' → 'esp32-p4', 'esp32' →
     'esp32 (classic)'). The fallback for boards behind a UART bridge. Pure."""
-    f = (firmware or "").lower()
-    for key, chip in (("p4", "esp32-p4"), ("s3", "esp32-s3"),
-                      ("s2", "esp32-s2"), ("c6", "esp32-c6"), ("c3", "esp32-c3")):
-        if key in f:
-            return chip
-    if f.startswith("esp32"):
-        return "esp32 (classic)"
-    return ""
+    key = re.sub(r"rev\d+$", "", (firmware or "").lower().split("-")[0])   # esp32p4 from esp32p4rev1-eth, as the picker's firmwareChip
+    if not key.startswith("esp32"):
+        return ""
+    return _normalize_chip("ESP32" + (f"-{key[5:].upper()}" if key[5:] else ""))   # one family map, _normalize_chip's
 
 
 def _port_serial(path: str) -> str:
@@ -1297,14 +1230,14 @@ def describe_serial_ports(devices: list | None = None) -> list[dict]:
 
 def _normalize_chip(detected: str) -> str:
     """esptool's chip name ('ESP32-S3', 'ESP32-S31', 'ESP32-P4', 'ESP32') → our
-    family style ('esp32-s3', 'esp32-p4', 'esp32 (classic)'). Pure."""
+    family style ('esp32-s3', 'esp32-s31', 'esp32-p4', 'esp32 (classic)'), the S31 its own family as build_esp32's TARGET_TO_FAMILY has it. Pure."""
     d = (detected or "").strip().lower()
     if not d.startswith("esp32"):
         return ""
     for fam in ("esp32-p4", "esp32-s31", "esp32-s3", "esp32-s2",
                 "esp32-c6", "esp32-c5", "esp32-c3", "esp32-h2"):
         if d.startswith(fam):
-            return "esp32-s3" if fam == "esp32-s31" else fam   # S31 is an S3 variant
+            return fam
     return "esp32 (classic)"   # bare "esp32"
 
 
@@ -1674,19 +1607,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 return
             self._send_json({"ok": True, "started": True}, 202)
 
-        elif self.path == "/api/push-device":
-            # The user picked a deviceModel from the per-device dropdown, so the device gets the catalog entry's whole state.
-            # Discovery and refresh push only the identity.
-            body = self._read_body()
-            params = json.loads(body) if body else {}
-            ip = params.get("ip", "")
-            model = params.get("deviceModel", "")
-            if not ip:
-                self._send_json({"error": "ip required"}, 400)
-                return
-            ok = _push_device(ip, model, full=True)
-            self._send_json({"ok": ok})
-
         elif self.path == "/api/discover":
             body = self._read_body()
             params = json.loads(body) if body else {}
@@ -1695,9 +1615,9 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             # parallel discovers on different subnets don't serialize behind
             # each other. The merge into the active network record happens
             # under the lock via mutate_state.
-            devices, scanned_subnet = discover_devices(subnet)
+            known = (_active_network(load_state()) or {}).get("devices") or []
+            devices, scanned_subnet = discover_devices(subnet, known)
             target_subnet = _subnet_from_host_subnet(scanned_subnet)
-            pushes = []   # (ip, deviceModel) tuples populated by _merge_discover
 
             def _merge_discover(state):
                 # Attribute found devices to the network whose subnet matches
@@ -1731,21 +1651,13 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                         # deliberate (the product-owner "MAC or it's not a device" rule), not an omission.
                         continue
                     keep = by_key.get(key, {})
-                    out = {**_strip_probe_transient(fresh), "online": True,
+                    out = {**fresh, "online": True,
                            "selected": keep.get("selected", False)}
                     if keep.get("deviceModel") and not out.get("deviceModel"):
                         out["deviceModel"] = keep["deviceModel"]
                     if keep.get("last_port"):
                         out["last_port"] = keep["last_port"]
                     merged.append(out)
-                    # Compare the device's OWN reported model (`_reportedModel`, empty if it hasn't
-                    # been told) against the merged value. When they differ — typically MoonDeck just
-                    # deduced a model from firmware, or the user picked one, for a device that hasn't
-                    # heard it — schedule a push so the device persists it and reports it back next scan.
-                    reported_model = (fresh.get("_reportedModel") or "")
-                    merged_model = (out.get("deviceModel") or "")
-                    if merged_model and merged_model != reported_model:
-                        pushes.append((fresh.get("ip", ""), merged_model))
                 # Previously-stored (MAC'd) devices not found in this scan stay as offline, so a
                 # known board isn't lost just because it's powered off. Discover is additive; refresh
                 # prunes. (MAC-less entries never entered by_key, so they simply fall away.)
@@ -1760,9 +1672,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 net["devices"] = merged
 
             result = mutate_state(_merge_discover)
-            # Fire pushes outside the lock — the state write has already
-            # landed; pushes are best-effort device-side mirroring.
-            _push_devices_in_parallel(pushes)
             # Report WHICH subnet was scanned + how many answered, so a "found
             # nothing" is distinguishable from "scanned the wrong network" (the
             # scan uses the machine's auto-detected /24, not the active network's
@@ -1789,7 +1698,6 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json(state)
                 return
             refreshed = refresh_devices(snapshot)
-            pushes = []   # (ip, deviceModel) tuples populated by _merge_refresh
 
             def _merge_refresh(state):
                 # Re-resolve `net` under the second lock — the network may have
@@ -1807,8 +1715,7 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 # a responding device without a MAC is shown but not stored; a prior MAC'd device
                 # not seen this refresh stays as offline.
                 refreshed_keys = {_device_key(d) for d in refreshed if _device_key(d)}
-                merged = [_strip_probe_transient(d)
-                          for d in refreshed if _device_key(d)]
+                merged = [d for d in refreshed if _device_key(d)]
                 for prior in (target.get("devices") or []):
                     pk = _device_key(prior)
                     if pk and pk not in refreshed_keys:
@@ -1817,18 +1724,8 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
                 # DevicesModule order (see the discover merge above).
                 merged.sort(key=_device_sort_key)
                 target["devices"] = merged
-                # Schedule a deviceModel push for every online device with a
-                # non-empty board. Redundant writes are cheap on the device
-                # (Text-control write hits a 2s debounce — repeated identical
-                # writes coalesce into one disk write). Catches the case
-                # where the device lost its persisted value but MoonDeck
-                # still has the user-set / deduced one.
-                for dev in merged:
-                    if dev.get("online") and dev.get("deviceModel") and dev.get("ip"):
-                        pushes.append((dev["ip"], dev["deviceModel"]))
 
             result = mutate_state(_merge_refresh)
-            _push_devices_in_parallel(pushes)
             self._send_json(result)
 
         else:

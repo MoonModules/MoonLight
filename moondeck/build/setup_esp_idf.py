@@ -18,11 +18,11 @@ if sys.stderr is not None:
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # PINNED_IDF_COMMIT / PINNED_IDF_VERSION / installed_idf_commit live in
-# build_esp32.py so the pre-build drift check (check_idf_pin, called on every
+# idf_env.py so the pre-build drift check (check_idf_pin, called on every
 # ESP32 build) shares them with this setup script. Single source of truth.
-from build_esp32 import (find_idf, IDF_SEARCH_PATHS,
-                         PINNED_IDF_COMMIT, PINNED_IDF_VERSION,
-                         installed_idf_commit)
+from idf_env import (find_idf, IDF_SEARCH_PATHS,
+                     PINNED_IDF_COMMIT, PINNED_IDF_VERSION,
+                     installed_idf_commit)
 
 # Espressif ships install.sh for POSIX hosts and install.bat / install.ps1 for
 # Windows. Both create the same `~/.espressif/python_env/...` venv and download

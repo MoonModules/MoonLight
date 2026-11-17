@@ -326,10 +326,6 @@ target_link_libraries(mm_tests PRIVATE mm_core mm_platform)
 if(NOT MSVC)
     target_compile_options(mm_tests PRIVATE -Wno-error=double-promotion)
 endif()
-# GCC 16.2 reports three false positives, each through a test's inlining, so they stop being fatal on the test target only, from that version on: -Wnull-dereference on `this` read through std::function plumbing, -Warray-bounds on MoonModule::setName's bounded memcpy inlined into DOCTEST_ANON_FUNCs, and -Wmaybe-uninitialized past a loop's own bound in unit_Hub75Driver_pins.cpp. GCC 16.1 is clean.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16.2)
-    target_compile_options(mm_tests PRIVATE -Wno-error=null-dereference -Wno-error=array-bounds -Wno-error=maybe-uninitialized)
-endif()
 # doctest.h forward-declares `std::tuple`, which the VS 2026 MSVC STL flags as specializing a standard template (C5285): vendored test code, so test target only.
 if(MSVC)
     target_compile_options(mm_tests PRIVATE /wd5285)
