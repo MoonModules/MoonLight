@@ -36,7 +36,7 @@ SCENARIOS_DIR = ROOT / "test" / "scenarios"
 
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _host import desktop_target  # noqa: E402
+from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
@@ -224,13 +224,13 @@ def _detect_target(state: dict, local: bool = True) -> str:
     ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
     `esp32s3-n16r8`, …): set at compile time from MM_FIRMWARE_NAME and
     exposed through the `firmware` control. Desktop: its firmware names the release's program
-    (`desktop-macos-arm64`), and its metrics key is this host's, desktop-<host-os> (still
+    (`host-macos-arm64`), and its metrics key is this host's, host-<host-os> (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
 
     A desktop build on ANOTHER machine is named after the platform it reports about itself
-    (`desktop-docker-arm64`), because this host's name says nothing about it: a NanoPi measured
-    from a Mac was recorded as `desktop-macos`, into the Mac's own figures.
+    (`host-docker-arm64`), because this host's name says nothing about it: a NanoPi measured
+    from a Mac was recorded as `host-macos`, into the Mac's own figures.
     """
     firmware = model = None
     for m in state.get("modules", []):
@@ -239,12 +239,12 @@ def _detect_target(state: dict, local: bool = True) -> str:
                 firmware = c.get("value")
             elif m.get("type") == "SystemModule" and c.get("name") == "deviceModel":
                 model = c.get("value")
-    if firmware and firmware != "unknown" and not firmware.startswith("desktop-"):
+    if firmware and firmware != "unknown" and not firmware.startswith("host-"):
         return firmware
     if not local:
-        return "desktop-" + str(model or "remote").strip().lower().replace(" ", "-")
+        return "host-" + str(model or "remote").strip().lower().replace(" ", "-")
     # Desktop fallback, from the one home every script shares (moondeck/_host.py).
-    return desktop_target()
+    return host_target()
 
 
 # --- The host's own WiFi, for a scenario that walks a device's first setup from its access point. ---
@@ -1405,12 +1405,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # KEEP IN SYNC: the in-process runner re-declares the same defaults
                 # at test/scenario_runner.cpp contract-block handler: tuning one
                 # without the other silently desyncs the two tiers.
-                is_desktop = target.startswith("desktop-")
+                is_host = target.startswith("host-")
                 tick_tol_pct = contract_block.get("tick_tolerance_pct",
-                                                  20 if is_desktop else 10)
+                                                  20 if is_host else 10)
                 heap_tol_pct = contract_block.get("heap_tolerance_pct",
-                                                  20 if is_desktop else 10)
-                tol_us_abs = contract_block.get("tolerance_us", 200 if is_desktop else 5)
+                                                  20 if is_host else 10)
+                tol_us_abs = contract_block.get("tolerance_us", 200 if is_host else 5)
                 exp_tick = contract_block.get("tick_us")
                 exp_heap = contract_block.get("free_heap")
                 if exp_tick is not None and exp_tick > 0:

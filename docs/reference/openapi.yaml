@@ -813,7 +813,7 @@ components:
       properties:
         version: { type: string, description: The firmware version. }
         build: { type: string, description: The build id. }
-        firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a desktop's desktop-<os>-<arch>." }
+        firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a desktop's host-<os>-<arch>." }
         update:
           type: string
           enum: [self, host, manual]

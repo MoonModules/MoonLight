@@ -201,7 +201,7 @@ def manifest_command(firmware: str, version: str, base_url: str, dist: Path = DI
 def manifests(tag: str, version: str, repo: str) -> None:
     """Absolute GitHub release-asset URLs, read by the on-device OTA picker; the Pages-relative ones are made at deploy."""
     base_url = f"https://github.com/{repo}/releases/download/{tag}"
-    for firmware in shipping(load_registry(), lambda platform: platform != "desktop"):
+    for firmware in shipping(load_registry(), lambda platform: platform != "host"):
         subprocess.run(manifest_command(firmware, version, base_url), cwd=ROOT, check=True)
 
 
@@ -399,7 +399,7 @@ def main() -> int:
     sub.add_parser("container-context", help="Write ctx/ with the .debs and the release Dockerfile.")
     sub.add_parser("smoke-images", help="Run the amd64 and arm64 smoke images.")
     smoke = sub.add_parser("smoke-update", help="Install a desktop program through its own Firmware route and check it restarts on it.")
-    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-desktop-<os>-<arch>-v<version>.bin")
+    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-host-<os>-<arch>-v<version>.bin")
     sub.add_parser("pages-site", help="Stage the installer under pages/install/.")
     docs = sub.add_parser("merge-docs", help="Copy the rendered docs site into pages/.")
     docs.add_argument("--site-dir", required=True, type=Path)

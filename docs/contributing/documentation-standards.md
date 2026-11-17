@@ -79,7 +79,7 @@ flowchart LR
     hpf["<b>light/powerfunctions/</b><br/><i>the shared toolbox</i>"]
     hml["<b>core/moonlive/</b> · <b>light/moonlive/</b><br/><i>engine and bindings</i>"]
     hlyr["<b>light/layers/</b> · <b>light/util/</b><br/><i>the pieces they share</i>"]
-    hplat["<b>platform/</b> · <b>platform/esp32/</b> · <b>platform/desktop/</b><br/><i>one interface, two implementations</i>"]
+    hplat["<b>platform/</b> · <b>platform/esp32/</b> · <b>platform/host/</b><br/><i>one interface, two implementations</i>"]
 
     core --> csys & csvc & cui & csup
     light --> leff & llay & lmod & ldrv & lpf & lml & lsup

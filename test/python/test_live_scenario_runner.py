@@ -48,12 +48,12 @@ def test_a_board_is_named_after_its_firmware_wherever_the_runner_is():
 
 
 def test_a_desktop_build_on_another_machine_is_named_after_its_own_platform():
-    # Measured from a Mac, a container on a NanoPi was recorded as desktop-macos, into the Mac's figures.
-    assert runner._detect_target(_state("unknown", "docker-arm64"), local=False) == "desktop-docker-arm64"
+    # Measured from a Mac, a container on a NanoPi was recorded as host-macos, into the Mac's figures.
+    assert runner._detect_target(_state("unknown", "docker-arm64"), local=False) == "host-docker-arm64"
 
 
 def test_a_desktop_build_on_this_machine_is_named_after_this_host():
-    assert runner._detect_target(_state("unknown", "docker-arm64"), local=True) == runner.desktop_target()
+    assert runner._detect_target(_state("unknown", "docker-arm64"), local=True) == runner.host_target()
 
 
 def test_only_a_host_on_this_machine_counts_as_local():

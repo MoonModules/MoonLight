@@ -3,13 +3,13 @@
 
 /// The macOS screen for the HDMI output: a borderless window covering a second display, in the mode the driver picks.
 ///
-/// The code gates read C++ alone, so this Objective-C++ file holds the screen and nothing more: the loop, the scaler and the handover it serves live in platform_desktop_hdmi.cpp, where they are measured.
+/// The code gates read C++ alone, so this Objective-C++ file holds the screen and nothing more: the loop, the scaler and the handover it serves live in platform_host_hdmi.cpp, where they are measured.
 ///
 /// @technical
 ///
 /// ## AppKit lives on the main thread
 ///
-/// AppKit creates and draws windows only on the process's main thread, so main_desktop.cpp runs MoonLight's loop on a thread of its own and hands the main thread to `runMainThread`. That loop runs the run loop, which serves the blocks this file queues on the main queue, and pumps AppKit's events once the first window made it an application. The output thread never waits on the main thread, so a stop cannot deadlock on it.
+/// AppKit creates and draws windows only on the process's main thread, so main_host.cpp runs MoonLight's loop on a thread of its own and hands the main thread to `runMainThread`. That loop runs the run loop, which serves the blocks this file queues on the main queue, and pumps AppKit's events once the first window made it an application. The output thread never waits on the main thread, so a stop cannot deadlock on it.
 ///
 /// ## A frame is an image the layer shows
 ///

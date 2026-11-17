@@ -24,7 +24,7 @@ The per-grid and per-device tables below add free-heap figures and why WiFi cost
 
 ## Desktop (64-bit)
 
-Desktop ArtNet sends to a non-existent IP so packets complete instantly; `freeHeap` returns 0 (unlimited). Per-step tick budgets live in per-host `contract.desktop-<os>` blocks across the scenarios: `desktop-macos` for macOS arm64, `desktop-windows` for Windows x64, `desktop-linux` for Linux. The `sizeof` and dynamic-memory numbers below apply to all 64-bit desktop targets; tick numbers differ by host CPU and live in the scenario contracts.
+Desktop ArtNet sends to a non-existent IP so packets complete instantly; `freeHeap` returns 0 (unlimited). Per-step tick budgets live in per-host `contract.host-<os>` blocks across the scenarios: `host-macos` for macOS arm64, `host-windows` for Windows x64, `host-linux` for Linux. The `sizeof` and dynamic-memory numbers below apply to all 64-bit desktop targets; tick numbers differ by host CPU and live in the scenario contracts.
 
 ### sizeof (desktop, 64-bit)
 

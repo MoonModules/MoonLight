@@ -104,7 +104,7 @@ add_executable(MoonLight.elf
     ${REPO}/src/main.cpp
     ${REPO}/src/module_types.cpp
     ${MM_CORE_SOURCES}
-    ${REPO}/src/platform/desktop/moonlive_emit_noarch.cpp
+    ${REPO}/src/platform/host/moonlive_emit_noarch.cpp
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp
     ${REPO}/src/platform/teensy/platform_teensy_fs.cpp

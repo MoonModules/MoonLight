@@ -1,4 +1,4 @@
-/// The Android app's entry: the two JNI calls the app's service makes, the counterpart of main_desktop.cpp's main().
+/// The Android app's entry: the two JNI calls the app's service makes, the counterpart of main_host.cpp's main().
 ///
 /// The firmware is the desktop's, unchanged; this file gives it a data folder, a log, and a way to stop.
 

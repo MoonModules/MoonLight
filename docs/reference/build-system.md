@@ -10,7 +10,7 @@ src/
   main.cpp                              ← shared pipeline wiring (mm_main), platform-neutral
   platform/
     desktop/
-      main_desktop.cpp                  ← desktop entry point: int main() + SIGINT and SIGTERM
+      main_host.cpp                  ← desktop entry point: int main() + SIGINT and SIGTERM
       platform_config.h                 ← desktop platform constants
     esp32/
       platform_config.h                 ← ESP32 platform constants (reads sdkconfig)

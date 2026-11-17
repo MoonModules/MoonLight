@@ -16,4 +16,4 @@ paths-ignore:
   # miniaudio: the vendored desktop audio-capture backend (same rule and same caveat as
   # doctest.h above; its 16 unsigned-overflow-pattern alerts were dismissed in the Security
   # tab as vendored third-party code).
-  - src/platform/desktop/vendor/miniaudio.h
+  - src/platform/host/vendor/miniaudio.h

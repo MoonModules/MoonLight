@@ -5,7 +5,7 @@
 /// An ELF, Mach-O or PE program for the right system and processor passes; another one, a library or an object file is refused with its reason, and a web page, an archive or a cut header is no program.
 
 #include "doctest.h"
-#include "ProgramImage.h"   // src/platform/desktop: the one platform that runs programs
+#include "ProgramImage.h"   // src/platform/host: the one platform that runs programs
 
 #include <cstdint>
 #include <string>

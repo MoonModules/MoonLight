@@ -65,7 +65,7 @@ def _shipping_firmwares():
     # to cp1252, which fails with UnicodeDecodeError. Same class of Windows-
     # only encoding bug as verify_version's stdout crash.
     # A desktop row is a download, not a flashable image, so it has no manifest.
-    return [f["name"] for f in _rows() if f.get("ships") and f["platform"] != "desktop"]
+    return [f["name"] for f in _rows() if f.get("ships") and f["platform"] != "host"]
 
 
 def _platform(firmware):

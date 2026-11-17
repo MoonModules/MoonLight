@@ -2055,7 +2055,7 @@ int httpRequest(const char* method, const char* host, uint16_t port, const char*
         const uint32_t cms = remainingMs();
         timeval ctv{};
         ctv.tv_sec = static_cast<time_t>(cms / 1000);
-        // decltype the field (not suseconds_t) so the same code compiles on Winsock's timeval too, where tv_usec is `long` and suseconds_t doesn't exist, see platform_desktop.cpp.
+        // decltype the field (not suseconds_t) so the same code compiles on Winsock's timeval too, where tv_usec is `long` and suseconds_t doesn't exist, see platform_host.cpp.
         ctv.tv_usec = static_cast<decltype(ctv.tv_usec)>((cms % 1000) * 1000);
         if (::select(fd + 1, nullptr, &wf, nullptr, &ctv) <= 0) return 0;   // timeout / error
         int soerr = 0; socklen_t len = sizeof(soerr);

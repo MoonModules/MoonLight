@@ -3,7 +3,7 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker, DESKTOP_DOWNLOAD } from "./install-picker.js";
+import { installPicker, HOST_DOWNLOAD } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
@@ -2639,9 +2639,9 @@ function createCard(mod, depth) {
             // second mechanism for a job the device had already done, with a JS transform
             // ("ESP32-S3" -> "esp32s3") that merely coincided with the build system's naming.
             // A device its host or its user updates has its card offer the download in place of an install.
-            ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? DESKTOP_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
+            ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? HOST_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
             // Its own build, as an Android device offers the APK whichever computer views its page.
-            downloadKey: /^desktop-/.test(ctrlValue("firmware") || "") ? ctrlValue("firmware") : null,   // a firmware an older build calls "unknown" names no package
+            downloadKey: /^host-/.test(ctrlValue("firmware") || "") ? ctrlValue("firmware") : null,   // a firmware an older build calls "unknown" names no package
             // Device already knows its deviceModel (SystemModule): picker is for releases +
             // firmware compatibility only. A board picker here would invite the user to
             // mis-narrow the firmware list.
@@ -2652,7 +2652,7 @@ function createCard(mod, depth) {
             extrasAfterInstall: true,
             onInstall: async (_firmware, _manifestUrl, binaryUrl, entry) => {
                 // A download, for a device its host or its user updates: the browser takes the file, the route would answer 501.
-                if (entry && entry.isDesktop) {
+                if (entry && entry.isHost) {
                     const a = document.createElement("a");
                     a.href = binaryUrl;
                     a.rel = "noopener";

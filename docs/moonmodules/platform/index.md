@@ -56,7 +56,7 @@ Source: [platform.h](../../../src/platform/platform.h)
 
 ## Three implementations, one contract
 
-`src/platform/desktop/`, `src/platform/esp32/` and `src/platform/teensy/` implement the same declarations. The desktop one exists so the whole system runs, is tested and is developed without hardware, which is what makes the desktop-first rule possible.
+`src/platform/host/`, `src/platform/esp32/` and `src/platform/teensy/` implement the same declarations. The desktop one exists so the whole system runs, is tested and is developed without hardware, which is what makes the desktop-first rule possible.
 
 The MoonLive assemblers live here too, one per instruction set, because emitting machine code is the most target-specific thing the system does. The engine and its lowering stay in core; only the encoding is per target.
 
@@ -65,9 +65,9 @@ The MoonLive assemblers live here too, one per instruction set, because emitting
 | [moonlive_asm_xtensa](../../../src/platform/esp32/moonlive_asm_xtensa.h) | classic ESP32 and S3 |
 | [moonlive_asm_riscv](../../../src/platform/esp32/moonlive_asm_riscv.h) | ESP32-P4 |
 | [moonlive_asm_thumb2](../../../src/platform/teensy/moonlive_asm_thumb2.h) | Teensy 4.1 |
-| [moonlive_asm_host](../../../src/platform/desktop/moonlive_asm_host.h) | desktop arm64 and x86-64 |
+| [moonlive_asm_host](../../../src/platform/host/moonlive_asm_host.h) | desktop arm64 and x86-64 |
 
-Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](../../../src/platform/desktop/platform_config.h), [ESP32](../../../src/platform/esp32/platform_config.h), which carries the per-chip capability table, and [Teensy 4.1](../../../src/platform/teensy/platform_config.h).
+Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](../../../src/platform/host/platform_config.h), [ESP32](../../../src/platform/esp32/platform_config.h), which carries the per-chip capability table, and [Teensy 4.1](../../../src/platform/teensy/platform_config.h).
 Two headers serve every target: [the Ethernet wiring](../../../src/platform/eth_config.h) each config's default is written in, and [the loopback bit check](../../../src/platform/loopback_verify.h) every LED self-test ends in.
 
 ## What does not belong here

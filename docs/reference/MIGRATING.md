@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A host's firmware id is `host-<os>-<arch>`
+
+**Action: *install by hand*, once, on each host that updates itself.**
+
+A host, MoonLight as a program on macOS, Windows, Linux or Android, names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `desktop-<os>-<arch>`, and the release's program assets are `firmware-host-<os>-<arch>-v<version>.bin`. A host that updates itself (the Android app, or a program in a folder it can write) lists no update on its Firmware card while it runs an earlier build, so it installs this release once by hand, from the installer page or the package, after which the card updates it as before. A host in a container or installed by a package updates as it did. The card of a host on this release installs releases from this one on; an earlier release is installed from its package.
+
 ### A new Network Send starts at the linear curve
 
 **Action: *nothing*; pick a curve on Network Send where its receivers drive their LEDs uncorrected.**

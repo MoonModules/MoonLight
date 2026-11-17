@@ -1,9 +1,9 @@
 {
  "#define used as a constant": 1,
- "(duplicated lines)": 3619,
- "(total)": 1731,
- "blocking call on the render path": 199,
- "complex function": 284,
+ "(duplicated lines)": 3617,
+ "(total)": 1733,
+ "blocking call on the render path": 200,
+ "complex function": 285,
  "deeply nested": 102,
  "duplicated block": 826,
  "large file": 24,

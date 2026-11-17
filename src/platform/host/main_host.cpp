@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
     mm::platform::confirmProgramWhenStable();   // a newly installed program proves itself by staying up, which ends its rollback window
 
 #ifdef _WIN32
-    // Winsock is initialized by a static RAII guard in platform_desktop.cpp, so it covers test binaries too (they link mm_platform but have their own main()). Nothing to do here.
+    // Winsock is initialized by a static RAII guard in platform_host.cpp, so it covers test binaries too (they link mm_platform but have their own main()). Nothing to do here.
 
     // Windows has no sigaction: signal() is one-shot, restoring SIG_DFL on entry so a re-raise shows the OS crash dialog. No SIGPIPE there; a broken socket write returns an error from send(), which the code checks.
     signal(SIGSEGV, crashHandler);

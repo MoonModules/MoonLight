@@ -39,7 +39,7 @@ if sys.stderr is not None:
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _host import desktop_target  # noqa: E402
+from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_desktop import host_build_dir  # noqa: E402 (one home for the build-dir name)
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
@@ -82,7 +82,7 @@ _RUNNER_SOURCE_DIRS = ("src",)
 # the gate permanently, which is the same false alarm the note above is about.
 def _other_platform(rel: str) -> bool:
     """Whether a repo-relative path sits in a platform's own directory other than the desktop's."""
-    return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/desktop/")
+    return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/host/")
 _RUNNER_SOURCE_FILES = ("test/scenario_runner.cpp",)
 _RUNNER_SOURCE_SUFFIXES = {".c", ".cpp", ".h", ".hpp"}
 _RUNNER_SKIP_PARTS = {"build", "__pycache__", ".git"}
@@ -219,7 +219,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     # Windows the default encoding is cp1252 and would mojibake those.
     with open(path, encoding="utf-8") as f:
         scenario = json.load(f)
-    target = desktop_target()
+    target = host_target()
     today = datetime.date.today().isoformat()
     touched_observed = 0
     touched_contract = 0

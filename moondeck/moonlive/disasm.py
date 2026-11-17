@@ -104,7 +104,7 @@ def disassemble(isa: str, script: str, binding: str) -> int:
         emitter = os.path.join(tmp, "emit")
         build = subprocess.run(
             ["c++", "-std=c++20", "-O0", "-I", os.path.join(ROOT, "src"),
-             "-I", os.path.join(ROOT, "src", "platform", "desktop"),
+             "-I", os.path.join(ROOT, "src", "platform", "host"),
              "-D", ISAS[isa]["define"],
              TOOL_SRC, os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveCompiler.cpp"),
              # Every backend runs the register allocator before lowering, so the pass comes along
@@ -112,7 +112,7 @@ def disassemble(isa: str, script: str, binding: str) -> int:
              os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveSpill.cpp"),
              # The IR sizes its op array with platform::alloc, so the platform implementation has
              # to come along: the compiler depends on it.
-             os.path.join(ROOT, "src", "platform", "desktop", "platform_desktop.cpp"),
+             os.path.join(ROOT, "src", "platform", "host", "platform_host.cpp"),
              "-o", emitter],
             capture_output=True, text=True)
         if build.returncode != 0:

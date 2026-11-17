@@ -15,6 +15,6 @@ def test_an_edit_to_a_platform_the_desktop_never_links_does_not_make_the_runner_
 
 
 def test_the_desktop_platform_and_the_shared_platform_headers_still_count():
-    assert not run_scenario._other_platform("src/platform/desktop/platform_desktop.cpp")
+    assert not run_scenario._other_platform("src/platform/host/platform_host.cpp")
     assert not run_scenario._other_platform("src/platform/platform.h")
     assert not run_scenario._other_platform("src/core/system/HttpServerModule.cpp")

@@ -28,7 +28,7 @@
 #include <cstdarg>
 #include <cstdio>
 
-// Ask the compiler whether it HAS the warning rather than inferring it from `__clang__`: Apple clang defines that macro and predates this group. The same guard `platform_desktop.cpp` carries.
+// Ask the compiler whether it HAS the warning rather than inferring it from `__clang__`: Apple clang defines that macro and predates this group. The same guard `platform_host.cpp` carries.
 #if defined(__clang__) && defined(__has_warning)
 #  if __has_warning("-Wfunction-effects")
 #    define MM_SUPPRESS_FUNCTION_EFFECTS 1

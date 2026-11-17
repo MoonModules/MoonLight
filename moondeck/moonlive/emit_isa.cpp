@@ -24,15 +24,15 @@
 #include "platform/teensy/moonlive_asm_thumb2.cpp"
 #elif defined(MM_EMIT_ARM64)
 #define __aarch64__ 1
-#include "platform/desktop/moonlive_asm_host.h"
-#include "platform/desktop/moonlive_asm_arm64.cpp"
+#include "platform/host/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_arm64.cpp"
 #elif defined(MM_EMIT_X86_64)
 // This ISA is selected by the host's own architecture, so it runs only on that host, where the device ISAs cross-emit because no host defines their macros.
 #if !defined(__x86_64__) && !defined(_M_X64)
 #error "MM_EMIT_X86_64 requires an x86-64 host; run --isa x86_64 on an x86-64 machine"
 #endif
-#include "platform/desktop/moonlive_asm_host.h"
-#include "platform/desktop/moonlive_asm_x86_64.cpp"
+#include "platform/host/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_x86_64.cpp"
 #else
 #error "define MM_EMIT_XTENSA, MM_EMIT_RISCV, MM_EMIT_THUMB2, MM_EMIT_ARM64 or MM_EMIT_X86_64"
 #endif

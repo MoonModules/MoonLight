@@ -20,11 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "build"))
 from build_desktop import host_build_dir  # noqa: E402
 
 
-def desktop_target() -> str:
-    """This host's metrics key, such as `desktop-macos`.
+def host_target() -> str:
+    """This host's metrics key, such as `host-macos`.
 
-    An unnamed OS gets its own name (`desktop-freebsd`) rather than a shared `desktop-unknown`,
+    An unnamed OS gets its own name (`host-freebsd`) rather than a shared `host-unknown`,
     which keeps a measurement from a platform nobody has added yet in its own row instead of
     overwriting a named host's numbers, and says which platform it came from.
     """
-    return "desktop-" + host_build_dir().rsplit("/", 1)[1]
+    return "host-" + host_build_dir().rsplit("/", 1)[1]

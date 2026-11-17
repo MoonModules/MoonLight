@@ -9,20 +9,20 @@ sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from firmwares import FIRMWARES, chip_family  # noqa: E402
 from generate_firmwares import PICKER, build_doc, picker_source  # noqa: E402
 
-DESKTOP = {name: spec for name, spec in FIRMWARES.items() if spec["platform"] == "desktop"}
+DESKTOP = {name: spec for name, spec in FIRMWARES.items() if spec["platform"] == "host"}
 
 
 def test_every_desktop_platform_the_release_builds_is_a_row():
-    assert sorted(DESKTOP) == ["desktop-android-arm64", "desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]
+    assert sorted(DESKTOP) == ["host-android-arm64", "host-linux-arm64", "host-linux-x64", "host-macos-arm64", "host-windows-x64"]
 
 
 def test_each_desktop_row_matches_the_assets_its_platform_ships():
     shipped = {
-        "desktop-macos-arm64": ["MoonLight-macos-arm64-v1.2.3.dmg", "MoonLight-macos-arm64-v1.2.3.tar.gz"],
-        "desktop-windows-x64": ["MoonLight-windows-x64-v1.2.3-setup.exe", "MoonLight-windows-x64-v1.2.3.zip"],
-        "desktop-linux-x64": ["moonlight_1.2.3_amd64.deb", "MoonLight-linux-x64-v1.2.3.tar.gz"],
-        "desktop-linux-arm64": ["moonlight_1.2.3_arm64.deb", "MoonLight-linux-arm64-v1.2.3.tar.gz"],
-        "desktop-android-arm64": ["MoonLight-android-arm64-v1.2.3.apk"],
+        "host-macos-arm64": ["MoonLight-macos-arm64-v1.2.3.dmg", "MoonLight-macos-arm64-v1.2.3.tar.gz"],
+        "host-windows-x64": ["MoonLight-windows-x64-v1.2.3-setup.exe", "MoonLight-windows-x64-v1.2.3.zip"],
+        "host-linux-x64": ["moonlight_1.2.3_amd64.deb", "MoonLight-linux-x64-v1.2.3.tar.gz"],
+        "host-linux-arm64": ["moonlight_1.2.3_arm64.deb", "MoonLight-linux-arm64-v1.2.3.tar.gz"],
+        "host-android-arm64": ["MoonLight-android-arm64-v1.2.3.apk"],
     }
     for name, names in shipped.items():
         patterns = [re.compile(p) for p in DESKTOP[name]["assets"]]
@@ -38,4 +38,4 @@ def test_a_desktop_row_has_a_family_label_for_the_manifest_vocabulary():
 
 def test_the_picker_carries_the_registry_desktop_rows():
     picker = PICKER.read_text(encoding="utf-8")
-    assert picker == picker_source(picker, build_doc()), "run generate_firmwares.py: install-picker.js DESKTOP_BUILDS is stale"
+    assert picker == picker_source(picker, build_doc()), "run generate_firmwares.py: install-picker.js HOST_BUILDS is stale"

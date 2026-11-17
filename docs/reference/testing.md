@@ -324,7 +324,7 @@ The runner compares each measurement to the contract and fails if the device mis
     "set_by": "2026-06-02",
     "reason": "initial contract"
   },
-  "desktop-macos": {
+  "host-macos": {
     "tick_us": 300,
     "free_heap": 0,
     "set_by": "2026-06-02",
@@ -346,14 +346,14 @@ The runner compares each measurement to the contract and fails if the device mis
 - Both are **hand-set promises**, not auto-captured last readings. Renegotiating a contract requires `--update-contract --reason "..."`, see below.
 - `set_by` records when the contract was last (re)negotiated; `reason` records why. Both stamped automatically by `--update-contract`.
 
-Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `desktop-macos` / `desktop-linux` / `desktop-windows` for desktop builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
+Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `host-macos` / `host-linux` / `host-windows` for desktop builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
 
 **Tolerance** absorbs run-to-run jitter only, not "I don't care":
 
-- Default tick tolerance: **20% on desktop-*** (multi-process OS scheduling), **10% on ESP32** (lwIP / EMAC jitter).
+- Default tick tolerance: **20% on host-*** (multi-process OS scheduling), **10% on ESP32** (lwIP / EMAC jitter).
 - Default heap tolerance: same percentages.
-- Default absolute floor on tick: **200 µs on desktop-***, **5 µs on ESP32**, prevents percentage tolerance from going sub-noise on tiny ticks.
-- **On desktop-*, the floor dominates** for any contract under ~1 ms tick (effectively all desktop contracts today: 5–300 µs). The percentage knob only matters for slow desktop tick. This is honest: a 100 µs desktop contract realistically can't assert anything tighter than ±200 µs because multi-process scheduling jitter routinely adds 100+ µs all by itself. If you need a tight assertion, run the contract on ESP32, bounded RTOS clocks are tighter.
+- Default absolute floor on tick: **200 µs on host-***, **5 µs on ESP32**, prevents percentage tolerance from going sub-noise on tiny ticks.
+- **On host-*, the floor dominates** for any contract under ~1 ms tick (effectively all desktop contracts today: 5–300 µs). The percentage knob only matters for slow desktop tick. This is honest: a 100 µs desktop contract realistically can't assert anything tighter than ±200 µs because multi-process scheduling jitter routinely adds 100+ µs all by itself. If you need a tight assertion, run the contract on ESP32, bounded RTOS clocks are tighter.
 - Per-step overrides: `tick_tolerance_pct`, `heap_tolerance_pct`, `tolerance_us` inside the per-target block.
 
 **Predicted-vs-actual heap.** The runner additionally prints the sum of `dynamicBytes()` from the live module tree as `model=N`. This is what the system *says* it allocated; comparing it to `free_heap` reveals framework overhead (lwIP, WiFi, HTTP buffers). The model number is informational, not asserted.
@@ -422,7 +422,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
           "tick_us": 100000, "free_heap": 105000,
           "set_by": "2026-06-02", "reason": "initial contract"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": 120, "free_heap": 0,
           "set_by": "2026-06-02", "reason": "initial contract"
         }

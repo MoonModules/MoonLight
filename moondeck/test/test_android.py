@@ -5,7 +5,7 @@ Strips the ``mm_tests`` build_android.py made, pushes it to ``/data/local/tmp``,
 with its temp and data folders beside it, since an adb shell has no /tmp and no home.
 
 A process adb shell starts lacks the app identity AAudio needs, so it runs as a machine with no sound
-device (platform_desktop_audio.cpp); the audio tests feed their own samples.
+device (platform_host_audio.cpp); the audio tests feed their own samples.
 """
 
 import argparse

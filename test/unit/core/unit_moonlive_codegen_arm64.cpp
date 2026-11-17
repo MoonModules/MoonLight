@@ -8,7 +8,7 @@
 
 #if defined(__aarch64__) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT)
 
-#include "platform/desktop/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_host.h"
 
 #include <cstdint>
 

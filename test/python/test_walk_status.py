@@ -20,9 +20,9 @@ def test_a_glob_crosses_folders_with_two_stars_and_stays_in_one_with_one():
 
 
 def test_the_last_matching_pattern_decides_so_an_exclusion_carves_out_a_folder():
-    globs = ["src/**", "!src/platform/desktop/**"]
+    globs = ["src/**", "!src/platform/host/**"]
     assert matches("src/core/Module.h", globs)
-    assert not matches("src/platform/desktop/main.cpp", globs)
+    assert not matches("src/platform/host/main.cpp", globs)
 
 
 def git(repo: Path, *args):

@@ -3,7 +3,7 @@
 /// A desktop's own address is its LAN's: the default route's when a LAN interface holds it, and the broadcasting interface's when a VPN holds the route.
 
 #include "doctest.h"
-#include "platform/desktop/host_address.h"
+#include "platform/host/host_address.h"
 
 #include <initializer_list>   // the names a case loops over
 

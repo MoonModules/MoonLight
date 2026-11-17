@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 # This host's metrics key, spelled in one place (moondeck/_host.py).
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _host import desktop_target  # noqa: E402
+from _host import host_target  # noqa: E402
 # The firmware registry, so carry-forward can drop rows for variants that no longer exist
 # (see merge_carry_forward). Same single source of truth check_firmwares.py reads.
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
@@ -259,7 +259,7 @@ def measure_flash():
     if desktop:
         st = desktop.stat()
         if (_time.time() - st.st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
-            host = desktop_target()  # keyed per host (moondeck/_host.py)
+            host = host_target()  # keyed per host (moondeck/_host.py)
             flash[host] = st.st_size
             MEASURED_THIS_RUN.add(host)
             MEASURED_DATES[host] = _dt.date.today().isoformat()
@@ -458,7 +458,7 @@ def merge_carry_forward(new, old):
     `complexity` are keyed by platform/metric and are carried forward as they were.
     """
     # Drop rows for ESP32 variants that no longer exist, but keep everything else: `flash`
-    # also holds non-firmware targets (`desktop-*`), which are not in FIRMWARES and must not be
+    # also holds non-firmware targets (`host-*`), which are not in FIRMWARES and must not be
     # filtered out. So the rule is "an esp32* key that is not a known firmware is a ghost",
     # which is exactly what a rename leaves behind and nothing else.
     known = set(FIRMWARES)
@@ -539,7 +539,7 @@ def _arrow(new, old, key, fmt=str, lower_is_better=True):
 # Columns of the scenario matrix, in fleet order. A fixed list rather than whatever the data
 # happens to carry: a new target should be a deliberate addition, and "unknown" (a scenario run
 # before targets were named) is a data defect, not a device.
-MATRIX_TARGETS = ("desktop-macos", "desktop-windows", "esp32", "esp32s3-n16r8",
+MATRIX_TARGETS = ("host-macos", "host-windows", "esp32", "esp32s3-n16r8",
                   "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi", *TEENSY_FIRMWARES)
 
 
@@ -582,7 +582,7 @@ def gains(new, ref, since="", code=(None, None)):
     heap_now = (new.get("perf", {}).get("esp32") or {}).get("heap_free")
     if heap_ref and heap_now:
         rows.append(("free heap esp32", "KB", heap_ref, heap_now))
-    host = desktop_target()
+    host = host_target()
     p_ref = (ref.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
     p_now = (new.get("perf", {}).get(host) or {}).get("scenario_p50") or {}
     for name in sorted(set(p_ref) & set(p_now)):

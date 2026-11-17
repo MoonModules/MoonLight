@@ -49,10 +49,10 @@ MAX_FRAME = 512
 UI_CONTRACT = {"Layouts", "Effects", "Drivers", "Services"}
 
 # Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor header is upstream's. -ENS adds the nesting depth column.
-LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-ENS"]
+LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/host/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
-FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
+FILE_EXCLUDE = ("src/platform/host/vendor/", "src/ui/vendor/", "test/doctest.h")
 
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"
@@ -453,7 +453,7 @@ def header_findings(rel: str, text: str) -> list:
 
 def double_findings(rel: str, lines) -> list:
     """Every line naming the type `double` in one firmware file; the host's own platform code and vendored files are not firmware."""
-    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
+    if not _firmware(rel) or rel.startswith("src/platform/host/"):
         return []
     rows = []
     for n, code in enumerate(_code_lines(lines), 1):   # a word in a string or a comment is no type
@@ -491,7 +491,7 @@ def define_findings(rel: str, lines, tested: set) -> list:
 
 def rtti_findings(rel: str, lines) -> list:
     """Every `dynamic_cast` or `typeid` in one firmware file; the build has no runtime type information."""
-    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
+    if not _firmware(rel) or rel.startswith("src/platform/host/"):
         return []
     return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, (line, code) in enumerate(zip(lines, _code_lines(lines)), 1) if _RTTI_RE.search(code)]
 

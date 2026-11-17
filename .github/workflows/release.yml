@@ -255,10 +255,10 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-macos
+          name: host-macos
           path: dist/
 
   build-windows-x64:
@@ -327,10 +327,10 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-windows
+          name: host-windows
           path: dist/
 
   # **ubuntu-22.04, pinned like build-linux-arm64, and this is load-bearing.** A binary carries the
@@ -390,12 +390,12 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-linux
+          name: host-linux
           path: dist/
 
   # The arm64 twin of build-linux-x64: Raspberry Pi, NanoPi and every other 64-bit board, which
@@ -453,12 +453,12 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-desktop-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-linux-arm64
+          name: host-linux-arm64
           path: dist/
 
   # The Android app: the desktop program built with the NDK, packed by Gradle with its Kotlin shell (android/), signed with the
@@ -723,11 +723,11 @@ jobs:
       # The same .debs the release published, from the same run: one per architecture.
       - uses: actions/download-artifact@v4
         with:
-          name: desktop-linux
+          name: host-linux
           path: dist
       - uses: actions/download-artifact@v4
         with:
-          name: desktop-linux-arm64
+          name: host-linux-arm64
           path: dist
 
       # The arm64 stage runs `dpkg-deb -x` on an amd64 runner, which needs emulation. Only the

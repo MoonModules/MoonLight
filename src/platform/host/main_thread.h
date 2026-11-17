@@ -1,6 +1,6 @@
 #pragma once
 
-/// The main thread's loop on macOS, where AppKit serves windows on that thread only: main_desktop.cpp runs MoonLight on a thread of its own and hands the main thread here.
+/// The main thread's loop on macOS, where AppKit serves windows on that thread only: main_host.cpp runs MoonLight on a thread of its own and hands the main thread here.
 
 #include <atomic>
 

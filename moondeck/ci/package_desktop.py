@@ -8,7 +8,7 @@ Runs under CI on macOS, Windows and Linux runners. The output lands in `dist/`:
   Linux x64:    dist/MoonLight-linux-x64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_amd64.deb
   Linux arm64:  dist/MoonLight-linux-arm64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_arm64.deb
 
-and beside each the bare program, dist/firmware-desktop-<os>-<arch>-vX.Y.Z.bin, which a running desktop installs over the air.
+and beside each the bare program, dist/firmware-host-<os>-<arch>-vX.Y.Z.bin, which a running desktop installs over the air.
 
 Each archive carries the executable + a short README.txt with run instructions.
 
@@ -136,7 +136,7 @@ def package_linux(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
-    stage_program(binary, version, f"desktop-linux-{tar_label}")
+    stage_program(binary, version, f"host-linux-{tar_label}")
     package_deb(binary, version)
     return out
 
@@ -421,7 +421,7 @@ def package_macos(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
-    stage_program(binary, version, "desktop-macos-arm64")
+    stage_program(binary, version, "host-macos-arm64")
     package_dmg(binary, version)
     return out
 
@@ -624,7 +624,7 @@ def package_windows(binary: Path, version: str) -> Path:
     finally:
         readme.unlink(missing_ok=True)
     print(f"package_desktop: wrote {out}")
-    stage_program(binary, version, "desktop-windows-x64")
+    stage_program(binary, version, "host-windows-x64")
     package_windows_installer(binary, version)
     return out
 

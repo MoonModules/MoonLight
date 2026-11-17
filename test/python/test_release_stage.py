@@ -15,7 +15,7 @@ REGISTRY = {"firmwares": [
     {"name": "esp32s3-n16r8", "platform": "esp32", "chip": "esp32s3", "ships": True},
     {"name": "esp32-dev", "platform": "esp32", "chip": "esp32", "ships": False},
     {"name": "teensy41", "platform": "teensy", "chip": "imxrt1062", "ships": True},
-    {"name": "desktop-macos-arm64", "platform": "desktop", "chip": "macos-arm64", "ships": True},
+    {"name": "host-macos-arm64", "platform": "host", "chip": "macos-arm64", "ships": True},
 ]}
 
 
@@ -44,7 +44,7 @@ def test_the_esp32_matrix_lists_only_shipping_esp32_firmwares_as_compact_json():
 
 
 def test_manifests_cover_every_shipping_firmware_except_desktop():
-    assert rs.shipping(REGISTRY, lambda platform: platform != "desktop") == ["esp32", "esp32s3-n16r8", "teensy41"]
+    assert rs.shipping(REGISTRY, lambda platform: platform != "host") == ["esp32", "esp32s3-n16r8", "teensy41"]
 
 
 def test_the_teensy_build_covers_only_shipping_teensy_firmwares():

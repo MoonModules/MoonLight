@@ -3,7 +3,7 @@
 /// SIGTERM, the stop systemd, Docker and kill send, clears the flag the main loop watches, as Ctrl+C does.
 
 #include "doctest.h"
-#include "platform/desktop/stop_signal.h"
+#include "platform/host/stop_signal.h"
 
 #include <atomic>
 #include <csignal>

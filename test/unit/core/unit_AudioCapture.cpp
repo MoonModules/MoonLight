@@ -1,6 +1,6 @@
 /// @module AudioService
 
-/// The desktop OS-capture seam (platform_desktop_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture hardware is not assumed: on a headless host init fails cleanly, and miniaudio's null backend makes success the CI norm, so the lifecycle cases assert coherence around either outcome. The first local run on macOS asks the OS microphone permission once.
+/// The desktop OS-capture seam (platform_host_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture hardware is not assumed: on a headless host init fails cleanly, and miniaudio's null backend makes success the CI norm, so the lifecycle cases assert coherence around either outcome. The first local run on macOS asks the OS microphone permission once.
 
 #include "doctest.h"
 #include "core/services/AudioService.h"

@@ -119,7 +119,7 @@ COPY --from=fetch /MoonLight /usr/bin/MoonLight
 COPY --from=fetch /deps/ /usr/lib/
 
 # WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The desktop
-# build resolves its data directory from the environment (platform_desktop.cpp, userDataDir): on
+# build resolves its data directory from the environment (platform_host.cpp, userDataDir): on
 # Linux XDG_DATA_HOME first, then HOME/.local/share. A container has NEITHER, and the function then
 # returns empty, so without this the app has nowhere defined to write. Setting it explicitly also
 # gives the volume one documented path instead of a guess: config lands in /data/MoonLight/.config.

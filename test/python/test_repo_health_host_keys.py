@@ -27,12 +27,12 @@ def test_the_key_names_the_host_and_never_lumps_two_together(monkeypatch):
     The fallback names the platform rather than sharing a `desktop-unknown` bucket, so a machine
     nobody has added yet still cannot overwrite a named host's numbers.
     """
-    for build_dir, expected in (("build/macos", "desktop-macos"),
-                                ("build/linux", "desktop-linux"),
-                                ("build/windows", "desktop-windows"),
-                                ("build/freebsd", "desktop-freebsd")):
+    for build_dir, expected in (("build/macos", "host-macos"),
+                                ("build/linux", "host-linux"),
+                                ("build/windows", "host-windows"),
+                                ("build/freebsd", "host-freebsd")):
         monkeypatch.setattr(_host, "host_build_dir", lambda d=build_dir: d)
-        assert _host.desktop_target() == expected
+        assert _host.host_target() == expected
 
 
 def test_the_measurement_itself_is_written_under_the_host_key(monkeypatch, tmp_path):
@@ -54,13 +54,13 @@ def test_the_measurement_itself_is_written_under_the_host_key(monkeypatch, tmp_p
     binary = tmp_path / "MoonLight.exe"
     binary.write_bytes(b"x" * 1024)
     monkeypatch.setattr(repo_health, "desktop_binary", lambda: binary)
-    monkeypatch.setattr(repo_health, "desktop_target", lambda: "desktop-windows")
+    monkeypatch.setattr(repo_health, "host_target", lambda: "host-windows")
     repo_health.MEASURED_THIS_RUN.clear()
     repo_health.MEASURED_DATES.clear()
 
     flash = repo_health.measure_flash()
 
     assert "desktop" not in flash, "a flat `desktop` key is what let two hosts overwrite each other"
-    assert flash["desktop-windows"] == 1024
-    assert "desktop-windows" in repo_health.MEASURED_THIS_RUN
+    assert flash["host-windows"] == 1024
+    assert "host-windows" in repo_health.MEASURED_THIS_RUN
     assert "desktop" not in repo_health.MEASURED_DATES

@@ -14,7 +14,7 @@
 ///
 /// ## Why the target key is always the host desktop
 ///
-/// The per-step `contract[<target>]` lookup needs a target key and the in-process runner builds for the host only, so the key is always `desktop-<host-os>`, matching the `run_live_scenario.py` convention.
+/// The per-step `contract[<target>]` lookup needs a target key and the in-process runner builds for the host only, so the key is always `host-<host-os>`, matching the `run_live_scenario.py` convention.
 ///
 /// ## How a scenario value reaches a control
 ///
@@ -283,13 +283,13 @@ static std::string readFile(const char* path) {
 // Target key for the per-step contract[<target>] lookup: @xref{why-the-target-key-is-always-the-host-desktop}.
 static const char* hostTarget() {
 #if defined(__APPLE__)
-    return "desktop-macos";
+    return "host-macos";
 #elif defined(_WIN32)
-    return "desktop-windows";
+    return "host-windows";
 #elif defined(__linux__)
-    return "desktop-linux";
+    return "host-linux";
 #else
-    return "desktop-unknown";
+    return "host-unknown";
 #endif
 }
 
@@ -824,14 +824,14 @@ static int runScenario(const char* path) {
             if (step.has("contract") && step["contract"].has(hostTarget())) {
                 const auto& exp = step["contract"][hostTarget()];
                 // Per-target defaults reflect run-to-run variance, and KEEP IN SYNC with the live runner: @xref{why-the-tolerance-defaults-differ-per-target}.
-                const bool isDesktop = std::strncmp(hostTarget(), "desktop-", 8) == 0;
+                const bool isHost = std::strncmp(hostTarget(), "host-", std::strlen("host-")) == 0;
                 double tickTolPct = exp.has("tick_tolerance_pct") ? exp["tick_tolerance_pct"].num
-                                                                   : (isDesktop ? 20.0 : 10.0);
+                                                                   : (isHost ? 20.0 : 10.0);
                 double heapTolPct = exp.has("heap_tolerance_pct") ? exp["heap_tolerance_pct"].num
-                                                                   : (isDesktop ? 20.0 : 10.0);
+                                                                   : (isHost ? 20.0 : 10.0);
                 // Absolute floor, since OS scheduling jitter dwarfs a percentage at a small tick: @xref{why-the-tolerance-defaults-differ-per-target}.
                 double tolUs = exp.has("tolerance_us") ? exp["tolerance_us"].num
-                                                       : (isDesktop ? 200.0 : 5.0);
+                                                       : (isHost ? 200.0 : 5.0);
                 if (exp.has("tick_us") && exp["tick_us"].num > 0) {
                     // tick is a *ceiling*, so a speedup never fails: @xref{the-performance-contract}.
                     double expTick = exp["tick_us"].num;

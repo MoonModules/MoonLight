@@ -173,55 +173,55 @@ endif()
 if(MM_VERSION)
     set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
-# A desktop build names its firmware as the release names its program, firmware-desktop-<os>-<arch>-v<version>.bin (package_desktop.py),
+# A host build names its firmware as the release names its program, firmware-host-<os>-<arch>-v<version>.bin (package_desktop.py),
 # so the Firmware card, the map and Home Assistant install it as they install a board, which takes its name from esp32/main/CMakeLists.txt.
 if(ANDROID)   # before the Linux default: Android is Linux underneath, and the NDK's toolchain sets ANDROID
-    set(MM_DESKTOP_OS android)
+    set(MM_HOST_OS android)
 elseif(APPLE)
-    set(MM_DESKTOP_OS macos)
+    set(MM_HOST_OS macos)
 elseif(WIN32)
-    set(MM_DESKTOP_OS windows)
+    set(MM_HOST_OS windows)
 else()
-    set(MM_DESKTOP_OS linux)
+    set(MM_HOST_OS linux)
 endif()
 # The processor the program is built for: on Apple, CMAKE_OSX_ARCHITECTURES when it names one, since CMAKE_SYSTEM_PROCESSOR may name the host's.
-set(MM_DESKTOP_CPU "${CMAKE_SYSTEM_PROCESSOR}")
+set(MM_HOST_CPU "${CMAKE_SYSTEM_PROCESSOR}")
 list(LENGTH CMAKE_OSX_ARCHITECTURES MM_OSX_ARCH_COUNT)
 if(APPLE AND MM_OSX_ARCH_COUNT EQUAL 1)
-    set(MM_DESKTOP_CPU "${CMAKE_OSX_ARCHITECTURES}")
+    set(MM_HOST_CPU "${CMAKE_OSX_ARCHITECTURES}")
 endif()
-string(TOLOWER "${MM_DESKTOP_CPU}" MM_DESKTOP_CPU)
-if(MM_DESKTOP_CPU MATCHES "^(arm64|aarch64)$")
-    set(MM_DESKTOP_CPU arm64)
-elseif(MM_DESKTOP_CPU MATCHES "^(x86_64|amd64)$")
-    set(MM_DESKTOP_CPU x64)
+string(TOLOWER "${MM_HOST_CPU}" MM_HOST_CPU)
+if(MM_HOST_CPU MATCHES "^(arm64|aarch64)$")
+    set(MM_HOST_CPU arm64)
+elseif(MM_HOST_CPU MATCHES "^(x86_64|amd64)$")
+    set(MM_HOST_CPU x64)
 else()
-    unset(MM_DESKTOP_CPU)   # a processor the release packages no program for: the name stays unknown
+    unset(MM_HOST_CPU)   # a processor the release packages no program for: the name stays unknown
 endif()
-if(MM_DESKTOP_CPU)
-    set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="desktop-${MM_DESKTOP_OS}-${MM_DESKTOP_CPU}")
+if(MM_HOST_CPU)
+    set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="host-${MM_HOST_OS}-${MM_HOST_CPU}")
 endif()
 
 # Platform library (desktop). moonlive_emit.cpp is the desktop MoonLive backend (host-ISA
 # codegen) — it lives here because emitted machine code is platform/ISA-specific.
 add_library(mm_platform
-    src/platform/desktop/platform_desktop.cpp
-    src/platform/desktop/platform_desktop_audio.cpp
-    src/platform/desktop/platform_desktop_hdmi.cpp
-    src/platform/desktop/platform_desktop_update.cpp
-    src/platform/desktop/moonlive_emit_noarch.cpp
-    src/platform/desktop/moonlive_asm_noarch.cpp
-    src/platform/desktop/moonlive_emit_arm64.cpp
-    src/platform/desktop/moonlive_emit_x86_64.cpp
-    src/platform/desktop/moonlive_asm_arm64.cpp
-    src/platform/desktop/moonlive_asm_x86_64.cpp
+    src/platform/host/platform_host.cpp
+    src/platform/host/platform_host_audio.cpp
+    src/platform/host/platform_host_hdmi.cpp
+    src/platform/host/platform_host_update.cpp
+    src/platform/host/moonlive_emit_noarch.cpp
+    src/platform/host/moonlive_asm_noarch.cpp
+    src/platform/host/moonlive_emit_arm64.cpp
+    src/platform/host/moonlive_emit_x86_64.cpp
+    src/platform/host/moonlive_asm_arm64.cpp
+    src/platform/host/moonlive_asm_x86_64.cpp
 )
-target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/desktop/)
+target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/host/)
 # Winsock for the desktop socket surface; IPHLPAPI for real Ethernet link state and negotiated
 # speed (PanelCardDriver warns below gigabit, and a ColorLight card tears rather than erroring).
-# Npcap is deliberately NOT linked: platform_desktop.cpp resolves wpcap.dll at run time so the
+# Npcap is deliberately NOT linked: platform_host.cpp resolves wpcap.dll at run time so the
 # build needs no SDK and the binary runs without it.
-# `dl` on Linux: miniaudio (platform_desktop_audio.cpp) runtime-links ALSA/PulseAudio via
+# `dl` on Linux: miniaudio (platform_host_audio.cpp) runtime-links ALSA/PulseAudio via
 # dlopen, so no audio SDK is a build requirement, the same no-SDK rule as Npcap above.
 # `winhttp` on Windows: the one outbound HTTPS call (MoonCloud). It is the OS's own client, in the
 # SDK Visual Studio already installs, so Windows needs no libcurl and no vendored TLS. The other
@@ -238,10 +238,10 @@ target_link_libraries(mm_platform PUBLIC $<$<PLATFORM_ID:Windows>:ws2_32> $<$<PL
 # takes user32, gdi32 and setupapi (the EDID), all in the SDK.
 if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     enable_language(OBJCXX)
-    target_sources(mm_platform PRIVATE src/platform/desktop/platform_desktop_hdmi_mac.mm)
+    target_sources(mm_platform PRIVATE src/platform/host/platform_host_hdmi_mac.mm)
     target_compile_definitions(mm_platform PUBLIC MM_MAC_SCREEN=1)
     target_link_libraries(mm_platform PUBLIC "-framework AppKit" "-framework CoreGraphics" "-framework QuartzCore" "-framework IOKit")
-    set_source_files_properties(src/platform/desktop/platform_desktop_hdmi_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    set_source_files_properties(src/platform/host/platform_host_hdmi_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
     # The C++ files' launcher, so the code check reads this file's saved findings with the rest.
     set_target_properties(mm_platform PROPERTIES OBJCXX_COMPILER_LAUNCHER "${CMAKE_CXX_COMPILER_LAUNCHER}")
 endif()
@@ -397,7 +397,7 @@ endif()
 # Application
 # module_types.cpp is the shared type registry, compiled into the app and the scenario runner
 # alike so one list serves both: src/module_types.cpp carries the reason.
-add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/desktop/main_desktop.cpp ${MM_WIN_RESOURCES})
+add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
 target_include_directories(MoonLight PRIVATE src/)
 target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
@@ -410,7 +410,7 @@ endif()
 
 # The Android app's library: the same program as MoonLight, entered through main_android.cpp's JNI calls rather than main(), written where the app's Gradle build packs it (android/app/build.gradle.kts).
 if(ANDROID)
-    add_library(moonlight SHARED src/main.cpp src/module_types.cpp src/platform/desktop/main_android.cpp)
+    add_library(moonlight SHARED src/main.cpp src/module_types.cpp src/platform/host/main_android.cpp)
     target_include_directories(moonlight PRIVATE src/)
     target_link_libraries(moonlight PRIVATE mm_core mm_platform log)
     add_dependencies(moonlight ui_embed build_info_gen moonlive_catalog)

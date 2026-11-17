@@ -1158,7 +1158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // A desktop archive is handed to the browser to download; there is no chip to flash
         // and no port to hold. Anchor-click rather than location.href so the Content-Disposition
         // from GitHub is honored and the page is not navigated away mid-session.
-        if (entry && entry.isDesktop) {
+        if (entry && entry.isHost) {
           const a = document.createElement("a");
           a.href = binaryUrl;
           a.download = "";

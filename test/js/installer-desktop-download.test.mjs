@@ -1,4 +1,4 @@
-// The desktop-download half of the install picker. The same picker offers two very
+// The host-download half of the install picker. The same picker offers two very
 // different things: an ESP32 firmware that gets FLASHED onto a board, and a desktop
 // archive that gets DOWNLOADED to the computer viewing the page. These tests pin the
 // rule that keeps those apart, because mixing them up means offering a .dmg as
@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseFirmwaresFromAssets, isCompatible, pickedEntry, DESKTOP_DOWNLOAD } from "../../src/ui/install-picker.js";
+import { parseFirmwaresFromAssets, isCompatible, pickedEntry, HOST_DOWNLOAD } from "../../src/ui/install-picker.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
@@ -39,16 +39,16 @@ test("a desktop archive is offered for download even though it has no manifest",
     // An ESP32 firmware needs a manifest to flash. A desktop archive has nothing to flash,
     // so requiring one would drop every desktop build from the list.
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0");
-    const mac = got.find(f => f.firmware === "desktop-macos-arm64");
+    const mac = got.find(f => f.firmware === "host-macos-arm64");
     assert.ok(mac, "the macOS archive should be offered");
     assert.equal(mac.manifestUrl, null);
-    assert.ok(mac.isDesktop);
+    assert.ok(mac.isHost);
 });
 
 test("each desktop platform is offered once, however many archives it ships", () => {
-    const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0").filter(f => f.isDesktop);
+    const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0").filter(f => f.isHost);
     assert.deepEqual(got.map(f => f.firmware).sort(),
-        ["desktop-android-arm64", "desktop-linux-arm64", "desktop-linux-x64", "desktop-macos-arm64", "desktop-windows-x64"]);
+        ["host-android-arm64", "host-linux-arm64", "host-linux-x64", "host-macos-arm64", "host-windows-x64"]);
 });
 
 test("a platform shipping both an installer and a tarball offers the installer", () => {
@@ -58,20 +58,20 @@ test("a platform shipping both an installer and a tarball offers the installer",
     // shipping a setup.exe the picker could not even see, so the one platform with a broken
     // download was the one nothing checked.
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0");
-    assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.dmg$/);
-    assert.match(got.find(f => f.firmware === "desktop-windows-x64").binaryUrl, /-setup\.exe$/);
-    assert.match(got.find(f => f.firmware === "desktop-linux-x64").binaryUrl, /\.deb$/);
-    assert.match(got.find(f => f.firmware === "desktop-linux-arm64").binaryUrl, /_arm64\.deb$/);
+    assert.match(got.find(f => f.firmware === "host-macos-arm64").binaryUrl, /\.dmg$/);
+    assert.match(got.find(f => f.firmware === "host-windows-x64").binaryUrl, /-setup\.exe$/);
+    assert.match(got.find(f => f.firmware === "host-linux-x64").binaryUrl, /\.deb$/);
+    assert.match(got.find(f => f.firmware === "host-linux-arm64").binaryUrl, /_arm64\.deb$/);
 });
 
 test("every shipped desktop asset is recognized under its own platform, and an unrelated asset is not", () => {
     // The names package_desktop.py writes, one per file the release carries.
     const SHIPPED = {
-        "desktop-macos-arm64": ["MoonLight-macos-arm64-v3.0.0.dmg", "MoonLight-macos-arm64-v3.0.0.tar.gz"],
-        "desktop-windows-x64": ["MoonLight-windows-x64-v3.0.0-setup.exe", "MoonLight-windows-x64-v3.0.0.zip"],
-        "desktop-linux-x64": ["moonlight_3.0.0_amd64.deb", "MoonLight-linux-x64-v3.0.0.tar.gz"],
-        "desktop-linux-arm64": ["moonlight_3.0.0_arm64.deb", "MoonLight-linux-arm64-v3.0.0.tar.gz"],
-        "desktop-android-arm64": ["MoonLight-android-arm64-v3.0.0.apk"],
+        "host-macos-arm64": ["MoonLight-macos-arm64-v3.0.0.dmg", "MoonLight-macos-arm64-v3.0.0.tar.gz"],
+        "host-windows-x64": ["MoonLight-windows-x64-v3.0.0-setup.exe", "MoonLight-windows-x64-v3.0.0.zip"],
+        "host-linux-x64": ["moonlight_3.0.0_amd64.deb", "MoonLight-linux-x64-v3.0.0.tar.gz"],
+        "host-linux-arm64": ["moonlight_3.0.0_arm64.deb", "MoonLight-linux-arm64-v3.0.0.tar.gz"],
+        "host-android-arm64": ["MoonLight-android-arm64-v3.0.0.apk"],
     };
     for (const [key, names] of Object.entries(SHIPPED)) {
         const got = parseFirmwaresFromAssets(names.map(asset), "v3.0.0");
@@ -84,9 +84,9 @@ test("every shipped desktop asset is recognized under its own platform, and an u
 });
 
 test("the picker's desktop list is the registry's desktop rows", () => {
-    // DESKTOP_BUILDS is generated from firmwares.py; each registry row must match an asset of its own.
+    // HOST_BUILDS is generated from firmwares.py; each registry row must match an asset of its own.
     const rows = JSON.parse(readFileSync(join(ROOT, "mooninstaller", "firmwares.json"), "utf8"))
-        .firmwares.filter(f => f.platform === "desktop");
+        .firmwares.filter(f => f.platform === "host");
     assert.ok(rows.length >= 4);
     for (const row of rows) {
         const name = row.assets[0].replace(/^\^/, "").replace(/\$$/, "").replace(/\\\./g, ".").replace(".+", "3.0.0").replace(/-v3\.0\.0-setup/, "-v3.0.0-setup");
@@ -100,7 +100,7 @@ test("a windows installer whose name carries a suffix after the version is still
     // asset ends at its extension. A pattern anchored on "version then extension" silently
     // dropped it, and the release page had an installer the install page never offered.
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0");
-    const win = got.find(f => f.firmware === "desktop-windows-x64");
+    const win = got.find(f => f.firmware === "host-windows-x64");
     assert.ok(win, "windows must be offered at all");
     assert.ok(win.assets.some(a => /-setup\.exe$/.test(a.name)),
               "the installer must appear among the platform's assets");
@@ -111,14 +111,14 @@ test("a version with dots does not break the platform match", () => {
     // version's own dots would otherwise end the match and the archive would vanish.
     const got = parseFirmwaresFromAssets([asset("MoonLight-macos-arm64-v10.20.30-rc1.dmg")], "x");
     assert.equal(got.length, 1);
-    assert.equal(got[0].firmware, "desktop-macos-arm64");
+    assert.equal(got[0].firmware, "host-macos-arm64");
 });
 
 test("an ESP32 device is never offered a desktop archive to flash", () => {
     // The property this whole split exists for: a .dmg written to a board is a failed
     // flash at best.
     for (const own of ["esp32", "esp32s3-n16r8", "esp32-eth"]) {
-        for (const key of ["desktop-macos-arm64", "desktop-windows-x64", "desktop-linux-x64"]) {
+        for (const key of ["host-macos-arm64", "host-windows-x64", "host-linux-x64"]) {
             assert.equal(isCompatible(own, key), false, `${own} must reject ${key}`);
         }
     }
@@ -127,8 +127,8 @@ test("an ESP32 device is never offered a desktop archive to flash", () => {
 test("a desktop is offered desktop programs alone, downloading or updating itself", () => {
     // Whichever OS the page runs on, no ESP32 image is a desktop's download or its update.
     for (const key of ["esp32", "esp32s3-n16r8", "esp32p4", "esp32-eth"]) {
-        assert.equal(isCompatible(DESKTOP_DOWNLOAD, key), false, `download mode must reject ${key}`);
-        assert.equal(isCompatible("desktop-linux-arm64", key), false, `a desktop must reject ${key}`);
+        assert.equal(isCompatible(HOST_DOWNLOAD, key), false, `download mode must reject ${key}`);
+        assert.equal(isCompatible("host-linux-arm64", key), false, `a desktop must reject ${key}`);
     }
 });
 
@@ -136,8 +136,8 @@ test("a desktop is offered exactly one archive: the one built for its own OS", (
     // Which OS this runs on depends on the host, so assert the SHAPE that must hold on any
     // of them: exactly one of the three desktop keys matches, never two, never none. That
     // is what stops a Mac being offered the Windows .zip.
-    const keys = ["desktop-macos-arm64", "desktop-windows-x64", "desktop-linux-x64"];
-    const matched = keys.filter(k => isCompatible(DESKTOP_DOWNLOAD, k));
+    const keys = ["host-macos-arm64", "host-windows-x64", "host-linux-x64"];
+    const matched = keys.filter(k => isCompatible(HOST_DOWNLOAD, k));
     assert.equal(matched.length, 1, `expected exactly one match, got ${matched}`);
 });
 
@@ -158,18 +158,18 @@ test("a release with only an archive still offers it, for every platform it has"
         asset("MoonLight-windows-x64-v3.0.0.zip"),
     ];
     const got = parseFirmwaresFromAssets(OLD_RELEASE, "v3.0.0");
-    assert.match(got.find(f => f.firmware === "desktop-macos-arm64").binaryUrl, /\.tar\.gz$/);
-    assert.match(got.find(f => f.firmware === "desktop-windows-x64").binaryUrl, /\.zip$/);
+    assert.match(got.find(f => f.firmware === "host-macos-arm64").binaryUrl, /\.tar\.gz$/);
+    assert.match(got.find(f => f.firmware === "host-windows-x64").binaryUrl, /\.zip$/);
 });
 
 test("installing a desktop's own program installs the program, and downloading it downloads the package, both in one release", () => {
-    // The package and the program share the key desktop-linux-x64; the install takes the one of the kind on offer.
-    const firmwares = parseFirmwaresFromAssets([...RELEASE, asset("firmware-desktop-linux-x64-v3.0.0.bin")]);
-    const program = pickedEntry(firmwares, "desktop-linux-x64", "desktop-linux-x64");
-    assert.equal(program.binaryUrl, "https://gh/firmware-desktop-linux-x64-v3.0.0.bin");
-    assert.ok(!program.isDesktop);
-    const download = pickedEntry(firmwares, "desktop-linux-x64", DESKTOP_DOWNLOAD);
-    assert.ok(download.isDesktop);
+    // The package and the program share the key host-linux-x64; the install takes the one of the kind on offer.
+    const firmwares = parseFirmwaresFromAssets([...RELEASE, asset("firmware-host-linux-x64-v3.0.0.bin")]);
+    const program = pickedEntry(firmwares, "host-linux-x64", "host-linux-x64");
+    assert.equal(program.binaryUrl, "https://gh/firmware-host-linux-x64-v3.0.0.bin");
+    assert.ok(!program.isHost);
+    const download = pickedEntry(firmwares, "host-linux-x64", HOST_DOWNLOAD);
+    assert.ok(download.isHost);
     assert.ok(download.assets.some(a => a.name.endsWith(".deb")));
 });
 
@@ -183,9 +183,9 @@ test("a phone, a tablet and a Quest are offered the Android app, not a Linux pac
             ["Linux x86_64", "Mozilla/5.0 (X11; Linux x86_64; Quest 3) AppleWebKit/537.36 OculusBrowser/35.3 Chrome/130 VR Safari/537.36"],
         ]) {
             as(platform, ua);
-            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-android-arm64"), true, ua);
-            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-linux-x64"), false, ua);
-            assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-linux-arm64"), false, ua);
+            assert.equal(isCompatible(HOST_DOWNLOAD, "host-android-arm64"), true, ua);
+            assert.equal(isCompatible(HOST_DOWNLOAD, "host-linux-x64"), false, ua);
+            assert.equal(isCompatible(HOST_DOWNLOAD, "host-linux-arm64"), false, ua);
         }
     } finally {
         if (real) Object.defineProperty(globalThis, "navigator", real); else delete globalThis.navigator;
@@ -194,6 +194,6 @@ test("a phone, a tablet and a Quest are offered the Android app, not a Linux pac
 
 test("a device's own card offers its own build for download, whichever computer views the page", () => {
     // A Mac viewing a Quest's page: the APK, not the .dmg.
-    assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-android-arm64", "desktop-android-arm64"), true);
-    assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-macos-arm64", "desktop-android-arm64"), false);
+    assert.equal(isCompatible(HOST_DOWNLOAD, "host-android-arm64", "host-android-arm64"), true);
+    assert.equal(isCompatible(HOST_DOWNLOAD, "host-macos-arm64", "host-android-arm64"), false);
 });

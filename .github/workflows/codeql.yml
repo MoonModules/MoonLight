@@ -7,7 +7,7 @@ name: CodeQL
 # the stack looks for that class of bug — the compiler checks effects, lizard counts branches,
 # the Python checks read text.
 #
-# It has paid for itself: 3 critical `localtime` findings in main_desktop.cpp (shared static,
+# It has paid for itself: 3 critical `localtime` findings in main_host.cpp (shared static,
 # not thread-safe), fixed via a portable isoTimestamp helper. The six packet parsers produced
 # no taint-flow findings, which is positive evidence nothing else in the stack could give.
 #

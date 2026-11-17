@@ -24,7 +24,7 @@ ESP32_DIR = ROOT / "esp32"
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
-from _host import desktop_target  # noqa: E402
+from _host import host_target  # noqa: E402
 
 # Same directory; imported by path so this needs no PYTHONPATH tweak (the pattern the
 # other cross-script imports here use).
@@ -110,7 +110,7 @@ def scenario_observed(target: str) -> dict:
     re-deriving a number from one run's stdout: a p50 over 32 runs is reproducible where a single
     max is whatever the host was doing that second.
 
-    `target` names the platform ("desktop-macos"), because a tick from macOS, CI Linux and an
+    `target` names the platform ("host-macos"), because a tick from macOS, CI Linux and an
     ESP32 are three different measurements and averaging them would mean nothing.
     """
     out: dict = {}
@@ -226,7 +226,7 @@ def collect_desktop():
             kpi["tick_us"] = per_scenario_max
             kpi["fps"] = [1000000 // t if t > 0 else 0 for t in per_scenario_max]
         # Named, module-isolated p50s beside the raw series: what repo-health tracks per commit.
-        obs = scenario_observed(desktop_target())
+        obs = scenario_observed(host_target())
         if obs:
             kpi["scenario_p50"] = obs
         # The whole matrix, every scenario x every target, for the repo-health table.
@@ -571,7 +571,7 @@ def main():
         print()
         perf = {}
         if desktop.get("tick_us"):
-            host = desktop_target()  # keyed per host (moondeck/_host.py)
+            host = host_target()  # keyed per host (moondeck/_host.py)
             perf[host] = {"tick_us": desktop["tick_us"][0],
                           "fps": desktop.get("fps", [None])[0]}
             # The isolated-scenario p50s ride along, so repo-health can report a figure that

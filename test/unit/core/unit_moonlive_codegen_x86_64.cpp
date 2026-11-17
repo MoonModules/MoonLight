@@ -11,7 +11,7 @@
 
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT)
 
-#include "platform/desktop/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_host.h"
 #include "core/moonlive/MoonLiveCompiler.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 
