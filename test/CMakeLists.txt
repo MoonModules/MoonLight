@@ -289,7 +289,7 @@ add_executable(mm_tests
     unit/light/unit_MoonI80Peripheral.cpp
     unit/light/unit_Hub75Driver_frame.cpp
     unit/light/unit_Hub75Driver_pins.cpp
-    unit/light/unit_Hub75Slots.cpp
+    unit/light/unit_Hub75Encode.cpp
     unit/light/unit_ParallelSlots.cpp
     unit/light/unit_ParlioPeripheral.cpp
     unit/light/unit_GpioDmaPeripheral.cpp

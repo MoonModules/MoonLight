@@ -9,7 +9,7 @@ Plan of 2026-10-25, a Restructure, for approval. Another repository takes MoonLi
 - **The root CMakeLists assumes it is the top level.** It always builds the MoonLight app and the tests, and names paths through `CMAKE_SOURCE_DIR` (23 times, 7 more in `test/`) and the include root through `CMAKE_BINARY_DIR`. Under `add_subdirectory` or `FetchContent` those point into the consumer's tree.
 - **`mm_core` builds three MoonLight inputs**: the web UI (`ui_embed`, from `src/ui`), the version (`build_info_gen`, from `library.json`) and the script catalog (`moonlive_catalog`, from `moonlive/`).
 - **Core's source list is written three times**: the root CMakeLists (26 lines naming `src/core/`), `esp32/main/CMakeLists.txt` (22) and `teensy/CMakeLists.txt` (25). The ESP32 component holds core, the platform, light and the app as one.
-- **The ESP32 platform includes light**: `platform_esp32_h264.cpp` takes `light/util/MpegTs.h` (shared with `HlsDriver`), `platform_esp32_hub75.cpp` takes `light/drivers/Hub75Slots.h` (shared with `Hub75Driver`). The desktop platform includes none.
+- **The ESP32 platform includes light**: `platform_esp32_h264.cpp` takes `light/util/MpegTs.h` (shared with `HlsDriver`), `platform_esp32_hub75.cpp` takes the HUB75 bus contract, in the file that is now `Hub75Bus.h` and `Hub75Encode.h` (shared with `Hub75Driver`). The desktop platform includes none.
 - **Light behavior inside core.** 15 core files name a light type. Most are the interfaces the architecture asks for (`LightOutput`, read by MQTT and MoonStats). Three are behavior:
   - the WLED shim, `HttpServerWled.cpp`, 11 light names;
   - the preset roles in `ControlModule.h`, `kCapturable`: `Layouts`, `Effects`, `Drivers`, `Services`;
@@ -128,7 +128,7 @@ Phase 1, the library:
 
 Phase 2, the firmware components:
 
-4. ✅ `MpegTs.h` to `core/util`, and `Hub75Slots.h`'s bus contract (`Hub75Layout`, `Hub75Geometry`) to `platform/Hub75Bus.h`, the encoder staying in light (2026-10-25). No platform file includes light; the desktop build holds it already, `mm_platform` compiling through the core root, and step 5 holds it on the ESP32 the same way, so no text rule counts it.
+4. ✅ `MpegTs.h` to `core/util`, and `Hub75Slots.h`'s bus contract (`Hub75Layout`, `Hub75Geometry`) to `platform/Hub75Bus.h`, the encoder staying in light (2026-10-25; the HUB75 plan's PR 1 moves the encoder to `platform/Hub75Encode.h` too, beside the contract it builds, since no platform file includes light). No platform file includes light; the desktop build holds it already, `mm_platform` compiling through the core root, and step 5 holds it on the ESP32 the same way, so no text rule counts it.
 5. ⏳ The `mooncore` IDF component with the core include root; `esp32/main` requires it; every shipped ESP32 variant builds, and the ESP32 consumer builds in CI. Flashed on a board only on the product owner's go.
 
 Phase 3, light behavior out of core:
