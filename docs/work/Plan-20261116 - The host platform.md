@@ -45,9 +45,9 @@ One end state, picked: **host** for the platform, the firmware ids changed, the 
 | 7 | **Checks and tests**: the files named after desktop (`test_firmwares_desktop.py` and others), check_taglines, the scenario and KPI scripts reading the build folder. | ⏳ | about 20 files | an hour |
 | 8 | **Verify**: every commit check, the desktop, Android, ESP32 and Teensy builds, the release workflow on a branch run, the installer listing every host package, and a host updating from its Firmware card across the id change. | ⏳ | | half a session, the update across the id change on a real install |
 
-**In all**: about 400 files, most of them a one-word change. For the agent, about three sessions of work; for the product owner, the review of one large and mostly mechanical diff, the line-by-line read of the CLAUDE.md change, and one hand update of a host across the id change. One topic, one pull request, on its own branch.
+**In all**: about 400 files, most of them a one-word change. For the agent, about three sessions of work; for the product owner, the review of one large and mostly mechanical diff, the line-by-line read of the CLAUDE.md change, and one hand update of a host across the id change. One topic on its own branch, `next-iteration` (#255).
 
 ## Open questions
 
 - **`receivers`**: the name for the devices a service sends to. sACN and Art-Net call them receivers and nodes; the alternative, `destinations`, is longer and names a place rather than a device.
-- **When**: after #251 merges, on a branch of its own, so the rename's diff reviews alone rather than inside the Android work.
+- **When** (decided 2026-11-17): on `next-iteration`, the branch of #255, once #254 is merged and main merged into it, so the rename starts from the encoder's move.

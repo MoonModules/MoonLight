@@ -16,7 +16,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 - **The page is the app's window**, as a browser shows it on a desktop. Any other browser on the network reaches it at `http://<device address>:8080/`.
 - **The microphone** is the Audio card's input, through Android's AAudio. The app asks for it the first time it opens.
 - **The network:** the app holds Android's multicast lock, so discovery, mDNS and Art-Net broadcast reach it, and it announces itself through Android's service discovery: a service browser, Home Assistant and the other MoonLight devices find it under its name.
-- **It updates itself** from the Firmware card or the Devices map, as a board does: it downloads the release's APK, checks it against the release's digest and hands it to Android's installer, which replaces the app and starts it again, settings kept. Android asks you to allow MoonLight to install apps, once, and to confirm the first update; the updates after it run on their own.
+- **It updates itself** from the Firmware card or the Devices map, as a board does: it downloads the release's APK, checks it against the release's digest and hands it to Android's installer, which replaces the app and starts it again, settings kept. Android asks you to allow MoonLight to install apps, once, and to confirm the first update; the updates after it usually install on their own, and when Android asks again, you confirm.
 
     ![The Quest asking to allow MoonLight to install apps](../assets/reference/android/install-unknown-apps.jpeg){ width="300" }
 

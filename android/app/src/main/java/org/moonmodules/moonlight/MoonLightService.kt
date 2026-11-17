@@ -55,7 +55,12 @@ class MoonLightService : Service() {
             val mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
                 (if (mic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
-            startForeground(NOTIFICATION_ID, notification(), types)
+            // A start from the background (after an update, or Android restarting the service) may not take the microphone, so it starts without it; the activity adds it when it opens.
+            try {
+                startForeground(NOTIFICATION_ID, notification(), types)
+            } catch (e: SecurityException) {
+                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification())
         }

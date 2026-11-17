@@ -44,7 +44,7 @@ A board's own page, such as `http://192.168.1.158`, is not a secure origin, so C
 
 The inputs carry the names SDL's GameController API uses (`a`, `b`, `dpup`, `leftx`), so one set of rows works with any pad the browser reports in the standard mapping. A pad it does not recognize reports its own order, and `learn` binds it all the same.
 
-A stick follows the surface's convention, up and right being more, and writes its position rescaled into the target's range once it moves past a small deadband. A pad's first stick positions are taken as rest, so plugging one in off-center leaves its targets where they are. A switch on the surface driving a button control, such as MoonInvaders' `fire`, presses it on the way down only.
+A stick follows the surface's convention, up and right being more, and writes its position rescaled into the target's range once it moves past a small deadband. The first stick positions after MoonLight starts are taken as rest, so a pad first plugged in off-center leaves its targets where they are. A switch on the surface driving a button control, such as MoonInvaders' `fire`, presses it on the way down only.
 
 ### What a desk does
 

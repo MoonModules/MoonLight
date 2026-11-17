@@ -396,6 +396,12 @@ function migrateDocument(doc, type, file, report) {
         if (tr) {
             report.push({ kind: "renamed", where: `${file} ${where}`, detail: `type ${node.type} → ${tr.type} (${tr.date})` });
             node.type = nodeType = tr.type;
+            if (tr.review) report.push({ kind: "review", where: `${file} ${where}`, detail: tr.review });
+            // The settings the old type implied, as renameKeys applies them to a flat file; a saved value they replace is reported.
+            if (tr.set) for (const [k, v] of Object.entries(tr.set)) {
+                if (k in node && node[k] !== v) report.push({ kind: "review", where: `${file} ${where}.${k}`, detail: `${node[k]} → ${v}, which ${tr.type} needs to keep the old behavior` });
+                node[k] = v;
+            }
             changed = true;
         }
         for (const [key, value] of Object.entries(node)) {

@@ -18,7 +18,7 @@ int yellowPixels(mm::Layer& layer) {
 
 }  // namespace
 
-// Changing how many of each KIND are on the wall must change what is drawn. Slots are positional (the first `moonmen` slots are MoonMan, the rest invaders) and a slot's role is decided when it launches. Trading one kind for another keeps the TOTAL the same, so no slot respawns, and unless a re-role pass runs, the cast keeps the shapes it already had: the controls say three MoonMen while the wall still shows one. Found in review.
+// Trading one KIND for another must change the drawing: slots are positional and keep the role they launched with, so the total stays and only a re-role pass gives each its new shape. Found in review.
 TEST_CASE("Trading invaders for MoonMen changes what is drawn on the wall") {
     mm::Layouts layouts;
     mm::GridLayout grid;

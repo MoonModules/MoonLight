@@ -299,7 +299,7 @@ processes:
         given: [{ input: platform, equals: Android }]
         when: { manual: "Pick it and press Install, as on a board; your settings stay." }
         detail: |
-          Android asks you once to allow MoonLight to install apps, and to confirm the first update; the updates after it install on their own and the app starts again on the new version.
+          Android asks you once to allow MoonLight to install apps, and to confirm the first update; the updates after it usually install on their own, a confirmation when Android asks for one, and the app starts again on the new version.
       - id: update-docker
         section: Updating
         say: Recreate the container from the new image.

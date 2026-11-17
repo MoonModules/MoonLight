@@ -20,11 +20,13 @@ object Updater {
     lateinit var context: Context   // the service sets it before the program starts
 
     /** Write the package at [path] into an install session and commit it: null once committed, else the reason it was not. */
-    @JvmStatic fun install(path: String): String? = try {
+    @JvmStatic fun install(path: String): String? {
         val installer = context.packageManager.packageInstaller
+        var id = -1
+        return try {
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-        val id = installer.createSession(params)
+        id = installer.createSession(params)
         val file = File(path)
         installer.openSession(id).use { session ->
             session.openWrite("MoonLight.apk", 0, file.length()).use { out ->
@@ -37,9 +39,11 @@ object Updater {
         }
         file.delete()
         null
-    } catch (e: Exception) {
+    } catch (e: Exception) {   // any failure: the program reports it and keeps running this version
         Log.w("MoonLight", "update: ${e.message}")
+        if (id >= 0) runCatching { installer.abandonSession(id) }   // closing keeps a session and its staged copy; abandoning frees them
         e.message ?: "the installer refused the package"
+    }
     }
 }
 

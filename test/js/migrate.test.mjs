@@ -454,3 +454,11 @@ test("a saved document's renamed type takes its new name, and its controls renam
     assert.deepEqual(L.P, { type: "MoonManEffect", moonmen: 2, invaders: 3, audioReactive: true });
     assert.deepEqual(L.S, { type: "MoonInvadersEffect", marchBpm: 90 });
 });
+
+test("a saved document's renamed type takes the settings and the review note its mapping carries", () => {
+    const doc = { Drivers: { "$patch": "replace", D: { type: "ParlioLedDriver" }, N: { type: "Noise2DEffect" } } };
+    const { files, report } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(doc) }, []);
+    const D = JSON.parse(files["/.config/Drivers.json"]).Drivers.D;
+    assert.deepEqual(D, { type: "ParallelLedDriver", peripheral: "Parlio" });   // the backend the old type was
+    assert.ok(report.some(r => r.kind === "review" && r.where.endsWith(".N")));   // the old speed has no equivalent: the user hears so
+});
