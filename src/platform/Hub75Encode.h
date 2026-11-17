@@ -68,7 +68,7 @@ inline size_t hub75EncodeFrame(const uint8_t* rgb, uint8_t* out, const Hub75Geom
     // Lit words in plane p's window: one division per plane, and one more for row 0's group, which lights the plane before. The numerator is 64-bit: 32 bits overflow above ~131,000 row words at 8 bits.
     const uint32_t span = 255u << (geo.bitDepth - 1);
     auto windowWords = [&](uint8_t p) {
-        return static_cast<uint32_t>((static_cast<uint64_t>(passWords - 1) * geo.brightness * (1u << p) + span / 2) / span);
+        return static_cast<uint32_t>((static_cast<uint64_t>(passWords - 1) * geo.brightness * (static_cast<uint64_t>(1) << p) + span / 2) / span);
     };
 
     size_t w = 0;
