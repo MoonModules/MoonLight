@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: MoonLight device API
   version: 7.0.0-dev
-  summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a desktop.
+  summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a host.
   description: |
     Every route answers a client sending no `Origin` and a page from this network, which a private, shared or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name or one label names, or the device itself under the name it was opened by; a page from beyond it gets 403 on every route, WebSockets included.
     A request's `Host` names an IP address, a local name or the device's own name under any domain; every other `Host` gets 403, which stops a DNS-rebinding page.
@@ -727,7 +727,7 @@ components:
             required: [url]
             properties:
               url: { type: string, pattern: "^https://", maxLength: 255, description: "The image to fetch, over https only: nothing authenticates an image fetched over plain http." }
-              sha256: { type: string, pattern: "^[0-9a-fA-F]{64}$", description: "The image's SHA-256, which a desktop checks before it installs its new program; a board's image carries its own." }
+              sha256: { type: string, pattern: "^[0-9a-fA-F]{64}$", description: "The image's SHA-256, which a host checks before it installs its new program; a board's image carries its own." }
     Image:
       required: true
       description: The binary image, sent with a Content-Length.
@@ -813,11 +813,11 @@ components:
       properties:
         version: { type: string, description: The firmware version. }
         build: { type: string, description: The build id. }
-        firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a desktop's host-<os>-<arch>." }
+        firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a host's host-<os>-<arch>." }
         update:
           type: string
           enum: [self, host, manual]
-          description: "How it takes a new version: it installs one itself (a board, or a desktop whose program sits in a folder it can write), its host replaces it (a container), or someone does by hand (a program in a folder it cannot write)."
+          description: "How it takes a new version: it installs one itself (a board, or a host whose program sits in a folder it can write), its host replaces it (a container), or someone does by hand (a program in a folder it cannot write)."
         mac: { type: string, description: "The MAC address, the device identity." }
         board: { type: string, description: "The board model tooling set, empty until set." }
         chip: { type: string }

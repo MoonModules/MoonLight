@@ -70,7 +70,7 @@ The product owner is the critical success factor. They review every line before 
 
 **ESP32 build: when the work needs it. Flash: only when the product owner approves.** A build runs without asking when a gate finds the firmware stale or a platform change needs compiling for a board, never for an interesting measurement. Writing a board waits for the product owner's go, every time.
 
-**Desktop build and test: only as a prerequisite to continue.** A build earns its place when the next step cannot happen without it. Not after every edit.
+**Host build and test: only as a prerequisite to continue.** A build earns its place when the next step cannot happen without it. Not after every edit.
 
 **Ask before running anything slow**: full scenario sweeps, gate lists, repo-wide sweeps, `collect_kpi`. Run the cheapest thing that answers the question, and say what the expensive one is and why before asking for it.
 
@@ -92,7 +92,7 @@ Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its st
 | `07-maintain.yaml` | Updates, moves, backups, finding faults and reporting them. |
 | `08-integrate.yaml` | A script, a program or a hub driving a device over its API. |
 | `09-plan-setup.yaml` | A picked topic on its own branch, on a computer set up to build it. |
-| `10-develop.yaml` | The change written and proven on the desktop. |
+| `10-develop.yaml` | The change written and proven on the host. |
 | `11-hardware.yaml` | The change built, flashed and running on a board or a Teensy. |
 | `12-test.yaml` | The change pinned by tests, scenarios and live runs. |
 | `13-document-commit.yaml` | The change documented, checked and committed. |

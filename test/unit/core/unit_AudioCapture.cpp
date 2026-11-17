@@ -1,6 +1,6 @@
 /// @module AudioService
 
-/// The desktop OS-capture seam (platform_host_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture hardware is not assumed: on a headless host init fails cleanly, and miniaudio's null backend makes success the CI norm, so the lifecycle cases assert coherence around either outcome. The first local run on macOS asks the OS microphone permission once.
+/// The host OS-capture seam (platform_host_audio.cpp, miniaudio-backed): what shared code may rely on regardless of host. Capture hardware is not assumed: on a headless host init fails cleanly, and miniaudio's null backend makes success the CI norm, so the lifecycle cases assert coherence around either outcome. The first local run on macOS asks the OS microphone permission once.
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
@@ -11,7 +11,7 @@
 #include <cstring>
 #include <string>
 
-#if defined(MM_PLATFORM_DESKTOP) || !defined(ESP_PLATFORM)
+#if !defined(ESP_PLATFORM)
 
 // Device enumeration always offers at least "default", at entry 0, from stable platform storage.
 TEST_CASE("audio capture enumeration offers 'default' first, from platform-owned storage") {
@@ -45,7 +45,7 @@ TEST_CASE("audio capture enumeration lists no device twice and not ALSA's bit bu
     }
 }
 
-// The capture device someone picks survives the device list changing under it: unplug a webcam and everything below it shifts up a slot, so a config that stored the index named another device. Reported from the desktop bench 2026-08-29.
+// The capture device someone picks survives the device list changing under it: unplug a webcam and everything below it shifts up a slot, so a config that stored the index named another device. Reported from the host bench 2026-08-29.
 TEST_CASE("a picked audio device is remembered by name, not by its position in the list") {
     // The list as it was when the user picked: BlackHole sits at index 3.
     static constexpr const char* kBefore[] = {"default", "HD Pro Webcam C920", "NDI Audio",
@@ -111,10 +111,10 @@ TEST_CASE("audio capture refuses an out-of-range device index") {
     mm::platform::audioMicDeinit(h);
 }
 
-// A capture device delivering silence must not raise the I2S wire diagnosis: on desktop there are no pins to check, and silence is a quiet room or an idle loopback between songs. The verdict is compile-time-gated to hasI2sMic.
+// A capture device delivering silence must not raise the I2S wire diagnosis: on host there are no pins to check, and silence is a quiet room or an idle loopback between songs. The verdict is compile-time-gated to hasI2sMic.
 TEST_CASE("a silent capture device raises no I2S wire status") {
     static_assert(!mm::platform::hasI2sMic,
-                  "this desktop-only case pins the desktop side of the gate");
+                  "this host-only case pins the host side of the gate");
     mm::AudioService a;
     a.mode = mm::AudioService::kLocalMode;
     a.applyState();

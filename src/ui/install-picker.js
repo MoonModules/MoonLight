@@ -115,7 +115,7 @@ function makeState() {
         devices: [],            // parsed mooninstaller/deviceModels.json, [] if unavailable
         selectedDevice: null,   // user pick from device <select>; "" for (any device)
         deviceResolved: false,  // has the link/preference default been applied yet? render()
-                                // runs on every setDesktopMode toggle, and re-resolving there
+                                // runs on every setHostMode toggle, and re-resolving there
                                 // threw away the pick the visitor made after the first one.
         blocker: null,         // () => the host's reason Install must wait, "" when nothing blocks it: the web
                                // installer's unpicked USB port, the map's Tasmota without SetOption128. The host
@@ -133,8 +133,8 @@ function makeState() {
 // (returns whichever initialized last). See comment at makeState — pickers
 // are otherwise isolated.
 let _lastState = null;
-// A setDesktopMode() that arrived before init() mounted the state. Applied by init().
-let _pendingDesktopMode = null;
+// A setHostMode() that arrived before init() mounted the state. Applied by init().
+let _pendingHostMode = null;
 
 // ---------------------------------------------------------------------------
 // 2. GitHub Releases API + sessionStorage cache
@@ -211,7 +211,7 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
             firmwares.set(firmware, entry);
         }
     }
-    // A DESKTOP build also ships archives and installers, offered as a DOWNLOAD for a computer that is
+    // A HOST build also ships archives and installers, offered as a DOWNLOAD for a computer that is
     // not running MoonLight yet, or one its host or its user updates; the caller decides what that means. Each platform
     // lists its asset patterns in the firmware registry (HOST_BUILDS), the friendliest form first:
     // a .dmg to drag, a setup.exe that installs, a .deb apt installs, over the archive that is there
@@ -223,7 +223,7 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
             for (const a of assets) if (rx.test(a.name)) found.push({ name: a.name, url: a.browser_download_url });
         }
         if (!found.length) continue;
-        // Keyed apart from the desktop's own program of the same name, which the .bin loop below adds.
+        // Keyed apart from the host's own program of the same name, which the .bin loop below adds.
         firmwares.set(`download:${b.key}`, { firmware: b.key, manifestUrl: null, binaryUrl: found[0].url, isHost: true, assets: found });
     }
 
@@ -255,12 +255,12 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
             const firmware = m[1];
             const entry = firmwares.get(firmware) || { firmware, manifestUrl: null, binaryUrl: null };
             entry.binaryUrl = a.browser_download_url;
-            entry.sha256 = a.digest?.replace(/^sha256:/, "") || null;   // GitHub's digest, which a desktop checks before it installs the image
+            entry.sha256 = a.digest?.replace(/^sha256:/, "") || null;   // GitHub's digest, which a host checks before it installs the image
             firmwares.set(firmware, entry);
         }
     }
     // An OTA firmware needs BOTH a manifest and a binary: a partial upload (the
-    // mid-release-publish race) shouldn't appear in the dropdown. A desktop archive and a desktop's
+    // mid-release-publish race) shouldn't appear in the dropdown. A host archive and a host's
     // own program qualify on their file alone, a manifest being what a flash over USB reads.
     return Array.from(firmwares.values())
         .filter(f => f.binaryUrl && (f.manifestUrl || f.isHost || f.isMoonBase || isHostProgram(f.firmware)));
@@ -282,19 +282,19 @@ function mergeFirmwares(published, extras) {
 // 4. Compatibility filter (OTA only)
 // ---------------------------------------------------------------------------
 
-// The picker's download mode, as its own firmware key: the desktop build for the machine viewing the page, on the web installer's
-// "This computer" and on the Firmware card of a desktop its host or its user updates.
+// The picker's download mode, as its own firmware key: the host build for the machine viewing the page, on the web installer's
+// "This computer" and on the Firmware card of a program its container or its user updates.
 export const HOST_DOWNLOAD = "host-download";
 
-// Whether `f` is the kind on offer: a download in download mode, a board's firmware or a desktop's own program otherwise.
-// A desktop's archive and its program share one firmware key, so the kind tells them apart, in the list and at the install alike.
+// Whether `f` is the kind on offer: a download in download mode, a board's firmware or a host's own program otherwise.
+// A host's archive and its program share one firmware key, so the kind tells them apart, in the list and at the install alike.
 const ofOfferedKind = (f, ownFirmwareKey) => !!f.isHost === (ownFirmwareKey === HOST_DOWNLOAD);
 
 // The entry an install acts on: the picked firmware, of the kind on offer.
 export const pickedEntry = (firmwares, firmware, ownFirmwareKey) =>
     (firmwares || []).find(f => f.firmware === firmware && ofOfferedKind(f, ownFirmwareKey));
 
-// A desktop's own program, firmware-host-<os>-<arch>-v<version>.bin, which a running desktop installs over the air.
+// A host's own program, firmware-host-<os>-<arch>-v<version>.bin, which a running host installs over the air.
 const isHostProgram = (firmware) => /^host-(?!download$)/.test(firmware || "");
 
 // Bespoke rule for MoonLight's firmware keys: strip the `-eth*` suffix from
@@ -307,9 +307,9 @@ const isHostProgram = (firmware) => /^host-(?!download$)/.test(firmware || "");
 // table). Web installer passes ownFirmwareKey=null → all candidates compatible.
 function isCompatible(ownFirmwareKey, candidateFirmwareKey, downloadKey = hostKeyForThisHost()) {
     // Download mode: the package for `downloadKey`, a device's own build on its card, else the OS the browser runs on, so a Mac is offered the .dmg and not the Windows .zip.
-    // The archive shares its key with the desktop's own program, which the caller's download filter keeps out of this list.
+    // The archive shares its key with the host's own program, which the caller's download filter keeps out of this list.
     if (ownFirmwareKey === HOST_DOWNLOAD) return candidateFirmwareKey === downloadKey;
-    // A desktop's own program installs on that desktop only; a board the web installer flashes takes its own firmware.
+    // A host's own program installs on that host only; a board the web installer flashes takes its own firmware.
     if (isHostProgram(candidateFirmwareKey)) return ownFirmwareKey === candidateFirmwareKey;
     if (!ownFirmwareKey) return true;
     const strip = f => f.replace(/-eth.*$/, "");
@@ -334,7 +334,7 @@ function chipKey(family) {
     return String(family || "").toLowerCase().replace(/-/g, "");
 }
 
-// The desktop builds of the firmware registry (moondeck/build/firmwares.py), written here by
+// The host builds of the firmware registry (moondeck/build/firmwares.py), written here by
 // generate_firmwares.py because the picker is embedded in the firmware, where no firmwares.json
 // can be fetched. `label` names a build in the Device row and the Firmware option.
 // <generated:host-builds>
@@ -348,7 +348,7 @@ const HOST_BUILDS = [
 // </generated:host-builds>
 const HOST_LABEL = Object.fromEntries(HOST_BUILDS.map(b => [b.key, b.label]));
 
-// Which desktop archive belongs to the machine viewing this page. Null on an OS we do not package,
+// Which host archive belongs to the machine viewing this page. Null on an OS we do not package,
 // which leaves the list empty rather than offering a download that will not run.
 function hostKeyForThisHost() {
     const p = (navigator.platform || "") + " " + (navigator.userAgent || "");
@@ -446,13 +446,13 @@ function render(state) {
 
     // Row order: Release → Device → Firmware. Release first because it's the version the user wants to flash (the picker's primary identity); Device second so the firmware narrowing happens in front of Firmware; Firmware last so it shows the narrowed list immediately below the device that filtered it.
     // The device row only renders when (a) the caller didn't opt out and (b) the catalog loaded: on-device OTA passes enableDevicePicker:false, since a device flashing itself already knows what it is, and a catalog that failed to load on the web installer (rare) falls back to a two-row Release+Firmware layout with no narrowing.
-    // In desktop mode the target is the computer viewing the page rather than a device, so there is no catalog to narrow by. The web installer draws its own Device row (a picture grid it hides in this mode), so naming the computer here would be a second one; only the on-device card, which has no device row of its own, gets the static label.
-    const desktopMode = state.ownFirmwareKey === HOST_DOWNLOAD;
-    const deviceRow = (desktopMode && !state.enableDevicePicker) ? `
+    // In host mode the target is the computer viewing the page rather than a device, so there is no catalog to narrow by. The web installer draws its own Device row (a picture grid it hides in this mode), so naming the computer here would be a second one; only the on-device card, which has no device row of its own, gets the static label.
+    const hostMode = state.ownFirmwareKey === HOST_DOWNLOAD;
+    const deviceRow = (hostMode && !state.enableDevicePicker) ? `
         <div class="control-row">
             <span class="control-label">Device</span>
             <span class="rp-status">${HOST_LABEL[state.downloadKey || hostKeyForThisHost()] || "this computer"}</span>
-        </div>` : (!desktopMode && state.enableDevicePicker && state.devices.length > 0) ? `
+        </div>` : (!hostMode && state.enableDevicePicker && state.devices.length > 0) ? `
         <div class="control-row">
             <span class="control-label">Device</span>
             <select id="rp-device" class="rp-select"></select>
@@ -509,9 +509,9 @@ function render(state) {
         // NOT ours: it sits in a visitor's browser under the name it was written with, which is why
         // that one keeps a fallback and this one does not.
         //
-        // ONCE PER MOUNT. render() runs again on every setDesktopMode() toggle, so resolving here
+        // ONCE PER MOUNT. render() runs again on every setHostMode() toggle, so resolving here
         // each time re-applied `?device=` over a device the visitor picked afterwards: open a
-        // device link, pick another, switch to the desktop target and back, and the link's device
+        // device link, pick another, switch to the host target and back, and the link's device
         // returned. The flag makes the link a default rather than a standing instruction.
         if (!state.deviceResolved) {
             state.deviceResolved = true;
@@ -585,11 +585,11 @@ function render(state) {
             installBtn.disabled = true;
             return;
         }
-        // A desktop archive and a flashable firmware are never alternatives in the same list:
+        // A host archive and a flashable firmware are never alternatives in the same list:
         // the web installer with no ownFirmwareKey accepts every candidate, which would otherwise
         // offer "macOS arm64" as something to flash onto an ESP32. The target picked in the Port
         // row decides which kind is on offer.
-        const wantDesktop = state.ownFirmwareKey === HOST_DOWNLOAD;
+        const wantHost = state.ownFirmwareKey === HOST_DOWNLOAD;
         let compatible = (r.firmwares || [])
             .filter(f => ofOfferedKind(f, state.ownFirmwareKey))
             // A MoonBase key is a CHIP ("esp32s3"), not a firmware variant, so the variant rule
@@ -602,7 +602,7 @@ function render(state) {
         // Defensive: a device the user picked that isn't in the catalog (e.g.
         // catalog edited mid-session) skips the narrow — better than rejecting
         // every firmware silently.
-        if (state.selectedDevice && !wantDesktop) {
+        if (state.selectedDevice && !wantHost) {
             const device = state.devices.find(b => b.name === state.selectedDevice);
             if (device) {
                 compatible = compatible.filter(f => device.firmwares.includes(f.firmware));
@@ -622,7 +622,7 @@ function render(state) {
             if (state.ownFirmwareKey === HOST_DOWNLOAD) {
                 reason = (state.downloadKey || hostKeyForThisHost())
                     ? "this release has no build for this host"
-                    : "no desktop build is packaged for your OS: build from source";
+                    : "no host build is packaged for your OS: build from source";
             } else if (state.selectedDevice) {
                 const device = state.devices.find(b => b.name === state.selectedDevice);
                 const wanted = device ? device.firmwares : [];
@@ -652,7 +652,7 @@ function render(state) {
             // is unverified must carry its own visible warning here — the firmwares.json
             // `description` isn't loaded by the picker (it parses names from release asset
             // filenames), so a user picking blind would see nothing.
-            // A desktop entry is a download, so name the file rather than the variant key: the
+            // A host entry is a download, so name the file rather than the variant key: the
             // user is about to receive that file and will look for it by name.
             opt.textContent = f.isHost
                 ? HOST_LABEL[f.firmware] || f.firmware
@@ -661,7 +661,7 @@ function render(state) {
                     : f.firmware;
             firmwareEl.appendChild(opt);
         });
-        // The button says what it will do. A desktop entry is downloaded and opened by the user;
+        // The button says what it will do. A host entry is downloaded and opened by the user;
         // a firmware is flashed by the device. Same control, two honest verbs.
         const selEntry = compatible.find(f => f.firmware === state.firmware) || compatible[0];
         installBtn.textContent = (selEntry && selEntry.isHost) ? "Download" : "Install";
@@ -726,7 +726,7 @@ function render(state) {
 
     firmwareEl.addEventListener("change", () => {
         state.firmware = firmwareEl.value;
-        // Only a flashable variant is worth remembering. There is one desktop archive per
+        // Only a flashable variant is worth remembering. There is one host archive per
         // host and the OS picks it, so storing it would just overwrite the ESP32 variant a
         // returning user chose.
         if (!state.firmware.startsWith("host-")) safeLocalSet(PREF_FIRMWARE_KEY, state.firmware);
@@ -812,7 +812,7 @@ function render(state) {
         // Install click is the strongest "yes, this is my choice" signal, so remember it
         // explicitly in addition to the on-change writes above, in case the user reaches
         // this point without having touched the dropdowns (defaults restored, click
-        // straight through). Desktop keys are excluded for the reason given at that write.
+        // straight through). Host keys are excluded for the reason given at that write.
         safeLocalSet(PREF_RELEASE_KEY, r.tag_name);
         if (!entry.isHost) safeLocalSet(PREF_FIRMWARE_KEY, state.firmware);
         state.installing = true;
@@ -849,19 +849,19 @@ export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, offersFirmware,
 export const installPicker = {
     /**
      * Web installer only: switch between flashing a device over USB and downloading the
-     * desktop build for the machine viewing the page. The port dropdown offers "This
+     * host build for the machine viewing the page. The port dropdown offers "This
      * computer" as an entry alongside the USB ports, and picking it lands here.
      *
-     * The same download mode a desktop's Firmware card uses when its host or its user updates
+     * The same download mode a host's Firmware card uses when its container or its user updates
      * it: isCompatible() maps HOST_DOWNLOAD to this host's archive, so the labels, the
      * Download button and the download itself follow with no second implementation. The
      * device picker is hidden while it is on, because no device is being flashed.
      */
-    setDesktopMode(on) {
+    setHostMode(on) {
         const state = _lastState;
         // Called before init() finished mounting: remember it, and init applies it once the
         // state exists. Without this the host's opening default is silently dropped.
-        if (!state) { _pendingDesktopMode = on; return; }
+        if (!state) { _pendingHostMode = on; return; }
         const want = on ? HOST_DOWNLOAD : null;
         if (state.ownFirmwareKey === want) return;
         state.ownFirmwareKey = want;
@@ -948,9 +948,9 @@ export const installPicker = {
         state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === targetChip) : devices;
         _lastState = state;
         // Honour a mode the host chose while the release fetch was still in flight.
-        if (_pendingDesktopMode !== null) {
-            if (_pendingDesktopMode) state.ownFirmwareKey = HOST_DOWNLOAD;
-            _pendingDesktopMode = null;
+        if (_pendingHostMode !== null) {
+            if (_pendingHostMode) state.ownFirmwareKey = HOST_DOWNLOAD;
+            _pendingHostMode = null;
         }
         if (!data) {
             container.innerHTML =

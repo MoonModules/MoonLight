@@ -49,7 +49,7 @@ Your module is a class with a handful of **hook functions**. You override the on
 
 **The core calls these, you only fill them in.** It decides when to build, when to run, and when to release. A single traffic-cop method, `applyState()`, visits every module in the tree and either **builds it** (calls `prepare()`) when it's enabled or **releases it** (calls `release()`) when it's disabled, then runs `tick()` on the enabled ones each render tick.
 
-> **A word on speed.** `tick()` runs on the **render tick**, as fast as the hardware can go: a few hundred frames per second on an ESP32, thousands on a desktop. This is the **hot path**, the one place where speed and memory really matter. The rule of thumb: keep `tick()` to the pixel math, and put anything expensive-but-occasional (allocating a buffer, opening a file, parsing a config) in `prepare()`, which runs only when something changes. A lean `tick()` flies on the smallest chip.
+> **A word on speed.** `tick()` runs on the **render tick**, as fast as the hardware can go: a few hundred frames per second on an ESP32, thousands on a host. This is the **hot path**, the one place where speed and memory really matter. The rule of thumb: keep `tick()` to the pixel math, and put anything expensive-but-occasional (allocating a buffer, opening a file, parsing a config) in `prepare()`, which runs only when something changes. A lean `tick()` flies on the smallest chip.
 
 Two consequences that make your life easy:
 
@@ -119,7 +119,7 @@ Notice we call `width()` and `height()` **inside** `tick()`, and loop exactly `0
 
 ### Animating off *time*
 
-We build the moving `phase` from `elapsed()` (milliseconds since the show started), so motion tracks real time. A desktop renders thousands of frames per second and an ESP32 a few hundred; driving `phase` from `elapsed()` keeps the speed identical on both. (Driving it from a frame counter instead would tie the speed to the frame rate: fast on the desktop, slow on the chip.) `beat8(speed, elapsed())` is the ready-made helper: it returns a 0..255 value that rotates once per beat and handles the time math and overflow internally, so you write one line. There's a small family: `beatsin8` for a value that eases in and out like a wave, `sin8`/`cos8` for integer trig: all in `core/math8.h`.
+We build the moving `phase` from `elapsed()` (milliseconds since the show started), so motion tracks real time. A host renders thousands of frames per second and an ESP32 a few hundred; driving `phase` from `elapsed()` keeps the speed identical on both. (Driving it from a frame counter instead would tie the speed to the frame rate: fast on the host, slow on the chip.) `beat8(speed, elapsed())` is the ready-made helper: it returns a 0..255 value that rotates once per beat and handles the time math and overflow internally, so you write one line. There's a small family: `beatsin8` for a value that eases in and out like a wave, `sin8`/`cos8` for integer trig: all in `core/math8.h`.
 
 ### Writing pixels by coordinate
 
@@ -230,7 +230,7 @@ That's the *entire* memory story: one member, one line in `prepare()`, and the `
 
 The one line that reads like housekeeping (`if (!heat_) return;` at the top of `tick()`) checks the buffer exists before using it. It covers the rare cases where it might be absent: a 0×0 grid, or an allocation that ran short on a low-memory board. It asks *"is my buffer here?"*; the core already answers *"is my effect enabled?"* by choosing when to call `tick()`, so those two concerns stay separate.
 
-> **Why one member does all this.** `ScratchBuffer` is a *[Complexity lives in core](../../CLAUDE.md#principles)* primitive: the allocate / free / free-on-disable / report-memory lifecycle is written once, in core, so every memory-holding effect drops to "declare a buffer and use it" instead of hand-rolling the same six lines (and getting one of them subtly wrong). You get the portable allocator (same on desktop, ESP32, Raspberry Pi), the disable-frees-memory guarantee, and the UI readout for free.
+> **Why one member does all this.** `ScratchBuffer` is a *[Complexity lives in core](../../CLAUDE.md#principles)* primitive: the allocate / free / free-on-disable / report-memory lifecycle is written once, in core, so every memory-holding effect drops to "declare a buffer and use it" instead of hand-rolling the same six lines (and getting one of them subtly wrong). You get the portable allocator (same on host, ESP32, Raspberry Pi), the disable-frees-memory guarantee, and the UI readout for free.
 
 For **more than one** buffer: a game-of-life keeps three planes, a starfield keeps four parallel arrays: just declare several members, each `{*this}`. Each sizes, frees, and reports independently; the module's total memory is their sum, still with no bookkeeping line:
 

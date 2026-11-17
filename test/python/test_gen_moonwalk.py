@@ -174,11 +174,11 @@ def test_every_page_a_process_names_exists(tmp_path):
 
 def test_a_choice_shows_once_per_section_and_names_its_option_in_the_plain_text():
     text = gen_moonwalk.render_text(gen_moonwalk.build())
-    desktop = text[text.index("{#install}"):text.index("{#install-windows-zip}")]
-    assert desktop.count("Where your settings live") == 1   # three options, one heading
-    assert "**Windows: Run the setup you kept.**" in desktop
-    assert "**macOS: Drag MoonLight to Applications.**" in desktop
-    assert desktop.count(". Updating\n") == 1   # a step per platform, one heading
+    section = text[text.index("{#install}"):text.index("{#install-windows-zip}")]
+    assert section.count("Where your settings live") == 1   # three options, one heading
+    assert "**Windows: Run the setup you kept.**" in section
+    assert "**macOS: Drag MoonLight to Applications.**" in section
+    assert section.count(". Updating\n") == 1   # a step per platform, one heading
 
 
 def test_a_key_written_twice_is_refused_rather_than_the_last_kept(tmp_path):
@@ -311,7 +311,7 @@ def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_withi
     assert all("given" not in parent[sid] for sid in groups)   # a group triggers nothing itself: its steps' paths decide
     # Every check keeps its id, so a run record and a link keyed on it still find it.
     ids = [s["id"] for pid in ["commit", *groups.values(), "host-tests"] for s in processes[pid]["steps"] if "run" in s["when"]]
-    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-desktop", "build-tests", "test", "scenarios",
+    assert sorted(ids) == sorted(["specs", "prose", "commit", "docs", "docgen", "taglines", "code", "build-host", "build-tests", "test", "scenarios",
                                   "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv", "backlog"])
     over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
     assert over == []   # the parent, each group and the stage within their caps

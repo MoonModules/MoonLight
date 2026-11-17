@@ -1,4 +1,4 @@
-/// Every platform seam on macOS, Windows and Linux, so the desktop build runs what a device runs.
+/// Every platform seam on macOS, Windows and Linux, so the host build runs what a device runs.
 ///
 /// Where a host has the facility it is real: sockets, the filesystem, executable memory, raw frames. Where it has no silicon the seam is backed by ordinary memory instead of refused, which is what keeps the drivers above testable off device.
 ///
@@ -16,7 +16,7 @@
 ///
 /// The address is generated once and kept beside the config, the pattern systemd uses for its machine identity. It is an identity, not a diagnostic: the device name, the MQTT topic prefix and the Home Assistant identifier all derive from it.
 ///
-/// A hardcoded value would make every desktop instance the same one, so two desktops or a handful of containers fight over one entity. Home Assistant requires such an identifier to survive container recreation, which storing achieves.
+/// A hardcoded value would make every host instance the same one, so two hosts or a handful of containers fight over one entity. Home Assistant requires such an identifier to survive container recreation, which storing achieves.
 ///
 /// Reading a host interface does not: this Mac lists an internal management interface before its real one, and containers sharing a bridge can present related addresses.
 ///
@@ -64,7 +64,7 @@
 ///
 /// ## What the allocation counter is for
 ///
-/// Not a heap figure: a desktop has as much memory as it wants, and the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
+/// Not a heap figure: a host has as much memory as it wants, and the free-heap report stays at nothing because three call sites read that as unlimited and switch off gates that only mean something on a device.
 ///
 /// Its use is the DELTA. Every buffer the system takes on purpose comes through these entry points, so adding or removing a module moves the number by exactly what it costs, on a laptop, in a second, with no board attached.
 ///
@@ -74,7 +74,7 @@
 ///
 /// Yielding only offers the processor to another runnable thread, so on an idle machine it returns at once and the caller spins a core flat out, seen on a bench as the process slowly eating cycles.
 ///
-/// Nothing consumes a desktop render faster than a display or a driver's rate limit, so free-running thousands of frames spends a core on frames nobody reads. The budget is far above any rate we drive while leaving the processor idle between.
+/// Nothing consumes a host render faster than a display or a driver's rate limit, so free-running thousands of frames spends a core on frames nobody reads. The budget is far above any rate we drive while leaving the processor idle between.
 ///
 /// A tick that runs longer gets no sleep, so a heavy grid still runs as fast as it can.
 ///
@@ -383,7 +383,7 @@ void setTestPsramRange(const void* begin, const void* end) {
     testPsramEnd.store(end, std::memory_order_relaxed);
 }
 
-bool ptrIsPsram(const void* p) {   // desktop has no PSRAM, unless a test marks a range as such
+bool ptrIsPsram(const void* p) {   // host has no PSRAM, unless a test marks a range as such
     const auto* b = static_cast<const uint8_t*>(testPsramBegin.load(std::memory_order_relaxed));
     const auto* e = static_cast<const uint8_t*>(testPsramEnd.load(std::memory_order_relaxed));
     const auto* q = static_cast<const uint8_t*>(p);
@@ -391,7 +391,7 @@ bool ptrIsPsram(const void* p) {   // desktop has no PSRAM, unless a test marks 
 }
 
 void* allocInternal(size_t bytes) {
-    return trackedAlloc(bytes);   // desktop has one flat RAM: internal == ordinary
+    return trackedAlloc(bytes);   // host has one flat RAM: internal == ordinary
 }
 
 void free(void* ptr) {
@@ -477,14 +477,14 @@ size_t allocatedPeak()  { return g_allocatedPeak.load(std::memory_order_relaxed)
 uint32_t allocatedCount() { return g_allocCount.load(std::memory_order_relaxed); }
 
 size_t freeHeap() {
-    return 0; // Not meaningful on desktop (0 = unlimited)
+    return 0; // Not meaningful on host (0 = unlimited)
 }
 
 static std::atomic<size_t> testFreeInternal{0};
 void setTestFreeInternalHeap(size_t bytes) { testFreeInternal.store(bytes, std::memory_order_relaxed); }
 
 size_t freeInternalHeap() {
-    return testFreeInternal.load(std::memory_order_relaxed);   // 0 = not meaningful on desktop (unlimited), unless a test sets it
+    return testFreeInternal.load(std::memory_order_relaxed);   // 0 = not meaningful on host (unlimited), unless a test sets it
 }
 
 // Test-only cap on the reported largest free block, so a test can force the paged fallback without a fragmented heap.
@@ -496,7 +496,7 @@ size_t maxAllocBlock() {
 }
 
 size_t maxInternalAllocBlock() {
-    return 0; // Not meaningful on desktop (0 = unlimited)
+    return 0; // Not meaningful on host (0 = unlimited)
 }
 
 size_t maxExecAllocBlock() {
@@ -521,7 +521,7 @@ const char* renderTaskName() { return g_testRenderTask; }
 
 // The worker seam is a thread and a condition variable, the core pin ignored. The wake is a single-slot latch, matching the device notification's one-pending-count semantics.
 namespace {
-struct DesktopWorker {
+struct HostWorker {
     std::thread thread;
     std::mutex mtx;
     std::condition_variable cv;
@@ -532,7 +532,7 @@ struct DesktopWorker {
 
 bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* user,
                      size_t /*stackBytes*/, uint8_t /*priority*/, int /*core*/) {
-    auto* w = new (std::nothrow) DesktopWorker();
+    auto* w = new (std::nothrow) HostWorker();
     if (!w) return false;
     t.impl = w;
     w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
@@ -540,14 +540,14 @@ bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* use
 }
 
 void notifyTask(WorkerTask& t) {
-    auto* w = static_cast<DesktopWorker*>(t.impl);
+    auto* w = static_cast<HostWorker*>(t.impl);
     if (!w) return;
     { std::scoped_lock<std::mutex> lk(w->mtx); w->pending = true; }
     w->cv.notify_one();
 }
 
 bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
-    auto* w = static_cast<DesktopWorker*>(t.impl);
+    auto* w = static_cast<HostWorker*>(t.impl);
     if (!w) return false;
     std::unique_lock<std::mutex> lk(w->mtx);
     const bool got = w->cv.wait_for(lk, std::chrono::milliseconds(timeoutMs),
@@ -558,14 +558,14 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs) {
 }
 
 void sleepUs(WorkerTask& t, uint32_t us) {
-    auto* w = static_cast<DesktopWorker*>(t.impl);
+    auto* w = static_cast<HostWorker*>(t.impl);
     if (!w) return;
     std::unique_lock<std::mutex> lk(w->mtx);
     w->cv.wait_for(lk, std::chrono::microseconds(us), [w] { return w->stop; });
 }
 
 void stopPinnedTask(WorkerTask& t) {
-    auto* w = static_cast<DesktopWorker*>(t.impl);
+    auto* w = static_cast<HostWorker*>(t.impl);
     if (!w) return;
     { std::scoped_lock<std::mutex> lk(w->mtx); w->stop = true; }
     w->cv.notify_one();
@@ -625,11 +625,11 @@ void clearTestGpioLiveState() {
 }
 
 size_t totalHeap() {
-    return 0; // Not meaningful on desktop
+    return 0; // Not meaningful on host
 }
 
 size_t totalInternalHeap() {
-    return 0; // Not meaningful on desktop
+    return 0; // Not meaningful on host
 }
 
 const char* macString() {
@@ -654,7 +654,7 @@ const char* chipModel() {
 #elif defined(__i386__) || defined(_M_IX86)
     return "x86";
 #else
-    return "desktop";   // an architecture nobody has built for yet; better vague than wrong
+    return "host";   // an architecture nobody has built for yet; better vague than wrong
 #endif
 }
 
@@ -704,7 +704,7 @@ void setTestHttpFetch(HttpFetchFn fn) { testHttpFetch.store(fn, std::memory_orde
 
 bool tlsRoom(const char* url) {
     if (!url || std::strncmp(url, "https://", 8) != 0) return true;
-    // Zero is the desktop's "not measured", which only a test replaces with a board's figure.
+    // Zero is the host's "not measured", which only a test replaces with a board's figure.
     const size_t internal = freeInternalHeap();
     return internal == 0 || internal >= kInternalFreeFloor + kTlsSessionBytes;
 }
@@ -1031,7 +1031,7 @@ const char* sdkVersion() {
 }
 
 const char* coprocessorWifi() {
-    return "";   // desktop has no WiFi co-processor
+    return "";   // host has no WiFi co-processor
 }
 const char* coprocessorLine() MM_NONBLOCKING { return ""; }
 const char* coprocessorHostVersion() { return ""; }
@@ -1039,7 +1039,7 @@ bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
 
 const char* psramType() {
-    return "";   // desktop has no PSRAM
+    return "";   // host has no PSRAM
 }
 
 const char* flashMode() {
@@ -1047,7 +1047,7 @@ const char* flashMode() {
 }
 
 const char* resetReason() {
-    // Desktop has no reset-reason concept; report a benign value the UI treats as "not crashed".
+    // Host has no reset-reason concept; report a benign value the UI treats as "not crashed".
     return "OK";
 }
 
@@ -1199,7 +1199,7 @@ int fsRead(const char* path, char* buf, size_t maxLen) {
 
 
 namespace {
-// The files a read stream holds open. LittleFS, the device's filesystem, refuses to replace an open file, and a desktop that allowed it hid that.
+// The files a read stream holds open. LittleFS, the device's filesystem, refuses to replace an open file, and a host that allowed it hid that.
 std::vector<std::filesystem::path> openReads_;
 bool openForRead(const std::filesystem::path& p) { return std::find(openReads_.begin(), openReads_.end(), p) != openReads_.end(); }
 }
@@ -1255,13 +1255,13 @@ int64_t fsSize(const char* path) {
 
 namespace {
 // Tags whether this handle counts toward sdStreamsOpen_, so close() decrements exactly what open() counted, and the file it holds open.
-struct DesktopReadHandle { FILE* f = nullptr; bool isSd = false; std::filesystem::path path; };
+struct HostReadHandle { FILE* f = nullptr; bool isSd = false; std::filesystem::path path; };
 }
 
 bool fsReadStreamOpen(FsReadStream& h, const char* path) {
     FILE* f = std::fopen(toFsPath(path).string().c_str(), "rb");
     if (!f) return false;
-    auto* rh = new DesktopReadHandle();
+    auto* rh = new HostReadHandle();
     rh->f = f;
     rh->isSd = isSdPath(path);
     rh->path = toFsPath(path);
@@ -1272,7 +1272,7 @@ bool fsReadStreamOpen(FsReadStream& h, const char* path) {
 }
 
 int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
-    auto* rh = static_cast<DesktopReadHandle*>(h.impl);
+    auto* rh = static_cast<HostReadHandle*>(h.impl);
     if (!rh) return -1;
     const size_t n = std::fread(buf, 1, len, rh->f);
     if (n == 0 && std::ferror(rh->f)) return -1;
@@ -1280,7 +1280,7 @@ int fsReadStreamRead(FsReadStream& h, char* buf, size_t len) {
 }
 
 void fsReadStreamClose(FsReadStream& h) {
-    auto* rh = static_cast<DesktopReadHandle*>(h.impl);
+    auto* rh = static_cast<HostReadHandle*>(h.impl);
     if (rh) {
         std::fclose(rh->f);
         if (rh->isSd) --sdStreamsOpen_;
@@ -1291,15 +1291,15 @@ void fsReadStreamClose(FsReadStream& h) {
 }
 
 namespace {
-// Both paths live alongside the FILE*, so close() can rename without re-deriving them; isSd mirrors DesktopReadHandle's.
-struct DesktopWriteHandle { FILE* f = nullptr; std::filesystem::path target, tmp; bool isSd = false; };
+// Both paths live alongside the FILE*, so close() can rename without re-deriving them; isSd mirrors HostReadHandle's.
+struct HostWriteHandle { FILE* f = nullptr; std::filesystem::path target, tmp; bool isSd = false; };
 }
 
 bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
     auto target = toFsPath(path);
     if (target.empty()) return false;
     makeParent(target);
-    auto* wh = new DesktopWriteHandle();
+    auto* wh = new HostWriteHandle();
     wh->target = target;
     wh->tmp = target;
     wh->tmp += ".tmp";
@@ -1312,13 +1312,13 @@ bool fsWriteStreamOpen(FsWriteStream& h, const char* path) {
 }
 
 bool fsWriteStreamWrite(FsWriteStream& h, const char* buf, size_t len) {
-    auto* wh = static_cast<DesktopWriteHandle*>(h.impl);
+    auto* wh = static_cast<HostWriteHandle*>(h.impl);
     if (!wh) return false;
     return std::fwrite(buf, 1, len, wh->f) == len;
 }
 
 bool fsWriteStreamClose(FsWriteStream& h, bool commit) {
-    auto* wh = static_cast<DesktopWriteHandle*>(h.impl);
+    auto* wh = static_cast<HostWriteHandle*>(h.impl);
     if (!wh) return false;
     std::fflush(wh->f);
 #ifdef _WIN32
@@ -1354,7 +1354,7 @@ void listEntry(const std::filesystem::directory_entry& entry, const std::string&
 
 void fsList(const char* dir, FsListCb cb, void* user) {
     if (!cb) return;
-    // On the desktop the card is a real subdirectory, listed by hand while mounted and skipped below as its backing folder.
+    // On the host the card is a real subdirectory, listed by hand while mounted and skipped below as its backing folder.
     const bool sdHere = isFsRoot(dir) && hasSdCard;
     if (sdHere && sdCardMounted()) cb("sd", true, 0, user);
     std::error_code ec;
@@ -1383,7 +1383,7 @@ size_t filesystemUsed() {
 }
 
 size_t filesystemTotal() {
-    // Desktop has no fixed quota; report a notional 384 KB to match the 4MB ESP32 partition.
+    // Host has no fixed quota; report a notional 384 KB to match the 4MB ESP32 partition.
     return 384 * 1024;
 }
 
@@ -1408,7 +1408,7 @@ bool sdMount(const SdPinConfig& pins) {
     return true;
 }
 
-// No decoder linked on desktop; the FSEQ player reports "unsupported" for a compressed file here.
+// No decoder linked on host; the FSEQ player reports "unsupported" for a compressed file here.
 bool zlibInflateAll(void*, const uint8_t*, size_t, uint8_t*, size_t, size_t&) { return false; }
 size_t zlibWorkspaceBytes() { return 0; }
 
@@ -1469,7 +1469,7 @@ uint64_t sdCardUsed() {
 uint64_t sdCardTotal() { return sdMounted_ ? sdCardTotalForTest_ : 0; }
 
 namespace {
-// Off by default: hasSdCard is unconditionally true on desktop for test coverage, but that must not boot SdCardService into an unrelated session's tree; a test opts it in by name.
+// Off by default: hasSdCard is unconditionally true on host for test coverage, but that must not boot SdCardService into an unrelated session's tree; a test opts it in by name.
 bool sdCardBootsByDefault_ = false;
 }
 
@@ -1489,18 +1489,18 @@ void setTestSdFormatHeld(bool held) {
 }
 #endif
 
-// Network stubs (desktop has no WiFi/Ethernet hardware)
+// Network stubs (host has no WiFi/Ethernet hardware)
 
-void setEthConfig(const EthPinConfig&) {}   // no eth on desktop; ethInit stubs false
-void ethStop() {}                           // no eth on desktop
+void setEthConfig(const EthPinConfig&) {}   // no eth on host; ethInit stubs false
+void ethStop() {}                           // no eth on host
 // Test seam: a faked cable and address, all zero meaning none, so a host test can drive the Ethernet cascade.
 static uint8_t testEthIp_[4] = {};
 static bool testEthFaked() MM_NONBLOCKING { return testEthIp_[0] || testEthIp_[1] || testEthIp_[2] || testEthIp_[3]; }
 void setTestEthIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testEthIp_[i] = ip ? ip[i] : 0; }
-// The host's own network is the desktop's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test turns it off to drive the cascade on the fakes alone.
+// The host's own network is the host's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test turns it off to drive the cascade on the fakes alone.
 static bool testHostNetwork_ = true;
 void setTestDeviceNetwork(bool counts) { testHostNetwork_ = counts; }
-/// What carries the desktop's wired link: see wiredLink() below.
+/// What carries the host's wired link: see wiredLink() below.
 enum class WiredLink : uint8_t { Faked, Host, Adapter, None };
 static bool hostLinkUp() MM_NONBLOCKING {
     if (!testHostNetwork_) return false;
@@ -1518,7 +1518,7 @@ uint8_t (*ethTestFrames_)[kEthTestFrameMax] = nullptr;
 size_t  ethTestLens_[kEthTestMaxFrames] = {};
 size_t  ethTestCount_ = 0;
 bool    ethTestSendFails_ = false;
-uint16_t ethTestLinkSpeed_ = 1000;   // desktop reports gigabit unless a test says otherwise
+uint16_t ethTestLinkSpeed_ = 1000;   // host reports gigabit unless a test says otherwise
 int      ethRawClaims_ = 0;          // drivers holding the link for direct L2 use
 // Atomic as on the ESP32: a driver sends from the encode task while its tick1s reads the streak on the main loop.
 std::atomic<uint32_t> ethSendFails_{0};    // consecutive ethSendRaw failures (the streak)
@@ -2175,10 +2175,10 @@ void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], u
     uint8_t* outs[3] = {gw, mask, dns};
     for (int k = 0; k < 3; k++) for (int i = 0; i < 4; i++) outs[k][i] = testLease_[k][i];
 }
-void setHostname(const char* /*name*/) {}   // no DHCP client on desktop
+void setHostname(const char* /*name*/) {}   // no DHCP client on host
 void wifiStaStop() {}
 int wifiStaRssi() { return 0; }
-// The scan and the join outcome are test seams here, the desktop having no radio of its own.
+// The scan and the join outcome are test seams here, the host having no radio of its own.
 static WifiNetwork testScan_[16] = {};
 static int testScanCount_ = 0;
 static bool testScanStarted_ = false;
@@ -2286,7 +2286,7 @@ bool resolveName(const char* name, uint8_t ip[4]) {
 LookupStep resolveNameStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
-// No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
+// No partitions on host: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
 static const char* testMoonBaseVersion_ = nullptr;
 static const char* testMoonBaseBuilt_ = nullptr;
 void setTestMoonBase(const char* version, const char* built) { testMoonBaseVersion_ = version; testMoonBaseBuilt_ = built; }
@@ -2307,7 +2307,7 @@ bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 // No image to install into off-device, of any target.
 bool otaFetchUrl(OtaTarget, const char*, char* statusBuf, size_t statusBufLen,
                  uint32_t* bytesReadOut, uint32_t* bytesTotalOut) {
-    if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
+    if (statusBuf && statusBufLen > 0) std::snprintf(statusBuf, statusBufLen, "unsupported on host");
     if (bytesReadOut) *bytesReadOut = 0;
     if (bytesTotalOut) *bytesTotalOut = 0;
     return false;
@@ -2429,7 +2429,7 @@ bool improvProvisioningInit(const ImprovDeviceInfo& /*info*/,
                             char* /*opOut*/, size_t /*opOutLen*/,
                             std::atomic<bool>* /*opReady*/) {
     if (statusBuf && statusBufLen > 0) {
-        std::snprintf(statusBuf, statusBufLen, "unsupported on desktop");
+        std::snprintf(statusBuf, statusBufLen, "unsupported on host");
     }
     return false;
 }
@@ -2840,7 +2840,7 @@ RmtLoopbackResult ws2812LoopbackRide(uint16_t /*rxGpio*/, const uint8_t* /*sent*
     return {};   // no RMT-RX capture off ESP32
 }
 
-// Parallel WS2812 buses on desktop, backed by real memory: @xref{a-host-bus-is-real-memory-not-a-refusal|what is and is not modelled}.
+// Parallel WS2812 buses on host, backed by real memory: @xref{a-host-bus-is-real-memory-not-a-refusal|what is and is not modeled}.
 namespace {
 
 /// One memory-backed parallel bus, shared by every parallel seam below: three peripherals for the same job, and off device that job is holding a frame.
@@ -3002,7 +3002,7 @@ RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*
     return {};   // no wire on a host
 }
 
-// No panel on a desktop: the init refuses, as on a chip without the silicon. setTestHub75 opens the port for a test, which reads the bit planes the driver packs into a frame sized as the ESP32 port sizes it.
+// No panel on a host: the init refuses, as on a chip without the silicon. setTestHub75 opens the port for a test, which reads the bit planes the driver packs into a frame sized as the ESP32 port sizes it.
 namespace {
 bool hub75TestOpen_ = false;
 std::vector<uint8_t> hub75TestFrame_;
@@ -3112,7 +3112,7 @@ void setTestGpioLevel(uint8_t gpio, bool level) { if (gpio < kMaxGpio) g_gpioLev
 void clearTestGpioLevel() { for (bool& b : g_gpioLevel) b = false; }
 
 // --- ADC ---
-// The desktop has no converter, so a read reports what a test injected, as with the GPIO level. That pins a pedal's mapping, min/max/invert and smoothing on the host.
+// The host has no converter, so a read reports what a test injected, as with the GPIO level. That pins a pedal's mapping, min/max/invert and smoothing on the host.
 namespace {
 uint16_t g_adcValue[kMaxGpio] = {};
 // Millivolts are injected SEPARATELY from the raw count. The chip's eFuse curve relates them on a board, and deriving one here would pass against a relation hardware lacks.
@@ -3125,7 +3125,7 @@ bool adcRead(uint8_t gpio, uint16_t& raw) {
     return true;
 }
 
-// The ESP32's 12-bit full scale, so a mapping verified against 4095 on the desktop behaves the same on a device.
+// The ESP32's 12-bit full scale, so a mapping verified against 4095 on the host behaves the same on a device.
 uint16_t adcMaxCount() { return 4095; }
 
 void setTestAdcValue(uint8_t gpio, uint16_t raw) { if (gpio < kMaxGpio) g_adcValue[gpio] = raw; }
@@ -3140,8 +3140,8 @@ bool adcReadMv(uint8_t gpio, uint16_t& mv) {
 void setTestAdcMv(uint8_t gpio, uint16_t mv) { if (gpio < kMaxGpio) g_adcMv[gpio] = mv; }
 
 bool irRead(uint16_t /*pin*/, uint32_t& /*codeOut*/) { return false; }
-void irStop() {}   // no IR hardware on desktop
-bool irChannelReady(uint16_t /*pin*/) { return true; }   // no channel to fail on desktop
+void irStop() {}   // no IR hardware on host
+bool irChannelReady(uint16_t /*pin*/) { return true; }   // no channel to fail on host
 
 // A desk on the computer reaches the MIDI service through the browser, so the USB host here is a test desk only.
 namespace {
@@ -3332,7 +3332,7 @@ NdiSendCreateFn  ndiSendCreate_  = nullptr;
 NdiSendVideoFn   ndiSendVideo_   = nullptr;
 NdiSendDestroyFn ndiSendDestroy_ = nullptr;
 
-// Test capture (platform.h § NDI test seam). Recording is OFF unless a test turns it on, so a desktop build with a real runtime behaves exactly as it would in production.
+// Test capture (platform.h § NDI test seam). Recording is OFF unless a test turns it on, so a host build with a real runtime behaves exactly as it would in production.
 struct NdiCapturedFrame { uint16_t w, h; uint8_t fps; std::vector<uint8_t> rgb; };
 NdiTestMode                  ndiTestMode_ = NdiTestMode::Off;
 std::vector<NdiCapturedFrame> ndiCaptured_;
@@ -3794,7 +3794,7 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
     return true;
 }
 
-// The ffmpeg invocation is the desktop encode contract: raw RGB in, zerolatency x264 out as 1 s segments on a short rolling playlist (glass-to-glass 2-5 s).
+// The ffmpeg invocation is the host encode contract: raw RGB in, zerolatency x264 out as 1 s segments on a short rolling playlist (glass-to-glass 2-5 s).
 bool encoderStart(const EncoderConfig& cfg) {
     char geo[16], rate[8], gop[8], bv[12], out[192];
     std::snprintf(geo, sizeof(geo), "%ux%u", static_cast<unsigned>(cfg.width),

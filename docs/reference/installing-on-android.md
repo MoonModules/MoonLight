@@ -1,12 +1,12 @@
 # Running MoonLight on Android
 
-MoonLight runs as an Android app on a phone, a tablet or a headset: the same program the desktop runs, with the device as the host and its own screen as the window. Effects, MoonLive scripts and the preview run on the road with no board and no laptop, and the app drives networked fixtures over WiFi, Art-Net, DDP and E1.31, as a desktop does.
+MoonLight runs as an Android app on a phone, a tablet or a headset: the same program as on macOS, Windows and Linux, with the device as the host and its own screen as the window. Effects, MoonLive scripts and the preview run on the road with no board and no laptop, and the app drives networked fixtures over WiFi, Art-Net, DDP and E1.31.
 
 The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#install) with Android picked.
 
 ## The device
 
-- **Android 9 or later on a 64-bit ARM processor** (arm64), which every phone and tablet of the last years has. The app is one APK, `MoonLight-android-arm64-vX.Y.Z.apk`, on each release beside the desktop packages.
+- **Android 9 or later on a 64-bit ARM processor** (arm64), which every phone and tablet of the last years has. The app is one APK, `MoonLight-android-arm64-vX.Y.Z.apk`, on each release beside the host packages.
 - **A headset is an Android too.** A Meta Quest (Horizon OS) runs the same APK as a panel in front of the wearer, opening wide and resizeable. It installs in developer mode: the Meta Horizon app on your phone turns that on for the headset, and `adb install` or SideQuest puts the APK on it.
 - **Designed for** phones, tablets, Meta Quest and Pico headsets; **tested on** a Meta Quest 3 with Android 14.
 
@@ -20,7 +20,7 @@ The facts follow; the steps are MoonWalk's. [Install MoonLight](../moonwalk.md#i
 
     ![The Quest asking to allow MoonLight to install apps](../assets/reference/android/install-unknown-apps.jpeg){ width="300" }
 
-- **Its settings** live in the app's own storage, in the same layout as on Linux, so a backup restores on a phone, a desktop or a board alike. Uninstalling the app removes them; back up first.
+- **Its settings** live in the app's own storage, in the same layout as on Linux, so a backup restores on a phone, a computer or a board alike. Uninstalling the app removes them; back up first.
 
 ## What Android leaves out
 

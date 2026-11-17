@@ -4,7 +4,7 @@ What shipped and where it lives: [Choosing and wiring an LED driver](../referenc
 
 ## LED output from a Raspberry Pi's own pins
 
-Backlog: LED output from a Raspberry Pi's own pins ([#218](https://github.com/MoonModules/MoonLight/issues/218)). The prerequisite is a `src/platform/rpi/` backend; a Pi runs the desktop build and reaches LEDs through the network drivers.
+Backlog: LED output from a Raspberry Pi's own pins ([#218](https://github.com/MoonModules/MoonLight/issues/218)). The prerequisite is a `src/platform/rpi/` backend; a Pi runs the host build and reaches LEDs through the network drivers.
 
 **Pi 4 and earlier (BCM2711 and before).** rpi_ws281x (BSD-2, <https://github.com/jgarff/rpi_ws281x>) drives the header by DMA through PWM (2 channels), PCM (1) or SPI (1), up to about 2,700 lights a string on PWM and 5,400 on PCM. It is the reference for that route; its last release is v1.0.0 of March 2023.
 

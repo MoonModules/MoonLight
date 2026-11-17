@@ -1,8 +1,8 @@
 """The name this host reports itself as in the metrics, shared across check/ and scenario/.
 
-One home for the spelling, because a desktop measurement is only comparable against the same OS.
+One home for the spelling, because a host measurement is only comparable against the same OS.
 A tick from macOS, Windows and CI Linux differs by more than the code between two commits does, so
-a metric keyed plainly `desktop` records whichever machine ran it last rather than what changed.
+a metric keyed by a flat key records whichever machine ran it last rather than what changed.
 The scenario observations carry the same key, and so do repo-health's `flash`, `measured` and
 `perf` entries.
 

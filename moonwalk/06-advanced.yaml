@@ -48,7 +48,7 @@ processes:
   - id: panel-cards
     title: Drive LED panels through a receiving card
     actor: user
-    goal: A ColorLight wall lit from an ESP32 or a desktop.
+    goal: A ColorLight wall lit from an ESP32 or a host.
     systems: [MoonLight]
     page: reference/hardware/panel-cards.md
     inputs:
@@ -413,7 +413,7 @@ processes:
         given: [{ input: source, in: [The computer's audio on macOS, The computer's audio on Windows, The computer's audio on Linux, A PulseAudio server into the container] }]
         when: { manual: "Pick the loopback source in device." }
         detail: |
-          On the desktop it captures the picked device right away.
+          On the host it captures the picked device right away.
       - id: squelch
         section: Set the squelch
         say: Raise squelch until a quiet room reads dark.
@@ -436,7 +436,7 @@ processes:
           enum: [NDI, HLS, RTSP]
           description: Which video protocol do you use?
     intro: |
-      NDI feeds OBS, Resolume or TouchDesigner, HLS feeds VLC, a browser or an Apple TV, and RTSP feeds VLC or `ffplay`. Each needs one install on a desktop, and then a player opens the stream.
+      NDI feeds OBS, Resolume or TouchDesigner, HLS feeds VLC, a browser or an Apple TV, and RTSP feeds VLC or `ffplay`. Each needs one install on a host, and then a player opens the stream.
     steps:
       - id: ffmpeg
         section: Install what the driver needs

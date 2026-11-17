@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_health  # noqa: E402
 import check_code  # noqa: E402
 
-# Per-host desktop build dir (matches build_host.py / package_host.py).
+# Per-host build dir (matches build_host.py / package_host.py).
 # We pick the directory belonging to the OS this script runs on so KPI
 # numbers reflect the binary the developer actually has on disk.
 import platform as _plat
@@ -61,7 +61,7 @@ BUILD_DIR = ROOT / "build" / _HOST
 MIN_ESP32_FPS_LED_PRODUCT = 10 * 16384  # 163840
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_host import desktop_binary  # noqa: E402 (one definition of where the binary lands)
+from build_host import host_binary  # noqa: E402 (one definition of where the binary lands)
 from build_esp32 import APP_BIN  # noqa: E402 (one definition of what ESP-IDF names the app image)
 
 
@@ -149,15 +149,15 @@ def _scenario_matrix() -> dict:
     return out
 
 
-def collect_desktop():
+def collect_host():
     kpi = {}
 
     # Binary names + locations differ per host: macOS/Linux drop the
     # executable under <build>/, MSVC multi-config under <build>/Release/.
-    # Located by build_host.desktop_binary(), which repo_health.py also calls: the two had
+    # Located by build_host.host_binary(), which repo_health.py also calls: the two had
     # separate copies of the candidate list in OPPOSITE order, so one run of this script could
-    # take binary_kb from one file and flash.desktop from another.
-    MoonLight = desktop_binary(BUILD_DIR)
+    # take binary_kb from one file and the flash figure from another.
+    MoonLight = host_binary(BUILD_DIR)
     if MoonLight:
         kpi["binary_kb"] = MoonLight.stat().st_size // 1024
 
@@ -445,15 +445,15 @@ def collect_code():
 # Formatters
 # ---------------------------------------------------------------------------
 
-def format_oneliner(desktop, esp32, code):
+def format_oneliner(host, esp32, code):
     parts = []
-    if "lights" in desktop:
-        parts.append(f"{desktop['lights']}lights")
-    if "binary_kb" in desktop:
-        parts.append(f"Desktop:{desktop['binary_kb']}KB")
-    if "tick_us" in desktop:
-        ticks = '/'.join(str(t) for t in desktop['tick_us'])
-        fps = '/'.join(str(f) for f in desktop.get('fps', []))
+    if "lights" in host:
+        parts.append(f"{host['lights']}lights")
+    if "binary_kb" in host:
+        parts.append(f"Host:{host['binary_kb']}KB")
+    if "tick_us" in host:
+        ticks = '/'.join(str(t) for t in host['tick_us'])
+        fps = '/'.join(str(f) for f in host.get('fps', []))
         parts.append(f"tick:{ticks}us(FPS:{fps})")
     if "flash_kb" in esp32:
         parts.append(f"ESP32:{esp32['flash_kb']}KB")
@@ -469,25 +469,25 @@ def format_oneliner(desktop, esp32, code):
         parts.append(f"functions-over:{code['code_findings']}")
     return "KPI: " + " | ".join(parts)
 
-def format_full(desktop, esp32, code):
+def format_full(host, esp32, code):
     lines = []
     lines.append("KPI Details:")
 
-    lines.append("  Desktop:")
-    if "lights" in desktop:
-        lines.append(f"    Lights: {desktop['lights']:,}")
-    if "binary_kb" in desktop:
-        lines.append(f"    Binary: {desktop['binary_kb']} KB")
-    if "tests" in desktop:
-        lines.append(f"    {desktop['tests']}")
-    if "tick_us" in desktop:
-        ticks = ', '.join(f"{t}us" for t in desktop['tick_us'])
-        fps = ', '.join(str(f) for f in desktop.get('fps', []))
+    lines.append("  Host:")
+    if "lights" in host:
+        lines.append(f"    Lights: {host['lights']:,}")
+    if "binary_kb" in host:
+        lines.append(f"    Binary: {host['binary_kb']} KB")
+    if "tests" in host:
+        lines.append(f"    {host['tests']}")
+    if "tick_us" in host:
+        ticks = ', '.join(f"{t}us" for t in host['tick_us'])
+        fps = ', '.join(str(f) for f in host.get('fps', []))
         lines.append(f"    tick: {ticks} (FPS: {fps}) (per scenario)")
-    if "scenarios" in desktop:
-        lines.append(f"    {desktop['scenarios']}")
-    if "specs_check" in desktop:
-        lines.append(f"    Specs: {desktop.get('specs_summary', desktop['specs_check'])}")
+    if "scenarios" in host:
+        lines.append(f"    {host['scenarios']}")
+    if "specs_check" in host:
+        lines.append(f"    Specs: {host.get('specs_summary', host['specs_check'])}")
 
     if esp32:
         lines.append("  ESP32:")
@@ -531,25 +531,25 @@ def main():
         global _LIVE_CAPTURE_ENABLED
         _LIVE_CAPTURE_ENABLED = False
 
-    desktop = collect_desktop()
+    host = collect_host()
     esp32 = collect_esp32()
     code = collect_code()
 
     if args.commit:
-        print(format_oneliner(desktop, esp32, code))
+        print(format_oneliner(host, esp32, code))
         print(check_code.account())
         print("(see KPI Details at bottom)")
         print()
-        print(format_full(desktop, esp32, code))
+        print(format_full(host, esp32, code))
     else:
         # Full interactive report
         print("=" * 50)
         print("  MoonLight KPI Report")
         print("=" * 50)
         print()
-        print(format_oneliner(desktop, esp32, code))
+        print(format_oneliner(host, esp32, code))
         print()
-        print(format_full(desktop, esp32, code))
+        print(format_full(host, esp32, code))
         print()
         print("=" * 50)
 
@@ -570,16 +570,16 @@ def main():
     if args.commit:
         print()
         perf = {}
-        if desktop.get("tick_us"):
-            host = host_target()  # keyed per host (moondeck/_host.py)
-            perf[host] = {"tick_us": desktop["tick_us"][0],
-                          "fps": desktop.get("fps", [None])[0]}
+        if host.get("tick_us"):
+            target = host_target()  # keyed per host (moondeck/_host.py)
+            perf[target] = {"tick_us": host["tick_us"][0],
+                            "fps": host.get("fps", [None])[0]}
             # The isolated-scenario p50s ride along, so repo-health can report a figure that
             # compares across commits beside the run's own summary tick.
-            if desktop.get("scenario_p50"):
-                perf[host]["scenario_p50"] = desktop["scenario_p50"]
-        if desktop.get("scenario_matrix"):
-            perf["scenario_matrix"] = desktop["scenario_matrix"]
+            if host.get("scenario_p50"):
+                perf[target]["scenario_p50"] = host["scenario_p50"]
+        if host.get("scenario_matrix"):
+            perf["scenario_matrix"] = host["scenario_matrix"]
         if esp32.get("tick_us"):
             perf["esp32"] = {"tick_us": esp32["tick_us"], "fps": esp32.get("fps")}
             if esp32.get("heap_free"):
@@ -589,7 +589,7 @@ def main():
         print(repo_health.flash_split.line(repo_health.FLASH_SPLIT))
 
     esp32_tick = esp32.get("tick_us")
-    lights = desktop.get("lights")
+    lights = host.get("lights")
     if esp32_tick is not None and lights:
         max_tick = round(lights * 1_000_000 / MIN_ESP32_FPS_LED_PRODUCT)
         if esp32_tick > max_tick:

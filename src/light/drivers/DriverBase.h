@@ -19,7 +19,7 @@
 namespace mm {
 
 /// A driver consumes the light output and sends it on: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
-/// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
+/// @video 07-drivers-host.webm Drivers on a host: preview, NDI, RTSP, HLS, network send and Hue.
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
 /// Each reads its own slice of the @ref Drivers container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while @ref PreviewDriver shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).

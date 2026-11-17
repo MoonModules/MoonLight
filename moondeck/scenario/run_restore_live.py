@@ -9,7 +9,7 @@ rather than stores, are left out. It fails when the device restarted meanwhile, 
 `--readers N` keeps N other clients reading the device for the whole restore, as a second browser or a script does.
 With the serial monitor attached, that is the setup that caught a panic after a restore on the bench.
 
-`--launch` starts this host's desktop build on an empty data folder and its own port, restores onto it and stops it, printing
+`--launch` starts this host's build on an empty data folder and its own port, restores onto it and stops it, printing
 the app's log when the restore fails: the CI job, the same on any machine, beside a desktop app already running on 8080.
 
 Exit codes: 0 every value back and the report clean, 1 a failure, 2 no Node or no device.
@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_host import desktop_binary  # noqa: E402 (one definition of where the binary lands)
+from build_host import host_binary  # noqa: E402 (one definition of where the binary lands)
 
 LAUNCH_PORT = 8091   # beside a desktop app already running on 8080
 
@@ -65,7 +65,7 @@ def main() -> int:
     ap.add_argument("--host", default="localhost:8080", help="the device, as IP or IP:port (default the desktop app)")
     ap.add_argument("--bundle", required=True, help="a backup bundle, as the File Manager's Backup writes it")
     ap.add_argument("--readers", type=int, default=0, help="other clients reading the device during the restore")
-    ap.add_argument("--launch", action="store_true", help="start this host's desktop build on an empty data folder, restore onto it, stop it")
+    ap.add_argument("--launch", action="store_true", help="start this host's build on an empty data folder, restore onto it, stop it")
     args = ap.parse_args()
     if shutil.which("node") is None:
         print("run_restore_live: Node is not installed.")
@@ -75,9 +75,9 @@ def main() -> int:
             print(f"run_restore_live: no device answers at {args.host}.")
             return 2
         return restore(args.host, args.bundle, args.readers)
-    app = desktop_binary()
+    app = host_binary()
     if app is None:
-        print("run_restore_live: no desktop build; run uv run moondeck/build/build_host.py first.")
+        print("run_restore_live: no host build; run uv run moondeck/build/build_host.py first.")
         return 2
     host = f"localhost:{LAUNCH_PORT}"
     if answers(host, 0):

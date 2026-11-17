@@ -15,9 +15,9 @@ test("a board is an ESP32 or a Teensy, a board target, with its own microphone",
     assert.equal(walkChoices(sys("i.MX RT1062", "")).platform, "Teensy");
 });
 
-test("a desktop build is named by its operating system, a container as Docker", () => {
+test("a host build is named by its operating system, a container as Docker", () => {
     assert.deepEqual(walkChoices(sys("arm64", "macos-arm64")),
-        { platform: "macOS", target: "Desktop", source: "The computer's audio on macOS" });
+        { platform: "macOS", target: "Host", source: "The computer's audio on macOS" });
     assert.equal(walkChoices(sys("x64", "windows-x64")).platform, "Windows");
     assert.equal(walkChoices(sys("arm64", "linux-arm64")).platform, "Linux");
     assert.equal(walkChoices(sys("x64", "docker")).source, "A PulseAudio server into the container");

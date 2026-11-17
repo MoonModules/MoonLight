@@ -1,13 +1,13 @@
 {
-  "name": "07-drivers-desktop",
-  "description": "What carries the frame out of the device, on a desktop: a preview, the video senders, and the network protocols a fixture listens on.",
+  "name": "07-drivers-host",
+  "description": "What carries the frame out of the device, on a host: a preview, the video senders, and the network protocols a fixture listens on.",
   "speed": 1.8,
   "voice": "northern",
   "steps": [
     {
       "action": "chapter",
       "title": "Drivers",
-      "description": "Getting the frame out, on a desktop",
+      "description": "Getting the frame out, on a host",
       "seconds": 4.8,
       "caption": "Drivers. Getting the finished frame out of the device."
     },

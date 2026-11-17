@@ -1,5 +1,5 @@
 {
-  "name": "01-install-desktop",
+  "name": "01-install-host",
   "description": "The same installer, pointed at this computer: pick a release and download the app.",
   "speed": 1.6,
   "voice": "alan",

@@ -74,10 +74,10 @@ processes:
         detail: |
           Workflow `test.yml`. It runs `node --test` over `test/js`, so the web installer and the device agree on the golden vector.
       - id: restore
-        say: Restore a backup onto the desktop app.
+        say: Restore a backup onto the host app.
         when: { run: { script: moondeck/scenario/run_restore_live.py, args: "--launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2" } }
         detail: |
-          Workflow `test.yml`, after building the desktop app. A backup from before config files were state documents, restored while two other clients read the device: every value back and the report clean. It starts its own app on an empty data folder, beside one already running.
+          Workflow `test.yml`, after building the host app. A backup from before config files were state documents, restored while two other clients read the device: every value back and the report clean. It starts its own app on an empty data folder, beside one already running.
       - id: teensy
         say: Build the Teensy 4.1 firmwares.
         when: { run: { script: moondeck/build/build_teensy.py, args: "--all" } }
@@ -217,7 +217,7 @@ processes:
         detail: |
           The reviewer checks the same steps the author followed, so a rule lives once: [Write a MoonModule](moonwalk.md#write-module), [Add a test](moonwalk.md#add-test), [Document the change](moonwalk.md#document).
       - id: test
-        say: Test the branch on the desktop.
+        say: Test the branch on the host.
         when: { process: host-tests }
         detail: |
           In a worktree of the pull request's head (`git fetch origin pull/<n>/head:pr<n>`, then `git worktree add`), so your own checkout and its index stay untouched. A fork's pull request may not run every CI job.
@@ -231,7 +231,7 @@ processes:
         say: Take over the easy fixes when it helps.
         when: { manual: "On the second round, when the contributor goes quiet, or sooner when the case calls for it." }
         detail: |
-          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. One maintainer commit per round: run every check CI runs before it, so no follow-up commit is needed. Commit only once it is tested: the desktop tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
+          Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. One maintainer commit per round: run every check CI runs before it, so no follow-up commit is needed. Commit only once it is tested: the host tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
       - id: conventions
         say: Apply the project's conventions yourself.
         when: { manual: "The local gates' findings, comment and prose style, generated files, where a doc belongs, a compiler flag scoped too wide: on their branch, or as a follow-up commit after the merge." }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the desktop target into a host-named build directory.
+"""Build the host target into a host-named build directory.
 
 ``build/macos/`` on macOS arm64, ``build/linux/`` on Linux, ``build/windows/``
 on Windows — so a single machine could (in principle) build multiple host
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def host_build_dir() -> str:
-    """Map platform.system() to the desktop build-dir name.
+    """Map platform.system() to the host build-dir name.
 
     Returns a slash-string (not Path) so the cmake -B argument stays
     portable across shells.
@@ -42,8 +42,8 @@ def host_build_dir() -> str:
 GCC_CANDIDATES = ("g++-16", "g++-15", "g++-14", "g++-13")
 
 
-def desktop_binary(build_dir=None):
-    """The built desktop executable inside `build_dir` (default: this host's), or None.
+def host_binary(build_dir=None):
+    """The built host executable inside `build_dir` (default: this host's), or None.
 
     Where it lands depends on the generator, not the platform: a single-config generator (Ninja,
     Makefiles) writes it at the build root, a multi-config one (Visual Studio, Xcode) puts it under
@@ -53,7 +53,7 @@ def desktop_binary(build_dir=None):
 
     ONE definition, because the copies had already drifted: collect_kpi.py looked for bare, .exe,
     Release/.exe while repo_health.py looked for Release/.exe, .exe, bare, so a single
-    `collect_kpi --commit` could take `binary_kb` from one file and `flash.desktop` from another.
+    `collect_kpi --commit` could take `binary_kb` from one file and the `flash` figure from another.
     """
     root = Path(build_dir) if build_dir else ROOT / host_build_dir()
     found = [p for p in (root / "MoonLight", root / "MoonLight.exe",
@@ -106,8 +106,8 @@ def main():
                     help="build with GCC instead of the default compiler — the toolchain CI uses. "
                          "Catches the warnings clang does not emit.")
     ap.add_argument("--no-jit", action="store_true",
-                    help="build as a desktop WITHOUT a MoonLive backend (forces "
-                         "MM_MOONLIVE_HAS_HOST_JIT=0). Every x86-64 desktop is one: Windows, Linux "
+                    help="build as a host WITHOUT a MoonLive backend (forces "
+                         "MM_MOONLIVE_HAS_HOST_JIT=0). Every x86-64 host is one: Windows, Linux "
                          "and Intel macOS ship no backend, so a test that presumes a compile "
                          "succeeds passes on an arm64 bench and fails only on CI. This runs the "
                          "suite the way those hosts see it.")
@@ -138,8 +138,8 @@ def main():
         # sharing a cache with the normal build would mean rebuilding the world on every switch.
         bdir = "build/nojit"
         extra += ["-DMM_MOONLIVE_NO_HOST_JIT=ON"]
-        print("Forcing MM_MOONLIVE_HAS_HOST_JIT=0 — the x86-64 desktop's view.")
-    what = "test binaries" if args.tests else "desktop target"
+        print("Forcing MM_MOONLIVE_HAS_HOST_JIT=0: the x86-64 host's view.")
+    what = "test binaries" if args.tests else "host target"
     print(f"Configuring {bdir}/ and generating build_id.h ..." if args.configure else f"Building {what} into {bdir}/ ...")
     # CMAKE_BUILD_TYPE is honoured by single-config generators (Ninja, Make).
     # Visual Studio is multi-config and ignores it — we pass --config Release at
@@ -153,7 +153,7 @@ def main():
     if args.configure:
         sys.exit(subprocess.run([sys.executable, str(ROOT / "moondeck" / "build" / "generate_build_info.py")], cwd=ROOT).returncode)
 
-    # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the desktop binary builds alone and a header edit leaves the test suite out of the compile.
+    # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the host binary builds alone and a header edit leaves the test suite out of the compile.
     # `--tests` builds the test binaries instead: mm_tests (test_host.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
     targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
     build_cmd = ["cmake", "--build", bdir, "--target", *targets]

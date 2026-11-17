@@ -162,7 +162,7 @@ The test: *would the Layer know to skip this?* If yes (an empty grid, a disabled
 
 **Effects render at every channel count.** An effect writes per channel, the way `draw::pixel` does (`if (write >= 1) …r; if (write >= 2) …g;`), so a light carries as much of the color as it has channels, RGB on three, R+G on two, R on one. Channels the effect doesn't set belong to the driver. Every light has at least one channel: `Layer::setChannelsPerLight` enforces that at the setter.
 
-**Effects must animate at every tick rate.** Per-tick phase math computed as `dt * bpm * K / 60000` truncates to 0 on devices where `dt < 234/bpm` ms: desktop ticks every 0–1 ms, so even bpm=60 freezes. The fix is to keep the raw `dt * bpm` numerator in the phase accumulator and divide only at the read site:
+**Effects must animate at every tick rate.** Per-tick phase math computed as `dt * bpm * K / 60000` truncates to 0 on devices where `dt < 234/bpm` ms: the host ticks every 0–1 ms, so even bpm=60 freezes. The fix is to keep the raw `dt * bpm` numerator in the phase accumulator and divide only at the read site:
 
 ```cpp
 phase_num_ += static_cast<uint64_t>(dt) * bpm;
@@ -171,7 +171,7 @@ uint8_t t = static_cast<uint8_t>((phase_num_ * 256) / 60000);
 
 See NoiseEffect / MetaballsEffect for the canonical pattern. Animation speed must depend only on `bpm` and wallclock, not on tick rate or grid size.
 
-**Everything that changes over time is driven by elapsed time, never by the frame count.** The rule above is one half of it, a phase that truncates to zero and freezes. The other half is the mirror image and as wrong: state advanced by a fixed amount *per frame* runs at whatever speed the hardware happens to render. The same gravity setting is an explosion on a desktop at 5,000 fps and a drift on an ESP32 at 470. This applies to every per-frame quantity, more than phase: a force, a velocity, a trail fade, a decay, a drop rate, a simulation step. The user sets a speed; the hardware must not get a vote.
+**Everything that changes over time is driven by elapsed time, never by the frame count.** The rule above is one half of it, a phase that truncates to zero and freezes. The other half is the mirror image and as wrong: state advanced by a fixed amount *per frame* runs at whatever speed the hardware happens to render. The same gravity setting is an explosion on a host at 5,000 fps and a drift on an ESP32 at 470. This applies to every per-frame quantity, more than phase: a force, a velocity, a trail fade, a decay, a drop rate, a simulation step. The user sets a speed; the hardware must not get a vote.
 
 **A faster device renders the same motion more smoothly, not more motion.** Quantising to a fixed 60 Hz and skipping the frames in between is wrong here: it discards the smoothness those extra frames were rendered for. Instead scale the work by the fraction of a reference frame that elapsed, so a device rendering ten times as fast takes ten steps a tenth the size: the same trajectory at ten times the resolution. `particles::FrameTime` is the shared implementation (8.8 fixed point, 256 = one reference frame, whose rate is the constructor's `referenceHz`, 60 by default). It carries the undivided numerator and divides late, for the same reason `BeatPhase` does. One unit is a fraction of a millisecond, so a remainder held in whole milliseconds cannot represent it and the truncated time, which differs by render rate, becomes a framerate dependency of its own.
 
@@ -244,7 +244,7 @@ Each driver (a MoonModule) speaks one protocol:
 - **LED drivers**: WS2812 over RMT for multi-pin output, plus one DMA-driven parallel driver, [ParallelLedDriver](../../moonmodules/light/drivers.md#parallelled). Its `peripheral` control picks the backend the chip supports: the `i80` bus, our own-GDMA MoonI80, or the P4's Parlio. The `i80` bus is LCD_CAM on the S3, P4 and S31, and the classic ESP32's I2S peripheral in i80 mode, which is that chip's only route past 8 lanes; IDF's `esp_lcd` picks the backend per chip. MoonI80 adds the streaming ring and the 74HCT595 expander. All are DMA-driven and behind the platform boundary; the driver rounds an i80 bus up around whatever pin count is configured (any count from 1) and parks unused lanes on a pin already driven.
 - **DMX / ArtNet**: sends DMX over UDP. Supports addressable LEDs and conventional DMX fixtures (pars, moving heads, dimmers).
 - **Preview**: streams light data to the web UI via WebSocket.
-- **Desktop output**: SDL2 or terminal for visual preview. Desktop also serves as a high-speed processing node, driving lights via ArtNet/DDP over the network.
+- **Host output**: SDL2 or terminal for visual preview. The host also serves as a high-speed processing node, driving lights via ArtNet/DDP over the network.
 
 Each driver child reads from the Drivers container's output buffer. Everything before the Drivers container is platform-independent.
 

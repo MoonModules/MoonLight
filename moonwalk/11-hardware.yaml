@@ -5,13 +5,13 @@ processes:
   - id: esp32-build-flash
     title: Build, flash and monitor an ESP32
     actor: contributor
-    goal: A bench board runs the change the desktop could not prove.
+    goal: A bench board runs the change the host could not prove.
     systems: [MoonDeck]
     dependsOn: [host-build-test]
     intro: |
       ESP-IDF directly, not the Arduino framework, at the pinned [ESP-IDF version](reference/build-system.md#esp-idf-version). The firmware variants and their keys: [Firmware variants](reference/build-system.md#firmware-variants).
 
-      A board build runs when the work needs it, once the desktop is clean: a gate finds the firmware stale, or a platform change needs compiling for a board. Never for an interesting measurement. A flash happens only when the product owner approves it. Bench boards are free in risk and costly in time: nothing on them is precious, and the product owner still says when a board is written to. A change that could brick, boot-loop or wipe one gets a one-sentence heads-up.
+      A board build runs when the work needs it, once the host is clean: a gate finds the firmware stale, or a platform change needs compiling for a board. Never for an interesting measurement. A flash happens only when the product owner approves it. Bench boards are free in risk and costly in time: nothing on them is precious, and the product owner still says when a board is written to. A change that could brick, boot-loop or wipe one gets a one-sentence heads-up.
     inputs:
       type: object
       properties:

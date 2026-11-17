@@ -85,7 +85,7 @@ Open the [web installer](https://moonmodules.org/MoonLight/install/) in Chrome o
 
 [Install MoonLight](moonwalk.md#install) walks you from a blank board to a running device, and [Show an effect on your lights](moonwalk.md#first-light-show) from there to your first light show.
 
-### A laptop: the desktop build
+### A laptop: the host build
 
 Download your build from the [releases page](https://github.com/MoonModules/MoonLight/releases/latest), then open `http://localhost:8080/`. It runs the same interface and effect pipeline on macOS, Windows and Linux, driving fixtures over Art-Net, DDP or E1.31. [Install MoonLight](moonwalk.md#install) goes through it for macOS, Windows, Linux and Docker, with screenshots.
 

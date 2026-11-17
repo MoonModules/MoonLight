@@ -1231,7 +1231,7 @@
    "guide": [
     {
      "title": "Compressed files need ESP32",
-     "text": "A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; desktop and Teensy builds show a clean error instead of playing it.\n\nZstd-compressed files do not play on any target yet.\n\nExport a track uncompressed if it needs to play everywhere."
+     "text": "A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; host and Teensy builds show a clean error instead of playing it.\n\nZstd-compressed files do not play on any target yet.\n\nExport a track uncompressed if it needs to play everywhere."
     },
     {
      "title": "The layout numbers its lights as the xLights model does",
@@ -2175,7 +2175,7 @@
   },
   "FluidEffect": {
    "line": "Light poured into a simulated medium and carried by it.",
-   "summary": "Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4; an S3 runs it on a small grid.",
+   "summary": "Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the host and the P4; an S3 runs it on a small grid.",
    "attribution": "[Jos Stam](https://moonmodules.org/MoonLight/reference/attributions.html#jos-stam)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FluidEffect.gif",
    "controls": {
@@ -3613,7 +3613,7 @@
   },
   "NdiDriver": {
    "line": "Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.",
-   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nDesktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nHost only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
    "attribution": "[NDI](https://moonmodules.org/MoonLight/reference/attributions.html#ndi), [Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium)",
    "guide": [
     {
@@ -3668,7 +3668,7 @@
    "guide": [
     {
      "title": "ffmpeg",
-     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
+     "text": "It runs on the host, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
     },
     {
      "title": "On the ESP32-P4",
@@ -3718,7 +3718,7 @@
   },
   "RtspDriver": {
    "line": "Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.",
-   "summary": "RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the desktop, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
+   "summary": "RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the host, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
    "attribution": "[Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium), [RTSP](https://moonmodules.org/MoonLight/reference/attributions.html#rtsp), [RTP](https://moonmodules.org/MoonLight/reference/attributions.html#rtp)",
    "guide": [
     {
@@ -3881,7 +3881,7 @@
     },
     "interface": {
      "line": "The network adapter the frames go out on.",
-     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop))."
+     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-host))."
     },
     "fps": {
      "line": "Frame-rate limit, so a fast render tick does not saturate the link."
@@ -4195,7 +4195,7 @@
    "controls": {
     "port": {
      "line": "The port the server listens on.",
-     "more": "8080 on the desktop and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: how."
+     "more": "8080 on the host and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: how."
     }
    },
    "role": "generic",
@@ -4278,7 +4278,7 @@
     },
     "mode": {
      "line": "How much of the UI is shown, cumulative.",
-     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a desktop carries to exercise their settings. Only the UI reads it."
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it."
     },
     "factory reset": {
      "line": "Delete every setting and preset and restart as freshly installed.",
@@ -4381,7 +4381,7 @@
    "guide": [
     {
      "title": "Choosing a source",
-     "text": "Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop."
+     "text": "Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on a host."
     },
     {
      "title": "Wiring and capture",
@@ -4618,7 +4618,7 @@
   },
   "TasksModule": {
    "line": "A read-only diagnostic showing what runs where: the tasks, and the modules inside each.",
-   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the desktop.",
+   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the host.",
    "guide": [
     {
      "title": "Reading a task row",
@@ -5358,7 +5358,7 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.\n\nA desktop builds the same cards over stubs, for developer mode. The order is described under The cascade in the header.",
+   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.\n\nA host builds the same cards over stubs, for developer mode. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",
@@ -5393,7 +5393,7 @@
   },
   "EthernetModule": {
    "line": "The wired interface: which board's wiring it uses, and how it gets an address.",
-   "summary": "A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the desktop.",
+   "summary": "A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the host.",
    "guide": [
     {
      "title": "Choosing a static address",
@@ -5646,8 +5646,8 @@
    "summary": "Each reads its own slice of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).",
    "videos": [
     {
-     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",
-     "caption": "Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-host.webm",
+     "caption": "Drivers on a host: preview, NDI, RTSP, HLS, network send and Hue."
     },
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-esp32.webm",

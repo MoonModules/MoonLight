@@ -129,7 +129,7 @@ Persistence reaches the Scheduler through a **function-pointer hook**, `setLoadA
 
 ## Parallelism
 
-On multi-core systems (ESP32 has 2 cores, desktop and RPi many), a MoonModule can declare a core affinity, which the scheduler respects when pinning tasks; on single-core or desktop systems it is ignored.
+On multi-core systems (ESP32 has 2 cores, host and RPi many), a MoonModule can declare a core affinity, which the scheduler respects when pinning tasks; on single-core or host systems it is ignored.
 
 The model is **producers vs consumers**: producers generate data, consumers process and output it. The light domain instantiates it concretely: effects are producers, drivers are consumers.
 
@@ -208,7 +208,7 @@ The render loop (`Scheduler::tick` and everything it calls: every effect, modifi
 
 **Memory layout** is the corollary: allocate buffers as single contiguous blocks outside the hot path. Never allocate many small scattered objects in a loop; fragmentation catches up even off-path. On ESP32 with PSRAM, use `heap_caps_malloc(..., MALLOC_CAP_SPIRAM)` for large buffers; the `platform::alloc` wrapper does this automatically.
 
-**Network input** follows the same discipline: process synchronously at a defined point in the frame loop. Async input with staging buffers is allowed when memory is plentiful (desktop, PSRAM-rich ESP32), but the default is synchronous to keep the loop's worst case predictable.
+**Network input** follows the same discipline: process synchronously at a defined point in the frame loop. Async input with staging buffers is allowed when memory is plentiful (host, PSRAM-rich ESP32), but the default is synchronous to keep the loop's worst case predictable.
 
 **Data over objects.** The hot path is designed around plain contiguous data: flat buffers one stage writes and the next stage reads, no per-element objects, no virtual calls per light. The module tree is the one deliberate class hierarchy, because uniform polymorphism is what lets the UI render any module generically, see [Web UI](mooncore.md#web-ui). Off the hot path a proven adapter interface is fine, such as `ListSource`, the textbook data-source shape behind UITableView and Qt's `QAbstractItemModel`.
 

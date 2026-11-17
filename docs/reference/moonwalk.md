@@ -107,7 +107,7 @@ flowchart LR
     os -- no --> first["the first option"]
 ```
 
-A choice, such as the platform, takes the reader's own pick first, then the host's preset, then the reader's operating system, then the first option. A device presets what follows from where it runs, read from its System card: the platform (ESP32, Teensy, or the desktop build's macOS, Linux, Windows or Docker), the target (Board or Desktop) and the audio source. The pick is kept per choice name, in the browser's storage for that host's address, so the website and a device each keep their own.
+A choice, such as the platform, takes the reader's own pick first, then the host's preset, then the reader's operating system, then the first option. A device presets what follows from where it runs, read from its System card: the platform (ESP32, Teensy, or the host build's macOS, Linux, Windows or Docker), the target (Board or Host) and the audio source. The pick is kept per choice name, in the browser's storage for that host's address, so the website and a device each keep their own.
 
 ### 3. Opening a process
 

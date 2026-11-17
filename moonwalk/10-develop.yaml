@@ -1,38 +1,38 @@
 # yaml-language-server: $schema=moonwalk.schema.json
 stage: Develop
-summary: The change written and proven on the desktop.
+summary: The change written and proven on the host.
 processes:
   - id: host-build-test
-    title: Build, run and test on the desktop
+    title: Build, run and test on the host
     actor: contributor
     goal: A change is proven on the host before any board build.
     systems: [MoonDeck]
     dependsOn: [build-setup]
     intro: |
-      Desktop first, always: anything the desktop can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. A board build comes after the desktop is clean, and only for what the desktop cannot show: the platform layer, timing, memory, real hardware. Implement against [the architecture](explanation/architecture/index.md) and [the coding standards](contributing/coding-standards.md).
+      Host first, always: anything the host can prove, the user interface, the logic and the tests, is proven there rather than through a multi-minute compile and a flash. A board build comes after the host is clean, and only for what the host cannot show: the platform layer, timing, memory, real hardware. Implement against [the architecture](explanation/architecture/index.md) and [the coding standards](contributing/coding-standards.md).
 
       Every task is one MoonDeck script, and the script is the contract. It picks the build directory, applies the flags the gate expects and tees its output where the report reads it. Never run `ctest`, `cmake`, `pytest`, `node --test` or `idf.py` directly when a script wraps it; a task with no script is worth saying rather than working around. Where each build writes: [Build directories](reference/build-system.md#build-directories).
     steps:
       - id: build
-        say: Build the desktop firmware, warning-free.
+        say: Build the host firmware, warning-free.
         when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
-          Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
+          Build only when the next step needs it, rather than after every edit. The host and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
       - id: run
         say: Run it.
         when: { run: { script: moondeck/run/run_host.py } }
         detail: |
-          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced. One desktop runs at a time, on 8080: a check that needs a running device uses that one or the unit tests' own fixtures, and opens no instance on another port.
+          A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced. One host runs at a time, on 8080: a check that needs a running device uses that one or the unit tests' own fixtures, and opens no instance on another port.
 
-          The run detaches and outlives the script that started it, as a flashed board runs on its own. Open `http://localhost:8080`. A source checkout keeps its settings in `build/fs/`: [where the desktop keeps its settings](reference/build-system.md#where-the-desktop-keeps-its-settings).
+          The run detaches and outlives the script that started it, as a flashed board runs on its own. Open `http://localhost:8080`. A source checkout keeps its settings in `build/fs/`: [where the host keeps its settings](reference/build-system.md#where-the-host-keeps-its-settings).
 
           When the product owner can see or judge the result, hand it over, leave it running, and wait for their observation before moving on.
       - id: tests
         say: Test the change.
         when: { process: host-tests }
   - id: host-tests
-    title: Test the change on the desktop
+    title: Test the change on the host
     actor: contributor
     goal: The unit tests and the scenarios the change touches pass on the host.
     systems: [MoonDeck]
@@ -52,7 +52,7 @@ processes:
   - id: write-module
     title: Write a MoonModule in C++
     actor: contributor
-    goal: A new effect, layout, modifier or driver that builds, runs on the desktop and is tested and documented.
+    goal: A new effect, layout, modifier or driver that builds, runs on the host and is tested and documented.
     systems: [MoonCore, MoonLight, MoonDeck]
     dependsOn: [host-build-test]
     intro: |
@@ -102,7 +102,7 @@ processes:
         detail: |
           Put it in `test/unit/light/unit_<Module>.cpp`. Build a small grid, run one frame and check the output. Pin that the module survives a 1x1 and a 0x0 grid, and that a module holding memory drops its `dynamicBytes` to zero when disabled.
       - id: run
-        say: Try the module on the running desktop.
+        say: Try the module on the running host.
         when: { run: { script: moondeck/run/run_host.py } }
         detail: |
           Open `http://localhost:8080`, add the module in the UI, then resize the grid live to 1x1 and 0x0. It must not crash.
@@ -121,7 +121,7 @@ processes:
   - id: add-stream-source
     title: Add a picture or channel-data source
     actor: contributor
-    goal: A new way for frames to reach the lights, proven on the desktop, then on a board.
+    goal: A new way for frames to reach the lights, proven on the host, then on a board.
     systems: [MoonLight, MoonDeck]
     dependsOn: [host-build-test]
     page: reference/adding-a-stream-source.md
@@ -180,16 +180,16 @@ processes:
         say: Pin the source with a unit test.
         when: { process: add-test }
         detail: |
-          A picture source drives the desktop with a stand-in for the device. A channel-data source writes frames and checks each light against what was sent; `moondeck/run/fseq_play.py` writes reference FSEQ files and streams them over DDP. The service's own tests already pin the swap, and Network Receive's tests pin the sink's placement on serpentine, 3D, mirrored and transposed layouts.
+          A picture source drives the host with a stand-in for the device. A channel-data source writes frames and checks each light against what was sent; `moondeck/run/fseq_play.py` writes reference FSEQ files and streams them over DDP. The service's own tests already pin the swap, and Network Receive's tests pin the sink's placement on serpentine, 3D, mirrored and transposed layouts.
     outro: |
-      Prove the source on the desktop before a board sees it. Then run it on the board it is for: a platform seam holds the device itself, with stubs on every other platform, so a board without the device builds and shows a status rather than failing. Flash it with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash), then open the change as [one topic](moonwalk.md#contribute-pr).
+      Prove the source on the host before a board sees it. Then run it on the board it is for: a platform seam holds the device itself, with stubs on every other platform, so a board without the device builds and shows a status rather than failing. Flash it with [Build, flash and monitor an ESP32](moonwalk.md#esp32-build-flash), then open the change as [one topic](moonwalk.md#contribute-pr).
   - id: iterate-moonlive
     title: Iterate a MoonLive script on a board
     actor: agent
     goal: A script is edited and judged on the device before it lands in the repo.
     systems: [MoonLive]
     intro: |
-      The working copy of a script lives on the board while you shape it with the product owner. The device compiles it and reports errors in the module's status, so a tweak costs one upload instead of a tree edit and a desktop build. The language: [MoonLive](moonmodules/light/moonlive.md). The HTTP calls: [Run a MoonLive script over the API](moonwalk.md#moonlive-api).
+      The working copy of a script lives on the board while you shape it with the product owner. The device compiles it and reports errors in the module's status, so a tweak costs one upload instead of a tree edit and a host build. The language: [MoonLive](moonmodules/light/moonlive.md). The HTTP calls: [Run a MoonLive script over the API](moonwalk.md#moonlive-api).
     steps:
       - id: name
         section: Edit on the device
@@ -223,7 +223,7 @@ processes:
         say: Check the heap on a refused compile.
         when: { call: { operation: getSystem } }
         detail: |
-          `codegen failed` on a classic ESP32 is usually memory, not the compiler: the same script lowers on the desktop. Read `freeInternal` and `maxBlock` before you theorize about registers or the emitter, and when the host and the device disagree on identical input, make the device name which guard fired.
+          `codegen failed` on a classic ESP32 is usually memory, not the compiler: the same script lowers on the host. Read `freeInternal` and `maxBlock` before you theorize about registers or the emitter, and when the host and the device disagree on identical input, make the device name which guard fired.
       - id: repeat
         say: Repeat until the product owner approves.
         when: { manual: "Each round uploads, reads back and reads the status." }
@@ -237,8 +237,8 @@ processes:
           Keep the header line and the control hints and nothing else. Every shipped script must also compile as C++, which `test_scripts_are_cpp.py` pins.
     outro: |
       Drafts stay on the board and the repo gets the finished script once. The product owner judges the result on the hardware.
-  - id: package-desktop
-    title: Package the desktop build
+  - id: package-host
+    title: Package the host build
     actor: contributor
     goal: The installable files for the host it runs on.
     systems: [MoonDeck]

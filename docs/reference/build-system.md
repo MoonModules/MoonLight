@@ -5,13 +5,13 @@ How the source tree maps onto CMake, where each build writes, and the facts a bu
 CMake is the sole build system. The source tree is shared across every platform, but build entry points are separate because ESP-IDF wraps CMake with its own conventions (`idf_component_register()` instead of `add_library()`).
 
 ```text
-CMakeLists.txt                          ← standard CMake: desktop / RPi + tests
+CMakeLists.txt                          ← standard CMake: host / RPi + tests
 src/
   main.cpp                              ← shared pipeline wiring (mm_main), platform-neutral
   platform/
     host/
-      main_host.cpp                  ← desktop entry point: int main() + SIGINT and SIGTERM
-      platform_config.h                 ← desktop platform constants
+      main_host.cpp                  ← host entry point: int main() + SIGINT and SIGTERM
+      platform_config.h                 ← host platform constants
     esp32/
       platform_config.h                 ← ESP32 platform constants (reads sdkconfig)
 esp32/
@@ -22,7 +22,7 @@ esp32/
   sdkconfig.defaults                    ← board-specific defaults
 ```
 
-The shared `src/main.cpp` defines `mm_main(keepRunning, httpPort)`, the full pipeline wiring. Each platform provides a thin entry point that does platform-specific init (SIGINT and SIGTERM on desktop, NVS on ESP32; the network starts in the platform layer) then calls `mm_main()`.
+The shared `src/main.cpp` defines `mm_main(keepRunning, httpPort)`, the full pipeline wiring. Each platform provides a thin entry point that does platform-specific init (SIGINT and SIGTERM on the host, NVS on ESP32; the network starts in the platform layer) then calls `mm_main()`.
 
 The project is a small set of CMake libraries. A core library is platform-independent, a platform library is selected at configure time, and the application target links both and provides the entry point. Further decomposition (effects, networking, drivers as separate libraries) happens when the codebase is large enough to justify it.
 
@@ -38,9 +38,9 @@ On Windows the default generator is Visual Studio multi-config, so `MoonLight.ex
 
 ## The compiler cache
 
-Every build uses [ccache](https://ccache.dev) when it is installed, and builds as before when it is not. A compile whose source, headers and flags match an earlier one is read back from the cache. That covers a rebuild after a clean, the same file in another ESP32 firmware, and a branch switched back to. ESP-IDF turns on its own ccache switch from `esp32/CMakeLists.txt`, and the desktop and Teensy builds set it as the compiler launcher. ESP-IDF's installer brings ccache on Windows; the Windows desktop build, on the Visual Studio generator, runs without it. `ccache -s` shows how often it hits. CI keeps one cache per build job through `.github/actions/ccache`. The version, git hash and date change with every commit, so `build_info.cpp` alone holds them, and a new commit recompiles only what it changed.
+Every build uses [ccache](https://ccache.dev) when it is installed, and builds as before when it is not. A compile whose source, headers and flags match an earlier one is read back from the cache. That covers a rebuild after a clean, the same file in another ESP32 firmware, and a branch switched back to. ESP-IDF turns on its own ccache switch from `esp32/CMakeLists.txt`, and the host and Teensy builds set it as the compiler launcher. ESP-IDF's installer brings ccache on Windows; the Windows host build, on the Visual Studio generator, runs without it. `ccache -s` shows how often it hits. CI keeps one cache per build job through `.github/actions/ccache`. The version, git hash and date change with every commit, so `build_info.cpp` alone holds them, and a new commit recompiles only what it changed.
 
-## Where the desktop keeps its settings
+## Where the host keeps its settings
 
 A source checkout writes to `build/fs/`, its config under `build/fs/.config/`, recognized by `CMakeLists.txt` and `moondeck/` both being in the working directory. A development tree stays self-contained and ignored by git, and the File Manager shows what a board shows rather than build output. An installed or unzipped binary writes to the per-user data folder its OS provides, listed under [Install MoonLight](../moonwalk.md#install). `MM_DATA_DIR` overrides both, which is how the tests keep their files inside the build tree.
 
@@ -48,7 +48,7 @@ A shipped binary starts from a download folder or a Start-menu shortcut, where a
 
 ## Generated before compiling
 
-CMake runs these when their sources change; the generated files are ignored by git and rebuilt on every clean build. Both are defined in the root `CMakeLists.txt` (desktop) and `esp32/main/CMakeLists.txt` (ESP32).
+CMake runs these when their sources change; the generated files are ignored by git and rebuilt on every clean build. Both are defined in the root `CMakeLists.txt` (host) and `esp32/main/CMakeLists.txt` (ESP32).
 
 | Step | Source | Generated |
 |---|---|---|
@@ -87,7 +87,7 @@ Some variants carry [MoonBase](../explanation/architecture/moonbase.md), the sec
 
 ### The v6 ecosystem
 
-Anything the IDF makes the recognized way to build, install, provision or ship is the path to take rather than a bespoke one. It is adopted step by step, each its own commit and hardware re-test, on the pinned release. None may leak an IDF assumption into shared `src/` or the desktop and Teensy builds. The plan per item is in [backlog/platform](https://github.com/MoonModules/MoonLight/issues/220).
+Anything the IDF makes the recognized way to build, install, provision or ship is the path to take rather than a bespoke one. It is adopted step by step, each its own commit and hardware re-test, on the pinned release. None may leak an IDF assumption into shared `src/` or the host and Teensy builds. The plan per item is in [backlog/platform](https://github.com/MoonModules/MoonLight/issues/220).
 
 | Change | Where MoonLight stands |
 |---|---|
@@ -99,4 +99,4 @@ Anything the IDF makes the recognized way to build, install, provision or ship i
 
 ## Source
 
-[CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/CMakeLists.txt) is the desktop and test build; [esp32/CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/esp32/CMakeLists.txt) is the ESP-IDF project root.
+[CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/CMakeLists.txt) is the host and test build; [esp32/CMakeLists.txt](https://github.com/MoonModules/MoonLight/blob/main/esp32/CMakeLists.txt) is the ESP-IDF project root.

@@ -132,7 +132,7 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 
 | limit | what it cost | wants |
 |---|---|---|
-| "codegen failed: assembler overflow (branch range, slot, or immediate)" | names neither the limit nor the line; finding it took a desktop bisect with `disasm.py` | the message names the table that ran out and the function it was filling |
+| "codegen failed: assembler overflow (branch range, slot, or immediate)" | names neither the limit nor the line; finding it took a host bisect with `disasm.py` | the message names the table that ran out and the function it was filling |
 | "too many arguments to hold" | fires when the eye's `tick()` held too many live locals, so the wording sends the author to the calls | a message about live variables when that is the cause |
 | a failed recompile leaves the effect dark | on a live installation every edit that does not compile switches the light off until a fixed one arrives; it happened three times in the session | keep running the last program that compiled, and show the error beside it |
 | `setPaletteColor` clamps the palette index | a palette is circular, but `hue + offset` past 255 sticks at the last color unless the script writes `mod(..., 256)` | wrap the index, as the palette itself does |
@@ -141,7 +141,7 @@ Two effects written in one session on real hardware: `stadbeest-walk.mle` (a wal
 
 ### 12. A one-to-one port of hpwit's scripts, for a like-for-like comparison (2026-10-19)
 
-hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. His `multi_effect_controller.sc` (800 lines) and the five `ProceduralEffects` were ported to MoonLive on 2026-10-18 (`moonlive/projects/hpwit/`), but as the same LOOK rather than the same program, so code size and frame time do not compare like for like. A one-to-one port needs the language to accept his programs as written. Each construct was compiled on the desktop on 2026-10-19:
+hpwit's compiler (`hpwit/new-parser`, `asmparser2`) runs whole C-like programs. His `multi_effect_controller.sc` (800 lines) and the five `ProceduralEffects` were ported to MoonLive on 2026-10-18 (`moonlive/projects/hpwit/`), but as the same LOOK rather than the same program, so code size and frame time do not compare like for like. A one-to-one port needs the language to accept his programs as written. Each construct was compiled on the host on 2026-10-19:
 
 | his scripts use | MoonLive | what it takes | work |
 |---|---|---|---|

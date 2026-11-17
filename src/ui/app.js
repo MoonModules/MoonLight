@@ -3098,7 +3098,7 @@ function walkChoices(controls) {
     const platform = model === "docker" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
     if (!platform) return {};
     const board = platform === "ESP32" || platform === "Teensy";
-    return { platform, target: board ? "Board" : "Desktop",
+    return { platform, target: board ? "Board" : "Host",
              source: board ? "A microphone on a board" : platform === "Docker" ? "A PulseAudio server into the container" : `The computer's audio on ${platform}` };
 }
 
@@ -5201,7 +5201,7 @@ function openGraphNode(row, opts) {
 }
 
 // The fields a node's popup lists: its flavor as its type (WLED-MM), and as its url the `<name>.local` address a MoonLight board answers on;
-// the ip links to the address the device was found on, so a url saying the same goes. A desktop serves on a port and answers no mDNS.
+// the ip links to the address the device was found on, so a url saying the same goes. A host serves on a port and answers no mDNS.
 function popupFields(row) {
     const shown = Object.assign({}, row);
     if (shown.flavor) { shown.type = shown.flavor; delete shown.flavor; }
@@ -5260,7 +5260,7 @@ async function peerFirmware(base) {
 }
 
 // The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
-// a board and a desktop alike. Null url for a device its host or its user updates, and for one older than its firmware name.
+// a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
 function updateAsset(rel, dev, version) {
     const installs = !!dev.firmware && (!dev.update || dev.update === "self");
     const asset = installs ? (rel?.assets || []).find(a => a.name === `firmware-${dev.firmware}-v${version}.bin`) : null;
@@ -5642,7 +5642,7 @@ function peerSummaryLines(sys) {
     if (board) lines.push(`Board: ${board}`);
     if (sys.mac) lines.push(`MAC: ${sys.mac}`);
     const health = [sys.uptime !== undefined ? `up ${fmtTime(sys.uptime)}` : "", sys.fps !== undefined ? `${sys.fps} fps` : "",
-                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a desktop, 0 signal off WiFi
+                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a host, 0 signal off WiFi
     if (health.length) lines.push(`Health: ${health.join(" · ")}`);
     const outputs = graphOutputs(sys);
     if (outputs) lines.push(`Lights: ${outputs}`);
@@ -7500,7 +7500,7 @@ function headerStats(ctrls, tuning) {
         const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
         parts.push("🧠 " + freeKb + "KB");
     }
-    // Skip on desktop, where the platform stub reports "0KB" (no real
+    // Skip on host, where the platform stub reports "0KB" (no real
     // block measurement / unlimited heap): same reason heap free above
     // only shows when the heap progress control is present.
     if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
@@ -7639,7 +7639,7 @@ function deviceFirmwareInfo() {
     const version = value(fw, "appVersion");
     const sys = allModules().find(m => m.type === "SystemModule");
     const firmware = value(sys, "firmware");
-    // "unknown" is what a desktop build older than its own firmware name reports, with no image to match.
+    // "unknown" is what a host build older than its own firmware name reports, with no image to match.
     return version ? { version, firmware: firmware && firmware !== "unknown" ? firmware : null, update: value(fw, "update"),
                        moonbase: value(fw, "moonbaseMismatch") || null } : null;
 }
@@ -7696,7 +7696,7 @@ async function stableUpdate(dev, force) {
     const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", force);
     if (!rel || !rel.tag_name) return null;
     const assetNames = (rel.assets || []).map(a => a.name);
-    // A board or a desktop alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
+    // A board or a host alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
     const hasBinary = !!dev.firmware && assetNames.some(n => n === `firmware-${dev.firmware}-${rel.tag_name}.bin`);
     return (isNewer(rel.tag_name, dev.version) && hasBinary) ? rel.tag_name : null;
 }
@@ -9064,7 +9064,7 @@ function renderFileManager(mod, host) {
     renderChildren("/", tree, 0);
 
     // Filesystem usage bar below the tree: the File Manager's own `flash` control (used /
-    // total bytes from the platform). Absent (e.g. desktop fs total 0) → nothing shown.
+    // total bytes from the platform). Absent (e.g. host fs total 0) → nothing shown.
     const fsCtrl = fmFilesystemUsage(mod);
     if (fsCtrl) {
         const usage = document.createElement("div");

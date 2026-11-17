@@ -51,7 +51,7 @@
     {
       "action": "click",
       "selector": ".status-dot[data-id=\"test_host\"]",
-      "caption": "Test is the group that keeps the agents honest. Nearly three thousand unit tests, the scenario suite that drives a whole pipeline, and the host tests for the scripts themselves.",
+      "caption": "Test is the group that keeps the agents honest. Nearly three thousand unit tests, the scenario suite that drives a whole pipeline, and the tooling tests for the scripts themselves.",
       "speech": 13.6
     },
     {
@@ -110,8 +110,8 @@
     },
     {
       "action": "click",
-      "selector": "[data-tab=\"desktop\"]",
-      "caption": "Desktop is next. MoonLight runs on this computer as a real device, so almost everything is proven here before any hardware is touched.",
+      "selector": "[data-tab=\"host\"]",
+      "caption": "Host is next. MoonLight runs on this computer as a real device, so almost everything is proven here before any hardware is touched.",
       "speech": 11.1
     },
     {

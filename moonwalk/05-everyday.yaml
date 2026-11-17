@@ -205,7 +205,7 @@ processes:
         say: Read the device's address on WiFi.
         when: { open: { module: WiFiModule } }
         detail: |
-          Its `address` is what you typed into the browser. A desktop install talking to itself uses `127.0.0.1`.
+          Its `address` is what you typed into the browser. A host install talking to itself uses `127.0.0.1`.
       - id: install
         say: Install Open Stage Control.
         when: { open: { url: "https://openstagecontrol.ammd.net/" } }

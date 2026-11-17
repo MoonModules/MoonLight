@@ -129,7 +129,7 @@ processes:
         detail: |
           On Windows this gives you `MoonLight-windows-x64-vX.Y.Z-setup.exe`, on macOS a `.dmg`, on Linux a `.tar.gz` and a `.deb`.
 
-          ![The installer pointed at this computer: picking a release, then downloading the app](assets/moontube/01-install-desktop.webm)
+          ![The installer pointed at this computer: picking a release, then downloading the app](assets/moontube/01-install-host.webm)
 
           ![The web installer with Windows x64 selected, and the downloaded setup.exe in the browser's Downloads panel carrying a SmartScreen warning](assets/tutorials/windows-01-download.png)
       - id: keep

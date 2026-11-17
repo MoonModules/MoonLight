@@ -70,7 +70,7 @@ Where an enum for the values already exists, such as `Addressing` or `platform::
 A test sets the control by the same names.
 See [MidiService.h](../src/core/services/MidiService.h): `profile == kProfileApc40`, not `profile == 1`.
 
-**Width the intermediate, and the result follows.** Any `a * b` where both operands are `nrOfLightsType`, or a count times a multiplier, can overflow `uint16_t` even when each operand is small: `256 * 256 = 65536` wraps to 0 on a no-PSRAM device. Do the arithmetic in a wider type, clamp to the ceiling, then narrow. A counter derived from a cell count is the domain typedef too, never a fixed `uint16_t`. Such a path is invisible on the uint32 desktop build, so pin it with a `uint16`-typed unit test or hardware confirmation.
+**Width the intermediate, and the result follows.** Any `a * b` where both operands are `nrOfLightsType`, or a count times a multiplier, can overflow `uint16_t` even when each operand is small: `256 * 256 = 65536` wraps to 0 on a no-PSRAM device. Do the arithmetic in a wider type, clamp to the ceiling, then narrow. A counter derived from a cell count is the domain typedef too, never a fixed `uint16_t`. Such a path is invisible on the uint32 host build, so pin it with a `uint16`-typed unit test or hardware confirmation.
 
 **When a validation field's storage is narrower than what it claims to validate, the validation is wrong, not the field.** A `uint8_t` min/max slot can't bound an `Int16` control, clamping it to `[0..0]`. The fix is a wider bound, or per-type bound slots; until then the constraint is documented at the field's declaration.
 

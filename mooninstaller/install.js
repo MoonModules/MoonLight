@@ -786,17 +786,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // the stale-handle risk above is the opt-in's to carry: a failed open surfaces
     // as the same mid-flash error, with the same Try-again path out of it.
     let pickedPort = null;
-    // Desktop mode: the user is not flashing a device over USB, they are downloading the build
+    // Host mode: the user is not flashing a device over USB, they are downloading the build
     // for the computer viewing this page. Same picker, same release list; only the target
     // differs. Kept beside pickedPort because the two are mutually exclusive states of the
     // one "what am I installing onto" question the Port row asks.
-    let desktopMode = false;   // this page is for flashing an ESP32; the desktop download is the alternative
+    let hostMode = false;   // this page is for flashing an ESP32; the host download is the alternative
     // A Teensy held in its bootloader by its program button: no serial port, the bootloader itself is the target.
     // Not a dropdown choice: the port picker offers it when no Teensy is listed, the one case that needs it.
     let teensyBootMode = false;
     const portSelect = document.getElementById("port-select");
     const PICK_NEW = "__pick_new__"; // sentinel value for the "pick another" option
-    const DESKTOP = "__desktop__";   // sentinel value for the "this computer" option
+    const HOST = "__host__";   // sentinel value for the "this computer" option
     const TEENSY_BOOT = "__teensy_boot__";   // sentinel value naming the bootloader mode while it is active
     const IDLE = "__idle__";         // neutral placeholder: nothing chosen yet
 
@@ -823,8 +823,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // The "this computer" option, offered in every state: a visitor with no device
       // attached is the exact person who wants the desktop build, and they should not
       // have to grant a serial port to discover it exists.
-      const desktopLabel = thisComputerLabel();
-      const addDesktopOpt = () => {
+      const computerLabel = thisComputerLabel();
+      const addHostOpt = () => {
         // Shown only while active, so the row names the target the hint below the port picker chose.
         if (teensyBootMode) {
           const teensyOpt = document.createElement("option");
@@ -832,13 +832,13 @@ document.addEventListener('DOMContentLoaded', () => {
           teensyOpt.textContent = "A Teensy in its bootloader";
           portSelect.appendChild(teensyOpt);
         }
-        if (!desktopLabel) return;
+        if (!computerLabel) return;
         const opt = document.createElement("option");
-        opt.value = DESKTOP;
-        opt.textContent = `This computer (${desktopLabel})`;
+        opt.value = HOST;
+        opt.textContent = `This computer (${computerLabel})`;
         portSelect.appendChild(opt);
       };
-      const modeValue = () => desktopMode ? DESKTOP : teensyBootMode ? TEENSY_BOOT : null;
+      const modeValue = () => hostMode ? HOST : teensyBootMode ? TEENSY_BOOT : null;
       if (!pickedPort) {
         // A neutral placeholder sits first and stays selected until the user chooses. It is
         // what makes every pick a real `change` event, including re-picking the same option
@@ -855,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
           pickOpt.textContent = "A board on a USB port…";
           portSelect.appendChild(pickOpt);
         }
-        addDesktopOpt();
+        addHostOpt();
         portSelect.value = modeValue() || IDLE;
         return;
       }
@@ -872,7 +872,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pickOpt.value = PICK_NEW;
       pickOpt.textContent = "Pick another USB port…";
       portSelect.appendChild(pickOpt);
-      addDesktopOpt();
+      addHostOpt();
       portSelect.value = modeValue() || "current";
     }
 
@@ -890,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // picked while this was resolving would otherwise be overwritten with ports[0].
         if (!ports.length || pickedPort) return;
         pickedPort = ports[0];
-        desktopMode = false;
+        hostMode = false;
         teensyBootMode = false;
         syncPortState();
       } catch {
@@ -900,21 +900,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function syncPortState() {
       rebuildPortSelect();
-      installPicker.setDesktopMode(desktopMode);
+      installPicker.setHostMode(hostMode);
       installPicker.notifyReadyChanged();
       // The serial-only controls have no meaning when the target is this computer: there is
       // no chip to erase and no port to monitor. Hidden rather than disabled, because a
       // greyed "Erase chip first" next to a Mac download invites the wrong question.
-      // The device grid picks an ESP32 to flash; in desktop mode the target is this computer,
+      // The device grid picks an ESP32 to flash; in host mode the target is this computer,
       // and a stale device selection would also narrow the firmware list to ESP32 variants.
       const deviceCard = document.getElementById("device-grid-card");
-      if (deviceCard) deviceCard.hidden = desktopMode;
+      if (deviceCard) deviceCard.hidden = hostMode;
       const eraseRow = document.getElementById("erase-row");
       // The button's own control-row, so hiding it doesn't leave an empty row behind.
       const monitorRow = document.getElementById("monitor-btn")?.closest(".control-row");
       // A Teensy in its bootloader keeps the erase choice: a board whose settings went bad is the one that lands there.
-      if (eraseRow) eraseRow.hidden = desktopMode;
-      if (monitorRow) monitorRow.hidden = desktopMode || teensyBootMode;
+      if (eraseRow) eraseRow.hidden = hostMode;
+      if (monitorRow) monitorRow.hidden = hostMode || teensyBootMode;
     }
 
     syncPortState();
@@ -967,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
       link.addEventListener("click", (e) => {
         e.preventDefault();
         teensyBootMode = true;
-        desktopMode = false;
+        hostMode = false;
         syncPortState();
         // Narrow the device list to the Teensy, as a detected port would.
         installPicker.runDetect((text) => { status.textContent = text; });
@@ -977,10 +977,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function applyPortChoice(value) {
       if (value === IDLE || value === TEENSY_BOOT) return;   // the placeholder, and the active bootloader mode, are not choices
-      if (value === DESKTOP) { desktopMode = true; teensyBootMode = false; syncPortState(); return; }
+      if (value === HOST) { hostMode = true; teensyBootMode = false; syncPortState(); return; }
       // Any other choice is about a device again. openPortPicker ends in its own
       // syncPortState, so only sync here when nothing else will.
-      desktopMode = false;
+      hostMode = false;
       teensyBootMode = false;
       if (value === PICK_NEW) openPortPicker();
       else syncPortState();
@@ -1143,9 +1143,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Gate Install on a picked USB port — the web installer requires the user
       // to choose the port in the dropdown before flashing. (notifyReadyChanged()
       // re-evaluates the button whenever pickedPort changes.)
-      // Desktop mode has nothing to open, so the port gate does not apply: the button is a
+      // Host mode has nothing to open, so the port gate does not apply: the button is a
       // download and is enabled as soon as an archive for this OS exists.
-      blocker: () => (desktopMode || teensyBootMode || pickedPort) ? "" : "Select a USB port first",
+      blocker: () => (hostMode || teensyBootMode || pickedPort) ? "" : "Select a USB port first",
       onDetect: async () => {
         if (teensyBootMode) return TEENSY_FAMILY;
         // The monitor (if open) holds the port — release it before esptool
@@ -1155,7 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return await installer.detect({ port: pickedPort, onLog: appendLog });
       },
       onInstall: async (firmware, manifestUrl, binaryUrl, entry, release) => {
-        // A desktop archive is handed to the browser to download; there is no chip to flash
+        // A host archive is handed to the browser to download; there is no chip to flash
         // and no port to hold. Anchor-click rather than location.href so the Content-Disposition
         // from GitHub is honored and the page is not navigated away mid-session.
         if (entry && entry.isHost) {
@@ -1298,11 +1298,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show the unsupported-browser banner when Web Serial isn't available.
     if (!("serial" in navigator)) {
       document.getElementById("browser-warning").style.display = "block";
-      // Flashing needs Web Serial; downloading the desktop build does not. On a browser
+      // Flashing needs Web Serial; downloading the host build does not. On a browser
       // without it, open on the half that works instead of on a port row that cannot.
-      // After _pickerReady: setDesktopMode reaches the picker's state only once init()
+      // After _pickerReady: setHostMode reaches the picker's state only once init()
       // has mounted it, so calling it here synchronously would silently do nothing.
-      if (thisComputerLabel()) { desktopMode = true; syncPortState(); }
+      if (thisComputerLabel()) { hostMode = true; syncPortState(); }
     }
 
     // --- picture device grid --------------------------------

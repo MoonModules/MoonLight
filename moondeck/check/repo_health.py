@@ -42,7 +42,7 @@ from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
 import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
-from build_host import desktop_binary  # noqa: E402 (one definition of where it lands)
+from build_host import host_binary  # noqa: E402 (one definition of where it lands)
 from build_teensy import FIRMWARES as TEENSY_FIRMWARES, UPDATE_IMAGE_BYTES as TEENSY_UPDATE_BYTES, hex_image_bytes, hex_path  # noqa: E402
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
@@ -247,7 +247,7 @@ def measure_flash():
             flash[firmware] = hex_image_bytes(image)
             MEASURED_THIS_RUN.add(firmware)
             MEASURED_DATES[firmware] = _dt.date.today().isoformat()
-    # The desktop binary, located by build_host.desktop_binary() so this and collect_kpi.py
+    # The host binary, located by build_host.host_binary() so this and collect_kpi.py
     # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
     # a measurement: the same defect the firmware freshness rule above exists to prevent.
@@ -255,9 +255,9 @@ def measure_flash():
     # Held to the SAME rule as the firmwares rather than trusting the build gate to have just
     # built it. That gate does, but `collect_kpi.py --commit` is also run standalone, where nothing
     # builds first, and a rule that holds only inside one caller is not a rule.
-    desktop = desktop_binary()
-    if desktop:
-        st = desktop.stat()
+    binary = host_binary()
+    if binary:
+        st = binary.stat()
         if (_time.time() - st.st_mtime) <= MEASURED_WITHIN_HOURS * 3600:
             host = host_target()  # keyed per host (moondeck/_host.py)
             flash[host] = st.st_size
@@ -394,11 +394,6 @@ def _valid_snapshot(data, source):
             print(f"repo-health: ignoring {source}: section '{key}' is "
                   f"{type(data[key]).__name__}, expected an object", file=sys.stderr)
             return {}
-    # A snapshot from before the host rename names its host targets desktop-<os>; read as host-<os>, they carry forward and compare.
-    for key in ("flash", "perf", "measured"):
-        section = data.get(key)
-        if isinstance(section, dict):
-            data[key] = {("host-" + k[len("desktop-"):] if k.startswith("desktop-") else k): v for k, v in section.items()}
     return data
 
 
@@ -713,7 +708,7 @@ def render_markdown(new, old):
         # fleet and a regression on one target stands out from a change that moved all of them.
         matrix = (new.get("perf") or {}).get("scenario_matrix") or {}
         if matrix and any(matrix.values()):
-            # MATRIX_TARGETS fixes the column ORDER (desktop first, then the boards); a target it
+            # MATRIX_TARGETS fixes the column ORDER (host first, then the boards); a target it
             # does not name still gets a column, appended, rather than being dropped without a
             # word -- a new board on the bench must show up here the day it first reports.
             seen = {c for per in matrix.values() for c in per}

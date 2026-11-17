@@ -15,14 +15,14 @@ No clip is filmed by hand. [MoonTube](../moondeck/moontube/moontube.md) performs
 | | |
 |--|--|
 | [<img src="assets/moontube/00-intro.jpg" alt="Why MoonLight was rebuilt" width="220">](getting-started.md#the-introduction) | **Why MoonLight was rebuilt**<br>Luna introduces MoonLight: what MoonModules built before, what she built from their prompts, and the principles that survived the rewrite.<br>[Getting started](getting-started.md#the-introduction) |
-| [<img src="assets/moontube/01-install-desktop.jpg" alt="No hardware needed" width="220">](getting-started.md#three-ways-in) | **No hardware needed**<br>The same installer, pointed at this computer: pick a release and download the app.<br>[Three ways in](getting-started.md#three-ways-in) |
+| [<img src="assets/moontube/01-install-host.jpg" alt="No hardware needed" width="220">](getting-started.md#three-ways-in) | **No hardware needed**<br>The same installer, pointed at this computer: pick a release and download the app.<br>[Three ways in](getting-started.md#three-ways-in) |
 | [<img src="assets/moontube/01-install-esp32.jpg" alt="Install it" width="220">](getting-started.md#three-ways-in) | **Install it**<br>The web installer onto a device: erase, flash, join WiFi, and open the UI that comes back.<br>[Three ways in](getting-started.md#three-ways-in) |
 
 ## Look around
 
 | | |
 |--|--|
-| [<img src="assets/moontube/02-first-look-desktop.jpg" alt="Look around" width="220">](explanation/how-moonlight-works.md) | **Look around**<br>The same tour on a computer: every module, and what sits inside each one.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
+| [<img src="assets/moontube/02-first-look-host.jpg" alt="Look around" width="220">](explanation/how-moonlight-works.md) | **Look around**<br>The same tour on a computer: every module, and what sits inside each one.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
 | [<img src="assets/moontube/02-first-look-esp32.jpg" alt="On real hardware" width="220">](explanation/how-moonlight-works.md) | **On real hardware**<br>The same tree on real hardware: what a device adds that a computer cannot, from LED pins to a microphone.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
 | [<img src="assets/moontube/03-second-look.jpg" alt="Change your mind freely" width="220">](explanation/how-moonlight-works.md) | **Change your mind freely**<br>The parts of the interface every card shares, each one pressed so you see what it does.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
 
@@ -32,8 +32,8 @@ No clip is filmed by hand. [MoonTube](../moondeck/moontube/moontube.md) performs
 |--|--|
 | [<img src="assets/moontube/05-layouts.jpg" alt="Say where the lights are" width="220">](explanation/how-moonlight-works.md) | **Say where the lights are**<br>Where the lights physically are: compiled layouts for the common shapes, and scripted ones for anything else.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
 | [<img src="assets/moontube/06-layers.jpg" alt="Paint them" width="220">](explanation/how-moonlight-works.md) | **Paint them**<br>An effect, a modifier reshaping it, and a second layer doing the same, blended over the first.<br>[How MoonLight works](explanation/how-moonlight-works.md) |
-| [<img src="assets/moontube/07-drivers-desktop.jpg" alt="Get the frame out" width="220">](moonmodules/light/drivers.md) | **Get the frame out**<br>What carries the frame out of the device, on a desktop: a preview, the video senders, and the network protocols a fixture listens on.<br>[Drivers](moonmodules/light/drivers.md) |
-| [<img src="assets/moontube/07-drivers-esp32.jpg" alt="And out of a device" width="220">](moonmodules/light/drivers.md) | **And out of a device**<br>What carries the frame out of a device: the LED pins only real hardware has, the panel protocols, and the network senders it shares with a desktop.<br>[Drivers](moonmodules/light/drivers.md) |
+| [<img src="assets/moontube/07-drivers-host.jpg" alt="Get the frame out" width="220">](moonmodules/light/drivers.md) | **Get the frame out**<br>What carries the frame out of the device, on a host: a preview, the video senders, and the network protocols a fixture listens on.<br>[Drivers](moonmodules/light/drivers.md) |
+| [<img src="assets/moontube/07-drivers-esp32.jpg" alt="And out of a device" width="220">](moonmodules/light/drivers.md) | **And out of a device**<br>What carries the frame out of a device: the LED pins only real hardware has, the panel protocols, and the network senders it shares with a host.<br>[Drivers](moonmodules/light/drivers.md) |
 | [<img src="assets/moontube/08-moonlive-effects.jpg" alt="Write your own" width="220">](moonmodules/light/moonlive.md) | **Write your own**<br>Scripting the lights in the browser: a library effect downloaded and run, then one written from nothing, from a single line to a particle system.<br>[MoonLive](moonmodules/light/moonlive.md) |
 
 ## Control it

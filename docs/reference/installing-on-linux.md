@@ -50,7 +50,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
 | **HDMI out** | `--device /dev/dri`, on a host with no desktop holding the screen |
 
-**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
+**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the host build renders as fast as it may; cap it with `cpus:` when running a fleet.
 
 ## Package or container: which to pick
 

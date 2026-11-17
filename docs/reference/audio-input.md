@@ -12,7 +12,7 @@ A `PDM` microphone has two wires, a clock and a data line, as the QuinLED Dig-Ne
 
 An ADC or codec in front of the microphone needs `mclkPin`, and a codec is chosen with `codec`, its I2C address with `codecAddr` and its analog input gain with `codecGain`: 30 dB for a microphone, 0 dB for a line-in source. The [MHC-WLED ESP32-P4 shield](hardware/mhc-wled-esp32-p4-shield.md) wires its onboard PCM1808 line-in ADC this way.
 
-On an ESP32 the Local source idles until real GPIOs are entered. On the desktop it captures the device picked in `device` right away.
+On an ESP32 the Local source idles until real GPIOs are entered. On the host it captures the device picked in `device` right away.
 
 ## The squelch
 
@@ -26,6 +26,6 @@ Pick the loopback source in `device`. macOS has no native loopback, so it takes 
 
 ## Driving a fleet of devices
 
-A desktop in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives every device in Receive mode. Sending and receiving use the WLED multicast group, so WLED devices hear it too.
+A host in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives every device in Receive mode. Sending and receiving use the WLED multicast group, so WLED devices hear it too.
 
 If a device on WiFi stays silent, set `addressing` to `unicast` and list the devices in `receivers`.

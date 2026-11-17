@@ -1436,8 +1436,8 @@ function renderDevices() {
         const otaBtn = document.createElement("button");
         otaBtn.className = "device-inject";       // same compact style as inject
         const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
-        // A desktop's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
-        const isHost = otaFw.startsWith("host-") || otaFw.startsWith("desktop-");   // desktop-: a host on a release before the host rename
+        // A host's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
+        const isHost = otaFw.startsWith("host-");
         const ota = otaStatus[device.ip];
         otaBtn.textContent = otaLabel(ota);
         otaBtn.disabled = !otaFw || isHost || (ota && !ota.done);
