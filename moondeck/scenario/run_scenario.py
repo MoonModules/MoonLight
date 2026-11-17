@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_desktop import host_build_dir  # noqa: E402 (one home for the build-dir name)
+from build_host import host_build_dir  # noqa: E402 (one home for the build-dir name)
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
@@ -112,7 +112,7 @@ def _stale_runner_reason() -> str:
 
     The trap is easy to fall into because two build directories exist: `cmake --build build`
     (what a developer types) writes build/, while this script runs build/<host>/ — the tree
-    build_desktop.py produces. Rebuilding the wrong one leaves the runner untouched and no
+    build_host.py produces. Rebuilding the wrong one leaves the runner untouched and no
     error anywhere.
     """
     if not RUNNER.exists():
@@ -152,7 +152,7 @@ def _require_fresh_runner() -> None:
         print(f"Scenario runner is STALE: {rel}")
         print(f"  {reason}")
         print("  It would report on code that is no longer there.")
-    print("  rebuild: uv run moondeck/build/build_desktop.py --tests")
+    print("  rebuild: uv run moondeck/build/build_host.py --tests")
     sys.exit(1)
 
 # Format emitted by scenario_runner.cpp's measure block:
@@ -187,7 +187,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     # encoding="utf-8" EXPLICITLY: text=True alone decodes with the locale codec, which is cp1252
     # on Windows, and the runner writes UTF-8. An em-dash came back as "â€”" in every REBOOT line,
     # a display fault rather than a parsing one, since the MEASURE regex only reads ASCII. Same
-    # site and same fix as test_desktop.py's reader; a subprocess read is the half a stdout
+    # site and same fix as test_host.py's reader; a subprocess read is the half a stdout
     # reconfigure preamble cannot reach.
     proc = subprocess.Popen([str(RUNNER), str(path)], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

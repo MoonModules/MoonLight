@@ -121,7 +121,7 @@ processes:
         when: { manual: "With clangd, it reports every diagnostic twice, and they disagree." }
       - id: build-once
         say: Build the desktop once.
-        when: { run: { script: moondeck/build/build_desktop.py } }
+        when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           It writes the compilation database clangd reads.
 

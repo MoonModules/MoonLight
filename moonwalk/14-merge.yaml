@@ -65,12 +65,12 @@ processes:
     steps:
       - id: python
         say: Run the Python host tests.
-        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
         detail: |
           Workflow `test.yml`, through this command. It covers MoonDeck, the build scripts, the Improv wire format, and that every MoonLive script is valid C++.
       - id: js
         say: Run the JavaScript host tests.
-        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
         detail: |
           Workflow `test.yml`. It runs `node --test` over `test/js`, so the web installer and the device agree on the golden vector.
       - id: restore
@@ -164,7 +164,7 @@ processes:
       - id: gcc
         say: Build with GCC when CI asks.
         actor: contributor
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--gcc --tests" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--gcc --tests" } }
         detail: |
           CI asks when it failed on something clang builds cleanly.
 

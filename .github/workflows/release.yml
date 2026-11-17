@@ -27,7 +27,7 @@ on:
       # MoonBase and the migration image ship in the ESP32 jobs' assets.
       - 'moonbase/**'
       - 'moondeck/build/**'
-      # package_desktop.py builds and packages the three desktop jobs; without this line a
+      # package_host.py builds and packages the three desktop jobs; without this line a
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
       # manual dispatch because only moondeck/ci changed).
       - 'moondeck/ci/**'
@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 0
       # CMakeLists.txt calls find_program(UV_EXECUTABLE … REQUIRED) so the
       # build-host Python (gzip / build_info.h) is reached through uv. The
-      # runners don't ship uv by default — install it before package_desktop.
+      # runners don't ship uv by default — install it before package_host.
       - uses: astral-sh/setup-uv@v3
       # Same tag + version resolution as build-esp32 (see the comments there): the computed
       # semver must reach the DESKTOP binary too, or a desktop build reports library.json's bare
@@ -251,7 +251,7 @@ jobs:
       - name: Build + package macOS arm64
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-        run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+        run: uv run moondeck/ci/package_host.py --version "$VERSION"
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
@@ -323,7 +323,7 @@ jobs:
         shell: bash   # PowerShell would read "$VERSION" as its own, empty variable and package library.json's bare version
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-        run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+        run: uv run moondeck/ci/package_host.py --version "$VERSION"
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
@@ -386,7 +386,7 @@ jobs:
       - name: Build + package Linux x64
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-        run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+        run: uv run moondeck/ci/package_host.py --version "$VERSION"
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
@@ -449,7 +449,7 @@ jobs:
       - name: Build + package Linux arm64
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-        run: uv run moondeck/ci/package_desktop.py --version "$VERSION"
+        run: uv run moondeck/ci/package_host.py --version "$VERSION"
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash

@@ -114,7 +114,7 @@ def main():
     ap.add_argument("--tests", action="store_true",
                     help="compile the test binaries (mm_tests, mm_scenarios, mm_tempo) instead of the firmware. "
                          "The default build makes only MoonLight; the ~130 test units are a separate, "
-                         "slower compile, run afterwards by test_desktop.py / run_scenario.py.")
+                         "slower compile, run afterwards by test_host.py / run_scenario.py.")
     ap.add_argument("--configure", action="store_true",
                     help="configure the tree and generate build_id.h, without compiling: what check_code and "
                          "check_docgen read, as CI's findings job runs them")
@@ -154,7 +154,7 @@ def main():
         sys.exit(subprocess.run([sys.executable, str(ROOT / "moondeck" / "build" / "generate_build_info.py")], cwd=ROOT).returncode)
 
     # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the desktop binary builds alone and a header edit leaves the test suite out of the compile.
-    # `--tests` builds the test binaries instead: mm_tests (test_desktop.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
+    # `--tests` builds the test binaries instead: mm_tests (test_host.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
     targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
     build_cmd = ["cmake", "--build", bdir, "--target", *targets]
     if is_windows:

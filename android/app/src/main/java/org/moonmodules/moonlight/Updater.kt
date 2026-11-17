@@ -1,5 +1,8 @@
 package org.moonmodules.moonlight
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,7 +15,7 @@ import kotlin.system.exitProcess
 
 /**
  * The app installing a new version of itself, as a desktop puts a new program in place: the program downloads and vets the release's
- * package (platform_desktop_update.cpp, host_update.h) and hands its path here, and Android's PackageInstaller replaces the app.
+ * package (platform_host_update.cpp, host_update.h) and hands its path here, and Android's PackageInstaller replaces the app.
  *
  * Android asks the person to confirm unless this app installed the version running, which every update through here makes so.
  */
@@ -25,6 +28,7 @@ object Updater {
         var id = -1
         return try {
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(context.packageName)   // another app's package is refused, not installed in MoonLight's place
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         id = installer.createSession(params)
         val file = File(path)
@@ -54,16 +58,37 @@ class InstallStatus : BroadcastReceiver() {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                               else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_INTENT)
-                confirm?.let { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                confirm?.let { askToConfirm(context, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
-            PackageInstaller.STATUS_SUCCESS -> {}
+            PackageInstaller.STATUS_SUCCESS -> clearConfirmation(context)
             else -> {   // declined or failed: the program waits in reboot() for a replacement that is not coming, so this ends it and the sticky service starts it again
+                clearConfirmation(context)   // its session is gone, so a tap would open nothing
                 Log.w("MoonLight", "update: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)}")
                 exitProcess(0)
             }
         }
     }
 }
+
+private const val CONFIRM_NOTIFICATION = 2   // the running service's own notification is 1
+
+/** Open the installer's confirmation, and keep it as a notification: Android 15 lets no app open an activity from the background, so an update started from another device waits there for the person. */
+private fun askToConfirm(context: Context, confirm: Intent) {
+    val manager = context.getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannel(NotificationChannel("moonlight-update", "MoonLight updates", NotificationManager.IMPORTANCE_HIGH))
+    val tap = PendingIntent.getActivity(context, 2, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    manager.notify(CONFIRM_NOTIFICATION, Notification.Builder(context, "moonlight-update")
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle("MoonLight update ready")
+        .setContentText("Tap to confirm the install")
+        .setContentIntent(tap)
+        .setAutoCancel(true)
+        .build())
+    runCatching { context.startActivity(confirm) }   // in front already: the confirmation opens at once
+}
+
+/** Take the confirmation notification back once the install has an answer. */
+private fun clearConfirmation(context: Context) = context.getSystemService(NotificationManager::class.java).cancel(CONFIRM_NOTIFICATION)
 
 /** After an update Android starts nothing of the app, so the service starts again here, on the new version. */
 class PackageReplaced : BroadcastReceiver() {

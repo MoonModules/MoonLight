@@ -42,7 +42,7 @@ from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_BIN, FIRMWARES, table_from_fragments, find_idf, idf_env  # noqa: E402
 import flash_split  # noqa: E402 (beside this file; the commit's flash change by kind)
-from build_desktop import desktop_binary  # noqa: E402 (one definition of where it lands)
+from build_host import desktop_binary  # noqa: E402 (one definition of where it lands)
 from build_teensy import FIRMWARES as TEENSY_FIRMWARES, UPDATE_IMAGE_BYTES as TEENSY_UPDATE_BYTES, hex_image_bytes, hex_path  # noqa: E402
 HEALTH_FILE = ROOT / "docs" / "reference" / "metrics" / "repo-health.json"
 # The same snapshot as a table a human reads: units applied, ratios as percentages, areas
@@ -247,7 +247,7 @@ def measure_flash():
             flash[firmware] = hex_image_bytes(image)
             MEASURED_THIS_RUN.add(firmware)
             MEASURED_DATES[firmware] = _dt.date.today().isoformat()
-    # The desktop binary, located by build_desktop.desktop_binary() so this and collect_kpi.py
+    # The desktop binary, located by build_host.desktop_binary() so this and collect_kpi.py
     # cannot name different files in the same run. A bare build/MoonLight matched nothing off
     # macOS, so this metric silently carried a foreign machine's number forward while reading as
     # a measurement: the same defect the firmware freshness rule above exists to prevent.
@@ -394,6 +394,11 @@ def _valid_snapshot(data, source):
             print(f"repo-health: ignoring {source}: section '{key}' is "
                   f"{type(data[key]).__name__}, expected an object", file=sys.stderr)
             return {}
+    # A snapshot from before the host rename names its host targets desktop-<os>; read as host-<os>, they carry forward and compare.
+    for key in ("flash", "perf", "measured"):
+        section = data.get(key)
+        if isinstance(section, dict):
+            data[key] = {("host-" + k[len("desktop-"):] if k.startswith("desktop-") else k): v for k, v in section.items()}
     return data
 
 

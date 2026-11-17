@@ -9,7 +9,7 @@ CMakeLists.txt                          ← standard CMake: desktop / RPi + test
 src/
   main.cpp                              ← shared pipeline wiring (mm_main), platform-neutral
   platform/
-    desktop/
+    host/
       main_host.cpp                  ← desktop entry point: int main() + SIGINT and SIGTERM
       platform_config.h                 ← desktop platform constants
     esp32/
@@ -34,7 +34,7 @@ Each host writes into its own build directory: `build/macos/`, `build/linux/` or
 
 A firmware key that changes its feature set would otherwise keep its old `MM_NO_ETH` or `MM_ETH_ONLY` in `CMakeCache.txt`. CMake writes a `-D` flag to the cache, and omitting it later does not clear it. `build_esp32.py` compares the cached feature flags with what the firmware wants and wipes the directory for a clean configure on a mismatch, printing the reason.
 
-On Windows the default generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_desktop.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well.
+On Windows the default generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_host.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well.
 
 ## The compiler cache
 

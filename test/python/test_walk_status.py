@@ -1,6 +1,6 @@
 """MoonWalk's rule for a contributor's script steps: a step is triggered when the change touches its paths, and its pass holds while those paths are unchanged since it ran.
 
-Each test builds a small git repository of its own, so the trees and the change are the test's. Run: `uv run moondeck/test/test_host.py --python`.
+Each test builds a small git repository of its own, so the trees and the change are the test's. Run: `uv run moondeck/test/test_tooling.py --python`.
 """
 
 import subprocess
@@ -40,7 +40,7 @@ def repo_with(tmp_path: Path) -> Path:
 
 
 MODEL = {"processes": {"commit": {"steps": [
-    {"id": "build", "given": [{"changed": ["src/**"]}], "when": {"run": {"script": "moondeck/build/build_desktop.py"}}},
+    {"id": "build", "given": [{"changed": ["src/**"]}], "when": {"run": {"script": "moondeck/build/build_host.py"}}},
     {"id": "docs", "given": [{"changed": ["**/*.md"]}], "when": {"run": {"script": "moondeck/docs/build_docs.py", "args": "--strict"}}},
     {"id": "stage", "when": {"manual": "Stage."}},
 ]}}}
@@ -61,7 +61,7 @@ def test_a_step_is_triggered_only_when_the_change_touches_its_paths(tmp_path):
 def test_a_pass_holds_until_a_file_it_covers_changes(tmp_path):
     repo = repo_with(tmp_path)
     (repo / "src/a.cpp").write_text("a2")
-    runs = {run_key("moondeck/build/build_desktop.py"): {"tree": tree_now(repo), "passed": True}}
+    runs = {run_key("moondeck/build/build_host.py"): {"tree": tree_now(repo), "passed": True}}
     (repo / "docs/b.md").write_text("b2")   # outside the build's paths
     assert by_id(status(MODEL, runs, root=repo))["build"]["fresh"]
     (repo / "src/a.cpp").write_text("a3")   # inside them
@@ -80,7 +80,7 @@ def test_a_pass_that_writes_a_file_it_covers_still_holds(tmp_path):
 def test_a_failed_run_or_one_with_other_arguments_proves_nothing(tmp_path):
     repo = repo_with(tmp_path)
     tree = tree_now(repo)
-    failed = {run_key("moondeck/build/build_desktop.py"): {"tree": tree, "passed": False}}
+    failed = {run_key("moondeck/build/build_host.py"): {"tree": tree, "passed": False}}
     assert not by_id(status(MODEL, failed, root=repo))["build"]["fresh"]
     other = {run_key("moondeck/docs/build_docs.py", "--serve"): {"tree": tree, "passed": True}}
     assert not by_id(status(MODEL, other, root=repo))["docs"]["fresh"]
@@ -104,8 +104,8 @@ def test_a_record_that_cannot_be_read_is_no_runs(tmp_path):
 def test_a_step_takes_as_long_as_its_longest_recent_run_and_is_slow_past_the_line(tmp_path):
     path = tmp_path / "durations.json"
     for seconds in (1.9, 2.1, 95.0, 2.0, 2.2, 1.8):   # one clean build among incremental ones
-        walk_status.record_duration(path, "moondeck/build/build_desktop.py", seconds)
-    kept = walk_status.read_runs(path)["moondeck/build/build_desktop.py"]
+        walk_status.record_duration(path, "moondeck/build/build_host.py", seconds)
+    kept = walk_status.read_runs(path)["moondeck/build/build_host.py"]
     assert kept == [2.1, 95.0, 2.0, 2.2, 1.8]   # the last five
     repo = repo_with(tmp_path / "repo")
     build = by_id(status(MODEL, {}, walk_status.read_runs(path), root=repo))["build"]
@@ -136,7 +136,7 @@ def test_a_step_without_paths_runs_on_every_change_and_any_change_makes_its_pass
 
 def test_a_pass_on_a_tree_git_has_pruned_proves_nothing(tmp_path):
     repo = repo_with(tmp_path)
-    runs = {run_key("moondeck/build/build_desktop.py"): {"tree": "0" * 40, "passed": True}}
+    runs = {run_key("moondeck/build/build_host.py"): {"tree": "0" * 40, "passed": True}}
     assert not by_id(status(MODEL, runs, root=repo))["build"]["fresh"]
 
 
@@ -173,9 +173,9 @@ def test_two_runs_ending_together_both_land_in_the_record(tmp_path):
 def test_a_card_counts_its_own_calls_but_not_another_cards():
     sys.path.insert(0, str(ROOT / "moondeck"))
     from moondeck import SCRIPTS, card_duration
-    build = next(c for c in SCRIPTS if c["id"] == "build_desktop")
-    tests = next(c for c in SCRIPTS if c.get("args") == ["--tests"] and c["script"] == "build/build_desktop.py")
-    durations = {"moondeck/build/build_desktop.py --tests": [30.1], "moondeck/build/build_desktop.py": [1.9]}
+    build = next(c for c in SCRIPTS if c["id"] == "build_host")
+    tests = next(c for c in SCRIPTS if c.get("args") == ["--tests"] and c["script"] == "build/build_host.py")
+    durations = {"moondeck/build/build_host.py --tests": [30.1], "moondeck/build/build_host.py": [1.9]}
     assert card_duration(build, durations)["seconds"] == 1.9    # the Compile Tests card's call is not the Build card's
     assert card_duration(tests, durations)["seconds"] == 30.1
 
@@ -197,14 +197,14 @@ def test_a_step_running_a_subprocess_reports_the_subprocess_steps_under_their_ow
     assert [(s["process"], s["id"]) for s in result["commit"]] == [("commit", "specs"), ("commit-code", "build"), ("commit-code", "docs")]
     assert result["commit"][1]["triggered"] and not result["commit"][2]["triggered"]   # each keeps its own trigger
     assert [s["id"] for s in result["commit-code"]] == ["build", "docs"]
-    assert walk_status.step_run(model, "commit-code/build") == {"script": "moondeck/build/build_desktop.py"}   # a reported step runs by its own process and id
+    assert walk_status.step_run(model, "commit-code/build") == {"script": "moondeck/build/build_host.py"}   # a reported step runs by its own process and id
 
 
 def test_a_calls_paths_guard_the_steps_it_calls_so_a_docs_change_runs_no_code_check(tmp_path):
     repo = repo_with(tmp_path)
     model = {"processes": {
         "commit-code": {"steps": [{"id": "tests", "given": [{"changed": ["src/**"]}], "when": {"process": "desktop-tests"}}]},
-        "desktop-tests": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_desktop.py"}}}]},
+        "desktop-tests": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_host.py"}}}]},
     }}
     (repo / "docs/b.md").write_text("b2")
     assert not status(model, {}, root=repo)["commit-code"][0]["triggered"]
@@ -215,10 +215,10 @@ def test_a_calls_paths_guard_the_steps_it_calls_so_a_docs_change_runs_no_code_ch
 
 def test_a_subprocess_reached_twice_or_through_a_cycle_is_read_once(tmp_path):
     repo = repo_with(tmp_path)
-    build = {"id": "build", "when": {"run": {"script": "moondeck/build/build_desktop.py"}}}
+    build = {"id": "build", "when": {"run": {"script": "moondeck/build/build_host.py"}}}
     model = {"processes": {
         "a": {"steps": [build, {"id": "to-b", "when": {"process": "b"}}, {"id": "again", "when": {"process": "b"}}]},
-        "b": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_desktop.py"}}}, {"id": "back", "when": {"process": "a"}}]},
+        "b": {"steps": [{"id": "test", "when": {"run": {"script": "moondeck/test/test_host.py"}}}, {"id": "back", "when": {"process": "a"}}]},
         "lost": {"steps": [{"id": "nowhere", "when": {"process": "missing"}}]},
     }}
     result = status(model, {}, root=repo)

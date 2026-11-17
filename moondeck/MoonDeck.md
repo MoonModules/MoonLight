@@ -3,7 +3,7 @@
 MoonDeck is MoonLight's browser-based developer console. One page builds, flashes, runs, tests, monitors and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code. Agents typically use the CLI, humans MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [the MoonDeck architecture page](../docs/explanation/architecture/moondeck.md). What follows is the per-script reference.
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
-**Desktop**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
+**Host**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
 A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, `?every=1` takes every step, as a release does. A step that runs a subprocess, as `commit` runs its four groups, stands for that subprocess's steps. `?model=1` adds the map itself, so the map draws from one generation. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
@@ -23,18 +23,18 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
 - **OTA button** on each device row: uploads the local build for the device's firmware (`build/esp32-<firmware>/`) over WiFi, rebooting the device into MoonBase first where its variant has it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand; see `_ota_upload` in [moondeck.py](moondeck.py).
 
-## Desktop Tab
+## Host Tab
 
 
-![Moondeck Desktop](../docs/assets/ui/moondeck_desktop.png)
+![Moondeck Host](../docs/assets/ui/moondeck_host.png)
 
-### build_desktop
+### build_host
 
 Build the desktop firmware binary using CMake.
 
 ```bash
-uv run moondeck/build/build_desktop.py
-uv run moondeck/build/build_desktop.py --configure   # configure and generate build_id.h only, what check_code and check_docgen read
+uv run moondeck/build/build_host.py
+uv run moondeck/build/build_host.py --configure   # configure and generate build_id.h only, what check_code and check_docgen read
 ```
 
 Runs `cmake -B build/<host> -DCMAKE_BUILD_TYPE=Release` then `cmake --build build/<host> --target MoonLight`, where `<host>` is `macos`, `linux`, or `windows` depending on the OS this script runs on. It builds ONLY the firmware binary, not the ~130-file test suite, so the "give me the binary to run" path stays fast; compile the tests separately (see `compile_tests`). The per-host directory keeps an experimental Linux build from clobbering a macOS one on the same machine, and mirrors the ESP32 side's `build/esp32-<board>/` shape.
@@ -61,12 +61,12 @@ uv run moondeck/run/run_android.py
 
 `adb install -r` keeps the app's settings when the installed app carries the same signing key and a version no newer; over a release, which the release key signs, it says to back up, uninstall and restore. Its log: `adb logcat -s MoonLight`.
 
-### run_desktop
+### run_host
 
 Launch the desktop executable as a detached background process and exit. The app keeps running across other MoonDeck scripts and outlives MoonDeck itself, the way a flashed ESP32 runs independently of this console.
 
 ```bash
-uv run moondeck/run/run_desktop.py
+uv run moondeck/run/run_host.py
 ```
 
 Re-running is idempotent: any existing `MoonLight` instance is stopped first, then a fresh one is launched. Output goes to `build/<host>/MoonLight.log`. Build first.
@@ -188,10 +188,10 @@ The work on the source tree, whatever the target: tests, the checks and tools, t
 Compile the test binaries (unit + scenario) without running them.
 
 ```bash
-uv run moondeck/build/build_desktop.py --tests
+uv run moondeck/build/build_host.py --tests
 ```
 
-Builds `mm_tests`, `mm_scenarios` and `mm_tempo` (the `--tests` target set of `build_desktop.py`), in the same per-host build dir. Separate from `build_desktop` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_desktop` (unit) and `scenario_pipeline` (scenarios).
+Builds `mm_tests`, `mm_scenarios` and `mm_tempo` (the `--tests` target set of `build_host.py`), in the same per-host build dir. Separate from `build_host` so a firmware build doesn't drag the ~130 test translation units through the compiler; run the compiled binaries afterward with `test_host` (unit) and `scenario_pipeline` (scenarios).
 
 ### test_android
 
@@ -202,17 +202,17 @@ uv run moondeck/test/test_android.py
 uv run moondeck/test/test_android.py -tc='*MoonLive*'   # doctest's own filters pass through
 ```
 
-Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, in a `repo` folder beside it), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_desktop`'s.
+Strips the `mm_tests` that `build_android --tests` made, pushes it to `/data/local/tmp` with the repository files some tests read (`SOURCE_FILES`, in a `repo` folder beside it), and runs it there with its temp and data folders beside it. A process `adb shell` starts lacks the app identity Android's audio needs, so the tests run as on a machine with no sound device. The device's network needs the same quiet as `test_host`'s.
 
-### test_desktop
+### test_host
 
 Run the desktop test suite.
 
 ```bash
-uv run moondeck/test/test_desktop.py
+uv run moondeck/test/test_host.py
 ```
 
-Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown) — same per-host build dir as the desktop build above.
+Runs `./build/<host>/test/mm_tests -s` (doctest with all test cases shown), from the same per-host build dir as the host build above.
 
 **The network stays quiet on the light protocols' ports while it runs.** The NetworkReceive tests open the real Art-Net, E1.31 and DDP sockets, which test more than a stand-in would, so they count every packet arriving there: a MoonLight on the same machine holding a receiver, or any device broadcasting Art-Net on the network, a NetworkSend driver set to broadcast included, makes their counts fail.
 
@@ -234,17 +234,17 @@ uv run moondeck/run/run_process.py ci-on-pr     # what CI runs on a pull request
 uv run moondeck/run/run_process.py commit --every
 ```
 
-### test_host
+### test_tooling
 
 Run the host test suites: the Python ones, the JS ones, and the UI ones. The UI runs drive a real browser against a running device, cost minutes and skip without a desktop and a Playwright browser, so they run on request only and are never a gate.
 
 ```bash
-uv run moondeck/test/test_host.py            # Python and JS
-uv run moondeck/test/test_host.py --python   # just Python
-uv run moondeck/test/test_host.py --js       # just JS
-uv run moondeck/test/test_host.py --ui       # only the UI runs (needs a running device)
-uv run moondeck/test/test_host.py --ui --clip 16-restore-a-backup   # one run file
-uv run moondeck/test/test_host.py --python --junit-dir results      # as CI runs it: the results where its annotations read them
+uv run moondeck/test/test_tooling.py            # Python and JS
+uv run moondeck/test/test_tooling.py --python   # just Python
+uv run moondeck/test/test_tooling.py --js       # just JS
+uv run moondeck/test/test_tooling.py --ui       # only the UI runs (needs a running device)
+uv run moondeck/test/test_tooling.py --ui --clip 16-restore-a-backup   # one run file
+uv run moondeck/test/test_tooling.py --python --junit-dir results      # as CI runs it: the results where its annotations read them
 ```
 
 The tests the C++ binary cannot reach: the cross-language contracts (the Improv frame's wire format,
@@ -777,7 +777,7 @@ Connects to a running MoonLight server, builds a minimal pipeline scaffold (Layo
 - `<TypeName>.png` — module card screenshot for every module in the catalogue
 - `<TypeName>.gif` — 3-second preview animation for effects and modifiers (requires `--gif`)
 - `ui_overview.png` — full-page screenshot of the MoonLight UI
-- `moondeck_desktop.png`, `moondeck_esp32.png`, `moondeck_live.png` — MoonDeck tab screenshots (requires MoonDeck running on port 8420)
+- `moondeck_host.png`, `moondeck_esp32.png`, `moondeck_live.png`: MoonDeck tab screenshots (requires MoonDeck running on port 8420)
 - `installer.png` — web installer preview (requires `preview_installer` running on port 8421)
 
 Without `--force`, existing screenshots are skipped, so only missing files are captured. Run with `--force` to re-capture everything (e.g. after a UI change).
@@ -856,7 +856,7 @@ Record one UI clip: perform a run file against the interface while Playwright re
 uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
 ```
 
-The dropdown lists every run under `moontube/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_host.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/moontube/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [moontube.md](moontube/moontube.md).
+The dropdown lists every run under `moontube/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_tooling.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/moontube/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [moontube.md](moontube/moontube.md).
 
 A run names its own `host` when it drives something other than the desktop UI. The installer clip records against the installer preview, and the audio clip against a device with a microphone. Start what a run needs before recording it.
 

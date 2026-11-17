@@ -13,7 +13,7 @@ test("each known entry reads with its counterpart, in the list's order", () => {
         "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30");
 });
 
-test("a receivers text naming no known board shows nothing", () => {
+test("a receivers text naming only unknown boards shows an empty list", () => {
     assert.equal(knownReceiversText(undefined), "");
     assert.equal(knownReceiversText({}), "");
 });

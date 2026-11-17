@@ -525,7 +525,7 @@ def main():
     build_dir = check_clang_tidy._host_build_dir()
     if not (build_dir / "CMakeCache.txt").exists():
         print(f"No build in {build_dir.relative_to(ROOT)} — run "
-              f"`uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
+              f"`uv run moondeck/build/build_host.py` first.", file=sys.stderr)
         return 2
 
     # NOT APPLICABLE is not the same as FAILED. -Wfunction-effects is Clang 20+ only, and

@@ -50,7 +50,7 @@
     },
     {
       "action": "click",
-      "selector": ".status-dot[data-id=\"test_desktop\"]",
+      "selector": ".status-dot[data-id=\"test_host\"]",
       "caption": "Test is the group that keeps the agents honest. Nearly three thousand unit tests, the scenario suite that drives a whole pipeline, and the host tests for the scripts themselves.",
       "speech": 13.6
     },
@@ -116,13 +116,13 @@
     },
     {
       "action": "click",
-      "selector": ".status-dot[data-id=\"build_desktop\"]",
+      "selector": ".status-dot[data-id=\"build_host\"]",
       "caption": "Build compiles the firmware for this machine, in seconds rather than the minutes a chip build takes.",
       "speech": 7.5
     },
     {
       "action": "click",
-      "selector": ".status-dot[data-id=\"run_desktop\"]",
+      "selector": ".status-dot[data-id=\"run_host\"]",
       "caption": "Run starts it, and the interface you have seen in the other clips is then live on this computer, with no device plugged in anywhere.",
       "speech": 10.1
     },

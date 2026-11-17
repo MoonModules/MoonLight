@@ -970,7 +970,7 @@ def main():
     build_dir = check_clang_tidy._host_build_dir()
     if not (build_dir / "compile_commands.json").exists():
         print(f"No compile_commands.json in {build_dir.relative_to(ROOT)} — "
-              f"run `uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
+              f"run `uv run moondeck/build/build_host.py` first.", file=sys.stderr)
         return 2
 
     # A module's HEADER is not a translation unit — it is analyzed through whichever .cpp

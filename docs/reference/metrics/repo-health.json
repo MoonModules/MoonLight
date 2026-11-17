@@ -1,5 +1,5 @@
 {
-  "commit": "594433f3",
+  "commit": "94d4ea5b",
   "flash": {
     "esp32s3-n16r8": 2537664,
     "esp32": 2315424,
@@ -800,8 +800,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 7,
-      "fps": 142857,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -880,7 +880,7 @@
   },
   "docs": {
     "md_files": 126,
-    "md_lines": 20183,
+    "md_lines": 20181,
     "plans_files": 17,
     "backlog_lines": 2896,
     "lessons_lines": 458,

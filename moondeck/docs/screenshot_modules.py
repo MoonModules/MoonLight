@@ -45,8 +45,8 @@ Prerequisites (one-time, machine-local — NOT in the repo or the venv):
        and repo transfers — if it's "missing" it was simply never installed here.
 
 Running server: the script captures against whatever is on --host (default
-:8080). Start ONE fresh server:  uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight
-(or via MoonDeck's Desktop tab — same per-host build dir, so they share the binary). GOTCHA: a leftover binary on :8080 captures the WRONG
+:8080). Start ONE fresh server:  uv run moondeck/build/build_host.py && ./build/<host>/MoonLight
+(or via MoonDeck's Host tab — same per-host build dir, so they share the binary). GOTCHA: a leftover binary on :8080 captures the WRONG
 images silently, e.g. a `build/macos/MoonLight` from a MoonDeck run still bound
 to the port serves the OLD code, so a renamed/changed effect screenshots as its
 previous version no matter how often you rebuild. The script now prints a STALE
@@ -317,7 +317,7 @@ INSTALLER_URL  = "http://localhost:8000"
 
 EXTRA_SHOTS = [
     (
-        "moondeck_desktop.png",
+        "moondeck_host.png",
         f"{MOONDECK_URL}/?tab=desktop",
         ".tab-content.active",
         ["README.md", "moondeck/MoonDeck.md"],
@@ -683,7 +683,7 @@ def check_server_freshness(host: str) -> None:
         print("      The running binary is older than the current source. Most likely a")
         print("      second MoonLight (a stale build/<host>/MoonLight) is still on :8080.")
         print("      Fix:  pkill -f MoonLight  then rebuild + run ONE server:")
-        print("        uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight")
+        print("        uv run moondeck/build/build_host.py && ./build/<host>/MoonLight")
 
 
 # ---------------------------------------------------------------------------
@@ -978,7 +978,7 @@ def main() -> int:
             _get(f"http://{args.host}/api/state", timeout=3)
         except Exception as e:
             print(f"Cannot reach MoonLight at {args.host}: {e}")
-            print("Start the server first: uv run moondeck/moondeck.py  (then build+run from Desktop tab)")
+            print("Start the server first: uv run moondeck/moondeck.py  (then build+run from Host tab)")
             return 1
 
     # Module-related state, only meaningful when MoonLight is reachable.
@@ -1032,7 +1032,7 @@ def main() -> int:
         missing = [r for r in ("Layer", "Drivers", "Layouts") if r not in parents]
         if missing:
             print(f"Pipeline containers not found: {missing}")
-            print("Build and run MoonLight first (Desktop tab → Build → Run).")
+            print("Build and run MoonLight first (Host tab → Build → Run).")
             return 1
 
         # Undo what a run cut short against this host added and changed, by the ledger it kept: @see LEDGER.

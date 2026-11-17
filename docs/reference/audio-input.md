@@ -28,4 +28,4 @@ Pick the loopback source in `device`. macOS has no native loopback, so it takes 
 
 A desktop in Local mode with `send audio` on is an audio-sync source: one machine's microphone or loopback drives every device in Receive mode. Sending and receiving use the WLED multicast group, so WLED devices hear it too.
 
-If a device on WiFi hears nothing, set `addressing` to `unicast` and list the devices in `receivers`.
+If a device on WiFi stays silent, set `addressing` to `unicast` and list the devices in `receivers`.

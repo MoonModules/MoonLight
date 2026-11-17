@@ -51,13 +51,13 @@ processes:
       - id: build
         say: Build the desktop tests.
         given: [{ input: kind, equals: Module logic }]
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
         detail: |
           It builds `mm_tests` and `mm_scenarios` only, not the app. A full pipeline builds inside the scenario run.
       - id: run-unit
         say: Run the unit tests.
         given: [{ input: kind, equals: Module logic }]
-        when: { run: { script: moondeck/test/test_desktop.py, args: "--module <Name>" } }
+        when: { run: { script: moondeck/test/test_host.py, args: "--module <Name>" } }
         detail: |
           `--test "<case-name>"` runs one case; a bare run runs all of them. A full run prints a summary, and a filtered run adds assertion-level detail.
       - id: run-scenario
@@ -67,11 +67,11 @@ processes:
       - id: run-python
         say: Run the Python host tests.
         given: [{ input: kind, equals: MoonDeck script }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
       - id: run-js
         say: Run the JS host tests.
         given: [{ input: kind, equals: Installer or UI code }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
         detail: |
           It reports SKIP rather than failing when node is absent.
     outro: |
@@ -87,7 +87,7 @@ processes:
     steps:
       - id: build
         say: Build the desktop tests.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
       - id: select
         say: Run what the diff touched.
         when: { run: { script: moondeck/scenario/run_scenario.py, args: "--module <Name>" } }
@@ -124,7 +124,7 @@ processes:
       - id: start-desktop
         say: Run the desktop app.
         given: [{ input: target, equals: Desktop }]
-        when: { run: { script: moondeck/run/run_desktop.py } }
+        when: { run: { script: moondeck/run/run_host.py } }
         detail: |
           It stops the previous instance first, so the run never hits an old binary.
       - id: find-board

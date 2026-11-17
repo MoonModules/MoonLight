@@ -30,7 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_desktop import desktop_binary  # noqa: E402 (one definition of where the binary lands)
+from build_host import desktop_binary  # noqa: E402 (one definition of where the binary lands)
 
 LAUNCH_PORT = 8091   # beside a desktop app already running on 8080
 
@@ -77,7 +77,7 @@ def main() -> int:
         return restore(args.host, args.bundle, args.readers)
     app = desktop_binary()
     if app is None:
-        print("run_restore_live: no desktop build; run uv run moondeck/build/build_desktop.py first.")
+        print("run_restore_live: no desktop build; run uv run moondeck/build/build_host.py first.")
         return 2
     host = f"localhost:{LAUNCH_PORT}"
     if answers(host, 0):

@@ -221,7 +221,7 @@ def main():
     build_dir = _host_build_dir()
     if not (build_dir / "compile_commands.json").exists():
         print(f"No compile_commands.json in {build_dir.relative_to(ROOT)} — "
-              f"run `uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
+              f"run `uv run moondeck/build/build_host.py` first.", file=sys.stderr)
         return 2
 
     only, tu_regex = None, None

@@ -36,7 +36,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_desktop import build_target, test_binary  # noqa: E402  the one home of the build tree and its binaries
+from build_host import build_target, test_binary  # noqa: E402  the one home of the build tree and its binaries
 from _tempo_baseline import baseline_bpm  # noqa: E402
 
 OUT_DIR = ROOT / "build" / "tempo"

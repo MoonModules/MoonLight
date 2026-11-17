@@ -1,6 +1,6 @@
 """The in-process scenario runner says what it does not run, rather than passing it in silence.
 
-Each test hands the built `mm_scenarios` a scenario written for it. The binary is built by `build_desktop.py --tests`; without it the tests skip, as the JS lane does without node, since a host-test run in CI builds no C++."""
+Each test hands the built `mm_scenarios` a scenario written for it. The binary is built by `build_host.py --tests`; without it the tests skip, as the JS lane does without node, since a host-test run in CI builds no C++."""
 
 import json
 import os
@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
 
 from run_scenario import RUNNER  # noqa: E402
 
-pytestmark = pytest.mark.skipif(not RUNNER.exists(), reason="mm_scenarios is not built: run build_desktop.py --tests")
+pytestmark = pytest.mark.skipif(not RUNNER.exists(), reason="mm_scenarios is not built: run build_host.py --tests")
 
 
 def run(tmp_path: Path, scenario: dict) -> subprocess.CompletedProcess:

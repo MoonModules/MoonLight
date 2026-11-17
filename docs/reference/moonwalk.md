@@ -188,14 +188,14 @@ To see the map yourself, start these, each in its own terminal, from the reposit
 
 | To see | Run | Open |
 |--|--|--|
-| a device | `uv run moondeck/build/build_desktop.py`, then `uv run moondeck/run/run_desktop.py` | <http://localhost:8080/> |
+| a device | `uv run moondeck/build/build_host.py`, then `uv run moondeck/run/run_host.py` | <http://localhost:8080/> |
 | MoonDeck | `uv run moondeck/moondeck.py` | <http://localhost:8420/> |
 | the website | `uv run moondeck/docs/build_docs.py --serve` | <http://localhost:8422/MoonLight/moonwalk.html> |
 | the installer, and your working copy of MoonWalk in a device | `uv run moondeck/run/preview_installer.py` | <http://localhost:8421/>, and <http://localhost:8080/?help=local> |
 
 The device loads MoonWalk from the website. `?help=local` makes it load the renderer, the map and the help from the preview server on 8421 instead, so a change in the working tree shows after a page reload. The device asks once whether to load from there. Stop the servers with `pkill MoonLight`, `pkill -f preview_installer` and `pkill -f build_docs`.
 
-To run the checks behind the map: `uv run moondeck/test/test_host.py` runs every test, and `uv run moondeck/docs/gen_moonwalk.py --out /tmp/moonwalk.json` builds the map and reports every fault in the stage files.
+To run the checks behind the map: `uv run moondeck/test/test_tooling.py` runs every test, and `uv run moondeck/docs/gen_moonwalk.py --out /tmp/moonwalk.json` builds the map and reports every fault in the stage files.
 
 ### 6. MoonWalk in MoonDeck
 

@@ -31,7 +31,7 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # check_code reads a configured tree; check_docgen parses the sources, and build_info.cpp includes the build_id.h the build generates.
       - name: configure the desktop build, and generate build_id.h
-        run: uv run moondeck/build/build_desktop.py --configure
+        run: uv run moondeck/build/build_host.py --configure
       - name: check_code
         if: always()
         run: uv run moondeck/check/check_code.py

@@ -65,7 +65,7 @@
       "description": "The pipeline rendering on its own, which every later measurement is read against.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 8,
             "p95": 12,
@@ -99,7 +99,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 17,
             "p95": 2183,
@@ -109,7 +109,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 208,
             "p95": 208,
@@ -164,7 +164,7 @@
       "description": "Producer and consumer both live. The difference against the baseline is what the pair costs.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 5,
             "p95": 7,
@@ -198,7 +198,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 11,
             "p95": 3090,
@@ -208,7 +208,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 275,
             "p95": 275,
@@ -259,7 +259,7 @@
       "description": "The consumer outlived its producer and the lights are still on. A dangling read shows up here as a crash rather than a number.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 7,
             "p95": 9,
@@ -293,7 +293,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 5,
             "p95": 1862,
@@ -303,7 +303,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 482,
             "p95": 482,
@@ -364,7 +364,7 @@
       "description": "Both gone. The cost should return to the baseline, since what was added has been fully released rather than merely unhooked.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 7,
             "p95": 10,
@@ -398,7 +398,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 7,
             "p95": 1306,
@@ -408,7 +408,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 232,
             "p95": 232,
@@ -475,7 +475,7 @@
       "description": "A layer with no effect at all: the floor, and proof the teardown reached it without taking the buffer with it.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 7,
             "p95": 11,
@@ -509,7 +509,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 5,
             "p95": 2544,
@@ -519,7 +519,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 228,
             "p95": 228,
@@ -582,7 +582,7 @@
       "description": "Rendering again after a full teardown and rebuild, which is what leaves the buffer checks below something to assert.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 7,
@@ -616,7 +616,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 13,
             "p95": 2013,
@@ -626,7 +626,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 263,
             "p95": 263,
@@ -705,7 +705,7 @@
       "description": "Still rendering into the preview with the added driver gone.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 7,
@@ -739,7 +739,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 12,
             "p95": 2354,
@@ -749,7 +749,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 233,
             "p95": 233,

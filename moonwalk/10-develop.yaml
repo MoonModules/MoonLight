@@ -15,13 +15,13 @@ processes:
     steps:
       - id: build
         say: Build the desktop firmware, warning-free.
-        when: { run: { script: moondeck/build/build_desktop.py } }
+        when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
           Build only when the next step needs it, rather than after every edit. Desktop and Raspberry Pi build from the same root `CMakeLists.txt`, natively or cross-compiled.
       - id: run
         say: Run it.
-        when: { run: { script: moondeck/run/run_desktop.py } }
+        when: { run: { script: moondeck/run/run_host.py } }
         detail: |
           A second run replaces the instance already running; started by hand, an older process keeps port 8080 and answers every request with the code you replaced. One desktop runs at a time, on 8080: a check that needs a running device uses that one or the unit tests' own fixtures, and opens no instance on another port.
 
@@ -40,10 +40,10 @@ processes:
     steps:
       - id: build-tests
         say: Build the unit tests and the scenario runner.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
       - id: test
         say: Run the unit tests.
-        when: { run: { script: moondeck/test/test_desktop.py } }
+        when: { run: { script: moondeck/test/test_host.py } }
       - id: scenarios
         say: Replay the scenarios in-process.
         when: { run: { script: moondeck/scenario/run_scenario.py } }
@@ -103,7 +103,7 @@ processes:
           Put it in `test/unit/light/unit_<Module>.cpp`. Build a small grid, run one frame and check the output. Pin that the module survives a 1x1 and a 0x0 grid, and that a module holding memory drops its `dynamicBytes` to zero when disabled.
       - id: run
         say: Try the module on the running desktop.
-        when: { run: { script: moondeck/run/run_desktop.py } }
+        when: { run: { script: moondeck/run/run_host.py } }
         detail: |
           Open `http://localhost:8080`, add the module in the UI, then resize the grid live to 1x1 and 0x0. It must not crash.
       - id: header
@@ -246,7 +246,7 @@ processes:
     steps:
       - id: package
         say: Package the build for this host.
-        when: { run: { script: moondeck/ci/package_desktop.py } }
+        when: { run: { script: moondeck/ci/package_host.py } }
         detail: |
           A `.tar.gz` and a `.dmg` holding a `.app` on macOS, a `.tar.gz` and a `.deb` on Linux, a `.zip` and an NSIS `-setup.exe` on Windows. The setup installs as [Install MoonLight](moonwalk.md#install) describes and keeps the settings folder.
 
@@ -306,7 +306,7 @@ processes:
           Open the device with `?help=local`, and the device loads your working copy of the map: [try it](reference/moonwalk.md#5-try-it). A reload shows each edit.
       - id: tests
         say: Run the Python and JS tests.
-        when: { run: { script: moondeck/test/test_host.py } }
+        when: { run: { script: moondeck/test/test_tooling.py } }
       - id: docs
         say: Check the documentation.
         when: { run: { script: moondeck/check/check_docgen.py } }

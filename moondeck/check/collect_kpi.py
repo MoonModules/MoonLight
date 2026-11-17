@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repo_health  # noqa: E402
 import check_code  # noqa: E402
 
-# Per-host desktop build dir (matches build_desktop.py / package_desktop.py).
+# Per-host desktop build dir (matches build_host.py / package_host.py).
 # We pick the directory belonging to the OS this script runs on so KPI
 # numbers reflect the binary the developer actually has on disk.
 import platform as _plat
@@ -61,7 +61,7 @@ BUILD_DIR = ROOT / "build" / _HOST
 MIN_ESP32_FPS_LED_PRODUCT = 10 * 16384  # 163840
 
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_desktop import desktop_binary  # noqa: E402 (one definition of where the binary lands)
+from build_host import desktop_binary  # noqa: E402 (one definition of where the binary lands)
 from build_esp32 import APP_BIN  # noqa: E402 (one definition of what ESP-IDF names the app image)
 
 
@@ -154,7 +154,7 @@ def collect_desktop():
 
     # Binary names + locations differ per host: macOS/Linux drop the
     # executable under <build>/, MSVC multi-config under <build>/Release/.
-    # Located by build_desktop.desktop_binary(), which repo_health.py also calls: the two had
+    # Located by build_host.desktop_binary(), which repo_health.py also calls: the two had
     # separate copies of the candidate list in OPPOSITE order, so one run of this script could
     # take binary_kb from one file and flash.desktop from another.
     MoonLight = desktop_binary(BUILD_DIR)

@@ -63,7 +63,7 @@
       "description": "A lone layer with no modifier: one light maps to one light, so there is no lookup table and no separate output buffer. This is the floor the rest is read against, and the contrast that says a modifier costs something.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 7,
             "p95": 10,
@@ -97,7 +97,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 29,
             "p95": 1505,
@@ -107,7 +107,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 208,
             "p95": 208,
@@ -170,7 +170,7 @@
       "description": "The difference against the identity floor is what the lookup table and the second buffer cost.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 3,
             "p95": 5,
@@ -204,7 +204,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 23,
             "p95": 1858,
@@ -214,7 +214,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 167,
             "p95": 167,
@@ -270,7 +270,7 @@
       "description": "Rendering through the rebuilt mapping. A rebuild that failed leaves the old table in place, which costs the same and shows the wrong picture.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 3,
             "p95": 5,
@@ -304,7 +304,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 4,
             "p95": 2105,
@@ -314,7 +314,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 169,
             "p95": 169,
@@ -369,7 +369,7 @@
       "description": "A two-deep chain, which is the shape a real installation uses and the one where an ordering fault shows.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 3,
             "p95": 3,
@@ -403,7 +403,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 14,
             "p95": 2746,
@@ -413,7 +413,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 160,
             "p95": 160,
@@ -474,7 +474,7 @@
       "description": "One modifier again, after a removal from the middle of a chain.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 5,
@@ -508,7 +508,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 12,
             "p95": 2536,
@@ -518,7 +518,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 273,
             "p95": 273,
@@ -581,7 +581,7 @@
       "description": "Rendering through a modifier that was not there a frame ago, in a slot that never emptied.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 3,
             "p95": 5,
@@ -615,7 +615,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 14,
             "p95": 2117,
@@ -625,7 +625,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 164,
             "p95": 164,
@@ -686,7 +686,7 @@
       "description": "The floor again. Read against the first measurement, this is what says the lookup table and the extra buffer were given back rather than leaked.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 7,
             "p95": 11,
@@ -720,7 +720,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 7,
             "p95": 1705,
@@ -730,7 +730,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 252,
             "p95": 252,

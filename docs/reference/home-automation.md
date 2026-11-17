@@ -140,7 +140,7 @@ Only looks are exposed, on both paths. A `Drivers` or `Layouts` preset rewires p
 Home Assistant's WLED integration connects on **port 80 only**: its host field rejects a port. A desktop build defaults to 8080, so it needs `--port 80`, and that needs root:
 
 ```sh
-sudo uv run moondeck/run/run_desktop.py --port 80
+sudo uv run moondeck/run/run_host.py --port 80
 ```
 
 ## Set up the infrastructure

@@ -242,7 +242,7 @@ def test_a_process_with_more_steps_than_a_reader_follows_is_a_warning_to_fold_th
 
 
 def test_two_steps_in_a_row_that_two_processes_share_are_a_warning_to_call_one_process(tmp_path):
-    steps = "      - {id: b, say: Build it., when: {run: {script: moondeck/build/build_desktop.py}}}\n      - {id: t, say: Test it., when: {run: {script: moondeck/test/test_desktop.py}}}\n"
+    steps = "      - {id: b, say: Build it., when: {run: {script: moondeck/build/build_host.py}}}\n      - {id: t, say: Test it., when: {run: {script: moondeck/test/test_host.py}}}\n"
     body = "stage: T\nprocesses:\n" + "".join(f"  - id: {p}\n    title: P\n    actor: user\n    goal: G\n    steps:\n" + steps for p in ("a", "c"))
     processes = gen_moonwalk.build(stage(tmp_path, body))["processes"]
     assert gen_moonwalk.shared_runs(processes) == [("test", "c: 2 steps repeat a's (b, t); make them one process both call")]
@@ -338,9 +338,9 @@ def test_a_call_gets_its_method_its_path_with_the_parameters_filled_in_and_its_e
 
 
 def test_a_step_carries_the_line_a_reader_copies_written_once_by_the_generator(tmp_path):
-    run = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Build it., when: {run: {script: moondeck/build/build_desktop.py, args: --tests}}}\n      - {id: c, say: Open a PR., when: {run: {command: gh pr create --base main}}}\n      - {id: m, say: Stage it., when: {manual: Stage.}}\n"
+    run = "stage: T\nprocesses:\n  - id: a\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Build it., when: {run: {script: moondeck/build/build_host.py, args: --tests}}}\n      - {id: c, say: Open a PR., when: {run: {command: gh pr create --base main}}}\n      - {id: m, say: Stage it., when: {manual: Stage.}}\n"
     steps = {s["id"]: s for s in gen_moonwalk.build(stage(tmp_path, run))["processes"]["a"]["steps"]}
-    assert steps["s"]["command"] == "uv run moondeck/build/build_desktop.py --tests"
+    assert steps["s"]["command"] == "uv run moondeck/build/build_host.py --tests"
     assert steps["c"]["command"] == "gh pr create --base main" and "command" not in steps["m"]
     post = gen_moonwalk.build(stage(tmp_path, CALL % "{operation: setControl, body: '{\"value\":\"it''s\"}'}"))["processes"]["a"]["steps"][0]
     assert post["command"] == "curl -X POST 'http://<device>/api/control' -d '{\"value\":\"it'\\''s\"}'"   # a quote in the body survives the shell
@@ -418,11 +418,11 @@ def run_step(run: str) -> str:
 
 
 def test_a_run_step_passes_only_flags_its_script_declares(tmp_path):
-    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_host.py` has no option --nope"):
-        gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_host.py, args: '--python --nope'}")))
-    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_host.py` has no option --nope"):
-        gen_moonwalk.build(stage(tmp_path, run_step("{command: 'uv run moondeck/test/test_host.py --nope=1 && echo done'}")))
-    gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_host.py, args: '--python'}")))
+    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_tooling.py` has no option --nope"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_tooling.py, args: '--python --nope'}")))
+    with pytest.raises(ValueError, match=r"a/s: `moondeck/test/test_tooling.py` has no option --nope"):
+        gen_moonwalk.build(stage(tmp_path, run_step("{command: 'uv run moondeck/test/test_tooling.py --nope=1 && echo done'}")))
+    gen_moonwalk.build(stage(tmp_path, run_step("{script: moondeck/test/test_tooling.py, args: '--python'}")))
     gen_moonwalk.build(stage(tmp_path, run_step("{command: 'curl --data-binary @x.bin http://<device>/'}")))   # not a MoonDeck script
 
 
@@ -479,7 +479,7 @@ def test_a_call_derives_nothing_since_its_result_is_not_in_its_action(tmp_path):
 def test_a_process_no_runner_performs_is_reported_and_one_with_a_script_a_set_or_a_condition_is_not(tmp_path):
     model = gen_moonwalk.build(stage(tmp_path, "stage: T\nprocesses:\n"
                                      "  - id: by-hand\n    title: A\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Look., when: {manual: Look}}\n"
-                                     "  - id: by-script\n    title: B\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Run it., when: {run: {script: moondeck/build/build_desktop.py}}}\n"))
+                                     "  - id: by-script\n    title: B\n    actor: user\n    goal: G\n    steps:\n      - {id: s, say: Run it., when: {run: {script: moondeck/build/build_host.py}}}\n"))
     assert [why for _, why in gen_moonwalk.unverified(model["processes"])] == ["by-hand: no step has an automated runner or a condition, so no run proves it works"]
 
 

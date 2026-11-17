@@ -53,7 +53,7 @@ def test_drumkits_toms_are_any_of_its_four_tom_bits():
 
 
 @pytest.mark.skipif(not bench_drums.bench_tempo.binary().exists() or shutil.which("ffmpeg") is None,
-                    reason="needs mm_tempo (build_desktop.py --tests or bench_drums.py builds it) and FFmpeg")
+                    reason="needs mm_tempo (build_host.py --tests or bench_drums.py builds it) and FFmpeg")
 def test_on_a_drum_input_the_walks_kick_lights_the_bass_and_not_the_mids_and_its_snare_the_mids_and_not_the_bass(tmp_path):
     bench_drums.generate(tmp_path)
     res = bench_drums.bench_tempo.analyze(tmp_path / "drum-walk.wav", bench_drums.bench_tempo.binary(), ("--drums", "--drum-input"))

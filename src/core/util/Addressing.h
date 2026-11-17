@@ -7,6 +7,7 @@
 namespace mm {
 
 /// One rule for every service that sends one packet to many receivers: unicast to a receiver list, multicast to a group, or broadcast.
+///
 /// Why each, and how discovery proves a network drops multicast: [Multicast and IGMP snooping](../../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 /// How a service sends to many receivers; a service offers only the modes its protocol allows.

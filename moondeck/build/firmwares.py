@@ -13,12 +13,12 @@ import build_teensy  # noqa: E402
 
 
 def _host(label: str, assets: list[str], runs_on: str = "the computer") -> dict:
-    """A host build, downloaded rather than flashed. `assets` are the release-asset name patterns (regexes) package_desktop.py and build_android.py write, the installer's own form first."""
+    """A host build, downloaded rather than flashed. `assets` are the release-asset name patterns (regexes) package_host.py and build_android.py write, the installer's own form first."""
     return {"chip": label.lower().replace(" ", "-"), "label": label, "eth_only": False, "ships": True, "assets": assets,
             "description": f"MoonLight for {label}, downloaded and run on {runs_on}."}
 
 
-# The host slice: one row per platform the release's host jobs build, package_desktop.py's and build_android.py's. The name is `host-<chip>`, the key the installer's download list carries.
+# The host slice: one row per platform the release's host jobs build, package_host.py's and build_android.py's. The name is `host-<chip>`, the key the installer's download list carries.
 _HOST = {
     f"host-{spec['chip']}": spec
     for spec in (

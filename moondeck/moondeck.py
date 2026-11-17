@@ -155,7 +155,7 @@ def gates(base: str | None = None, every: bool = False, with_model: bool = False
     model = walk_model()
     if model is None:
         return {"error": "gen_moonwalk failed; its error is in this console"}
-    # A step's card is the one whose own call it is, else the first card for its script: Compile Tests runs `build_desktop.py --tests`, not Build.
+    # A step's card is the one whose own call it is, else the first card for its script: Compile Tests runs `build_host.py --tests`, not Build.
     by_call, by_script = {}, {}
     for c in SCRIPTS:
         by_call.setdefault(card_call(c), c["id"])
@@ -2800,7 +2800,7 @@ document.addEventListener("click", function(e) {{
 
     def _serve_static(self):
         """Serve files from moondeck_ui/ and docs/assets/."""
-        # Strip query string before resolving path (e.g. /?tab=desktop → /)
+        # Strip query string before resolving path (e.g. /?tab=host → /)
         raw = self.path.split("?", 1)[0].lstrip("/")
         path = raw if raw else "index.html"
 

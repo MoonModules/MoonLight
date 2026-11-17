@@ -316,7 +316,7 @@ def build_warnings() -> str | None:
     import check_nonblocking as nb
     build_dir = nb.check_clang_tidy._host_build_dir()
     if not (build_dir / "CMakeCache.txt").exists():
-        raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_desktop.py` first.")
+        raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_host.py` first.")
     if not nb.function_effects_enabled(build_dir):
         print("The desktop build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
         return None

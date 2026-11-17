@@ -40,7 +40,7 @@ processes:
     intro: |
       The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. An applicable check skipped carries a one-line reason in the commit or pull request. A failure with a clear fix is fixed, and only its check reruns, with any check whose paths the fix touches; a failure that needs a decision is reported and waits.
 
-      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_host --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_tooling --ui` is never a gate.
     steps:
       - id: reviewer
         say: Have the Reviewer read the staged diff.
@@ -130,7 +130,7 @@ processes:
       - id: build-desktop
         say: Build the desktop firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/build/build_desktop.py } }
+        when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
       - id: tests
@@ -152,7 +152,7 @@ processes:
       - id: no-jit
         say: Build the desktop without the MoonLive backend.
         given: [{ changed: ["src/*/moonlive/**"] }]
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--no-jit" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--no-jit" } }
         detail: |
           It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
       - id: kpi
@@ -169,7 +169,7 @@ processes:
       - id: js
         say: Run the JavaScript tests.
         given: [{ changed: [src/ui/**, mooninstaller/**, "docs/assets/*.js", test/js/**] }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
       - id: devices
         say: Check the installer's device catalog.
         given: [{ changed: [src/ui/**, mooninstaller/**] }]
@@ -182,7 +182,7 @@ processes:
       - id: python
         say: Run the Python tests.
         given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
       - id: firmwares
         say: Check the firmware list.
         given: [{ changed: [moondeck/**, moonlive/**] }]

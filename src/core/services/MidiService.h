@@ -650,7 +650,7 @@ private:
     /// The desk on the network, an address or a name with an optional `:port`.
     /// @guide Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`.
     char participant_[64] = {};
-    char participantName_[64] = {};     ///< `participant_` without its port
+    char participantName_[64] = {};     ///< `participant_` up to its port
     uint8_t participantIp_[4] = {};
     uint16_t participantPort_ = rtpmidi::kDefaultPort;
     bool participantIsName_ = false;

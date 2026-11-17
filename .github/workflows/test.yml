@@ -59,9 +59,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v3
-      # The command the commit gate runs, its test dependencies named once in test_host.py.
+      # The command the commit gate runs, its test dependencies named once in test_tooling.py.
       - name: the Python host tests
-        run: uv run moondeck/test/test_host.py --python --junit-dir results
+        run: uv run moondeck/test/test_tooling.py --python --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
@@ -75,7 +75,7 @@ jobs:
       - uses: astral-sh/setup-uv@v3
       # Node's built-in test runner, no npm install, through the command the commit gate runs.
       - name: the JavaScript host tests
-        run: uv run moondeck/test/test_host.py --js --junit-dir results
+        run: uv run moondeck/test/test_tooling.py --js --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
@@ -93,7 +93,7 @@ jobs:
         with:
           key: restore
       - name: build the desktop app
-        run: uv run moondeck/build/build_desktop.py
+        run: uv run moondeck/build/build_host.py
       # The script starts the app on an empty data folder, restores, stops it, and prints the app's log on a failure.
       - name: restore a flat backup onto it
         run: uv run moondeck/scenario/run_restore_live.py --launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2

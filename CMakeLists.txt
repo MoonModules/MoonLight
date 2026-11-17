@@ -163,7 +163,7 @@ endif()
 # `add_dependencies(mm_core ui_embed)` is below, after the ui_embed target is defined.
 
 # The computed semver (compute_version.py): the core for a stable tag, <core>-dev.<N> for a
-# moving latest build. Only the release pipeline sets it (package_desktop.py --version); a local
+# moving latest build. Only the release pipeline sets it (package_host.py --version); a local
 # build falls through to build_info.cpp's #ifndef default, the same <core>-dev.<N> computed into
 # build_id.h, so a desktop built from main reports the version latest carries. The same override the
 # ESP32 build has (esp32/main/CMakeLists.txt), so a desktop binary reports the same precise
@@ -173,7 +173,7 @@ endif()
 if(MM_VERSION)
     set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
 endif()
-# A host build names its firmware as the release names its program, firmware-host-<os>-<arch>-v<version>.bin (package_desktop.py),
+# A host build names its firmware as the release names its program, firmware-host-<os>-<arch>-v<version>.bin (package_host.py),
 # so the Firmware card, the map and Home Assistant install it as they install a board, which takes its name from esp32/main/CMakeLists.txt.
 if(ANDROID)   # before the Linux default: Android is Linux underneath, and the NDK's toolchain sets ANDROID
     set(MM_HOST_OS android)
@@ -234,7 +234,7 @@ target_link_libraries(mm_platform PUBLIC $<$<PLATFORM_ID:Windows>:ws2_32> $<$<PL
 # The HDMI output's window on macOS: AppKit for the window, Core Graphics for the displays and their modes, Core Animation
 # for the layer showing the frame, IOKit for the monitor's EDID, all frameworks the OS ships, so the no-SDK rule holds.
 # Objective-C++ with ARC for that one file, on Apple's clang only: GCC's Objective-C++ reads neither blocks nor ARC, so the
-# GCC compile-proof build (build_desktop.py --gcc) has no macOS screen and the driver says so. On Windows the same window
+# GCC compile-proof build (build_host.py --gcc) has no macOS screen and the driver says so. On Windows the same window
 # takes user32, gdi32 and setupapi (the EDID), all in the SDK.
 if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     enable_language(OBJCXX)
@@ -270,7 +270,7 @@ elseif(DEFINED ENV{MM_PACKAGING} AND NOT WIN32)
     # consent and then be structurally unable to honor it, and nobody would find out. Optional
     # stays optional for a contributor's machine; a published artifact must be able to report.
     #
-    # Keyed on MM_PACKAGING, which package_desktop.py exports and nothing else sets. Two earlier
+    # Keyed on MM_PACKAGING, which package_host.py exports and nothing else sets. Two earlier
     # signals were both wrong. MM_RELEASE reaches the build as a CMake -D from build_esp32.py and
     # is never an environment variable, so that branch could not fire and three of the four
     # published desktop binaries shipped with the feature compiled out. CI is set by every runner,
@@ -401,7 +401,7 @@ add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/host/mai
 target_include_directories(MoonLight PRIVATE src/)
 target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
-# macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_desktop.py).
+# macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_host.py).
 if(APPLE)
     add_custom_command(TARGET MoonLight POST_BUILD
         COMMAND codesign --force --sign - --identifier org.moonmodules.moonlight $<TARGET_FILE:MoonLight>

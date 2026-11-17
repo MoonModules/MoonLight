@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / "ci"))
-import package_desktop as pd  # noqa: E402
+import package_host as pd  # noqa: E402
 
 
 def staged(tmp_path, monkeypatch):

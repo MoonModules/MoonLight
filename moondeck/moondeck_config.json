@@ -1,16 +1,16 @@
 {
   "scripts": [
     {
-      "id": "build_desktop",
-      "tab": "desktop",
+      "id": "build_host",
+      "tab": "host",
       "group": "build",
       "label": "Build",
-      "help": "build_desktop",
-      "script": "build/build_desktop.py"
+      "help": "build_host",
+      "script": "build/build_host.py"
     },
     {
       "id": "build_android",
-      "tab": "desktop",
+      "tab": "host",
       "group": "build",
       "label": "Build Android",
       "help": "build_android",
@@ -21,7 +21,7 @@
     },
     {
       "id": "run_android",
-      "tab": "desktop",
+      "tab": "host",
       "group": "run",
       "label": "Run on Android",
       "help": "run_android",
@@ -41,27 +41,27 @@
       "group": "test",
       "label": "Compile Tests",
       "help": "compile_tests",
-      "script": "build/build_desktop.py",
+      "script": "build/build_host.py",
       "args": [
         "--tests"
       ]
     },
     {
-      "id": "test_desktop",
-      "tab": "repo",
-      "group": "test",
-      "label": "Unit Test",
-      "help": "test_desktop",
-      "script": "test/test_desktop.py",
-      "needs_module": true
-    },
-    {
       "id": "test_host",
       "tab": "repo",
       "group": "test",
-      "label": "Host Tests",
+      "label": "Unit Test",
       "help": "test_host",
-      "script": "test/test_host.py"
+      "script": "test/test_host.py",
+      "needs_module": true
+    },
+    {
+      "id": "test_tooling",
+      "tab": "repo",
+      "group": "test",
+      "label": "Tooling Tests",
+      "help": "test_tooling",
+      "script": "test/test_tooling.py"
     },
     {
       "id": "scenario_pipeline",
@@ -74,18 +74,18 @@
       "needs_scenario": true
     },
     {
-      "id": "run_desktop",
-      "tab": "desktop",
+      "id": "run_host",
+      "tab": "host",
       "group": "run",
       "label": "Run",
-      "help": "run_desktop",
-      "script": "run/run_desktop.py",
+      "help": "run_host",
+      "script": "run/run_host.py",
       "long_running": true,
       "process_name": "MoonLight"
     },
     {
       "id": "show_crash_log",
-      "tab": "desktop",
+      "tab": "host",
       "group": "run",
       "label": "Crash Log",
       "help": "show_crash_log",
@@ -103,7 +103,7 @@
     },
     {
       "id": "run_open_stage_control",
-      "tab": "desktop",
+      "tab": "host",
       "group": "run",
       "label": "Control Surface",
       "help": "run_open_stage_control",
@@ -113,7 +113,7 @@
     },
     {
       "id": "bench_tempo",
-      "tab": "desktop",
+      "tab": "host",
       "group": "run",
       "label": "Tempo Report",
       "help": "bench_tempo",
@@ -124,7 +124,7 @@
     },
     {
       "id": "bench_notes",
-      "tab": "desktop",
+      "tab": "host",
       "group": "run",
       "label": "Notes Report",
       "help": "bench_notes",

@@ -430,8 +430,10 @@ public:
     // DELIBERATELY blocking, despite MM_NONBLOCKING: the wait IS the stall this test needs, as SlowDriver's is.
     void tick() MM_NONBLOCKING override {
         std::unique_lock<std::mutex> lk(m_);
-        if (!stalled_) { stalled_ = true; cv_.wait_for(lk, 5s, [this] { return released_; }); }
+        if (!stalled_) { stalled_ = true; cv_.notify_all(); cv_.wait_for(lk, 5s, [this] { return released_; }); }
     }
+    /// True once the worker is inside its first tick, so the test opens the stall on demand rather than by timing.
+    bool waitEntered() { std::unique_lock<std::mutex> lk(m_); return cv_.wait_for(lk, 5s, [this] { return stalled_; }); }
     void letGo() { { std::scoped_lock<std::mutex> lk(m_); released_ = true; } cv_.notify_all(); }
     mm::Buffer* src_ = nullptr;
 private:
@@ -464,9 +466,9 @@ TEST_CASE("render-split: after a stalled worker drops the split to inline, new f
     REQUIRE(drivers.renderSplitActive());
 
     drivers.tick();                                    // the worker wedges inside d.tick()
-    std::thread releaser([&] { std::this_thread::sleep_for(700ms); d.letGo(); });   // past the 500 ms boundary wait
-    drivers.tick();                                    // times out, joins the worker, runs inline from here
-    releaser.join();
+    REQUIRE(d.waitEntered());
+    CHECK_FALSE(drivers.quiesceEncodeForTest());       // the boundary wait times out and drops the split to inline
+    d.letGo();                                         // the wedged tick ends; the worker is notified no more
     CHECK_FALSE(drivers.renderSplitActive());
 
     layer.buffer().data()[0] = 0x42;                   // the effect draws a new frame

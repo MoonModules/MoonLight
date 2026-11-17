@@ -2,7 +2,7 @@
 """Run the desktop executable as a detached background process.
 
 Same shape as flashing ESP32: this script does the launch and exits cleanly.
-The app keeps running until the user (or another `run_desktop` invocation)
+The app keeps running until the user (or another `run_host` invocation)
 stops it. A re-run kills any prior instance first, so "Run" is idempotent —
 press it twice in a row and you get one fresh app, not two.
 
@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _host_build_dir() -> Path:
-    """Per-host build dir, matching build_desktop.py / package_desktop.py."""
+    """Per-host build dir, matching build_host.py / package_host.py."""
     return ROOT / "build" / {
         "Darwin":  "macos",
         "Linux":   "linux",
@@ -103,7 +103,7 @@ def main():
     ap = argparse.ArgumentParser(description="Run the desktop build in the background.")
     # Ports below 1024 need root, so the default stays 8080. Port 80 exists for Home Assistant's
     # WLED integration, which hardcodes port 80 and offers no way to specify another
-    # (`sudo uv run moondeck/run/run_desktop.py --port 80`).
+    # (`sudo uv run moondeck/run/run_host.py --port 80`).
     ap.add_argument("--port", type=int, default=None,
                     help="HTTP port (default 8080; 80 needs root, for the Home Assistant WLED integration)")
     args = ap.parse_args()
@@ -113,7 +113,7 @@ def main():
 
     if not EXECUTABLE.exists():
         print(f"Executable not found: {EXECUTABLE}")
-        print("Run build_desktop.py first.")
+        print("Run build_host.py first.")
         sys.exit(1)
 
     if _is_running():

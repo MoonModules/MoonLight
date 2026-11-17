@@ -258,7 +258,7 @@ TEST_CASE("RainbowEffect writes non-zero RGB data to buffer") {
 
 That's the whole shape: **set up a small grid, run `tick()`, assert the output is what you expect.** Good things to pin for a new effect: it paints *something* on a normal grid, it survives a 1×1 and 0×0 grid without crashing (the robustness rule), and, if it holds memory, its `dynamicBytes` drops to zero when it's disabled. When you find a bug, the fix isn't done until a test reproduces it: that's how a crash becomes a test that stops it ever coming back.
 
-Tests live in `test/unit/light/unit_<YourEffect>.cpp`, built and run as [Add a test, and pin a bug](../moonwalk.md#add-test) shows: `uv run moondeck/test/test_desktop.py --module <YourEffect>`. The full strategy, the unit and scenario tiers, how to pick one and the live-device tier, is a topic of its own: [Testing](../reference/testing.md). For your first effect, one small "it paints and it doesn't crash" test is plenty.
+Tests live in `test/unit/light/unit_<YourEffect>.cpp`, built and run as [Add a test, and pin a bug](../moonwalk.md#add-test) shows: `uv run moondeck/test/test_host.py --module <YourEffect>`. The full strategy, the unit and scenario tiers, how to pick one and the live-device tier, is a topic of its own: [Testing](../reference/testing.md). For your first effect, one small "it paints and it doesn't crash" test is plenty.
 
 ## A tour of the other module kinds
 

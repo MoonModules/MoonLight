@@ -176,7 +176,7 @@
       "op": "measure",
       "measure": true,
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 8,
             "p95": 14,

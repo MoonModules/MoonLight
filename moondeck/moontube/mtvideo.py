@@ -13,7 +13,7 @@ pass burning text into frames and no hand-drawn pointer to keep in sync.
     uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
 
 Prerequisites:
-    1. A running MoonLight:   uv run moondeck/run/run_desktop.py
+    1. A running MoonLight:   uv run moondeck/run/run_host.py
     2. Playwright's chromium: uv run --with playwright playwright install chromium
 """
 
@@ -106,7 +106,7 @@ def main() -> int:
         requests.get(f"http://{host}/api/state", timeout=3)
     except requests.RequestException:
         print(f"No MoonLight answering on {host}.\n"
-              f"Start one with: uv run moondeck/run/run_desktop.py", file=sys.stderr)
+              f"Start one with: uv run moondeck/run/run_host.py", file=sys.stderr)
         return 1
 
     run = mtrun.load_run(Path(args.run))

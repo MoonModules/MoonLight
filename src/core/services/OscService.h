@@ -216,12 +216,15 @@ private:
         });
     }
 
+    /// Whether a packet has come in, so feedback has someone to answer.
+    bool hasPeer() const { return (peer_[0] | peer_[1] | peer_[2] | peer_[3]) != 0; }
+
     /// Where feedback goes, which the send and the network report share: the receivers, whoever wrote last when there are none, or the group.
     template <class Fn>
     void forEachFeedbackDestination(Fn&& fn) const {
         const Addressing mode = static_cast<Addressing>(addressing < kModeCount ? addressing : 0);
         if (mode == Addressing::Unicast && receiverCount_ == 0) {
-            if (peer_[0] || peer_[1] || peer_[2] || peer_[3]) fn(peer_);
+            if (!receiversError_ && hasPeer()) fn(peer_);   // a mistyped list sends to nobody, as its status says
             return;
         }
         if (mode != Addressing::Unicast && !groupValid_) return;   // no group, nowhere to send; the status says so

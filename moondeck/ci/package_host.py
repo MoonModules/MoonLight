@@ -74,7 +74,7 @@ def configure_and_build_macos(version: str = "") -> Path:
     run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
     binary = BUILD_DIR_MACOS / "MoonLight"
     if not binary.exists():
-        print(f"package_desktop: expected binary not found at {binary}")
+        print(f"package_host: expected binary not found at {binary}")
         sys.exit(1)
     return binary
 
@@ -99,7 +99,7 @@ def configure_and_build_linux(version: str = "") -> Path:
     run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
     binary = BUILD_DIR_LINUX / "MoonLight"
     if not binary.exists():
-        print(f"package_desktop: expected binary not found at {binary}")
+        print(f"package_host: expected binary not found at {binary}")
         sys.exit(1)
     return binary
 
@@ -110,7 +110,7 @@ def stage_program(binary: Path, version: str, firmware: str) -> Path:
     DIST_DIR.mkdir(exist_ok=True)
     out = DIST_DIR / f"firmware-{firmware}-v{version}.bin"
     shutil.copy2(binary, out)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     return out
 
 
@@ -135,7 +135,7 @@ def package_linux(binary: Path, version: str) -> Path:
             tar.add(readme, arcname="README.txt")
     finally:
         readme.unlink(missing_ok=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     stage_program(binary, version, f"host-linux-{tar_label}")
     package_deb(binary, version)
     return out
@@ -154,8 +154,8 @@ def package_deb(binary: Path, version: str) -> Path | None:
         # firmware and all) with an error naming the glob rather than the missing tool.
         # On a dev machine it stays a skip, which is what the tarball beside it is for.
         if os.environ.get("CI"):
-            sys.exit("package_desktop: no dpkg-deb on this CI runner, cannot build the .deb")
-        print("package_desktop: no dpkg-deb on this host, skipping the .deb")
+            sys.exit("package_host: no dpkg-deb on this CI runner, cannot build the .deb")
+        print("package_host: no dpkg-deb on this host, skipping the .deb")
         return None
     # A Debian version cannot carry a leading 'v' and must start with a digit. A hyphen is also
     # out: dpkg reads it as the upstream/revision separator, so the computed 3.0.0-dev.N becomes
@@ -217,7 +217,7 @@ def package_deb(binary: Path, version: str) -> Path | None:
     out = DIST_DIR / f"moonlight_{version}_{deb_arch}.deb"
     run(["dpkg-deb", "--build", "--root-owner-group", str(stage), str(out)])
     shutil.rmtree(stage, ignore_errors=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     return out
 
 
@@ -239,7 +239,7 @@ def configure_and_build_windows(version: str = "") -> Path:
         fallback = BUILD_DIR_WIN / "MoonLight.exe"
         if fallback.exists():
             return fallback
-        print(f"package_desktop: expected binary not found at {binary}")
+        print(f"package_host: expected binary not found at {binary}")
         sys.exit(1)
     return binary
 
@@ -294,9 +294,9 @@ def adhoc_sign(binary: Path) -> None:
     r = subprocess.run(["codesign", "--force", "--sign", "-", "--identifier", BUNDLE_ID, str(binary)],
                        capture_output=True, text=True)
     if r.returncode == 0:
-        print("package_desktop: ad-hoc signed (Gatekeeper shows the standard unverified-developer prompt)")
+        print("package_host: ad-hoc signed (Gatekeeper shows the standard unverified-developer prompt)")
     else:
-        print(f"package_desktop: ad-hoc signing failed, shipping unsigned: {r.stderr.strip()}")
+        print(f"package_host: ad-hoc signing failed, shipping unsigned: {r.stderr.strip()}")
 
 
 def make_icns(dest: Path) -> Path | None:
@@ -309,7 +309,7 @@ def make_icns(dest: Path) -> Path | None:
     """
     src = ROOT / "mooninstaller" / "favicon.png"
     if not src.exists() or shutil.which("iconutil") is None:
-        print("package_desktop: no favicon or no iconutil, the app will use the default icon")
+        print("package_host: no favicon or no iconutil, the app will use the default icon")
         return None
     iconset = dest / "MoonLight.iconset"
     shutil.rmtree(iconset, ignore_errors=True)
@@ -387,8 +387,8 @@ def package_dmg(binary: Path, version: str) -> Path | None:
     if shutil.which("hdiutil") is None:
         # Fatal under CI for the same reason as the .deb above.
         if os.environ.get("CI"):
-            sys.exit("package_desktop: no hdiutil on this CI runner, cannot build the .dmg")
-        print("package_desktop: no hdiutil, skipping the .dmg")
+            sys.exit("package_host: no hdiutil on this CI runner, cannot build the .dmg")
+        print("package_host: no hdiutil, skipping the .dmg")
         return None
     stage = DIST_DIR / "dmg"
     shutil.rmtree(stage, ignore_errors=True)
@@ -401,7 +401,7 @@ def package_dmg(binary: Path, version: str) -> Path | None:
     run(["hdiutil", "create", "-volname", f"MoonLight {version}",
          "-srcfolder", str(stage), "-ov", "-format", "UDZO", str(out)])
     shutil.rmtree(stage, ignore_errors=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     return out
 
 
@@ -420,7 +420,7 @@ def package_macos(binary: Path, version: str) -> Path:
             tar.add(readme, arcname="README.txt")
     finally:
         readme.unlink(missing_ok=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     stage_program(binary, version, "host-macos-arm64")
     package_dmg(binary, version)
     return out
@@ -516,7 +516,7 @@ def windows_icon(version: str) -> Path | None:
     out = DIST_DIR / "MoonLight.ico"
     src = ROOT / "mooninstaller" / "favicon.png"
     if not src.exists():
-        print("package_desktop: no favicon to generate an icon from")
+        print("package_host: no favicon to generate an icon from")
         return None
     run(["uv", "run", str(ROOT / "moondeck" / "ci" / "make_ico.py"), str(src), str(out)])
     return out if out.exists() else None
@@ -556,8 +556,8 @@ def package_windows_installer(binary: Path, version: str) -> Path | None:
         # error naming a glob rather than the missing tool. On a dev machine it is a skip, and the
         # zip beside it is what that developer uses.
         if os.environ.get("CI"):
-            sys.exit("package_desktop: no makensis on this CI runner, cannot build the installer")
-        print("package_desktop: no makensis on this host, skipping the installer")
+            sys.exit("package_host: no makensis on this CI runner, cannot build the installer")
+        print("package_host: no makensis on this host, skipping the installer")
         return None
 
     icon = windows_icon(version)
@@ -566,8 +566,8 @@ def package_windows_installer(binary: Path, version: str) -> Path | None:
         # installer with fail_on_unmatched_files, so skipping here would fail the whole release
         # with an error naming a glob rather than the missing icon source.
         if os.environ.get("CI"):
-            sys.exit("package_desktop: no icon for the installer, and no favicon to build one from")
-        print("package_desktop: no icon, skipping the installer")
+            sys.exit("package_host: no icon for the installer, and no favicon to build one from")
+        print("package_host: no icon, skipping the installer")
         return None
 
     out = DIST_DIR / f"MoonLight-windows-x64-v{version}-setup.exe"
@@ -587,7 +587,7 @@ def package_windows_installer(binary: Path, version: str) -> Path | None:
     finally:
         script.unlink(missing_ok=True)
         readme.unlink(missing_ok=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     return out
 
 
@@ -623,7 +623,7 @@ def package_windows(binary: Path, version: str) -> Path:
             zf.write(scripts / "Install-MoonLight.cmd", arcname="Install-MoonLight.cmd")
     finally:
         readme.unlink(missing_ok=True)
-    print(f"package_desktop: wrote {out}")
+    print(f"package_host: wrote {out}")
     stage_program(binary, version, "host-windows-x64")
     package_windows_installer(binary, version)
     return out
@@ -662,7 +662,7 @@ def main() -> int:
 
     if system == "Darwin":
         if machine not in ("arm64", "aarch64"):
-            print(f"package_desktop: unsupported macOS arch '{machine}'. "
+            print(f"package_host: unsupported macOS arch '{machine}'. "
                   f"MoonLight 1.0 ships macOS arm64 only.")
             return 2
         binary = configure_and_build_macos(args.version)
@@ -677,7 +677,7 @@ def main() -> int:
 
     if system == "Linux":
         if machine not in ("x86_64", "amd64", "aarch64", "arm64"):
-            print(f"package_desktop: unsupported Linux arch '{machine}'. "
+            print(f"package_host: unsupported Linux arch '{machine}'. "
                   f"x86-64 and arm64 are packaged; other arches build from source.")
             return 2
         binary = configure_and_build_linux(args.version)
@@ -685,7 +685,7 @@ def main() -> int:
         show_ccache_stats()
         return 0
 
-    print(f"package_desktop: host '{system}' not supported. "
+    print(f"package_host: host '{system}' not supported. "
           f"MoonLight ships macOS arm64, Windows x64 and Linux x64/arm64.")
     return 2
 

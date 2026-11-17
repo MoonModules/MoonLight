@@ -1,4 +1,4 @@
-"""Running a process's script steps from the terminal: which steps run and which are skipped, and why. Run: `uv run moondeck/test/test_host.py --python`."""
+"""Running a process's script steps from the terminal: which steps run and which are skipped, and why. Run: `uv run moondeck/test/test_tooling.py --python`."""
 
 import sys
 from pathlib import Path

@@ -6,7 +6,7 @@ rather than fails when nothing is listening. That is the same shape the JS lane 
 for a missing node: a bench without a running desktop build is a normal setup, and
 "this does not apply here" is what skip means.
 
-Run:  uv run moondeck/test/test_host.py --ui
+Run:  uv run moondeck/test/test_tooling.py --ui
 """
 
 import os
@@ -40,7 +40,7 @@ def _alive(host: str, path: str = "/api/state") -> bool:
 def host() -> str:
     if not _alive(HOST):
         pytest.skip(f"no MoonLight answering on {HOST} "
-                    f"(start one: uv run moondeck/run/run_desktop.py)")
+                    f"(start one: uv run moondeck/run/run_host.py)")
     return HOST
 
 
