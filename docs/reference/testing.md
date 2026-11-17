@@ -6,8 +6,8 @@ What we test and how. The inventory of every test is [the test page](tests.md), 
 
 Three test categories, each with a clear purpose:
 
-- **Unit tests** (desktop, `test/unit/{core,light}/unit_*.cpp`), exercise individual MoonModules in isolation with doctest. Each test file declares `// @module <Name>` so it's categorized under that module in the generated inventory. Run via [test_desktop](../../moondeck/MoonDeck.md#test_desktop), which picks the per-host build dir. Verify a module's API, edge cases, and output independent of how it's wired into a pipeline.
-- **In-process scenarios** (desktop, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file naming its top-level containers and a sequence of steps (`apply_state` documents, `set_control`, `measure`) with an optional per-target performance contract. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
+- **Unit tests** (host, `test/unit/{core,light}/unit_*.cpp`), exercise individual MoonModules in isolation with doctest. Each test file declares `// @module <Name>` so it's categorized under that module in the generated inventory. Run via [test_host](../../moondeck/MoonDeck.md#test_host), which picks the per-host build dir. Verify a module's API, edge cases, and output independent of how it's wired into a pipeline.
+- **In-process scenarios** (host, `test/scenarios/{core,light}/scenario_*.json`), exercise the system as an integrated pipeline. Each scenario is a declarative JSON file naming its top-level containers and a sequence of steps (`apply_state` documents, `set_control`, `measure`) with an optional per-target performance contract. The scenario runner (`test/scenario_runner.cpp`) replays the steps in-process and reports tick + heap per `measure` step. Same JSON files run against a live device through the HTTP API, that's the next tier.
 - **Live scenarios**: the same scenarios driven against a running device over REST. See [Live scenarios](#live-scenarios) below.
 
 A live run is worth watching once, because it is the tier that proves the device rather than a model of it. This one stacks three layers, blends them, swaps an effect, resizes the grid and takes the stack apart again, and every step happens through the same API the page uses:
@@ -33,14 +33,14 @@ Tests pin behavior that runs; static analysis catches what never gets exercised.
 |---|---|---|---|
 | 0 | Compiler warnings | shadowing, double promotion, fallthrough, null deref | Every build, all targets |
 | 1 | [clang-tidy](../.clang-tidy) | bug patterns, performance, portability | Editor (clangd) + MoonDeck card |
-| 2 | Sanitizers (ASan, TSan) | real memory/threading faults at run time | Desktop CI lanes |
+| 2 | Sanitizers (ASan, TSan) | real memory/threading faults at run time | Host CI lanes |
 | 3 | RTSan + `[[clang::nonblocking]]` | allocation/blocking in the render path, **transitively** | Compile time + CI |
 | 4 | [CodeQL](../.github/codeql-config.yml) | untrusted input, whole-program taint, use-after-free | CI, Security tab |
 
 Alongside them, **check_code** writes one report that only falls. It counts complexity, size, nesting and parameters from lizard, duplication from jscpd, the render path's blocking calls from the compiler, and the two boundaries. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../../moondeck/MoonDeck.md)).
 
 **Every one of these is a report, not a gate.** They state what they find; a consumer decides
-what to do about it. `WarningsAsErrors` is empty, CodeQL never runs on `pull_request`, and the hot-path check never fails the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed at the moment they appear.
+what to do about it. `WarningsAsErrors` is empty, CodeQL stays off `pull_request`, and the hot-path check always passes the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed as they appear.
 
 **One rule, one owner.** Each rule is enforced in exactly one place, so a finding has one home
 and cannot drift between two tools that half-agree:
@@ -69,7 +69,7 @@ An analyzer reporting "0 findings" is indistinguishable from one that read nothi
 | Same trap in `-checks` | The filter had never worked |
 | Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analyzed |
 | Missing `-isysroot` | Under-report, not an error: 5 matches where there were 14 |
-| A baseline keyed on a name the tool no longer emits | Pins nothing while looking green, which is why `check_code` counts per file |
+| A baseline keyed on a name the tool stopped emitting | Looks green while pinning zero cases, which is why `check_code` counts per file |
 
 So: **run a control check that MUST fire.** After reaching 0, enabling a deliberately-disabled check (`--check readability-magic-numbers`) returned 3,307, that is what proves the pipeline reads the code. `check_clang_tidy.py` also refuses to report when more than ten files fail to compile, because "most files errored" is a broken run, not a result.
 
@@ -120,17 +120,17 @@ test/
 ├── scenarios/
 │   ├── core/      scenario_<Module>_<topic>.json     # mirrors src/core/
 │   └── light/     scenario_<Module>_<topic>.json     # mirrors src/light/
-├── python/        test_<topic>.py                    # host-side: MoonDeck / build-script logic
-└── js/            <topic>.test.mjs                    # host-side: mooninstaller logic
+├── python/        test_<topic>.py                    # tooling: MoonDeck / build-script logic
+└── js/            <topic>.test.mjs                    # tooling: mooninstaller logic
 ```
 
-A test lives under the subfolder of its **primary** `@module`'s source domain (e.g. `Layer` lives in `src/light/`, so `unit_Layer_extrude.cpp` goes in `test/unit/light/`). Cross-domain awareness travels through the `@also` list, not the directory. There's no `platform/` subfolder today, `src/platform/` is a pure abstraction layer whose desktop backend every unit test implicitly exercises; ESP32 platform code never runs on the desktop, so there's nothing to put there yet.
+A test lives under the subfolder of its **primary** `@module`'s source domain (e.g. `Layer` lives in `src/light/`, so `unit_Layer_extrude.cpp` goes in `test/unit/light/`). Cross-domain awareness travels through the `@also` list, not the directory. `test/unit/` holds no `platform/` subfolder, since `src/platform/` is a pure abstraction layer whose host backend every unit test implicitly exercises; ESP32 platform code never runs on the host, so there's nothing to put there yet.
 
-### Host-side tests (Python + JS)
+### Tooling tests (Python + JS)
 
-The C++ unit and scenario suites cover the C++ code, and the **Python** (MoonDeck, build scripts) and **JS** (web installer) code has its own host-side unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_host](../../moondeck/MoonDeck.md#test_host). Both run in `.github/workflows/test.yml` on a pull request whose changed paths match that workflow's filter, and are commit checks; which paths trigger them is [the commit process](../moonwalk.md#commit). Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
+The C++ unit and scenario suites cover the C++ code, and the **Python** (MoonDeck, build scripts) and **JS** (web installer) code has its own tooling unit tier. It is `test/python/` (pytest) and `test/js/` (Node's built-in runner; no `package.json`/`npm install`), both run by [test_tooling](../../moondeck/MoonDeck.md#test_tooling). Both run in `.github/workflows/test.yml` on a pull request whose changed paths match that workflow's filter, and are commit checks; which paths trigger them is [the commit process](../moonwalk.md#commit). Python test files carry their deps in a PEP-723 `# /// script` block (the repo's convention, there's no central `pyproject.toml`). Pyserial is a dep only because `improv_provision.py`'s import guard exits without it, not because the frame logic needs it.
 
-#### What's covered today: the Improv frame wire format
+#### What's covered: the Improv frame wire format
 
 The Improv serial frame is implemented **three times**, device C++ (`src/core/ImprovFrame.h`), Python (`moondeck/build/improv_provision.py`), and installer JS (`mooninstaller/improv-frame.js`), so a drift in any one silently breaks provisioning. Both suites assert the **same golden vector** so the Python and JS builders provably agree (hand-verified against the C++ sum-mod-256 checksum):
 
@@ -160,11 +160,11 @@ buildImprovFrame(type=0x03, payload=[0x01])  ==  49 4d 50 52 4f 56 01 03 01 01 e
 | at-least-one-frame | an empty document still emits one frame with `last=1` (so `last` always sends) |
 | one document per container | an entry sends one `{"<Root>": …}` document per top-level `state` container, in key order, each within the device's 512-byte reassembly buffer |
 
-The JS suite proves the installer *chunks* a document correctly; the **device side that reassembles those chunks** is pinned by the C++ `unit_ImprovOpReassembler` suite (`src/core/ImprovOpReassembler.h`, the pure state machine behind the device's `APPLY_OP` handler, extracted from `platform_esp32_improv.cpp` so it's desktop-testable). It covers the full receive contract: in-order multi-chunk reassembly + NUL-termination, **duplicate-chunk rejection** and **out-of-order/skipped-seq rejection** (the guard against an installer retry corrupting the buffer), **overflow** rejection at the buffer-minus-NUL boundary, mid-stream `seq 0` abandoning a partial op, and clean recovery after every error. Encode (JS) + reassemble (C++) together prove APPLY_OP end to end without hardware.
+The JS suite proves the installer *chunks* a document correctly; the **device side that reassembles those chunks** is pinned by the C++ `unit_ImprovOpReassembler` suite (`src/core/ImprovOpReassembler.h`, the pure state machine behind the device's `APPLY_OP` handler, extracted from `platform_esp32_improv.cpp` so it's host-testable). It covers the full receive contract: in-order multi-chunk reassembly + NUL-termination, **duplicate-chunk rejection** and **out-of-order/skipped-seq rejection** (the guard against an installer retry corrupting the buffer), **overflow** rejection at the buffer-minus-NUL boundary, mid-stream `seq 0` abandoning a partial op, and clean recovery after every error. Encode (JS) + reassemble (C++) together prove APPLY_OP end to end without hardware.
 
 **`test/python/test_installer_manifests.py`** (pytest), pins the web installer's per-release file contract. For every `ships: true` firmware in `mooninstaller/firmwares.json` it runs `moondeck/build/generate_manifest.py` (with a synthetic `flasher_args.json`, so no firmware build is needed) and asserts the manifest is valid (a `chipFamily` + non-empty `parts[]`) AND that **every part filename matches one of the globs the release workflow stages onto Pages** (`firmware-*.bin` / `shared-*.bin`, where `firmware-*.bin` covers each firmware's own partition table and `shared-*.bin` covers the plain ota-data plus a MoonBase manifest's `shared-ota-data-slot0.bin` and `shared-moonbase-<chip>.bin`). A manifest that names a file outside those globs points at something the deploy never stages → the installer 404s at fetch-firmware (the failure that shipped a broken v2.0.0 installer). The test guards the manifest-generation ↔ staged-files contract; the *deploy mechanics* that stage them (per-tag, in `release.yml`) are workflow shell logic a unit test can't reach, so the two are complementary.
 
-MoonDeck's pure logic (catalog reverse-lookup, state migration) and the installer's op-walk / storage are the next host-side candidates as they accrete regression risk.
+MoonDeck's pure logic (catalog reverse-lookup, state migration) and the installer's op-walk / storage are the next tooling-test candidates as they accrete regression risk.
 
 ### Naming convention
 
@@ -243,7 +243,7 @@ Assert those through a scalar the list drives rather than through the list itsel
 { "name": "it-survived", "op": "expect_control", "id": "System", "key": "deviceName", "equals": "MM-Bench" }
 ```
 
-Every device restarts itself on the endpoint: a board reboots, and a desktop starts its program again in place, on the same data directory, so what survives the restart is what was saved. In-process the op skips, because the scheduler is the process and restarting it would end the run.
+Every device restarts itself on the endpoint: a board reboots, and a host starts its program again in place, on the same data directory, so what survives the restart is what was saved. In-process the op skips, because the scheduler is the process and restarting it would end the run.
 
 ### Walking first setup, with the computer as the phone
 
@@ -264,7 +264,7 @@ The run: [Run a scenario against a live device](../moonwalk.md#run-live-scenario
 
 #### Several boards
 
-A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapped to a device by `--board NAME=HOST`; it is skipped while one is missing. A step with `"device": "<name>"` runs on that board, as an `apply_state`, a `set_control` or a `measure`. Every step's strings fill `{host}` and `{<name>}` with the boards' addresses, so a sender's `hosts` points at its receivers. Each board is restored from its own snapshot, before the device under test. `--keep` leaves the device under test as the last step set it, to watch or deploy what the scenario built. The observations are keyed by the whole combination, such as `host=esp32s3-n16r8 sender=esp32p4rev1-eth`, so a WiFi pair and an Ethernet pair keep apart.
+A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapped to a device by `--board NAME=HOST`; it is skipped while one is missing. A step with `"device": "<name>"` runs on that board, as an `apply_state`, a `set_control` or a `measure`. Every step's strings fill `{host}` and `{<name>}` with the boards' addresses, so a sender's `receivers` names the boards it feeds. Each board is restored from its own snapshot, before the device under test. `--keep` leaves the device under test as the last step set it, to watch or deploy what the scenario built. The observations are keyed by the whole combination, such as `host=esp32s3-n16r8 sender=esp32p4rev1-eth`, so a WiFi pair and an Ethernet pair keep apart.
 
 A measuring step waits `--settle` seconds before it reads, or its own `settle`. A `measure` step's `read` list names extra values to report: `"Module.control"` from the state, `"Module.status[unit]"` for the number before that unit in a module's status, such as `"NetworkReceive.status[lost/s]"`, `"Module.tick"` for a module's tick time, or `"fps"`; `"<name>:"` in front reads another board, such as `"sender:fps"`. A step's `samples` reads them that many times a second apart and reports each number's median, for a value that swings from second to second. The run ends with one row per such step, which is what a sweep is read from.
 
@@ -324,7 +324,7 @@ The runner compares each measurement to the contract and fails if the device mis
     "set_by": "2026-06-02",
     "reason": "initial contract"
   },
-  "desktop-macos": {
+  "host-macos": {
     "tick_us": 300,
     "free_heap": 0,
     "set_by": "2026-06-02",
@@ -346,14 +346,14 @@ The runner compares each measurement to the contract and fails if the device mis
 - Both are **hand-set promises**, not auto-captured last readings. Renegotiating a contract requires `--update-contract --reason "..."`, see below.
 - `set_by` records when the contract was last (re)negotiated; `reason` records why. Both stamped automatically by `--update-contract`.
 
-Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `desktop-macos` / `desktop-linux` / `desktop-windows` for desktop builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
+Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `host-macos` / `host-linux` / `host-windows` for host builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
 
 **Tolerance** absorbs run-to-run jitter only, not "I don't care":
 
-- Default tick tolerance: **20% on desktop-*** (multi-process OS scheduling), **10% on ESP32** (lwIP / EMAC jitter).
+- Default tick tolerance: **20% on host-*** (multi-process OS scheduling), **10% on ESP32** (lwIP / EMAC jitter).
 - Default heap tolerance: same percentages.
-- Default absolute floor on tick: **200 µs on desktop-***, **5 µs on ESP32**, prevents percentage tolerance from going sub-noise on tiny ticks.
-- **On desktop-*, the floor dominates** for any contract under ~1 ms tick (effectively all desktop contracts today: 5–300 µs). The percentage knob only matters for slow desktop tick. This is honest: a 100 µs desktop contract realistically can't assert anything tighter than ±200 µs because multi-process scheduling jitter routinely adds 100+ µs all by itself. If you need a tight assertion, run the contract on ESP32, bounded RTOS clocks are tighter.
+- Default absolute floor on tick: **200 µs on host-***, **5 µs on ESP32**, prevents percentage tolerance from going sub-noise on tiny ticks.
+- **On host-*, the floor dominates** for any contract under ~1 ms tick (effectively every host contract: 5–300 µs). The percentage knob only matters for slow host tick. This is honest: a 100 µs host contract realistically can't assert anything tighter than ±200 µs because multi-process scheduling jitter routinely adds 100+ µs all by itself. If you need a tight assertion, run the contract on ESP32, bounded RTOS clocks are tighter.
 - Per-step overrides: `tick_tolerance_pct`, `heap_tolerance_pct`, `tolerance_us` inside the per-target block.
 
 **Predicted-vs-actual heap.** The runner additionally prints the sum of `dynamicBytes()` from the live module tree as `model=N`. This is what the system *says* it allocated; comparing it to `free_heap` reveals framework overhead (lwIP, WiFi, HTTP buffers). The model number is informational, not asserted.
@@ -375,7 +375,7 @@ The scenario file carries a **summary** of the window, published on purpose: `--
 }
 ```
 
-A median is what a step normally costs and cannot be dragged by one contended run, and the tail is the p95, which a real regression moves and a single bad run does not. A window of one sample (`n: 1`) is a first impression, not a baseline. A free heap or largest block of 0 is the desktop saying it has no ceiling, so it never enters a window.
+A median is what a step normally costs and cannot be dragged by one contended run, and the tail is the p95, which a real regression moves and a single bad run does not. A window of one sample (`n: 1`) is a first impression, not a baseline. A free heap or largest block of 0 is the host saying it has no ceiling, so it never enters a window.
 
 #### Renegotiating a contract
 
@@ -383,7 +383,7 @@ A contract changes only when there's a reason: a code change improved performanc
 
 Steps: [Renegotiate a performance contract](../moonwalk.md#renegotiate-contract).
 
-Both runners require `--reason`. They stamp `set_by` to today's date and write the new contract for the active target only, other targets are untouched. Review the diff carefully; tightening or loosening a contract is a deliberate act that ships to the project's public KPIs.
+Both runners require `--reason`. They stamp `set_by` with the run's date and write the new contract for the active target only, other targets are untouched. Review the diff carefully; tightening or loosening a contract is a deliberate act that ships to the project's public KPIs.
 
 ### Scenario file shape
 
@@ -422,7 +422,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
           "tick_us": 100000, "free_heap": 105000,
           "set_by": "2026-06-02", "reason": "initial contract"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": 120, "free_heap": 0,
           "set_by": "2026-06-02", "reason": "initial contract"
         }
@@ -453,7 +453,7 @@ The registry is generated at every docs build, so it cannot drift from the test 
 
 Inventory: [the test page](tests.md), by `@module`.
 
-Steps to run them: [Add a test, and pin a bug](../moonwalk.md#add-test). In MoonDeck, the Desktop tab's Unit Test card filters by the shared module dropdown, and Tests shows the per-module inventory.
+Steps to run them: [Add a test, and pin a bug](../moonwalk.md#add-test). In MoonDeck, the Host tab's Unit Test card filters by the shared module dropdown, and Tests shows the per-module inventory.
 
 Output is summary-only on a full run (the doctest `-s` flag is added only on filtered runs, where the assertion-level detail is small enough to be useful).
 
@@ -461,11 +461,11 @@ Output is summary-only on a full run (the doctest `-s` flag is added only on fil
 
 Inventory: [the test page](tests.md), by `module`.
 
-Steps to run them: [Run a scenario in-process on the desktop](../moonwalk.md#run-scenario). In MoonDeck, the Scenarios card shares the module dropdown with the Unit Test card, and Steps shows the per-scenario step list.
+Steps to run them: [Run a scenario in-process on the host](../moonwalk.md#run-scenario). In MoonDeck, the Scenarios card shares the module dropdown with the Unit Test card, and Steps shows the per-scenario step list.
 
 **Scenarios with `"live_only": true`** are skipped in-process (they need a real device, e.g. measure real-Ethernet throughput at a given grid size). They appear in the inventory but only run via the live tier below. The symmetric case (scenarios that only make sense in-process) is already handled by `mode: "construct"`, which skips on live.
 
-**Step ops** the in-process runner understands today:
+**Step ops** the in-process runner understands:
 
 - `set_control`: write a control on an already-added module (`id` + `key` + `value`). Mirrors `handleSetControl`: applies the typed write, calls `onControlChanged()`, and rebuilds the scope `prepareScope()` names if `affectsPrepare` returns true. It supports Uint8 / Uint16 / Int16 / Bool / Text / Password / Select. A step may carry `"optional": true`, a best-effort write (e.g. shrink a grid that may not exist) that's skipped, not failed, when the target is absent.
 - `apply_state`: a state document (`document`) through the engine `PATCH /api/state` runs, from its text as written so key order holds; it is how a scenario changes the tree. A member with a `type` adds a module and a new `type` under the same name replaces one, `null` removes one, and `"$patch":"replace"` keeps only the children listed, so with none it clears a container (the "prepare my own canvas" primitive), keeping the ones main.cpp wires. With `error`, and optionally `at`, the step expects that failure; with `optional`, an unknown type is a skip, as for a peripheral another chip has. The live runner removes the modules a document created, and restores each container's document at the end.
@@ -488,7 +488,7 @@ Settle time is 3 seconds to let the pipeline stabilize after rebuilds.
 
 Scenarios that add modules (e.g. `scenario_Effects_pipeline_builds_and_renders`, `scenario_Modifiers_reshape_the_mapping`) create temporary modules on the running device and clean them up at the end (`- Rainbow (cleanup)`). Modules that already exist show `=` instead of `+`.
 
-Memory tracking works on ESP32: `freeHeap` and `freeInternalHeap` report real values. Desktop returns 0 (unlimited). The control-change scenario verifies no memory leaks by checking that heap returns to baseline after a mirror toggle.
+Memory tracking works on ESP32: `freeHeap` and `freeInternalHeap` report real values. The host returns 0 (unlimited). The control-change scenario verifies no memory leaks by checking that heap returns to baseline after a mirror toggle.
 
 One live-tier test lives outside the scenario JSON schema because it spans **multiple devices**. Its script, `run_network_live.py`, sends lights over UDP (ArtNet, E1.31 and DDP) between every online board in `moondeck.json`. Each board is once the sender while all others listen, and reception is asserted by reading each device's `/ws` preview stream (see [MoonDeck.md § run_network_live](../../moondeck/MoonDeck.md#run_network_live)). A device matrix needs loops and per-round state the declarative scenario JSON can't express, so it follows the `improv_smoke_test.py` script shape instead.
 
@@ -500,17 +500,17 @@ How to run one: [MoonTube](https://github.com/MoonModules/MoonLight/blob/main/mo
 
 The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 
-**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves nothing about the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/moontube/`. A failing test means the UI no longer does what a published video shows.
+**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves only the API, not the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/moontube/`. A failing test means the UI differs from what a published video shows.
 
-**Opt-in, because it needs something running.** A bare `test_host.py` leaves this lane out, and it is never a gate: it runs on request only. `--ui` skips rather than fails when nothing answers, the same way the JS lane skips without node. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
+**Opt-in, because it needs something running.** A bare `test_tooling.py` leaves this lane out, and it runs on request only, outside every gate. `--ui` skips rather than fails when no server answers, the same way the JS lane skips when node is absent. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
 
 ## The tempo harness
 
-A report rather than a test: [bench_tempo](../../moondeck/MoonDeck.md#bench_tempo) runs labeled music through the shipped audio analysis on the desktop and scores the tempo it reads. Steps: [Measure the tempo](../moonwalk.md#measure-tempo).
+A report rather than a test: [bench_tempo](../../moondeck/MoonDeck.md#bench_tempo) runs labeled music through the shipped audio analysis on the host and scores the tempo it reads. Steps: [Measure the tempo](../moonwalk.md#measure-tempo).
 
 ## Hardware Verification
 
-All live scenarios pass on both desktop and ESP32. Steps to verify on boards: [Run a live verification on boards](../moonwalk.md#live-verification). Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
+All live scenarios pass on both host and ESP32. Steps to verify on boards: [Run a live verification on boards](../moonwalk.md#live-verification). Per-module timing, memory allocation, and sizeof measurements for each platform are in [performance.md](performance.md).
 
 ### ESP32: classic, internal RAM only (measured on an Olimex ESP32-Gateway Rev G)
 

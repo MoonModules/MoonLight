@@ -4,7 +4,7 @@ How code in this repo is written. Hard rules live in [CLAUDE.md](../CLAUDE.md), 
 
 A rule here is applied and reviewed at the [MoonWalk](../moonwalk.md) step that links it, as [one home per rule](documentation-standards.md) describes.
 
-How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#desktop-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
+How to build and run lives in [MoonWalk's contributor processes](../moonwalk.md#host-build-test), and what is tested in [testing.md](../reference/testing.md). Design rationale lives in [the architecture](../explanation/architecture/index.md).
 
 It runs from the smallest scale outward: the line you are typing, then naming and when to add a file, then values and the hot path they run in. After that the shape of a whole module, then the tooling that checks all of it, and last the method for when something breaks.
 
@@ -70,7 +70,7 @@ Where an enum for the values already exists, such as `Addressing` or `platform::
 A test sets the control by the same names.
 See [MidiService.h](../src/core/services/MidiService.h): `profile == kProfileApc40`, not `profile == 1`.
 
-**Width the intermediate, and the result follows.** Any `a * b` where both operands are `nrOfLightsType`, or a count times a multiplier, can overflow `uint16_t` even when each operand is small: `256 * 256 = 65536` wraps to 0 on a no-PSRAM device. Do the arithmetic in a wider type, clamp to the ceiling, then narrow. A counter derived from a cell count is the domain typedef too, never a fixed `uint16_t`. Such a path is invisible on the uint32 desktop build, so pin it with a `uint16`-typed unit test or hardware confirmation.
+**Width the intermediate, and the result follows.** Any `a * b` where both operands are `nrOfLightsType`, or a count times a multiplier, can overflow `uint16_t` even when each operand is small: `256 * 256 = 65536` wraps to 0 on a no-PSRAM device. Do the arithmetic in a wider type, clamp to the ceiling, then narrow. A counter derived from a cell count is the domain typedef too, never a fixed `uint16_t`. Such a path is invisible on the uint32 host build, so pin it with a `uint16`-typed unit test or hardware confirmation.
 
 **When a validation field's storage is narrower than what it claims to validate, the validation is wrong, not the field.** A `uint8_t` min/max slot can't bound an `Int16` control, clamping it to `[0..0]`. The fix is a wider bound, or per-type bound slots; until then the constraint is documented at the field's declaration.
 

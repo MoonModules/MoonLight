@@ -11,7 +11,7 @@
 /// **The image passes through.** The caller sends the image's bytes itself, in whatever pieces they arrive, and reports them.
 /// Protocol version 2 answers one "chunk OK" per 8 KB received and one for the remainder, which this counts in passing.
 ///
-/// Pure: bytes in, bytes out, no socket, so a desktop test runs a whole session; nothing here allocates.
+/// Pure: bytes in, bytes out, no socket, so a host test runs a whole session; nothing here allocates.
 #include "core/util/HttpHead.h"   // queryValue: the relay's query read as its parameters
 #include "core/util/Ipv4.h"
 

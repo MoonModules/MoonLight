@@ -25,11 +25,11 @@ flowchart LR
     class cli,ui check
 ```
 
-Every action the console offers is a thin wrapper around a script, so `uv run moondeck/build/build_desktop.py` and the button run the same code. That is the whole design: one implementation, two ways in, and no path where a human and an agent measure something differently.
+Every action the console offers is a thin wrapper around a script, so `uv run moondeck/build/build_host.py` and the button run the same code. That is the whole design: one implementation, two ways in, and no path where a human and an agent measure something differently.
 
 <video src="../../assets/moontube/11-moondeck.webm" controls playsinline width="720" title="A tour of MoonDeck: why it exists, and what its tabs hold."></video>
 
-![MoonDeck, one page per task](../../assets/ui/moondeck_desktop.png)
+![MoonDeck, one page per task](../../assets/ui/moondeck_host.png)
 
 **The script is the contract.** It picks the right per-host build directory, applies the flags the gate expects, and tees its output where the report reads it. Reaching past it to `cmake` or `idf.py` produces a number measured differently, or a stale binary the script would have rebuilt.
 
@@ -41,7 +41,7 @@ The docs site shows the same set menu as a reference to read, for a contributor 
 
 ## Why our own scripts
 
-The ESP32 build is ESP-IDF-native. MoonLight tracks the IDF against a pinned commit for chips like the P4 and the S31, a control PlatformIO's packaged platforms do not offer. The hot-path drivers (LCD_CAM, parlio, GDMA) use the vendor APIs directly rather than through an Arduino core. The tooling also covers far more than compile, upload and monitor. It builds the desktop, runs unit tests and scenarios, checks specs and boundaries, measures, serves the web installer, provisions boards and drives bench runs. A wrapper toolchain covers one of those and still needs the scripts around it. One script per task with two front ends keeps people, agents and CI on the same path.
+The ESP32 build is ESP-IDF-native. MoonLight tracks the IDF against a pinned commit for chips like the P4 and the S31, a control PlatformIO's packaged platforms do not offer. The hot-path drivers (LCD_CAM, parlio, GDMA) use the vendor APIs directly rather than through an Arduino core. The tooling also covers far more than compile, upload and monitor. It builds the host, runs unit tests and scenarios, checks specs and boundaries, measures, serves the web installer, provisions boards and drives bench runs. A wrapper toolchain covers one of those and still needs the scripts around it. One script per task with two front ends keeps people, agents and CI on the same path.
 
 ## State, and where it lives
 

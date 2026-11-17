@@ -164,7 +164,7 @@ def registry() -> dict:
             if description:
                 entry["description"] = description
             if f["module"]:
-                entry["run"] = {"script": "moondeck/test/test_desktop.py", "args": f"--module {f['module']}"}
+                entry["run"] = {"script": "moondeck/test/test_host.py", "args": f"--module {f['module']}"}
             add(f"unit:{entry['file']}::{name}", entry)
     # A shared body of cases in an .inc file is compiled into each unit file that includes it, once per target: its names are built from a macro the includer defines, so a case is one test per includer, as a parametrized test is.
     for inc in sorted(meta.UNIT_DIR.rglob("*.inc")):
@@ -190,13 +190,13 @@ def registry() -> dict:
                 add(f"unit:{entry['file']}::{name}", entry)
     for file, name, line, doc in python_tests():
         entry = {"kind": "python", "size": "small", "title": name.removeprefix("test_").replace("_", " "), "file": file, "line": line, "subjects": [Path(file).stem.removeprefix("test_")],
-                 "run": {"script": "moondeck/test/test_host.py", "args": "--python"}}
+                 "run": {"script": "moondeck/test/test_tooling.py", "args": "--python"}}
         if doc:
             entry["description"] = doc
         add(f"python:{file}::{name}", entry)
     for file, title, line in js_tests():
         add(f"js:{file}::{title}", {"kind": "js", "size": "small", "title": title, "file": file, "line": line, "subjects": [Path(file).name.removesuffix(".test.mjs")],
-                                    "run": {"script": "moondeck/test/test_host.py", "args": "--js"}})
+                                    "run": {"script": "moondeck/test/test_tooling.py", "args": "--js"}})
     for file, stem, doc in check_scripts():
         entry = {"kind": "check", "size": "medium", "title": stem.removeprefix("check_").replace("_", " ").capitalize() + " check", "file": file, "subjects": [stem], "run": {"script": file}}
         if doc:

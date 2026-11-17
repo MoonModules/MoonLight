@@ -69,7 +69,7 @@ TEST_CASE("WledPacket: a marked packet appends the page's port and the board's b
     const uint8_t ip[4] = {192, 168, 1, 147};
     const uint8_t mac[6] = {0x08, 0xb6, 0x1f, 0x6f, 0xbd, 0x3c};
     uint8_t pkt[WledPacket::kSizeWithMac];
-    WledPacket::build(pkt, ip, "MM-Desktop", 32, true);
+    WledPacket::build(pkt, ip, "MM-Host", 32, true);
     WledPacket::stampMarker(pkt);
     uint8_t read[6] = {};
     CHECK(WledPacket::httpPort(pkt, WledPacket::kSize) == 80);   // absent means 80, as in an http URL

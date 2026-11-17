@@ -19,7 +19,7 @@
 namespace mm {
 
 /// A driver consumes the light output and sends it on: to LEDs on a wire, a HUB75 panel, the network, a smart-light bridge or the web UI.
-/// @video 07-drivers-desktop.webm Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue.
+/// @video 07-drivers-host.webm Drivers on a host: preview, NDI, RTSP, HLS, network send and Hue.
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
 /// Each reads its own slice of the @ref Drivers container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while @ref PreviewDriver shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).
@@ -266,6 +266,8 @@ protected:
 
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
+    /// Set this driver's default curve, from its constructor.
+    void setDefaultCurve(Correction::Curve c) { curveSel_ = static_cast<uint8_t>(c); }
 
     /// Give the correction the gained tables its profile asks for, and take them back when it asks for none; true when one is new, which the rebuild before could not fill.
     bool resolveGainTables() {

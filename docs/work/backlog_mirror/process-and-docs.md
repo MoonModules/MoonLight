@@ -428,20 +428,3 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A MoonDeck check asks `gh` for the state of each row of [Issues in other projects](https://moonmodules.org/MoonLight/reference/issues-in-other-projects.html) and of the release that carries its fix, and flags a row whose issue closed or whose fix shipped, so a workaround does not outlive its reason.
 
 From the Processes plan's step 20.
-
-### A gate runner that runs each commit check once, on its own inputs
-
-[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306095198)
-
-**Why.** On 2026-11-15 one commit's gates ran three times over: the first run found four findings, and the fixes were followed by two full reruns, where the commit process asks for the failed check and the checks whose inputs the fix touched. The judgment of which gates to rerun was by hand, and it was wrong twice.
-
-**What.** A MoonDeck script, `run_gates.py`, that reads the commit process's own trigger table, the `given: changed:` globs in `moonwalk/13-document-commit.yaml`, and:
-- picks the gates the diff triggers, runs each once, the fast ones first;
-- records each pass with a hash of the files its globs match, so a later invocation runs only the gates whose inputs changed since they last passed;
-- prints the one-line-per-gate report the process asks for, PASS, FAIL or SKIP with the reason.
-
-The trigger table stays in the YAML, its one home; the runner reads it rather than copying it. Per-module probes that exist already (`check_code.py --module`, `test_desktop.py --module`) are the first pass before a whole-tree gate.
-
-**Out.** The hand-written gate chain an agent types per round, and the rerun judgment with it.
-
-**Size.** About a day.

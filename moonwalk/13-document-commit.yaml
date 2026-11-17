@@ -35,12 +35,12 @@ processes:
     actor: contributor
     goal: A commit whose every check the change triggers passed, reviewed and measured.
     systems: [MoonDeck]
-    dependsOn: [desktop-build-test, document]
+    dependsOn: [host-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. An applicable check skipped carries a one-line reason in the commit or pull request. A failure with a clear fix is fixed, and only its check reruns, with any check whose paths the fix touches; a failure that needs a decision is reported and waits.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. A long run reports each minute: gates started, the one running, a failure at once. An applicable check skipped carries a one-line reason in the commit or pull request. A clear failure is fixed and rechecks only the checks its fix touches; one that needs a decision waits.
 
-      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_host --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_tooling --ui` is never a gate.
     steps:
       - id: reviewer
         say: Have the Reviewer read the staged diff.
@@ -127,19 +127,19 @@ processes:
         when: { run: { script: moondeck/check/check_code.py } }
         detail: |
           A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
-      - id: build-desktop
-        say: Build the desktop firmware, warning-free.
+      - id: build-host
+        say: Build the host firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/build/build_desktop.py } }
+        when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
       - id: tests
-        say: Test the change on the desktop.
+        say: Test the change on the host.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { process: desktop-tests }
+        when: { process: host-tests }
       - id: esp32-fresh
         say: Check the S3 firmware is up to date.
-        given: [{ changed: [src/**, "!src/platform/desktop/**"] }]
+        given: [{ changed: [src/**, "!src/platform/host/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
         detail: |
           It compares the binary against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments, since a family's variants compile the same code and differ only in their fragments; the rest wait for the release workflow. A stale one is rebuilt without asking, [one at a time](moonwalk.md#esp32-build-flash).
@@ -150,9 +150,9 @@ processes:
         detail: |
           The classic is the firmware that carries the MoonBase image, so a MoonBase change is checked there.
       - id: no-jit
-        say: Build the desktop without the MoonLive backend.
+        say: Build the host without the MoonLive backend.
         given: [{ changed: ["src/*/moonlive/**"] }]
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--no-jit" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--no-jit" } }
         detail: |
           It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
       - id: kpi
@@ -169,7 +169,7 @@ processes:
       - id: js
         say: Run the JavaScript tests.
         given: [{ changed: [src/ui/**, mooninstaller/**, "docs/assets/*.js", test/js/**] }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
       - id: devices
         say: Check the installer's device catalog.
         given: [{ changed: [src/ui/**, mooninstaller/**] }]
@@ -182,7 +182,7 @@ processes:
       - id: python
         say: Run the Python tests.
         given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
       - id: firmwares
         say: Check the firmware list.
         given: [{ changed: [moondeck/**, moonlive/**] }]

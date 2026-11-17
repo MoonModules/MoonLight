@@ -111,7 +111,7 @@ A quieter, consolidation month on `main` after July's V5 platform switch: the to
 - Circle drawing is more accurate: outlines no longer come out slightly flat, and filled circles are rounder.
 - Renaming a segment while effects are running no longer risks a crash on dual-core ESP32.
 - If the device runs out of memory at startup, it now creates a small default segment instead of showing "no segments" with most controls disabled.
-- Pac-Man is hardened against drawing outside the strip, and ESP8266 gets a smaller DDP send packet so streaming does not fail, plus about 2.5 KB of flash back by dropping unusable GIF code.
+- The maze-chase effect is hardened against drawing outside the strip, and ESP8266 gets a smaller DDP send packet so streaming does not fail, plus about 2.5 KB of flash back by dropping unusable GIF code.
 - ESP32 chip revision is reported correctly again on the V5 platform.
 
 **Fixed (reported by users)**
@@ -266,7 +266,7 @@ _Auditability: 43 commits on `main` with author-date 2026-06-01..2026-06-30 (`re
 
 **New / effects**
 
-- **PacMan effect** and the new **"WLEDPixelForge"** image & scrolling-text interface (#4982); dynamic LED-type dropdown; improved 2D particle collisions; sequential UI-resource loading.
+- A **maze-chase effect** and the new **"WLEDPixelForge"** image & scrolling-text interface (#4982); dynamic LED-type dropdown; improved 2D particle collisions; sequential UI-resource loading.
 - Usermod Temperature uses full 12-bit precision; "peek" shows gaps; removed legacy EEPROM support.
 
 **Fixed**

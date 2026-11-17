@@ -1,4 +1,4 @@
-"""The Discord reader: which channels it reads, which messages a window holds, and how a message reads. Run: `uv run moondeck/test/test_host.py --python`."""
+"""The Discord reader: which channels it reads, which messages a window holds, and how a message reads. Run: `uv run moondeck/test/test_tooling.py --python`."""
 
 import io
 import urllib.error

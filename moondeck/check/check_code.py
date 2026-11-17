@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The code check: counts that only fall, per rule and in total, as check_docgen and check_prose keep theirs.
 
-Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The counts committed in docs/reference/metrics/code.json are the number to beat, per rule and in total; the test page shows every finding.
+Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the host that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The counts committed in docs/reference/metrics/code.json are the number to beat, per rule and in total; the test page shows every finding.
 
 Lizard tokenizes rather than parses, which is what lets it run in a second with no build; the cost is a mangled name on some template-dense bodies. Counting per FILE rather than whitelisting per function name is what makes that harmless: a file's count is right whatever lizard calls the function.
 
@@ -49,10 +49,10 @@ MAX_FRAME = 512
 UI_CONTRACT = {"Layouts", "Effects", "Drivers", "Services"}
 
 # Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor header is upstream's. -ENS adds the nesting depth column.
-LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/desktop/vendor/*", "-ENS"]
+LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/host/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
-FILE_EXCLUDE = ("src/platform/desktop/vendor/", "src/ui/vendor/", "test/doctest.h")
+FILE_EXCLUDE = ("src/platform/host/vendor/", "src/ui/vendor/", "test/doctest.h")
 
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"
@@ -190,8 +190,10 @@ def clones():
         print("jscpd needs npx (node), which the docs build needs as well", file=sys.stderr)
         return None
     with tempfile.TemporaryDirectory() as td:
+        # jscpd skips a file over 1,000 lines by default, which would leave the largest files uncompared; the caps lift so every owned file is read.
         proc = subprocess.run([npx, "--yes", "jscpd@4", *owned_files(),
                                "--min-lines", str(MIN_CLONE_LINES), "--min-tokens", str(MIN_CLONE_TOKENS),
+                               "--max-lines", "1000000", "--max-size", "100mb",
                                "--reporters", "json", "--output", td, "--silent"],
                               cwd=ROOT, capture_output=True, text=True, timeout=600)
         report = Path(td) / "jscpd-report.json"
@@ -303,24 +305,24 @@ def spread_rows(types: set) -> list:
 
 
 class BuildMissing(Exception):
-    """The desktop build the hot path is read from is absent or does not compile."""
+    """The host build the hot path is read from is absent or does not compile."""
 
 
 def build_warnings() -> str | None:
-    """The desktop build's saved compiler warnings, which the hot path and the stack frames are read from.
+    """The host build's saved compiler warnings, which the hot path and the stack frames are read from.
 
     None when this host's compiler cannot measure them (no Clang 20 -Wfunction-effects), which skips both rules; BuildMissing when the build is absent or fails, which fails the run rather than reading as a clean tree.
     """
     import check_nonblocking as nb
     build_dir = nb.check_clang_tidy._host_build_dir()
     if not (build_dir / "CMakeCache.txt").exists():
-        raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_desktop.py` first.")
+        raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_host.py` first.")
     if not nb.function_effects_enabled(build_dir):
-        print("The desktop build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
+        print("The host build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
         return None
     out = nb.build_output(build_dir)
     if out is None:
-        raise BuildMissing("The desktop build failed, so the hot path cannot be read.")
+        raise BuildMissing("The host build failed, so the hot path cannot be read.")
     return out
 
 
@@ -404,7 +406,7 @@ _CHAR_LITERAL_RE = re.compile(r"'(?:\\.|[^\\'])'")
 
 
 def _code_lines(lines) -> list:
-    """Each line's code, read in one lexical pass as a compiler does: a string or a character literal emptied, a comment cut, a block comment across every line it spans, so a quote inside a comment opens nothing and a `/*` inside a string opens nothing."""
+    """Each line's code, read in one lexical pass as a compiler does: a string or a character literal emptied, a comment cut, a block comment across every line it spans, so a quote inside a comment stays comment and a `/*` inside a string stays string."""
     out, in_block = [], False
     for line in lines:
         code, i, n = [], 0, len(line)
@@ -451,7 +453,7 @@ def header_findings(rel: str, text: str) -> list:
 
 def double_findings(rel: str, lines) -> list:
     """Every line naming the type `double` in one firmware file; the host's own platform code and vendored files are not firmware."""
-    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
+    if not _firmware(rel) or rel.startswith("src/platform/host/"):
         return []
     rows = []
     for n, code in enumerate(_code_lines(lines), 1):   # a word in a string or a comment is no type
@@ -489,7 +491,7 @@ def define_findings(rel: str, lines, tested: set) -> list:
 
 def rtti_findings(rel: str, lines) -> list:
     """Every `dynamic_cast` or `typeid` in one firmware file; the build has no runtime type information."""
-    if not _firmware(rel) or rel.startswith("src/platform/desktop/"):
+    if not _firmware(rel) or rel.startswith("src/platform/host/"):
         return []
     return [(rel, RTTI, f"line {n}: {line.strip()[:60]}", 1) for n, (line, code) in enumerate(zip(lines, _code_lines(lines)), 1) if _RTTI_RE.search(code)]
 

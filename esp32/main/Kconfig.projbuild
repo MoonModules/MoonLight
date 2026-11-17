@@ -34,7 +34,7 @@ menu "MoonLight"
         help
             Pulls the esp_h264 managed component and compiles the platform HLS
             encoder (hardware H.264 + MPEG-TS muxer + PSRAM segment ring) behind
-            the same HlsDriver the desktop uses. Only the P4 has the encoder
+            the same HlsDriver the host uses. Only the P4 has the encoder
             silicon; other chips keep this off and build nothing.
 
     config MM_USB_MIDI_HOST

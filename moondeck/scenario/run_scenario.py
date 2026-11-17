@@ -39,9 +39,9 @@ if sys.stderr is not None:
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _host import desktop_target  # noqa: E402
+from _host import host_target  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_desktop import host_build_dir  # noqa: E402 (one home for the build-dir name)
+from build_host import host_build_dir  # noqa: E402 (one home for the build-dir name)
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "scenario"))
@@ -77,12 +77,12 @@ RUNNER = _resolve_runner()
 # test/ made every unit-test edit report the runner stale, and rebuilding did not clear it
 # because CMake correctly relinks nothing: a false alarm that trains people to ignore the guard.
 _RUNNER_SOURCE_DIRS = ("src",)
-# Every platform but the desktop is in the tree but NOT in this target: the runner links mm_platform's desktop half,
+# Every platform but the host is in the tree but NOT in this target: the runner links mm_platform's host half,
 # so an edit to another platform relinks nothing and rebuilding can never clear the warning. Left in scope it wedges
 # the gate permanently, which is the same false alarm the note above is about.
 def _other_platform(rel: str) -> bool:
-    """Whether a repo-relative path sits in a platform's own directory other than the desktop's."""
-    return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/desktop/")
+    """Whether a repo-relative path sits in a platform's own directory other than the host's."""
+    return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/host/")
 _RUNNER_SOURCE_FILES = ("test/scenario_runner.cpp",)
 _RUNNER_SOURCE_SUFFIXES = {".c", ".cpp", ".h", ".hpp"}
 _RUNNER_SKIP_PARTS = {"build", "__pycache__", ".git"}
@@ -112,7 +112,7 @@ def _stale_runner_reason() -> str:
 
     The trap is easy to fall into because two build directories exist: `cmake --build build`
     (what a developer types) writes build/, while this script runs build/<host>/ — the tree
-    build_desktop.py produces. Rebuilding the wrong one leaves the runner untouched and no
+    build_host.py produces. Rebuilding the wrong one leaves the runner untouched and no
     error anywhere.
     """
     if not RUNNER.exists():
@@ -152,7 +152,7 @@ def _require_fresh_runner() -> None:
         print(f"Scenario runner is STALE: {rel}")
         print(f"  {reason}")
         print("  It would report on code that is no longer there.")
-    print("  rebuild: uv run moondeck/build/build_desktop.py --tests")
+    print("  rebuild: uv run moondeck/build/build_host.py --tests")
     sys.exit(1)
 
 # Format emitted by scenario_runner.cpp's measure block:
@@ -160,7 +160,7 @@ def _require_fresh_runner() -> None:
 # `<step-name>` may contain hyphens and underscores. heap is the absolute free
 # heap after the measurement (what observed.free_heap consumes); the (step: ±N)
 # fragment is a human-readable delta for diagnostics — not captured here.
-# Both heap and block are 0 on desktop where the platform stubs return
+# Both heap and block are 0 on host where the platform stubs return
 # "unlimited".
 _MEASURE_RE = re.compile(
     r"^\s*MEASURE\s+(?P<name>\S+):\s+tick=(?P<tick>\d+)us\s+FPS=\d+\s+lights=\d+"
@@ -187,7 +187,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     # encoding="utf-8" EXPLICITLY: text=True alone decodes with the locale codec, which is cp1252
     # on Windows, and the runner writes UTF-8. An em-dash came back as "â€”" in every REBOOT line,
     # a display fault rather than a parsing one, since the MEASURE regex only reads ASCII. Same
-    # site and same fix as test_desktop.py's reader; a subprocess read is the half a stdout
+    # site and same fix as test_host.py's reader; a subprocess read is the half a stdout
     # reconfigure preamble cannot reach.
     proc = subprocess.Popen([str(RUNNER), str(path)], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -198,7 +198,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
         m = _MEASURE_RE.match(line)
         if m:
             # heap is absolute free-heap after measurement (the value the
-            # observed/contract blocks consume directly). On desktop
+            # observed/contract blocks consume directly). On host
             # freeHeap() returns 0 (unlimited) which the runner treats as
             # "no heap assertion". max_alloc_block is also absolute.
             observations[m["name"]] = {
@@ -219,7 +219,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     # Windows the default encoding is cp1252 and would mojibake those.
     with open(path, encoding="utf-8") as f:
         scenario = json.load(f)
-    target = desktop_target()
+    target = host_target()
     today = datetime.date.today().isoformat()
     touched_observed = 0
     touched_contract = 0

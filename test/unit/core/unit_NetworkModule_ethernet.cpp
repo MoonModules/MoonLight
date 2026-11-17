@@ -19,8 +19,8 @@ TEST_CASE("EthPhyType enum values match the dropdown/dispatch contract") {
     CHECK(mm::platform::ethW5500   == 3);
 }
 
-// Desktop has no Ethernet: the default PHY type is ethNone, so a board that never pushes an eth config still reports "no Ethernet" and the cascade falls through.
-TEST_CASE("Desktop ethConfigDefault is ethNone (no Ethernet)") {
+// Host has no Ethernet: the default PHY type is ethNone, so a board that never pushes an eth config still reports "no Ethernet" and the cascade falls through.
+TEST_CASE("Host ethConfigDefault is ethNone (no Ethernet)") {
     CHECK_FALSE(mm::platform::hasEthernet);
     CHECK(mm::platform::ethConfigDefault.phyType == mm::platform::ethNone);
 }
@@ -30,9 +30,9 @@ TEST_CASE("Ethernet is opt-in: ethNone is the zero value (unset ethType → no P
     CHECK(mm::platform::ethNone == 0);   // an absent/zero ethType control resolves to None
 }
 
-// With the host's own network out, ethInit() returns false on desktop for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe while the interface is down.
-TEST_CASE("Desktop Ethernet seam is a safe no-op") {
-    mm::platform::setTestHostNetwork(false);
+// With the host's own network out, ethInit() returns false on host for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe while the interface is down.
+TEST_CASE("Host Ethernet seam is a safe no-op") {
+    mm::platform::setTestDeviceNetwork(false);
     mm::platform::EthPinConfig w5500{ mm::platform::ethW5500, 1,
                                       -1, -1, -1, -1, false,
                                       /*miso*/ 5, /*mosi*/ 6, /*sck*/ 7, /*cs*/ 15, /*irq*/ 18 };
@@ -52,7 +52,7 @@ TEST_CASE("Desktop Ethernet seam is a safe no-op") {
 
     // Restore the platform default so later tests inherit no shared eth-config state.
     mm::platform::setEthConfig(mm::platform::ethConfigDefault);
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 // Regression: ethPhyAddr is a signed int16 with min -1 (auto-detect), rendered as a number field; as a uint8 it clamped to 31 and the S31 RGMII never linked.
@@ -71,9 +71,9 @@ TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number 
     CHECK(phyAddr == -1);                        // the bound value still reads -1 through the int16 control
 }
 
-// Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and leave it as it is.
-TEST_CASE("Desktop static-addressing seam is a safe no-op") {
-    mm::platform::setTestHostNetwork(false);
+// Host addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and leave it as it is.
+TEST_CASE("Host static-addressing seam is a safe no-op") {
+    mm::platform::setTestDeviceNetwork(false);
     const uint8_t ip[4]   = {192, 168, 1, 50};
     const uint8_t gw[4]   = {192, 168, 1, 1};
     const uint8_t mask[4] = {255, 255, 255, 0};
@@ -82,15 +82,15 @@ TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     mm::platform::netSetStaticIPv4(mm::platform::NetIface::Sta, ip, gw, mask, dns);
     mm::platform::netSetDhcp(mm::platform::NetIface::Eth);
     mm::platform::netSetDhcp(mm::platform::NetIface::Sta);
-    // Desktop reports no eth/sta connection regardless, the setters didn't fake one.
+    // Host reports no eth/sta connection regardless, the setters didn't fake one.
     CHECK_FALSE(mm::platform::ethConnected());
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 // A known network set to Static pins its address during bring-up, since a DHCP-less network never fires a lease event.
 TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
     mm::platform::setTestWifiStaAvailable(true);
-    mm::platform::setTestHostNetwork(false);
+    mm::platform::setTestDeviceNetwork(false);
     {
         mm::NetworkModule net;
         mm::WiFiModule wifi;
@@ -101,14 +101,14 @@ TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
         constexpr uint32_t kFirstRowId = 1;   // a fresh list numbers its first network 1
         REQUIRE(wifi.setListRowField(kFirstRowId, "ipSettings", "{\"value\":1}"));
         REQUIRE(wifi.setListRowField(kFirstRowId, "ip", "{\"value\":\"192.168.1.250\"}"));
-        net.setup();   // desktop ethInit() fails → cascades to STA; the seam lands it in WaitingSta
+        net.setup();   // host ethInit() fails → cascades to STA; the seam lands it in WaitingSta
         uint32_t before = mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta);
         net.tick1s();   // WaitingSta: Static + not connected → applyStaStatic()
         CHECK(mm::platform::testNetStaticApplyCount(mm::platform::NetIface::Sta) > before);
         net.removeChild(&wifi);   // the child is a local, not the tree's to free
     }
     mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 namespace {
@@ -134,11 +134,11 @@ struct WiredNetwork {
     mm::NetworkModule net;
     mm::EthernetModule eth;
     WiredNetwork() {
-        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
+        mm::platform::setTestDeviceNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&eth);
         net.setEthernet(&eth);
     }
-    ~WiredNetwork() { net.removeChild(&eth); mm::platform::setTestHostNetwork(true); }   // the child is a member, not the tree's to free
+    ~WiredNetwork() { net.removeChild(&eth); mm::platform::setTestDeviceNetwork(true); }   // the child is a member, not the tree's to free
 };
 
 // Set one control through the normal control-apply path.
@@ -177,7 +177,7 @@ TEST_CASE("Ethernet's IP settings: DHCP by default, Static reveals the fields") 
     CHECK(eth.configuredIp()[3] == 250);
 }
 
-// A cable on a network without DHCP gives itself 169.254.x.y. The desktop declares WiFi, so it plays the WiFi build: there that address must not end the cascade, and a lease that lands later must.
+// A cable on a network without DHCP gives itself 169.254.x.y. The host declares WiFi, so it plays the WiFi build: there that address must not end the cascade, and a lease that lands later must.
 TEST_CASE("a self-assigned Ethernet address keeps the cascade waiting on a WiFi build, and a lease ends it") {
     const uint8_t linkLocal[4] = {169, 254, 7, 9};
     const uint8_t leased[4]    = {192, 168, 1, 20};
@@ -366,15 +366,15 @@ TEST_CASE("ethBoard seeds from the pins after a restore, not once before it") {
     CHECK(std::strcmp(boardOf(net), "Classic RMII") == 0);
 }
 
-// Asked per chip rather than per build, since a host test runs as the desktop, which previews every board: a classic Olimex once offered the P4 and S31 boards.
+// Asked per chip rather than per build, since a host test runs as the host, which previews every board: a classic Olimex once offered the P4 and S31 boards.
 TEST_CASE("each chip offers only the Ethernet boards it can wire") {
     using E = mm::EthernetModule;
     constexpr E::EthChip classic{true, false, false, false, false}, p4{true, false, true, false, false},
                          s31{true, false, false, true, false}, s3{true, true, false, false, false},
-                         desktop{false, false, false, false, false},
+                         host{false, false, false, false, false},
                          teensy{true, false, false, false, true};
     constexpr int8_t custom = 0, lan8720 = 1, ip101 = 2, w5500 = 3, yt8531 = 4;
-    for (const auto& chip : {classic, p4, s31, s3, desktop, teensy}) CHECK(E::presetFits(custom, chip));
+    for (const auto& chip : {classic, p4, s31, s3, host, teensy}) CHECK(E::presetFits(custom, chip));
     CHECK(E::presetFits(lan8720, classic));
     CHECK_FALSE(E::presetFits(ip101, classic));
     CHECK_FALSE(E::presetFits(yt8531, classic));
@@ -386,7 +386,7 @@ TEST_CASE("each chip offers only the Ethernet boards it can wire") {
     CHECK_FALSE(E::presetFits(ip101, s31));
     CHECK(E::presetFits(w5500, s3));
     CHECK_FALSE(E::presetFits(lan8720, s3));
-    for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK(E::presetFits(t, desktop));
+    for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK(E::presetFits(t, host));
     // A build that fixed its interface offers no board: a classic ESP32's RMII map would read as the Teensy's wiring.
     for (int8_t t : {lan8720, ip101, w5500, yt8531}) CHECK_FALSE(E::presetFits(t, teensy));
 }
@@ -411,7 +411,7 @@ TEST_CASE("a chip with one buildable preset defaults to it, not to Custom") {
     }
     REQUIRE(board != nullptr);
 
-    // The option count tells the two builds apart: a desktop previews the whole catalog, so Custom is right there.
+    // The option count tells the two builds apart: a host previews the whole catalog, so Custom is right there.
     if (options == 2) CHECK(std::strcmp(board, "Custom") != 0);
     else CHECK(std::strcmp(board, "Custom") == 0);
 

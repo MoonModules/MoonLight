@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
-#include "core/util/HostResolver.h"   // formatPeer: the sender by its board's name
+#include "core/util/NameResolver.h"   // formatPeer: the sender by its board's name
 #include "core/system/ControlModule.h"   // ControlModule::deviceName(): this device's name for an ArtPoll reply
 #include "light/effects/ChannelDataSink.h"   // staging, the held frame and its placement
 #include "light/effects/EffectBase.h"
@@ -466,8 +466,8 @@ private:
         lastProto_ = proto;
         lastPath_ = path;
         std::memcpy(lastIp_, ip, 4);
-        char peer[HostResolver::kPeerChars];
-        HostResolver::formatPeer(peer, sizeof(peer), ip);
+        char peer[NameResolver::kPeerChars];
+        NameResolver::formatPeer(peer, sizeof(peer), ip);
         const int n = mm::formatTo(recvStatus_, sizeof(recvStatus_), "%u fps, %u packets/s, %u lost/s, %s from %s%s",
                                    static_cast<unsigned>(framesPerS_), static_cast<unsigned>(packetsPerS_), static_cast<unsigned>(lostPerS_),
                                    proto, peer, kPathNotes[path]);
@@ -500,9 +500,9 @@ private:
     void replyToPoll(const uint8_t pollerIp[4]) {
         uint8_t myIp[4];
         platform::localIPv4(myIp);
-        // The desktop has no netif, so parse hostIp()'s string as the last resort.
+        // The host has no netif, so parse deviceIp()'s string as the last resort.
         if (!myIp[0] && !myIp[1] && !myIp[2] && !myIp[3]) {
-            if (!parseDottedQuad(platform::hostIp(), myIp)) return;  // no usable IP, so stay silent
+            if (!parseDottedQuad(platform::deviceIp(), myIp)) return;  // no usable IP, so stay silent
         }
         uint8_t mac[6];
         platform::getMacAddress(mac);

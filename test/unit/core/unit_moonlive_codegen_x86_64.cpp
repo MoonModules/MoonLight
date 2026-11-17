@@ -2,7 +2,7 @@
 
 /// The x86-64 (Windows + Linux + Intel macOS) host backend's emitted code, checked BYTE for BYTE on the development machine. Same intent as unit_moonlive_codegen_riscv.cpp and _xtensa.cpp: without this, an encoding bug is caught by an execution crash, and the only way back from a fault inside JIT-emitted bytes is a debugger session. A pinned expected-byte sequence per named instruction turns "the emitted code crashes" into "these three bytes are wrong".
 ///
-/// Runs only on x86-64 hosts: the assembler this file exercises is the platform's HostAssembler, which compiles as x86-64 encoding on any x86-64 target (Windows/Linux/Intel-macOS) via the #elif branch in moonlive_asm_host.cpp. Skipped elsewhere (arm64 desktops) because we would be checking bytes against an assembler that isn't there, the arm64 branch of the same file uses completely different encodings, checked by the RISC-V/Xtensa/host-arm64 suites.
+/// Runs only on x86-64 hosts: the assembler this file exercises is the platform's HostAssembler, which compiles as x86-64 encoding on any x86-64 target (Windows/Linux/Intel-macOS) via the #elif branch in moonlive_asm_host.cpp. Skipped elsewhere (arm64 hosts) because we would be checking bytes against an assembler that isn't there, the arm64 branch of the same file uses completely different encodings, checked by the RISC-V/Xtensa/host-arm64 suites.
 ///
 /// Naming: tests are named for the exact instruction they pin so a red one immediately says which helper to fix in moonlive_asm_host.cpp. Expected byte sequences are computed by hand against Intel SDM Vol. 2 encoding tables and marked with the human-readable assembly they represent.
 
@@ -11,7 +11,7 @@
 
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT)
 
-#include "platform/desktop/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_host.h"
 #include "core/moonlive/MoonLiveCompiler.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 

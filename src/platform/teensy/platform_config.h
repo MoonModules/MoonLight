@@ -1,6 +1,6 @@
 #pragma once
 
-/// What a Teensy 4.1 offers: one Cortex-M7 at 600 MHz, 1 MB of RAM, no WiFi, no RTOS; a feature without its seam compiles out as on a desktop.
+/// What a Teensy 4.1 offers: one Cortex-M7 at 600 MHz, 1 MB of RAM, no WiFi, no RTOS; a feature without its seam compiles out as on a host.
 
 #include <cstdint>
 
@@ -64,7 +64,7 @@ constexpr bool previewsHardwareControls = false;
 /// False: one interface, so a raw sender names none.
 constexpr bool hasNamedNetInterfaces = false;
 
-/// False: the panel card driver (MM_PANEL_CARDS) links into ESP32 and desktop builds alone.
+/// False: the panel card driver (MM_PANEL_CARDS) links into ESP32 and host builds alone.
 constexpr bool hasRawEthernet = false;
 
 /// No NDI, HLS or RTSP source.

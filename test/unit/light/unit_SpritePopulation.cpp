@@ -1,13 +1,13 @@
-/// @module PacmanEffect
+/// @module MoonManEffect
 
 #include "doctest.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
-#include "light/effects/PacmanEffect.h"
+#include "light/effects/MoonManEffect.h"
 
 namespace {
 
-// Pacman's yellow is fixed and belongs to no other character in the cast, so counting it counts Pacmen on the wall. Testing the drawn frame rather than the pool keeps this a statement about what a user sees.
+// MoonMan's yellow is fixed and belongs to no other character in the cast, so counting it counts MoonMen on the wall. Testing the drawn frame rather than the pool keeps this a statement about what a user sees.
 int yellowPixels(mm::Layer& layer) {
     const auto& buf = layer.buffer();
     int n = 0;
@@ -18,8 +18,8 @@ int yellowPixels(mm::Layer& layer) {
 
 }  // namespace
 
-// Changing how many of each KIND are on the wall must change what is drawn. Slots are positional (the first `pacmen` slots are Pacman, the rest ghosts) and a slot's role is decided when it launches. Trading one kind for another keeps the TOTAL the same, so no slot respawns, and without a re-role pass the cast keeps the shapes it already had: the controls say three Pacmen while the wall still shows one. Found in review.
-TEST_CASE("Trading ghosts for Pacmen changes what is drawn on the wall") {
+// Trading one KIND for another must change the drawing: slots are positional and keep the role they launched with, so the total stays and only a re-role pass gives each its new shape. Found in review.
+TEST_CASE("Trading invaders for MoonMen changes what is drawn on the wall") {
     mm::Layouts layouts;
     mm::GridLayout grid;
     grid.width = 64; grid.height = 64; grid.depth = 1;
@@ -29,21 +29,21 @@ TEST_CASE("Trading ghosts for Pacmen changes what is drawn on the wall") {
     layer.setLayouts(&layouts);
     layer.setChannelsPerLight(3);
 
-    mm::PacmanEffect fx;
-    fx.pacmen = 1;
-    fx.ghosts = 4;
+    mm::MoonManEffect fx;
+    fx.moonmen = 1;
+    fx.invaders = 4;
     fx.spriteSize = 2;          // fixed, so the pixel counts do not ride on the auto-scale rule
     layer.addChild(&fx);
     layer.applyState();
     layer.tick();
 
     const int oneMan = yellowPixels(layer);
-    CHECK(oneMan > 0);          // the single Pacman is on the wall
+    CHECK(oneMan > 0);          // the single MoonMan is on the wall
 
     // Same five characters, a different split: nothing needs to spawn or die. This is the UI path - a control change, NOT a re-prepare, which would relaunch every slot and hide the very staleness under test.
-    fx.pacmen = 3;
-    fx.ghosts = 2;
+    fx.moonmen = 3;
+    fx.invaders = 2;
     layer.tick();
 
-    CHECK(yellowPixels(layer) > oneMan);   // more Pacmen means more yellow
+    CHECK(yellowPixels(layer) > oneMan);   // more MoonMen means more yellow
 }

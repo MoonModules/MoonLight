@@ -12,9 +12,9 @@
 ///
 /// No scenario needs a uXXXX escape and a half-done surrogate decoder is worse than none, so the runner warns loudly once and keeps the escape visible, rather than appending a literal `u` that surfaces later as a confusing compile error.
 ///
-/// ## Why the target key is always the host desktop
+/// ## Why the target key is always the host
 ///
-/// The per-step `contract[<target>]` lookup needs a target key and the in-process runner builds for the host only, so the key is always `desktop-<host-os>`, matching the `run_live_scenario.py` convention.
+/// The per-step `contract[<target>]` lookup needs a target key and the in-process runner builds for the host only, so the key is always `host-<host-os>`, matching the `run_live_scenario.py` convention.
 ///
 /// ## How a scenario value reaches a control
 ///
@@ -50,19 +50,19 @@
 ///
 /// ## What the heap numbers mean
 ///
-/// `heap=` is the absolute free heap after the measurement window, which `observed.<target>.free_heap` consumes; desktop reports 0 (no heap assertion). `(step: ±N)` is the signed delta from pre-step heap, a diagnostic only.
+/// `heap=` is the absolute free heap after the measurement window, which `observed.<target>.free_heap` consumes; host reports 0 (no heap assertion). `(step: ±N)` is the signed delta from pre-step heap, a diagnostic only.
 ///
 /// ## Why the block size is internal RAM only
 ///
-/// `maxInternalAllocBlock` is the largest contiguous internal-RAM block, which diagnoses the fragmentation that degrades the Layer LUT (60 to 90 KB at 128×128 with mirror); internal-only suits PSRAM boards. Desktop reads 0, meaning unlimited.
+/// `maxInternalAllocBlock` is the largest contiguous internal-RAM block, which diagnoses the fragmentation that degrades the Layer LUT (60 to 90 KB at 128×128 with mirror); internal-only suits PSRAM boards. Host reads 0, meaning unlimited.
 ///
 /// ## The performance contract
 ///
-/// A measure step may carry an optional `contract[<target>]` block: `tick_us` (ceiling), `free_heap` and `max_alloc_block` (floors, skipped on desktop), tolerances, hand-blessed with `--update-contract --reason`; the live runner shares the shape.
+/// A measure step may carry an optional `contract[<target>]` block: `tick_us` (ceiling), `free_heap` and `max_alloc_block` (floors, skipped on host), tolerances, hand-blessed with `--update-contract --reason`; the live runner shares the shape.
 ///
 /// ## Why the tolerance defaults differ per target
 ///
-/// Per-target defaults reflect run-to-run variance: desktop OS jitter gets 20 percent plus a 200us floor, an esp32 RTOS gets 10 percent plus a 5us floor. KEEP IN SYNC with the contract-block handler of `moondeck/scenario/run_live_scenario.py`.
+/// Per-target defaults reflect run-to-run variance: host OS jitter gets 20 percent plus a 200us floor, an esp32 RTOS gets 10 percent plus a 5us floor. KEEP IN SYNC with the contract-block handler of `moondeck/scenario/run_live_scenario.py`.
 ///
 /// ## Why a filesystem error escapes main
 ///
@@ -74,7 +74,7 @@
 ///
 /// The window is sized to the slowest shipped default, PulseEffect at 40 bpm, which emits every 1500 ms; a shorter window can fall between two emissions and report an idle effect as its cost.
 ///
-/// The frame cap is sized ABOVE what the window can reach: an early-outing effect ticks about three thousand times per millisecond on a desktop, so a 200k cap stopped after 65 ms of a 1600 ms window. Reaching the cap before the clock is reported.
+/// The frame cap is sized ABOVE what the window can reach: an early-outing effect ticks about three thousand times per millisecond on a host, so a 200k cap stopped after 65 ms of a 1600 ms window. Reaching the cap before the clock is reported.
 ///
 /// ## What a green run is allowed to mean
 ///
@@ -280,16 +280,16 @@ static std::string readFile(const char* path) {
 
 
 
-// Target key for the per-step contract[<target>] lookup: @xref{why-the-target-key-is-always-the-host-desktop}.
+// Target key for the per-step contract[<target>] lookup: @xref{why-the-target-key-is-always-the-host}.
 static const char* hostTarget() {
 #if defined(__APPLE__)
-    return "desktop-macos";
+    return "host-macos";
 #elif defined(_WIN32)
-    return "desktop-windows";
+    return "host-windows";
 #elif defined(__linux__)
-    return "desktop-linux";
+    return "host-linux";
 #else
-    return "desktop-unknown";
+    return "host-unknown";
 #endif
 }
 
@@ -792,7 +792,7 @@ static int runScenario(const char* path) {
                 std::printf("  NOTE  frame cap reached after %ums of a %ums window\n",
                             elapsedUs / 1000u, MEASURE_WINDOW_MS);
             }
-            // Rounded rather than floored: a desktop tick is a fraction of a microsecond, and flooring reported 0 or 1 for everything, which is what made the trend unreadable.
+            // Rounded rather than floored: a host tick is a fraction of a microsecond, and flooring reported 0 or 1 for everything, which is what made the trend unreadable.
             uint32_t tickTimeUs = frames > 0
                 ? (elapsedUs + static_cast<uint32_t>(frames) / 2) / static_cast<uint32_t>(frames)
                 : 0;
@@ -824,14 +824,14 @@ static int runScenario(const char* path) {
             if (step.has("contract") && step["contract"].has(hostTarget())) {
                 const auto& exp = step["contract"][hostTarget()];
                 // Per-target defaults reflect run-to-run variance, and KEEP IN SYNC with the live runner: @xref{why-the-tolerance-defaults-differ-per-target}.
-                const bool isDesktop = std::strncmp(hostTarget(), "desktop-", 8) == 0;
+                const bool isHost = std::strncmp(hostTarget(), "host-", std::strlen("host-")) == 0;
                 double tickTolPct = exp.has("tick_tolerance_pct") ? exp["tick_tolerance_pct"].num
-                                                                   : (isDesktop ? 20.0 : 10.0);
+                                                                   : (isHost ? 20.0 : 10.0);
                 double heapTolPct = exp.has("heap_tolerance_pct") ? exp["heap_tolerance_pct"].num
-                                                                   : (isDesktop ? 20.0 : 10.0);
+                                                                   : (isHost ? 20.0 : 10.0);
                 // Absolute floor, since OS scheduling jitter dwarfs a percentage at a small tick: @xref{why-the-tolerance-defaults-differ-per-target}.
                 double tolUs = exp.has("tolerance_us") ? exp["tolerance_us"].num
-                                                       : (isDesktop ? 200.0 : 5.0);
+                                                       : (isHost ? 200.0 : 5.0);
                 if (exp.has("tick_us") && exp["tick_us"].num > 0) {
                     // tick is a *ceiling*, so a speedup never fails: @xref{the-performance-contract}.
                     double expTick = exp["tick_us"].num;
@@ -851,7 +851,7 @@ static int runScenario(const char* path) {
                         result.check(overshoot <= allowed, msg);
                     }
                 }
-                // free_heap is a *floor*, meaningful on ESP32 and unlimited on desktop: @xref{the-performance-contract}.
+                // free_heap is a *floor*, meaningful on ESP32 and unlimited on host: @xref{the-performance-contract}.
                 if (exp.has("free_heap") && exp["free_heap"].num > 0 &&
                     heapAfterMeasure > 0) {
                     double expHeap = exp["free_heap"].num;
@@ -864,7 +864,7 @@ static int runScenario(const char* path) {
                                   name, static_cast<unsigned>(heapAfterMeasure), expHeap, dropPct, heapTolPct);
                     result.check(dropPct <= heapTolPct, msg);
                 }
-                // max_alloc_block is also a *floor*, optional and skipped on desktop: @xref{the-performance-contract}.
+                // max_alloc_block is also a *floor*, optional and skipped on host: @xref{the-performance-contract}.
                 if (exp.has("max_alloc_block") && exp["max_alloc_block"].num > 0 &&
                     maxBlock > 0) {
                     double expBlock = exp["max_alloc_block"].num;

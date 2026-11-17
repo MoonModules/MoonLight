@@ -18,7 +18,7 @@
 #include "core/util/CaptivePortal.h"     // the redirect a phone on the access point follows to the UI
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
 #include "core/system/Sha1.h"
-#include "core/util/sha256.h"   // kSha256DigestSize: the digest a desktop's install names
+#include "core/util/sha256.h"   // kSha256DigestSize: the digest a host's install names
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
@@ -456,9 +456,10 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         return true;
     }
     if (length == http::Length::Valid) {
-        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX).
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), and a program image the platform's, whose otaBegin refuses one larger than its slot or a host's 256 MB.
         const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
-        const uint64_t kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
+        const bool imageUpload = isStreamingUpload(req) && std::strncmp(req, "POST /api/firmware/upload ", 26) == 0;
+        const uint64_t kContentLenMax = sdUpload || imageUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
         // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
         if (parsed > kContentLenMax) {
             sendResponse(conn, 413, "application/json",
@@ -599,7 +600,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         else if (std::strcmp(path, "/json") == 0) serveWledDeviceJson(conn);
         // /presets.json: python-wled fetches it after /json and a 404 aborts HA's config flow; the truthy-but-empty `{"0":{}}` yields zero presets where `{}` fails its `not presets` guard.
         else if (std::strcmp(path, "/presets.json") == 0) serveWledPresets(conn);
-        // A desktop running from a checkout serves the UI's own modules, which the embedded bundle holds inside app.js: scripts only, so the folder's other files stay private.
+        // A host running from a checkout serves the UI's own modules, which the embedded bundle holds inside app.js: scripts only, so the folder's other files stay private.
         else if (isScriptName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");
     } else if (std::strcmp(method, "POST") == 0) {
@@ -944,7 +945,7 @@ void HttpServerModule::serveHlsFile(platform::TcpConnection& conn, const char* n
     else if (dot && std::strcmp(dot, ".ts") == 0) mime = "video/mp2t";
     else if (dot && (std::strcmp(dot, ".mp4") == 0 || std::strcmp(dot, ".m4s") == 0)) mime = "video/mp4";
 
-    // RAM first, then the filesystem: a platform that keeps segments in memory (the P4) answers here, one whose encoder writes to disk (desktop ffmpeg) declines.
+    // RAM first, then the filesystem: a platform that keeps segments in memory (the P4) answers here, one whose encoder writes to disk (host ffmpeg) declines.
     const uint8_t* ram = nullptr;
     size_t ramLen = 0;
     if (platform::hlsSegment(name, &ram, &ramLen)) {
@@ -1231,6 +1232,7 @@ void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, pl
     FilesystemModule::flushPending();
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
     conn.close();
+    if (platform::imageAwaitsInstaller()) return;   // the OS installer replaces and restarts the program; the loop runs on meanwhile
     platform::delayMs(200);
     platform::reboot();   // noreturn: boots the flashed image
 }
@@ -1336,7 +1338,7 @@ static bool etagMatches(const char* ifNoneMatch, const char* etag) {
 }
 
 void HttpServerModule::serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file, const char* ifNoneMatch) {
-    // A desktop running from a checkout serves its folder's copy, so an edit shows without a rebuild.
+    // A host running from a checkout serves its folder's copy, so an edit shows without a rebuild.
     if (serveUiFromDisk(conn, file.name)) return;
     // A browser holding this exact file is told so, and loads it from its cache.
     if (etagMatches(ifNoneMatch, file.etag)) {
@@ -2697,7 +2699,7 @@ size_t HttpServerModule::drainChunkBytes() const {
     constexpr size_t kFloor = 2048;     // always make real progress, even on a fragmented board
     constexpr size_t kCeil  = 65536;    // cap tick occupancy regardless of how much RAM is free
     const size_t block = platform::maxAllocBlock();
-    // 0 means unlimited (desktop): no ceiling, since writeSome stops at the socket buffer and TCP paces the drain.
+    // 0 means unlimited (host): no ceiling, since writeSome stops at the socket buffer and TCP paces the drain.
     if (block == 0) return static_cast<size_t>(1) << 30;
     size_t chunk = block / 8;           // a fraction of the largest contiguous block
     if (chunk < kFloor) chunk = kFloor;

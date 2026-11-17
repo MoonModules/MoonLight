@@ -164,7 +164,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 11,
@@ -174,7 +174,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 9,
             "p95": 10622,
@@ -256,7 +256,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 410,
             "p95": 410,
@@ -362,7 +362,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 16,
             "p95": 24,
@@ -372,7 +372,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 37,
             "p95": 10628,
@@ -454,7 +454,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 433,
             "p95": 433,
@@ -560,7 +560,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 65,
             "p95": 95,
@@ -570,7 +570,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 160,
             "p95": 16241,
@@ -652,7 +652,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 1449,
             "p95": 1449,
@@ -758,7 +758,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 257,
             "p95": 325,
@@ -768,7 +768,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 649,
             "p95": 14152,
@@ -850,7 +850,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 2445,
             "p95": 2445,
@@ -980,7 +980,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 15,
@@ -990,7 +990,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 9,
             "p95": 1711,
@@ -1072,7 +1072,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 153,
             "p95": 153,
@@ -1178,7 +1178,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 16,
             "p95": 39,
@@ -1188,7 +1188,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 37,
             "p95": 2061,
@@ -1270,7 +1270,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 413,
             "p95": 413,
@@ -1376,7 +1376,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 63,
             "p95": 100,
@@ -1386,7 +1386,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 152,
             "p95": 2263,
@@ -1468,7 +1468,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 1464,
             "p95": 1464,
@@ -1574,7 +1574,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 253,
             "p95": 385,
@@ -1584,7 +1584,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 644,
             "p95": 4200,
@@ -1666,7 +1666,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 2577,
             "p95": 2577,
@@ -1796,7 +1796,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 9,
@@ -1806,7 +1806,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 9,
             "p95": 1772,
@@ -1888,7 +1888,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 263,
             "p95": 263,
@@ -1994,7 +1994,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 16,
             "p95": 18,
@@ -2004,7 +2004,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 37,
             "p95": 1767,
@@ -2086,7 +2086,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 439,
             "p95": 439,
@@ -2192,7 +2192,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 64,
             "p95": 98,
@@ -2202,7 +2202,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 155,
             "p95": 1988,
@@ -2284,7 +2284,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 1473,
             "p95": 1473,
@@ -2390,7 +2390,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 253,
             "p95": 326,
@@ -2400,7 +2400,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 641,
             "p95": 4588,
@@ -2482,7 +2482,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 2510,
             "p95": 2510,
@@ -2612,7 +2612,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 4,
             "p95": 10,
@@ -2622,7 +2622,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 9,
             "p95": 1974,
@@ -2704,7 +2704,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 154,
             "p95": 154,
@@ -2810,7 +2810,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 16,
             "p95": 25,
@@ -2820,7 +2820,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 37,
             "p95": 1506,
@@ -2902,7 +2902,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 418,
             "p95": 418,
@@ -3008,7 +3008,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 63,
             "p95": 89,
@@ -3018,7 +3018,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 159,
             "p95": 1589,
@@ -3100,7 +3100,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 1481,
             "p95": 1481,
@@ -3206,7 +3206,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 254,
             "p95": 337,
@@ -3216,7 +3216,7 @@
           },
           "last_updated": "2026-09-30"
         },
-        "desktop-windows": {
+        "host-windows": {
           "tick_us": {
             "p50": 641,
             "p95": 4288,
@@ -3298,7 +3298,7 @@
           },
           "last_updated": "2026-09-29"
         },
-        "desktop-docker-arm64": {
+        "host-docker-arm64": {
           "tick_us": {
             "p50": 1783,
             "p95": 1783,

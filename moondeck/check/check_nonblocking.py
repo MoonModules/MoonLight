@@ -525,7 +525,7 @@ def main():
     build_dir = check_clang_tidy._host_build_dir()
     if not (build_dir / "CMakeCache.txt").exists():
         print(f"No build in {build_dir.relative_to(ROOT)} — run "
-              f"`uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
+              f"`uv run moondeck/build/build_host.py` first.", file=sys.stderr)
         return 2
 
     # NOT APPLICABLE is not the same as FAILED. -Wfunction-effects is Clang 20+ only, and
@@ -534,7 +534,7 @@ def main():
     # produce a finding, and building to discover that wastes a build and then reports a
     # failure the toolchain guarantees. Reading the cache says the same thing for free.
     #
-    # Skipping is safe here in a way it would not be for a normal gate: the desktop build that
+    # Skipping is safe here in a way it would not be for a normal gate: the host build that
     # DOES carry the flag is the one every contributor and CI runs, so the tree is still measured,
     # though not from this host. Say so loudly rather than printing a number, because this script's
     # standing rule is that a comfortable zero from a check that never ran is the worst outcome.

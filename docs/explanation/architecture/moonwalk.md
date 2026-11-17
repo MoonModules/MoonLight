@@ -40,7 +40,7 @@ Running the same script from several processes is a call, its explanation living
 
 **A step is done when its `then` holds now.** The app reads its own state, so "WiFi is set up" is done the moment a network is known, however it got there. This is the onboarding checklist's textbook rule, completion observed rather than recorded, and it needs no storage. A process is done when every expectation the state can answer holds, and it has at least one: its last step alone is not enough, since a last step is often one the state cannot see.
 
-What the state cannot show is vouched for by whoever knows it. The installer marks the install done, since it knows the platform for certain where a running device cannot tell a desktop from a Linux board or a container. MoonDeck marks a process done when every script its steps run last passed, and a run counts only while it is newer than the sources it covers, as a firmware build does. Those marks stay in the browser. The website cannot read a device, since an https page cannot call a device's http address, so there only the reader's marks count.
+What the state cannot show is vouched for by whoever knows it. The installer marks the install done, since it knows the platform for certain where a running device cannot tell a macOS or Windows host from a Linux board or a container. MoonDeck marks a process done when every script its steps run last passed, and a run counts only while it is newer than the sources it covers, as a firmware build does. Those marks stay in the browser. The website cannot read a device, since an https page cannot call a device's http address, so there only the reader's marks count.
 
 ## The definition in the repository, the runs on GitHub
 
@@ -58,7 +58,7 @@ A process file is the definition and one run of it is an instance, the split wor
 | Module | the module's class name, empty for an item across modules |
 | Kind | Bug, Feature, Restructure, Investigation |
 | Trigger | what makes the item worth building, so a met trigger is found by scanning one column |
-| Platform | classic, S3, P4, C3, Teensy, desktop, Pi, all |
+| Platform | classic, S3, P4, C3, Teensy, host, Pi, all |
 | Stage, Process | the MoonWalk stage and process the item serves |
 
 ## The map

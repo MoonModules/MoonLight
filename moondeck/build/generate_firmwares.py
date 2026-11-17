@@ -16,7 +16,7 @@ check_firmwares.py guards the committed file against drift from FIRMWARES.
 "Firmware" here is the compiled binary variant, separate from "board" (the
 physical hardware). See docs/explanation/architecture/index.md § Firmware vs board.
 
-The desktop rows also land in src/ui/install-picker.js, between its `generated:desktop-builds` markers: the picker is embedded in the firmware, where no firmwares.json can be fetched.
+The host rows also land in src/ui/install-picker.js, between its `generated:host-builds` markers: the picker is embedded in the firmware, where no firmwares.json can be fetched.
 
 Inputs:
   --out <path>   firmwares.json destination (mooninstaller/firmwares.json).
@@ -54,7 +54,7 @@ def build_doc() -> dict:
                 "eth_only": spec["eth_only"],
                 "ships": spec["ships"],
                 "description": spec["description"],
-                # A desktop row also names its download: the label the installer shows and the asset patterns, preferred form first.
+                # A host row also names its download: the label the installer shows and the asset patterns, preferred form first.
                 **{k: spec[k] for k in ("label", "assets") if k in spec},
             }
             # FLASHABLE variants only. This file feeds the WEB INSTALLER, the list of things a
@@ -68,18 +68,18 @@ def build_doc() -> dict:
 
 
 PICKER = Path(__file__).resolve().parent.parent.parent / "src" / "ui" / "install-picker.js"
-_BLOCK = re.compile(r"(// <generated:desktop-builds>.*?\n)(.*?)(// </generated:desktop-builds>)", re.S)
+_BLOCK = re.compile(r"(// <generated:host-builds>.*?\n)(.*?)(// </generated:host-builds>)", re.S)
 
 
 def picker_block(doc: dict) -> str:
-    """The `DESKTOP_BUILDS` constant for install-picker.js, one line per desktop row."""
+    """The `HOST_BUILDS` constant for install-picker.js, one line per host row."""
     rows = [f"    {json.dumps({'key': f['name'], 'label': f['label'], 'assets': f['assets']}, ensure_ascii=False)},\n"
-            for f in doc["firmwares"] if f["platform"] == "desktop"]
-    return "const DESKTOP_BUILDS = [\n" + "".join(rows) + "];\n"
+            for f in doc["firmwares"] if f["platform"] == "host"]
+    return "const HOST_BUILDS = [\n" + "".join(rows) + "];\n"
 
 
 def picker_source(text: str, doc: dict) -> str:
-    """install-picker.js with its generated block replaced by the registry's desktop rows."""
+    """install-picker.js with its generated block replaced by the registry's host rows."""
     return _BLOCK.sub(lambda m: m.group(1) + picker_block(doc) + m.group(3), text, count=1)
 
 

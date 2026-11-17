@@ -33,7 +33,7 @@ def test_a_large_file_is_a_finding_and_a_vendored_one_is_not(tmp_path, monkeypat
     rows = check_code.large_files()
     assert all(r[1] == "large file" and r[3] > 3 for r in rows)
     assert any(r[0] == "moondeck/check/check_code.py" for r in rows)
-    assert not any(r[0].startswith("src/platform/desktop/vendor/") or r[0] == "test/doctest.h" for r in rows)
+    assert not any(r[0].startswith("src/platform/host/vendor/") or r[0] == "test/doctest.h" for r in rows)
     # The same files feed the clone search, so a scenario's recorded JSON or an installer SVG never moves a code count.
     owned = check_code.owned_files()
     assert owned and not any(f.endswith((".json", ".svg", ".css", ".md")) for f in owned)
@@ -81,6 +81,21 @@ def test_a_clone_counts_under_both_of_its_files_and_names_the_other():
     assert rows[0][2] == "lines 10-16, also in src/light/effects/B.h:40"   # the span from start and length, since jscpd's end field is unreliable
     assert rows[1][2] == "lines 40-46, also in src/light/effects/A.h:10"
     assert check_code.clone_rows({"duplicates": []}) == ([], (0.0, 0))
+
+
+def test_the_clone_check_reads_files_of_any_length(monkeypatch):
+    """jscpd skips a file over 1,000 lines unless told otherwise, which left the largest files uncompared (issue #252)."""
+    seen = {}
+    def run(args, **_kw):
+        if args[0] == "npx":
+            seen["args"] = args
+        return type("Proc", (), {"stdout": "", "stderr": "", "returncode": 0})()
+    monkeypatch.setattr(check_code.shutil, "which", lambda _name: "npx")
+    monkeypatch.setattr(check_code.subprocess, "run", run)
+    check_code.clones()
+    args = seen["args"]
+    assert int(args[args.index("--max-lines") + 1]) > 100_000
+    assert args[args.index("--max-size") + 1].endswith("mb") and int(args[args.index("--max-size") + 1][:-2]) >= 100
 
 
 def test_a_commit_account_shows_what_it_added_and_what_it_saved():
@@ -238,13 +253,13 @@ def test_a_type_named_beyond_its_own_files_spreads_onto_its_header(tmp_path, mon
 
 
 def test_a_large_frame_is_a_row_per_function_and_only_ours_count(tmp_path, monkeypatch):
-    _tree(tmp_path, monkeypatch, {"src/core/a.h": "", "src/platform/desktop/vendor/v.h": ""})
+    _tree(tmp_path, monkeypatch, {"src/core/a.h": "", "src/platform/host/vendor/v.h": ""})
     monkeypatch.setattr(check_code, "owned_files", lambda: ["src/core/a.h"])
     out = "\n".join([
         f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (1056) exceeds limit (512) in 'bool mm::F::reg<mm::X>(char const*)' [-Wframe-larger-than]",
         f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (1056) exceeds limit (512) in 'bool mm::F::reg<mm::X>(char const*)' [-Wframe-larger-than]",
         f"{tmp_path}/src/core/a.h:40:17: warning: stack frame size (600) exceeds limit (512) in 'bool mm::F::reg<mm::Y>(char const*)' [-Wframe-larger-than]",
-        f"{tmp_path}/src/platform/desktop/vendor/v.h:9:1: warning: stack frame size (4000) exceeds limit (512) in 'f()' [-Wframe-larger-than]",
+        f"{tmp_path}/src/platform/host/vendor/v.h:9:1: warning: stack frame size (4000) exceeds limit (512) in 'f()' [-Wframe-larger-than]",
         "/Library/SDK/thread.h:9:1: warning: stack frame size (700) exceeds limit (512) in 'g()' [-Wframe-larger-than]"])
     rows = sorted(check_code.stack_rows(out))
     assert rows == [("src/core/a.h", check_code.STACK, "F::reg<mm::X>, line 40", 1056),
@@ -305,7 +320,7 @@ def test_the_type_double_is_a_finding_in_firmware_and_a_word_in_a_string_or_a_co
     import check_code as c
     assert [r[1] for r in c.double_findings("src/core/A.h", ["double v = 1;\n"])] == [c.FIRMWARE_DOUBLE]
     assert c.double_findings("src/core/A.h", ['const char* s = "a double test"; // a double comment\n']) == []
-    assert c.double_findings("src/platform/desktop/p.cpp", ["double v;\n"]) == []   # the host's own code is not firmware
+    assert c.double_findings("src/platform/host/p.cpp", ["double v;\n"]) == []   # the host's own code is not firmware
     assert [r[1] for r in c.double_findings("src/core/A.h", ['const char* u = "http://a"; double v;\n'])] == [c.FIRMWARE_DOUBLE], "a // inside a string is no comment"
     assert c.double_findings("src/core/A.h", ["/* the old\n", "   double here\n", "*/ int v;\n"]) == [], "a block comment is no code, across its lines"
     assert [r[1] for r in c.double_findings("src/core/A.h", ["/* a */ double v;\n"])] == [c.FIRMWARE_DOUBLE], "code after a closed block comment counts"

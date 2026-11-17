@@ -16,7 +16,7 @@ namespace mm {
 /// A read-only diagnostic showing what runs where: the tasks, and the modules inside each.
 /// @card TasksModule.png
 ///
-/// You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the desktop.
+/// You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the host.
 ///
 /// @guide
 ///

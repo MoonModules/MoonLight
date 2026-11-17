@@ -257,7 +257,7 @@ public:
         for (uint8_t i = 0; i < kMaxPresets; i++) mirrorOne(SurfaceControl::Pad, i, pads[i], sentPads_[i]);
     }
 
-    /// Follow every assignment and push what moved, so a value changing underneath, such as a self-playing game, reaches a desk at once. A pass costs about 1.3 us with all 24 assigned, on a desktop; the preset pads add a pass only when one of them changed.
+    /// Follow every assignment and push what moved, so a value changing underneath, such as a self-playing game, reaches a desk at once. A pass costs about 1.3 us with all 24 assigned, on a host; the preset pads add a pass only when one of them changed.
     void tick20ms() MM_NONBLOCKING override {
         MoonModule::tick20ms();
         mirrorToSurfaces();

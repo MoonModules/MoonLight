@@ -121,7 +121,7 @@ TEST_CASE("leaf module tick default is a safe no-op (childCount_ == 0)") {
 
 // Each child's tickTimeUs() reflects its own accumulated cost (Scheduler reads per-child timing, not the parent's sum).
 TEST_CASE("per-child timing accumulates on the child, not the parent") {
-    // Inject a known accumulation via addAccumUs(), since two adjacent platform::micros() reads on a fast desktop can round to 0 and make the assertion tautological.
+    // Inject a known accumulation via addAccumUs(), since two adjacent platform::micros() reads on a fast host can round to 0 and make the assertion tautological.
     Counting parent;
     Counting a;
     parent.addChild(&a);

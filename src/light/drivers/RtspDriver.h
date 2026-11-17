@@ -19,7 +19,7 @@ namespace mm {
 ///
 /// RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.
 ///
-/// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the desktop, and shares one encoder with @ref HlsDriver, so only one of the two runs at a time.
+/// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the host, and shares one encoder with @ref HlsDriver, so only one of the two runs at a time.
 ///
 /// @attribution Delphium, RTSP, RTP
 ///

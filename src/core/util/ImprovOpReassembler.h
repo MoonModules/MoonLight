@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// This is the pure logic behind the device's 0xFC handler, which treats Improv as REST over serial.
 /// Each platform's listener owns its transport and hands each APPLY_OP payload to @ref improvApplyOp, which feeds the chunks here and holds the `opReady` handshake.
-/// That is the same core-against-platform line `ImprovFrame.h` draws, so the reassembly and its sequence guard are proven on the desktop without hardware.
+/// That is the same core-against-platform line `ImprovFrame.h` draws, so the reassembly and its sequence guard are proven on the host without hardware.
 ///
 /// ## Why the sequence guard is real
 ///

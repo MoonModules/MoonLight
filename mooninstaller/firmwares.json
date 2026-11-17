@@ -137,8 +137,8 @@
       "description": "Teensy 4.1: its own Ethernet PHY, or on the 4.1-NE a W5500 module on its SPI port, found at boot."
     },
     {
-      "name": "desktop-macos-arm64",
-      "platform": "desktop",
+      "name": "host-macos-arm64",
+      "platform": "host",
       "chip": "macos-arm64",
       "eth_only": false,
       "ships": true,
@@ -150,8 +150,8 @@
       ]
     },
     {
-      "name": "desktop-windows-x64",
-      "platform": "desktop",
+      "name": "host-windows-x64",
+      "platform": "host",
       "chip": "windows-x64",
       "eth_only": false,
       "ships": true,
@@ -163,8 +163,8 @@
       ]
     },
     {
-      "name": "desktop-linux-x64",
-      "platform": "desktop",
+      "name": "host-linux-x64",
+      "platform": "host",
       "chip": "linux-x64",
       "eth_only": false,
       "ships": true,
@@ -176,8 +176,8 @@
       ]
     },
     {
-      "name": "desktop-linux-arm64",
-      "platform": "desktop",
+      "name": "host-linux-arm64",
+      "platform": "host",
       "chip": "linux-arm64",
       "eth_only": false,
       "ships": true,
@@ -189,8 +189,8 @@
       ]
     },
     {
-      "name": "desktop-android-arm64",
-      "platform": "desktop",
+      "name": "host-android-arm64",
+      "platform": "host",
       "chip": "android-arm64",
       "eth_only": false,
       "ships": true,

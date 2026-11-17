@@ -371,7 +371,7 @@ body.panel-resizing.corner { cursor: nesw-resize; }
     padding: 2px 4px;
     min-width: 0;
 }
-/* The boards a hosts text names, on a line of their own under the field. */
+/* The boards a receivers text names, on a line of their own under the field. */
 .control-known { color: var(--fg-muted); font-size: 11px; flex-basis: 100%; }
 .preview-grip { display: none; color: var(--fg-muted); cursor: grab; user-select: none; font-size: 14px; flex-shrink: 0; }
 .preview-status {
@@ -2058,7 +2058,7 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 }
 .fm-row:hover .fm-dl { opacity: 1; }
 .fm-dl:hover { color: var(--accent); }
-/* Drag-drop upload target highlight (a folder row or the tree while a desktop file hovers). */
+/* Drag-drop upload target highlight (a folder row or the tree while a host file hovers). */
 .fm-row--drop, .fm-tree.fm-row--drop {
     outline: 2px dashed var(--accent); outline-offset: -2px;
     background: color-mix(in srgb, var(--accent) 12%, transparent);

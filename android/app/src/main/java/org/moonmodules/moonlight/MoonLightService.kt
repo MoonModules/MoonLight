@@ -16,7 +16,7 @@ import android.os.IBinder
 import android.os.PowerManager
 
 /**
- * Runs MoonLight, the desktop program, on a thread of its own while the app is open or in the background.
+ * Runs MoonLight, the host program, on a thread of its own while the app is open or in the background.
  *
  * A foreground service, so Android keeps it running with the screen off; it holds a multicast lock, since mDNS, Art-Net
  * broadcast and the presence packets are multicast, and a partial wake lock, so the effects keep their rate. Its
@@ -55,7 +55,12 @@ class MoonLightService : Service() {
             val mic = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
                 (if (mic && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
-            startForeground(NOTIFICATION_ID, notification(), types)
+            // A start from the background (after an update, or Android restarting the service) may not take the microphone, so it starts without it; the activity adds it when it opens.
+            try {
+                startForeground(NOTIFICATION_ID, notification(), types)
+            } catch (e: SecurityException) {
+                startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            }
         } else {
             startForeground(NOTIFICATION_ID, notification())
         }
@@ -65,6 +70,7 @@ class MoonLightService : Service() {
             wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MoonLight:program").apply { acquire() }
             Mdns.nsd = getSystemService(NsdManager::class.java)
+            Updater.context = applicationContext
             program = Thread({ run(filesDir.absolutePath, PORT) }, "MoonLight").apply { start() }
         }
         return START_STICKY

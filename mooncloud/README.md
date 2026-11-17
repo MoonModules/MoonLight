@@ -60,7 +60,7 @@ pattern = "stats.example.org"
 custom_domain = true
 ```
 
-**Do not point the firmware at a Custom Domain without checking the issuer.** Cloudflare picks the CA, and the one it picked was absent from IDF's default `esp_crt_bundle`: every ESP32 handshake failed with "No matching trusted root certificate found" while desktop's system trust store accepted it, so devices went silent with nothing on screen to say why. The `workers.dev` certificate is one the bundle carries. Enabling `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL` would cover any issuer, at roughly 30 KB of flash on a board already at 81% of its app slot.
+**Do not point the firmware at a Custom Domain without checking the issuer.** Cloudflare picks the CA, and the one it picked was absent from IDF's default `esp_crt_bundle`: every ESP32 handshake failed with "No matching trusted root certificate found" while the host's system trust store accepted it, so devices went silent with nothing on screen to say why. The `workers.dev` certificate is one the bundle carries. Enabling `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL` would cover any issuer, at roughly 30 KB of flash on a board already at 81% of its app slot.
 
 Point the firmware at a new address only once that address answers, and only after a real device has completed a TLS handshake with it: a failed report is never retried, so every device reporting into an unreachable name loses that report.
 

@@ -1,0 +1,98 @@
+package org.moonmodules.moonlight
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.os.Build
+import android.util.Log
+import java.io.File
+import kotlin.system.exitProcess
+
+/**
+ * The app installing a new version of itself, as a host puts a new program in place: the program downloads and vets the release's
+ * package (platform_host_update.cpp, host_update.h) and hands its path here, and Android's PackageInstaller replaces the app.
+ *
+ * Android asks the person to confirm unless this app installed the version running, which every update through here makes so.
+ */
+object Updater {
+    lateinit var context: Context   // the service sets it before the program starts
+
+    /** Write the package at [path] into an install session and commit it: null once committed, else the reason it was not. */
+    @JvmStatic fun install(path: String): String? {
+        val installer = context.packageManager.packageInstaller
+        var id = -1
+        return try {
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(context.packageName)   // another app's package is refused, not installed in MoonLight's place
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        id = installer.createSession(params)
+        val file = File(path)
+        installer.openSession(id).use { session ->
+            session.openWrite("MoonLight.apk", 0, file.length()).use { out ->
+                file.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            val answer = PendingIntent.getBroadcast(context, id, Intent(context, InstallStatus::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)   // mutable: the installer adds its status
+            session.commit(answer.intentSender)
+        }
+        file.delete()
+        null
+    } catch (e: Exception) {   // any failure: the program reports it and keeps running this version
+        Log.w("MoonLight", "update: ${e.message}")
+        if (id >= 0) runCatching { installer.abandonSession(id) }   // closing keeps a session and its staged copy; abandoning frees them
+        e.message ?: "the installer refused the package"
+    }
+    }
+}
+
+/** The installer's answer: a confirmation it needs from the person opens, a refusal or failure is logged and restarts the program on the version it runs. */
+class InstallStatus : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                val confirm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                              else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_INTENT)
+                confirm?.let { askToConfirm(context, it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+            PackageInstaller.STATUS_SUCCESS -> clearConfirmation(context)
+            else -> {   // declined or failed: the program waits in reboot() for a replacement that is not coming, so this ends it and the sticky service starts it again
+                clearConfirmation(context)   // its session is gone, so a tap would open nothing
+                Log.w("MoonLight", "update: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)}")
+                exitProcess(0)
+            }
+        }
+    }
+}
+
+private const val CONFIRM_NOTIFICATION = 2   // the running service's own notification is 1
+
+/** Open the installer's confirmation, and keep it as a notification: Android 15 lets no app open an activity from the background, so an update started from another device waits there for the person. */
+private fun askToConfirm(context: Context, confirm: Intent) {
+    val manager = context.getSystemService(NotificationManager::class.java)
+    manager.createNotificationChannel(NotificationChannel("moonlight-update", "MoonLight updates", NotificationManager.IMPORTANCE_HIGH))
+    val tap = PendingIntent.getActivity(context, 2, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    manager.notify(CONFIRM_NOTIFICATION, Notification.Builder(context, "moonlight-update")
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle("MoonLight update ready")
+        .setContentText("Tap to confirm the install")
+        .setContentIntent(tap)
+        .setAutoCancel(true)
+        .build())
+    runCatching { context.startActivity(confirm) }   // in front already: the confirmation opens at once
+}
+
+/** Take the confirmation notification back once the install has an answer. */
+private fun clearConfirmation(context: Context) = context.getSystemService(NotificationManager::class.java).cancel(CONFIRM_NOTIFICATION)
+
+/** After an update Android starts nothing of the app, so the service starts again here, on the new version. */
+class PackageReplaced : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) context.startForegroundService(Intent(context, MoonLightService::class.java))
+    }
+}

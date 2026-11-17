@@ -17,7 +17,7 @@
       "title": "What is new in seven"
     },
     {
-      "clip": "01-install-desktop",
+      "clip": "01-install-host",
       "title": "No hardware needed",
       "bars": 0
     },
@@ -28,7 +28,7 @@
       "subtitle": "A browser and a USB cable"
     },
     {
-      "clip": "02-first-look-desktop",
+      "clip": "02-first-look-host",
       "title": "Look around",
       "bars": 0,
       "subtitle": "Every module, on a computer"
@@ -60,7 +60,7 @@
       "bars": 0
     },
     {
-      "clip": "07-drivers-desktop",
+      "clip": "07-drivers-host",
       "title": "Get the frame out",
       "bars": 0,
       "subtitle": "On a computer"

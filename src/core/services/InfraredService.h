@@ -73,7 +73,7 @@ public:
     /// The last decoded code (0 = none yet).
     uint32_t latestCode() const { return lastCode_; }
 
-    /// Feed a decoded code as if from the receiver, since a desktop has none.
+    /// Feed a decoded code as if from the receiver, since a host has none.
     void injectCodeForTest(uint32_t code) { processCode(code); }
 
     // --- ListSource: the code rows -------------------------------------------------------------

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run clang-tidy over the desktop build and print a readable findings report.
+"""Run clang-tidy over the host build and print a readable findings report.
 
 The config is [.clang-tidy](../../.clang-tidy) at the repo root — the same file clangd reads,
 so the editor and this report never disagree. This script only adds what a raw `run-clang-tidy`
@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _findings  # noqa: E402
 
 # Third-party code that lives inside our tree. Findings here are upstream's to fix.
-VENDORED = ("test/doctest.h", "src/platform/desktop/vendor/miniaudio.h")
+VENDORED = ("test/doctest.h", "src/platform/host/vendor/miniaudio.h")
 
 # A diagnostic line: path:line:col: severity: message [check-name]
 #
@@ -163,7 +163,7 @@ def run(build_dir, check_filter=None, tu_regex=None):
     if errors > 10:
         print(f"{errors} files failed to compile — clang-tidy analysed almost nothing.\n"
               f"Usually a toolchain mismatch: the compilation database was written by a\n"
-              f"different compiler than clang-tidy is using. Rebuild the desktop target, or\n"
+              f"different compiler than clang-tidy is using. Rebuild the host target, or\n"
               f"check _toolchain_args() covers this platform.", file=sys.stderr)
         return None
 
@@ -221,7 +221,7 @@ def main():
     build_dir = _host_build_dir()
     if not (build_dir / "compile_commands.json").exists():
         print(f"No compile_commands.json in {build_dir.relative_to(ROOT)} — "
-              f"run `uv run moondeck/build/build_desktop.py` first.", file=sys.stderr)
+              f"run `uv run moondeck/build/build_host.py` first.", file=sys.stderr)
         return 2
 
     only, tu_regex = None, None

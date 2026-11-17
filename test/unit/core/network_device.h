@@ -24,7 +24,7 @@ struct NetworkDevice {
 
     /// Boot on the config folder at `root`.
     explicit NetworkDevice(const char* root) {
-        platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
+        platform::setTestDeviceNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         platform::fsSetRoot(root);
         ModuleFactory::registerType<EthernetModule>("EthernetModule");
         ModuleFactory::registerType<WiFiModule>("WiFiModule");
@@ -51,7 +51,7 @@ struct NetworkDevice {
         scheduler.setup();
     }
     /// Release the tree.
-    ~NetworkDevice() { scheduler.release(); platform::setTestHostNetwork(true); }
+    ~NetworkDevice() { scheduler.release(); platform::setTestDeviceNetwork(true); }
 };
 
 }  // namespace mm

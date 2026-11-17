@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The Firmware card installs the next release's APK over this one, which Android lets an app do once the person allows it to install apps. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- The Audio card's microphone, asked for the first time the app opens. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -43,5 +45,13 @@
             android:name=".MoonLightService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|microphone" />
+
+        <!-- The installer's answer to an update this app committed (Updater.kt), and the service started again once Android replaced the app. -->
+        <receiver android:name=".InstallStatus" android:exported="false" />
+        <receiver android:name=".PackageReplaced" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

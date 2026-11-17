@@ -127,7 +127,7 @@ bool fsRemove(const char* path) {
     if (!fsMounted_) return false;
     char full[128];
     if (!fsTranslate(path, full, sizeof(full))) return false;
-    // Matching the desktop contract: remove maps to unlink here and fails on a directory, so stat first.
+    // Matching the host contract: remove maps to unlink here and fails on a directory, so stat first.
     struct stat st;
     if (::stat(full, &st) == 0 && S_ISDIR(st.st_mode)) return ::rmdir(full) == 0;
     return ::remove(full) == 0;

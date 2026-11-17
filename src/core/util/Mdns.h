@@ -8,7 +8,7 @@
 ///
 /// **One reply, one device.** A responder answers with its own records: the PTR naming its service instance, the TXT carrying its key=value pairs, and its address. The reply's source address is the device's, so no A record is needed.
 ///
-/// Pure functions on byte buffers, so a desktop test reads a captured reply; nothing here allocates.
+/// Pure functions on byte buffers, so a host test reads a captured reply; nothing here allocates.
 
 #include <cctype>
 #include <cstddef>

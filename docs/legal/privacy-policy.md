@@ -54,14 +54,14 @@ Each member is a separate setting on that card, off by default, and each says on
 
 The one part of a MoonCloud transmission that is about you rather than your hardware.
 
-It is a SHA-256 hash of an internal address together with a fixed salt. On a device that address is the chip's MAC; on a desktop or in Docker it is a random value generated on first run and stored with your configuration, derived from nothing about your machine. The address itself is never sent, and the salt is unique to MoonCloud, so the id cannot be matched against the device name or MQTT topics that same address produces on your own network.
+It is a SHA-256 hash of an internal address together with a fixed salt. On a device that address is the chip's MAC; on a host or in Docker it is a random value generated on first run and stored with your configuration, derived from nothing about your machine. The address itself is never sent, and the salt is unique to MoonCloud, so the id cannot be matched against the device name or MQTT topics that same address produces on your own network.
 
 **We call it pseudonymous rather than anonymous.** It is the same each time, so reports carrying it came from one installation. That is deliberate: it is what distinguishes an upgrade from a new install. It also means the id is personal data under the GDPR, and **your consent is the lawful basis**: nothing is generated, stored or sent until you answer yes.
 
 What follows from it being stable:
 
 - On a device it survives a factory reset and a reflash. Our salt is published in our source code and a MAC address is a short number, so someone determined could work backwards from an id to a MAC. We do not do this and store nothing that would help, but we will not claim it is impossible.
-- On a desktop or in Docker it cannot be worked backwards to anything. Deleting your configuration folder gives you a new one.
+- On a host or in Docker it cannot be worked backwards to anything. Deleting your configuration folder gives you a new one.
 - It is kept indefinitely, alongside the aggregates.
 - **A transmission already sent cannot practically be withdrawn**, because finding it would mean you supplying your id. To ask anyway, use the contact details below.
 

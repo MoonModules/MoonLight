@@ -35,6 +35,9 @@ export const TYPE_RENAMES = {
     "I2cScanModule": { type: "I2cBusModule", date: "2026-10-06" },
     // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
     "LightPresetsModule": { type: "FixtureProfilesModule", date: "2026-10-03" },
+    // The two arcade effects took moon names: MoonMan chomps among the invaders, MoonInvaders marches ghosts. Their count controls follow (CONTROL_RENAMES).
+    "PacmanEffect": { type: "MoonManEffect", date: "2026-11-17" },
+    "SpaceInvadersEffect": { type: "MoonInvadersEffect", date: "2026-11-17" },
     "Layers": { type: "Effects", date: "2026-08-08" },
     // Noise2D folded into Noise, which is Dim::D3 and renders the same field on a panel. `scale`
     // carries; Noise2D's `speed` (a 0..15 divisor) has no equivalent, because Noise takes its rate
@@ -75,22 +78,29 @@ const AUDIO_SERVICE = ["AudioService"];
 export const CONTROL_RENAMES = {
     // The MIDI desk's USB switch names both places a desk can be: a `source` select, browser or USB.
     "usb": { name: "source", date: "2026-10-08", onTypes: ["MidiService"] },
+    "pacmen": { name: "moonmen", date: "2026-11-17", onTypes: ["MoonManEffect"] },
+    "ghosts": { name: "invaders", date: "2026-11-17", onTypes: ["MoonManEffect"] },
     // Light presets are fixture profiles: the library's row list, and the Select every driver uses to pick a row.
     "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
     "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
     "presetRef": { name: "fixtureRef", date: "2026-10-03", onTypes: ["*Driver"] },
-    // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
-    "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscService"] },
+    // One rule for reaching many receivers: a list is `receivers`, and how packets travel is `addressing`.
+    "ips": { name: "receivers", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "lightsPerIp": { name: "lightsPerReceiver", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "feedbackTo": { name: "receivers", date: "2026-10-02", onTypes: ["OscService"] },
+    // The devices a service sends to are receivers, as sACN and Art-Net call them.
+    "hosts": { name: "receivers", date: "2026-11-17", onTypes: ["NetworkSendDriver", "AudioService", "OscService"] },
+    "lightsPerHost": { name: "lightsPerReceiver", date: "2026-11-17", onTypes: ["NetworkSendDriver"] },
+    // The address MIDI invites is the session's participant, RTP-MIDI's term.
+    "host": { name: "participant", date: "2026-11-17", onTypes: ["MidiService"] },
     "wledCompatible": { name: "addressing", date: "2026-10-02", onTypes: ["DevicesModule"] },
     // One name for one thing: the service is AudioService, the frame is AudioFrame, so the control
     // that makes a sprite effect follow the music is audioReactive. Scoped to the seven effects that
     // declare it, per the rule above.
     "soundReactive": {
         name: "audioReactive", date: "2026-09-05",
-        onTypes: ["FishTankEffect", "FlyingToastersEffect", "PacmanEffect", "PongEffect",
-                  "SpaceInvadersEffect", "SpriteFountainEffect", "MovingHeadEffect"],
+        onTypes: ["FishTankEffect", "FlyingToastersEffect", "MoonManEffect", "PongEffect",
+                  "MoonInvadersEffect", "SpriteFountainEffect", "MovingHeadEffect"],
     },
     // AudioSpectrum's level bar grew into every readout drawn with the bars: the frequency, the gate, the ranges and the pitch classes.
     "levelBar": { name: "readouts", date: "2026-11-04", onTypes: ["AudioSpectrumEffect"] },
@@ -386,6 +396,19 @@ function renameKeys(obj, file, report) {
 function migrateDocument(doc, type, file, report) {
     let changed = false;
     const walk = (node, nodeType, where) => {
+        // A renamed type first, so the control renames below scope on the name it takes.
+        const tr = typeof node.type === "string" ? TYPE_RENAMES[node.type] : null;
+        if (tr) {
+            report.push({ kind: "renamed", where: `${file} ${where}`, detail: `type ${node.type} → ${tr.type} (${tr.date})` });
+            node.type = nodeType = tr.type;
+            if (tr.review) report.push({ kind: "review", where: `${file} ${where}`, detail: tr.review });
+            // The settings the old type implied, as renameKeys applies them to a flat file; a saved value they replace is reported.
+            if (tr.set) for (const [k, v] of Object.entries(tr.set)) {
+                if (k in node && node[k] !== v) report.push({ kind: "review", where: `${file} ${where}.${k}`, detail: `${node[k]} → ${v}, which ${tr.type} needs to keep the old behavior` });
+                node[k] = v;
+            }
+            changed = true;
+        }
         for (const [key, value] of Object.entries(node)) {
             if (isObject(value)) { walk(value, value.type, `${where}.${key}`); continue; }
             const retired = CONTROL_RETIREMENTS[key];
@@ -591,7 +614,7 @@ export const IDENTITY = {
         ...["ipSettings", "ip", "gateway", "subnet", "dns",
             "ethBoard", "ethType", "ethPhyAddr", "ethRstGpio", "ethMdcGpio", "ethMdioGpio", "ethClockGpio", "ethClockExtIn",
             "ethSpiMiso", "ethSpiMosi", "ethSpiSck", "ethSpiCs", "ethSpiIrq"].map(k => ["Network", "Ethernet", k])],
-    "/.config/identity": [],   // the desktop's stored hardware address, which its name derives from
+    "/.config/identity": [],   // the host's stored hardware address, which its name derives from
 };
 /// Turn a backup's files into a clone of it for another device: the target's identity, from `targetFiles` (its own current files), replaces the bundle's.
 /// Returns {files, report}: a key the target holds is the target's, whether or not the backup has it, and a key the target lacks is dropped, so the device keeps what it holds.

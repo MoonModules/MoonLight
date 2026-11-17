@@ -179,7 +179,7 @@ function setupTabs() {
 
 // The network bar (selector + WiFi panel) only matters when the workflow
 // involves a device on the LAN — ESP32 tab uses the active network's port
-// + WiFi creds (Improv), Live tab uses the device list. The Desktop tab runs on
+// + WiFi creds (Improv), Live tab uses the device list. The Host tab runs on
 // localhost and has no network concept; hide the bar so it doesn't add noise.
 function applyNetworkBarVisibility(tab) {
     const bar = document.getElementById("network-bar");
@@ -317,7 +317,7 @@ function buildModuleRow({ rowClass, onChange }) {
 
 function renderScripts() {
     const containers = {
-        desktop: document.getElementById("scripts-desktop"),
+        host: document.getElementById("scripts-host"),
         esp32: document.getElementById("scripts-esp32"),
         teensy: document.getElementById("scripts-teensy"),
         live: document.getElementById("scripts-live"),
@@ -588,7 +588,7 @@ async function runScript(script, btn) {
         if (!confirm(`${script.label} is destructive — are you sure?`)) return;
     }
     // Any running script can be stopped — long_running ones are the typical case
-    // (run_desktop, monitor_esp32, …) but a foreground script that's taking longer
+    // (run_host, monitor_esp32, …) but a foreground script that's taking longer
     // than expected (e.g. a full unit-test run) should also be killable mid-flight.
     if (btn.classList.contains("running")) {
         appendLog(`\n--- Stopping ${script.label} ---\n`);
@@ -697,7 +697,7 @@ async function runScriptOnce(script, btn, extraParams) {
                 try {
                     const data = JSON.parse(e.data);
                     resetBtn(data.exitCode);
-                    // The script may launch a detached process (e.g. run_desktop
+                    // The script may launch a detached process (e.g. run_host
                     // spawns MoonLight and exits). Refresh the running state now
                     // instead of waiting up to 5s for the poll, so the button
                     // flips back to "Stop" without a visible blink.
@@ -1436,13 +1436,13 @@ function renderDevices() {
         const otaBtn = document.createElement("button");
         otaBtn.className = "device-inject";       // same compact style as inject
         const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
-        // A desktop's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
-        const isDesktop = otaFw.startsWith("desktop-");
+        // A host's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
+        const isHost = otaFw.startsWith("host-");
         const ota = otaStatus[device.ip];
         otaBtn.textContent = otaLabel(ota);
-        otaBtn.disabled = !otaFw || isDesktop || (ota && !ota.done);
+        otaBtn.disabled = !otaFw || isHost || (ota && !ota.done);
         otaBtn.title = ota && ota.error ? ota.error
-            : isDesktop ? "A desktop updates from its own Firmware card"
+            : isHost ? "A host updates from its own Firmware card"
             : otaFw ? `Flash the local ${otaFw} build to this device over WiFi (no USB)`
             : "OTA needs the device's firmware known (discover it first)";
         otaBtn.dataset.otaIp = device.ip;

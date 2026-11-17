@@ -196,7 +196,7 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
                  "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"
                  // palcount is the real count, built-ins plus the scripted tail, matching palettes[] below; fxcount stays 1 and cpal/umpal are 0.
                  "\"fxcount\":1,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
-                 // Non-zero or HA rejects the device: the desktop's freeHeap() reports 0, so a nominal figure stands in.
+                 // Non-zero or HA rejects the device: the host's freeHeap() reports 0, so a nominal figure stands in.
                  pmt,
                  static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
                  static_cast<unsigned>(platform::millis() / 1000u),

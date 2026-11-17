@@ -1,7 +1,7 @@
 /// @module HlsDriver
 /// @also Drivers, Correction
 
-/// The HLS driver's encode hand-off, pinned without an ffmpeg. CI never has one installed, so the desktop platform RECORDS the spawn argv and the frames the driver piped (platform.h § HLS test seam), exactly as the NDI seam records frames. These tests state what ffmpeg would receive; the bench then only has to confirm a player shows it.
+/// The HLS driver's encode hand-off, pinned without an ffmpeg. CI never has one installed, so the host platform RECORDS the spawn argv and the frames the driver piped (platform.h § HLS test seam), exactly as the NDI seam records frames. These tests state what ffmpeg would receive; the bench then only has to confirm a player shows it.
 
 #include "doctest.h"
 #include "light/drivers/HlsDriver.h"
@@ -73,7 +73,7 @@ TEST_CASE("HlsDriver reports a missing ffmpeg instead of failing") {
     CHECK(mm::platform::encoderTestFrameCount() == 0);
 }
 
-// The ffmpeg invocation is the desktop encode contract: raw RGB at the grid size and rate, zerolatency x264 at the bitrate, 1 s segments on a short rolling playlist for the 2-5 s latency, aged segments deleted.
+// The ffmpeg invocation is the host encode contract: raw RGB at the grid size and rate, zerolatency x264 at the bitrate, 1 s segments on a short rolling playlist for the 2-5 s latency, aged segments deleted.
 TEST_CASE("HlsDriver hands ffmpeg the exact live-HLS invocation") {
     EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
     mm::Buffer source;

@@ -1,6 +1,6 @@
 /// The platform half of the encoder seam.
 ///
-/// Where a desktop hands the whole job to an external encoder, this chip does all three parts itself: the hardware encoder, our own muxer, and a segment ring served straight out of memory.
+/// Where a host hands the whole job to an external encoder, this chip does all three parts itself: the hardware encoder, our own muxer, and a segment ring served straight out of memory.
 ///
 /// @technical
 ///
@@ -10,7 +10,7 @@
 ///
 /// ## Why a worker task
 ///
-/// The write is called from the render tick and must never block on an encode: it copies the frame into a slot ring and returns, and the worker converts, encodes and muxes. A full ring drops the newest frame, as the desktop path does.
+/// The write is called from the render tick and must never block on an encode: it copies the frame into a slot ring and returns, and the worker converts, encodes and muxes. A full ring drops the newest frame, as the host path does.
 ///
 /// ## An orphaned worker must not become a second producer
 ///
@@ -79,7 +79,7 @@
 namespace mm::platform {
 namespace {
 
-// Frame slots between the render tick and the encode task. Three is the desktop's number and the same reasoning: enough to absorb a burst, few enough that a backlog is dropped rather than queued into latency.
+// Frame slots between the render tick and the encode task. Three is the host's number and the same reasoning: enough to absorb a burst, few enough that a backlog is dropped rather than queued into latency.
 constexpr size_t kSlots = 3;
 
 // Segments kept in the ring, and so the playlist's depth: @xref{the-rings-depth-is-a-lifetime-not-a-cache|what the number buys a player}.

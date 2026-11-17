@@ -2,7 +2,7 @@
 # Configured by moondeck/build/build_teensy.py with -DCMAKE_TOOLCHAIN_FILE=teensy/teensy41.cmake.
 
 cmake_minimum_required(VERSION 3.20)
-# A compiler cache where one is installed, as the desktop build does.
+# A compiler cache where one is installed, as the host build does.
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
     set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
@@ -53,7 +53,7 @@ target_compile_definitions(qnethernet PUBLIC TCP_SND_BUF=23360 MEMP_NUM_TCP_SEG=
 target_link_libraries(qnethernet PUBLIC teensy_libs)
 target_compile_options(qnethernet PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++17>)
 
-# Generated headers, the same steps the desktop and ESP32 builds run.
+# Generated headers, the same steps the host and ESP32 builds run.
 add_custom_target(build_info_gen ALL
     COMMAND ${UV_EXECUTABLE} run python ${REPO}/moondeck/build/generate_build_info.py
     BYPRODUCTS ${REPO}/src/core/util/build_id.h ${REPO}/src/core/util/build_date.stamp
@@ -104,7 +104,7 @@ add_executable(MoonLight.elf
     ${REPO}/src/main.cpp
     ${REPO}/src/module_types.cpp
     ${MM_CORE_SOURCES}
-    ${REPO}/src/platform/desktop/moonlive_emit_noarch.cpp
+    ${REPO}/src/platform/host/moonlive_emit_noarch.cpp
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp
     ${REPO}/src/platform/teensy/platform_teensy_fs.cpp

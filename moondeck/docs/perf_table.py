@@ -30,7 +30,7 @@ def _fps_from_us(us: int) -> str:
 
 
 def _fmt_heap(bytes_: int) -> str:
-    """Pretty-print free-heap bytes (KB once over 1024). 0 = unlimited (desktop)."""
+    """Pretty-print free-heap bytes (KB once over 1024). 0 = unlimited (host)."""
     if bytes_ == 0:
         return "unlimited"
     if bytes_ >= 1024:
@@ -76,7 +76,7 @@ def _fps_range_from_observed_range(v) -> str:
 
 def _heap_contract_cell(v) -> str:
     """Contract heap/block floor → '≥ N KB'. None → NO_VALUE. 0 → 'unlimited'
-    (the desktop platform reports free_heap=0 / max_alloc_block=0 to mean
+    (the host platform reports free_heap=0 / max_alloc_block=0 to mean
     "no meaningful ceiling"; rendering them as missing was misleading)."""
     if v is None:
         return NO_VALUE
@@ -113,7 +113,7 @@ def _observed_pair(v):
 
 def _heap_observed_cell(v) -> str:
     """Observed heap/block as 'N KB' or 'N-M KB'; the missing-value dash when absent; and
-    'unlimited' for 0, matching the contract cell (desktop reports 0 to mean "no
+    'unlimited' for 0, matching the contract cell (host reports 0 to mean "no
     meaningful value", which should display as unlimited rather than be dropped)."""
     pair = _observed_pair(v)
     if pair is None:

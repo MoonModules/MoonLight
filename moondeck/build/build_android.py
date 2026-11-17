@@ -2,10 +2,10 @@
 # /// script
 # dependencies = ["pillow"]
 # ///
-"""Build the desktop target for Android arm64 into ``build/android-arm64/``, with the NDK.
+"""Build the host target for Android arm64 into ``build/android-arm64/``, with the NDK.
 
-Android is the fourth desktop OS: the NDK's CMake toolchain compiles the same tree as Linux, and
-CMake names the program ``desktop-android-arm64``. Builds ONE thing: the program (``MoonLight``)
+Android is the fourth host OS: the NDK's CMake toolchain compiles the same tree as Linux, and
+CMake names the program ``host-android-arm64``. Builds ONE thing: the program (``MoonLight``)
 by default, the unit tests (``--tests`` → ``mm_tests``), which test_android.py runs on a device, or
 the app (``--apk``): ``libmoonlight.so`` and the launcher icon, packed by Gradle into
 ``build/android-arm64/MoonLight.apk``.
@@ -107,7 +107,7 @@ def build_apk(version: str | None) -> int:
     if not env.get("JAVA_HOME") and Path("/opt/homebrew/opt/openjdk@17").exists():
         env["JAVA_HOME"] = "/opt/homebrew/opt/openjdk@17"   # Homebrew's JDK, which macOS does not put on the path
     gradlew = ROOT / "android" / ("gradlew.bat" if os.name == "nt" else "gradlew")
-    # A local build carries the version a local desktop build does, so its version code ranks with CI's and installs over one.
+    # A local build carries the version a local host build does, so its version code ranks with CI's and installs over one.
     from compute_version import compute
     app_version = version or compute("local")
     props = [f"-PmmVersion={app_version}", f"-PmmVersionCode={version_code(app_version)}"]
@@ -121,10 +121,12 @@ def build_apk(version: str | None) -> int:
     out = ROOT / BUILD_DIR / "MoonLight.apk"
     shutil.copy2(apk, out)
     print(f"Built {out.relative_to(ROOT)}")
-    if version:   # the release asset, named as the desktop packages are
+    if version:   # the release asset, named as the host packages are
         (ROOT / "dist").mkdir(exist_ok=True)
         shutil.copy2(apk, ROOT / "dist" / f"MoonLight-android-arm64-v{version}.apk")
-        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk")
+        # The same package as the program an Android device installs over itself, named as every host's own program is, which the Firmware card and the map look for.
+        shutil.copy2(apk, ROOT / "dist" / f"firmware-host-android-arm64-v{version}.bin")
+        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk and dist/firmware-host-android-arm64-v{version}.bin")
     return 0
 
 
@@ -143,8 +145,9 @@ def main():
     configure = ["cmake", "-B", BUILD_DIR, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
                  f"-DCMAKE_TOOLCHAIN_FILE={ndk / 'build' / 'cmake' / 'android.toolchain.cmake'}",
                  "-DANDROID_ABI=arm64-v8a", f"-DANDROID_PLATFORM=android-{API_LEVEL}"]
-    if args.version:
-        configure.append(f"-DMM_VERSION={args.version}")   # bare: CMakeLists.txt adds the quotes
+    # Always set, so the program reports the version the app carries: a version left in CMake's cache by an earlier --version build stays otherwise.
+    from compute_version import compute
+    configure.append(f"-DMM_VERSION={args.version or compute('local')}")   # bare: CMakeLists.txt adds the quotes
     r = subprocess.run(configure, cwd=ROOT)
     if r.returncode != 0:
         sys.exit(r.returncode)

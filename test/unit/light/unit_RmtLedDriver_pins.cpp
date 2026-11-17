@@ -354,7 +354,7 @@ TEST_CASE("RmtLedDriver window: count 0 means the rest of the buffer from start"
     CHECK(d.pinLightCount(0) == 64);          // 65 - 1 = 64
 }
 
-// A wall with PSRAM holds more than 65535 lights (nrOfLightsType is 32 bits there, and on the desktop test target), so the window counts past it: tested on the slice directly, since a driver's per-pin WS2812 cap would mask it.
+// A wall with PSRAM holds more than 65535 lights (nrOfLightsType is 32 bits there, and on the host test target), so the window counts past it: tested on the slice directly, since a driver's per-pin WS2812 cap would mask it.
 TEST_CASE("window: the default reads all of a buffer past 65535 lights, and a window starts and counts past it") {
     mm::RmtLedDriver d;   // any concrete DriverBase: the window math lives on the base
     CHECK(d.windowCount() == 0);                         // the default is 0, all lights
@@ -409,7 +409,7 @@ TEST_CASE("RmtLedDriver window: a start past the buffer end yields an empty slic
 
 // --- tick() robustness -------------------------------------------------------
 //
-// tick()'s transmit-all/wait-all body is gated out on the desktop (rmtTxChannels == 0), so the host pins only the reachable contract: tick() never crashes or overruns for any pin configuration, grid size or uninitialized state.
+// tick()'s transmit-all/wait-all body is gated out on the host (rmtTxChannels == 0), so the host pins only the reachable contract: tick() never crashes or overruns for any pin configuration, grid size or uninitialized state.
 
 // tick() is a safe no-op across single-pin, multi-pin and zero-grid configs.
 TEST_CASE("RmtLedDriver tick is crash-safe for every pin configuration") {

@@ -1,6 +1,6 @@
 /// @module SpscRing
 
-/// The lock-free single-producer single-consumer ring behind desktop audio capture: the miniaudio callback thread pushes samples, AudioService's polled tick pops them. These tests pin the contract a consumer can rely on: strict FIFO order across index wrap, drop-newest on overflow with an honest accepted-count, and an unbroken sequence under real two-thread concurrency.
+/// The lock-free single-producer single-consumer ring behind host audio capture: the miniaudio callback thread pushes samples, AudioService's polled tick pops them. These tests pin the contract a consumer can rely on: strict FIFO order across index wrap, drop-newest on overflow with an honest accepted-count, and an unbroken sequence under real two-thread concurrency.
 
 #include "doctest.h"
 #include "core/util/SpscRing.h"

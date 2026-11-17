@@ -1,6 +1,10 @@
 /// @module MoonLive
 
-/// The arm64 (Apple Silicon desktop) host backend's new signed-value encodings, checked BYTE for BYTE. Twin of unit_moonlive_codegen_x86_64.cpp for the same reason it exists: an encoding bug in JIT-emitted bytes surfaces as a fault inside anonymous executable memory, and a pinned byte sequence turns that into "this word is wrong". Runs only on arm64 hosts, where HostAssembler compiles as the arm64 branch of the platform backend; skipped elsewhere.
+/// The arm64 (Apple Silicon host) host backend's new signed-value encodings, checked BYTE for BYTE.
+///
+/// Twin of unit_moonlive_codegen_x86_64.cpp for the same reason it exists: an encoding bug in JIT-emitted bytes surfaces as a fault inside anonymous executable memory, and a pinned byte sequence turns that into "this word is wrong".
+///
+/// Runs only on arm64 hosts, where HostAssembler compiles as the arm64 branch of the platform backend; skipped elsewhere.
 ///
 /// Scoped to what this file adds (branchGeS, the Q16.16 primitives, 32-bit slot access): the other arm64 encodings are covered by every compile-through-run test on this host, which executes them for real.
 
@@ -8,7 +12,7 @@
 
 #if defined(__aarch64__) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT)
 
-#include "platform/desktop/moonlive_asm_host.h"
+#include "platform/host/moonlive_asm_host.h"
 
 #include <cstdint>
 

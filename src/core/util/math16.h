@@ -187,7 +187,7 @@ constexpr int32_t map32(int32_t v, int32_t inLo, int32_t inHi, int32_t outLo, in
 /// A resolution- and framerate-independent BPM phase accumulator.
 ///
 /// Nine effects hand-rolled this identically, and the shape is subtle enough to be worth owning once.
-/// The per-tick product `dt * bpm * scale / 60000` rounds to ZERO when dt is under a millisecond (every desktop frame.
+/// The per-tick product `dt * bpm * scale / 60000` rounds to ZERO when dt is under a millisecond (every host frame.
 /// An ESP32 running a small fixture fast), so the animation silently freezes. The fix all nine converged on is to accumulate the RAW numerator in 64 bits and divide only at the read: which is what this does.
 ///
 /// Usage: one member per animated quantity; call `advanceTo(nowMs, rate)` once per frame, then read as often as needed. `rate` is BPM-like: the caller's speed control, whatever its units.

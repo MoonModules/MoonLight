@@ -26,7 +26,7 @@ namespace mm {
 ///
 /// ## ffmpeg
 ///
-/// It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg)).
+/// It runs on the host, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg)).
 ///
 /// ## On the ESP32-P4
 ///
@@ -40,7 +40,7 @@ namespace mm {
 ///
 /// **Frame pacing.** A fixed schedule, not a last-sent timestamp: millisecond truncation and re-basing on arrival let one late tick shift it, and the drift ends in the player re-buffering.
 ///
-/// **Segments.** On the desktop they live in the transient `/.hls/` directory, served at `/hls/` and excluded from config backups.
+/// **Segments.** On the host they live in the transient `/.hls/` directory, served at `/hls/` and excluded from config backups.
 class HlsDriver : public DriverBase {
 public:
     /// A destroyed driver releases the encoder, since nothing else can: a claim outliving its owner would refuse every later driver.

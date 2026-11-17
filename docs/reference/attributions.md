@@ -37,7 +37,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [ewowi](https://github.com/ewowi) | 🧑 | MoonLight, StarLight, WLED 2D, LED preview. |
 | [Fabien Gouyon / Gouyon](https://doi.org/10.1109/TSA.2005.858509) | 🧑 | Acc1 and Acc2 at 4%, from An experimental comparison of audio tempo induction algorithms (2006), the tempo harness's scores. |
 | [FastLED](https://github.com/FastLED/FastLED) | 🧰 | The canonical LED-effects library whose names and models MoonLight carries forward (`scale8`, `sin8`, the gradient-palette model, the `beatsin8` family) so a contributor recognizes them on sight. The implementations are our own, integer-only and hot-path-tuned. Color maths and the basic power functions. |
-| [FFmpeg](https://ffmpeg.org) | 🧰 | The open video toolkit the desktop HLS and RTSP drivers encode through. |
+| [FFmpeg](https://ffmpeg.org) | 🧰 | The open video toolkit the host HLS and RTSP drivers encode through. |
 | [Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) File:Durstenfeld_shuffle.svg | 🧮 | A uniform random permutation in one pass. |
 | [FPP / Falcon Player](https://github.com/FalconChristmas/fpp) | 🧰 | The show player that prompted [PanelCardDriver](../moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them. Its receiving-card protocols, and its FSEQ format is what a show file is. |
 | [Frank / softhack007](https://github.com/softhack007) | 🧑 | Main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](../moonmodules/core/services.md#audio), including the adaptive noise gate analyzed with his permission, descend from years of collaboration, as do the AI principles and the care for code quality. |
@@ -73,7 +73,6 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [ObjectFLED](https://github.com/KurtMF/ObjectFLED) | 🧰 | Parallel WS2812 output on the Teensy 4 by DMA to a GPIO port. |
 | [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html) | 🧰 | Paul Stoffregen's parallel WS2812 library for the Teensy, timer-driven DMA. |
 | [Olimex](https://www.olimex.com) | 🏢 | The ESP32-P4-PC, and its board demo whose HDMI bring-up the output follows. |
-| [Pac-Man](https://en.wikipedia.org/wiki/Pac-Man) | 🎨 | Namco's 1980 arcade game. |
 | [Philips Hue](https://developers.meethue.com) | 🏢 | The smart-light bridge and its local REST API. |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | 🧰 | OHF-Voice's offline text-to-speech that narrates the documentation clips, the voice you hear, with voice models from rhasspy. GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track. |
 | [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system) File:Examples_of_Polar_Coordinates.svg | 🧮 | A point as an angle and a radius. |
@@ -87,7 +86,6 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [RTP](https://www.rfc-editor.org/rfc/rfc6184) | 📜 | The RTP payload format for H.264, RFC 6184: how a frame is cut into packets. |
 | [RTSP](https://www.rfc-editor.org/rfc/rfc2326) | 📜 | The Real Time Streaming Protocol, RFC 2326: a player pulls a live stream. |
 | [Semi-implicit Euler](https://en.wikipedia.org/wiki/Semi-implicit_Euler_method) | 🧮 | The integration the particle kernel runs on: velocity from the forces, then position from the new velocity. |
-| [Space Invaders](https://en.wikipedia.org/wiki/Space_Invaders) | 🎨 | Taito's 1978 arcade game. |
 | [Stefan Petrick](https://github.com/StefanPetrick) | 🧑 | The shader vocabulary of the LED world. Its generative fields come from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](../moonmodules/light/effects.md#aurora), [PolarNoise](../moonmodules/light/effects.md#polarnoise), [Tunnel](../moonmodules/light/effects.md#tunnel) and [Trails](../moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath. |
 | [Stepko / St3p40](https://github.com/St3p40) | 🧑 | WLED's 2D effects, Soap and Octopus among them. |
 | [Sutaburosu](https://github.com/sutaburosu) | 🧑 | The fixed-point canvas demos. |

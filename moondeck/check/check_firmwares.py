@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that mooninstaller/firmwares.json and install-picker.js's DESKTOP_BUILDS are in sync with the FIRMWARES dict.
+"""Check that mooninstaller/firmwares.json and install-picker.js's HOST_BUILDS are in sync with the FIRMWARES dict.
 
 firmwares.json is a generated projection of build_esp32.py's FIRMWARES (the single
 source of truth), read by the CI release matrix, the ESP Web Tools manifest loops,
@@ -52,7 +52,7 @@ def main():
 
     picker = PICKER.read_text(encoding="utf-8")
     if picker != picker_source(picker, expected):
-        _findings.write("check_firmwares", RULES, [{"rule": "firmware list drift", "message": "install-picker.js DESKTOP_BUILDS differs from the desktop rows of FIRMWARES", "file": PICKER.relative_to(ROOT).as_posix(), "level": "error"}])
+        _findings.write("check_firmwares", RULES, [{"rule": "firmware list drift", "message": "install-picker.js HOST_BUILDS differs from the host rows of FIRMWARES", "file": PICKER.relative_to(ROOT).as_posix(), "level": "error"}])
         print(f"Firmware check: {n} variants, DRIFT in install-picker.js")
         print("  regenerate with: uv run moondeck/build/generate_firmwares.py --out mooninstaller/firmwares.json")
         sys.exit(1)

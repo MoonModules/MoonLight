@@ -67,10 +67,10 @@ def test_an_exempt_step_names_its_reason_and_still_exists():
 
 
 def test_a_script_call_chained_to_another_command_is_not_a_script_call():
-    assert SCRIPT.match("uv run moondeck/test/test_host.py --python --junit-dir results")
+    assert SCRIPT.match("uv run moondeck/test/test_tooling.py --python --junit-dir results")
     assert SCRIPT.match(EXPRESSION.sub("EXPR", "uv run moondeck/check/check_sanitizers.py --kind ${{ matrix.kind }} ${{ a && 'b' || '' }}"))
-    assert not SCRIPT.match("uv run moondeck/test/test_host.py && rm -rf results")
-    assert not SCRIPT.match("uv run moondeck/test/test_host.py; echo done")
+    assert not SCRIPT.match("uv run moondeck/test/test_tooling.py && rm -rf results")
+    assert not SCRIPT.match("uv run moondeck/test/test_tooling.py; echo done")
 
 
 def test_a_job_that_runs_uv_sets_it_up_first():

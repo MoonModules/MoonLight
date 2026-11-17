@@ -11,7 +11,7 @@
 #include <string>   // std::string — clang gets it transitively, GCC does not
 #include <vector>
 
-// Host test of the deferred-wait DOUBLE-BUFFER logic in ParallelLedDriver::tick() (Step 1.5). The real LCD/Parlio peripherals are inert on the host (desktop stubs return null), so the alternation/wait/drain invariants can't be exercised through them. Instead a MockPeripheral (a runtime LedPeripheral backend) supplies the bus* hooks against two in-memory buffers and RECORDS the call sequence, so the orchestrator's loop behavior is pinned on the host exactly where the hardware would run it:
+// Host test of the deferred-wait DOUBLE-BUFFER logic in ParallelLedDriver::tick() (Step 1.5). The real LCD/Parlio peripherals are inert on the host (host stubs return null), so the alternation/wait/drain invariants can't be exercised through them. Instead a MockPeripheral (a runtime LedPeripheral backend) supplies the bus* hooks against two in-memory buffers and RECORDS the call sequence, so the orchestrator's loop behavior is pinned on the host exactly where the hardware would run it:
 //   - double-buffer mode alternates encode target 0,1,0,1,… and waits on a buffer
 //     only right before it's REUSED (never after every transmit);
 //   - single-buffer mode (mock offers no buffer 1) stays on buffer 0 and waits every

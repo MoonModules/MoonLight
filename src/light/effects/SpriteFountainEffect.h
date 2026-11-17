@@ -12,11 +12,11 @@ namespace mm {
 /// A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.
 /// @card SpriteFountainEffect.gif
 ///
-/// The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.
+/// The cast is fish, MoonMan and the ghosts, toasters and toast, the three invaders, and Luna and Momo.
 ///
-/// Colors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.
+/// Colors come from the active palette, one per sprite, held for its whole flight. MoonMan, the toasters, Luna and Momo keep their own.
 ///
-/// With `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: Pacman on the kick, a ghost on the snare, a small fish on the hats.
+/// With `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: MoonMan on the kick, a ghost on the snare, a small fish on the hats.
 ///
 /// @technical
 ///
@@ -157,7 +157,7 @@ private:
         }
     }
 
-    /// One sprite per drum hit, once a frame however many ticks read it: Pacman on the kick, a ghost on the snare, a small fish on the hats, thrown higher the harder the hit.
+    /// One sprite per drum hit, once a frame however many ticks read it: MoonMan on the kick, a ghost on the snare, a small fish on the hats, thrown higher the harder the hit.
     void emitOnHits(const AudioFrame& audio, draw::pos_t ox, draw::pos_t oy, angle16 aim, draw::pos_t speed) {
         if (audio.seq == lastSeq_) return;
         lastSeq_ = audio.seq;
@@ -170,7 +170,7 @@ private:
         }
     }
 
-    static constexpr uint8_t kHitKinds[3] = {spritecast::kPac, spritecast::kGhost, spritecast::kTiny};   ///< the sprite each range's hit throws: kick, snare, hats
+    static constexpr uint8_t kHitKinds[3] = {spritecast::kMoonMan, spritecast::kGhost, spritecast::kTiny};   ///< the sprite each range's hit throws: kick, snare, hats
     static constexpr uint8_t  kBandFloor = 40;   ///< a band under this is not throwing anything
     static constexpr uint8_t  kBandCount = 16;   ///< AudioFrame's spectrum width
 

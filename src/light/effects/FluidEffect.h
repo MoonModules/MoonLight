@@ -8,7 +8,7 @@ namespace mm {
 /// Light poured into a simulated medium and carried by it.
 /// @card FluidEffect.gif
 ///
-/// Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4; an S3 runs it on a small grid.
+/// Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the host and the P4; an S3 runs it on a small grid.
 ///
 /// @attribution Jos Stam
 ///

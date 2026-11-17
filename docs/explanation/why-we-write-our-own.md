@@ -84,7 +84,7 @@ The platform abstraction layer replaces what libraries typically provide. Today 
 | Library | Why not | What replaces it |
 |---|---|---|
 | [FastLED](https://github.com/FastLED/FastLED) | Arduino-dependent. LED protocol drivers (RMT, SPI) are available natively in ESP-IDF; FastLED's color math is small enough to reimplement. | Own color math in core. Own LED drivers per platform in `src/platform/`. |
-| [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) | Arduino-dependent. Past memory-leak issues. Ties us to Arduino. | Own HTTP server via ESP-IDF's `esp_http_server` (ESP32) or BSD sockets (desktop). Reconsider if Arduino-as-component is added. |
+| [ESPAsyncWebServer](https://github.com/ESP32Async/ESPAsyncWebServer) | Arduino-dependent. Past memory-leak issues. Ties us to Arduino. | Own HTTP server via ESP-IDF's `esp_http_server` (ESP32) or BSD sockets (host). Reconsider if Arduino-as-component is added. |
 | [ArduinoJson](https://github.com/bblanchon/ArduinoJson) | Works on ESP-IDF, but heavy: dynamic allocation, large footprint. | Own `JsonSink`, which serves both the API and persistence: each module's state is written as a flat `/.config/<TypeName>.json` and read back through `loadSubtree`. |
 
 When a library is genuinely needed (e.g. FastLED for specific hardware support), it lives inside `src/platform/` and is not referenced from core or light-domain code.

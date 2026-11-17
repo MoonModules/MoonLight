@@ -74,7 +74,7 @@ public:
         return true;
     }
 
-    /// A fresh driver takes the GRB profile (WS2812 wiring) and the first backend this chip supports; on desktop none links, so the driver idles.
+    /// A fresh driver takes the GRB profile (WS2812 wiring) and the first backend this chip supports; on host none links, so the driver idles.
     ParallelLedDriver() {
         this->setDefaultFixtureName("GRB");
         selectDefaultPeripheral(nullptr);
@@ -691,7 +691,7 @@ protected:
             peripheralIndex_[peripheralOptionCount_] = i;
             peripheralOptionCount_++;
         }
-        if (peripheralOptionCount_ == 0) {   // no usable backend on this chip (desktop): a single inert row
+        if (peripheralOptionCount_ == 0) {   // no usable backend on this chip (host): a single inert row
             peripheralOptions_[0] = "(none)";
             peripheralIndex_[0] = 0;
             peripheralOptionCount_ = 1;

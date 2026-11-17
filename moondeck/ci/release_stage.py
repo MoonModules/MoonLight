@@ -19,7 +19,7 @@ A step's outputs go to $GITHUB_OUTPUT when it is set, and always to stdout as ke
     image-name     the lowercase container image path
     container-context   the Docker build context holding the release .debs
     smoke-images   run each container image before anything is published
-    smoke-update   a desktop program installs itself through its Firmware route and restarts on it
+    smoke-update   a host program installs itself through its Firmware route and restarts on it
     pages-site     the installer and its assets, staged for Pages
     merge-docs     the rendered docs site, copied into the Pages root beside the installer
 
@@ -201,7 +201,7 @@ def manifest_command(firmware: str, version: str, base_url: str, dist: Path = DI
 def manifests(tag: str, version: str, repo: str) -> None:
     """Absolute GitHub release-asset URLs, read by the on-device OTA picker; the Pages-relative ones are made at deploy."""
     base_url = f"https://github.com/{repo}/releases/download/{tag}"
-    for firmware in shipping(load_registry(), lambda platform: platform != "desktop"):
+    for firmware in shipping(load_registry(), lambda platform: platform != "host"):
         subprocess.run(manifest_command(firmware, version, base_url), cwd=ROOT, check=True)
 
 
@@ -291,9 +291,9 @@ def check_beside(work: Path, program: str) -> None:
 
 
 def smoke_update(program: Path) -> None:
-    """A desktop installs a program through POST /api/firmware/upload as a board installs an image, and restarts on it: the new run answers from
+    """A host installs a program through POST /api/firmware/upload as a board installs an image, and restarts on it: the new run answers from
     a fresh uptime, the old program waits beside it as .prev and the new one is marked .pending. The program is its own image, a copy in a
-    folder of its own standing in for an installed one, so this runs on each runner the release builds a desktop on."""
+    folder of its own standing in for an installed one, so this runs on each runner the release builds a host on."""
     port = 18081
     base = f"http://127.0.0.1:{port}"
     work = Path(tempfile.mkdtemp(prefix="mm-smoke-update-"))
@@ -398,8 +398,8 @@ def main() -> int:
     image.add_argument("--repo", required=True, help="owner/name")
     sub.add_parser("container-context", help="Write ctx/ with the .debs and the release Dockerfile.")
     sub.add_parser("smoke-images", help="Run the amd64 and arm64 smoke images.")
-    smoke = sub.add_parser("smoke-update", help="Install a desktop program through its own Firmware route and check it restarts on it.")
-    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-desktop-<os>-<arch>-v<version>.bin")
+    smoke = sub.add_parser("smoke-update", help="Install a host program through its own Firmware route and check it restarts on it.")
+    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-host-<os>-<arch>-v<version>.bin")
     sub.add_parser("pages-site", help="Stage the installer under pages/install/.")
     docs = sub.add_parser("merge-docs", help="Copy the rendered docs site into pages/.")
     docs.add_argument("--site-dir", required=True, type=Path)

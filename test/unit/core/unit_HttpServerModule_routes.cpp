@@ -7,7 +7,8 @@
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "core/system/HttpServerModule.h"
-#include "core/system/DevicesModule.h"   // the boards a hosts text names
+#include "core/system/DevicesModule.h"   // the boards a receivers text names
+#include "core/system/FirmwareUpdateModule.h"   // g_otaBytesTotal: the size an accepted image announced
 #include "core/system/WledPacket.h"      // a board announcing itself
 #include "platform/platform.h"
 #include "http_loopback.h"
@@ -19,6 +20,7 @@
 namespace {
 
 constexpr uint16_t kTestPort = 18094;   // 18090 to 18093 belong to the connections, SD card, subscription and upload tests
+constexpr uint16_t kImagePort = 18096;  // the image upload left unfinished lingers on its port, as the upload tests' do, so it has its own
 using namespace http_loopback;
 
 struct Dial : public mm::MoonModule {};
@@ -79,12 +81,12 @@ struct Level : public mm::MoonModule {
     void defineControls() override { controls_.addControl("level", level, 0, 255); }
 };
 
-// A module with a hosts text, declared as a service declares one.
+// A module with a receivers text, declared as a service declares one.
 struct Sender : public mm::MoonModule {
-    char hosts[64] = "192.168.1.125, MM-Eye, 10.0.0.9";
+    char receivers[64] = "192.168.1.125, MM-Eye, 10.0.0.9";
     void defineControls() override {
-        controls_.addText("hosts", hosts, sizeof(hosts));
-        controls_.setHostsField(controls_.count() - 1);
+        controls_.addText("receivers", receivers, sizeof(receivers));
+        controls_.setReceiversField(controls_.count() - 1);
     }
 };
 
@@ -147,6 +149,22 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
     http.setup();
     CHECK(request(http, "POST /api/firmware/upload HTTP/1.1\r\n\r\nxx").rfind("HTTP/1.1 411", 0) == 0);
     http.release();
+}
+
+// An Android package runs to tens of megabytes, past the 8 MB a request body holds elsewhere: a firmware image meets the platform's own ceiling, which otaBegin applies.
+TEST_CASE("a firmware image past 8 MB reaches the install route rather than a 413"
+          * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
+    mm::HttpServerModule http;
+    http.port = kImagePort;
+    http.setup();
+    mm::g_otaBytesTotal = 0;
+    const std::string reply = requestOnce(http, kImagePort, "POST /api/firmware/upload HTTP/1.1\r\nContent-Length: 20000000\r\n\r\nPK");
+    CHECK(reply.rfind("HTTP/1.1 413", 0) != 0);
+    CHECK(mm::g_otaBytesTotal == 20000000u);   // the install route took the image and announced its size
+    CHECK(requestOnce(http, kImagePort, "POST /api/modules HTTP/1.1\r\nContent-Length: 20000000\r\n\r\n{").rfind("HTTP/1.1 413", 0) == 0);   // any other body keeps the cap
+    http.release();
+    std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));   // the abandoned install ends here, or the next install route answers 409
+    mm::g_otaBytesTotal = 0;
 }
 
 // The route reads the URL on a device that updates itself; a container or a read-only build folder answers 501 first.
@@ -340,8 +358,8 @@ TEST_CASE("the type list reads each type's defaults from an unreleased probe, so
 
 namespace {
 
-// The full state with a Sender whose hosts text is `hosts`, as the device list hears MM-S31 at .125 and MM-Eye at .30.
-std::string stateWithHosts(const char* hosts) {
+// The full state with a Sender whose receivers text is `receivers`, as the device list hears MM-S31 at .125 and MM-Eye at .30.
+std::string stateWithReceivers(const char* receivers) {
     RackServer server;
     mm::DevicesModule devices;
     devices.setup();
@@ -350,7 +368,7 @@ std::string stateWithHosts(const char* hosts) {
     announce(devices, "MM-Eye", 30);
     auto* sender = new Sender();
     sender->setName("Sender");
-    std::strcpy(sender->hosts, hosts);
+    std::strcpy(sender->receivers, receivers);
     server.rack->addChild(sender);
     sender->rebuildControls();
     mm::platform::TcpConnection client;
@@ -366,12 +384,12 @@ std::string stateWithHosts(const char* hosts) {
 }  // namespace
 
 // An address says nothing about which board it is: the state names each board the device list knows, and leaves a desk or a computer alone.
-TEST_CASE("a hosts text carries the boards the device list knows among its entries, each address with its name and each name with its address") {
-    const std::string reply = stateWithHosts("192.168.1.125, MM-Eye, 10.0.0.9");
+TEST_CASE("a receivers text carries the boards the device list knows among its entries, each address with its name and each name with its address") {
+    const std::string reply = stateWithReceivers("192.168.1.125, MM-Eye, 10.0.0.9");
     CHECK(reply.find(R"("known":{"192.168.1.125":"MM-S31","MM-Eye":"192.168.1.30"})") != std::string::npos);   // 10.0.0.9 is no board heard
 }
 
-// The interface tells a hosts text by its `known`, so a text naming no board still carries it, empty, and the note can follow an edit.
-TEST_CASE("a hosts text naming no board the device list knows carries an empty known") {
-    CHECK(stateWithHosts("10.0.0.9").find(R"("known":{})") != std::string::npos);
+// The interface tells a receivers text by its `known`, so a text naming no board still carries it, empty, and the note can follow an edit.
+TEST_CASE("a receivers text naming no board the device list knows carries an empty known") {
+    CHECK(stateWithReceivers("10.0.0.9").find(R"("known":{})") != std::string::npos);
 }

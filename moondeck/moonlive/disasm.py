@@ -15,13 +15,13 @@ this compiles a script through a REAL backend and pipes the bytes to that ISA's 
     uv run moondeck/moonlive/disasm.py --isa thumb2 moonlive/layouts/grid.mll layout
     uv run moondeck/moonlive/disasm.py --isa all moonlive/layouts/grid.mll layout
 
-`--isa x86_64` reads the desktop backend's other half. It is selected by the HOST's architecture
+`--isa x86_64` reads the host backend's other half. It is selected by the HOST's architecture
 rather than by a define, so it only runs ON an x86-64 machine; see emit_isa.cpp for why the trick
 the device ISAs use does not apply to it.
 
 POSIX HOSTS ONLY, every ISA: this shells out to `c++` and `objdump`, and a Windows machine with
 only MSVC has neither. The x86-64 entry is therefore usable from Linux and Intel macOS but not
-from the Windows desktop whose backend it disassembles. Backlogged: https://github.com/MoonModules/MoonLight/issues/220
+from the Windows host whose backend it disassembles. Backlogged: https://github.com/MoonModules/MoonLight/issues/220
 """
 
 import argparse
@@ -104,7 +104,7 @@ def disassemble(isa: str, script: str, binding: str) -> int:
         emitter = os.path.join(tmp, "emit")
         build = subprocess.run(
             ["c++", "-std=c++20", "-O0", "-I", os.path.join(ROOT, "src"),
-             "-I", os.path.join(ROOT, "src", "platform", "desktop"),
+             "-I", os.path.join(ROOT, "src", "platform", "host"),
              "-D", ISAS[isa]["define"],
              TOOL_SRC, os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveCompiler.cpp"),
              # Every backend runs the register allocator before lowering, so the pass comes along
@@ -112,7 +112,7 @@ def disassemble(isa: str, script: str, binding: str) -> int:
              os.path.join(ROOT, "src", "core", "moonlive", "MoonLiveSpill.cpp"),
              # The IR sizes its op array with platform::alloc, so the platform implementation has
              # to come along: the compiler depends on it.
-             os.path.join(ROOT, "src", "platform", "desktop", "platform_desktop.cpp"),
+             os.path.join(ROOT, "src", "platform", "host", "platform_host.cpp"),
              "-o", emitter],
             capture_output=True, text=True)
         if build.returncode != 0:

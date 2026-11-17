@@ -47,7 +47,7 @@ def test_the_generated_set_runs_whole_while_other_folders_take_a_sample(tmp_path
 
 
 @pytest.mark.skipif(not bench_tempo.binary().exists() or shutil.which("ffmpeg") is None,
-                    reason="needs mm_tempo (build_desktop.py --tests or bench_tempo.py builds it) and FFmpeg")
+                    reason="needs mm_tempo (build_host.py --tests or bench_tempo.py builds it) and FFmpeg")
 def test_the_generated_set_reads_through_the_shipped_analysis_as_pinned(tmp_path):
     # The whole path: FFmpeg, mm_tempo's AudioService, its header, the baseline. From 170 BPM the prior reads half.
     bench_tempo.generate(tmp_path / "generated")

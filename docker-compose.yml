@@ -1,4 +1,4 @@
-# MoonLight in a container: the desktop firmware, which is the whole system without an ESP32.
+# MoonLight in a container: the host firmware, which is the whole system without an ESP32.
 #
 #   docker compose up -d          start it, in the background
 #   docker compose logs -f        watch it
@@ -35,13 +35,13 @@ services:
 
     # NAMING an instance happens in the UI (System > deviceName), not on the command line: it is
     # persisted state, so it lives in the volume above and survives a restart. It is not a hostname
-    # either, because the desktop build advertises no mDNS. Instances address each other by IP,
+    # either, because the host build advertises no mDNS. Instances address each other by IP,
     # which is what the network drivers take.
 
     restart: unless-stopped
 
     # CPU is the real limit when running SEVERAL instances, and the reason is worth knowing: the
-    # desktop build renders as fast as the machine allows (measured at ~83,000 fps in a container),
+    # host build renders as fast as the machine allows (measured at ~83,000 fps in a container),
     # because nothing paces it the way an LED refresh paces a board. One instance therefore takes a
     # whole core, and three take three. Uncomment to cap it; 0.5 is ample for output over the
     # network, where the wire rate is what actually matters.

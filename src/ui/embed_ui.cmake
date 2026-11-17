@@ -12,8 +12,8 @@
 # Interpreter resolution — callers pick ONE of:
 #   PYTHON_CMD       — a CMake list giving the exact argv prefix (ESP32 path
 #                      passes `${Python3_EXECUTABLE}`). Wins if both are set.
-#   UV_EXECUTABLE    — path to `uv`; built into `<uv> run python` here (desktop
-#                      path). The list is built in-script so the desktop
+#   UV_EXECUTABLE    path to `uv`; built into `<uv> run python` here (host
+#                      path). The list is built in-script so the host
 #                      CMakeLists doesn't have to pass semicolons through
 #                      MSBuild / make's command-line splitter.
 # The two build entry points always pass one of these (root CMakeLists passes

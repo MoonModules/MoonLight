@@ -38,10 +38,10 @@ processes:
         actor: product-owner
         when: { manual: "Planned ahead, since the series takes a few hours; the product owner starts it." }
         detail: |
-          First update the clips: fix the captions and steps the release made false or outdated, from the release notes and MIGRATING, and add a step where a topic gained something. Then add the release clip, `moontube/clips/NN-whats-new-in-N.json`, covering what shows on a screen, and embed it at the top of [Videos](../docs/videos.md). Hardware and invisible changes stay in the release notes. Then re-record every clip, each with `mtmeasure.py`, `mtvideo.py` and `mtvoiceover.py` and `--run moontube/clips/<name>.json` ([MoonTube](../moondeck/moontube/moontube.md#clips-and-projects)); a clip the interface outgrew fails rather than publishes. The desktop app runs on a fresh build, the bench board is on the network because the install clip reflashes it, and the laptop stays open. The tag deploys the clips with the site.
+          First update the clips: fix the captions and steps the release made false or outdated, from the release notes and MIGRATING, and add a step where a topic gained something. Then add the release clip, `moontube/clips/NN-whats-new-in-N.json`, covering what shows on a screen, and embed it at the top of [Videos](../docs/videos.md). Hardware and invisible changes stay in the release notes. Then re-record every clip, each with `mtmeasure.py`, `mtvideo.py` and `mtvoiceover.py` and `--run moontube/clips/<name>.json` ([MoonTube](../moondeck/moontube/moontube.md#clips-and-projects)); a clip the interface outgrew fails rather than publishes. The host app runs on a fresh build, the bench board is on the network because the install clip reflashes it, and the laptop stays open. The tag deploys the clips with the site.
       - id: smoke
         say: Smoke-test all platforms on minor and major bumps.
-        when: { manual: "Install and run it on each desktop OS and a board per chip family." }
+        when: { manual: "Install and run it on each host OS and a board per chip family." }
       - id: tag
         section: Ship
         say: Tag the release.

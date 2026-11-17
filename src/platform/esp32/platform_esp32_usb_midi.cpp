@@ -262,7 +262,7 @@ bool usbMidiWrite(const uint8_t (*)[4], size_t) { return false; }
 
 namespace mm::platform {
 
-// The test desk is the desktop's; a board's USB host has a real one.
+// The test desk is the host's; a board's USB host has a real one.
 void setTestUsbMidiDesk(bool) {}
 void injectTestUsbMidi(const uint8_t (*)[4], size_t) {}
 size_t takeTestUsbMidiSent(uint8_t (*)[4], size_t) { return 0; }

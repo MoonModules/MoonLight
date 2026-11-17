@@ -66,9 +66,9 @@ processes:
         detail: |
           The previous topic's context steers the next one, and a long context costs every turn. A large commit is a point to start fresh too: the next commit then begins from the repository rather than from the conversation.
       - id: work
-        say: Prove the change on the desktop.
+        say: Prove the change on the host.
         actor: contributor
-        when: { process: desktop-build-test }
+        when: { process: host-build-test }
         detail: |
           Keep each commit under about 100 changed files: CodeRabbit reviews the files a pushed commit changes, and past that the commit silently loses a review layer. A mechanical sweep, such as em-dashes or a metrics refresh, is a commit of its own, apart from behavioral fixes, so both stay reviewable.
   - id: build-setup
@@ -120,8 +120,8 @@ processes:
         say: Turn off IntelliSense.
         when: { manual: "With clangd, it reports every diagnostic twice, and they disagree." }
       - id: build-once
-        say: Build the desktop once.
-        when: { run: { script: moondeck/build/build_desktop.py } }
+        say: Build the host once.
+        when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           It writes the compilation database clangd reads.
 

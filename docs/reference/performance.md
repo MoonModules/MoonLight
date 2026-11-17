@@ -12,7 +12,7 @@ A full render pipeline (effect, modifier, Art-Net output) on real hardware, at 1
 
 | Device | Lights | FPS |
 |---|---:|---:|
-| Desktop | 16,384 | 9,708 |
+| Host | 16,384 | 9,708 |
 | Olimex `esp32` | 16,384 | 11 |
 | LOLIN S3 N16R8 | 16,384 | 6 |
 
@@ -22,11 +22,11 @@ The per-grid and per-device tables below add free-heap figures and why WiFi cost
 
 ---
 
-## Desktop (64-bit)
+## Host (64-bit)
 
-Desktop ArtNet sends to a non-existent IP so packets complete instantly; `freeHeap` returns 0 (unlimited). Per-step tick budgets live in per-host `contract.desktop-<os>` blocks across the scenarios: `desktop-macos` for macOS arm64, `desktop-windows` for Windows x64, `desktop-linux` for Linux. The `sizeof` and dynamic-memory numbers below apply to all 64-bit desktop targets; tick numbers differ by host CPU and live in the scenario contracts.
+Host ArtNet sends to a non-existent IP so packets complete instantly; `freeHeap` returns 0 (unlimited). Per-step tick budgets live in per-host `contract.host-<os>` blocks across the scenarios: `host-macos` for macOS arm64, `host-windows` for Windows x64, `host-linux` for Linux. The `sizeof` and dynamic-memory numbers below apply to all 64-bit host targets; tick numbers differ by host CPU and live in the scenario contracts.
 
-### sizeof (desktop, 64-bit)
+### sizeof (host, 64-bit)
 
 | Class | sizeof (bytes) |
 |-------|---------------|
@@ -109,7 +109,7 @@ The 3D path sits closest to the bound: 3D gradient noise computes eight dot prod
 
 ### Fluid solver cost (host)
 
-`scenario_Fluid_solver`, desktop macOS arm64, tick in µs. The solver is Stam's stable fluid: several passes over the grid per frame, plus `iterations` Gauss-Seidel sweeps for the pressure projection that keeps the flow divergence-free.
+`scenario_Fluid_solver`, host macOS arm64, tick in µs. The solver is Stam's stable fluid: several passes over the grid per frame, plus `iterations` Gauss-Seidel sweeps for the pressure projection that keeps the flow divergence-free.
 
 | Grid | iterations | tick µs |
 |---|---:|---:|
@@ -179,7 +179,7 @@ The default `esp32` build carries both the WiFi and Ethernet stacks. `sdkconfig.
 | Drivers | 48 KB | output buffer (128×128×3) |
 | System + Network | 0 | char buffers in class, no heap |
 
-LUT is half desktop size (uint16_t vs uint32_t per entry). The 1:1 (no-modifier) path skips the LUT entirely, which `unit_Layer_sparse_mapping` pins as the identity path against a serpentine grid that does build one.
+LUT is half host size (uint16_t vs uint32_t per entry). The 1:1 (no-modifier) path skips the LUT entirely, which `unit_Layer_sparse_mapping` pins as the identity path against a serpentine grid that does build one.
 
 ### Heap breakdown (128×128, mirror, RainbowEffect, Ethernet + mDNS)
 
@@ -245,7 +245,7 @@ A `MoonLiveEffect` compiles its script to native code for the board's ISA once, 
 | `setRGB(random16(256), 0, 255, 0)` (one host call) | 29 | ~140 B |
 | `fill(0, 0, 255)` (loop over all lights) | 47 | ~68 B |
 
-The rows above are a dated S3 bench record; the numbers below them are what a desktop run measures. The tick cost is native-code speed: a `setRGB` is a bounds-guard + three byte stores (~26 µs including the per-tick module overhead), `fill` adds the per-light loop. The **exec block scales with the program**, not a fixed cap: a one-liner is tens of bytes of machine code, since `place()` allocates the emitted length, word-rounded. The module reports it as its dynamic memory (`setDynamicBytes(engine_.heapBytes())`, the exec block plus the control arena), so it shows on the UI card. What the rest costs is in the table below.
+The rows above are a dated S3 bench record; the numbers below them are what a host run measures. The tick cost is native-code speed: a `setRGB` is a bounds-guard + three byte stores (~26 µs including the per-tick module overhead), `fill` adds the per-light loop. The **exec block scales with the program**, not a fixed cap: a one-liner is tens of bytes of machine code, since `place()` allocates the emitted length, word-rounded. The module reports it as its dynamic memory (`setDynamicBytes(engine_.heapBytes())`, the exec block plus the control arena), so it shows on the UI card. What the rest costs is in the table below.
 
 **What MoonLive costs** (the `esp32s3-n16r8` image, 2026-10-02, from the link map and the symbol table):
 
@@ -290,7 +290,7 @@ The exec block is the emitted machine code, so its size varies by ISA. `lines.ml
 
 **Two cost models** (2026-08-22, shiffy's 80x48 = 3,840 lights). A shader is a function of position and time, so it pays per light. A particle script pays per object, with the per-particle work inside one C++ loop per call.
 
-| Script | Shape | shiffy 80x48 | desktop 128x96 |
+| Script | Shape | shiffy 80x48 | host 128x96 |
 |---|---|---:|---:|
 | `plasma.mle` | 9 host calls per cell | 16,031 us | |
 | `metal.mle` | ~14 per cell, 3 square roots | 59,600 us | 1,557 us |
@@ -391,7 +391,7 @@ A control that reshapes prepares its scope rather than the tree ([MoonModule, th
 |---|---|---|
 | shiffy, the show with its service | 1,300 to 1,700 ms a frame | 44 ms, 22 fps, as with the layers standing still |
 | Waveshare 64×64 HUB75, the same | 273 ms | 43 ms, 23 fps |
-| The desktop, 128×128 Art-Net to an FPP | Art-Net frozen, the sender restarted on every prepare | about 1,100 fps, the sender undisturbed |
+| The host, 128×128 Art-Net to an FPP | Art-Net frozen, the sender restarted on every prepare | about 1,100 fps, the sender undisturbed |
 | Flash saves while the show runs | about one a second | none |
 
 Before the script re-read, each layer's rebuild on shiffy took 37 to 78 ms, almost all of it reading the script file to hash it. That read took 30 ms for 714 bytes and 70 ms for 1,924 under load.

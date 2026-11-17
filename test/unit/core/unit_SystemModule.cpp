@@ -18,7 +18,7 @@ public:
 };
 } // namespace
 
-/// The derived name is "MM-" plus the last two MAC bytes in hex, pinned by shape since the desktop MAC is a per-install identity.
+/// The derived name is "MM-" plus the last two MAC bytes in hex, pinned by shape since the host MAC is a per-install identity.
 bool looksLikeMacName(const char* name) {
     uint8_t mac[6] = {};
     mm::platform::getMacAddress(mac);
@@ -29,7 +29,7 @@ bool looksLikeMacName(const char* name) {
 
 // The auto-generated device name is "MM-" plus the last two MAC bytes (see looksLikeMacName).
 TEST_CASE("SystemModule MAC-to-deviceName") {
-    // Desktop platform returns MAC DE:AD:BE:EF:CA:FE deviceName follows the MAC, whatever this install's stored identity is
+    // Host platform returns MAC DE:AD:BE:EF:CA:FE deviceName follows the MAC, whatever this install's stored identity is
     mm::SystemModule sys;
     sys.setup();
     CHECK(looksLikeMacName(sys.deviceName()));
@@ -111,7 +111,7 @@ TEST_CASE("SystemModule leaves a valid deviceName unchanged") {
 
 // (firmware identity controls, version / build / firmware, moved to FirmwareUpdateModule; see test/unit/core/unit_FirmwareUpdateModule.cpp.)
 
-// The `bootReason` control is populated from platform::resetReason; on desktop it reports "OK".
+// The `bootReason` control is populated from platform::resetReason; on host it reports "OK".
 TEST_CASE("SystemModule bootReason control populated") {
     // The UI uses bootReason to style the reboot button's crashed state, see ui-spec.md.
     mm::SystemModule sys;
@@ -125,7 +125,7 @@ TEST_CASE("SystemModule bootReason control populated") {
             const char* val = static_cast<const char*>(sys.controls()[i].ptr);
             CHECK(val != nullptr);
             CHECK(val[0] != '\0');  // non-empty
-            // Desktop stub always reports "OK"
+            // Host stub always reports "OK"
             CHECK(std::strcmp(val, "OK") == 0);
             found = true;
         }

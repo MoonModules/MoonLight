@@ -31,6 +31,36 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A `latest` host's firmware id is `host-<os>-<arch>`
+
+**Action: *install by hand*, once, on each host program that updates itself.**
+
+A host, MoonLight as a program on macOS, Windows, Linux or Android, names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `desktop-<os>-<arch>`, and the release's program assets are `firmware-host-<os>-<arch>-v<version>.bin`. A program in a folder it can write (macOS, Windows, Linux) lists no update on its Firmware card while it runs an earlier build, so it installs this release once by hand, from the installer page or the package, after which the card updates it as before. The Android app offers the new APK on its card as before. A host in a container or installed by a package updates as it did. The card of a host on this release installs releases from this one on; an earlier release is installed from its package. MoonDeck shows a host on an earlier release as a board until it updates, and the KPI report compares host ticks with the previous release again from the next release on. `/api/system`'s `update` says `container` for a program in a container, where it said `host`; a script reading it compares with the new value.
+
+### A new Network Send starts at the linear curve
+
+**Action: *nothing*; pick a curve on Network Send where its receivers drive their LEDs uncorrected.**
+
+A Network Send added from now on starts with `curve` at linear, since Falcon, Advatek, WLED and MoonLight receivers apply their own curve and one on both ends darkens the low levels. A saved Network Send keeps the curve it has.
+
+### MIDI invites its participant
+
+**Action: *nothing* after a Restore; a script or API call naming the old control uses the new name.**
+
+The MIDI service's `host` control, the address of the desk or board it invites over RTP-MIDI, is now `participant`, the session protocol's own term. A Restore renames it with its value.
+
+### The devices a service sends to are receivers
+
+**Action: *nothing* after a Restore; a script or API call naming the old controls uses the new names.**
+
+The `hosts` control of Network Send, the audio sync send and OSC feedback, and Network Send's `lightsPerHost`, are now `receivers` and `lightsPerReceiver`, the term sACN and Art-Net use for the devices a service sends to. A Restore renames them with their values. A script or API call that writes `hosts` or `lightsPerHost` writes `receivers` or `lightsPerReceiver`.
+
+### MoonMan and MoonInvaders join the sprite effects
+
+**Action: *re-add a module* where a layer ran one of the two arcade effects, or Restore a backup, which turns them into MoonMan and MoonInvaders with their settings.**
+
+`MoonManEffect` draws a crescent moon chomping across the wall among the invaders, its count controls `moonmen` and `invaders`; `MoonInvadersEffect` is the marching formation with the cannon, its controls as they were. A layer saved with an earlier effect skips it at boot, and File Manager names it.
+
 ### A HUB75 row of 16 shift words or fewer sends a longer frame at 6 bit planes
 
 **Action: *nothing*; a wider layout or fewer planes if the refresh rate matters.**
@@ -43,11 +73,11 @@ The HUB75 driver leads each plane's row with hold words when the row is 2^(`bitD
 
 `/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
 
-### A desktop updates itself as a board does, and the Debian package installs a service
+### A host updates itself as a board does, and the Debian package installs a service
 
-**Action: *nothing* on most desktops; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
+**Action: *nothing* on most hosts; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
 
-A desktop build names its firmware `desktop-<os>-<arch>`, such as `desktop-linux-arm64`, where it said `unknown`, and installs `firmware-<firmware>-v<version>.bin` from a release through the Firmware card, the Devices map and `/api/firmware/url`, as a board does. `/api/reboot` restarts a desktop where it ended the process: in place, in its terminal window, under systemd or in a container alike. A script that stopped a desktop through `/api/reboot` stops it with Ctrl+C or its service manager instead.
+A host build names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `unknown`, and installs `firmware-<firmware>-v<version>.bin` from a release through the Firmware card, the Devices map and `/api/firmware/url`, as a board does. `/api/reboot` restarts a host where it ended the process: in place, in its terminal window, under systemd or in a container alike. A script that stopped a host through `/api/reboot` stops it with Ctrl+C or its service manager instead.
 
 The package now installs and starts `moonlight.service`, run as its own `moonlight` user from `/var/lib/moonlight/bin`, a folder that user owns, so the Devices map updates it like a board. The program moves from `/usr/bin/MoonLight` to `/usr/lib/moonlight/MoonLight`, the copy the service starts from, and the menu entry opens `http://localhost:8080/`.
 
@@ -136,7 +166,7 @@ Fireworks fill any grid: the shells burst at `burstHeight`, a share of the grid'
 
 **Action: *nothing*, or *re-set a control* to keep a look you tuned.**
 
-An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, Space Invaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
+An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, MoonInvaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
 
 ### ESP32-P4 boards read their flash over four lines
 

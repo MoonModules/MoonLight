@@ -93,7 +93,7 @@
       "description": "One layer: Drivers hands its buffer over without blending. The floor the stack is read against.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 8,
             "p95": 11,
@@ -136,7 +136,7 @@
       "description": "Two layers blended: the difference against one layer is what the blend costs.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 15,
             "p95": 19,
@@ -223,7 +223,7 @@
       "description": "Three layers, one of them through a lookup table: the shape of a real installation.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 21,
             "p95": 24,
@@ -262,7 +262,7 @@
       "description": "Three layers again, with the bottom one replaced under a running stack.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 124,
             "p95": 141,
@@ -301,7 +301,7 @@
       "description": "The same stack over more than twice the lights: the difference is what the size costs.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 267,
             "p95": 309,
@@ -337,7 +337,7 @@
       "description": "The stack on a wheel, a layout with far fewer lights than the grid it replaced.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 56,
             "p95": 69,
@@ -362,7 +362,7 @@
       "description": "Two of three layers rendering: an off layer costs nothing.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 52,
             "p95": 76,
@@ -397,7 +397,7 @@
       "description": "Back to one enabled layer: the nebula on the wheel, with Top still in the stack but switched off, after the top layer and its effect and modifier were taken away.",
       "op": "measure",
       "observed": {
-        "desktop-macos": {
+        "host-macos": {
           "tick_us": {
             "p50": 51,
             "p95": 205,

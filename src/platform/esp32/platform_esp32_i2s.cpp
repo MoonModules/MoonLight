@@ -197,7 +197,7 @@ bool audioMicSharedBusFree(MicMode) { return false; }   // no I2S: nothing to co
 
 #endif  // SOC_I2S_SUPPORTED
 
-// OS capture is desktop only (hasAudioCapture == false on ESP32). Outside the SOC_I2S_SUPPORTED split: discarded `if constexpr (hasAudioCapture)` branches still need a definition to link.
+// OS capture is host only (hasAudioCapture == false on ESP32). Outside the SOC_I2S_SUPPORTED split: discarded `if constexpr (hasAudioCapture)` branches still need a definition to link.
 namespace mm::platform {
 size_t audioCaptureDevices(const char* const** optionsOut) {
     if (optionsOut) *optionsOut = nullptr;

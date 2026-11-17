@@ -127,7 +127,7 @@ def load_run(path: Path) -> Run:
 # A DEVICE serves this from a small embedded stack while a browser is driving its UI, and the two
 # contend: measured on the S3 testbench, /api/state answers in 0.2s idle and 2.3s after a few reads
 # in a row, so the 5s that suits the desktop app times out mid-take. The retry costs nothing when
-# the first read succeeds, which is every desktop run.
+# the first read succeeds, which is every host run.
 _STATE_TIMEOUT = 15
 
 

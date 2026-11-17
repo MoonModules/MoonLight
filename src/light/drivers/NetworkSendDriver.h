@@ -6,8 +6,8 @@
 #include "light/util/DdpPacket.h"      // shared DDP wire format
 #include "light/util/E131Packet.h"     // shared E1.31/sACN wire format
 #include "core/util/Addressing.h"      // sendAddressed: unicast, multicast or broadcast, one rule for every sender
-#include "core/util/HostList.h"        // parseHostList: the host-list parser (core primitive)
-#include "core/util/HostResolver.h"    // a named host's address, looked up off the render thread
+#include "core/util/ReceiverList.h"        // parseReceiverList: the receiver-list parser (core primitive)
+#include "core/util/NameResolver.h"    // a named receiver's address, looked up off the render thread
 #include "core/util/format.h"          // formatTo: the unresolved-names status
 #include "light/drivers/PinList.h"  // assignCounts: the same window-split idiom as ledsPerPin
 #include "platform/platform.h"
@@ -17,10 +17,12 @@
 
 namespace mm {
 
-/// Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.
+/// Streams the buffer over UDP as Art-Net, E1.31 or DDP to Falcon and Advatek controllers, xLights and LedFx, its packets paced.
 /// @card NetworkSendDriver.png
 ///
-/// One driver feeds many receivers, each a run of the window at its own address, as an LED driver fans out over pins.
+/// One driver feeds many receivers, each a run of the window.
+///
+/// `curve` starts at linear, as receivers apply their own.
 ///
 /// @attribution Art-Net, E1.31, DDP, troyhacks
 ///
@@ -46,13 +48,16 @@ namespace mm {
 ///
 /// A burst loses packets at an access point and at a wire-speed receiver, so `packet_gap` spaces them. The tick hands the frame to a task and skips frames meanwhile; a gap of 0 or a board without tasks sends the burst from the tick.
 ///
-/// **Mixed fixtures.** `lightsPerHost` splits a window between receivers that share one fixture profile, so differing fixtures need a driver each. Motion slots come from the first driver with a motion profile, so the richest fixture leads.
+/// **Mixed fixtures.** `lightsPerReceiver` splits a window between receivers that share one fixture profile, so differing fixtures need a driver each. Motion slots come from the first driver with a motion profile, so the richest fixture leads.
 ///
 /// **Motion.** Every light carries the motion bytes, so a mixed rig's buffer is as wide as its widest fixture. An effect's `setPan` reaches every light in its layer, so use separate Layers when heads should move independently.
 class NetworkSendDriver : public DriverBase {
 public:
-    /// Default to the RGB profile: network fixtures are RGB by convention, unlike the strips.
-    NetworkSendDriver() { setDefaultFixtureName("RGB"); }
+    /// Default to the RGB profile and the linear curve: network fixtures are RGB by convention, and a receiver applies its own curve.
+    NetworkSendDriver() {
+        setDefaultFixtureName("RGB");
+        setDefaultCurve(Correction::Curve::Linear);
+    }
 
     /// The protocol names, index-aligned with the constants the send switch uses.
     static constexpr const char* kProtocolOptions[] = {"ArtNet", "E1.31", "DDP"};
@@ -84,11 +89,11 @@ public:
     static constexpr uint8_t kMaxDestinations = 32;
     /// Receiver addresses or names, in fan-out order; blank idles.
     /// @guide A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting.
-    char hosts[64] = {};
+    char receivers[64] = {};
     /// Lights per receiver; blank splits evenly, one number to all, a list each.
-    char lightsPerHost[64] = {};
+    char lightsPerReceiver[64] = {};
     /// How packets travel: unicast, Art-Net broadcast or E1.31 multicast.
-    /// @guide Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
+    /// @guide Art-Net 4 requires unicast; broadcast loads every receiver. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
     uint8_t addressing = 0;
     /// The wire protocol: Art-Net, E1.31 or DDP; the port follows.
     uint8_t protocol = 0;
@@ -120,10 +125,10 @@ public:
         controls_.addSelect("addressing", addressing, kModeNames[p], kModeCount[p]);
         controls_.setHidden(controls_.count() - 1, kModeCount[p] < 2);
         const bool unicast = mode() == Addressing::Unicast;
-        controls_.addText("hosts", hosts, sizeof(hosts));
-        controls_.setHostsField(controls_.count() - 1);
+        controls_.addText("receivers", receivers, sizeof(receivers));
+        controls_.setReceiversField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, !unicast);
-        controls_.addText("lightsPerHost", lightsPerHost, sizeof(lightsPerHost));
+        controls_.addText("lightsPerReceiver", lightsPerReceiver, sizeof(lightsPerReceiver));
         controls_.setHidden(controls_.count() - 1, !unicast);
         controls_.addControl("universe_start", universeStart);
         controls_.addControl("channels_per_universe", channelsPerUniverse, 1, 512);
@@ -134,7 +139,7 @@ public:
     /// Which controls route through the prepare sweep, so the corrected buffer is re-sized.
     bool affectsPrepare(const char* name) const override {
         // Both are PARSED in prepare, so a change must re-run the sweep to re-derive the table.
-        return std::strcmp(name, "hosts") == 0 || std::strcmp(name, "lightsPerHost") == 0
+        return std::strcmp(name, "receivers") == 0 || std::strcmp(name, "lightsPerReceiver") == 0
                || std::strcmp(name, "protocol") == 0 || std::strcmp(name, "addressing") == 0
                || std::strcmp(name, "packet_gap") == 0   // starts or stops the send task
                || isWindowControl(name) || isCorrectionControl(name);
@@ -160,7 +165,7 @@ public:
                       [&](const uint8_t ip[4]) { use.flow(name, true, ip, framesLastSecond_, "/s"); });
     }
 
-    /// Refresh the named hosts' addresses from the resolver, which never blocks, and the status: a warning, or what went out this second.
+    /// Refresh the named receivers' addresses from the resolver, which answers at once, and the status: a warning, or what went out this second.
     void tick1s() MM_NONBLOCKING override {
         DriverBase::tick1s();
         const uint32_t frames = framesSent_.load(std::memory_order_relaxed);
@@ -169,7 +174,7 @@ public:
         packetsLastSecond_ = packets - packetsAtSecond_;
         framesAtSecond_ = frames;
         packetsAtSecond_ = packets;
-        refreshHosts();
+        refreshReceivers();
     }
 
 
@@ -205,17 +210,17 @@ public:
         resizeCorrected();       // which waits out a running task only when it reallocates
 
         // Published only once EVERYTHING validates: wrong output is worse than none at all.
-        Host dest[kMaxDestinations] = {};
+        Receiver dest[kMaxDestinations] = {};
         uint8_t n = 0;
         if (mode() == Addressing::Unicast) {
-            const char* err = parseHostList(hosts, dest, kMaxDestinations, n);
+            const char* err = parseReceiverList(receivers, dest, kMaxDestinations, n);
             if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
             startResolverForNames(dest, n);
             if (n == 0) {
-                // A Warning, not an Error: an unset host is unfinished, not faulty.
+                // A Warning, not an Error: an unset receiver is unfinished, not faulty.
                 stopSendTask();
                 nDest_ = 0;
-                setStatus("set a host", Severity::Warning);
+                setStatus("set a receiver", Severity::Warning);
                 return;
             }
         } else {
@@ -227,27 +232,27 @@ public:
         if (sourceBuffer_) windowSlice(sourceBuffer_->count(), winStart, winLen);
         nrOfLightsType counts[kMaxDestinations] = {};
         const char* warn = nullptr;
-        const char* err = assignCounts(mode() == Addressing::Unicast ? lightsPerHost : "", n, winLen, counts, 0, &warn);
+        const char* err = assignCounts(mode() == Addressing::Unicast ? lightsPerReceiver : "", n, winLen, counts, 0, &warn);
         if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
 
         publishDestinations(dest, counts, n);
         prepareWarn_ = warn;
-        refreshHosts();
+        refreshReceivers();
         if (packetGap > 0) startSendTask();   // a no-op while it runs
         else stopSendTask();
     }
 
     /// Publish validated destinations as one unit. The send task reads them, so it stops only when they differ, and a rebuild elsewhere leaves a running stream alone.
-    void publishDestinations(const Host* dest, const nrOfLightsType* counts, uint8_t n) {
+    void publishDestinations(const Receiver* dest, const nrOfLightsType* counts, uint8_t n) {
         // By the text and mode they came from, since the resolver fills in a name's address later.
-        if (n == nDest_ && mode() == preparedMode_ && std::strcmp(hosts, preparedHosts_) == 0
+        if (n == nDest_ && mode() == preparedMode_ && std::strcmp(receivers, preparedReceivers_) == 0
             && std::memcmp(destCounts_, counts, sizeof(nrOfLightsType) * n) == 0) return;
         stopSendTask();
-        std::memcpy(dest_, dest, sizeof(Host) * n);
+        std::memcpy(dest_, dest, sizeof(Receiver) * n);
         std::memcpy(destCounts_, counts, sizeof(nrOfLightsType) * n);
         nDest_ = n;
         preparedMode_ = mode();
-        std::snprintf(preparedHosts_, sizeof(preparedHosts_), "%s", hosts);
+        std::snprintf(preparedReceivers_, sizeof(preparedReceivers_), "%s", receivers);
     }
 
     /// Re-size the corrected buffer when the fixture profile changes the output channel count.
@@ -384,8 +389,8 @@ private:
     std::atomic<uint32_t> framePeriodUs_{0};   ///< written by the tick, read by the send task
     /// E1.31 component id, built once in setup() from the MAC so it is stable per device.
     uint8_t cid_[E131_CID_LENGTH] = {};
-    /// Destination hosts, derived in prepare() (never in tick()); a name's address is refreshed each second.
-    Host dest_[kMaxDestinations] = {};
+    /// Destination receivers, derived in prepare(), outside tick(); a name's address is refreshed each second.
+    Receiver dest_[kMaxDestinations] = {};
     /// Each destination's slice of the window, index-aligned with `dest_`.
     nrOfLightsType destCounts_[kMaxDestinations] = {};
     /// How many entries of `dest_` / `destCounts_` are live.
@@ -527,24 +532,24 @@ private:
         return protocol == kProtoE131 ? E131_PORT : protocol == kProtoDdp ? ddpPort : ARTNET_PORT;
     }
 
-    /// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing, then report.
-    void refreshHosts() {
+    /// Copy each named receiver's latest address in from the resolver, keeping the last one while it is busy or failing, then report.
+    void refreshReceivers() {
         if (nDest_ == 0) return;   // idle or refused: prepare's own status stands
         uint8_t waiting = 0;
         for (uint8_t d = 0; d < nDest_; d++) {
             if (!dest_[d].isName()) continue;
             char name[kMaxHostName + 1];
-            hostName(hosts, dest_[d], name);
+            receiverName(receivers, dest_[d], name);
             uint8_t ip[4];
-            const HostResolver::State st = HostResolver::lookup(name, ip);
-            if (st == HostResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
+            const NameResolver::State st = NameResolver::lookup(name, ip);
+            if (st == NameResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
             // Not while the task sends: an address it reads mid-copy would be half old, half new.
             const bool sending = sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle;
-            if (!sending && (st == HostResolver::State::Resolved || st == HostResolver::State::Stale)) std::memcpy(dest_[d].ip, ip, 4);
-            if (st == HostResolver::State::Waiting || st == HostResolver::State::Full) waiting++;
+            if (!sending && (st == NameResolver::State::Resolved || st == NameResolver::State::Stale)) std::memcpy(dest_[d].ip, ip, 4);
+            if (st == NameResolver::State::Waiting || st == NameResolver::State::Full) waiting++;
         }
         if (waiting) {
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u host%s not resolved yet", waiting, waiting == 1 ? "" : "s");
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u receiver%s not resolved yet", waiting, waiting == 1 ? "" : "s");
             setStatus(statusBuf_, Severity::Warning);
         } else if (mode() == Addressing::Multicast && NetworkPath::multicastDropped) {
             // A light stream never falls back to broadcast, which would flood every device on the LAN.
@@ -584,7 +589,7 @@ private:
         if (wasSending) startSendTask();
     }
     uint32_t taskStarts_ = 0;   ///< send-task starts, for taskStartsForTest
-    char preparedHosts_[sizeof(hosts)] = {};      ///< the host text the running destinations came from
+    char preparedReceivers_[sizeof(receivers)] = {};      ///< the receiver text the running destinations came from
     Addressing preparedMode_ = Addressing::Unicast;   ///< and the addressing
 };
 

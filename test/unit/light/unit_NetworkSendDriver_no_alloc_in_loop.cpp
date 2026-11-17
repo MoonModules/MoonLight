@@ -98,16 +98,16 @@ TEST_CASE("NetworkSendDriver keeps its send task running through a prepare that 
     REQUIRE(source.allocate(64, 3));
     mm::NetworkSendDriver driver;
     driver.setSourceBuffer(&source);
-    std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.1");
+    std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.1");
     driver.packetGap = 500;   // paced from its own task
     driver.applyState();
     REQUIRE(driver.taskStartsForTest() == 1);
     driver.applyState();
     CHECK(driver.taskStartsForTest() == 1);   // the stream runs on
-    std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "127.0.0.2");
+    std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.2");
     driver.applyState();
     CHECK(driver.taskStartsForTest() == 2);   // a new destination restarts it
-    std::snprintf(driver.hosts, sizeof(driver.hosts), "%s", "fpp.local");   // a name, whose address the resolver fills in
+    std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "fpp.local");   // a name, whose address the resolver fills in
     driver.applyState();
     REQUIRE(driver.taskStartsForTest() == 3);
     driver.applyState();

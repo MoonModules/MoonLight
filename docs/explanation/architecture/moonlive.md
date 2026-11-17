@@ -1,6 +1,6 @@
 # MoonLive
 
-Scripts compiled to native machine code on the device. An effect written as text in the browser runs at the speed of compiled code rather than an interpreter, on ESP32 and desktop alike.
+Scripts compiled to native machine code on the device. An effect written as text in the browser runs at the speed of compiled code rather than an interpreter, on ESP32 and host alike.
 
 The engine comes first, then how a script reaches the device, and last the one place the lifecycle does not yet fit.
 
@@ -49,7 +49,7 @@ The engine is a **domain-neutral core** with one narrow seam, structured as thre
 
 - **Front-end** (`src/core/moonlive/`, platform-independent): a recursive-descent lexer and parser over an expression grammar, where every function argument is an expression. It lowers each statement to a typed **[IR](../../../src/core/moonlive/MoonLiveIr.h)**, a flat list of three-address ops over virtual registers. The IR is the seam: it knows *operations*, never an ISA and never a domain. It is compile-time only, consumed during lowering and discarded, so it costs nothing at run time. The CPU executes only the final native instructions.
 - **Host builtin table** (the domain seam): the core owns no function names. A *host* registers `{name → descriptor}`, `setRGB`/`fill`/`random16` for LEDs (`src/light/moonlive/`), something else for a display or sensor. A descriptor is either a `Call` (a generic call to a host C function pointer, a pure helper like `random16`) or an `Inline` op (a neutral opcode tag the backend emits inline, a buffer writer, no per-pixel call). This is the ESPLiveScript / ARTI bound-function model; it is what keeps the core LED-free while the hot path stays inline. The LED *names* and the "an element is 3 RGB bytes" meaning live only in the light-domain registration and the per-ISA lowering, never in core.
-- **Per-ISA backend** (`src/platform/`, behind the boundary): a tiny named-instruction MacroAssembler in the textbook V8 and asmjit shape, plus the IR→bytes lowering within [the register budget](../../../src/core/moonlive/moonlive_emit.h) of the target. Xtensa (classic ESP32 / S3), RISC-V (P4), and the host ISA (desktop arm64/x86-64) each are *a new backend file behind the unchanged IR*. The front-end and IR never branch on ISA. Emitted code goes into an `allocExec` block (see [Platform abstraction](mooncore.md#platform-abstraction)) and is called each tick.
+- **Per-ISA backend** (`src/platform/`, behind the boundary): a tiny named-instruction MacroAssembler in the textbook V8 and asmjit shape, plus the IR→bytes lowering within [the register budget](../../../src/core/moonlive/moonlive_emit.h) of the target. Xtensa (classic ESP32 / S3), RISC-V (P4), and the host ISA (host arm64/x86-64) each are *a new backend file behind the unchanged IR*. The front-end and IR never branch on ISA. Emitted code goes into an `allocExec` block (see [Platform abstraction](mooncore.md#platform-abstraction)) and is called each tick.
 
 ## The domain seam
 
@@ -62,7 +62,7 @@ A recompile is the normal cold-path rebuild. Editing the `script` control routes
 ## The executable-memory seam
 
 Three platform functions carry every quirk of writing code a CPU will fetch.
-`allocExec` and `freeExec` take memory the core can execute from, which is IRAM on an ESP32 and an mmap page on desktop.
+`allocExec` and `freeExec` take memory the core can execute from, which is IRAM on an ESP32 and an mmap page on the host.
 `writeExec` copies emitted code in, which on an ESP32 means aligned stores plus an instruction-cache sync so the core fetches fresh code.
 The engine stays target-agnostic because all three live behind the platform boundary.
 

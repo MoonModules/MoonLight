@@ -1,4 +1,4 @@
-"""The Project mirror: the record an agent searching build/project.json relies on, and the documents it renders to docs/work/backlog_mirror/. Run: `uv run moondeck/test/test_host.py --python`."""
+"""The Project mirror: the record an agent searching build/project.json relies on, and the documents it renders to docs/work/backlog_mirror/. Run: `uv run moondeck/test/test_tooling.py --python`."""
 
 from project_mirror import FIELDS, REPO_URL, differences, missing_targets, normalize, relative_links, render, unstable_links
 

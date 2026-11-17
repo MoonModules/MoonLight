@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// The sprite ball is a member of the shared cast in SpriteCast.h, so a Pacman crossing the court runs the same code path as the fountain throwing one.
+/// The sprite ball is a member of the shared cast in SpriteCast.h, so a MoonMan crossing the court runs the same code path as the fountain throwing one.
 class PongEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight origin, a game.

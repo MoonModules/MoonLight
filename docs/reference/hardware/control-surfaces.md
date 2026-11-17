@@ -25,7 +25,7 @@ The larger of the Mackie desks, and the only desk here with a network port.
 **The Ethernet port carries RTP-MIDI, not OSC.** RTP-MIDI (RFC 6295, UDP port 5004) is MIDI tunneled over a network with a session layer: an invitation handshake and clock synchronization.
 The protocol's recovery journal is optional, and MoonLight sends none, so a packet lost on the wire stays lost.
 It is what the [MIDI service](../../moonmodules/core/services.md#midi)'s `network` source speaks.
-A desk that waits to be invited goes in `host`; for a desk that invites the device, `host` stays empty.
+A desk that waits to be invited goes in `participant`; for a desk that invites the device, `participant` stays empty.
 
 ## iCON QCon Pro G2
 

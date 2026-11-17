@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / "ci"))
-import package_desktop as pd  # noqa: E402
+import package_host as pd  # noqa: E402
 
 
 def staged(tmp_path, monkeypatch):
@@ -43,9 +43,9 @@ def test_the_package_carries_the_service_its_rollback_and_the_scripts_that_insta
 
 
 def test_the_menu_entry_opens_the_running_service_page(tmp_path, monkeypatch):
-    desktop = staged(tmp_path, monkeypatch)["_desktop"]
-    assert "Exec=xdg-open http://localhost:8080/" in desktop
-    assert "Terminal=false" in desktop
+    entry = staged(tmp_path, monkeypatch)["_desktop"]
+    assert "Exec=xdg-open http://localhost:8080/" in entry
+    assert "Terminal=false" in entry
 
 
 def test_the_service_runs_the_copy_its_user_owns_and_rolls_back_through_systemd():

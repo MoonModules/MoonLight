@@ -30,7 +30,7 @@
 ///
 /// ## Why the cadence and the frame count are fixed
 ///
-/// 20 ms a frame is the real tick20ms cadence, so the phase accumulators under test see the dt production gives them. A sub-millisecond desktop dt, which rounds to zero in a naive accumulator, cannot mask a bug.
+/// 20 ms a frame is the real tick20ms cadence, so the phase accumulators under test see the dt production gives them. A sub-millisecond host dt, which rounds to zero in a naive accumulator, cannot mask a bug.
 ///
 /// ## Why the frame count is not a handful
 ///

@@ -28,7 +28,7 @@ Supported: **ColorLight 5A-75** (5A-75B and 5A-75E use the same wire format).
 | HUB75 panels | Any size; you tell MoonLight the geometry later |
 | 5 V power supply | Sized from the panels' own rating: see the note on power in [§5](#5-power-wifi-and-the-status-line) |
 | Cat5e or Cat6 cable | Controller → the card's **input** port |
-| A controller | An ESP32 board ([§3](#3-pick-a-board)) or a desktop/Pi ([§6](#6-from-a-desktop)) |
+| A controller | An ESP32 board ([§3](#3-pick-a-board)) or a host/Pi ([§6](#6-from-a-host)) |
 | A gigabit switch | Only if your controller is a **P4 or an S3**, whose Ethernet is 100 Mbit: the switch lets the card negotiate a gigabit link on its own side and re-times the frames toward it. It does **not** make the controller faster: the 100 Mbit leg and its wire time ([§2](#the-one-hardware-fact-that-decides-everything)) remain, so a large wall still wants an S31. An **S31 is gigabit already** and connects straight to the card. |
 | A USB gigabit Ethernet dongle | Recommended on Windows. Not for MoonLight, which drives these cards fine from a built-in port, but for **LEDUpgrade**: if it cannot find the card through your built-in adapter, a dongle is the known way through. See [§7](#7-card-firmware-and-the-flicker). |
 
@@ -103,9 +103,9 @@ The failure when you do run short is not a clean one: the 5 V rail sags, and a s
 
 ---
 
-## 6. From a desktop
+## 6. From a host
 
-A PC, a Mac or a Raspberry Pi drives the same card with the same Layout and driver, for far more compute. Two things differ. `interface` must name the NIC the frames leave from. Raw Ethernet needs permission: sending below IP is privileged on every desktop OS, and without it the driver warns and *records* frames instead of sending them, which is also how the tests run with no hardware.
+A PC, a Mac or a Raspberry Pi drives the same card with the same Layout and driver, for far more compute. Two things differ. `interface` must name the NIC the frames leave from. Raw Ethernet needs permission: sending below IP is privileged on every host OS, and without it the driver warns and *records* frames instead of sending them, which is also how the tests run with no hardware.
 
 ### 6.1 Windows
 
@@ -192,16 +192,16 @@ A video: [Setting up a Colorlight Card with FPP v6.3 and LED Vision 8.5](https:/
 
 | Symptom | Look at |
 |---|---|
-| `no ethernet link` | On a desktop, check `interface` first: a string that matches no adapter fails the bind and reports exactly this, with nothing to distinguish it from an unplugged cable. Then cable seated, card powered, and plugged into the card's **input** port. On a 100 Mbit controller, try a gigabit switch in between. |
+| `no ethernet link` | On a host, check `interface` first: a string that matches no adapter fails the bind and reports exactly this, with nothing to distinguish it from an unplugged cable. Then cable seated, card powered, and plugged into the card's **input** port. On a 100 Mbit controller, try a gigabit switch in between. |
 | Status healthy, panels dark | The Layout, not the driver. If the wall is 0 lights, or the driver's window (`start`/`count`) selects none, there is nothing to send. |
-| Image tears or rolls | Link speed ([§2](#the-one-hardware-fact-that-decides-everything)). Check the status line says 1000 Mbit. On a desktop, a USB network adapter has been seen to tear where a built-in port does not. |
+| Image tears or rolls | Link speed ([§2](#the-one-hardware-fact-that-decides-everything)). Check the status line says 1000 Mbit. On a host, a USB network adapter has been seen to tear where a built-in port does not. |
 | Lit when cabled directly, dark through several switches | The frames are raw Ethernet, and the cards react badly to other traffic. Carry them in one VLAN: the first switch gives the untagged port from the controller a PVID, the switches pass it tagged between them, and the last strips the tag on the card's port. |
 | A new frame only every few seconds | `firmware` ([§7](#7-card-firmware-and-the-flicker)) is set to `v13 and newer` on a card running v12 or older. The duplicate sync latches twice and aborts the refresh. |
 | Flicker in time with network activity | The card's own v13 firmware defect ([§7](#7-card-firmware-and-the-flicker)), not the sender. Downgrade the card. |
 | Every other row or column mirrored | With a receiving card, this is the card's own panel configuration: revisit the data group order in LEDVision ([§8](#8-set-the-card-up-in-ledvision)). The layout's `snake` / `snakeP` apply only to walls wired as a pixel strip. |
 | Panels in the wrong places | Same: the chain order is set on the card. |
 | Right image, wrong colors | `fixture` on the driver, which is where channel order and RGBW synthesis live for every driver. There is no separate color-order control here. |
-| Works on ESP32, not on desktop | Permission ([§6](#6-from-a-desktop)). The driver shows a warning that says so. |
+| Works on ESP32, not on host | Permission ([§6](#6-from-a-host)). The driver shows a warning that says so. |
 | **PanelCard is not in the Drivers list** | The driver is compiled only into firmwares for boards with Ethernet (S3, P4, S31), so a classic-ESP32 build does not offer it. Only the S31 is gigabit; the S3 and P4 are 100 Mbit. Check the **Firmware** page for the variant and version you are running: an OTA upgrade keeps the installed variant, so a device first flashed with a different one keeps that one. Re-flash from the [web installer](https://moonmodules.org/MoonLight/install/) to change variant. |
 | **Link is up and packets are on the wire, but the wall stays dark** | The frames are leaving correctly, so the fault is downstream of the send. Check, in order: global **brightness** *and* the driver's own `localBrightness`, both of which must be up; a **layout** actually configured and an **effect** selected, since an empty layer sends valid black frames; and `format` / `firmware` matching the card ([§7](#7-card-firmware-and-the-flicker)). If all of that is right, remove the PanelCard driver and add it again: a re-add re-runs the bind and the geometry from scratch. |
 

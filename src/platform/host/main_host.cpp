@@ -1,0 +1,236 @@
+/// The process wrapper: signal handling, the exit path, and the call into the firmware.
+///
+/// Everything a host gives a program and a device does not, kept here so the firmware itself is the same code on both.
+
+#include <atomic>    // the stop flag
+#include <csignal>
+#include <cstdint>   // mm_main() takes uint16_t; <unistd.h> used to pull this in on POSIX
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <cstring>
+#include <initializer_list>   // sentSignal's SI_ codes
+#include <iterator>   // std::size: the crash signals' count from their one array
+
+#include "main.h"          // mm_main
+#include "stop_signal.h"   // stopOnSigterm
+#include "host_update.h"   // confirmProgramWhenStable
+#ifdef MM_MAC_SCREEN
+#include <thread>
+#include "main_thread.h"   // runMainThread
+#endif
+
+#ifdef _WIN32
+#include <io.h>      // _write
+#else
+#include <unistd.h>
+#endif
+
+
+// A lock-free atomic, which a signal handler may store ([support.signal]) and the app thread reads race-free, where a volatile sig_atomic_t holds within one thread only.
+static std::atomic<bool> running{true};
+static_assert(std::atomic<bool>::is_always_lock_free);
+static bool cleanExit = false;
+
+// Write a string literal to the error stream from a signal handler, its length taken from the array bound so it can never drift from the text.
+template <size_t N>
+static void safeWrite(const char (&s)[N]);
+
+// The length is passed rather than measured, since measuring it is not on the async-signal-safe list and taking it at the call site makes the guarantee real.
+static void safeWrite(const char* s, size_t len) {
+    while (len > 0) {
+#ifdef _WIN32
+        int n = ::_write(2 /* stderr fd */, s, static_cast<unsigned int>(len));
+#else
+        ssize_t n = ::write(STDERR_FILENO, s, len);
+#endif
+        if (n <= 0) break;
+        s += n; len -= static_cast<size_t>(n);
+    }
+}
+
+template <size_t N>
+static void safeWrite(const char (&s)[N]) { safeWrite(s, N - 1); }   // N-1: drop the NUL
+
+#ifndef _WIN32
+// The handlers installed before ours, restored before the re-raise, so the OS's own reporter still runs: Android's debuggerd writes its tombstone, elsewhere the previous one is the default and dumps core.
+static const int kCrashSignals[] = {SIGSEGV, SIGFPE, SIGBUS, SIGABRT};
+static struct sigaction previousCrashAction[std::size(kCrashSignals)];
+#endif
+
+static void reportCrash(int sig) {
+    // Name and length together: safeWrite takes an explicit length (strlen is not async-signal-safe), and these names are not all the same width.
+    const char* name = "SIGNAL"; size_t nameLen = 6;
+    if (sig == SIGSEGV)      { name = "SIGSEGV"; nameLen = 7; }
+    else if (sig == SIGABRT) { name = "SIGABRT"; nameLen = 7; }
+    else if (sig == SIGFPE)  { name = "SIGFPE";  nameLen = 6; }
+#ifdef SIGBUS
+    else if (sig == SIGBUS)  { name = "SIGBUS";  nameLen = 6; }
+#endif
+    safeWrite("\n*** CRASH: ");
+    safeWrite(name, nameLen);
+    safeWrite(" ***\n");
+}
+
+#ifdef _WIN32
+// Windows' signal() is one-shot and already restored SIG_DFL, so the re-raise is the OS's crash report.
+static void crashHandler(int sig) {
+    reportCrash(sig);
+    raise(sig);
+}
+#else
+// Whether no faulting instruction will raise the signal again on return: a sent one (POSIX's SI_ codes, which Linux numbers 0 and below and Darwin from 0x10001) or an asynchronous hardware report, as Linux's early memory-failure SIGBUS.
+static bool nothingToRepeat(const siginfo_t* info) {
+    if (info == nullptr || info->si_code <= 0) return true;
+    for (int code : {SI_USER, SI_QUEUE, SI_TIMER, SI_ASYNCIO, SI_MESGQ})
+        if (info->si_code == code) return true;
+#ifdef BUS_MCEERR_AO
+    if (info->si_signo == SIGBUS && info->si_code == BUS_MCEERR_AO) return true;
+#endif
+    return false;
+}
+// The previous handler comes back, then a fault returns and runs its instruction again, so the OS's reporter sees the real fault and its context; any other signal is raised again.
+static void crashHandler(int sig, siginfo_t* info, void*) {
+    reportCrash(sig);
+    for (size_t i = 0; i < std::size(kCrashSignals); i++)
+        if (kCrashSignals[i] == sig) sigaction(sig, &previousCrashAction[i], nullptr);   // sigaction is async-signal-safe
+    if (nothingToRepeat(info)) raise(sig);
+}
+#endif
+
+// Local time as an ISO-8601 stamp, thread-safely: `std::localtime` shares one static tm across threads (clang-tidy concurrency-mt-unsafe, CodeQL critical), and the reentrant form is spelled per platform, hence the branch.
+static void isoTimestamp(char* out, size_t n) {
+    const std::time_t t = std::time(nullptr);
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &t);        // MSVC: arguments reversed relative to POSIX
+#else
+    localtime_r(&t, &tm);
+#endif
+    std::strftime(out, n, "%Y-%m-%dT%H:%M:%S", &tm);
+}
+
+// Fires on std::exit(), distinguishes reboot (platform::reboot prints its own line first) from a genuine unexpected exit with no preceding crash signal.
+static void atExitHandler() {
+    if (!cleanExit) {
+        char tbuf[32];
+        isoTimestamp(tbuf, sizeof(tbuf));
+        std::fprintf(stderr, "*** process exited without clean shutdown at %s ***\n", tbuf);
+        std::fflush(stderr);
+    }
+}
+
+// Open the interface once the server is up, since a user launched from a file manager has no terminal to read an address from; best effort, as the banner printed it, and a flag opts out for a headless box.
+static void openLocalUi(uint16_t port) {
+    char url[64];
+    std::snprintf(url, sizeof(url), "http://localhost:%u/", static_cast<unsigned>(port));
+    char cmd[128];
+#if defined(_WIN32)
+    std::snprintf(cmd, sizeof(cmd), "start \"\" \"%s\"", url);
+#elif defined(__APPLE__)
+    std::snprintf(cmd, sizeof(cmd), "open \"%s\" >/dev/null 2>&1 &", url);
+#else
+    std::snprintf(cmd, sizeof(cmd), "xdg-open \"%s\" >/dev/null 2>&1 &", url);
+#endif
+    // Degrade visibly: a box without xdg-open, the headless case --no-browser is for, would leave the user waiting for a window; the URL is already on stdout, so this says only that the auto-open failed.
+    if (std::system(cmd) != 0) {
+        std::printf("  (could not open a browser automatically, open %s yourself)\n", url);
+    }
+}
+
+int main(int argc, char** argv) {
+    // --port N: the HTTP port. Defaults to 8080 because ports below 1024 need root on POSIX, but
+    // Home Assistant's WLED integration hardcodes port 80 with no way to specify another, so testing that path on host needs `sudo MoonLight --port 80`.
+    uint16_t httpPort = 8080;
+    bool openBrowser = true;
+    for (int i = 1; i < argc; i++) {
+        const bool isPort = std::strcmp(argv[i], "--port") == 0;
+        if (isPort && i + 1 < argc) {
+            // endptr check: "80abc" must be an error, not port 80, silently accepting a typo'd value binds the wrong port and the failure surfaces much later as "HA can't connect".
+            char* end = nullptr;
+            const long v = std::strtol(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || v <= 0 || v > 65535) {
+                std::printf("--port must be a number 1..65535, got \"%s\"\n", argv[i]);
+                return 1;
+            }
+            httpPort = static_cast<uint16_t>(v);
+        } else if (isPort) {
+            std::printf("--port needs a value\n"); return 1;
+        } else if (std::strcmp(argv[i], "--no-browser") == 0) {
+            openBrowser = false;
+        } else if (std::strcmp(argv[i], "--help") == 0) {
+            std::printf("usage: MoonLight [--port N] [--no-browser]\n"
+                        "  --port N       HTTP port (default 8080; 80 needs root)\n"
+                        "  --no-browser   do not open the UI on start\n");
+            return 0;
+        } else {
+            // An unknown argument is a user error, not noise to ignore: "--prot 80" silently running on 8080 is the same late-surfacing failure as the typo'd value.
+            std::printf("unknown argument \"%s\" — try --help\n", argv[i]);
+            return 1;
+        }
+    }
+    // Unbuffer so every line lands in MoonLight.log before a crash.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
+    mm::platform::confirmProgramWhenStable();   // a newly installed program proves itself by staying up, which ends its rollback window
+
+#ifdef _WIN32
+    // Winsock is initialized by a static RAII guard in platform_host.cpp, so it covers test binaries too (they link mm_platform but have their own main()).
+
+    // Windows has no sigaction: signal() is one-shot, restoring SIG_DFL on entry so a re-raise shows the OS crash dialog. No SIGPIPE there; a broken socket write returns an error from send(), which the code checks.
+    signal(SIGSEGV, crashHandler);
+    signal(SIGFPE,  crashHandler);
+    signal(SIGABRT, crashHandler);
+    // signal() is one-shot on Windows, so the handler is already reset after the first Ctrl+C and a second one force-quits: the same escalation SA_RESETHAND gives the POSIX branch below.
+    signal(SIGINT,  [](int) { running = false; });
+#else
+    struct sigaction sa{};
+    sa.sa_sigaction = crashHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    for (size_t i = 0; i < std::size(kCrashSignals); i++) sigaction(kCrashSignals[i], &sa, &previousCrashAction[i]);
+
+    // The first interrupt asks for a clean stop and restores the default handler, so a second kills a wedged shutdown outright rather than leaving the key dead and another terminal the only way out.
+    struct sigaction saInt{};
+    saInt.sa_handler = [](int) {
+        running = false;
+        // Say so, because the first press otherwise looks ignored while teardown runs. safeWrite, not printf: only async-signal-safe calls are legal in a handler.
+        safeWrite("\nStopping. Press Ctrl+C again to force quit.\n");
+    };
+    sigemptyset(&saInt.sa_mask);
+    saInt.sa_flags = SA_RESETHAND;
+    sigaction(SIGINT, &saInt, nullptr);
+
+    // The same clean stop for a service manager, so a HUB75 panel goes dark rather than freezing lit.
+    mm::platform::stopOnSigterm(running);
+
+    // Ignore SIGPIPE, write() on a closed TCP connection delivers it by default, which kills the process silently (no crash report) when a browser tab closes mid-response. We handle broken writes via return-value checks instead.
+    signal(SIGPIPE, SIG_IGN);
+#endif
+
+    std::atexit(atExitHandler);
+
+    char tbuf[32];
+    isoTimestamp(tbuf, sizeof(tbuf));
+    // The banner, the URL, then how to stop: this window is the app on a host, with no tray icon or GUI, and the tick lines below print for the first 60 s, then go quiet unless the log level asks.
+    std::printf("MoonLight started at %s\n", tbuf);
+    std::printf("\n  MoonLight is running: http://localhost:%u/\n", static_cast<unsigned>(httpPort));
+    std::printf("  Close this window (or press Ctrl-C) to stop.\n\n");
+
+    if (openBrowser) openLocalUi(httpPort);
+
+#ifdef MM_MAC_SCREEN
+    // AppKit serves windows only on the main thread, which the HDMI output's window needs, so MoonLight's loop runs on a thread of its own here.
+    std::atomic<bool> appDone{false};   // the loop's own flag, so no thread but a signal handler writes `running`
+    std::thread app([httpPort, &appDone] { mm_main(running, httpPort); appDone.store(true); });
+    mm::platform::runMainThread(appDone);
+    app.join();
+#else
+    mm_main(running, httpPort);
+#endif
+
+    cleanExit = true;
+    isoTimestamp(tbuf, sizeof(tbuf));
+    std::printf("MoonLight exited cleanly at %s\n", tbuf);
+    return 0;
+}

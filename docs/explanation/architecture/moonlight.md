@@ -162,7 +162,7 @@ The test: *would the Layer know to skip this?* If yes (an empty grid, a disabled
 
 **Effects render at every channel count.** An effect writes per channel, the way `draw::pixel` does (`if (write >= 1) …r; if (write >= 2) …g;`), so a light carries as much of the color as it has channels, RGB on three, R+G on two, R on one. Channels the effect doesn't set belong to the driver. Every light has at least one channel: `Layer::setChannelsPerLight` enforces that at the setter.
 
-**Effects must animate at every tick rate.** Per-tick phase math computed as `dt * bpm * K / 60000` truncates to 0 on devices where `dt < 234/bpm` ms: desktop ticks every 0–1 ms, so even bpm=60 freezes. The fix is to keep the raw `dt * bpm` numerator in the phase accumulator and divide only at the read site:
+**Effects must animate at every tick rate.** Per-tick phase math computed as `dt * bpm * K / 60000` truncates to 0 on devices where `dt < 234/bpm` ms: the host ticks every 0–1 ms, so even bpm=60 freezes. The fix is to keep the raw `dt * bpm` numerator in the phase accumulator and divide only at the read site:
 
 ```cpp
 phase_num_ += static_cast<uint64_t>(dt) * bpm;
@@ -171,7 +171,7 @@ uint8_t t = static_cast<uint8_t>((phase_num_ * 256) / 60000);
 
 See NoiseEffect / MetaballsEffect for the canonical pattern. Animation speed must depend only on `bpm` and wallclock, not on tick rate or grid size.
 
-**Everything that changes over time is driven by elapsed time, never by the frame count.** The rule above is one half of it, a phase that truncates to zero and freezes. The other half is the mirror image and as wrong: state advanced by a fixed amount *per frame* runs at whatever speed the hardware happens to render. The same gravity setting is an explosion on a desktop at 5,000 fps and a drift on an ESP32 at 470. This applies to every per-frame quantity, more than phase: a force, a velocity, a trail fade, a decay, a drop rate, a simulation step. The user sets a speed; the hardware must not get a vote.
+**Everything that changes over time is driven by elapsed time, never by the frame count.** The rule above is one half of it, a phase that truncates to zero and freezes. The other half is the mirror image and as wrong: state advanced by a fixed amount *per frame* runs at whatever speed the hardware happens to render. The same gravity setting is an explosion on a host at 5,000 fps and a drift on an ESP32 at 470. This applies to every per-frame quantity, more than phase: a force, a velocity, a trail fade, a decay, a drop rate, a simulation step. The user sets a speed; the hardware must not get a vote.
 
 **A faster device renders the same motion more smoothly, not more motion.** Quantising to a fixed 60 Hz and skipping the frames in between is wrong here: it discards the smoothness those extra frames were rendered for. Instead scale the work by the fraction of a reference frame that elapsed, so a device rendering ten times as fast takes ten steps a tenth the size: the same trajectory at ten times the resolution. `particles::FrameTime` is the shared implementation (8.8 fixed point, 256 = one reference frame, whose rate is the constructor's `referenceHz`, 60 by default). It carries the undivided numerator and divides late, for the same reason `BeatPhase` does. One unit is a fraction of a millisecond, so a remainder held in whole milliseconds cannot represent it and the truncated time, which differs by render rate, becomes a framerate dependency of its own.
 
@@ -244,7 +244,7 @@ Each driver (a MoonModule) speaks one protocol:
 - **LED drivers**: WS2812 over RMT for multi-pin output, plus one DMA-driven parallel driver, [ParallelLedDriver](../../moonmodules/light/drivers.md#parallelled). Its `peripheral` control picks the backend the chip supports: the `i80` bus, our own-GDMA MoonI80, or the P4's Parlio. The `i80` bus is LCD_CAM on the S3, P4 and S31, and the classic ESP32's I2S peripheral in i80 mode, which is that chip's only route past 8 lanes; IDF's `esp_lcd` picks the backend per chip. MoonI80 adds the streaming ring and the 74HCT595 expander. All are DMA-driven and behind the platform boundary; the driver rounds an i80 bus up around whatever pin count is configured (any count from 1) and parks unused lanes on a pin already driven.
 - **DMX / ArtNet**: sends DMX over UDP. Supports addressable LEDs and conventional DMX fixtures (pars, moving heads, dimmers).
 - **Preview**: streams light data to the web UI via WebSocket.
-- **Desktop output**: SDL2 or terminal for visual preview. Desktop also serves as a high-speed processing node, driving lights via ArtNet/DDP over the network.
+- **Host output**: SDL2 or terminal for visual preview. The host also serves as a high-speed processing node, driving lights via ArtNet/DDP over the network.
 
 Each driver child reads from the Drivers container's output buffer. Everything before the Drivers container is platform-independent.
 
@@ -265,16 +265,16 @@ The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types o
 
 ## Multicast and IGMP snooping
 
-Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../../src/core/util/Addressing.h), and a service offers the modes its protocol allows under one control, `addressing`, with `hosts` as its unicast list:
+Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../../src/core/util/Addressing.h), and a service offers the modes its protocol allows under one control, `addressing`, with `receivers` as its unicast list:
 
 | | modes | why |
 |---|---|---|
-| Audio sync | multicast `239.0.0.2` for the MoonLight format and `239.0.0.1` for WLED's, or unicast to `hosts` | WLED's usermod sends and receives on its group, and the MoonLight format has its own, so a WLED device never wakes for a packet it cannot read; unicast reaches a few MoonLight boards faster on WiFi |
+| Audio sync | multicast `239.0.0.2` for the MoonLight format and `239.0.0.1` for WLED's, or unicast to `receivers` | WLED's usermod sends and receives on its group, and the MoonLight format has its own, so a WLED device wakes only for packets it can read; unicast reaches a few MoonLight boards faster on WiFi |
 | Device discovery | multicast `239.255.77.77` plus broadcast by default | WLED announces and listens on the discovery port by broadcast |
-| OSC feedback | unicast to `hosts`, multicast, multicast plus broadcast | one desk driving several boards |
+| OSC feedback | unicast to `receivers`, multicast, multicast plus broadcast | one desk driving several boards |
 | Art-Net, E1.31, DDP output | unicast; E1.31 multicast; Art-Net broadcast | multicast is sACN's native mode, broadcast Art-Net's legacy one |
 
-**Unicast to a list** is N separate copies, each retried by WiFi at full speed. It works on every network, and it is the cheapest way to reach a handful of known receivers. A host may be a name, resolved in the background so the render thread never waits on DNS.
+**Unicast to a list** is N separate copies, each retried by WiFi at full speed. It works on every network, and it is the cheapest way to reach a handful of known receivers. A receiver may be a name, resolved in the background so the render thread keeps its pace while DNS answers.
 
 **Broadcast** reaches every device on the subnet. Each one takes the interrupt, walks up the stack, finds nothing listening on the port and discards the packet. At LED frame rates that is real work imposed on every phone, laptop and printer on the LAN.
 

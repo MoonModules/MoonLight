@@ -432,8 +432,8 @@ struct Svc {
 
 
 def test_a_lead_may_name_several_clips_each_with_its_title():
-    _, fields = gen_help.block_tags("Lead.\n@video a.webm On a desktop.\n@video b.webm On a\ndevice.")
-    assert fields["video"] == ["a.webm On a desktop.", "b.webm On a device."]
+    _, fields = gen_help.block_tags("Lead.\n@video a.webm On a host.\n@video b.webm On a\ndevice.")
+    assert fields["video"] == ["a.webm On a host.", "b.webm On a device."]
 
 
 def test_a_controls_comment_is_its_line_and_its_guide_line_its_more():

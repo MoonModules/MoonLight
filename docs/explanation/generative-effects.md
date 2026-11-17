@@ -213,7 +213,7 @@ Anything that integrates its own state needs its input to keep changing: rotate 
 
 ### Step at a fixed rate
 
-A simulation stepped once per rendered frame runs at whatever speed the hardware delivers: 16x faster on a desktop at 1200 fps than on a device at 60. An effect that reads well on a panel is then unusable on a bench.
+A simulation stepped once per rendered frame runs at whatever speed the hardware delivers: 16x faster on a host at 1200 fps than on a device at 60. An effect that reads well on a panel is then unusable on a bench.
 
 Accumulate elapsed time and step a fixed amount (16 ms works), capping the catch-up so a stall cannot spend a second of frames at once. Everything that moves goes inside that loop, including trail fades: a fade outside it makes trail length depend on frame rate even when the motion does not.
 

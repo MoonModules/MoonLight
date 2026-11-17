@@ -1,7 +1,7 @@
 /// @module SdCardService
 /// @also I2cBusModule
 
-/// `hasSdCard` is true on the desktop, so these tests run the real mount, remount and format against a temp-dir `/sd`, the card being runtime configuration like AudioService's mic pins.
+/// `hasSdCard` is true on the host, so these tests run the real mount, remount and format against a temp-dir `/sd`, the card being runtime configuration like AudioService's mic pins.
 
 #include "doctest.h"
 #include "core/services/SdCardService.h"
@@ -76,8 +76,8 @@ void selectBoard(SdCardService& sd, const char* label) {
     const auto* c = find(sd, "board");
     REQUIRE(c != nullptr);
     const auto* opts = reinterpret_cast<const char* const*>(c->aux);
-    for (uint8_t k = 0; k < c->max; k++)
-        if (std::strcmp(opts[k], label) == 0) *static_cast<uint8_t*>(c->ptr) = k;
+    for (int32_t k = 0; k < c->max; k++)   // as wide as the bound it counts to
+        if (std::strcmp(opts[k], label) == 0) *static_cast<uint8_t*>(c->ptr) = static_cast<uint8_t>(k);
     sd.rebuildControls();
 }
 
@@ -143,15 +143,15 @@ TEST_CASE("pins that match a board preset open on its name rather than on Custom
     CHECK(boardOf(sd) == "P4 SDMMC");
 }
 
-// Asked per chip rather than per build, since a host test runs as the desktop, which previews every preset.
+// Asked per chip rather than per build, since a host test runs as the host, which previews every preset.
 namespace {
 using Chip = SdCardService::SdPresetChip;
 constexpr SdCardService::SdChip kClassic{false, true, false, false}, kP4{false, false, true, false}, kS3{false, false, false, false},
-                               kTeensy{false, false, false, true}, kDesktop{true, true, false, false};
+                               kTeensy{false, false, false, true}, kHost{true, true, false, false};
 }  // namespace
 
 TEST_CASE("each chip offers only the SD board presets it can wire") {
-    for (const auto& chip : {kClassic, kP4, kS3, kDesktop}) CHECK(SdCardService::presetFits(Chip::Any, chip));
+    for (const auto& chip : {kClassic, kP4, kS3, kHost}) CHECK(SdCardService::presetFits(Chip::Any, chip));
     CHECK(SdCardService::presetFits(Chip::P4, kP4));
     CHECK_FALSE(SdCardService::presetFits(Chip::P4, kClassic));
     CHECK_FALSE(SdCardService::presetFits(Chip::P4, kS3));        // an S3 or S31 has no board preset
@@ -161,16 +161,16 @@ TEST_CASE("each chip offers only the SD board presets it can wire") {
     CHECK(SdCardService::presetFits(Chip::Teensy, kTeensy));
     for (Chip c : {Chip::Classic, Chip::P4}) CHECK_FALSE(SdCardService::presetFits(c, kTeensy));
     CHECK_FALSE(SdCardService::presetFits(Chip::Teensy, kClassic));
-    for (Chip c : {Chip::Classic, Chip::P4, Chip::Teensy}) CHECK(SdCardService::presetFits(c, kDesktop));   // the desktop previews them all
+    for (Chip c : {Chip::Classic, Chip::P4, Chip::Teensy}) CHECK(SdCardService::presetFits(c, kHost));   // the host previews them all
 }
 
-// Every P4 board with a slot wires the same pins, so a P4 opens on that preset; a classic has two to choose from, an S3 none, and the desktop previews them all.
+// Every P4 board with a slot wires the same pins, so a P4 opens on that preset; a classic has two to choose from, an S3 none, and the host previews them all.
 TEST_CASE("a P4 opens on its one SD board preset, every other build on Custom") {
     CHECK(SdCardService::opensOnSolePreset(kP4));
     CHECK(SdCardService::opensOnSolePreset(kTeensy));   // the 4.1's own socket
     CHECK_FALSE(SdCardService::opensOnSolePreset(kClassic));
     CHECK_FALSE(SdCardService::opensOnSolePreset(kS3));
-    CHECK_FALSE(SdCardService::opensOnSolePreset(kDesktop));
+    CHECK_FALSE(SdCardService::opensOnSolePreset(kHost));
 }
 
 TEST_CASE("an SPI preset sets the bus, warns about long writes once mounted, and the mount needs its CS") {

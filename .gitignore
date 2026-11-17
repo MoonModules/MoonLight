@@ -43,7 +43,7 @@
 /build/
 /build-*/
 
-# Packaging output from moondeck/build/package_desktop.py — the .tar.gz / .zip
+# Packaging output from moondeck/build/package_host.py — the .tar.gz / .zip
 # bundles attached to GitHub releases. CI is the authoritative producer
 # (release.yml on tag/main push); local runs are scratch for dev verification.
 # Never commit these — they bloat the repo and can drift from source.

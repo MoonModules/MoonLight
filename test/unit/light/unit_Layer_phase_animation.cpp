@@ -14,7 +14,7 @@
 
 #include <vector>
 
-// Regression: per-tick phase accumulators computed `dt * bpm * 256 / 60000`, which truncates to 0 on desktop where dt ≈ 0..1 ms, the animations froze.
+// Regression: per-tick phase accumulators computed `dt * bpm * 256 / 60000`, which truncates to 0 on host where dt ≈ 0..1 ms, the animations froze.
 // Fix accumulates the raw (dt*bpm) numerator and only divides at the read site.
 // These tests pin animation across a short time gap for every affected effect.
 
@@ -59,11 +59,11 @@ bool animates_over_ms(int total_ms) {
 } // namespace
 
 // Metaballs visibly changes over 100ms even when per-tick dt is sub-millisecond (no phase-accumulator truncation).
-TEST_CASE("MetaballsEffect animates over a 100ms gap (desktop dt ≈ 0..1ms)") {
+TEST_CASE("MetaballsEffect animates over a 100ms gap (host dt ≈ 0..1ms)") {
     CHECK(animates_over_ms<mm::MetaballsEffect>(100));
 }
 
-// SpiralEffect advances at desktop speed (the spiral rotates across 100ms).
+// SpiralEffect advances at host speed (the spiral rotates across 100ms).
 TEST_CASE("SpiralEffect animates over a 100ms gap") {
     CHECK(animates_over_ms<mm::SpiralEffect>(100));
 }

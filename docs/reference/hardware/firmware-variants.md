@@ -25,7 +25,7 @@ Selected by `build_esp32.py --firmware <key>`, reported by `SystemModule.firmwar
 | ESP32 + OPI PSRAM | 2-8 MB | Many layers, 10K+ LEDs |
 | ESP32, no PSRAM | ~320 KB internal | Full pipeline: double buffering, mapping, blending, parallelism. Proven up to 16K lights (128x128 measured live on an Olimex Gateway) |
 | Teensy 4.x | 1 MB internal, no PSRAM | Comfortable headroom for several layers; DMA-based LED output (OctoWS2811). Ethernet built-in on 4.1 |
-| Desktop / RPi | Abundant | No constraints |
+| Host / RPi | Abundant | No constraints |
 
 ## Degradation cascade
 

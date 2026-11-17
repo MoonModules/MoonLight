@@ -34,7 +34,7 @@ Effects read through `PictureService::Reader`, which holds the picture still for
 **What a picture source brings:**
 
 - its option and its row on the Picture service's spec card;
-- a unit test that drives it on the desktop with a stand-in for the device;
+- a unit test that drives it on the host with a stand-in for the device;
 - the platform seam for the device itself, with stubs on every other platform.
 
 The thread-safety of the swap is already pinned by the service's own tests, a writer task racing a reader.

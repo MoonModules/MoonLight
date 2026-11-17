@@ -222,7 +222,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 class HttpServerModule : public MoonModule, public BinaryBroadcaster {
 public:
     /// The port the server listens on.
-    /// @guide 8080 on the desktop and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: @xref{the-served-port-is-not-the-port-control|how}.
+    /// @guide 8080 on the host and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: @xref{the-served-port-is-not-the-port-control|how}.
     uint16_t port = 8080;
 
     /// The scheduler every control write is applied through.
@@ -815,9 +815,9 @@ private:
     /// The child module a delete or replace may act on: found, not top-level, and one the user can remove.
     OpResult editableChild(const char* moduleName, MoonModule*& mod);
     void sendPreflightResponse(platform::TcpConnection& conn);
-    /// Serve one UI file: from disk on a desktop checkout, else its embedded copy with its tag, or a 304 when the request already holds it.
+    /// Serve one UI file: from disk on a host checkout, else its embedded copy with its tag, or a 304 when the request already holds it.
     void serveFile(platform::TcpConnection& conn, const ui::EmbeddedFile& file, const char* ifNoneMatch = nullptr);
-    /// Serve `name` from the platform's UI folder, a desktop running from a checkout; false when there is no such file, always on a device.
+    /// Serve `name` from the platform's UI folder, a host running from a checkout; false when there is no such file, always on a device.
     bool serveUiFromDisk(platform::TcpConnection& conn, const char* name);
 
     /// A file body is not a control value, so the File Manager has its own vetted endpoints, `/api/file` and `/api/dir`. @xref{the-rest-api}
@@ -848,10 +848,10 @@ private:
     static void writeControl(JsonSink& sink, const ControlDescriptor& c);
     /// The flags after a control's value and extras, and its closing brace.
     static void writeControlTail(JsonSink& sink, const ControlDescriptor& c);
-    /// For a hosts text, the boards the device list knows among its entries, as `"known":{entry: counterpart}`.
-    static void writeKnownHosts(JsonSink& sink, const char* text);
-    /// The entries alone, between the braces writeKnownHosts writes.
-    static void writeKnownHostEntries(JsonSink& sink, const char* text);
+    /// For a receivers text, the boards the device list knows among its entries, as `"known":{entry: counterpart}`.
+    static void writeKnownReceivers(JsonSink& sink, const char* text);
+    /// The entries alone, between the braces writeKnownReceivers writes.
+    static void writeKnownReceiverEntries(JsonSink& sink, const char* text);
     /// Emit a module's status and severity where set, shared so the two endpoints stay in sync.
     static void writeStatus(JsonSink& sink, MoonModule* mod);
 
@@ -932,7 +932,7 @@ private:
     bool readImageUrl(platform::TcpConnection& conn, const char* body, char (&url)[kMaxImageUrl + 2], bool coprocessorDefault);
     /// A SHA-256 written out with one character to spare and the terminator.
     static constexpr size_t kDigestText = 66;
-    /// Read the image's digest from `body`, which a desktop checks before it installs its new program, empty when none is named; false after answering 400.
+    /// Read the image's digest from `body`, which a host checks before it installs its new program, empty when none is named; false after answering 400.
     bool readDigest(platform::TcpConnection& conn, const char* body, char (&sha256)[kDigestText]);
     /// Stage `url` for MoonBase and reboot into it, which installs it and boots the app again.
     void installThroughMoonBase(platform::TcpConnection& conn, const char* url);

@@ -1,12 +1,12 @@
 name: Test
 
-# Fast host-side unit tests for the Python (MoonDeck / build scripts) and JS (web installer) code that the C++ unit and scenario suites can't reach. Runs on every PR and on pushes to main, scoped to the paths these tests cover so a docs-only or pure-firmware change doesn't spend a runner here.
+# Fast tooling unit tests for the Python (MoonDeck / build scripts) and JS (web installer) code that the C++ unit and scenario suites can't reach. Runs on every PR and on pushes to main, scoped to the paths these tests cover so a docs-only or pure-firmware change doesn't spend a runner here.
 #
 # Today this pins the Improv frame wire format (test/python + test/js assert a
 # shared golden vector so the device C++, Python, and JS builders can't drift).
 # New Python/JS unit suites land under test/python and test/js and run here.
 
-# Paths cover every input to the host-side tests: the Python/JS sources under test
+# Paths cover every input to the tooling tests: the Python/JS sources under test
 # (scripts, mooninstaller), the test files themselves, AND the device-side C++ frame
 # contract (src/core/Improv*.h + the platform handler) — a wire-format change in the
 # firmware must run the cross-language golden-vector tests so it can't drift from the
@@ -59,9 +59,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v3
-      # The command the commit gate runs, its test dependencies named once in test_host.py.
-      - name: the Python host tests
-        run: uv run moondeck/test/test_host.py --python --junit-dir results
+      # The command the commit gate runs, its test dependencies named once in test_tooling.py.
+      - name: the Python tooling tests
+        run: uv run moondeck/test/test_tooling.py --python --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
@@ -74,13 +74,13 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v3
       # Node's built-in test runner, no npm install, through the command the commit gate runs.
-      - name: the JavaScript host tests
-        run: uv run moondeck/test/test_host.py --js --junit-dir results
+      - name: the JavaScript tooling tests
+        run: uv run moondeck/test/test_tooling.py --js --junit-dir results
       # Each failing test annotated where it fails, and the counts in the job summary, through workflow commands: no token, so a fork's pull request gets them too.
       - if: always()
         run: uv run moondeck/ci/github_annotations.py --junit results/*.xml
 
-  # A backup from before config files were state documents, restored onto the desktop app the way the File Manager's Restore does, with
+  # A backup from before config files were state documents, restored onto the host app the way the File Manager's Restore does, with
   # two other clients reading it meanwhile: every value back and the report clean, or the job fails.
   restore:
     runs-on: ubuntu-latest
@@ -92,8 +92,8 @@ jobs:
       - uses: ./.github/actions/ccache
         with:
           key: restore
-      - name: build the desktop app
-        run: uv run moondeck/build/build_desktop.py
+      - name: build the host app
+        run: uv run moondeck/build/build_host.py
       # The script starts the app on an empty data folder, restores, stops it, and prints the app's log on a failure.
       - name: restore a flat backup onto it
         run: uv run moondeck/scenario/run_restore_live.py --launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2

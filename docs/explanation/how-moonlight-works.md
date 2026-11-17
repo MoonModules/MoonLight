@@ -26,7 +26,7 @@ What a device adds on a freshly flashed board, and the same interface on a compu
 
 <video src="../assets/moontube/02-first-look-esp32.webm" controls playsinline width="720" title="Each part of a freshly flashed board and what a device adds: an LED driver on a pin, the I2C bus, the pins, a microphone, and updates over the air"></video>
 
-<video src="../assets/moontube/02-first-look-desktop.webm" controls playsinline width="720" title="A tour of the interface: every module, and what sits inside each one."></video>
+<video src="../assets/moontube/02-first-look-host.webm" controls playsinline width="720" title="A tour of the interface: every module, and what sits inside each one."></video>
 
 ---
 

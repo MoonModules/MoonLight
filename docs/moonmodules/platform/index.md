@@ -1,10 +1,10 @@
 # Platform
 
-The one interface every module reaches hardware through. Core and the light domain call these names and never a vendor SDK, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
+The one interface every module reaches hardware through. Core and the light domain call these names and never a vendor SDK, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a host.
 
 Why the boundary is drawn here, and what is allowed to cross it, is [MoonCore's platform abstraction](../../explanation/architecture/mooncore.md#platform-abstraction). This page is the reference half: what the interface offers, and where each target implements it.
 
-`platform.h` declares the interface; `desktop/`, `esp32/` and `teensy/` implement it. A module that needs something the interface does not offer gets a new function here rather than an `#ifdef` at the call site, which is what keeps the domains target-blind.
+`platform.h` declares the interface; `host/`, `esp32/` and `teensy/` implement it. A module that needs something the interface does not offer gets a new function here rather than an `#ifdef` at the call site, which is what keeps the domains target-blind.
 
 ## Time
 
@@ -20,13 +20,13 @@ Source: [platform.h](../../../src/platform/platform.h)
 
 ## Executable memory
 
-`allocExec`, `writeExec`, `freeExec`. Memory a CPU will fetch instructions from, which is IRAM on an ESP32 and an mmap page on desktop. [MoonLive](../light/moonlive.md) compiles into it; nothing else does.
+`allocExec`, `writeExec`, `freeExec`. Memory a CPU will fetch instructions from, which is IRAM on an ESP32 and an mmap page on the host. [MoonLive](../light/moonlive.md) compiles into it; nothing else does.
 
 Source: [platform.h](../../../src/platform/platform.h)
 
 ## Filesystem
 
-`fsMount`, `fsRead`, `fsWrite`, `fsList`, `fsExists`, `fsMkdir`. LittleFS on a device and `std::filesystem` on desktop, behind one set of names, so a config file and a script are read the same way on both.
+`fsMount`, `fsRead`, `fsWrite`, `fsList`, `fsExists`, `fsMkdir`. LittleFS on a device and `std::filesystem` on the host, behind one set of names, so a config file and a script are read the same way on both.
 
 Source: [platform.h](../../../src/platform/platform.h)
 
@@ -44,7 +44,7 @@ Source: [platform.h](../../../src/platform/platform.h)
 
 ## Tasks and workers
 
-RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On desktop these are threads; the contract is identical.
+RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On the host these are threads; the contract is identical.
 
 Source: [platform.h](../../../src/platform/platform.h)
 
@@ -56,7 +56,7 @@ Source: [platform.h](../../../src/platform/platform.h)
 
 ## Three implementations, one contract
 
-`src/platform/desktop/`, `src/platform/esp32/` and `src/platform/teensy/` implement the same declarations. The desktop one exists so the whole system runs, is tested and is developed without hardware, which is what makes the desktop-first rule possible.
+`src/platform/host/`, `src/platform/esp32/` and `src/platform/teensy/` implement the same declarations. The host one exists so the whole system runs, is tested and is developed without hardware, which is what makes the host-first rule possible.
 
 The MoonLive assemblers live here too, one per instruction set, because emitting machine code is the most target-specific thing the system does. The engine and its lowering stay in core; only the encoding is per target.
 
@@ -65,9 +65,9 @@ The MoonLive assemblers live here too, one per instruction set, because emitting
 | [moonlive_asm_xtensa](../../../src/platform/esp32/moonlive_asm_xtensa.h) | classic ESP32 and S3 |
 | [moonlive_asm_riscv](../../../src/platform/esp32/moonlive_asm_riscv.h) | ESP32-P4 |
 | [moonlive_asm_thumb2](../../../src/platform/teensy/moonlive_asm_thumb2.h) | Teensy 4.1 |
-| [moonlive_asm_host](../../../src/platform/desktop/moonlive_asm_host.h) | desktop arm64 and x86-64 |
+| [moonlive_asm_host](../../../src/platform/host/moonlive_asm_host.h) | host arm64 and x86-64 |
 
-Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [desktop](../../../src/platform/desktop/platform_config.h), [ESP32](../../../src/platform/esp32/platform_config.h), which carries the per-chip capability table, and [Teensy 4.1](../../../src/platform/teensy/platform_config.h).
+Each satisfies the assembler contract [the lowering](../light/moonlive.md) names, so adding an instruction set is a new file behind an unchanged IR. Per-target build settings are in each target's own `platform_config`: [host](../../../src/platform/host/platform_config.h), [ESP32](../../../src/platform/esp32/platform_config.h), which carries the per-chip capability table, and [Teensy 4.1](../../../src/platform/teensy/platform_config.h).
 Two headers serve every target: [the Ethernet wiring](../../../src/platform/eth_config.h) each config's default is written in, and [the loopback bit check](../../../src/platform/loopback_verify.h) every LED self-test ends in.
 
 ## What does not belong here

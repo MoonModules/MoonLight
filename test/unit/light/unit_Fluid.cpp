@@ -136,7 +136,7 @@ TEST_CASE("a grid too small to have an interior is refused rather than half-buil
 // The release path.
 // MoonModule::release() frees every ScratchBuffer a module registered, and it runs whenever the module or an ancestor is disabled.
 // The re-enable only REQUESTS a prepare for the next scheduler loop, and Layer::tick runs every child whose enabled flag is set, so one frame can tick between the release and the prepare that rebuilds the grids.
-// That frame crashed the desktop with a null dye plane (2026-09-05).
+// That frame crashed the host with a null dye plane (2026-09-05).
 // The solver and the effect both read readiness from their buffers now.
 
 TEST_CASE("a fluid whose grids were released reports itself not ready, and resizing to the same shape rebuilds them") {

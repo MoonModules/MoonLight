@@ -18,7 +18,7 @@ Saves to (by domain/type, mirroring src):
   docs/assets/light/{modifiers,layouts,drivers}/  — other light modules
   docs/assets/core/<TypeName>.png                 — core modules
   docs/assets/ui/ui_overview.png                  : MoonLight full-page screenshot
-  docs/assets/ui/moondeck_{desktop,esp32,live}.png     — MoonDeck tabs
+  docs/assets/ui/moondeck_{host,esp32,live}.png    : MoonDeck tabs
   docs/assets/ui/installer.png                    — web installer page
 
 Usage:
@@ -45,8 +45,8 @@ Prerequisites (one-time, machine-local — NOT in the repo or the venv):
        and repo transfers — if it's "missing" it was simply never installed here.
 
 Running server: the script captures against whatever is on --host (default
-:8080). Start ONE fresh server:  uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight
-(or via MoonDeck's Desktop tab — same per-host build dir, so they share the binary). GOTCHA: a leftover binary on :8080 captures the WRONG
+:8080). Start ONE fresh server:  uv run moondeck/build/build_host.py && ./build/<host>/MoonLight
+(or via MoonDeck's Host tab — same per-host build dir, so they share the binary). GOTCHA: a leftover binary on :8080 captures the WRONG
 images silently, e.g. a `build/macos/MoonLight` from a MoonDeck run still bound
 to the port serves the OLD code, so a renamed/changed effect screenshots as its
 previous version no matter how often you rebuild. The script now prints a STALE
@@ -202,7 +202,7 @@ MODULES = [
     # Drivers
     ("NetworkSendDriver",    "Drivers",  {}, False),
     ("PreviewDriver",       "Drivers",  {}, False),
-    # The desktop build links every driver (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a runtime the user installs, PWM wants LEDC. The card and its controls are what a screenshot is for, and those are real on any host.
+    # The host build links every driver (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a runtime the user installs, PWM wants LEDC. The card and its controls are what a screenshot is for, and those are real on any host.
     # The two LED drivers, each its own card: they share only `pins` and `ledsPerPin`, and a
     # screenshot of one describes the other's controls wrongly.
     ("RmtLedDriver",        "Drivers",  {}, False),
@@ -247,7 +247,7 @@ CORE_MODULES = [
     "MoonTalkModule",
     "TasksModule",
     "PinsModule",
-    # Present only in an ESP32 tree (services / provisioning) — skipped on desktop
+    # Present only in an ESP32 tree (services / provisioning): skipped on host
     # (not in state); capture these against a board when needed.
     "ImprovProvisioningModule",
     "AudioService",
@@ -282,7 +282,7 @@ CORE_NAV_ROOT = {
     "ImprovProvisioningModule": "NetworkModule",
     # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in
-    # the desktop tree — so they're captured against an ESP32, where these entries route the
+    # the host tree: so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
     "AudioService": "Services",
     "PictureService": "Services",
@@ -317,11 +317,11 @@ INSTALLER_URL  = "http://localhost:8000"
 
 EXTRA_SHOTS = [
     (
-        "moondeck_desktop.png",
-        f"{MOONDECK_URL}/?tab=desktop",
+        "moondeck_host.png",
+        f"{MOONDECK_URL}/?tab=host",
         ".tab-content.active",
         ["README.md", "moondeck/MoonDeck.md"],
-        "## Desktop Tab",
+        "## Host Tab",
     ),
     (
         "moondeck_esp32.png",
@@ -477,7 +477,7 @@ def push_script(host: str, name: str) -> bool:
     """Copy one script from the repo onto the device, so a capture needs no hand-copied file.
 
     A scripted module captures an empty card reading "script not found" unless the script it
-    names is on the device, and the desktop build's filesystem is a build directory nothing
+    names is on the device, and the host build's filesystem is a build directory nothing
     in the repo seeds. Pushing here keeps the run self-contained: check out, build, capture.
 
     Byte-exact through /api/file, the same request the File Manager's upload makes.
@@ -683,7 +683,7 @@ def check_server_freshness(host: str) -> None:
         print("      The running binary is older than the current source. Most likely a")
         print("      second MoonLight (a stale build/<host>/MoonLight) is still on :8080.")
         print("      Fix:  pkill -f MoonLight  then rebuild + run ONE server:")
-        print("        uv run moondeck/build/build_desktop.py && ./build/<host>/MoonLight")
+        print("        uv run moondeck/build/build_host.py && ./build/<host>/MoonLight")
 
 
 # ---------------------------------------------------------------------------
@@ -978,7 +978,7 @@ def main() -> int:
             _get(f"http://{args.host}/api/state", timeout=3)
         except Exception as e:
             print(f"Cannot reach MoonLight at {args.host}: {e}")
-            print("Start the server first: uv run moondeck/moondeck.py  (then build+run from Desktop tab)")
+            print("Start the server first: uv run moondeck/moondeck.py  (then build+run from Host tab)")
             return 1
 
     # Module-related state, only meaningful when MoonLight is reachable.
@@ -1032,7 +1032,7 @@ def main() -> int:
         missing = [r for r in ("Layer", "Drivers", "Layouts") if r not in parents]
         if missing:
             print(f"Pipeline containers not found: {missing}")
-            print("Build and run MoonLight first (Desktop tab → Build → Run).")
+            print("Build and run MoonLight first (Host tab → Build → Run).")
             return 1
 
         # Undo what a run cut short against this host added and changed, by the ledger it kept: @see LEDGER.

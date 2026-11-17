@@ -755,7 +755,7 @@ def build_dir_for(firmware: str) -> Path:
     Each firmware variant gets its own subdir of ``<ROOT>/build/`` so multiple
     variants can coexist on disk; switching firmwares no longer forces a
     clean rebuild. The ``esp32-`` prefix namespaces ESP32 firmware keys away
-    from desktop targets (``build/macos/``, ``build/linux/``,
+    from host targets (``build/macos/``, ``build/linux/``,
     ``build/windows/``) that share the same root. Common-patterns rationale:
     CMake / idf.py ``-B <dir>`` is the documented mechanism for parallel
     build dirs; the bespoke choice here is just the naming.

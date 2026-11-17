@@ -68,7 +68,7 @@ TEST_CASE("Layer: buffer persists across frames (no per-frame clear)") {
     CHECK(s.layer.buffer().data()[0] == 255);
 }
 
-// A trail decays with TIME, not with frames. Ticking repeatedly inside the same millisecond therefore fades almost nothing: the frames are real (a fast device draws the motion more smoothly) but no time has passed for the decay to spend. This is the property that makes a tail the same length on a 470 fps board and a 140,000 fps desktop, and it is the whole reason the Layer scales the requested rate rather than applying it once per frame.
+// A trail decays with TIME, not with frames. Ticking repeatedly inside the same millisecond therefore fades almost nothing: the frames are real (a fast device draws the motion more smoothly) but no time has passed for the decay to spend. This is the property that makes a tail the same length on a 470 fps board and a 140,000 fps host, and it is the whole reason the Layer scales the requested rate rather than applying it once per frame.
 TEST_CASE("a trail decays with elapsed time, not with the frame count") {
     Scene s(4, 4);
     WriteOnceEffect once;
@@ -167,7 +167,7 @@ TEST_CASE("a scripted effect fades its layer the way a compiled one does") {
     CHECK(after > 0);                            // and asked for a half fade, not a wipe
 }
 
-// What a trail actually IS, and the trap behind it: the buffer persists, so a fade applied EVERY frame decays a pixel by the frame rate, not by the motion. A desktop renders thousands of frames while a slow dot sits in one pixel, so a per-frame fade erases the tail long before the dot moves and the effect reads as "no trail" though every part works. A script that fades only when its subject MOVES gets the same trail on any renderer.
+// What a trail actually IS, and the trap behind it: the buffer persists, so a fade applied EVERY frame decays a pixel by the frame rate, not by the motion. A host renders thousands of frames while a slow dot sits in one pixel, so a per-frame fade erases the tail long before the dot moves and the effect reads as "no trail" though every part works. A script that fades only when its subject MOVES gets the same trail on any renderer.
 TEST_CASE("a trail survives many frames when the script fades only as it moves") {
     Scene s(4, 4);
     WriteOnceEffect once;

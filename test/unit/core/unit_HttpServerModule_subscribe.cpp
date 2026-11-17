@@ -342,7 +342,7 @@ struct Served {
 }  // namespace
 
 TEST_CASE("the full state streams as one fragmented message that reassembles to the subscribed document") {
-    // A board whose largest block is 16 KB takes 2 KB fragments; a desktop's would hold this tree in one.
+    // A board whose largest block is 16 KB takes 2 KB fragments; a host's would hold this tree in one.
     struct Block { Block() { mm::platform::setTestMaxAllocBlock(16384); } ~Block() { mm::platform::setTestMaxAllocBlock(0); } } block;
     Served sv;
     WsClient c{sv.http, {}, {}};

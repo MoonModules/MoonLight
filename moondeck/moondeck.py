@@ -155,7 +155,7 @@ def gates(base: str | None = None, every: bool = False, with_model: bool = False
     model = walk_model()
     if model is None:
         return {"error": "gen_moonwalk failed; its error is in this console"}
-    # A step's card is the one whose own call it is, else the first card for its script: Compile Tests runs `build_desktop.py --tests`, not Build.
+    # A step's card is the one whose own call it is, else the first card for its script: Compile Tests runs `build_host.py --tests`, not Build.
     by_call, by_script = {}, {}
     for c in SCRIPTS:
         by_call.setdefault(card_call(c), c["id"])
@@ -318,7 +318,7 @@ def _probe_device(ip, port=8080, timeout=0.4):
             return {
                 # `mac` is the stable device IDENTITY (per-chip, survives DHCP IP changes); the merge
                 # keys on it. `ip` is just the current location — omit the port when it's HTTP's
-                # default (80, the ESP32 devices), keep a non-default port (8080, the desktop build).
+                # default (80, the ESP32 devices), keep a non-default port (8080, the host build).
                 "mac": mac,
                 "ip": ip if port == 80 else f"{ip}:{port}",
                 "deviceName": device_name,
@@ -474,7 +474,7 @@ def discover_devices(subnet=""):
     if not subnet:
         subnet = _get_local_subnet()
 
-    # .1-.254 on port 80 (ESP32) and 8080 (desktop), plus localhost.
+    # .1-.254 on port 80 (ESP32) and 8080 (host), plus localhost.
     targets = [(f"{subnet}.{i}", port)
                for i in range(1, 255) for port in (80, 8080)]
     targets.append(("localhost", 8080))
@@ -2800,7 +2800,7 @@ document.addEventListener("click", function(e) {{
 
     def _serve_static(self):
         """Serve files from moondeck_ui/ and docs/assets/."""
-        # Strip query string before resolving path (e.g. /?tab=desktop → /)
+        # Strip query string before resolving path (e.g. /?tab=host → /)
         raw = self.path.split("?", 1)[0].lstrip("/")
         path = raw if raw else "index.html"
 

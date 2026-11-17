@@ -4,7 +4,7 @@
 ///
 /// @technical
 ///
-/// Four DMA peripherals do one job off-device, holding a frame, so the desktop backs them all with one heap buffer and the assertions are written once.
+/// Four DMA peripherals do one job off-device, holding a frame, so the host backs them all with one heap buffer and the assertions are written once.
 ///
 /// ## Why the buffers must appear in the memory readout
 ///

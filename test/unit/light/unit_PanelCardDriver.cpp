@@ -1,7 +1,7 @@
 /// @module PanelCardDriver
 /// @also Drivers, Correction
 
-/// End-to-end tests for the raw-Ethernet panel driver. The desktop platform records every frame ethSendRaw() emits instead of putting it on a wire, so these pin what the driver would actually send, the geometry, the chunking, and the sync-last ordering, with no hardware and no privileges. The bench then only has to confirm the wire itself.
+/// End-to-end tests for the raw-Ethernet panel driver. The host platform records every frame ethSendRaw() emits instead of putting it on a wire, so these pin what the driver would actually send, the geometry, the chunking, and the sync-last ordering, with no hardware and no privileges. The bench then only has to confirm the wire itself.
 
 #include "doctest.h"
 #include "light/drivers/PanelCardDriver.h"

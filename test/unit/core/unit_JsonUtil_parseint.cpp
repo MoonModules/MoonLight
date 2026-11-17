@@ -38,7 +38,7 @@ TEST_CASE("a value too large to represent reads as the fallback instead of wrapp
     // The boundaries themselves still convert.
     CHECK(parseIntStr("2147483647") == INT_MAX);
     CHECK(parseIntStr("-2147483648") == INT_MIN);
-    // One past each boundary: a 64-bit `long` (desktop) holds it and only the INT_MAX compare rejects it; a 32-bit one (ESP32) saturates with ERANGE.
+    // One past each boundary: a 64-bit `long` (host) holds it and only the INT_MAX compare rejects it; a 32-bit one (ESP32) saturates with ERANGE.
     CHECK(parseIntStr("2147483648", -1) == -1);
     CHECK(parseIntStr("-2147483649", -1) == -1);
 }

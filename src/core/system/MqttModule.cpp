@@ -71,7 +71,7 @@
 /// An empty payload therefore means "install latest", falling back to this build's own version so the command re-installs the current release rather than silently doing nothing.
 /// A leading `v` is stripped because the template can send either shape, and the URL is built from `kReleaseAssetUrlFormat` naming both repositories so a rename cannot strand it.
 /// It hands off to `platform::http_fetch_to_ota`, the same OTA path `POST /api/firmware/url` takes, and `otaInFlight()` guards a second install mid-flash rather than corrupting the running task.
-/// On desktop that platform call is a stub returning false, so the install safely reports failure via `g_otaStatus`, and HA polls the retained state rather than any reply.
+/// On host that platform call is a stub returning false, so the install safely reports failure via `g_otaStatus`, and HA polls the retained state rather than any reply.
 ///
 /// ## Sending never blocks the render loop
 ///

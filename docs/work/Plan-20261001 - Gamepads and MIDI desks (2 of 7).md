@@ -2,7 +2,7 @@
 
 ## Why
 
-The arcade effects (Pong, Breakout, Space Invaders) play themselves. With a controller in hand they become games, which is what makes them worth standing in front of at an event. A motorized MIDI desk such as the Behringer X-Touch or the iCON QCon Pro G2 is the same wish from the performer's side: physical faders and knobs that drive the show, and that move by themselves when the show changes.
+The arcade effects (Pong, Breakout, MoonInvaders) play themselves. With a controller in hand they become games, which is what makes them worth standing in front of at an event. A motorized MIDI desk such as the Behringer X-Touch or the iCON QCon Pro G2 is the same wish from the performer's side: physical faders and knobs that drive the show, and that move by themselves when the show changes.
 
 ## What already exists
 
@@ -20,10 +20,10 @@ Everything this needs on the receiving side is built. The plan adds transports a
 
 - Pong: `player1` and `player2`, the paddle positions, 0 to 255.
 - Breakout: `player`, the paddle position.
-- Space Invaders: `player`, the cannon position, and `fire`, one shot in the air at a time as in the arcade.
+- MoonInvaders: `player`, the cannon position, and `fire`, one shot in the air at a time as in the arcade.
 - All are live controls. While the game plays itself it writes its own positions into them, so an assigned fader or encoder follows the paddle.
 - Any write through `setControl` hands that player to a person; ten seconds without one hands it back, so an installation never stands idle. The rule lives once, in `PlayerSeat`.
-- Wiring with what exists: a ControlModule fader assigned to `PongEffect.player1`, an `AnalogService` potentiometer onto that fader (a pot is the 1972 paddle), two `ButtonService` rows with Delta ±16 for left and right, a Set row onto `SpaceInvadersEffect.fire`.
+- Wiring with what exists: a ControlModule fader assigned to `PongEffect.player1`, an `AnalogService` potentiometer onto that fader (a pot is the 1972 paddle), two `ButtonService` rows with Delta ±16 for left and right, a Set row onto `MoonInvadersEffect.fire`.
 - A DIY controller needs nothing more: a gamepad's buttons wired to GPIOs are `ButtonService` rows, and a stick is two `AnalogService` channels.
 
 Also on this branch, from the same session: the Breakout effect (self-playing, the arcade's speed-ups and paddle halving, `descend` for a creeping wall, an audio-reactive wall that glows per band), a Pong score with first-to-11, independent paddles and `size` shown only with `spriteBall`, the beat-driven balls removed from Pong and Breakout, and Tetrix's stack drawn again with a per-run seed and staggered starts.
@@ -210,7 +210,7 @@ It replaces OSC `follow`: the bridge device turns into a plain MIDI cable with n
 
 - ✅ **`RtpMidi.h`**, the codec, beside `UsbMidi.h` and `OscPacket.h`: the AppleMIDI session packets (`IN`, `OK`, `NO`, `BY`, `CK`) and the RTP-MIDI data packet, its MIDI list read with delta times and running status, a journal skipped, and sent with no journal.
 - ✅ **`RtpMidiSession`**, one session over two UDP sockets, the control port and the next one up for data (5004 and 5005): it accepts an invitation, or invites a host with retries, and keeps the clock sync running, so a peer that goes silent ends the session and an inviter invites again.
-- ✅ **`MidiService` source `network`**, beside browser and USB: `host` is the bridge or the X-Touch, with an optional `:port`, and the service invites it; with `host` empty it waits to be invited, as a Mac's Audio MIDI Setup does. The greeting, the desk state and the changed-slot sending are the USB path's, shared through one desk link for both ports.
+- ✅ **`MidiService` source `network`**, beside browser and USB: `participant` is the bridge or the X-Touch, with an optional `:port`, and the service invites it; with `participant` empty it waits to be invited, as a Mac's Audio MIDI Setup does. The greeting, the desk state and the changed-slot sending are the USB path's, shared through one desk link for both ports.
 - ✅ **`share`** on the MIDI service, with `source` USB: the desk on the bridge device's USB port is reachable as an RTP-MIDI session, a message at a time both ways, driving no surface there. A device waiting to be invited announces itself over Bonjour (`_apple-midi._udp`), so `host` takes a name. A desk's own SysEx is not passed on, as the USB path already does; the host's greeting SysEx is.
 - ✅ **Removed:** OSC `follow`, the follower's greeting, its half-second hold-off, ControlModule's remote pad grid and `Seed::None`, and `ControlSurface::sendPress`. A pad's state goes out over OSC on `/mm/padstate/N`, apart from the press on `/mm/pad/N`, so no device reads a state as a press, and the Open Stage Control session lights its pads from it. `/mm/hello` stays, since Open Stage Control asks with it.
 - ✅ **Device models:** the MIDI-OSC bridge becomes the MIDI bridge (its MIDI service sharing the desk); a follower is OSC `listen` on the leader's `feedbackPort`.

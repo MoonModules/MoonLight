@@ -300,7 +300,7 @@ bool adcReadMv(uint8_t gpio, uint16_t& mv) {
     return true;
 }
 
-// The test seams are desktop-only: on a board the pins are real, and a test that wants to inject a level has the hardware to do it.
+// The test seams are host-only: on a board the pins are real, and a test that wants to inject a level has the hardware to do it.
 void setTestGpioLevel(uint8_t, bool) {}
 void clearTestGpioLevel() {}
 void setTestAdcValue(uint8_t, uint16_t) {}

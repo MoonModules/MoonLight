@@ -36,14 +36,14 @@ TEST_CASE("a report is due only after the user consents") {
 /// A device serving its own access point sends nothing.
 ///
 /// `inApMode()` consults the platform rather than a cached flag, so there is no copy to go stale.
-/// The desktop stub answers false, so this pins the FALSE branch: with no AP, a consented device has a report due.
-/// The true branch belongs on a board, a state the desktop cannot enter, so the honest thing is to say so rather than write an assertion that holds either way.
+/// The host stub answers false, so this pins the FALSE branch: with no AP, a consented device has a report due.
+/// The true branch belongs on a board, a state the host cannot enter, so the honest thing is to say so rather than write an assertion that holds either way.
 TEST_CASE("with no access point, a consented device has a report due") {
     mm::MoonStatsModule stats;
     stats.setup();
     stats.defineControls();
 
-    REQUIRE_FALSE(stats.inApMode());        // the desktop stub: never its own AP
+    REQUIRE_FALSE(stats.inApMode());        // the host stub: never its own AP
 
     stats.setConsent(true);
     CHECK(stats.reportDue());

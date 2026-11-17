@@ -163,7 +163,7 @@ The caller then advects its own dye along the finished field with `draw::advect1
 
 **Q16.16 throughout, not float.** The render path is integer by contract, and a fluid is the hardest case for it: `project` solves a linear system by relaxation, so an error a float would absorb accumulates over iterations. Sixteen fraction bits is what makes the pressure solve converge at all, where eight would quantize the gradient to nothing on a slow flow.
 
-The cost is per cell per iteration across several passes, so this is a desktop and P4 effect; an S3 runs it on a small grid or not at all. [fluid.h](../../../src/light/powerfunctions/fluid.h) is the implementation.
+The cost is per cell per iteration across several passes, so this is a host and P4 effect; an S3 runs it on a small grid or not at all. [fluid.h](../../../src/light/powerfunctions/fluid.h) is the implementation.
 
 ## Transport
 
@@ -237,7 +237,7 @@ Storage is structure-of-arrays over the caller's own buffers, so a pass that tou
 
 Frame order matters and is the caller's to get right: forces, then `collide()`, then `step()`, then walls, then `age()`, then `render()`. Collisions run *before* the move because resolving an overlap afterwards can shove a particle through a wall the bounce pass already checked.
 
-**Time is scaled, not quantised.** A pool advanced by a fixed amount each frame has physics that belong to the hardware: the desktop renders tens of thousands of frames a second and an ESP32 a few hundred, so one gravity setting is an explosion on one and a drift on the other. Running a fixed 60 Hz simulation and skipping the frames between is the obvious fix and the wrong one for a light effect, because it throws away exactly the smoothness those extra frames were rendered for.
+**Time is scaled, not quantised.** A pool advanced by a fixed amount each frame has physics that belong to the hardware: the host renders tens of thousands of frames a second and an ESP32 a few hundred, so one gravity setting is an explosion on one and a drift on the other. Running a fixed 60 Hz simulation and skipping the frames between is the obvious fix and the wrong one for a light effect, because it throws away exactly the smoothness those extra frames were rendered for.
 
 So every force and velocity is expressed per reference frame (1/60 s), and `FrameTime::scale()` reports how much of a reference frame this one covered, in 8.8 fixed point: 256 at exactly 60 fps, 26 at 600 fps, and 2048 after a sixteen-frame stall, which is the eight-reference-frame ceiling `advance()` caps a long stall to. A faster device takes many small steps where a slow one takes a few large ones: the same trajectory, at more resolution along it.
 

@@ -57,7 +57,7 @@ TEST_CASE("a Teensy image without its vector table, without a MoonLight mark, or
 
 TEST_CASE("the built Teensy image passes every check, when the build tree has one") {
     const std::filesystem::path bin = mm::sourceRoot() / "build/teensy41/MoonLight.bin";
-    if (!std::filesystem::exists(bin)) return;   // a tree that never built the Teensy, as on the desktop CI jobs
+    if (!std::filesystem::exists(bin)) return;   // a tree that never built the Teensy, as on the host CI jobs
     std::ifstream f(bin, std::ios::binary);
     const std::vector<uint8_t> img((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     REQUIRE(img.size() > mm::firmware::kTeensyIvtOffset);

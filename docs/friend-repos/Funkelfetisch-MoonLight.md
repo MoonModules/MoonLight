@@ -34,7 +34,7 @@ One fork commit, on a new branch cut from our `main` late in the month.
 - **An optional BLE control transport** (`codex/moonlight-ble-transport`, 2026-10-25, 399 added lines across ten files): an encrypted control channel for a controller outside WiFi range.
 - The peripheral is a native NimBLE one with GATT attributes for identity, state and commands, and pairing with persistent bonds.
 - A bounded 512-byte line reassembler applies backpressure and recovers after rejected input, and the exchange with the scheduler is non-blocking.
-- The caller owns startup, identity and request dispatch. Desktop, Teensy and BLE-disabled ESP32 builds share one stub, and shipping firmware defaults are unchanged.
+- The caller owns startup, identity and request dispatch. Host, Teensy and BLE-disabled ESP32 builds share one stub, and shipping firmware defaults are unchanged.
 - Provenance: the commit message says the hardware test ran on the HELIO prototype before the transport was extracted, and that Codex wrote the contribution at the author's request.
 - Status: offered to this project the same evening as [MoonModules/MoonLight#158](https://github.com/MoonModules/MoonLight/pull/158), open at month end.
 - **Branches:** `codex/moonlight-ble-transport` is new (2026-10-25), based on our `main` at `abcdaec9` with one commit on top. Nothing else moved: `codex/helio-private-wip` stays at 2026-08-21 and `main` at 2026-07-09.
@@ -78,7 +78,7 @@ _Checked: commits on `main` for author-date 2026-07-01..2026-08-01 (2, both upst
 
 ## June 2026
 
-- **Gyro / IMU input**, an MPU6050 accelerometer and gyroscope read over I2C, publishing angular rate plus pitch and roll as read-only values, with a desktop simulation so the interface shows live numbers without the hardware attached.
+- **Gyro / IMU input**, an MPU6050 accelerometer and gyroscope read over I2C, publishing angular rate plus pitch and roll as read-only values, with a host simulation so the interface shows live numbers without the hardware attached.
 
 - **Branches:** `feature/gyro_module` (06-05). No other branch activity.
 

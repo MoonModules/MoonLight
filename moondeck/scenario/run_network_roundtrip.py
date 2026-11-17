@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Measure desktop→device→desktop round-trip latency per protocol on the checked boards.
+"""Measure host→device→host round-trip latency per protocol on the checked boards.
 
-The simplest honest latency probe: the desktop sends one solid-color frame to a
+The simplest honest latency probe: the host sends one solid-color frame to a
 device, then times how long until that color shows up in the device's preview
-WebSocket stream. The path is desktop → device's NetworkReceiveEffect (writes the
-layer buffer) → PreviewDriver (broadcasts the buffer over /ws) → desktop. It sweeps
+WebSocket stream. The path is host → device's NetworkReceiveEffect (writes the
+layer buffer) → PreviewDriver (broadcasts the buffer over /ws) → host. It sweeps
 all three protocols — ArtNet, E1.31, DDP — per device (the receiver autodetects
 each on its own port, so no reconfig between them), and prints a per-device
 median-per-protocol comparison. Runs against every device CHECKED in MoonDeck's
@@ -157,7 +157,7 @@ def run_one(host: str, repeats: int, timeout_s: float) -> bool:
         any_ok = False
         summary = []
         for proto in PROTOCOLS:
-            print(f"  {proto}: desktop→device→desktop round-trip ({repeats} probes)…", flush=True)
+            print(f"  {proto}: host→device→host round-trip ({repeats} probes)…", flush=True)
             latencies = measure_roundtrip(host, repeats, timeout_s, proto)
             if not latencies:
                 print(f"    no {proto} frame came back", flush=True)

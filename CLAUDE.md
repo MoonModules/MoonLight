@@ -66,11 +66,11 @@ The product owner is the critical success factor. They review every line before 
 
 ## Working rhythm
 
-**Desktop first, always**: [Build and test on the desktop](docs/moonwalk.md#desktop-build-test).
+**Host first, always**: [Build and test on the host](docs/moonwalk.md#host-build-test).
 
 **ESP32 build: when the work needs it. Flash: only when the product owner approves.** A build runs without asking when a gate finds the firmware stale or a platform change needs compiling for a board, never for an interesting measurement. Writing a board waits for the product owner's go, every time.
 
-**Desktop build and test: only as a prerequisite to continue.** A build earns its place when the next step cannot happen without it. Not after every edit.
+**Host build and test: only as a prerequisite to continue.** A build earns its place when the next step cannot happen without it. Not after every edit.
 
 **Ask before running anything slow**: full scenario sweeps, gate lists, repo-wide sweeps, `collect_kpi`. Run the cheapest thing that answers the question, and say what the expensive one is and why before asking for it.
 
@@ -92,7 +92,7 @@ Every activity is a [MoonWalk](docs/moonwalk.md) process, the one home of its st
 | `07-maintain.yaml` | Updates, moves, backups, finding faults and reporting them. |
 | `08-integrate.yaml` | A script, a program or a hub driving a device over its API. |
 | `09-plan-setup.yaml` | A picked topic on its own branch, on a computer set up to build it. |
-| `10-develop.yaml` | The change written and proven on the desktop. |
+| `10-develop.yaml` | The change written and proven on the host. |
 | `11-hardware.yaml` | The change built, flashed and running on a board or a Teensy. |
 | `12-test.yaml` | The change pinned by tests, scenarios and live runs. |
 | `13-document-commit.yaml` | The change documented, checked and committed. |
@@ -110,7 +110,7 @@ An agent reads the process before acting on it, and its memory points to the pro
 
 ### Build and test
 
-Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md), [desktop first](docs/moonwalk.md#desktop-build-test), then [on hardware](docs/moonwalk.md#esp32-build-flash). **Every task is one MoonDeck script, and the script is the contract**: [the desktop process](docs/moonwalk.md#desktop-build-test), the scripts in [MoonDeck.md](moondeck/MoonDeck.md). New behavior is pinned before it ships, and every discovered crash becomes a test: [Add a test](docs/moonwalk.md#add-test). **Scenarios record**, and a number that moves without a reason in the diff is explained before committing: [Run a scenario](docs/moonwalk.md#run-scenario).
+Implement against [the architecture](docs/explanation/architecture/index.md) and [coding-standards.md](docs/contributing/coding-standards.md), [host first](docs/moonwalk.md#host-build-test), then [on hardware](docs/moonwalk.md#esp32-build-flash). **Every task is one MoonDeck script, and the script is the contract**: [the host process](docs/moonwalk.md#host-build-test), the scripts in [MoonDeck.md](moondeck/MoonDeck.md). New behavior is pinned before it ships, and every discovered crash becomes a test: [Add a test](docs/moonwalk.md#add-test). **Scenarios record**, and a number that moves without a reason in the diff is explained before committing: [Run a scenario](docs/moonwalk.md#run-scenario).
 
 ### Document
 

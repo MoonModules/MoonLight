@@ -15,9 +15,9 @@
 ///
 /// The conversion reports out of range rather than saturating, because a caller that narrows the result would otherwise store a different valid number.
 /// Two checks are needed because they cover different targets.
-/// On a desktop a huge value lands inside the wide type, so only the range compare rejects it.
+/// On a host a huge value lands inside the wide type, so only the range compare rejects it.
 /// On a device that compare is dead code, and the library's own saturation is the only signal.
-/// Testing one alone passes on the desktop and silently returns the maximum on the target this exists to protect.
+/// Testing one alone passes on the host and silently returns the maximum on the target this exists to protect.
 ///
 /// Trailing text is deliberately allowed, a value often being followed by a comma or a brace, so only the leading characters decide.
 ///

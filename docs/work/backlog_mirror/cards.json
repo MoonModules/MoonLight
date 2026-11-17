@@ -370,6 +370,16 @@
   "number": null
  },
  {
+  "title": "Renames migrate on the first page load after an update, within a two-release window",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=308167371",
+  "number": null
+ },
+ {
   "title": "Runtime board presets (multi-commit, partially landed)",
   "area": "Core",
   "module": "",
@@ -910,7 +920,7 @@
   "number": null
  },
  {
-  "title": "A real 2D/3D PacMan",
+  "title": "A real 2D/3D MoonMan maze",
   "area": "Effects",
   "module": "",
   "kind": "Feature",
@@ -1540,6 +1550,16 @@
   "number": null
  },
  {
+  "title": "MoonLight on iPhone and iPad: an interpreter backend for MoonLive, then the iOS app",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=307951024",
+  "number": null
+ },
+ {
   "title": "Move more devices to MoonLight over WiFi (2026-10-09)",
   "area": "Platform",
   "module": "",
@@ -1707,16 +1727,6 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086933",
-  "number": null
- },
- {
-  "title": "A gate runner that runs each commit check once, on its own inputs",
-  "area": "Process and docs",
-  "module": "",
-  "kind": "",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306095198",
   "number": null
  },
  {

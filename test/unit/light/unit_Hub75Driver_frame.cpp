@@ -1,7 +1,7 @@
 /// @module Hub75Driver
 /// @also Correction
 
-/// Hub75Driver's tick, pinned down to the bit planes without a panel. The desktop's HUB75 port, opened by the test (`setTestHub75` in platform.h), hands the driver one frame as the ESP32 port does, and each case compares it with what the encoder makes of the colors the panel should show.
+/// Hub75Driver's tick, pinned down to the bit planes without a panel. The host's HUB75 port, opened by the test (`setTestHub75` in platform.h), hands the driver one frame as the ESP32 port does, and each case compares it with what the encoder makes of the colors the panel should show.
 
 #include "doctest.h"
 #include "light/drivers/Hub75Driver.h"
@@ -116,7 +116,7 @@ void rewire(Rig& r, const mm::ChannelRole* roles, uint8_t count) {
 
 }  // namespace
 
-TEST_CASE("Hub75Driver on a desktop refuses with the cause, as on a chip without the silicon") {
+TEST_CASE("Hub75Driver on a host refuses with the cause, as on a chip without the silicon") {
     auto r = rig();
     r->driver.applyState();
     r->driver.prepare();

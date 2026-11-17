@@ -606,7 +606,7 @@ public:
         if (shouldSplit && !renderSplitActive_) {
             renderSplitActive_ = true;
             startEncodeTask();                 // spawns the task (at boot it parks in waitNotify)
-            // Keeping a buffer nothing composites into would freeze every driver on the last frame.
+            // An identity layer needs the shared buffer only for the split, so the inline path gives its memory and its copy back.
             if (!renderSplitActive_ && !needOutput) {
                 outputBuffer_.free();
                 setDynamicBytes(outputBuffer_.bytes());
@@ -680,8 +680,8 @@ public:
             wired->copyWiringFrame(outputBuffer_.data(), outputBuffer_.bytes(), !wiredLast_);
             return;
         }
-        // A mapped layer goes through its LUT; an identity one is copied only for the split, as core 1 must not read a buffer core 0 is mutating.
-        if (srcLayer && (srcLayer->lut().hasLUT() || renderSplitActive_))
+        // The drivers read this buffer whenever it exists, so it is filled whenever it exists: through the LUT, or copied for the split and for a split a stalled worker dropped to inline.
+        if (srcLayer)
             blendMap(srcLayer->buffer(), outputBuffer_, srcLayer->lut(), srcLayer->channelsPerLight());
     }
 

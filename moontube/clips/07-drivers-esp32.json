@@ -1,6 +1,6 @@
 {
   "name": "07-drivers-esp32",
-  "description": "What carries the frame out of a device: the LED pins only real hardware has, the panel protocols, and the network senders it shares with a desktop.",
+  "description": "What carries the frame out of a device: the LED pins only real hardware has, the panel protocols, and the network senders it shares with a host.",
   "speed": 1.8,
   "voice": "cori",
   "requires": "audio",
@@ -161,7 +161,7 @@
     {
       "action": "delete_module",
       "module": "{net}",
-      "caption": "Those and the Hue bridge behave the same on a device as on a desktop, and the video senders need a P4 or a computer, so the drivers clip on the computer shows them in full.",
+      "caption": "Those and the Hue bridge behave the same on a device as on a host, and the video senders need a P4 or a computer, so the drivers clip on the computer shows them in full.",
       "speech": 13.6
     },
     {

@@ -51,7 +51,7 @@ test("the resolution order prefers the explicit link over the saved habit", () =
         "the new key is preferred over the pre-rename one");
     assert.match(src, /urlParam\("device"\)\s*\?\?\s*saved/,
         "?device= outranks both saved keys");
-    // Resolved ONCE per mount: render() runs again on every setDesktopMode() toggle, and
+    // Resolved ONCE per mount: render() runs again on every setHostMode() toggle, and
     // re-resolving there re-applied the link over a device the visitor picked afterwards.
     assert.match(src, /if \(!state\.deviceResolved\)/,
         "the link is a default applied once, not a standing instruction on every render");

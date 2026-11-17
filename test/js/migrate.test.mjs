@@ -301,7 +301,7 @@ test("AudioSpectrum's saved levelBar comes back as readouts", () => {
     assert.ok(!("levelBar" in spectrum), "the old key must be gone");
 });
 
-test("the receiver lists become hosts, and discovery's WLED switch becomes its addressing", () => {
+test("the receiver lists become receivers, and discovery's WLED switch becomes its addressing", () => {
     const drivers = { enabled: true, "0.type": "NetworkSendDriver", "0.ips": "192.168.1.70-74", "0.lightsPerIp": "100" };
     const network = { enabled: true, "0.type": "DevicesModule", "0.wledCompatible": true, "1.type": "OscModule", "1.feedbackTo": "192.168.1.147" };
     const { files } = applyMigrations({
@@ -309,11 +309,27 @@ test("the receiver lists become hosts, and discovery's WLED switch becomes its a
         "/.config/Network.json": JSON.stringify(network),
     });
     const [send] = kids(rootOf(files, "/.config/Drivers.json"), "NetworkSendDriver");
-    assert.equal(send.hosts, "192.168.1.70-74");
-    assert.equal(send.lightsPerHost, "100");
+    assert.equal(send.receivers, "192.168.1.70-74");
+    assert.equal(send.lightsPerReceiver, "100");
     const net = rootOf(files, "/.config/Network.json");
     assert.equal(kids(net, "DevicesModule")[0].addressing, 1);                 // multicast + broadcast
-    assert.equal(kids(net, "OscService")[0].hosts, "192.168.1.147");   // the type renamed as well
+    assert.equal(kids(net, "OscService")[0].receivers, "192.168.1.147");   // the type renamed as well
+});
+
+test("the hosts and lightsPerHost controls become receivers and lightsPerReceiver", () => {
+    const drivers = { enabled: true, "0.type": "NetworkSendDriver", "0.hosts": "192.168.1.70-74", "0.lightsPerHost": "100" };
+    const services = { enabled: true, "0.type": "AudioService", "0.hosts": "192.168.1.80", "1.type": "OscService", "1.hosts": "192.168.1.147" };
+    const { files } = applyMigrations({
+        "/.config/Drivers.json": JSON.stringify(drivers),
+        "/.config/Services.json": JSON.stringify(services),
+    });
+    const [send] = kids(rootOf(files, "/.config/Drivers.json"), "NetworkSendDriver");
+    assert.equal(send.receivers, "192.168.1.70-74");
+    assert.equal(send.lightsPerReceiver, "100");
+    assert.ok(!("hosts" in send) && !("lightsPerHost" in send), "the old keys must be gone");
+    const svc = rootOf(files, "/.config/Services.json");
+    assert.equal(kids(svc, "AudioService")[0].receivers, "192.168.1.80");
+    assert.equal(kids(svc, "OscService")[0].receivers, "192.168.1.147");
 });
 
 test("the MIDI desk's usb switch becomes its source, browser or USB", () => {
@@ -443,4 +459,30 @@ test("a retirement is scoped by module type: another module's gain stays", () =>
     const { files } = applyMigrations({ "/.config/Effects.json": JSON.stringify(cfg) });
     const [other] = kids(rootOf(files, "/.config/Effects.json"), "SomeEffect");
     assert.equal(other.gain, 7);
+});
+
+test("a saved document's renamed type takes its new name, and its controls rename on that new type", () => {
+    const doc = { Effects: { "$patch": "replace", L: { type: "Layer",
+        P: { type: "PacmanEffect", pacmen: 2, ghosts: 3, soundReactive: true },
+        S: { type: "SpaceInvadersEffect", marchBpm: 90 } } } };
+    const { files } = applyMigrations({ "/.config/Effects.json": JSON.stringify(doc) }, []);
+    const L = JSON.parse(files["/.config/Effects.json"]).Effects.L;
+    assert.deepEqual(L.P, { type: "MoonManEffect", moonmen: 2, invaders: 3, audioReactive: true });
+    assert.deepEqual(L.S, { type: "MoonInvadersEffect", marchBpm: 90 });
+});
+
+test("a saved document's renamed type takes the settings and the review note its mapping carries", () => {
+    const doc = { Drivers: { "$patch": "replace", D: { type: "ParlioLedDriver" }, N: { type: "Noise2DEffect" } } };
+    const { files, report } = applyMigrations({ "/.config/Drivers.json": JSON.stringify(doc) }, []);
+    const D = JSON.parse(files["/.config/Drivers.json"]).Drivers.D;
+    assert.deepEqual(D, { type: "ParallelLedDriver", peripheral: "Parlio" });   // the backend the old type was
+    assert.ok(report.some(r => r.kind === "review" && r.where.endsWith(".N")));   // the old speed has no equivalent: the user hears so
+});
+
+test("a saved MIDI service's host restores as its participant", () => {
+    const doc = { Services: { "$patch": "replace", M: { type: "MidiService", source: 2, host: "MM-MIDI-rtp.local" } } };
+    const { files } = applyMigrations({ "/.config/Services.json": JSON.stringify(doc) }, []);
+    const M = JSON.parse(files["/.config/Services.json"]).Services.M;
+    assert.equal(M.participant, "MM-MIDI-rtp.local");
+    assert.ok(!("host" in M));
 });

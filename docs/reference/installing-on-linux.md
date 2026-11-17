@@ -25,7 +25,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | **Logs** | `journalctl -u moonlight` |
 | **Page** | `http://localhost:8080/`, which the menu entry opens |
 
-**Updating, as a board updates.** The service owns the folder its program runs from, so it installs a new version of itself through the same routes, Firmware card and map as a board, from the release's `firmware-desktop-linux-<arch>-v….bin`. It checks the image is a program for this processor and, from the map, against the SHA-256 GitHub publishes for it; it keeps the running program as `MoonLight.prev`, puts the new one in its place and restarts on it in place, the same process systemd started. Its `/api/system` says `update: self`. A package-managed program that updates itself is uncommon on Linux, where the textbook is an APT repository; that needs root to update from the map, and the network-facing service stays unprivileged, so the service owns a copy of the program the package seeds, as Syncthing does.
+**Updating, as a board updates.** The service owns the folder its program runs from, so it installs a new version of itself through the same routes, Firmware card and map as a board, from the release's `firmware-host-linux-<arch>-v….bin`. It checks the image is a program for this processor and, from the map, against the SHA-256 GitHub publishes for it; it keeps the running program as `MoonLight.prev`, puts the new one in its place and restarts on it in place, the same process systemd started. Its `/api/system` says `update: self`. A package-managed program that updates itself is uncommon on Linux, where the textbook is an APT repository; that needs root to update from the map, and the network-facing service stays unprivileged, so the service owns a copy of the program the package seeds, as Syncthing does.
 
 **Rolling back.** A new program stays pending, marked by `MoonLight.pending`, until it has run a minute. A pending program whose start fails gives way to `MoonLight.prev`, by the service's own `ExecStopPost` hook, run in its sandbox as its user; a confirmed one stays in place through its restarts, and five starts within two minutes stop the service until `sudo systemctl reset-failed moonlight && sudo systemctl start moonlight`. An `apt install` is the administrator's choice: it puts the package's program in place, older or newer, and drops `MoonLight.prev`.
 
@@ -50,7 +50,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
 | **HDMI out** | `--device /dev/dri`, on a host with no desktop holding the screen |
 
-**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the desktop build renders as fast as it may; cap it with `cpus:` when running a fleet.
+**Several instances** run side by side: each container has its own ports and writes its own identity, so they are told apart on the network. CPU is the limit rather than memory, about one core each, since the host build renders as fast as it may; cap it with `cpus:` when running a fleet.
 
 ## Package or container: which to pick
 

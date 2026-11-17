@@ -7,7 +7,7 @@
 #include "platform_config.h"  // hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
 
-/// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a desktop.
+/// The one interface every module reaches hardware through, so the same source drives an ESP32, a Teensy, a Raspberry Pi and a host.
 ///
 /// Core and the light domain call these names and never a vendor SDK. A module that needs something this interface does not offer gets a new function here rather than a target check at the call site.
 ///
@@ -71,9 +71,9 @@ enum class TestJoin : uint8_t { Network, Succeed, Fail };
 void setTestJoin(TestJoin mode);
 /// The group a socket left last, as a host test reads it.
 const uint8_t* testLastLeftGroup();
-/// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the desktop's unreported figure.
+/// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the host's unreported figure.
 void setTestFreeInternalHeap(size_t bytes);
-/// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the desktop's none.
+/// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the host's none.
 void setTestPsramRange(const void* begin, const void* end);
 #endif
 
@@ -102,7 +102,7 @@ size_t allocatedPeak();
 /// Live block count, separating one grown buffer from a per-frame allocation.
 uint32_t allocatedCount();
 
-/// True when the pointer resolves to external (PSRAM) memory; always false on desktop.
+/// True when the pointer resolves to external (PSRAM) memory; always false on host.
 bool ptrIsPsram(const void* p);
 
 /// CPU cycle counter, safe in an ISR; wraps at 2^32, so callers difference two reads.
@@ -194,7 +194,7 @@ void taskWdtReset();
 /// What one GPIO is, so the pin ownership map can flag a claim landing on an unsafe pin.
 ///
 /// @technical The SDK answers the first three fields; `strap` and `reserved` come from a per-chip table, being datasheet knowledge.
-/// Desktop reports everything valid and nothing reserved, a host build having no real pins to protect.
+/// Host reports everything valid and nothing reserved, a host build having no real pins to protect.
 struct GpioCapability {
     bool validGpio = true;      ///< a real, usable GPIO on this chip
     bool outputCapable = true;  ///< has an output driver (classic ESP32 34-39 are input-only)
@@ -219,7 +219,7 @@ void clearTestGpioCapability();
 /// @technical The pad reads on any pin, even one a peripheral drives.
 /// So a driver's output must toggle while it renders, and a mic clock while the mic runs.
 struct GpioLiveState {
-    bool valid = false;    ///< pin is readable; false out of range, and on desktop, which omits the columns
+    bool valid = false;    ///< pin is readable; false out of range, and on host, which omits the columns
     bool level = false;    ///< current pad level, true being HIGH
     bool output = false;   ///< the pad's output driver is enabled right now
     bool input = false;    ///< the pad's input buffer is enabled right now; a pin can be both
@@ -234,7 +234,7 @@ void clearTestGpioLiveState();
 
 /// Cap what maxAllocBlock reports, 0 being no cap, so a test reaches the paged-destinations fallback without a fragmented heap.
 void setTestMaxAllocBlock(size_t bytes);
-/// Refuse every allocation of at least `bytes`, 0 being none refused, so a test meets out-of-memory on a growing buffer. Desktop only.
+/// Refuse every allocation of at least `bytes`, 0 being none refused, so a test meets out-of-memory on a growing buffer. Host only.
 void setTestAllocRefusedFrom(size_t bytes);
 /// Total heap capacity, internal plus PSRAM.
 size_t totalHeap();
@@ -296,7 +296,7 @@ void setTestWifiRadioReady(bool ready);
 bool coprocessorConnect();
 
 /// This host's LAN IPv4 as a dotted string, or empty; on ESP32 the device IP belongs to NetworkModule.
-const char* hostIp();
+const char* deviceIp();
 
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
 const char* resetReason();
@@ -333,9 +333,9 @@ size_t filesystemUsed();
 /// Filesystem bytes total.
 size_t filesystemTotal();
 
-// LittleFS on ESP32, std::filesystem on desktop. Paths start with '/', which desktop strips to reach its root.
+// LittleFS on ESP32, std::filesystem on host. Paths start with '/', which host strips to reach its root.
 
-/// Redirect the desktop root, so a test gets an isolated directory without chdir; call it before fsMount.
+/// Redirect the host root, so a test gets an isolated directory without chdir; call it before fsMount.
 void fsSetRoot(const char* path);
 const char* fsRootPath();                                    // the resolved root, for diagnostics
 bool fsMount();                                              // idempotent; safe to call multiple times
@@ -391,7 +391,7 @@ inline bool fsWriteStream(const char* path, FsWriteSrc src, void* user) {
     return ok && committed;
 }
 
-/// Inflate one self-contained zlib block in one call; `outLen` is set only on success. Real decoder only on ESP32 (the ROM's `tinfl_decompress`, zero flash cost); desktop and Teensy both stub to false, no decoder linked on either.
+/// Inflate one self-contained zlib block in one call; `outLen` is set only on success. Real decoder only on ESP32 (the ROM's `tinfl_decompress`, zero flash cost); host and Teensy both stub to false, no decoder linked on either.
 bool zlibInflateAll(void* workspace, const uint8_t* src, size_t srcLen, uint8_t* dst, size_t dstCap, size_t& outLen);
 /// The bytes of decoder state the caller lends `zlibInflateAll` as its `workspace`, held only while it plays zlib; 0 where no decoder is linked.
 size_t zlibWorkspaceBytes();
@@ -448,7 +448,7 @@ SdFormatState sdFormatState();
 uint64_t sdCardUsed();
 /// Card bytes total, 0 when unmounted.
 uint64_t sdCardTotal();
-/// Whether SdCardService boots by default via kBootModules: matches hasSdCard on ESP32, off by default on desktop, so a plain desktop run carries no SD clutter unless a test opts in.
+/// Whether SdCardService boots by default via kBootModules: matches hasSdCard on ESP32, off by default on host, so a plain host run carries no SD clutter unless a test opts in.
 bool sdCardBootsByDefault();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Shrink the host's fictional card, so a test reaches the "not enough space" path without writing a real gigabyte.
@@ -465,7 +465,7 @@ void setTestSdCardReadable(bool readable);
 void setTestSdFormatHeld(bool held);
 #endif
 
-// Network: ESP32 only, stubs on desktop.
+// Network: ESP32 only, stubs on host.
 
 /// Override the per-chip default pin and PHY map with a board's own, before ethInit.
 void setEthConfig(const EthPinConfig& cfg);
@@ -530,7 +530,7 @@ void ndiSenderClose();
 /// Send one frame of tightly-packed RGB, w*h*3 bytes, declaring `fps` to the receiver.
 bool ndiSendFrame(const uint8_t* rgb, uint16_t w, uint16_t h, uint8_t fps);
 
-// A desktop seam recording what the driver sent, pinning geometry, packing and pacing without a runtime.
+// A host seam recording what the driver sent, pinning geometry, packing and pacing without a runtime.
 
 #ifndef ESP_PLATFORM
 /// Force the runtime's apparent presence, overriding what is installed.
@@ -578,7 +578,7 @@ void hdmiClose();
 /// Hand one tight-RGB frame to the output, which scales it to the screen, keeping its aspect when `fit`. Never blocks: a frame arriving before the previous one is shown replaces it.
 bool hdmiWrite(const uint8_t* rgb, uint16_t w, uint16_t h, bool fit) MM_NONBLOCKING;
 
-/// What the link reports back: Down while the output is not set up and is retried (an ESP32's bridge absent or failing, a Linux screen held by a desktop), then the monitor on its hot-plug detect.
+/// What the link reports back: Down while the output is not set up and is retried (an ESP32's bridge absent or failing, a Linux screen held by a host), then the monitor on its hot-plug detect.
 enum class HdmiLink : uint8_t { Down, NoMonitor, Monitor };
 
 /// The link's state now; NoMonitor until the first poll after opening.
@@ -602,7 +602,7 @@ struct HdmiBridgeState {
 bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING;
 
 #ifndef ESP_PLATFORM
-/// Report a link state: the desktop's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
+/// Report a link state: the host's stand-in records what the driver handed over, as the NDI seam does, so the driver is tested without a bridge.
 void setTestHdmiLink(HdmiLink link);
 /// Report a monitor's EDID as read.
 void setTestHdmiMonitor(const edid::Monitor& monitor);
@@ -634,7 +634,7 @@ struct EncoderConfig {
     uint16_t    height;        ///< frame height
     uint8_t     fps;           ///< also the GOP, since a cut needs a keyframe and a long GOP lengthens every segment
     uint16_t    bitrateKbit;   ///< target bitrate
-    const char* encoderName;   ///< a desktop ffmpeg encoder; ignored where the platform has only one
+    const char* encoderName;   ///< a host ffmpeg encoder; ignored where the platform has only one
     const char* outDir;        ///< absolute directory for the playlist and segments
 };
 
@@ -675,9 +675,9 @@ inline void encoderRelease(const void* owner) {
     encoderStop();
 }
 
-/// A UI file from the folder a desktop serves its interface from, read whole into a block the caller gives back with `free`. False on a device, whose interface is the embedded one alone, and for a name that is not a plain file in that folder.
+/// A UI file from the folder a host serves its interface from, read whole into a block the caller gives back with `free`. False on a device, whose interface is the embedded one alone, and for a name that is not a plain file in that folder.
 bool uiFolderFile(const char* name, char*& data, size_t& len);
-/// The folder a desktop serves its interface from, `src/ui` of the checkout it runs in; null serves the embedded interface alone.
+/// The folder a host serves its interface from, `src/ui` of the checkout it runs in; null serves the embedded interface alone.
 void setUiFolder(const char* path);
 
 /// Serve an HLS file the platform holds in RAM; false where this platform writes segments to disk.
@@ -744,8 +744,8 @@ void setTestEthSendFails(bool fail);
 void setTestEthLinkSpeed(uint16_t mbps);
 /// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
 void setTestEthIPv4(const uint8_t* ip);
-/// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a desktop; off in a host test that drives the cascade on the fakes alone.
-void setTestHostNetwork(bool counts);
+/// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a host; off in a host test that drives the cascade on the fakes alone.
+void setTestDeviceNetwork(bool counts);
 /// Fake one address table entry, `ip` answering with `mac`, null `ip` removing it, so a host test can drive arpLookup.
 void setTestArpEntry(const uint8_t* ip, const uint8_t* mac);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.
@@ -784,7 +784,7 @@ bool wifiScanStart();
 /// Copy the finished scan's networks into `out`, strongest first, or -1 while a scan runs or none ran.
 int wifiScanResults(WifiNetwork* out, int max);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Make the next scan find these networks, so a host test drives a radio-less desktop; a count of -1 makes it never finish.
+/// Make the next scan find these networks, so a host test drives a radio-less host; a count of -1 makes it never finish.
 void setTestWifiScan(const WifiNetwork* networks, int count);
 /// Make the next scans refuse to start, as a radio still starting or joining does.
 void setTestWifiScanRefused(bool refused);
@@ -824,7 +824,7 @@ void netSetDhcp(NetIface iface);
 /// A client interface's addressing as it runs now, leased or static; all zero where it has none.
 void netGetIPv4(NetIface iface, uint8_t ip[4], uint8_t gw[4], uint8_t mask[4], uint8_t dns[4]);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Make wifiStaInit succeed, so a host test can drive the station cascade a radio-less desktop never enters.
+/// Make wifiStaInit succeed, so a host test can drive the station cascade a radio-less host never enters.
 void setTestWifiStaAvailable(bool available);
 /// Make the station joined to its network while it waits for an address, for a host test.
 void setTestWifiStaAssociated(bool associated);
@@ -853,7 +853,7 @@ struct WifiApConfig {
 /// Bring up the SoftAP, alongside the station when that is running.
 bool wifiApInit(const WifiApConfig& cfg);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Make wifiApInit succeed, so a host test drives the access point a radio-less desktop never opens.
+/// Make wifiApInit succeed, so a host test drives the access point a radio-less host never opens.
 void setTestWifiApAvailable(bool available);
 #endif
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
@@ -899,25 +899,27 @@ void mdnsStop();
 /// Free the mDNS stack, at release.
 void mdnsShutdown();
 /// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
-bool resolveHost(const char* name, uint8_t ip[4]);
+bool resolveName(const char* name, uint8_t ip[4]);
 /// How far a non-blocking lookup has come.
 enum class LookupStep : uint8_t { Pending, Resolved, Failed };
 /// Start or continue resolving `name` without blocking, for a board with no worker task. One name at a time: a new name abandons the one in flight, and a start may allocate once.
-LookupStep resolveHostStep(const char* name, uint8_t ip[4]);
+LookupStep resolveNameStep(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
 
-/// How this device takes a new version: it installs one itself, the host replaces it (a container), or someone does by hand (a program started from a terminal or an app).
-enum class UpdateMode : uint8_t { Self, Host, Manual };
+/// How this device takes a new version: it installs one itself, its container is replaced from outside, or someone installs it by hand (a program in a folder it cannot write, or an app with no installer lent).
+enum class UpdateMode : uint8_t { Self, Container, Manual };
 /// The mode's name, as `/api/system` reports it.
 constexpr const char* updateModeName(UpdateMode m) {
-    return m == UpdateMode::Self ? "self" : m == UpdateMode::Host ? "host" : "manual";
+    return m == UpdateMode::Self ? "self" : m == UpdateMode::Container ? "container" : "manual";
 }
-/// How this device takes a new version: a board installs its own images, a desktop installs itself when its program sits in a folder it may write, a container is its host's.
+/// How this device takes a new version: a board installs its own images, a host installs itself when its program sits in a folder it may write, a container is its host's.
 UpdateMode updateMode();
+/// True once an installed image went to the operating system's installer, which replaces and restarts the program itself, so the caller leaves the restart to it and keeps running meanwhile.
+bool imageAwaitsInstaller();
 
-/// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a desktop checks `sha256Hex` when it is non-empty, a board's image its own.
+/// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a host checks `sha256Hex` when it is non-empty, a board's image its own.
 bool http_fetch_to_ota(const char* url,
                        char* statusBuf, size_t statusBufLen,
                        uint32_t* bytesReadOut, uint32_t* bytesTotalOut,
@@ -947,7 +949,7 @@ bool otaMoonBaseBuild(char* out, size_t len);
 /// How much of its slot MoonBase fills.
 bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Give a desktop a MoonBase with this descriptor version and build time, for a host test; null removes it.
+/// Give a host a MoonBase with this descriptor version and build time, for a host test; null removes it.
 void setTestMoonBase(const char* version, const char* built);
 #endif
 /// An install of `target` from a URL, which the device fetches itself; runs on its own task and returns at once. For the radio chip it starts the link first where it is still unstarted.
@@ -1160,7 +1162,7 @@ private:
     int fd_ = -1;
 };
 
-/// Restart the device: a hardware reset on ESP32, a process exit on desktop.
+/// Restart the device: a hardware reset on ESP32, a process exit on host.
 [[noreturn]] void reboot();
 
 // PWM output for lights whose channels are each a pin: the chip's LEDC peripheral, one timer per driver.
@@ -1186,13 +1188,13 @@ void pwmWrite(int channel, uint32_t duty) MM_NONBLOCKING;
 /// Release `timer` and every channel attached to it, their pins driven low.
 void pwmStop(int timer);
 
-/// The duty last written to `channel`, for the desktop tests; 0 on a device.
+/// The duty last written to `channel`, for the host tests; 0 on a device.
 uint32_t pwmDutyForTest(int channel);
 
-/// The pin `channel` drives, for the desktop tests; -1 when the channel is free.
+/// The pin `channel` drives, for the host tests; -1 when the channel is free.
 int pwmPinForTest(int channel);
 
-/// The phase `channel` was attached with, for the desktop tests; 0 on a device.
+/// The phase `channel` was attached with, for the host tests; 0 on a device.
 uint32_t pwmPhaseForTest(int channel);
 
 // RMT WS2812 output: the driver encodes symbols, the platform owns only the peripheral.
@@ -1503,7 +1505,7 @@ const char* hub75Backend(const Hub75Handle& h);
 void hub75Deinit(Hub75Handle& h);
 
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Open the desktop's HUB75 port on LCD_CAM with a frame of the geometry's size, so a test drives the driver's tick into bit planes; off, the port refuses as on a chip without the silicon.
+/// Open the host's HUB75 port on LCD_CAM with a frame of the geometry's size, so a test drives the driver's tick into bit planes; off, the port refuses as on a chip without the silicon.
 void setTestHub75(bool on);
 /// The frame the driver last packed while the test port is open, `bytes` long; null while closed.
 const uint8_t* hub75TestFrame(size_t* bytes);
@@ -1520,7 +1522,7 @@ bool audioCodecInit(CodecType type, uint8_t i2cAddr, uint32_t sampleRate, uint8_
 /// Release the codec.
 void audioCodecDeinit();
 
-/// One live audio input: an I2S channel on a board, an OS capture device on desktop.
+/// One live audio input: an I2S channel on a board, an OS capture device on host.
 struct AudioMicHandle { void* impl = nullptr; };
 
 /// Whether this target has any live audio, which is what makes the analysis path run.
@@ -1634,7 +1636,7 @@ size_t usbMidiRead(uint8_t (*packets)[4], size_t max);
 /// Queue USB-MIDI event packets for the desk, without waiting; false when no desk is attached or the queue is full.
 bool usbMidiWrite(const uint8_t (*packets)[4], size_t count);
 
-/// Make the desktop a USB MIDI host with a desk attached, so the MIDI service's USB path is host-testable; false detaches.
+/// Make the host a USB MIDI host with a desk attached, so the MIDI service's USB path is host-testable; false detaches.
 void setTestUsbMidiDesk(bool attached);
 /// Deliver packets as if the attached test desk sent them.
 void injectTestUsbMidi(const uint8_t (*packets)[4], size_t count);

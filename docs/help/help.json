@@ -1231,7 +1231,7 @@
    "guide": [
     {
      "title": "Compressed files need ESP32",
-     "text": "A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; desktop and Teensy builds show a clean error instead of playing it.\n\nZstd-compressed files do not play on any target yet.\n\nExport a track uncompressed if it needs to play everywhere."
+     "text": "A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; host and Teensy builds show a clean error instead of playing it.\n\nZstd-compressed files do not play on any target yet.\n\nExport a track uncompressed if it needs to play everywhere."
     },
     {
      "title": "The layout numbers its lights as the xLights model does",
@@ -2175,7 +2175,7 @@
   },
   "FluidEffect": {
    "line": "Light poured into a simulated medium and carried by it.",
-   "summary": "Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the desktop and the P4; an S3 runs it on a small grid.",
+   "summary": "Every other flow here is a function of position and time. This one is state, so a jet fired now changes where everything downstream goes for seconds afterwards. On a cube every depth slice is its own medium, so the slices differ. Sized for the host and the P4; an S3 runs it on a small grid.",
    "attribution": "[Jos Stam](https://moonmodules.org/MoonLight/reference/attributions.html#jos-stam)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/FluidEffect.gif",
    "controls": {
@@ -2572,17 +2572,16 @@
    "doc": "light/effects.md#fishtank",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FishTankEffect.h"
   },
-  "PacmanEffect": {
-   "line": "The arcade cast crossing a light wall: Pacman chomps along while the ghosts drift past, wrapping around the edges forever.",
-   "summary": "The characters travel independently, each on its own path. Pacman keeps his yellow, and the ghosts take their colors from the active palette.",
-   "attribution": "[Pac-Man](https://moonmodules.org/MoonLight/reference/attributions.html#pac-man)",
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/PacmanEffect.gif",
+  "MoonManEffect": {
+   "line": "The arcade cast crossing a light wall: MoonMan chomps along while the invaders drift past, wrapping around the edges forever.",
+   "summary": "The characters travel independently, each on its own path. MoonMan keeps his yellow, and the invaders take their colors from the active palette.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonManEffect.gif",
    "controls": {
-    "pacmen": {
-     "line": "How many Pacmen cross the wall, up to four."
+    "moonmen": {
+     "line": "How many MoonMen cross the wall, up to four."
     },
-    "ghosts": {
-     "line": "How many ghosts cross the wall, the arcade cast being four."
+    "invaders": {
+     "line": "How many invaders cross the wall, the three kinds taking turns."
     },
     "speed": {
      "line": "Travel rate in sprite widths, the same on any grid."
@@ -2597,8 +2596,8 @@
    "role": "effect",
    "tags": "💫🎶✨👾",
    "dim": 2,
-   "doc": "light/effects.md#pacman",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PacmanEffect.h"
+   "doc": "light/effects.md#moonman",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MoonManEffect.h"
   },
   "FixedPointEffect": {
    "line": "Shapes placed between pixels rather than on them.",
@@ -2710,17 +2709,16 @@
    "doc": "light/effects.md#flyingtoasters",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FlyingToastersEffect.h"
   },
-  "SpaceInvadersEffect": {
-   "line": "The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.",
-   "summary": "The march speeds up as the ranks thin, which is the defining mechanic.\n\nThe game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The invaders take their body color from the active palette.",
-   "attribution": "[Space Invaders](https://moonmodules.org/MoonLight/reference/attributions.html#space-invaders)",
+  "MoonInvadersEffect": {
+   "line": "A formation of ghosts marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.",
+   "summary": "The march speeds up as the ranks thin, which is the defining mechanic.\n\nThe game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The ghosts take their body color from the active palette, one per rank.",
    "guide": [
     {
      "title": "The game",
-     "text": "Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board."
+     "text": "The ghosts fire down and the cannon fires back. A formation that lands, or a board cleared of ghosts, resets the board."
     }
    ],
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpaceInvadersEffect.gif",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonInvadersEffect.gif",
    "controls": {
     "marchBpm": {
      "line": "March beats per minute, two steps a beat, faster as ranks thin."
@@ -2747,13 +2745,13 @@
    "role": "effect",
    "tags": "💫🎵👾",
    "dim": 2,
-   "doc": "light/effects.md#spaceinvaders",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SpaceInvadersEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#spaceinvaderseffect"
+   "doc": "light/effects.md#mooninvaders",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MoonInvadersEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mooninvaderseffect"
   },
   "SpriteFountainEffect": {
    "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
-   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.\n\nWith `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: Pacman on the kick, a ghost on the snare, a small fish on the hats.",
+   "summary": "The cast is fish, MoonMan and the ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. MoonMan, the toasters, Luna and Momo keep their own.\n\nWith `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: MoonMan on the kick, a ghost on the snare, a small fish on the hats.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpriteFountainEffect.gif",
    "controls": {
     "lift": {
@@ -3484,8 +3482,8 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#huedriver"
   },
   "NetworkSendDriver": {
-   "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
-   "summary": "One driver feeds many receivers, each a run of the window at its own address, as an LED driver fans out over pins.",
+   "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP to Falcon and Advatek controllers, xLights and LedFx, its packets paced.",
+   "summary": "One driver feeds many receivers, each a run of the window.\n\n`curve` starts at linear, as receivers apply their own.",
    "attribution": "[Art-Net](https://moonmodules.org/MoonLight/reference/attributions.html#art-net), [E1.31](https://moonmodules.org/MoonLight/reference/attributions.html#e1-31), [DDP](https://moonmodules.org/MoonLight/reference/attributions.html#ddp), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -3536,7 +3534,7 @@
     },
     "addressing": {
      "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
-     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
+     "more": "Art-Net 4 requires unicast; broadcast loads every receiver. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
      "tests": [
       {
        "title": "NetworkSend one sender many receivers",
@@ -3544,11 +3542,11 @@
       }
      ]
     },
-    "hosts": {
+    "receivers": {
      "line": "Receiver addresses or names, in fan-out order; blank idles.",
      "more": "A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting."
     },
-    "lightsPerHost": {
+    "lightsPerReceiver": {
      "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
     },
     "universe_start": {
@@ -3615,7 +3613,7 @@
   },
   "NdiDriver": {
    "line": "Publishes the layer as an NDI video source that OBS, Resolume, TouchDesigner or any NDI receiver finds by name on the network.",
-   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nDesktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is. Where [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) draws the lights for a person, this hands the same frame to a production tool.\n\nHost only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with [NetworkSend](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#networksend), and takes them in with [NetworkReceive](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#networkreceive).",
    "attribution": "[NDI](https://moonmodules.org/MoonLight/reference/attributions.html#ndi), [Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium)",
    "guide": [
     {
@@ -3670,7 +3668,7 @@
    "guide": [
     {
      "title": "ffmpeg",
-     "text": "It runs on the desktop, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
+     "text": "It runs on the host, where you install ffmpeg yourself and then open the stream ([Watching the output](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-ffmpeg))."
     },
     {
      "title": "On the ESP32-P4",
@@ -3720,7 +3718,7 @@
   },
   "RtspDriver": {
    "line": "Serves the layer as an H.264 stream a player pulls over RTSP, with a fraction of the delay HLS carries.",
-   "summary": "RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the desktop, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
+   "summary": "RTSP sends each frame as the encoder produces it, which makes this the remote view to reach for.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. It runs on the ESP32-P4 and the host, and shares one encoder with [Hls](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#hls), so only one of the two runs at a time.",
    "attribution": "[Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium), [RTSP](https://moonmodules.org/MoonLight/reference/attributions.html#rtsp), [RTP](https://moonmodules.org/MoonLight/reference/attributions.html#rtp)",
    "guide": [
     {
@@ -3883,7 +3881,7 @@
     },
     "interface": {
      "line": "The network adapter the frames go out on.",
-     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-desktop))."
+     "more": "`none (capture only)` records frames without sending. Sending needs root or `CAP_NET_RAW` on Linux, BPF on macOS, Npcap on Windows ([steps](https://moonmodules.org/MoonLight/reference/hardware/panel-cards.html#6-from-a-host))."
     },
     "fps": {
      "line": "Frame-rate limit, so a fast render tick does not saturate the link."
@@ -4197,7 +4195,7 @@
    "controls": {
     "port": {
      "line": "The port the server listens on.",
-     "more": "8080 on the desktop and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: how."
+     "more": "8080 on the host and 80 on a device. A change applies at once, and a port the system refuses is tried again each second: how."
     }
    },
    "role": "generic",
@@ -4280,7 +4278,7 @@
     },
     "mode": {
      "line": "How much of the UI is shown, cumulative.",
-     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a desktop carries to exercise their settings. Only the UI reads it."
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it."
     },
     "factory reset": {
      "line": "Delete every setting and preset and restart as freshly installed.",
@@ -4383,7 +4381,7 @@
    "guide": [
     {
      "title": "Choosing a source",
-     "text": "Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop."
+     "text": "Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on a host."
     },
     {
      "title": "Wiring and capture",
@@ -4464,9 +4462,9 @@
     },
     "addressing": {
      "line": "How the analysis travels: multicast, which WLED hears, or unicast.",
-     "more": "Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it."
+     "more": "Unicast to `receivers` reaches a few MoonLight boards faster on WiFi, which retries it."
     },
-    "hosts": {
+    "receivers": {
      "line": "The boards a unicast send reaches, addresses or names."
     },
     "simulate": {
@@ -4567,9 +4565,9 @@
      "more": "Off by default, since it sends traffic nobody asked for. It keeps a client honest and moves a motorized fader."
     },
     "addressing": {
-     "line": "Where feedback goes: `unicast` to the hosts, or `multicast` to the group."
+     "line": "Where feedback goes: `unicast` to the receivers, or `multicast` to the group."
     },
-    "hosts": {
+    "receivers": {
      "line": "Addresses or names feedback goes to (unicast).",
      "more": "Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else."
     },
@@ -4620,7 +4618,7 @@
   },
   "TasksModule": {
    "line": "A read-only diagnostic showing what runs where: the tasks, and the modules inside each.",
-   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the desktop.",
+   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the host.",
    "guide": [
     {
      "title": "Reading a task row",
@@ -4794,13 +4792,13 @@
     },
     "share": {
      "line": "Pass the desk on the USB port over the network instead of driving this device.",
-     "more": "The device the desk drives names this one in its `host`. One host at a time."
+     "more": "The device the desk drives names this one in its `participant`. One participant at a time."
     },
     "profile": {
      "line": "The desk's layout, since each desk lays its controls out in its own messages.",
      "more": "Hidden on a shared desk, which the device it is shared with decodes."
     },
-    "host": {
+    "participant": {
      "line": "The desk on the network, an address or a name with an optional `:port`.",
      "more": "Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`."
     },
@@ -5072,7 +5070,7 @@
      "line": "The installed version."
     },
     "update": {
-     "line": "How this device takes a new version: self, host or manual."
+     "line": "How this device takes a new version: self, container or manual."
     },
     "moonbaseMismatch": {
      "line": "The installed version."
@@ -5311,7 +5309,7 @@
     },
     {
      "title": "Boards by name",
-     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
+     "text": "An address setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DevicesModule.png",
@@ -5360,7 +5358,7 @@
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",
-   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.\n\nA desktop builds the same cards over stubs, for developer mode. The order is described under The cascade in the header.",
+   "summary": "Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.\n\nA host builds the same cards over stubs, for developer mode. The order is described under The cascade in the header.",
    "guide": [
     {
      "title": "A direct cable to a computer",
@@ -5395,7 +5393,7 @@
   },
   "EthernetModule": {
    "line": "The wired interface: which board's wiring it uses, and how it gets an address.",
-   "summary": "A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the desktop.",
+   "summary": "A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the host.",
    "guide": [
     {
      "title": "Choosing a static address",
@@ -5648,8 +5646,8 @@
    "summary": "Each reads its own slice of the [Drivers](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#drivers) container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while [Preview](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#preview) shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).",
    "videos": [
     {
-     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-desktop.webm",
-     "caption": "Drivers on a desktop: preview, NDI, RTSP, HLS, network send and Hue."
+     "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-host.webm",
+     "caption": "Drivers on a host: preview, NDI, RTSP, HLS, network send and Hue."
     },
     {
      "video": "https://moonmodules.org/MoonLight/assets/moontube/07-drivers-esp32.webm",

@@ -3,7 +3,7 @@
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker, DESKTOP_DOWNLOAD } from "./install-picker.js";
+import { installPicker, HOST_DOWNLOAD } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
@@ -2273,7 +2273,7 @@ function createCard(mod, depth) {
     // elsewhere (e.g. FileManager's filesystem/lastSaved render inside its own panel, not generically).
     const hasVisibleControls = mod.controls && mod.controls.some(c => controlRendersGenerically(mod, c));
     const wrapInDetails = depth > 0 && acceptsNewChildren(mod) && hasVisibleControls;
-    const controlsHost = wrapInDetails ? (() => {
+    const controlsBox = wrapInDetails ? (() => {
         const d = document.createElement("details");
         d.className = "card-controls-collapse";
         // Restore the open/closed state from localStorage, so a full-state rebuild (or a page reload) keeps
@@ -2303,7 +2303,7 @@ function createCard(mod, depth) {
         setStatusText(val, mod);
         row.appendChild(label);
         row.appendChild(val);
-        controlsHost.appendChild(row);
+        controlsBox.appendChild(row);
     }
 
     if (mod.controls) {
@@ -2311,10 +2311,10 @@ function createCard(mod, depth) {
         for (const ctrl of mod.controls) {
             if (!controlRendersGenerically(mod, ctrl)) continue;
             const kind = surfaceBank(ctrl);
-            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak(mod.type, bank));
+            if (bank && kind !== bank) controlsBox.appendChild(surfaceBreak(mod.type, bank));
             bank = kind;
             const row = createControl(mod.name, mod.type, ctrl);
-            if (row) controlsHost.appendChild(row);
+            if (row) controlsBox.appendChild(row);
         }
     }
 
@@ -2322,24 +2322,24 @@ function createCard(mod, depth) {
     // over /api/dir; a create/delete is a POST/DELETE /api/dir?path= call (the path rides the request,
     // no persisted control). Only the `show hidden` toggle renders as a raw control; the tree is the rest.
     if (mod.type === "FileManagerModule") {
-        renderFileManager(mod, controlsHost);
+        renderFileManager(mod, controlsBox);
     }
 
     // The gallery sits under the pads it fills.
     if (mod.type === "ControlModule") {
-        renderGallery(controlsHost, mod);
+        renderGallery(controlsBox, mod);
     }
 
     // Contributing earns the answer back on the card that asked for consent, so the charts render
     // here rather than anywhere else. They are drawn empty until consent is on.
     if (mod.type === "MoonStatsModule") {
-        renderMoonCloudStats(controlsHost, mod);
+        renderMoonCloudStats(controlsBox, mod);
     }
 
     // The board itself, under the controls that post to it: a message box with no way to read the
     // replies is half a chat.
     if (mod.type === "MoonTalkModule") {
-        renderMoonTalk(controlsHost, mod);
+        renderMoonTalk(controlsBox, mod);
     }
 
     // The Firmware card hosts the shared install picker, mounted once per card build, which offers the releases that fit SystemModule.firmware.
@@ -2364,7 +2364,7 @@ function createCard(mod, depth) {
             why.rel = "noopener";
             why.textContent = "Why you might like this";
             nudge.appendChild(why);
-            controlsHost.appendChild(nudge);
+            controlsBox.appendChild(nudge);
         }
 
         // TWO IMAGES, ONE PANEL. A device installs the app it runs and MoonBase the recovery
@@ -2446,8 +2446,8 @@ function createCard(mod, depth) {
                 if (tabKind === "coprocessor" && ctrlValue("coprocessorMismatch") !== null) applyTabDot(tab, { severity: "warning" });
                 strip.appendChild(tab);
             });
-            const titleRow = controlsHost.querySelector(":scope > .card-title");
-            controlsHost.insertBefore(strip, titleRow ? titleRow.nextSibling : controlsHost.firstChild);
+            const titleRow = controlsBox.querySelector(":scope > .card-title");
+            controlsBox.insertBefore(strip, titleRow ? titleRow.nextSibling : controlsBox.firstChild);
         }
 
         const status = document.createElement("span");
@@ -2550,7 +2550,9 @@ function createCard(mod, depth) {
             }
         });
         urlRow.append(urlLabel, urlField, urlBtn);
-        extras.appendChild(urlRow);
+        // A device its host or its user updates installs no file itself, so it offers the download alone.
+        const selfInstalls = !ctrlValue("update") || ctrlValue("update") === "self";
+        if (selfInstalls) extras.appendChild(urlRow);
 
         const fileRow = document.createElement("div");
         fileRow.className = "control-row fw-upload-row";
@@ -2584,7 +2586,7 @@ function createCard(mod, depth) {
         });
         upBtn.addEventListener("click", () => upInput.click());
         fileRow.append(fileLabel, upBtn, upInput);
-        extras.appendChild(fileRow);
+        if (selfInstalls) extras.appendChild(fileRow);
         extras.appendChild(status);
 
         // -- the radio chip: one matching image per release, so a button rather than the picker --
@@ -2610,16 +2612,22 @@ function createCard(mod, depth) {
                 }
             });
             relRow.append(relLabel, relBtn);
-            controlsHost.appendChild(relRow);
-            controlsHost.appendChild(extras);
+            controlsBox.appendChild(relRow);
+            controlsBox.appendChild(extras);
         }
 
         // -- the shared picker ----------------------------------------------------------
         const mount = document.createElement("div");
         mount.className = "install-picker-host";
-        controlsHost.appendChild(available);
-        controlsHost.appendChild(mount);
-        if (kind !== "coprocessor") installPicker.init({
+        controlsBox.appendChild(available);
+        controlsBox.appendChild(mount);
+        // A program in a container is its host's to replace, by pulling the image, so its card says that rather than offering a package.
+        if (kind === "app" && ctrlValue("update") === "container") {
+            const note = document.createElement("div");
+            note.className = "control-row rp-status";
+            note.textContent = "This program runs in a container: its host updates it, by docker pull and a new container, Watchtower or Podman's auto-update.";
+            mount.appendChild(note);
+        } else if (kind !== "coprocessor") installPicker.init({
             container: mount,
             // MoonBase ships ONE image per chip rather than one per variant, so on that tab the
             // picker offers the shared-moonbase assets and matches on the CHIP the device
@@ -2631,7 +2639,9 @@ function createCard(mod, depth) {
             // second mechanism for a job the device had already done, with a JS transform
             // ("ESP32-S3" -> "esp32s3") that merely coincided with the build system's naming.
             // A device its host or its user updates has its card offer the download in place of an install.
-            ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? DESKTOP_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
+            ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? HOST_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
+            // Its own build, as an Android device offers the APK whichever computer views its page.
+            downloadKey: /^host-/.test(ctrlValue("firmware") || "") ? ctrlValue("firmware") : null,   // a firmware an older build calls "unknown" names no package
             // Device already knows its deviceModel (SystemModule): picker is for releases +
             // firmware compatibility only. A board picker here would invite the user to
             // mis-narrow the firmware list.
@@ -2642,7 +2652,7 @@ function createCard(mod, depth) {
             extrasAfterInstall: true,
             onInstall: async (_firmware, _manifestUrl, binaryUrl, entry) => {
                 // A download, for a device its host or its user updates: the browser takes the file, the route would answer 501.
-                if (entry && entry.isDesktop) {
+                if (entry && entry.isHost) {
                     const a = document.createElement("a");
                     a.href = binaryUrl;
                     a.rel = "noopener";
@@ -2674,7 +2684,7 @@ function createCard(mod, depth) {
                 ui.fail(MOONBASE_SILENT_MSG);
             });
             mbRow.appendChild(mbBtn);
-            controlsHost.appendChild(mbRow);
+            controlsBox.appendChild(mbRow);
         }
     }
 
@@ -3088,7 +3098,7 @@ function walkChoices(controls) {
     const platform = model === "docker" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
     if (!platform) return {};
     const board = platform === "ESP32" || platform === "Teensy";
-    return { platform, target: board ? "Board" : "Desktop",
+    return { platform, target: board ? "Board" : "Host",
              source: board ? "A microphone on a board" : platform === "Docker" ? "A PulseAudio server into the container" : `The computer's audio on ${platform}` };
 }
 
@@ -3449,12 +3459,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
                 input.addEventListener("change", () => flushPendingSends(key));
             } else {
-                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
-                const hosts = ctrl.known !== undefined;
+                // A receivers text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const receivers = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    if (hosts) row.querySelector(".control-known")?.remove();
-                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
+                    if (receivers) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => receivers ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -3478,8 +3488,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 });
             }
             row.appendChild(input);
-            // A hosts text names the boards the device list knows among its entries, so an address says which board it is.
-            const known = knownHostsText(ctrl.known);
+            // A receivers text names the boards the device list knows among its entries, so an address says which board it is.
+            const known = knownReceiversText(ctrl.known);
             if (known) {
                 const note = document.createElement("span");
                 note.className = "control-known";
@@ -3520,12 +3530,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             if (ctrl.readonly) {
                 input.readOnly = true;
             } else {
-                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
-                const hosts = ctrl.known !== undefined;
+                // A receivers text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const receivers = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    if (hosts) row.querySelector(".control-known")?.remove();
-                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
+                    if (receivers) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => receivers ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);
@@ -5191,7 +5201,7 @@ function openGraphNode(row, opts) {
 }
 
 // The fields a node's popup lists: its flavor as its type (WLED-MM), and as its url the `<name>.local` address a MoonLight board answers on;
-// the ip links to the address the device was found on, so a url saying the same goes. A desktop serves on a port and answers no mDNS.
+// the ip links to the address the device was found on, so a url saying the same goes. A host serves on a port and answers no mDNS.
 function popupFields(row) {
     const shown = Object.assign({}, row);
     if (shown.flavor) { shown.type = shown.flavor; delete shown.flavor; }
@@ -5250,7 +5260,7 @@ async function peerFirmware(base) {
 }
 
 // The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
-// a board and a desktop alike. Null url for a device its host or its user updates, and for one older than its firmware name.
+// a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
 function updateAsset(rel, dev, version) {
     const installs = !!dev.firmware && (!dev.update || dev.update === "self");
     const asset = installs ? (rel?.assets || []).find(a => a.name === `firmware-${dev.firmware}-v${version}.bin`) : null;
@@ -5632,7 +5642,7 @@ function peerSummaryLines(sys) {
     if (board) lines.push(`Board: ${board}`);
     if (sys.mac) lines.push(`MAC: ${sys.mac}`);
     const health = [sys.uptime !== undefined ? `up ${fmtTime(sys.uptime)}` : "", sys.fps !== undefined ? `${sys.fps} fps` : "",
-                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a desktop, 0 signal off WiFi
+                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a host, 0 signal off WiFi
     if (health.length) lines.push(`Health: ${health.join(" · ")}`);
     const outputs = graphOutputs(sys);
     if (outputs) lines.push(`Lights: ${outputs}`);
@@ -5688,7 +5698,7 @@ function buildPeerSummary(row) {
         const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update });
         if (!u) { note.textContent = "Up to date."; return; }
         if (!u.url) {
-            note.textContent = update === "host"
+            note.textContent = update === "container"
                 ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
                 : `${u.label} is available: this device is updated by hand, from the release page.`;
             return;
@@ -7461,8 +7471,8 @@ function applyTheme(t) {
     if (btn) btn.textContent = (t === "dark") ? "☀" : "🌙";
 }
 
-// The boards a hosts text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
-function knownHostsText(known) {
+// The boards a receivers text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
+function knownReceiversText(known) {
     if (!known || typeof known !== "object") return "";
     return Object.entries(known).map(([entry, other]) => `${entry} is ${other}`).join(" · ");
 }
@@ -7490,7 +7500,7 @@ function headerStats(ctrls, tuning) {
         const freeKb = Math.round((heapCtrl.total - heapCtrl.value) / 1024);
         parts.push("🧠 " + freeKb + "KB");
     }
-    // Skip on desktop, where the platform stub reports "0KB" (no real
+    // Skip on host, where the platform stub reports "0KB" (no real
     // block measurement / unlimited heap): same reason heap free above
     // only shows when the heap progress control is present.
     if (tuning && blockCtrl && blockCtrl.value && blockCtrl.value !== "0KB") {
@@ -7629,7 +7639,7 @@ function deviceFirmwareInfo() {
     const version = value(fw, "appVersion");
     const sys = allModules().find(m => m.type === "SystemModule");
     const firmware = value(sys, "firmware");
-    // "unknown" is what a desktop build older than its own firmware name reports, with no image to match.
+    // "unknown" is what a host build older than its own firmware name reports, with no image to match.
     return version ? { version, firmware: firmware && firmware !== "unknown" ? firmware : null, update: value(fw, "update"),
                        moonbase: value(fw, "moonbaseMismatch") || null } : null;
 }
@@ -7686,7 +7696,7 @@ async function stableUpdate(dev, force) {
     const rel = await cachedJson(`${RELEASES_API}/latest`, "MoonLight.update.latest.v1", force);
     if (!rel || !rel.tag_name) return null;
     const assetNames = (rel.assets || []).map(a => a.name);
-    // A board or a desktop alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
+    // A board or a host alike: told about a release that ships its own image, firmware-<name>-<tag>.bin.
     const hasBinary = !!dev.firmware && assetNames.some(n => n === `firmware-${dev.firmware}-${rel.tag_name}.bin`);
     return (isNewer(rel.tag_name, dev.version) && hasBinary) ? rel.tag_name : null;
 }
@@ -9054,7 +9064,7 @@ function renderFileManager(mod, host) {
     renderChildren("/", tree, 0);
 
     // Filesystem usage bar below the tree: the File Manager's own `flash` control (used /
-    // total bytes from the platform). Absent (e.g. desktop fs total 0) → nothing shown.
+    // total bytes from the platform). Absent (e.g. host fs total 0) → nothing shown.
     const fsCtrl = fmFilesystemUsage(mod);
     if (fsCtrl) {
         const usage = document.createElement("div");

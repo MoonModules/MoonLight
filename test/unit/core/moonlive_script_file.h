@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <cstring>
 
-/// Write a script where the UI saves one, through the platform fs: the desktop roots its filesystem where it chooses, so a host path is never where the loader looks.
+/// Write a script where the UI saves one, through the platform fs: the host roots its filesystem where it chooses, so a host path is never where the loader looks.
 inline void writeScript(const char* name, const char* body) {
     mm::platform::fsMkdir(mm::moonlive::kScriptDir);
     char path[96];

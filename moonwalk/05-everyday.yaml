@@ -147,12 +147,12 @@ processes:
         when: { set: { module: MidiService, control: source, value: network } }
         detail: |
           The desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses.
-      - id: host
-        say: Name the desk's end in host.
+      - id: participant
+        say: Name the desk's end in participant.
         given: [{ input: route, equals: Desk on the network }]
         when: { manual: "An address or <name>.local; empty waits to be invited." }
         detail: |
-          The host is a board sharing the desk, a desk with a network port, or a computer sharing its desk. The service invites the host every second until it answers, so either side may start first. A Mac's Audio MIDI Setup and Windows' rtpMIDI driver invite a board with an empty `host`.
+          The participant is a board sharing the desk, a desk with a network port, or a computer sharing its desk. The service invites the participant every second until it answers, so either side may start first. A Mac's Audio MIDI Setup and Windows' rtpMIDI driver invite a board with an empty `participant`.
       - id: share-source
         say: Take the desk from the USB port.
         given: [{ input: route, equals: Desk on the network }]
@@ -205,7 +205,7 @@ processes:
         say: Read the device's address on WiFi.
         when: { open: { module: WiFiModule } }
         detail: |
-          Its `address` is what you typed into the browser. A desktop install talking to itself uses `127.0.0.1`.
+          Its `address` is what you typed into the browser. A host install talking to itself uses `127.0.0.1`.
       - id: install
         say: Install Open Stage Control.
         when: { open: { url: "https://openstagecontrol.ammd.net/" } }

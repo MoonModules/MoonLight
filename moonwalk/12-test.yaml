@@ -22,7 +22,7 @@ processes:
         say: Pick the tier by what you pin.
         when: { manual: "Module logic gets a unit test, a pipeline a scenario, MoonDeck scripts a Python test, installer and UI code a JS test." }
         detail: |
-          A scenario fits behavior that only exists with modules wired together, such as the pipeline reallocating when the grid resizes. A unit test fits a module in isolation. Host tests, Python and JS, reach the code the C++ binary cannot: [Host-side tests](reference/testing.md#host-side-tests-python-js). See [Testing strategy](reference/testing.md#testing-strategy) and the placement rule in [coding standards](contributing/coding-standards.md#tests).
+          A scenario fits behavior that only exists with modules wired together, such as the pipeline reallocating when the grid resizes. A unit test fits a module in isolation. Tooling tests, Python and JS, reach the code the C++ binary cannot: [Tooling tests](reference/testing.md#tooling-tests-python-js). See [Testing strategy](reference/testing.md#testing-strategy) and the placement rule in [coding standards](contributing/coding-standards.md#tests).
       - id: bug-first
         say: Reproduce a bug in the test first.
         when: { manual: "The new test fails against the unfixed code, then passes with the fix." }
@@ -49,15 +49,15 @@ processes:
         given: [{ input: kind, equals: Installer or UI code }]
         when: { manual: "Create test/js/<topic>.test.mjs for Node's built-in runner; no package.json is needed." }
       - id: build
-        say: Build the desktop tests.
+        say: Build the host tests.
         given: [{ input: kind, equals: Module logic }]
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
         detail: |
           It builds `mm_tests` and `mm_scenarios` only, not the app. A full pipeline builds inside the scenario run.
       - id: run-unit
         say: Run the unit tests.
         given: [{ input: kind, equals: Module logic }]
-        when: { run: { script: moondeck/test/test_desktop.py, args: "--module <Name>" } }
+        when: { run: { script: moondeck/test/test_host.py, args: "--module <Name>" } }
         detail: |
           `--test "<case-name>"` runs one case; a bare run runs all of them. A full run prints a summary, and a filtered run adds assertion-level detail.
       - id: run-scenario
@@ -65,19 +65,19 @@ processes:
         given: [{ input: kind, equals: Full pipeline }]
         when: { process: run-scenario }
       - id: run-python
-        say: Run the Python host tests.
+        say: Run the Python tooling tests.
         given: [{ input: kind, equals: MoonDeck script }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--python" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
       - id: run-js
-        say: Run the JS host tests.
+        say: Run the JS tooling tests.
         given: [{ input: kind, equals: Installer or UI code }]
-        when: { run: { script: moondeck/test/test_host.py, args: "--js" } }
+        when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
         detail: |
           It reports SKIP rather than failing when node is absent.
     outro: |
       A bug fix ships with the test that failed before it.
   - id: run-scenario
-    title: Run a scenario in-process on the desktop
+    title: Run a scenario in-process on the host
     actor: contributor
     goal: One scenario replays against a scheduler inside the test binary and records what each step costs.
     systems: [MoonDeck]
@@ -86,8 +86,8 @@ processes:
       A scenario replays a JSON script against the whole pipeline inside the test binary and checks each measured step against its contract. What each one proves is on [the test page](reference/tests.md).
     steps:
       - id: build
-        say: Build the desktop tests.
-        when: { run: { script: moondeck/build/build_desktop.py, args: "--tests" } }
+        say: Build the host tests.
+        when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
       - id: select
         say: Run what the diff touched.
         when: { run: { script: moondeck/scenario/run_scenario.py, args: "--module <Name>" } }
@@ -108,7 +108,7 @@ processes:
   - id: run-live-scenario
     title: Run a scenario against a live device
     actor: contributor
-    goal: The same scenario over REST against a running desktop or board, leaving the device as found.
+    goal: The same scenario over REST against a running host or board, leaving the device as found.
     systems: [MoonDeck]
     page: reference/testing.md
     inputs:
@@ -116,15 +116,15 @@ processes:
       properties:
         target:
           type: string
-          enum: [Desktop, Board]
+          enum: [Host, Board]
           description: "Which device runs the scenario?"
     intro: |
       The same JSON, driven over REST against a running device. It is the tier that proves the device rather than a model of it.
     steps:
-      - id: start-desktop
-        say: Run the desktop app.
-        given: [{ input: target, equals: Desktop }]
-        when: { run: { script: moondeck/run/run_desktop.py } }
+      - id: start-host
+        say: Run the host app.
+        given: [{ input: target, equals: Host }]
+        when: { run: { script: moondeck/run/run_host.py } }
         detail: |
           It stops the previous instance first, so the run never hits an old binary.
       - id: find-board
@@ -134,13 +134,13 @@ processes:
         detail: |
           The Live Scenarios card runs the selected scenario against every checked device.
       - id: run
-        say: Run the scenario against the host.
+        say: Run the scenario against the device.
         when: { run: { script: moondeck/scenario/run_live_scenario.py, args: "--host <host> --name <scenario>" } }
         detail: |
-          Use `--host localhost:8080` for the desktop. `--name` takes several comma-separated stems, and `--module` selects by module. The pipeline gets 3 seconds to settle first (`--settle`). Construct-mode scenarios are skipped, since a live tree is never empty.
+          Use `--host localhost:8080` for a host. `--name` takes several comma-separated stems, and `--module` selects by module. The pipeline gets 3 seconds to settle first (`--settle`). Construct-mode scenarios are skipped, since a live tree is never empty.
       - id: read
         say: Read the measurements against the contract.
-        when: { manual: "Each step reports FPS and heap. On a board, heap reads are real; on the desktop they read 0." }
+        when: { manual: "Each step reports FPS and heap. On a board, heap reads are real; on the host they read 0." }
         detail: |
           The memory check in the control-change scenario proves the heap returns to baseline after a toggle. Scenarios that add modules clean them up, and modules that already exist show `=` instead of `+`.
       - id: restored
@@ -153,15 +153,15 @@ processes:
   - id: live-verification
     title: Run a live verification on boards
     actor: contributor
-    goal: The bench boards confirm what the desktop cannot measure.
+    goal: The bench boards confirm what the host cannot measure.
     systems: [MoonDeck]
     page: reference/testing.md
     intro: |
-      The desktop cannot show platform code, timing or memory, so a change touching them is verified on boards. Per-module timing and memory per platform are in [Performance](reference/performance.md).
+      The host cannot show platform code, timing or memory, so a change touching them is verified on boards. Per-module timing and memory per platform are in [Performance](reference/performance.md).
     steps:
       - id: approval
         say: Ask the product owner before flashing.
-        when: { manual: "Build and flash only on approval, with the desktop already clean." }
+        when: { manual: "Build and flash only on approval, with the host already clean." }
       - id: flash
         say: Build and flash the board.
         when: { process: esp32-build-flash }
@@ -202,7 +202,7 @@ processes:
       properties:
         target:
           type: string
-          enum: [Desktop, Board]
+          enum: [Host, Board]
           description: "Which target's contract moves?"
     intro: |
       A contract is a hand-set promise, a tick ceiling and a heap floor per target. It moves only for a reason: an optimization that earns a tighter ceiling, or an accepted cost that loosens one. The contract fields are in [Performance contracts](reference/testing.md#performance-contracts-contracttarget).
@@ -212,9 +212,9 @@ processes:
         when: { manual: "A code change improved performance, or you accept a regression on purpose." }
         detail: |
           A tick that rose without a reason in the diff is a regression to explain, not a contract to loosen.
-      - id: desktop
+      - id: host
         say: Re-run the scenario with the reason.
-        given: [{ input: target, equals: Desktop }]
+        given: [{ input: target, equals: Host }]
         when: { run: { script: moondeck/scenario/run_scenario.py, args: '--module <Name> --update-contract --reason "<why>"' } }
         detail: |
           Both flags are required together, the reason in a few words, such as `Layer LUT inline copy`. The run stamps `set_by` with the run's date and writes the new contract for the host target only.
@@ -242,7 +242,7 @@ processes:
     systems: [MoonDeck]
     page: reference/testing.md
     intro: |
-      The harness feeds audio files through `AudioService`'s own analysis on the desktop, faster than real time, and scores the tempo against labels: [bench_tempo](../moondeck/MoonDeck.md#bench_tempo). An agent runs it from the command line; the product owner reviews on the **Tempo Report** card, which shows the latest report and starts nothing. The tempo is a baseline in Python, Ellis's autocorrelation of the shipped flux, so a figure describes the flux under that baseline, read over whole files near full scale.
+      The harness feeds audio files through `AudioService`'s own analysis on the host, faster than real time, and scores the tempo against labels: [bench_tempo](../moondeck/MoonDeck.md#bench_tempo). An agent runs it from the command line; the product owner reviews on the **Tempo Report** card, which shows the latest report and starts nothing. The tempo is a baseline in Python, Ellis's autocorrelation of the shipped flux, so a figure describes the flux under that baseline, read over whole files near full scale.
     steps:
       - id: agree
         say: Agree with the product owner what runs.

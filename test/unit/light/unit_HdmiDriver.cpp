@@ -1,7 +1,7 @@
 /// @module HdmiDriver
 /// @also Drivers, Correction
 
-/// The HDMI driver's frames and status, pinned without a bridge: the desktop platform records what the driver handed over (platform.h § HDMI). The bench then only has to confirm a monitor shows it.
+/// The HDMI driver's frames and status, pinned without a bridge: the host platform records what the driver handed over (platform.h § HDMI). The bench then only has to confirm a monitor shows it.
 
 #include "doctest.h"
 #include "light/drivers/HdmiDriver.h"

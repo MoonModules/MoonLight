@@ -120,7 +120,7 @@ def test_the_generated_set_writes_its_tracks_its_notes_and_its_version(tmp_path)
 
 
 @pytest.mark.skipif(not bench_notes.bench_tempo.binary().exists() or shutil.which("ffmpeg") is None,
-                    reason="needs mm_tempo (build_desktop.py --tests or bench_notes.py builds it) and FFmpeg")
+                    reason="needs mm_tempo (build_host.py --tests or bench_notes.py builds it) and FFmpeg")
 def test_the_generated_set_reads_through_the_shipped_analysis_and_the_note_effects_as_pinned(tmp_path):
     bench_notes.generate(tmp_path / "generated")
     rows = {r["name"]: r["scores"] for r in bench_notes.run(bench_notes.collect(tmp_path / "generated", 0), tmp_path / "out", no_build=True)}

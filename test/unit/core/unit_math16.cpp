@@ -1,7 +1,11 @@
 /// @module math16
 /// @also math8
 
-/// The 16-bit fixed-point tier the power-function contract is written in. What matters here is not that the functions compute something, but the three properties large fixtures depend on: sin16 is SMOOTH (no 8-bit staircase), map32 does not lose the last column to a fencepost, and BeatPhase keeps animating when the frame time is under a millisecond, the failure that silently froze hand-rolled accumulators on desktop.
+/// The 16-bit fixed-point tier the power-function contract is written in.
+///
+/// What matters here is the three properties large fixtures depend on: sin16 is SMOOTH (no 8-bit staircase), map32 does not lose the last column to a fencepost, and BeatPhase keeps animating when the frame time is under a millisecond.
+///
+/// That last failure silently froze hand-rolled accumulators on host.
 
 #include "doctest.h"
 #include "core/util/math16.h"

@@ -1,7 +1,7 @@
 /// @module Layer
 /// @also draw, particles
 
-/// The system rule from architecture.md: **everything that changes over time is driven by elapsed time, never by the frame count.** An effect advanced a fixed amount per frame runs at whatever speed the hardware renders, the same setting is an explosion on a desktop at thousands of fps and a drift on an ESP32 at a few hundred. The user sets a speed; the hardware must not get a vote.
+/// The system rule from architecture.md: **everything that changes over time is driven by elapsed time, never by the frame count.** An effect advanced a fixed amount per frame runs at whatever speed the hardware renders, the same setting is an explosion on a host at thousands of fps and a drift on an ESP32 at a few hundred. The user sets a speed; the hardware must not get a vote.
 ///
 /// This sweeps EVERY effect (the list is generated from the source tree, so a new effect is audited without touching this file) and renders the same span of SIMULATED time at two very different framerates. A time-driven effect produces a comparable amount of light either way; a frame-counting one does not.
 ///

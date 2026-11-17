@@ -19,11 +19,11 @@ struct WiFiNetwork {
     mm::NetworkModule net;
     mm::WiFiModule wifi;
     WiFiNetwork() {
-        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
+        mm::platform::setTestDeviceNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&wifi);
         net.setWiFi(&wifi);
     }
-    ~WiFiNetwork() { net.removeChild(&wifi); mm::platform::setTestHostNetwork(true); }   // the child is a member, not the tree's to free
+    ~WiFiNetwork() { net.removeChild(&wifi); mm::platform::setTestDeviceNetwork(true); }   // the child is a member, not the tree's to free
 };
 }  // namespace
 
@@ -78,7 +78,7 @@ TEST_CASE("NetworkModule::setWifiCredentials accepts long SSID without crash") {
 
 // The mode control names the cascade state; with the host's network out, every init stub fails, so it reads Idle.
 TEST_CASE("NetworkModule mode control reflects current state") {
-    mm::platform::setTestHostNetwork(false);
+    mm::platform::setTestDeviceNetwork(false);
     mm::NetworkModule net;
     net.setup();
     // Clears before building, so the controls setup() already built are not duplicated.
@@ -95,7 +95,7 @@ TEST_CASE("NetworkModule mode control reflects current state") {
         }
     }
     CHECK(foundMode);
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 // parseDottedQuad (in Control.h) is the validator on every IPv4 write, over both the HTTP API and persistence. Pin the contract.
@@ -146,7 +146,7 @@ TEST_CASE("the station tries each known network in priority order before the acc
         w.wifi.remember("third", "pw3");
         w.wifi.remember("second", "pw2");
         w.wifi.remember("first", "pw1");
-        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi
+        w.net.setup();   // no Ethernet on the host, so it starts on WiFi
         CHECK(std::strcmp(mm::platform::testLastStaSsid(), "first") == 0);
         mm::platform::setTestNowMs(1000 + 11000);   // past the per-network grace
         w.net.tick1s();
@@ -687,7 +687,7 @@ TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins a
     {
         WiFiNetwork w;
         w.wifi.remember("coproc-home", "pw");
-        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi, which refuses
+        w.net.setup();   // no Ethernet on the host, so it starts on WiFi, which refuses
         CHECK(std::strstr(w.net.status(), "waiting for the WiFi radio") != nullptr);
         CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") != 0);
         mm::platform::setTestNowMs(1000 + 5000);
@@ -709,7 +709,7 @@ TEST_CASE("a host's own network is its wired link") {
     if (!(ip[0] | ip[1] | ip[2] | ip[3])) return;   // the case needs the test machine's own address
     FrozenClock clock;
     WiFiNetwork w;
-    mm::platform::setTestHostNetwork(true);   // the fixture keeps it out; this case is about it
+    mm::platform::setTestDeviceNetwork(true);   // the fixture keeps it out; this case is about it
     w.wifi.remember("host-only", "pw");   // a name no other case joins, so the seam's last SSID tells in any order
     w.net.setup();
     w.net.rebuildControls();

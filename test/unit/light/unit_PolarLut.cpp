@@ -176,12 +176,12 @@ TEST_CASE("the index form and the coordinate form address the same pixel") {
 }
 
 TEST_CASE("the table is refused rather than taking the last of a small heap") {
-    // On a device without PSRAM the tables are a real fraction of the heap. Asking for a wall-sized grid must leave the reserve that protects stacks, WiFi and HTTP intact, and the caller then computes the address per pixel instead. The desktop reports unlimited heap, so this pins the arithmetic of the gate rather than the allocation.
+    // On a device without PSRAM the tables are a real fraction of the heap. Asking for a wall-sized grid must leave the reserve that protects stacks, WiFi and HTTP intact, and the caller then computes the address per pixel instead. The host reports unlimited heap, so this pins the arithmetic of the gate rather than the allocation.
     Owner o;
     const std::size_t reserve = platform::HEAP_RESERVE;
     const std::size_t free = platform::freeHeap();
     if (free == 0) {
-        // Desktop: unlimited, so even a wall-sized table is granted and the fallback is unused.
+        // Host: unlimited, so even a wall-sized table is granted and the fallback is unused.
         CHECK(o.lut.prepare(128, 128, true));
         CHECK(o.lut.bytes() == 128 * 128 * 4);
     } else {

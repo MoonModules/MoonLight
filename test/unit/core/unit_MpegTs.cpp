@@ -1,7 +1,7 @@
 /// @module MpegTs
 /// @also HlsDriver
 
-/// The MPEG-TS packaging the ESP32-P4 does for itself, where desktop hands the whole job to ffmpeg. These tests are why the muxer is pure logic in a header: the packet structure a player has to accept is pinned here, on the host, rather than only by watching a TV.
+/// The MPEG-TS packaging the ESP32-P4 does for itself, where host hands the whole job to ffmpeg. These tests are why the muxer is pure logic in a header: the packet structure a player has to accept is pinned here, on the host, rather than only by watching a TV.
 
 #include "doctest.h"
 #include "core/util/MpegTs.h"

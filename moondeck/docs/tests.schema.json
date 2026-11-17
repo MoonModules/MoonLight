@@ -19,7 +19,7 @@
       "additionalProperties": false,
       "properties": {
         "kind": { "enum": ["unit", "scenario", "live", "python", "js", "check"] },
-        "size": { "enum": ["small", "medium", "large"], "description": "Google's test sizes: small in one process, medium on the desktop with a server, large on hardware or a network." },
+        "size": { "enum": ["small", "medium", "large"], "description": "Google's test sizes: small in one process, medium on the host with a server, large on hardware or a network." },
         "title": { "type": "string", "description": "A unit test's sentence, a scenario's name, a check's one line." },
         "description": { "type": "string" },
         "file": { "type": "string", "description": "The path of the test, relative to the repository." },

@@ -507,7 +507,7 @@ private:
     /// Whether the heap can afford an allocation: true when unlimited or the budget suffices.
     static bool canAllocate(size_t bytesNeeded) {
         size_t availableHeap = platform::freeHeap();
-        if (availableHeap == 0) return true; // desktop: unlimited
+        if (availableHeap == 0) return true; // host: unlimited
         size_t internalHeap = platform::freeInternalHeap();
         if (internalHeap > 0 && internalHeap <= platform::HEAP_RESERVE) return false;
         size_t budget = availableHeap > platform::HEAP_RESERVE ? availableHeap - platform::HEAP_RESERVE : 0;

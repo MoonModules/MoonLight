@@ -32,7 +32,7 @@ inline bool addressCounts(const uint8_t ip[4], bool buildHasWiFi, const uint8_t*
 ///
 /// Network holds the cascade, its mode and the `<name>.local` address it advertises on whichever interface is up; each interface's settings are on its own card: Ethernet, WiFi and the access point.
 ///
-/// A desktop builds the same cards over stubs, for developer mode. The order is described under @xref{the-cascade|The cascade} in the header.
+/// A host builds the same cards over stubs, for developer mode. The order is described under @xref{the-cascade|The cascade} in the header.
 ///
 /// @guide
 ///

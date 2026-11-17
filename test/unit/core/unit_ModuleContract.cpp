@@ -24,7 +24,7 @@ namespace {
 // `hostDependent`: the result depends on the host, so passing elsewhere keeps the entry; `registersHere`: false where a capability flag keeps the type off this host.
 struct Known { const char* type; const char* reason; bool hostDependent = false; bool registersHere = true; };
 
-// Types that cannot be placed on a desktop run, each skipped for the reason given.
+// Types that cannot be placed on a host run, each skipped for the reason given.
 const std::vector<Known> kNotPlaced = {
 };
 

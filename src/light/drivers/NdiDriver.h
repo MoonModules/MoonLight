@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// One light per pixel, placed where the layout puts it and corrected as the wall is. Where @ref PreviewDriver draws the lights for a person, this hands the same frame to a production tool.
 ///
-/// Desktop only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with @ref NetworkSendDriver, and takes them in with @ref NetworkReceiveEffect.
+/// Host only, as no NDI runtime exists for the ESP32 chips. A board reaches the same tools over Art-Net, sACN or DDP with @ref NetworkSendDriver, and takes them in with @ref NetworkReceiveEffect.
 ///
 /// @attribution NDI, Delphium
 ///
@@ -39,7 +39,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// **Why NDI.** One implementation covers every desktop platform, discovers by name and crosses machines, where Spout and Syphon do not. At LED-wall pixel counts the latency difference sits far below one frame.
+/// **Why NDI.** One implementation covers every host platform, discovers by name and crosses machines, where Spout and Syphon do not. At LED-wall pixel counts the latency difference sits far below one frame.
 ///
 /// **The runtime is the user's.** MoonLight is GPL-3.0 and the runtime is a proprietary closed binary, so it is never bundled or linked. The platform layer resolves it on demand, and no NDI type appears in this header.
 class NdiDriver : public DriverBase {
