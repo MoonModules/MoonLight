@@ -266,6 +266,8 @@ protected:
 
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
+    /// Set this driver's default curve, from its constructor.
+    void setDefaultCurve(Correction::Curve c) { curveSel_ = static_cast<uint8_t>(c); }
 
     /// Give the correction the gained tables its profile asks for, and take them back when it asks for none; true when one is new, which the rebuild before could not fill.
     bool resolveGainTables() {

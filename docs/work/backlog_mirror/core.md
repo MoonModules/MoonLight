@@ -519,3 +519,18 @@ Drivers is the largest root in the state, 35 KB of the Teensy's view where Servi
 The `palette` options carry 66 palettes with 16 hex colors each for the dropdown's swatches, which change only with the firmware or a palette script: the state carries the names, and the page fetches the colors from a route the browser caches across reloads.
 FixtureProfiles' `profiles` summary is 1.9 KB, and its `detail`, 14.5 KB, repeats each expanded row's editor fields, their name, type and bounds, for every profile: the row schema is sent once, as `optionSets` already sends the role names, and each row carries its values.
 Together Drivers falls to about 12 KB, and the largest single control, the block a streamed state still needs whole, from 15 KB to a few.
+
+### Renames migrate on the first page load after an update, within a two-release window
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=308167371)
+
+**Why.** A control or type rename reaches a device's saved config only through a Backup and Restore, since migrate.js runs in the browser on Restore and the device skips a control it no longer has at boot. On 2026-11-17 the desktop's Network Send lost its `hosts` value this way after the receivers rename; it survived only because nothing had saved Drivers.json yet. The rename table (`TYPE_RENAMES`, `CONTROL_RENAMES` in src/ui/migrate.js) also only grows.
+
+**What.**
+- **The UI migrates on the first page load after an update**: it reads the device's config files, runs migrate.js over them as a Restore does, and writes back what changed, with the same report. migrate.js is already in flash inside the embedded UI, so no second table and no extra flash.
+- **The device preserves a key it does not recognize when it saves**, so a renamed control's value survives until the page migrates it.
+- **A support window**: rename entries cover upgrades from the previous stable release on; an entry older than that release is deleted at the next release, so the table stays about two releases of renames. MIGRATING says a config older than the window loses those settings.
+
+**Out.** "Backup and Restore after updating" for renames; a table that grows forever.
+
+**Not.** A firmware-embedded copy of the table: it would duplicate migrate.js in flash and grow with it.

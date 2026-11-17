@@ -952,15 +952,15 @@ static void eachInterface(F f) {
     ::freeifaddrs(list);
 }
 #endif
-static char hostIf_[32] = {};   ///< the interface that holds hostIp()'s address, empty where none does
-/// Name in hostIf_ the interface holding `addr`, whose link the Network card describes; empty where none does.
-static void findHostIf(const in_addr& addr) {
-    hostIf_[0] = 0;
+static char deviceIf_[32] = {};   ///< the interface that holds deviceIp()'s address, empty where none does
+/// Name in deviceIf_ the interface holding `addr`, whose link the Network card describes; empty where none does.
+static void findDeviceIf(const in_addr& addr) {
+    deviceIf_[0] = 0;
 #ifndef _WIN32
     eachInterface([&](const ifaddrs& a) {
-        if (!a.ifa_addr || a.ifa_addr->sa_family != AF_INET || !a.ifa_name || hostIf_[0]) return;
+        if (!a.ifa_addr || a.ifa_addr->sa_family != AF_INET || !a.ifa_name || deviceIf_[0]) return;
         if (reinterpret_cast<const sockaddr_in*>(a.ifa_addr)->sin_addr.s_addr != addr.s_addr) return;
-        std::snprintf(hostIf_, sizeof(hostIf_), "%s", a.ifa_name);
+        std::snprintf(deviceIf_, sizeof(deviceIf_), "%s", a.ifa_name);
     });
 #else
     (void)addr;
@@ -980,7 +980,7 @@ static bool routeAddress(sockaddr_in& local) {
     close_sock(fd);
     return got;
 }
-/// The host's LAN address (host_address.h), walking the interfaces when the route's address changes, as a VPN coming up changes it, or ten seconds on, as a network change behind a VPN needs, since the render loop reads hostIp().
+/// The host's LAN address (host_address.h), walking the interfaces when the route's address changes, as a VPN coming up changes it, or ten seconds on, as a network change behind a VPN needs, since the render loop reads deviceIp().
 static bool hostAddress(in_addr& out) {
     sockaddr_in route{};
     out.s_addr = routeAddress(route) ? route.sin_addr.s_addr : 0;
@@ -1004,7 +1004,7 @@ static bool hostAddress(in_addr& out) {
 #endif
     return out.s_addr != 0;
 }
-const char* hostIp() {
+const char* deviceIp() {
     // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; naming the interface runs only when the address changed.
     static char ip[INET_ADDRSTRLEN] = {};
     static uint32_t resolvedAt = 0;
@@ -1016,7 +1016,7 @@ const char* hostIp() {
     in_addr local{};
     if (hostAddress(local)) inet_ntop(AF_INET, &local, ip, sizeof(ip));
     else ip[0] = 0;
-    if (std::strcmp(was, ip) != 0) findHostIf(local);   // cleared with the address, since no interface holds none
+    if (std::strcmp(was, ip) != 0) findDeviceIf(local);   // cleared with the address, since no interface holds none
     return ip;
 }
 
@@ -1499,7 +1499,7 @@ static bool testEthFaked() MM_NONBLOCKING { return testEthIp_[0] || testEthIp_[1
 void setTestEthIPv4(const uint8_t* ip) { for (int i = 0; i < 4; i++) testEthIp_[i] = ip ? ip[i] : 0; }
 // The host's own network is the desktop's wired link, the one ethGetIPv4 reports: whatever the OS routes through, up whenever it has an address. A test turns it off to drive the cascade on the fakes alone.
 static bool testHostNetwork_ = true;
-void setTestHostNetwork(bool counts) { testHostNetwork_ = counts; }
+void setTestDeviceNetwork(bool counts) { testHostNetwork_ = counts; }
 /// What carries the desktop's wired link: see wiredLink() below.
 enum class WiredLink : uint8_t { Faked, Host, Adapter, None };
 static bool hostLinkUp() MM_NONBLOCKING {
@@ -2097,7 +2097,7 @@ const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Ho
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
     switch (wiredLink()) {
-        case WiredLink::Host:    posixIfLink(hostIf_, m); return m;      // the route interface's rate, which WiFi leaves unstated
+        case WiredLink::Host:    posixIfLink(deviceIf_, m); return m;      // the route interface's rate, which WiFi leaves unstated
         case WiredLink::Adapter: posixAdapterLink(m); return m;          // bound and up: the OS's answer, 0 included
         case WiredLink::Faked:   return ethTestLinkSpeed_;
         default: return 0;   // a rate the OS states is the one shown, since inventing one is worse than admitting it is unknown
@@ -2117,7 +2117,7 @@ void ethGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
     // No real interface state, but the discovery module needs this host's address to scan from, so the outbound-route answer is reported as the wired one it reads first.
     if (testEthFaked()) { for (int i = 0; i < 4; i++) out[i] = testEthIp_[i]; return; }
     out[0] = out[1] = out[2] = out[3] = 0;
-    const char* ip = hostIp();
+    const char* ip = deviceIp();
     if (ip && ip[0]) {
         // Parse the address with the system call already used here, since this layer does not include the core's parser.
         in_addr a{};
@@ -2271,7 +2271,7 @@ uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
 void mdnsShutdown() { if (hostMdns_.end) hostMdns_.end(); }
 
 // The system resolver answers `.local` too on macOS and Windows, and on Linux with nss-mdns, so one call covers both kinds of name.
-bool resolveHost(const char* name, uint8_t ip[4]) {
+bool resolveName(const char* name, uint8_t ip[4]) {
     struct addrinfo hints = {};
     hints.ai_family = AF_INET;
     struct addrinfo* res = nullptr;
@@ -2282,8 +2282,8 @@ bool resolveHost(const char* name, uint8_t ip[4]) {
     return true;
 }
 
-// resolveHost runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
-LookupStep resolveHostStep(const char*, uint8_t*) { return LookupStep::Failed; }
+// resolveName runs on the resolver's worker task here, so this step answers Failed: it is reached only when that task could not be created.
+LookupStep resolveNameStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // Advertising is a device concern, so these are stubs; discovery itself is datagram presence and runs here too, testable over real loopback.
 
 // No partitions on desktop: there is no recovery image and nothing to boot into, unless a host test gives it one to read.

@@ -848,10 +848,10 @@ private:
     static void writeControl(JsonSink& sink, const ControlDescriptor& c);
     /// The flags after a control's value and extras, and its closing brace.
     static void writeControlTail(JsonSink& sink, const ControlDescriptor& c);
-    /// For a hosts text, the boards the device list knows among its entries, as `"known":{entry: counterpart}`.
-    static void writeKnownHosts(JsonSink& sink, const char* text);
-    /// The entries alone, between the braces writeKnownHosts writes.
-    static void writeKnownHostEntries(JsonSink& sink, const char* text);
+    /// For a receivers text, the boards the device list knows among its entries, as `"known":{entry: counterpart}`.
+    static void writeKnownReceivers(JsonSink& sink, const char* text);
+    /// The entries alone, between the braces writeKnownReceivers writes.
+    static void writeKnownReceiverEntries(JsonSink& sink, const char* text);
     /// Emit a module's status and severity where set, shared so the two endpoints stay in sync.
     static void writeStatus(JsonSink& sink, MoonModule* mod);
 

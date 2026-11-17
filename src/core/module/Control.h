@@ -187,8 +187,8 @@ struct ControlDescriptor {
     bool live : 1 = false;
     /// Whether a number field reads and writes hexadecimal, for a value its datasheet gives in hex, such as an I2C address.
     bool hex : 1 = false;
-    /// Whether a text holds an address or a list of hosts, so the UI names the boards it knows among them.
-    bool hosts : 1 = false;
+    /// Whether a text holds an address or a list of receivers, so the UI names the boards it knows among them.
+    bool receivers : 1 = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
@@ -411,9 +411,9 @@ public:
         if (i < count_) controls_[i].numberField = numberField;
     }
 
-    /// Mark a text as holding hosts, an address or a list of addresses and names, so the UI shows each known board's name beside its address.
-    void setHostsField(uint8_t i) {
-        if (i < count_) controls_[i].hosts = true;
+    /// Mark a text as holding receivers, an address or a list of addresses and names, so the UI shows each known board's name beside its address.
+    void setReceiversField(uint8_t i) {
+        if (i < count_) controls_[i].receivers = true;
     }
 
     /// Render a numeric as a hexadecimal number input, as `0x18`.

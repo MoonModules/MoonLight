@@ -66,15 +66,15 @@ With the MIDI service's `source` on USB, the desk plugs into the board instead o
 
 ## A desk on the network
 
-With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `host` names the other end: a device sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk.
+With `source` on network, the desk is an [RTP-MIDI](https://www.rfc-editor.org/rfc/rfc6295) session, the standard Apple's Network MIDI uses. `participant` names the other end: a device sharing the desk on its USB port, a desk with a network port, or a computer sharing its desk.
 
-The service invites the host and asks again every second until it answers, so either side may start first. With `host` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the board's own USB port.
+The service invites the participant and asks again every second until it answers, so either side may start first. With `participant` empty the service waits to be invited, as a Mac's Audio MIDI Setup does when its Network window connects to the board. Windows does the same with the free rtpMIDI driver. The greeting, the surface and the touch handling are those of a desk on the board's own USB port.
 
 ### Sharing a desk with another board
 
-With `source` on USB and `share` on, the board's USB desk drives nothing here: the board is a network MIDI cable, as an RTP-MIDI interface is. On the board the desk should drive, `source` is network and `host` is the first board, by address or by name: `<name>.local`. A board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`, and a Mac lists it in Audio MIDI Setup's Network window the same way.
+With `source` on USB and `share` on, the board passes its USB desk on: it is a network MIDI cable, as an RTP-MIDI interface is. On the board the desk should drive, `source` is network and `participant` is the first board, by address or by name: `<name>.local`. A board waiting to be invited announces itself over Bonjour as `_apple-midi._udp`, and a Mac lists it in Audio MIDI Setup's Network window the same way.
 
-The sharing board accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the host invites again until the bridge says yes. One host at a time; a second is refused while the first holds the session. The host's status says why it was refused: `no desk`, `in use`, or `it invites` when the board it invited has a `host` of its own.
+The sharing board accepts a session only while a desk is plugged in, so a desk plugged in later is greeted: the participant invites again until the bridge says yes. One participant at a time; a second is refused while the first holds the session. The inviting board's status says why it was refused: `no desk`, `in use`, or `it invites` when the board it invited has a `participant` of its own.
 
 Messages pass both ways unchanged. The one exception is a SysEx the desk sends, which the USB side does not pass on; the greeting SysEx from the host reaches the desk. A lost message is not repaired, since the next fader message replaces it and a lost press is pressed again.
 
@@ -130,7 +130,7 @@ In MoonLight: **Services → OSC**.
 | `feedbackPort` | `9001` | where to answer. Must match the `osc-port` in the launcher |
 | `port` | `9000` | where the device listens. Matches the `send` port |
 
-Leave `hosts` empty, with `addressing` on `unicast`. Empty means "answer whoever last wrote to us", which finds your surface on its own. Fill it in only when you want feedback sent somewhere other than the thing driving it.
+Leave `receivers` empty, with `addressing` on `unicast`. Empty means "answer whoever last wrote to us", which finds your surface on its own. Fill it in only when you want feedback sent somewhere other than the thing driving it.
 
 <img src="../assets/core/OscService-open-stage-control.png" width="600" alt="The shipped Open Stage Control session beside MoonLight's own Control card: eight switches, eight encoders and eight faders in both">
 
@@ -197,7 +197,7 @@ A pad's light listens on `/mm/padstate/N`: dark when the pad is empty, dim when 
 
 With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface. That keeps a client honest and moves a motorized fader.
 
-- `addressing` picks where it goes: `unicast` to each of `hosts`, or to whoever last wrote when `hosts` is empty, or `multicast` to `group`.
+- `addressing` picks where it goes: `unicast` to each of `receivers`, or to whoever last wrote when `receivers` is empty, or `multicast` to `group`.
 - The default `group`, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in. A second rig on the same network picks another.
 - `feedbackPort` is where the client LISTENS, which is not the port the device listens on (Open Stage Control calls its own `osc-port`).
 

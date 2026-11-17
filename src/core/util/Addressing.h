@@ -1,17 +1,17 @@
 #pragma once
 
-#include "core/util/HostList.h"   // Host: a unicast send goes to each parsed host
+#include "core/util/ReceiverList.h"   // Receiver: a unicast send goes to each parsed receiver
 
 #include <cstdint>
 
 namespace mm {
 
-/// One rule for every service that sends one packet to many receivers: unicast to a host list, multicast to a group, or broadcast.
+/// One rule for every service that sends one packet to many receivers: unicast to a receiver list, multicast to a group, or broadcast.
 /// Why each, and how discovery proves a network drops multicast: [Multicast and IGMP snooping](../../../explanation/architecture/moonlight.md#multicast-and-igmp-snooping).
 
 /// How a service sends to many receivers; a service offers only the modes its protocol allows.
 enum class Addressing : uint8_t {
-    Unicast,              ///< a copy to each host in the list
+    Unicast,              ///< a copy to each receiver in the list
     Multicast,            ///< one copy to the group
     MulticastBroadcast,   ///< the group, plus the broadcast address
     Broadcast,            ///< one copy to every device on the subnet
@@ -41,13 +41,13 @@ inline bool alsoBroadcast(Addressing mode, Traffic traffic) {
         || (mode == Addressing::Multicast && traffic == Traffic::Occasional && NetworkPath::multicastDropped);
 }
 
-/// Send one packet where `mode` says through `send(ip)`, skipping a named host not resolved yet.
+/// Send one packet where `mode` says through `send(ip)`, skipping a named receiver not resolved yet.
 template <class Send>
-void sendAddressed(Addressing mode, Traffic traffic, const Host* hosts, uint8_t hostCount, const uint8_t group[4], Send&& send) {
+void sendAddressed(Addressing mode, Traffic traffic, const Receiver* receivers, uint8_t receiverCount, const uint8_t group[4], Send&& send) {
     switch (mode) {
         case Addressing::Unicast:
-            for (uint8_t i = 0; i < hostCount; i++) {
-                const uint8_t* ip = hosts[i].ip;
+            for (uint8_t i = 0; i < receiverCount; i++) {
+                const uint8_t* ip = receivers[i].ip;
                 if (ip[0] || ip[1] || ip[2] || ip[3]) send(ip);
             }
             return;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
-#include "core/util/fnv.h"      // fnv1a: the sync hosts, compared as one number
+#include "core/util/fnv.h"      // fnv1a: the sync receivers, compared as one number
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
@@ -187,10 +187,10 @@ public:
     /// The addressings `addressing` picks from, in its option order.
     enum SyncAddressing : uint8_t { kAddressMulticast, kAddressUnicast, kAddressCount };
     /// How the analysis travels: multicast, which WLED hears, or unicast.
-    /// @guide Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it.
+    /// @guide Unicast to `receivers` reaches a few MoonLight boards faster on WiFi, which retries it.
     uint8_t  addressing = kAddressMulticast;
     /// The boards a unicast send reaches, addresses or names.
-    char     hosts[64] = {};
+    char     receivers[64] = {};
     /// The packet formats `syncFormat` picks from, in its option order.
     enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatBoth, kFormatCount };
     /// What a sending board sends: MoonLight's whole frame, WLED's packet, or both.
@@ -267,8 +267,8 @@ public:
             static constexpr const char* kSyncModeNames[] = {"multicast", "unicast"};
             controls_.addSelect("addressing", addressing, kSyncModeNames, kAddressCount);
             controls_.setHidden(controls_.count() - 1, !localMode || !send);
-            controls_.addText("hosts", hosts, sizeof(hosts));
-            controls_.setHostsField(controls_.count() - 1);
+            controls_.addText("receivers", receivers, sizeof(receivers));
+            controls_.setReceiversField(controls_.count() - 1);
             controls_.setHidden(controls_.count() - 1, !localMode || !send || addressing != kAddressUnicast);
         }
         // The pattern picker, shown only in the synthesized mode.
@@ -305,7 +305,7 @@ public:
     bool affectsPrepare(const char* name) const override {
         // The pins, the kind of microphone and the device re-create the channel; the rate, the mode and the sync settings rebind, and the format decides whether sending needs the notes.
         static constexpr const char* kPrepares[] = {"wsPin", "sdPin", "sckPin", "mclkPin", "micMode", "device", "sampleRate",
-                                                    "mode", "send audio", "syncFormat", "syncPort", "addressing", "hosts"};
+                                                    "mode", "send audio", "syncFormat", "syncPort", "addressing", "receivers"};
         if (std::strncmp(name, "codec", 5) == 0) return true;   // the codec and its bus, which re-init it
         for (const char* p : kPrepares) if (std::strcmp(name, p) == 0) return true;
         return false;
@@ -329,7 +329,7 @@ public:
             syncedWith_ = syncConfig();
             syncSet_ = true;
         }
-        sync_.parseHosts(hosts);
+        sync_.parseReceivers(receivers);
     }
     /// A reader's demand turned on or off: count them again at the frame boundary, and switch the notes when that changes whether anything reads them.
     void onDemandChanged() override {
@@ -628,7 +628,7 @@ public:
                          static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);   // the samples the input delivered this second, its real rate
         else
             mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz%s%s", static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);
-        sync_.refreshHosts(hosts);
+        sync_.refreshReceivers(receivers);
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
@@ -670,10 +670,10 @@ private:
         uint8_t mode, addressing;
         bool send;
         uint16_t port;
-        uint32_t hosts;
+        uint32_t receivers;
         bool operator==(const SyncConfig&) const = default;
     };
-    SyncConfig syncConfig() const { return {mode, addressing, send, syncPort, fnv1a(hosts, std::strlen(hosts))}; }
+    SyncConfig syncConfig() const { return {mode, addressing, send, syncPort, fnv1a(receivers, std::strlen(receivers))}; }
     SyncConfig syncedWith_{};
     bool syncSet_ = false;
     uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it

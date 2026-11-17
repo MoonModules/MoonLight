@@ -1,7 +1,7 @@
 {
-  "commit": "500e4002",
+  "commit": "dac5ef15",
   "flash": {
-    "esp32s3-n16r8": 2536240,
+    "esp32s3-n16r8": 2537632,
     "esp32": 2315424,
     "esp32p4rev1-eth": 2655776,
     "esp32p4rev1-eth-wifi": 2876672,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2489104,
-    "desktop-macos": 2663344,
+    "desktop-macos": 2663504,
     "desktop-windows": 1925120,
     "esp32c3": 2405632,
     "desktop-linux": 2548000,
@@ -800,8 +800,8 @@
       }
     },
     "desktop-macos": {
-      "tick_us": 9,
-      "fps": 111111,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -842,11 +842,11 @@
   },
   "loc": {
     "core": 38012,
-    "light": 36275,
-    "platform": 26492,
-    "ui": 14752,
-    "test": 88635,
-    "moondeck": 35926
+    "light": 36174,
+    "platform": 26646,
+    "ui": 14763,
+    "test": 88961,
+    "moondeck": 35928
   },
   "comments": {
     "core": {
@@ -854,40 +854,40 @@
       "ratio": 0.217
     },
     "light": {
-      "lines": 7535,
+      "lines": 7496,
       "ratio": 0.233
     },
     "platform": {
-      "lines": 4605,
-      "ratio": 0.195
+      "lines": 4670,
+      "ratio": 0.196
     },
     "ui": {
-      "lines": 3654,
+      "lines": 3657,
       "ratio": 0.262
     },
     "test": {
-      "lines": 8095,
+      "lines": 8130,
       "ratio": 0.105
     },
     "moondeck": {
-      "lines": 4528,
+      "lines": 4529,
       "ratio": 0.145
     }
   },
   "tests": {
-    "cases": 3372,
+    "cases": 3387,
     "scenarios": 37
   },
   "docs": {
-    "md_files": 124,
-    "md_lines": 19996,
-    "plans_files": 15,
-    "backlog_lines": 2898,
+    "md_files": 126,
+    "md_lines": 20177,
+    "plans_files": 17,
+    "backlog_lines": 2896,
     "lessons_lines": 458,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6488,
+    "functions": 6490,
     "over_threshold": 333,
     "worst_ccn": 128
   }

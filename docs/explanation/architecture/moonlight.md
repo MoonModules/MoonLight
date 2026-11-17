@@ -265,16 +265,16 @@ The trade is deliberate: **a chain must be homogeneous**. Mixing fixture types o
 
 ## Multicast and IGMP snooping
 
-Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../../src/core/util/Addressing.h), and a service offers the modes its protocol allows under one control, `addressing`, with `hosts` as its unicast list:
+Four things MoonLight sends to more than one listener. Every one goes through one helper, `sendAddressed` in [Addressing](../../../src/core/util/Addressing.h), and a service offers the modes its protocol allows under one control, `addressing`, with `receivers` as its unicast list:
 
 | | modes | why |
 |---|---|---|
-| Audio sync | multicast `239.0.0.2` for the MoonLight format and `239.0.0.1` for WLED's, or unicast to `hosts` | WLED's usermod sends and receives on its group, and the MoonLight format has its own, so a WLED device never wakes for a packet it cannot read; unicast reaches a few MoonLight boards faster on WiFi |
+| Audio sync | multicast `239.0.0.2` for the MoonLight format and `239.0.0.1` for WLED's, or unicast to `receivers` | WLED's usermod sends and receives on its group, and the MoonLight format has its own, so a WLED device never wakes for a packet it cannot read; unicast reaches a few MoonLight boards faster on WiFi |
 | Device discovery | multicast `239.255.77.77` plus broadcast by default | WLED announces and listens on the discovery port by broadcast |
-| OSC feedback | unicast to `hosts`, multicast, multicast plus broadcast | one desk driving several boards |
+| OSC feedback | unicast to `receivers`, multicast, multicast plus broadcast | one desk driving several boards |
 | Art-Net, E1.31, DDP output | unicast; E1.31 multicast; Art-Net broadcast | multicast is sACN's native mode, broadcast Art-Net's legacy one |
 
-**Unicast to a list** is N separate copies, each retried by WiFi at full speed. It works on every network, and it is the cheapest way to reach a handful of known receivers. A host may be a name, resolved in the background so the render thread never waits on DNS.
+**Unicast to a list** is N separate copies, each retried by WiFi at full speed. It works on every network, and it is the cheapest way to reach a handful of known receivers. A receiver may be a name, resolved in the background so the render thread never waits on DNS.
 
 **Broadcast** reaches every device on the subnet. Each one takes the interrupt, walks up the stack, finds nothing listening on the port and discards the packet. At LED frame rates that is real work imposed on every phone, laptop and printer on the LAN.
 

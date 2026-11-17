@@ -421,3 +421,58 @@ TEST_CASE("render-split: the stall warning clears once the worker is healthy aga
     CHECK(std::strlen(r.drivers.status()) == 0);       // and the card stops crying stall
     r.drivers.release();
 }
+
+namespace {
+// Wedges its first tick on the worker until let go, as a core starved by other load does; every later tick returns at once.
+class StallingDriver : public mm::DriverBase {
+public:
+    void setSourceBuffer(mm::Buffer* b) override { src_ = b; }
+    // DELIBERATELY blocking, despite MM_NONBLOCKING: the wait IS the stall this test needs, as SlowDriver's is.
+    void tick() MM_NONBLOCKING override {
+        std::unique_lock<std::mutex> lk(m_);
+        if (!stalled_) { stalled_ = true; cv_.wait_for(lk, 5s, [this] { return released_; }); }
+    }
+    void letGo() { { std::scoped_lock<std::mutex> lk(m_); released_ = true; } cv_.notify_all(); }
+    mm::Buffer* src_ = nullptr;
+private:
+    std::mutex m_;
+    std::condition_variable cv_;
+    bool stalled_ = false;
+    bool released_ = false;
+};
+}  // namespace
+
+// A worker that misses the frame boundary drops the split to inline, and the drivers still read the shared buffer, so it must keep receiving frames: on 2026-11-17 a desktop under build load froze its preview and Network Send on the last frame here.
+TEST_CASE("render-split: after a stalled worker drops the split to inline, new frames still reach the drivers") {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    mm::Effects layers;
+    mm::Layer layer;
+    mm::Drivers drivers;
+    grid.width = 16; grid.height = 1; grid.depth = 1;
+    layouts.addChild(&grid);
+    layer.setChannelsPerLight(3);
+    layers.addChild(&layer);          // one identity layer: the shared buffer exists only for the split
+    layers.setLayouts(&layouts);
+    drivers.setEffects(&layers);
+    layers.applyState();
+
+    StallingDriver d;
+    drivers.addChild(&d);
+    drivers.setup();
+    drivers.prepare();
+    REQUIRE(drivers.renderSplitActive());
+
+    drivers.tick();                                    // the worker wedges inside d.tick()
+    std::thread releaser([&] { std::this_thread::sleep_for(700ms); d.letGo(); });   // past the 500 ms boundary wait
+    drivers.tick();                                    // times out, joins the worker, runs inline from here
+    releaser.join();
+    CHECK_FALSE(drivers.renderSplitActive());
+
+    layer.buffer().data()[0] = 0x42;                   // the effect draws a new frame
+    drivers.tick();
+    REQUIRE(d.src_);
+    REQUIRE(d.src_->data());
+    CHECK(d.src_->data()[0] == 0x42);                  // the drivers see it, rather than the frame from before the stall
+    drivers.release();
+}

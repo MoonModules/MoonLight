@@ -99,7 +99,7 @@
         "Drivers": {
           "Send": {
             "type": "NetworkSendDriver",
-            "hosts": "{host}",
+            "receivers": "{host}",
             "protocol": 2,
             "fps": 40
           }

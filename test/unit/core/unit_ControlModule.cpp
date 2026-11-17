@@ -1807,8 +1807,8 @@ TEST_CASE("an OSC pad press applies the preset on that pad, and its state goes o
     osc.feedback = true;
     auto& cs = osc.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "hosts") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.50");
-    osc.onControlChanged("hosts");
+        if (std::strcmp(cs[i].name, "receivers") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.50");
+    osc.onControlChanged("receivers");
     const auto send = [&](const char* address, int32_t value) {
         const auto p = oscInt(address, value);
         osc.handle(p.data(), p.size());
@@ -1841,15 +1841,15 @@ TEST_CASE("an OSC pad press applies the preset on that pad, and its state goes o
 }
 
 // Two boards feeding each other would otherwise echo a value between them for ever.
-TEST_CASE("OSC feedback never sends a value back to the host it came from, and sends a change made here") {
+TEST_CASE("OSC feedback never sends a value back to the receiver it came from, and sends a change made here") {
     Device board;
     WiredOsc osc;
     osc.defineControls();
     osc.feedback = true;
     auto& cs = osc.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "hosts") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.103");
-    osc.onControlChanged("hosts");
+        if (std::strcmp(cs[i].name, "receivers") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.103");
+    osc.onControlChanged("receivers");
     const uint8_t other[4] = {192, 168, 1, 103};
     board.control->addSurface(&osc, mm::ControlModule::Seed::Paced);
     REQUIRE(board.scheduler.setControl("Control", "fader4", "{\"value\":0}") == mm::Scheduler::SetControlResult::Ok);
@@ -1949,7 +1949,7 @@ TEST_CASE("a desk shared from a device's USB port drives another device's surfac
     midi.port = 25604;
     auto& cs = midi.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25504");
+        if (std::strcmp(cs[i].name, "participant") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25504");
     midi.prepare();
 
     std::vector<std::array<uint8_t, 4>> atDesk;
@@ -2001,7 +2001,7 @@ TEST_CASE("a Mackie desk shared over the network shows the display line of the d
     midi.port = 26004;
     auto& cs = midi.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25904");
+        if (std::strcmp(cs[i].name, "participant") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:25904");
     midi.prepare();
     d.control->writeStrip("brightness 200");
     std::string bytes;
@@ -2034,7 +2034,7 @@ TEST_CASE("a Mackie desk shared over the network turns a knob down as well as up
     midi.port = 26204;
     auto& cs = midi.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:26104");
+        if (std::strcmp(cs[i].name, "participant") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "127.0.0.1:26104");
     midi.prepare();
     const auto exchange = [&] {
         midi.tick20ms();
@@ -2129,8 +2129,8 @@ TEST_CASE("a MIDI service on the network is announced over Bonjour only while it
     CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 25804);
     auto& cs = midi.controls();
     for (uint8_t i = 0; i < cs.count(); i++)
-        if (std::strcmp(cs[i].name, "host") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.101");
-    midi.onControlChanged("host");
+        if (std::strcmp(cs[i].name, "participant") == 0) std::strcpy(static_cast<char*>(cs[i].ptr), "192.168.1.101");
+    midi.onControlChanged("participant");
     CHECK(mm::platform::mdnsAdvertisedPort("_apple-midi", "_udp") == 0);
     midi.release();
 }

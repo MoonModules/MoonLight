@@ -3482,8 +3482,8 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#huedriver"
   },
   "NetworkSendDriver": {
-   "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP, its packets paced so receivers keep up, to Falcon and Advatek controllers, xLights and LedFx.",
-   "summary": "One driver feeds many receivers, each a run of the window at its own address, as an LED driver fans out over pins.",
+   "line": "Streams the buffer over UDP as Art-Net, E1.31 or DDP to Falcon and Advatek controllers, xLights and LedFx, its packets paced.",
+   "summary": "One driver feeds many receivers, each a run of the window.\n\n`curve` starts at linear, as receivers apply their own.",
    "attribution": "[Art-Net](https://moonmodules.org/MoonLight/reference/attributions.html#art-net), [E1.31](https://moonmodules.org/MoonLight/reference/attributions.html#e1-31), [DDP](https://moonmodules.org/MoonLight/reference/attributions.html#ddp), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -3534,7 +3534,7 @@
     },
     "addressing": {
      "line": "How packets travel: unicast, Art-Net broadcast or E1.31 multicast.",
-     "more": "Art-Net 4 requires unicast; broadcast loads every host. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
+     "more": "Art-Net 4 requires unicast; broadcast loads every receiver. E1.31 `multicast` needs [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).",
      "tests": [
       {
        "title": "NetworkSend one sender many receivers",
@@ -3542,11 +3542,11 @@
       }
      ]
     },
-    "hosts": {
+    "receivers": {
      "line": "Receiver addresses or names, in fan-out order; blank idles.",
      "more": "A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting."
     },
-    "lightsPerHost": {
+    "lightsPerReceiver": {
      "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
     },
     "universe_start": {
@@ -4462,9 +4462,9 @@
     },
     "addressing": {
      "line": "How the analysis travels: multicast, which WLED hears, or unicast.",
-     "more": "Unicast to `hosts` reaches a few MoonLight boards faster on WiFi, which retries it."
+     "more": "Unicast to `receivers` reaches a few MoonLight boards faster on WiFi, which retries it."
     },
-    "hosts": {
+    "receivers": {
      "line": "The boards a unicast send reaches, addresses or names."
     },
     "simulate": {
@@ -4565,9 +4565,9 @@
      "more": "Off by default, since it sends traffic nobody asked for. It keeps a client honest and moves a motorized fader."
     },
     "addressing": {
-     "line": "Where feedback goes: `unicast` to the hosts, or `multicast` to the group."
+     "line": "Where feedback goes: `unicast` to the receivers, or `multicast` to the group."
     },
-    "hosts": {
+    "receivers": {
      "line": "Addresses or names feedback goes to (unicast).",
      "more": "Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else."
     },
@@ -4792,13 +4792,13 @@
     },
     "share": {
      "line": "Pass the desk on the USB port over the network instead of driving this device.",
-     "more": "The device the desk drives names this one in its `host`. One host at a time."
+     "more": "The device the desk drives names this one in its `participant`. One participant at a time."
     },
     "profile": {
      "line": "The desk's layout, since each desk lays its controls out in its own messages.",
      "more": "Hidden on a shared desk, which the device it is shared with decodes."
     },
-    "host": {
+    "participant": {
      "line": "The desk on the network, an address or a name with an optional `:port`.",
      "more": "Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`."
     },
@@ -5309,7 +5309,7 @@
     },
     {
      "title": "Boards by name",
-     "text": "A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
+     "text": "An address setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DevicesModule.png",

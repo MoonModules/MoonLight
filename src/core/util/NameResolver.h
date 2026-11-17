@@ -1,9 +1,9 @@
 #pragma once
 
-#include "core/util/HostList.h"   // kMaxHostName
+#include "core/util/ReceiverList.h"   // kMaxHostName
 #include "core/util/TryLock.h"    // the cache is shared between the asking thread and the lookup task
 #include "core/util/format.h"     // formatTo: a peer named into a fixed buffer
-#include "platform/platform.h"    // resolveHost, millis, yield, and the worker task seam
+#include "platform/platform.h"    // resolveName, millis, yield, and the worker task seam
 
 #include <atomic>
 #include <cstdint>
@@ -12,12 +12,12 @@
 
 namespace mm {
 
-/// A cache that answers a host name's last known address at once, while one low-priority task looks names up.
+/// A cache that answers a name's last known address at once, while one low-priority task looks names up.
 ///
 /// The asking side runs on the render thread and only reads the cache, since a lookup there stalls a frame; a new name answers `Waiting`, a failing one `Stale`.
 ///
 /// A board with no worker task looks names up from the asking side instead, one non-blocking step per ask.
-class HostResolver {
+class NameResolver {
 public:
     /// What the cache knows about a name.
     enum class State : uint8_t {
@@ -49,7 +49,7 @@ public:
         Self& s = self();
         if (s.slots) return;
         s.slots = new (std::nothrow) Slot[kSlots];
-        if (s.slots && !s.testMode) s.inlineSteps = !platform::spawnPinnedTask(s.task, "hosts", &run, &s, 5120, 1, -1);
+        if (s.slots && !s.testMode) s.inlineSteps = !platform::spawnPinnedTask(s.task, "receivers", &run, &s, 5120, 1, -1);
     }
 
     /// The name's address into `ip` when it is Resolved or Stale; the first ask queues a lookup, and nothing here allocates.
@@ -82,9 +82,9 @@ public:
 
     // For a test's scope, an empty cache and no task: a blocking resolve driven by passes, or a non-blocking step each lookup drives.
     struct LookupForTest {
-        explicit LookupForTest(bool (*resolve)(const char*, uint8_t*)) { use(resolve, &platform::resolveHostStep, false); }
-        explicit LookupForTest(platform::LookupStep (*step)(const char*, uint8_t*)) { use(&platform::resolveHost, step, true); }
-        ~LookupForTest() { use(&platform::resolveHost, &platform::resolveHostStep, false); }   // so no later test inherits the fake
+        explicit LookupForTest(bool (*resolve)(const char*, uint8_t*)) { use(resolve, &platform::resolveNameStep, false); }
+        explicit LookupForTest(platform::LookupStep (*step)(const char*, uint8_t*)) { use(&platform::resolveName, step, true); }
+        ~LookupForTest() { use(&platform::resolveName, &platform::resolveNameStep, false); }   // so no later test inherits the fake
         LookupForTest(const LookupForTest&) = delete;
         LookupForTest& operator=(const LookupForTest&) = delete;
     private:
@@ -123,8 +123,8 @@ private:
         Slot* slots = nullptr;
         TryLock lock;
         platform::WorkerTask task;
-        bool (*resolve)(const char*, uint8_t*) = &platform::resolveHost;
-        platform::LookupStep (*resolveStep)(const char*, uint8_t*) = &platform::resolveHostStep;
+        bool (*resolve)(const char*, uint8_t*) = &platform::resolveName;
+        platform::LookupStep (*resolveStep)(const char*, uint8_t*) = &platform::resolveNameStep;
         bool inlineSteps = false;   ///< no worker task: lookup() drives the lookups
         int8_t inFlight = -1;       ///< the slot the inline lookup in flight belongs to
         bool testMode = false;
@@ -196,21 +196,21 @@ private:
     }
 };
 
-/// Start the resolver when a parsed host list names a board, here where allocating is allowed.
-inline void startResolverForNames(const Host* hosts, uint8_t n) {
+/// Start the resolver when a parsed receiver list names a board, here where allocating is allowed.
+inline void startResolverForNames(const Receiver* receivers, uint8_t n) {
     for (uint8_t i = 0; i < n; i++)
-        if (hosts[i].isName()) { HostResolver::ensureStarted(); return; }
+        if (receivers[i].isName()) { NameResolver::ensureStarted(); return; }
 }
 
-/// Copy each named host's latest address in from the resolver, keeping the last one while it is busy or failing.
-inline void refreshNamedHosts(const char* text, Host* hosts, uint8_t n) {
+/// Copy each named receiver's latest address in from the resolver, keeping the last one while it is busy or failing.
+inline void refreshNamedReceivers(const char* text, Receiver* receivers, uint8_t n) {
     for (uint8_t i = 0; i < n; i++) {
-        if (!hosts[i].isName()) continue;
+        if (!receivers[i].isName()) continue;
         char name[kMaxHostName + 1];
-        hostName(text, hosts[i], name);
+        receiverName(text, receivers[i], name);
         uint8_t ip[4];
-        const HostResolver::State st = HostResolver::lookup(name, ip);
-        if (st == HostResolver::State::Resolved || st == HostResolver::State::Stale) std::memcpy(hosts[i].ip, ip, 4);
+        const NameResolver::State st = NameResolver::lookup(name, ip);
+        if (st == NameResolver::State::Resolved || st == NameResolver::State::Stale) std::memcpy(receivers[i].ip, ip, 4);
     }
 }
 

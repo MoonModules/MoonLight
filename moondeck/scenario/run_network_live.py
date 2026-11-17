@@ -18,7 +18,7 @@ every other device LISTENS:
      order): proves device → device over real firmware send + receive.
 
 With one online device only step 1 runs (the matrix needs ≥2 boards). All
-mutated state (grid size, NetworkSend hosts/protocol/enabled, the added effects)
+mutated state (grid size, NetworkSend receivers/protocol/enabled, the added effects)
 is restored in a finally block. Exit codes follow improv_smoke_test.py: 0 =
 all legs passed, 1 = a leg failed, 2 = environment problem (no devices,
 moondeck.json missing).
@@ -146,7 +146,7 @@ class Board:
         artnet = find_module(state, "NetworkSend") or {}
         self.orig_w = _control_value(grid, "width")
         self.orig_h = _control_value(grid, "height")
-        self.orig_hosts = _control_value(artnet, "hosts")
+        self.orig_receivers = _control_value(artnet, "receivers")
         self.orig_protocol = _control_value(artnet, "protocol")
         # The user may have NetworkSend disabled (e.g. while testing LED output);
         # relay legs need it on, so remember the original state to restore.
@@ -178,11 +178,11 @@ class Board:
                 self.client.delete("/api/modules/NetworkReceive")
             except Exception as e:
                 print(f"  WARN  {self.name}: could not remove NetworkReceive: {e}")
-        if self.hosts_changed and self.orig_hosts is not None:
+        if self.hosts_changed and self.orig_receivers is not None:
             try:
-                self.set_control("NetworkSend", "hosts", self.orig_hosts)
+                self.set_control("NetworkSend", "receivers", self.orig_receivers)
             except Exception as e:
-                print(f"  WARN  {self.name}: could not restore NetworkSend.hosts: {e}")
+                print(f"  WARN  {self.name}: could not restore NetworkSend.receivers: {e}")
         if self.enable_changed:
             try:
                 self.set_control("NetworkSend", "enabled", self.artnet_enabled)
@@ -294,7 +294,7 @@ def main() -> int:
                     sender.enable_changed = True
                 sender.set_control("NetworkSend", "protocol", relay_proto)
                 sender.protocol_changed = True
-                sender.set_control("NetworkSend", "hosts", listener.host.partition(":")[0])
+                sender.set_control("NetworkSend", "receivers", listener.host.partition(":")[0])
                 sender.hosts_changed = True
                 ok, pct, pts, detail = _preview_ws.wait_for_solid(
                     listener.host, expected, args.tolerance, 100.0, args.timeout)
@@ -307,8 +307,8 @@ def main() -> int:
                           f"(expected {expected}, best {pct:.0f}% of {pts} points"
                           f"{', ' + detail if detail else ''})", flush=True)
                     failed += 1
-            if sender.hosts_changed and sender.orig_hosts is not None:
-                sender.set_control("NetworkSend", "hosts", sender.orig_hosts)
+            if sender.hosts_changed and sender.orig_receivers is not None:
+                sender.set_control("NetworkSend", "receivers", sender.orig_receivers)
                 sender.hosts_changed = False
             if sender.protocol_changed and sender.orig_protocol is not None:
                 sender.set_control("NetworkSend", "protocol", sender.orig_protocol)

@@ -813,7 +813,7 @@ bool resolveLocal(const char* url, char* out, size_t cap) {
     std::memcpy(name, host, len);
     name[len] = '\0';
     uint8_t ip[4];
-    if (!resolveHost(name, ip)) return false;
+    if (!resolveName(name, ip)) return false;
     const int n = std::snprintf(out, cap, "%.*s%u.%u.%u.%u%s", static_cast<int>(host - url), url,
                                 ip[0], ip[1], ip[2], ip[3], end);
     return n > 0 && static_cast<size_t>(n) < cap;

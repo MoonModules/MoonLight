@@ -310,7 +310,7 @@ processes:
         detail: |
           Set `feedback` on, `addressing` multicast, `group` the default `239.255.77.78`, `feedbackPort` 9001. Every slot that changes on the leader goes out as `/mm/fader/N`, `/mm/encoder/N` or `/mm/switch/N`. The leader listens on 9000, so it never hears its own feedback.
 
-          For one desk and a few known boards, set `addressing` to `unicast` and list the boards in `hosts`, such as `192.168.1.139, MM-testbench-S3.local`: each gets its own copy. For any number of boards, keep multicast; a second rig takes another `group`.
+          For one desk and a few known boards, set `addressing` to `unicast` and list the boards in `receivers`, such as `192.168.1.139, MM-testbench-S3.local`: each gets its own copy. For any number of boards, keep multicast; a second rig takes another `group`.
       - id: followers
         say: Make the other devices followers.
         when: { open: { module: OscService } }

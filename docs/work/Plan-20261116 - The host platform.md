@@ -36,7 +36,7 @@ One end state, picked: **host** for the platform, the firmware ids changed, the 
 
 | # | Step | Status | Reach | Effort |
 |---|---|---|---|---|
-| 1 | **Free the word**: the renames above, with a MIGRATING entry for the `hosts` and `lightsPerHost` controls (a restore renames them). | ⏳ | about 60 files | half a session: mechanical, with the user-facing controls the one break |
+| 1 | **Free the word**: the renames above, with a MIGRATING entry for the `hosts` and `lightsPerHost` controls (a restore renames them). | ✅ | about 60 files | Done (2026-11-17): the network sense is `Receiver`, `ReceiverList.h`, `receivers` and `lightsPerReceiver`, with a MIGRATING entry and a Restore rename. |
 | 2 | **The platform layer**: `src/platform/desktop/` to `src/platform/host/` (`git mv`, history kept), `platform_desktop*.cpp` to `platform_host*.cpp`, `main_desktop.cpp` to `main_host.cpp`, `MM_DESKTOP_OS` and `MM_DESKTOP_CPU` to `MM_HOST_OS` and `MM_HOST_CPU`; every include and CMake line follows. | ⏳ | 23 files moved, about 40 edited | an hour: the builds on every target prove it |
 | 3 | **Firmware ids** `desktop-<os>-<arch>` to `host-<os>-<arch>`: `MM_FIRMWARE_NAME`, `firmwares.py` and the regenerated `firmwares.json`, the installer, the Firmware card's matching, tests. A MIGRATING entry: a host on an earlier build takes the first update by hand, since its own id names no release asset any more. | ⏳ | 41 files, 336 places | half a session: user-visible, so each match is read, not replaced blind |
 | 4 | **MoonDeck**: `test_host.py` to `test_tooling.py` first, its "Host Tests" card to "Tooling Tests"; then `build_desktop.py`, `run_desktop.py`, `test_desktop.py` and `ci/package_desktop.py` to `*_host.py`; the Desktop tab to **Host**, beside ESP32 and Teensy, with its eight cards (`"tab": "host"`); MoonDeck.md and release.yml follow. | ⏳ | about 60 files | an hour |
@@ -49,5 +49,4 @@ One end state, picked: **host** for the platform, the firmware ids changed, the 
 
 ## Open questions
 
-- **`receivers`**: the name for the devices a service sends to. sACN and Art-Net call them receivers and nodes; the alternative, `destinations`, is longer and names a place rather than a device.
 - **When** (decided 2026-11-17): on `next-iteration`, the branch of #255, once #254 is merged and main merged into it, so the rename starts from the encoder's move.

@@ -2273,7 +2273,7 @@ function createCard(mod, depth) {
     // elsewhere (e.g. FileManager's filesystem/lastSaved render inside its own panel, not generically).
     const hasVisibleControls = mod.controls && mod.controls.some(c => controlRendersGenerically(mod, c));
     const wrapInDetails = depth > 0 && acceptsNewChildren(mod) && hasVisibleControls;
-    const controlsHost = wrapInDetails ? (() => {
+    const controlsBox = wrapInDetails ? (() => {
         const d = document.createElement("details");
         d.className = "card-controls-collapse";
         // Restore the open/closed state from localStorage, so a full-state rebuild (or a page reload) keeps
@@ -2303,7 +2303,7 @@ function createCard(mod, depth) {
         setStatusText(val, mod);
         row.appendChild(label);
         row.appendChild(val);
-        controlsHost.appendChild(row);
+        controlsBox.appendChild(row);
     }
 
     if (mod.controls) {
@@ -2311,10 +2311,10 @@ function createCard(mod, depth) {
         for (const ctrl of mod.controls) {
             if (!controlRendersGenerically(mod, ctrl)) continue;
             const kind = surfaceBank(ctrl);
-            if (bank && kind !== bank) controlsHost.appendChild(surfaceBreak(mod.type, bank));
+            if (bank && kind !== bank) controlsBox.appendChild(surfaceBreak(mod.type, bank));
             bank = kind;
             const row = createControl(mod.name, mod.type, ctrl);
-            if (row) controlsHost.appendChild(row);
+            if (row) controlsBox.appendChild(row);
         }
     }
 
@@ -2322,24 +2322,24 @@ function createCard(mod, depth) {
     // over /api/dir; a create/delete is a POST/DELETE /api/dir?path= call (the path rides the request,
     // no persisted control). Only the `show hidden` toggle renders as a raw control; the tree is the rest.
     if (mod.type === "FileManagerModule") {
-        renderFileManager(mod, controlsHost);
+        renderFileManager(mod, controlsBox);
     }
 
     // The gallery sits under the pads it fills.
     if (mod.type === "ControlModule") {
-        renderGallery(controlsHost, mod);
+        renderGallery(controlsBox, mod);
     }
 
     // Contributing earns the answer back on the card that asked for consent, so the charts render
     // here rather than anywhere else. They are drawn empty until consent is on.
     if (mod.type === "MoonStatsModule") {
-        renderMoonCloudStats(controlsHost, mod);
+        renderMoonCloudStats(controlsBox, mod);
     }
 
     // The board itself, under the controls that post to it: a message box with no way to read the
     // replies is half a chat.
     if (mod.type === "MoonTalkModule") {
-        renderMoonTalk(controlsHost, mod);
+        renderMoonTalk(controlsBox, mod);
     }
 
     // The Firmware card hosts the shared install picker, mounted once per card build, which offers the releases that fit SystemModule.firmware.
@@ -2364,7 +2364,7 @@ function createCard(mod, depth) {
             why.rel = "noopener";
             why.textContent = "Why you might like this";
             nudge.appendChild(why);
-            controlsHost.appendChild(nudge);
+            controlsBox.appendChild(nudge);
         }
 
         // TWO IMAGES, ONE PANEL. A device installs the app it runs and MoonBase the recovery
@@ -2446,8 +2446,8 @@ function createCard(mod, depth) {
                 if (tabKind === "coprocessor" && ctrlValue("coprocessorMismatch") !== null) applyTabDot(tab, { severity: "warning" });
                 strip.appendChild(tab);
             });
-            const titleRow = controlsHost.querySelector(":scope > .card-title");
-            controlsHost.insertBefore(strip, titleRow ? titleRow.nextSibling : controlsHost.firstChild);
+            const titleRow = controlsBox.querySelector(":scope > .card-title");
+            controlsBox.insertBefore(strip, titleRow ? titleRow.nextSibling : controlsBox.firstChild);
         }
 
         const status = document.createElement("span");
@@ -2612,15 +2612,15 @@ function createCard(mod, depth) {
                 }
             });
             relRow.append(relLabel, relBtn);
-            controlsHost.appendChild(relRow);
-            controlsHost.appendChild(extras);
+            controlsBox.appendChild(relRow);
+            controlsBox.appendChild(extras);
         }
 
         // -- the shared picker ----------------------------------------------------------
         const mount = document.createElement("div");
         mount.className = "install-picker-host";
-        controlsHost.appendChild(available);
-        controlsHost.appendChild(mount);
+        controlsBox.appendChild(available);
+        controlsBox.appendChild(mount);
         // A program in a container is its host's to replace, by pulling the image, so its card says that rather than offering a package.
         if (kind === "app" && ctrlValue("update") === "host") {
             const note = document.createElement("div");
@@ -2684,7 +2684,7 @@ function createCard(mod, depth) {
                 ui.fail(MOONBASE_SILENT_MSG);
             });
             mbRow.appendChild(mbBtn);
-            controlsHost.appendChild(mbRow);
+            controlsBox.appendChild(mbRow);
         }
     }
 
@@ -3459,12 +3459,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
                 input.addEventListener("change", () => flushPendingSends(key));
             } else {
-                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
-                const hosts = ctrl.known !== undefined;
+                // A receivers text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const receivers = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    if (hosts) row.querySelector(".control-known")?.remove();
-                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
+                    if (receivers) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => receivers ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
                 // Enter presses the card's `send` button, where the module has one. Generic rather
                 // than a MoonTalk rule: any module pairing a text field with a send button gets it,
@@ -3488,8 +3488,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                 });
             }
             row.appendChild(input);
-            // A hosts text names the boards the device list knows among its entries, so an address says which board it is.
-            const known = knownHostsText(ctrl.known);
+            // A receivers text names the boards the device list knows among its entries, so an address says which board it is.
+            const known = knownReceiversText(ctrl.known);
             if (known) {
                 const note = document.createElement("span");
                 note.className = "control-known";
@@ -3530,12 +3530,12 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             if (ctrl.readonly) {
                 input.readOnly = true;
             } else {
-                // A hosts text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
-                const hosts = ctrl.known !== undefined;
+                // A receivers text carries `known`, the boards it names: the note goes while the text changes, and the view that follows the write brings it back.
+                const receivers = ctrl.known !== undefined;
                 input.addEventListener("input", () => {
                     dragTs[key] = Date.now();
-                    if (hosts) row.querySelector(".control-known")?.remove();
-                    debounceSend(key, 500, () => hosts ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
+                    if (receivers) row.querySelector(".control-known")?.remove();
+                    debounceSend(key, 500, () => receivers ? write(ctrl.name, input.value).then(() => refetchState()) : write(ctrl.name, input.value));
                 });
             }
             row.appendChild(input);
@@ -7471,8 +7471,8 @@ function applyTheme(t) {
     if (btn) btn.textContent = (t === "dark") ? "☀" : "🌙";
 }
 
-// The boards a hosts text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
-function knownHostsText(known) {
+// The boards a receivers text names, as the server matched them: "192.168.1.125 is MM-S31 · MM-Eye is 192.168.1.30".
+function knownReceiversText(known) {
     if (!known || typeof known !== "object") return "";
     return Object.entries(known).map(([entry, other]) => `${entry} is ${other}`).join(" · ");
 }

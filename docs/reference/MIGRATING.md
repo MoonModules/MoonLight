@@ -31,6 +31,24 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A new Network Send starts at the linear curve
+
+**Action: *nothing*; pick a curve on Network Send where its receivers drive their LEDs uncorrected.**
+
+A Network Send added from now on starts with `curve` at linear, since Falcon, Advatek, WLED and MoonLight receivers apply their own curve and one on both ends darkens the low levels. A saved Network Send keeps the curve it has.
+
+### MIDI invites its participant
+
+**Action: *nothing* after a Restore; a script or API call naming the old control uses the new name.**
+
+The MIDI service's `host` control, the address of the desk or board it invites over RTP-MIDI, is now `participant`, the session protocol's own term. A Restore renames it with its value.
+
+### The devices a service sends to are receivers
+
+**Action: *nothing* after a Restore; a script or API call naming the old controls uses the new names.**
+
+The `hosts` and `lightsPerHost` controls of Network Send, the audio sync send and OSC feedback are now `receivers` and `lightsPerReceiver`, the term sACN and Art-Net use for the devices a service sends to. A Restore renames them with their values. A script or API call that writes `hosts` or `lightsPerHost` writes `receivers` or `lightsPerReceiver`.
+
 ### MoonMan and MoonInvaders join the sprite effects
 
 **Action: *re-add a module* where a layer ran one of the two arcade effects, or Restore a backup, which turns them into MoonMan and MoonInvaders with their settings.**

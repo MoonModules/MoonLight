@@ -5,7 +5,7 @@
 #include "core/util/ControlSurface.h"      // the way back: motors, rings and button lights
 #include "core/util/UsbMidi.h"              // a desk on this device's own USB port
 #include "core/services/RtpMidiSession.h"   // a desk on the network
-#include "core/util/HostResolver.h"         // a desk named rather than numbered
+#include "core/util/NameResolver.h"         // a desk named rather than numbered
 #include "core/util/Ipv4.h"                 // parseDottedQuad: a desk's address
 #include "platform/platform.h"
 #include "core/util/format.h"              // formatTo: nonblocking formatting into a fixed buffer
@@ -56,7 +56,7 @@ public:
     /// @guide USB needs an S3 with 8 MB of flash or more. The port then carries no serial log or USB flashing, and the board supplies the desk's 5 V.
     uint8_t source = kSourceBrowser;
     /// Pass the desk on the USB port over the network instead of driving this device.
-    /// @guide The device the desk drives names this one in its `host`. One host at a time.
+    /// @guide The device the desk drives names this one in its `participant`. One participant at a time.
     bool share = false;
     /// The RTP-MIDI port of this device's session.
     /// @guide Data goes on the port above it.
@@ -68,9 +68,9 @@ public:
         controls_.addControl("share", share);
         controls_.setHidden(controls_.count() - 1, !onUsb());
         controls_.addSelect("profile", profile, kProfiles, kProfileCount);
-        controls_.setHidden(controls_.count() - 1, sharing());   // the host the desk is shared with decodes it
-        controls_.addText("host", host_, sizeof(host_));
-        controls_.setHostsField(controls_.count() - 1);
+        controls_.setHidden(controls_.count() - 1, sharing());   // the participant the desk is shared with decodes it
+        controls_.addText("participant", participant_, sizeof(participant_));
+        controls_.setReceiversField(controls_.count() - 1);
         controls_.setHidden(controls_.count() - 1, !onNetwork());
         controls_.addControl("port", port, 1, 65535);
         controls_.setHidden(controls_.count() - 1, !onNetwork() && !sharing());
@@ -147,7 +147,7 @@ public:
             followSource();
             return;
         }
-        if (std::strcmp(name, "host") == 0) {
+        if (std::strcmp(name, "participant") == 0) {
             parseHost();
             advertise();
             return;
@@ -412,47 +412,47 @@ private:
         session_.reset();
     }
 
-    /// Announce the session as Bonjour's RTP-MIDI record, which a Mac's Audio MIDI Setup finds. It waits to be invited: a shared desk, or a desk on the network with no host to invite.
+    /// Announce the session as Bonjour's RTP-MIDI record, which a Mac's Audio MIDI Setup finds. It waits to be invited: a shared desk, or a desk on the network with no participant to invite.
     void advertise() {
-        const bool want = session_ && (sharing() || !hostName_[0]);
+        const bool want = session_ && (sharing() || !participantName_[0]);
         if (want) platform::mdnsAdvertise("_apple-midi", "_udp", port);
         else if (advertised_) platform::mdnsWithdraw("_apple-midi", "_udp");
         advertised_ = want;
     }
 
-    /// Read `host`: an address or a name, with an optional `:port`; an empty one waits to be invited.
+    /// Read `participant`: an address or a name, with an optional `:port`; an empty one waits to be invited.
     void parseHost() {
-        char text[sizeof(host_)];
-        std::memcpy(text, host_, sizeof(text));
-        hostPort_ = rtpmidi::kDefaultPort;
+        char text[sizeof(participant_)];
+        std::memcpy(text, participant_, sizeof(text));
+        participantPort_ = rtpmidi::kDefaultPort;
         if (char* colon = std::strchr(text, ':')) {
             *colon = 0;
             const long p = std::strtol(colon + 1, nullptr, 10);
-            if (p > 0 && p < 65535) hostPort_ = static_cast<uint16_t>(p);
+            if (p > 0 && p < 65535) participantPort_ = static_cast<uint16_t>(p);
         }
-        std::memcpy(hostName_, text, sizeof(hostName_));
-        hostIsName_ = hostName_[0] && !parseDottedQuad(hostName_, hostIp_);
-        if (hostIsName_) HostResolver::ensureStarted();
-        if (!hostName_[0] && session_) session_->stopInviting();
+        std::memcpy(participantName_, text, sizeof(participantName_));
+        participantIsName_ = participantName_[0] && !parseDottedQuad(participantName_, participantIp_);
+        if (participantIsName_) NameResolver::ensureStarted();
+        if (!participantName_[0] && session_) session_->stopInviting();
         connected_ = false;   // the status says the new target on the next tick
     }
 
-    /// Invite the host once its address is known, a name being looked up in the background.
-    void inviteHost() {
-        if (!hostName_[0] || !session_) return;
-        if (hostIsName_) {
-            const HostResolver::State st = HostResolver::lookup(hostName_, hostIp_);
-            if (st != HostResolver::State::Resolved && st != HostResolver::State::Stale) return;
+    /// Invite the participant once its address is known, a name being looked up in the background.
+    void inviteParticipant() {
+        if (!participantName_[0] || !session_) return;
+        if (participantIsName_) {
+            const NameResolver::State st = NameResolver::lookup(participantName_, participantIp_);
+            if (st != NameResolver::State::Resolved && st != NameResolver::State::Stale) return;
         }
-        session_->invite(hostIp_, hostPort_);
+        session_->invite(participantIp_, participantPort_);
     }
 
     /// What the status says while no desk is connected over the network.
     void showNetworkWait() {
         if (!session_) return;
-        if (!hostName_[0]) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: waiting to be invited on %u", static_cast<unsigned>(port));
-        else if (!session_->refused()) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: inviting %s", hostName_);
-        else mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: %s refused%s%s", hostName_, session_->refusal()[0] ? ": " : "", session_->refusal());
+        if (!participantName_[0]) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: waiting to be invited on %u", static_cast<unsigned>(port));
+        else if (!session_->refused()) mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: inviting %s", participantName_);
+        else mm::formatTo(statusBuf_, sizeof(statusBuf_), "network: %s refused%s%s", participantName_, session_->refusal()[0] ? ": " : "", session_->refusal());
         setStatus(statusBuf_);
     }
 
@@ -484,11 +484,11 @@ private:
             return;
         }
         if (!session_) return;
-        inviteHost();
+        inviteParticipant();
         session_->service([this](const uint8_t* m, size_t len) { if (len <= 3) decode(m, static_cast<uint8_t>(len)); });
     }
 
-    /// Say where the desk stands when that changes: connected, waiting, or its host refusing.
+    /// Say where the desk stands when that changes: connected, waiting, or its participant refusing.
     void showLink(bool connected) {
         const bool refused = session_ && session_->refused();
         if (connected == connected_ && refused == refusedShown_) return;
@@ -578,7 +578,7 @@ private:
         if (state == kSharedPortTaken) { setStatus("another service has the USB port", Severity::Warning); return; }
         if (state == kSharedNoDesk) { setStatus(platform::hasUsbMidiHost ? "USB: waiting for a desk" : "this device has no USB host"); return; }
         if (state == kSharedWaiting) mm::formatTo(statusBuf_, sizeof(statusBuf_), "sharing on %u, not connected", static_cast<unsigned>(port));
-        else mm::formatTo(statusBuf_, sizeof(statusBuf_), "shared with %s", session_->peerName()[0] ? session_->peerName() : "a host");
+        else mm::formatTo(statusBuf_, sizeof(statusBuf_), "shared with %s", session_->peerName()[0] ? session_->peerName() : "a participant");
         setStatus(statusBuf_);
     }
 
@@ -649,12 +649,12 @@ private:
     char shown_[kDeskSlots * 6] = {};   ///< per slot, the hex that desk was last sent
     /// The desk on the network, an address or a name with an optional `:port`.
     /// @guide Empty waits to be invited, as a Mac's Audio MIDI Setup does. A sharing device announces `<name>.local`.
-    char host_[64] = {};
-    char hostName_[64] = {};     ///< `host_` without its port
-    uint8_t hostIp_[4] = {};
-    uint16_t hostPort_ = rtpmidi::kDefaultPort;
-    bool hostIsName_ = false;
-    bool refusedShown_ = false;  ///< whether the status last said the host refused
+    char participant_[64] = {};
+    char participantName_[64] = {};     ///< `participant_` without its port
+    uint8_t participantIp_[4] = {};
+    uint16_t participantPort_ = rtpmidi::kDefaultPort;
+    bool participantIsName_ = false;
+    bool refusedShown_ = false;  ///< whether the status last said the participant refused
     bool advertised_ = false;    ///< whether the session is announced over Bonjour
     uint8_t followed_ = 0xFF;    ///< the source followSource last set up, so a re-prepare does not set it up again
     bool sharedFollowed_ = false;

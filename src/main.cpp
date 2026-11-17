@@ -246,9 +246,9 @@ void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort) {
                 sizeof(mm::MoonModule), sizeof(mm::Layer), sizeof(mm::Drivers),
                 sizeof(mm::GridLayout), sizeof(mm::HttpServerModule));
     // The server binds every interface, so it is reachable across the LAN: @xref{what-the-boot-banner-prints}.
-    const char* hostIp = mm::platform::hostIp();
-    if (hostIp && hostIp[0]) {
-        std::printf("HTTP server → http://%s:%u\n", hostIp, httpServer->port);
+    const char* deviceIp = mm::platform::deviceIp();
+    if (deviceIp && deviceIp[0]) {
+        std::printf("HTTP server → http://%s:%u\n", deviceIp, httpServer->port);
     } else {
         // No address yet, which is true for two different reasons: @xref{what-the-boot-banner-prints}.
         std::printf("HTTP server on port %u — no network address yet\n", httpServer->port);

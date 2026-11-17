@@ -13,11 +13,11 @@
 #include "core/system/DevicePlugin.h"     // the interop plugin seam + the bundled plugins
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
-#include "core/util/HostResolver.h"       // setNameSource: a host setting naming a board resolves from this list, and a status names it
+#include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
 #include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
 #include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
-#include "core/util/HostList.h"           // parseHostList: the added addresses, as every host list is read
+#include "core/util/ReceiverList.h"           // parseReceiverList: the added addresses, as every receiver list is read
 #include "core/util/HttpHead.h"           // findHeader: the probe reads a page's Server header as the server reads a request's
 #include "platform/platform.h"
 
@@ -55,7 +55,7 @@ namespace mm {
 ///
 /// ## Boards by name
 ///
-/// A host setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address.
+/// An address setting naming a board, such as `MM-S31`, resolves from this list before mDNS, so the name holds where a router drops multicast. A card naming a peer shows its name beside its address.
 ///
 /// @technical
 ///
@@ -170,9 +170,9 @@ public:
     /// Parse `addedIps` into the addresses the probe asks, starting with the first now; an entry that is not an address is refused on the status.
     void parseAdded() {
         uint8_t n = 0;
-        const char* err = parseHostList(addedIps, addedHosts_, kMaxAdded, n);
+        const char* err = parseReceiverList(addedIps, addedReceivers_, kMaxAdded, n);
         for (uint8_t i = 0; !err && i < n; i++)
-            if (addedHosts_[i].isName()) err = "addedIps: IP addresses only";
+            if (addedReceivers_[i].isName()) err = "addedIps: IP addresses only";
         addedCount_ = err ? 0 : n;
         addedError_ = err;
         probe_.conn.close();
@@ -229,10 +229,10 @@ public:
         if (changed) { sortByName(); refreshStatus(); }
     }
 
-    /// Offer this list as the source host settings resolve board names from.
+    /// Offer this list as the source address settings resolve board names from.
     void setup() override {
         MoonModule::setup();
-        HostResolver::setNameSource(&resolveBoard, &boardNameAt);
+        NameResolver::setNameSource(&resolveBoard, &boardNameAt);
         setStatus(statusBuf_);
         parseAdded();   // a saved list is restored without a change hook
     }
@@ -294,7 +294,7 @@ public:
     }
     /// Test-only: one tick of the probe, and where it stands: which address, and whether it holds a connection.
     void stepProbeForTest() { probeAdded(); }
-    uint8_t probeHostForTest() const { return probe_.host; }
+    uint8_t probeReceiverForTest() const { return probe_.receiver; }
     bool probeOpenForTest() const { return probe_.conn.valid(); }
     /// Test-only: the first added address's page arriving in pieces of `piece` bytes, as the probe's reads take it.
     void injectPageForTest(const char* page, size_t piece) {
@@ -366,13 +366,13 @@ private:
 
     /// The added addresses, parsed from `addedIps`, and the one probe asking them in turn.
     static constexpr uint8_t kMaxAdded = 8;
-    Host    addedHosts_[kMaxAdded] = {};
+    Receiver    addedReceivers_[kMaxAdded] = {};
     uint8_t addedCount_ = 0;
     const char* addedError_ = nullptr;   // why `addedIps` was refused, kept in the status until it is fixed
     /// One HTTP request for an added address's page: its Server header names the firmware, its first <h2> the name a Tasmota was given.
     struct Probe {
         platform::TcpConnection conn;   ///< the request's connection
-        uint8_t host = 0;      ///< which added address
+        uint8_t receiver = 0;  ///< which added address
         uint8_t state = 0;     ///< 0 idle, 1 connecting, 2 sending, 3 reading
         uint8_t sent = 0;      ///< how much of the request the socket took
         uint8_t ticks = 0;     ///< ticks in this state, which bounds a silent address
@@ -645,10 +645,10 @@ private:
         if (!addedCount_) return;
         Probe& p = probe_;
         if (p.state == 0) {
-            if (p.host == 0 && ++probeTick_ < kProbeEverySec) return;
+            if (p.receiver == 0 && ++probeTick_ < kProbeEverySec) return;
             probeTick_ = 0;
             char ip[16];
-            formatDottedQuad(ip, addedHosts_[p.host].ip);
+            formatDottedQuad(ip, addedReceivers_[p.receiver].ip);
             p.ticks = 0;
             p.state = p.conn.connectStart(ip, WledPacket::kDefaultHttpPort) ? 1 : 0;
             if (!p.state) nextAdded();
@@ -715,7 +715,7 @@ private:
             const bool tasmota = std::strncmp(p.server, "Tasmota/", 8) == 0;
             found.type = tasmota ? DevType::Tasmota : DevType::Generic;
             setDeviceName(found, p.h2[0] ? p.h2 : "");
-            const uint8_t* ip = addedHosts_[p.host].ip;
+            const uint8_t* ip = addedReceivers_[p.receiver].ip;
             platform::arpLookup(ip, found.mac);   // the probe's connection put its MAC in the address table: the identity a page need not give
             upsertDevice(ip, found);
             if (Device* d = findByIp(ip); d && tasmota && slash) {
@@ -739,10 +739,10 @@ private:
 
     /// Close this probe and move to the next added address, back to the first after the last.
     void nextAdded() {
-        const uint8_t next = static_cast<uint8_t>((probe_.host + 1) % (addedCount_ ? addedCount_ : 1));
+        const uint8_t next = static_cast<uint8_t>((probe_.receiver + 1) % (addedCount_ ? addedCount_ : 1));
         probe_.conn.close();
         probe_ = Probe{};
-        probe_.host = next;
+        probe_.receiver = next;
     }
 
     /// Announce ourselves: a compatible packet, stamped so a peer types us correctly.
@@ -936,7 +936,7 @@ private:
         return std::memcmp(a, b, 4) == 0;
     }
 
-    /// A host setting's name as the board announcing it, through whichever instance is active.
+    /// An address setting's name as the board announcing it, through whichever instance is active.
     static const char* boardNameAt(const uint8_t ip[4]) MM_NONBLOCKING {
         const DevicesModule* devices = active();
         return devices ? devices->nameOf(ip) : nullptr;

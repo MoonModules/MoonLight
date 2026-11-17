@@ -792,7 +792,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
     board_snapshots = {b: _snapshot_documents(c) for b, c in boards.items()}
     obs_target = target
     if boards:
-        # A step names a board by its address as `{host}` or `{<name>}`, as a sender's `hosts` does.
+        # A step names a board by its address as `{host}` or `{<name>}`, as a sender's `receivers` does.
         ctx["host"] = urllib.parse.urlsplit(home_base).hostname or ""
         for b, c in boards.items():
             ctx[b] = urllib.parse.urlsplit(c.base).hostname or ""

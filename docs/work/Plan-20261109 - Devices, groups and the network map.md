@@ -29,7 +29,7 @@ Devices becomes a top-level module that shows what is on the network, lets devic
 
 ## What exists
 
-- **Discovery** ([DevicesModule.h](../../src/core/system/DevicesModule.h)): passive, from the 44-byte presence packet on multicast and broadcast ([WledPacket.h](../../src/core/system/WledPacket.h)); MoonLight, WLED and Hue bridges, typed by plugins ([DevicePlugin.h](../../src/core/system/DevicePlugin.h)); a host setting naming a board resolves from it ([HostResolver.h](../../src/core/util/HostResolver.h)). A code-wired child of Network today ([main.cpp](../../src/main.cpp), [module_types.cpp](../../src/module_types.cpp)).
+- **Discovery** ([DevicesModule.h](../../src/core/system/DevicesModule.h)): passive, from the 44-byte presence packet on multicast and broadcast ([WledPacket.h](../../src/core/system/WledPacket.h)); MoonLight, WLED and Hue bridges, typed by plugins ([DevicePlugin.h](../../src/core/system/DevicePlugin.h)); a host setting naming a board resolves from it ([NameResolver.h](../../src/core/util/NameResolver.h)). A code-wired child of Network today ([main.cpp](../../src/main.cpp), [module_types.cpp](../../src/module_types.cpp)).
 - **Shared controls** over OSC ([OscService.h](../../src/core/services/OscService.h)): the controls half of supersync, live ([mooncore.md](../explanation/architecture/mooncore.md#multi-device-runtime)).
 - **Audio sync**, following one sender and counting frames per sender ([AudioService.h](../../src/core/services/AudioService.h)).
 - **Light between devices** over Art-Net, E1.31 and DDP: NetworkSendDriver and the Network Receive effect.
@@ -309,7 +309,7 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 
 #### 7. Modules address a group, and the four peer lists go ⏳
 
-- OscService, AudioService and NetworkSendDriver pick a group in place of a typed `hosts` list; MidiService's `host` is decided in the step. Their `hosts` text fields go, with a [MIGRATING](../reference/MIGRATING.md) entry, and OscService's cap of 8 with them. A group reaches its members by multicast where the network carries it, by unicast to each where it does not.
+- OscService, AudioService and NetworkSendDriver pick a group in place of a typed `receivers` list; MidiService's `participant` is decided in the step. Their `receivers` text fields go, with a [MIGRATING](../reference/MIGRATING.md) entry, and OscService's cap of 8 with them. A group reaches its members by multicast where the network carries it, by unicast to each where it does not.
 - Shared controls become group state: last-writer-wins registers, published by the device that wrote them, repeated by Trickle, never forwarded ([the message design](#the-message-design)).
 - Who belongs together is then said in one place, and the map shows it.
 - **Verified by:** shared controls and audio sync across a group, a member added and receiving without touching OSC or AudioService; two boards changing one control at the same moment end on the same value, and a unit test feeds the registers every arrival order.

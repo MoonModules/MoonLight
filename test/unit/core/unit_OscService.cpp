@@ -26,13 +26,13 @@ struct Rig {
 };
 }  // namespace
 
-TEST_CASE("OSC feedback to a mistyped host list says why rather than sending to nobody") {
+TEST_CASE("OSC feedback to a mistyped receiver list says why rather than sending to nobody") {
     Rig rig;
-    REQUIRE(rig.scheduler.setControl("Osc", "hosts", "{\"value\":\"192.168.1.999\"}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(rig.scheduler.setControl("Osc", "receivers", "{\"value\":\"192.168.1.999\"}") == Scheduler::SetControlResult::Ok);
     REQUIRE(rig.osc->status() != nullptr);
-    CHECK(std::strstr(rig.osc->status(), "hosts:") != nullptr);
-    REQUIRE(rig.scheduler.setControl("Osc", "hosts", "{\"value\":\"192.168.1.99\"}") == Scheduler::SetControlResult::Ok);
-    CHECK(std::strstr(rig.osc->status(), "hosts:") == nullptr);
+    CHECK(std::strstr(rig.osc->status(), "receivers:") != nullptr);
+    REQUIRE(rig.scheduler.setControl("Osc", "receivers", "{\"value\":\"192.168.1.99\"}") == Scheduler::SetControlResult::Ok);
+    CHECK(std::strstr(rig.osc->status(), "receivers:") == nullptr);
 }
 
 TEST_CASE("OSC multicast feedback without a group says so, and the default group needs nothing filled in") {
@@ -105,7 +105,7 @@ TEST_CASE("a leader sends feedback without listening, and a live encoder write r
     scheduler.setup();
     REQUIRE(scheduler.setControl("Osc", "port", "{\"value\":19100}") == Scheduler::SetControlResult::Ok);
     REQUIRE(scheduler.setControl("Osc", "feedbackPort", "{\"value\":19101}") == Scheduler::SetControlResult::Ok);
-    REQUIRE(scheduler.setControl("Osc", "hosts", "{\"value\":\"127.0.0.1\"}") == Scheduler::SetControlResult::Ok);
+    REQUIRE(scheduler.setControl("Osc", "receivers", "{\"value\":\"127.0.0.1\"}") == Scheduler::SetControlResult::Ok);
     REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":false}") == Scheduler::SetControlResult::Ok);
     REQUIRE(scheduler.setControl("Osc", "feedback", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
 

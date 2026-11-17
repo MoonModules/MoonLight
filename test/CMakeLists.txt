@@ -125,9 +125,9 @@ add_executable(mm_tests
     unit/core/unit_platform_worker.cpp
     unit/core/unit_platform_httpfetch.cpp
     unit/core/unit_platform_update.cpp
-    unit/core/unit_HostList.cpp
+    unit/core/unit_ReceiverList.cpp
     unit/core/unit_Addressing.cpp
-    unit/core/unit_HostResolver.cpp
+    unit/core/unit_NameResolver.cpp
     unit/core/unit_OscService.cpp
     unit/core/unit_Scheduler_prepareScope.cpp
     unit/core/unit_Scheduler_unique_names.cpp

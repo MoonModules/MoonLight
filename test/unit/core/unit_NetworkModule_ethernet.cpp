@@ -32,7 +32,7 @@ TEST_CASE("Ethernet is opt-in: ethNone is the zero value (unset ethType → no P
 
 // With the host's own network out, ethInit() returns false on desktop for any config, so NetworkModule cascades to WiFi/AP, and ethStop() is safe while the interface is down.
 TEST_CASE("Desktop Ethernet seam is a safe no-op") {
-    mm::platform::setTestHostNetwork(false);
+    mm::platform::setTestDeviceNetwork(false);
     mm::platform::EthPinConfig w5500{ mm::platform::ethW5500, 1,
                                       -1, -1, -1, -1, false,
                                       /*miso*/ 5, /*mosi*/ 6, /*sck*/ 7, /*cs*/ 15, /*irq*/ 18 };
@@ -52,7 +52,7 @@ TEST_CASE("Desktop Ethernet seam is a safe no-op") {
 
     // Restore the platform default so later tests inherit no shared eth-config state.
     mm::platform::setEthConfig(mm::platform::ethConfigDefault);
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 // Regression: ethPhyAddr is a signed int16 with min -1 (auto-detect), rendered as a number field; as a uint8 it clamped to 31 and the S31 RGMII never linked.
@@ -73,7 +73,7 @@ TEST_CASE("ethPhyAddr-style control: signed int16, -1 sentinel in range, number 
 
 // Desktop addressing is OS-managed, so netSetStaticIPv4 and netSetDhcp accept any input and leave it as it is.
 TEST_CASE("Desktop static-addressing seam is a safe no-op") {
-    mm::platform::setTestHostNetwork(false);
+    mm::platform::setTestDeviceNetwork(false);
     const uint8_t ip[4]   = {192, 168, 1, 50};
     const uint8_t gw[4]   = {192, 168, 1, 1};
     const uint8_t mask[4] = {255, 255, 255, 0};
@@ -84,13 +84,13 @@ TEST_CASE("Desktop static-addressing seam is a safe no-op") {
     mm::platform::netSetDhcp(mm::platform::NetIface::Sta);
     // Desktop reports no eth/sta connection regardless, the setters didn't fake one.
     CHECK_FALSE(mm::platform::ethConnected());
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 // A known network set to Static pins its address during bring-up, since a DHCP-less network never fires a lease event.
 TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
     mm::platform::setTestWifiStaAvailable(true);
-    mm::platform::setTestHostNetwork(false);
+    mm::platform::setTestDeviceNetwork(false);
     {
         mm::NetworkModule net;
         mm::WiFiModule wifi;
@@ -108,7 +108,7 @@ TEST_CASE("Static mode pins the static IP during STA bring-up (WaitingSta)") {
         net.removeChild(&wifi);   // the child is a local, not the tree's to free
     }
     mm::platform::setTestWifiStaAvailable(false);   // reset, so cases stay independent
-    mm::platform::setTestHostNetwork(true);
+    mm::platform::setTestDeviceNetwork(true);
 }
 
 namespace {
@@ -134,11 +134,11 @@ struct WiredNetwork {
     mm::NetworkModule net;
     mm::EthernetModule eth;
     WiredNetwork() {
-        mm::platform::setTestHostNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
+        mm::platform::setTestDeviceNetwork(false);   // the cascade runs on the fakes alone: the test machine's own network stays out
         net.addChild(&eth);
         net.setEthernet(&eth);
     }
-    ~WiredNetwork() { net.removeChild(&eth); mm::platform::setTestHostNetwork(true); }   // the child is a member, not the tree's to free
+    ~WiredNetwork() { net.removeChild(&eth); mm::platform::setTestDeviceNetwork(true); }   // the child is a member, not the tree's to free
 };
 
 // Set one control through the normal control-apply path.

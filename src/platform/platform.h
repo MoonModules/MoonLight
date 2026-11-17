@@ -296,7 +296,7 @@ void setTestWifiRadioReady(bool ready);
 bool coprocessorConnect();
 
 /// This host's LAN IPv4 as a dotted string, or empty; on ESP32 the device IP belongs to NetworkModule.
-const char* hostIp();
+const char* deviceIp();
 
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
 const char* resetReason();
@@ -745,7 +745,7 @@ void setTestEthLinkSpeed(uint16_t mbps);
 /// Fake a cabled interface holding `ip`, null removing it, so a host test can drive the Ethernet cascade.
 void setTestEthIPv4(const uint8_t* ip);
 /// Whether the host's own network counts as the wired link, as it does when MoonLight runs on a desktop; off in a host test that drives the cascade on the fakes alone.
-void setTestHostNetwork(bool counts);
+void setTestDeviceNetwork(bool counts);
 /// Fake one address table entry, `ip` answering with `mac`, null `ip` removing it, so a host test can drive arpLookup.
 void setTestArpEntry(const uint8_t* ip, const uint8_t* mac);
 /// Make ethRestartTx fail, so a test can exercise the recovery-failed path.
@@ -899,11 +899,11 @@ void mdnsStop();
 /// Free the mDNS stack, at release.
 void mdnsShutdown();
 /// Resolve a host name to its IPv4 address, `.local` by mDNS and any other by DNS; it blocks, so only a background task calls it.
-bool resolveHost(const char* name, uint8_t ip[4]);
+bool resolveName(const char* name, uint8_t ip[4]);
 /// How far a non-blocking lookup has come.
 enum class LookupStep : uint8_t { Pending, Resolved, Failed };
 /// Start or continue resolving `name` without blocking, for a board with no worker task. One name at a time: a new name abandons the one in flight, and a start may allocate once.
-LookupStep resolveHostStep(const char* name, uint8_t ip[4]);
+LookupStep resolveNameStep(const char* name, uint8_t ip[4]);
 
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);

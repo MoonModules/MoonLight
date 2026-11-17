@@ -7,14 +7,14 @@
 
 namespace mm {
 
-/// One human-typed text control turned into the hosts a service sends to: addresses, names, or both.
+/// One human-typed text control turned into the receivers a service sends to: addresses, names, or both.
 ///
 /// @technical
 ///
-/// ## Why a list rather than one host per service
+/// ## Why a list rather than one receiver per service
 ///
 /// This sits beside `parsePinList`, the GPIO CSV parser, as the same shape of thing: a human-typed list of hardware endpoints.
-/// Art-Net 4 requires ArtDmx to be unicast to the node that owns each universe, so driving several receivers means several hosts.
+/// Art-Net 4 requires ArtDmx to be unicast to the node that owns each universe, so driving several receivers means several entries.
 /// One control keeps the common case, a row of identical tubes on consecutive addresses, to a single field.
 ///
 /// ## The syntaxes, which mix freely
@@ -22,31 +22,31 @@ namespace mm {
 /// | Written | What it means |
 /// |---------|---------------|
 /// | `192.168.1.60-70` | a range over the last octet alone, giving `.60` through `.70` |
-/// | `192.168.1.60,61,62,65` | after one full dotted quad, a bare number is the next host on the same `/24` |
+/// | `192.168.1.60,61,62,65` | after one full dotted quad, a bare number is the next receiver on the same `/24` |
 /// | `192.168.1.60, 10.0.0.5` | explicit full quads, across any subnets |
 /// | `panel-01.local, panel-02.lan` | names, resolved in the background: `.local` by mDNS, anything else by DNS |
 ///
 /// An entry with a letter in it is a name, and anything else must parse as numbers, so a mistyped address is refused rather than taken for a name.
-/// A name is kept as its place in the text rather than copied, so a list of 32 hosts costs 192 bytes.
+/// A name is kept as its place in the text rather than copied, so a list of 32 receivers costs 192 bytes.
 ///
 /// The parser returns null on success, or a static error literal the caller hands straight to `setStatus`.
 
-/// One host: a literal address, or a name and the address it last resolved to.
-struct Host {
+/// One receiver: a literal address, or a name and the address it last resolved to.
+struct Receiver {
     uint8_t ip[4] = {};    ///< the address; for a name, 0.0.0.0 until it first resolves
     uint8_t nameAt = 0;    ///< where the name starts in the list's text
     uint8_t nameLen = 0;   ///< the name's length, 0 for a literal address
-    /// Whether this host is a name to resolve.
+    /// Whether this receiver is a name to resolve.
     bool isName() const { return nameLen != 0; }
 };
 
 /// The longest name an entry may carry, a DNS label's own limit.
 inline constexpr uint8_t kMaxHostName = 63;
 
-/// Copy a host's name out of the list's text, NUL-terminated, into `out` of at least kMaxHostName + 1 bytes.
-inline void hostName(const char* text, const Host& h, char* out) {
-    std::memcpy(out, text + h.nameAt, h.nameLen);
-    out[h.nameLen] = 0;
+/// Copy a receiver's name out of the list's text, NUL-terminated, into `out` of at least kMaxHostName + 1 bytes.
+inline void receiverName(const char* text, const Receiver& r, char* out) {
+    std::memcpy(out, text + r.nameAt, r.nameLen);
+    out[r.nameLen] = 0;
 }
 
 namespace detail {
@@ -68,7 +68,7 @@ inline bool parseOneIp(const char*& p, const uint8_t prev[4], bool havePrev, uin
     }
     if (n == 4) {                       // a full dotted quad
         for (uint8_t i = 0; i < 4; i++) out[i] = static_cast<uint8_t>(o[i]);
-    } else if (n == 1 && havePrev) {    // a bare host number → same /24 as the previous address
+    } else if (n == 1 && havePrev) {    // a bare receiver number → same /24 as the previous address
         std::memcpy(out, prev, 3);
         out[3] = static_cast<uint8_t>(o[0]);
     } else {
@@ -78,7 +78,7 @@ inline bool parseOneIp(const char*& p, const uint8_t prev[4], bool havePrev, uin
     return true;
 }
 
-/// Whether a character belongs in a host name.
+/// Whether a character belongs in a receiver name.
 inline bool isNameChar(char c) {
     return std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '.' || c == '_';
 }
@@ -92,12 +92,12 @@ inline bool entryIsName(const char* p) {
 }  // namespace detail
 
 /// Parse `s` into `out`, `nOut` receiving the count, a blank string yielding none.
-inline const char* parseHostList(const char* s, Host* out, uint8_t maxHosts, uint8_t& nOut) {
+inline const char* parseReceiverList(const char* s, Receiver* out, uint8_t maxReceivers, uint8_t& nOut) {
     nOut = 0;
     if (!s) return nullptr;
     const char* p = s;
     while (*p == ' ') p++;
-    if (!*p) return nullptr;            // blank → no hosts, caller idles
+    if (!*p) return nullptr;            // blank → no receivers, caller idles
 
     uint8_t prev[4] = {};
     bool havePrev = false;
@@ -107,16 +107,16 @@ inline const char* parseHostList(const char* s, Host* out, uint8_t maxHosts, uin
             const char* start = p;
             while (detail::isNameChar(*p)) p++;
             const size_t len = static_cast<size_t>(p - start);
-            if (len == 0 || len > kMaxHostName || start[0] == '-' || start[0] == '.') return "invalid host name";
-            if (static_cast<size_t>(start - s) > 255) return "host list too long";
-            if (nOut >= maxHosts) return "too many hosts";
-            out[nOut] = Host{};
+            if (len == 0 || len > kMaxHostName || start[0] == '-' || start[0] == '.') return "invalid receiver name";
+            if (static_cast<size_t>(start - s) > 255) return "receiver list too long";
+            if (nOut >= maxReceivers) return "too many receivers";
+            out[nOut] = Receiver{};
             out[nOut].nameAt = static_cast<uint8_t>(start - s);
             out[nOut].nameLen = static_cast<uint8_t>(len);
             nOut++;
         } else {
             uint8_t ip[4];
-            if (!detail::parseOneIp(p, prev, havePrev, ip)) return "invalid host list";
+            if (!detail::parseOneIp(p, prev, havePrev, ip)) return "invalid receiver list";
             while (*p == ' ') p++;
             uint8_t last = ip[3];
             if (*p == '-') {                // a RANGE: expand low..high over the last octet
@@ -130,8 +130,8 @@ inline const char* parseHostList(const char* s, Host* out, uint8_t maxHosts, uin
                 p = end;
             }
             for (int o = ip[3]; o <= last; o++) {
-                if (nOut >= maxHosts) return "too many hosts";
-                out[nOut] = Host{};
+                if (nOut >= maxReceivers) return "too many receivers";
+                out[nOut] = Receiver{};
                 std::memcpy(out[nOut].ip, ip, 3);
                 out[nOut].ip[3] = static_cast<uint8_t>(o);
                 nOut++;
@@ -142,7 +142,7 @@ inline const char* parseHostList(const char* s, Host* out, uint8_t maxHosts, uin
 
         while (*p == ' ') p++;
         if (*p == '\0') return nullptr;
-        if (*p != ',') return "invalid host list";
+        if (*p != ',') return "invalid receiver list";
         p++;
         while (*p == ' ') p++;
     }

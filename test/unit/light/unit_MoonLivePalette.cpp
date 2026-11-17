@@ -25,11 +25,11 @@ using namespace mm;
 
 namespace {
 /// A module for the binding to report status through, which is how a scripted palette's errors reach a card.
-struct ScriptHost : public MoonModule {};
+struct ScriptModule : public MoonModule {};
 
 /// Compile `src` as a palette, run one frame, and return the active palette.
 Palette runPalette(const char* src) {
-    ScriptHost host;
+    ScriptModule host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript(src));
     pal.prepare(host);
@@ -70,7 +70,7 @@ TEST_CASE("an out-of-range entry index writes nothing at all") {
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{7, 7, 7};
     Palettes::setActiveDirect(seed);
 
-    ScriptHost host;
+    ScriptModule host;
     MoonLivePalette pal;
     // Pins the contract only: a missing bound writes past the entries unseen here, which the CI ASan lane catches.
     pal.setScript(mmWriteScript("class P { void tick() { setPalEntry(16, 255, 255, 255); } }"));
@@ -90,7 +90,7 @@ TEST_CASE("entries the script does not write keep their previous color") {
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{3, 4, 5};
     Palettes::setActiveDirect(seed);
 
-    ScriptHost host;
+    ScriptModule host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript("class P { void tick() { setPalEntry(0, 200, 0, 0); } }"));
     pal.prepare(host);
@@ -110,7 +110,7 @@ TEST_CASE("a broken palette script leaves the last good palette, rather than goi
     for (int i = 0; i < 16; i++) seed.entry[i] = RGB{9, 9, 9};
     Palettes::setActiveDirect(seed);
 
-    ScriptHost host;
+    ScriptModule host;
     MoonLivePalette pal;
     pal.setScript(mmWriteScript("class P { void tick() { this is not a script } }"));
     pal.prepare(host);
@@ -153,7 +153,7 @@ TEST_CASE("the harmony palette takes the chord's colors on each change, the same
         for (const auto& [c, v] : classes) f.chroma[c] = v;
         f.harmonyChange = change;
     };
-    ScriptHost host;
+    ScriptModule host;
     MoonLivePalette pal;
     const std::string src = readText(scriptRoot() / "palettes" / "harmony.mlp");
     pal.setScript(mmWriteScript(src.c_str()));

@@ -10,8 +10,8 @@
 #include "core/util/format.h"           // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/Addressing.h"       // sendAddressed: the multicast rule every sender shares
 #include "core/system/DeviceIdentify.h"  // isGroupAddress: a destination that is a format's group, named for the map
-#include "core/util/HostList.h"         // the boards a unicast send goes to
-#include "core/util/HostResolver.h"     // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
+#include "core/util/ReceiverList.h"         // the boards a unicast send goes to
+#include "core/util/NameResolver.h"     // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
 #include "core/util/AudioFrame.h"
 #include "core/util/MoonLightAudioSyncPacket.h"   // the MoonLight audio-sync format
 #include "core/util/WLEDAudioSyncPacket.h"        // WLED's audio-sync format
@@ -136,7 +136,7 @@ public:
         if (!platform::networkReady()) return false;   // interface not up yet, try again next tick
         const uint32_t now = platform::millis();
         if (lastOpenFailMs_ != 0 && now - lastOpenFailMs_ < kOpenRetryMs) return false;
-        // Send → each format's group, or the hosts; receive → bind, then join both groups. A failed join degrades rather than refuses, since unicast still arrives.
+        // Send → each format's group, or the receivers; receive → bind, then join both groups. A failed join degrades rather than refuses, since unicast still arrives.
         open_ = (role == kSend || rx_) && sock_.open() && (role == kSend || sock_.bind(port));
         if (!open_) {
             sock_.close();
@@ -197,16 +197,16 @@ public:
         return true;
     }
 
-    /// Parse `hosts`, starting the name lookups here where allocating is allowed.
-    void parseHosts(const char* hosts) {
-        hostsError_ = parseHostList(hosts, hosts_, kMaxHosts, hostCount_);
-        if (hostsError_) { hostCount_ = 0; return; }
-        startResolverForNames(hosts_, hostCount_);
-        refreshNamedHosts(hosts, hosts_, hostCount_);
+    /// Parse `receivers`, starting the name lookups here where allocating is allowed.
+    void parseReceivers(const char* receivers) {
+        receiversError_ = parseReceiverList(receivers, receivers_, kMaxReceivers, receiverCount_);
+        if (receiversError_) { receiverCount_ = 0; return; }
+        startResolverForNames(receivers_, receiverCount_);
+        refreshNamedReceivers(receivers, receivers_, receiverCount_);
     }
 
-    /// Take the names in `hosts` that have resolved since.
-    void refreshHosts(const char* hosts) { refreshNamedHosts(hosts, hosts_, hostCount_); }
+    /// Take the names in `receivers` that have resolved since.
+    void refreshReceivers(const char* receivers) { refreshNamedReceivers(receivers, receivers_, receiverCount_); }
 
     /// The live state on the owner's status line, once a second: sending, receiving from whom, or listening.
     void report(Role role) {
@@ -215,8 +215,8 @@ public:
         if (role == kSend) { owner_.setStatus("sending"); return; }
         if (lastRecvMs_ == 0 || platform::millis() - lastRecvMs_ >= kFallbackMs) { reportListening(); return; }
         // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
-        char peer[HostResolver::kPeerChars];
-        HostResolver::formatPeer(peer, sizeof(peer), peer_);
+        char peer[NameResolver::kPeerChars];
+        NameResolver::formatPeer(peer, sizeof(peer), peer_);
         mm::formatTo(status_, sizeof(status_), "receiving %s from %s%s", rxWled_ ? "WLED" : "MoonLight", peer,
                      selection_.othersIgnored(platform::millis(), kFallbackMs) ? ", ignoring another sender" : "");
         owner_.setStatus(status_);
@@ -233,7 +233,7 @@ public:
         takesAtSecond_ = takeCount_;
     }
 
-    /// What the sync offers and exchanges: the port it receives on and the sender it follows, or each format's group or each host it sends to.
+    /// What the sync offers and exchanges: the port it receives on and the sender it follows, or each format's group or each receiver it sends to.
     void reportNetworkUse(NetworkUse& use, Role role, bool moonLight, bool wled, bool unicast, uint16_t port) const {
         if (!open_) return;
         if (role == kReceive) {
@@ -259,7 +259,7 @@ private:
     static constexpr platform::UdpSocket::MulticastGroup kGroups[] = {{{239, 0, 0, 2}}, {{239, 0, 0, 1}}};
     static constexpr uint8_t kGroupCount = sizeof(kGroups) / sizeof(kGroups[0]);
     static constexpr int kMaxRecvPerTick = 8;         // bounded non-blocking drain (sync is low-rate)
-    static constexpr uint8_t kMaxHosts = 8;           // how many boards a unicast send reaches
+    static constexpr uint8_t kMaxReceivers = 8;           // how many boards a unicast send reaches
 
     MoonModule& owner_;
     platform::UdpSocket sock_;       // one socket, either format, bound only in send or receive
@@ -267,9 +267,9 @@ private:
     AudioFrame frame_;               // the frame a packet is parsed into or built from, a member since it and the datagram together would pass the stack's budget
     AudioHits hits_;                 // the hits of the frames since the last packet, which a throttled send would drop
     AudioHits rxHits_;               // the hits of the packets since the last frame taken, late ones among them
-    Host     hosts_[kMaxHosts] = {};
-    uint8_t  hostCount_ = 0;
-    const char* hostsError_ = nullptr;   // why the host list was refused, shown on the status
+    Receiver     receivers_[kMaxReceivers] = {};
+    uint8_t  receiverCount_ = 0;
+    const char* receiversError_ = nullptr;   // why the receiver list was refused, shown on the status
     uint32_t lastSendMs_ = 0;        // the send throttle
     uint32_t sendCount_ = 0;
     uint32_t takeCount_ = 0;         // packets taken from the followed sender
@@ -283,7 +283,7 @@ private:
     bool     rxWled_ = false;        // whether the last frame taken came in WLED's format, for the status line
     bool     open_ = false;          // the socket is open for the current role
     uint8_t  peer_[4] = {};          // the last packet's sender, for the status line
-    char     status_[sizeof("receiving MoonLight from , ignoring another sender") + HostResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)", and whether another sender is passed over
+    char     status_[sizeof("receiving MoonLight from , ignoring another sender") + NameResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)", and whether another sender is passed over
 
     /// Take the packet just parsed into `frame_` from `srcIp`, its hits kept; false for a late or repeated MoonLight frame, whose hits the next frame carries.
     bool take(bool ml, const uint8_t (&srcIp)[4]) {
@@ -296,7 +296,7 @@ private:
         return o == SenderOrder::Order::New;
     }
 
-    /// One packet to its format's `group`, or to the hosts.
+    /// One packet to its format's `group`, or to the receivers.
     void sendPacket(const uint8_t* pkt, size_t n, const uint8_t group[4], bool unicast, uint16_t port) {
         forEachDestination(group, unicast, [&](const uint8_t ip[4]) { sock_.sendToAddr(ip, port, pkt, n); });
     }
@@ -304,13 +304,13 @@ private:
     /// Where one format's packet goes, which the send and the network report share. A steady 40 frames a second is a stream, so no broadcast copy on any network.
     template <class Fn>
     void forEachDestination(const uint8_t group[4], bool unicast, Fn&& fn) const {
-        sendAddressed(unicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate, hosts_, hostCount_, group, fn);
+        sendAddressed(unicast ? Addressing::Unicast : Addressing::Multicast, Traffic::FrameRate, receivers_, receiverCount_, group, fn);
     }
 
     /// Where a send goes, or why a unicast send reaches nobody.
     void reportSending(bool unicast) {
-        if (unicast && hostsError_) owner_.setStatus(hostsError_, MoonModule::Severity::Error);
-        else if (unicast && hostCount_ == 0) owner_.setStatus("set hosts to send to", MoonModule::Severity::Warning);
+        if (unicast && receiversError_) owner_.setStatus(receiversError_, MoonModule::Severity::Error);
+        else if (unicast && receiverCount_ == 0) owner_.setStatus("set receivers to send to", MoonModule::Severity::Warning);
         else owner_.setStatus("sending");
     }
 
@@ -323,7 +323,7 @@ private:
 
     /// Whether status line `s` holds one of the sync's own messages, which a mode without a socket clears.
     static bool isOwnStatus(const char* s) {
-        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "no memory for packets", "from ", "listening", "sending", "set hosts"};
+        static constexpr const char* kOwn[] = {"waiting for network", "socket failed", "bind failed", "no memory for packets", "from ", "listening", "sending", "set receivers"};
         if (!s) return false;
         for (const char* k : kOwn) if (std::strstr(s, k)) return true;
         return false;

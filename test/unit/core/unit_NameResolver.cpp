@@ -1,9 +1,9 @@
-/// @module HostResolver
+/// @module NameResolver
 
 /// Names answer from a cache at once while lookups happen elsewhere: waiting until the first answer, then the address, then the last known one while lookups fail.
 
 #include "doctest.h"
-#include "core/util/HostResolver.h"
+#include "core/util/NameResolver.h"
 
 #include <cstring>
 
@@ -21,41 +21,41 @@ bool fakeResolve(const char* name, uint8_t* ip) {
 }  // namespace
 
 TEST_CASE("a host name waits for its first lookup, then answers its address") {
-    const mm::HostResolver::LookupForTest resolver(&fakeResolve);
+    const mm::NameResolver::LookupForTest resolver(&fakeResolve);
     gUp = true; gLast = 40;
     uint8_t ip[4] = {};
-    CHECK(mm::HostResolver::lookup("panel.local", ip) == mm::HostResolver::State::Waiting);
-    mm::HostResolver::passForTest();
-    CHECK(mm::HostResolver::lookup("panel.local", ip) == mm::HostResolver::State::Resolved);
+    CHECK(mm::NameResolver::lookup("panel.local", ip) == mm::NameResolver::State::Waiting);
+    mm::NameResolver::passForTest();
+    CHECK(mm::NameResolver::lookup("panel.local", ip) == mm::NameResolver::State::Resolved);
     CHECK(ip[3] == 40);
 }
 
 TEST_CASE("a host name that stops resolving keeps its last known address") {
-    const mm::HostResolver::LookupForTest resolver(&fakeResolve);
+    const mm::NameResolver::LookupForTest resolver(&fakeResolve);
     gUp = true; gLast = 41;
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
-    mm::HostResolver::lookup("panel.local", ip);
-    mm::HostResolver::passForTest();
+    mm::NameResolver::lookup("panel.local", ip);
+    mm::NameResolver::passForTest();
     gUp = false;
     mm::platform::setTestNowMs(62000);   // past the refresh interval
-    mm::HostResolver::passForTest();
-    CHECK(mm::HostResolver::lookup("panel.local", ip) == mm::HostResolver::State::Stale);
+    mm::NameResolver::passForTest();
+    CHECK(mm::NameResolver::lookup("panel.local", ip) == mm::NameResolver::State::Stale);
     CHECK(ip[3] == 41);   // still sending to where it was
     gUp = true;
     mm::platform::setTestNowMs(0);
 }
 
 TEST_CASE("a host name that never resolves stays waiting, and costs no lookup until it is due") {
-    const mm::HostResolver::LookupForTest resolver(&fakeResolve);
+    const mm::NameResolver::LookupForTest resolver(&fakeResolve);
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
-    mm::HostResolver::lookup("nowhere.lan", ip);
+    mm::NameResolver::lookup("nowhere.lan", ip);
     gCalls = 0;
-    mm::HostResolver::passForTest();
-    mm::HostResolver::passForTest();   // too soon to retry
+    mm::NameResolver::passForTest();
+    mm::NameResolver::passForTest();   // too soon to retry
     CHECK(gCalls == 1);
-    CHECK(mm::HostResolver::lookup("nowhere.lan", ip) == mm::HostResolver::State::Waiting);
+    CHECK(mm::NameResolver::lookup("nowhere.lan", ip) == mm::NameResolver::State::Waiting);
     mm::platform::setTestNowMs(0);
 }
 
@@ -73,30 +73,30 @@ mm::platform::LookupStep fakeStep(const char* name, uint8_t* ip) {
 }  // namespace
 
 TEST_CASE("on a board with no worker task, the asking side looks a name up one non-blocking step per ask") {
-    const mm::HostResolver::LookupForTest resolver(&fakeStep);
+    const mm::NameResolver::LookupForTest resolver(&fakeStep);
     gSteps = 0; gStepsToAnswer = 3;
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
-    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // queued
-    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // step 1: sent
-    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Waiting);   // step 2: no reply yet
-    CHECK(mm::HostResolver::lookup("panel.lan", ip) == mm::HostResolver::State::Resolved);  // step 3: the reply
+    CHECK(mm::NameResolver::lookup("panel.lan", ip) == mm::NameResolver::State::Waiting);   // queued
+    CHECK(mm::NameResolver::lookup("panel.lan", ip) == mm::NameResolver::State::Waiting);   // step 1: sent
+    CHECK(mm::NameResolver::lookup("panel.lan", ip) == mm::NameResolver::State::Waiting);   // step 2: no reply yet
+    CHECK(mm::NameResolver::lookup("panel.lan", ip) == mm::NameResolver::State::Resolved);  // step 3: the reply
     CHECK(ip[3] == 7);
     mm::platform::setTestNowMs(0);
 }
 
 TEST_CASE("on a board with no worker task, a name that fails is retried only once it is due") {
-    const mm::HostResolver::LookupForTest resolver(&fakeStep);
+    const mm::NameResolver::LookupForTest resolver(&fakeStep);
     gSteps = 0; gStepsToAnswer = 1;
     mm::platform::setTestNowMs(1000);
     uint8_t ip[4] = {};
-    mm::HostResolver::lookup("nowhere.lan", ip);
-    mm::HostResolver::lookup("nowhere.lan", ip);   // looked up, failed
+    mm::NameResolver::lookup("nowhere.lan", ip);
+    mm::NameResolver::lookup("nowhere.lan", ip);   // looked up, failed
     gSteps = 0; gStepsToAnswer = 100;              // a step now would count
-    mm::HostResolver::lookup("nowhere.lan", ip);
+    mm::NameResolver::lookup("nowhere.lan", ip);
     CHECK(gSteps == 0);                            // too soon to retry
     mm::platform::setTestNowMs(7000);              // past the retry interval
-    mm::HostResolver::lookup("nowhere.lan", ip);
+    mm::NameResolver::lookup("nowhere.lan", ip);
     CHECK(gSteps == 1);
     mm::platform::setTestNowMs(0);
 }

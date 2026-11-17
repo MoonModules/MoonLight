@@ -287,7 +287,7 @@ The StadBeest uses an ESP32-S3 N16R8 for it, with an [iCON QCon Pro G2](../hardw
 
 1. Install it as the **MIDI bridge** device model, which sets its [MIDI service](../../moonmodules/core/services.md#midi) to `source` USB with `share` on.
 2. Plug the desk into the board's own USB port, the one marked USB, and power the board from its other port.
-3. On the leader's MIDI service, set `source` to network and `host` to the bridge's name, such as `MM-MIDI-rtp.local`, or its address, and pick the desk's `profile` there.
+3. On the leader's MIDI service, set `source` to network and `participant` to the bridge's name, such as `MM-MIDI-rtp.local`, or its address, and pick the desk's `profile` there.
 
 <img src="../../assets/reference/examples/multi-board/midi-bridge-card.png" width="300" alt="The bridge's MIDI card: source USB, share on, port 5004, status shared with MM-StadBeest"> <img src="../../assets/reference/examples/multi-board/midi-leader-card.png" width="300" alt="The leader's MIDI card: source network, profile Mackie Control, host 192.168.1.101, port 5004, connected to the bridge">
 
@@ -333,7 +333,7 @@ Two router settings keep it steady:
   The audio then stopped every 20 seconds, and an eye missed the leader's palette changes.
   With a few small streams on a dedicated network, sending multicast to every device costs nothing worth saving.
 - **An address reservation per device** (Network, LAN), so the addresses above stay the same.
-  Or a board's name in the host settings, such as the leader's MIDI `host` as `MM-MIDI-rtp`.
+  Or a board's name in the address settings, such as the leader's MIDI `participant` as `MM-MIDI-rtp`.
   A MoonLight board's name resolves from the Devices list, which the boards' broadcast keeps current where a router drops mDNS's multicast.
   A host setting shows the name of each board it knows beside its address.
 

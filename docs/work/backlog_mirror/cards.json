@@ -370,6 +370,16 @@
   "number": null
  },
  {
+  "title": "Renames migrate on the first page load after an update, within a two-release window",
+  "area": "Core",
+  "module": "",
+  "kind": "Feature",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=308167371",
+  "number": null
+ },
+ {
   "title": "Runtime board presets (multi-commit, partially landed)",
   "area": "Core",
   "module": "",
@@ -1717,16 +1727,6 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086933",
-  "number": null
- },
- {
-  "title": "A gate runner that runs each commit check once, on its own inputs",
-  "area": "Process and docs",
-  "module": "",
-  "kind": "",
-  "status": "Backlog",
-  "process": "",
-  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=306095198",
   "number": null
  },
  {

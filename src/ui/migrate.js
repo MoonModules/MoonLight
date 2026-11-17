@@ -84,10 +84,15 @@ export const CONTROL_RENAMES = {
     "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
     "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
     "presetRef": { name: "fixtureRef", date: "2026-10-03", onTypes: ["*Driver"] },
-    // One rule for reaching many receivers: a list is `hosts`, and how packets travel is `addressing`.
-    "ips": { name: "hosts", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "lightsPerIp": { name: "lightsPerHost", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
-    "feedbackTo": { name: "hosts", date: "2026-10-02", onTypes: ["OscService"] },
+    // One rule for reaching many receivers: a list is `receivers`, and how packets travel is `addressing`.
+    "ips": { name: "receivers", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "lightsPerIp": { name: "lightsPerReceiver", date: "2026-10-02", onTypes: ["NetworkSendDriver"] },
+    "feedbackTo": { name: "receivers", date: "2026-10-02", onTypes: ["OscService"] },
+    // The devices a service sends to are receivers, as sACN and Art-Net call them.
+    "hosts": { name: "receivers", date: "2026-11-17", onTypes: ["NetworkSendDriver", "AudioService", "OscService"] },
+    "lightsPerHost": { name: "lightsPerReceiver", date: "2026-11-17", onTypes: ["NetworkSendDriver"] },
+    // The address MIDI invites is the session's participant, RTP-MIDI's term.
+    "host": { name: "participant", date: "2026-11-17", onTypes: ["MidiService"] },
     "wledCompatible": { name: "addressing", date: "2026-10-02", onTypes: ["DevicesModule"] },
     // One name for one thing: the service is AudioService, the frame is AudioFrame, so the control
     // that makes a sprite effect follow the music is audioReactive. Scoped to the seven effects that

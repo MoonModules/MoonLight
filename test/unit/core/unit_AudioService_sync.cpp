@@ -463,8 +463,8 @@ TEST_CASE("AudioService: leaving local clears an outstanding mic diagnosis and r
     }
 }
 
-// Unicast is the faster choice for a few MoonLight boards on WiFi, so it sends to the hosts, and says so when there are none.
-TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for them when the list is empty") {
+// Unicast is the faster choice for a few MoonLight boards on WiFi, so it sends to the receivers, and says so when there are none.
+TEST_CASE("AudioService Local+send unicast: sends to its receivers, and asks for them when the list is empty") {
     FrozenClock clk(1);
     AudioService a;
     a.mode = AudioService::kLocalMode;
@@ -473,14 +473,14 @@ TEST_CASE("AudioService Local+send unicast: sends to its hosts, and asks for the
     a.syncPort = kTestSyncPort;
     a.applyState();
     a.tick();
-    CHECK(std::strstr(a.syncStatusForTest(), "set hosts") != nullptr);   // read before tick1s, whose mic retry rewrites the status
+    CHECK(std::strstr(a.syncStatusForTest(), "set receivers") != nullptr);   // read before tick1s, whose mic retry rewrites the status
     a.release();
 
     AudioService b;
     b.mode = AudioService::kLocalMode;
     b.send = true;
     b.addressing = AudioService::kAddressUnicast;
-    std::snprintf(b.hosts, sizeof(b.hosts), "%s", "127.0.0.1");
+    std::snprintf(b.receivers, sizeof(b.receivers), "%s", "127.0.0.1");
     b.syncPort = kTestSyncPort;
     b.applyState();
     b.tick();
@@ -571,7 +571,7 @@ TEST_CASE("AudioService Local+send: syncFormat picks the format sent, and both s
     a.mode = AudioService::kLocalMode;
     a.send = true;
     a.addressing = AudioService::kAddressUnicast;
-    std::snprintf(a.hosts, sizeof(a.hosts), "%s", "127.0.0.1");
+    std::snprintf(a.receivers, sizeof(a.receivers), "%s", "127.0.0.1");
     a.syncPort = kTestSyncPort;
     a.applyState();
     CHECK(a.syncFormat == AudioService::kFormatMoonLight);   // the default

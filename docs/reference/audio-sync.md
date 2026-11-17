@@ -8,7 +8,7 @@ One board analyzes the music and the others follow it over UDP. A MoonLight boar
 |---|---|
 | Protocol | UDP, one datagram per packet |
 | Port | 11988 by default, the Audio card's `syncPort` |
-| Addressing | multicast, the MoonLight format to `239.0.0.2` and WLED's to `239.0.0.1`; or unicast to the Audio card's `hosts` |
+| Addressing | multicast, the MoonLight format to `239.0.0.2` and WLED's to `239.0.0.1`; or unicast to the Audio card's `receivers` |
 | Rate | at most one packet every 25 ms, about 40 a second |
 | Byte order | little-endian for every multi-byte field, as every chip it runs on and WLED's packet |
 | Size | at most 508 bytes, the UDP payload every IPv4 host accepts, so a packet never fragments and a receiver reads each one whole |

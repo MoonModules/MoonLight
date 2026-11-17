@@ -375,7 +375,7 @@ bool coprocessorConnect() { return false; }
 bool wifiRadioReady() MM_NONBLOCKING { return true; }
 const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot
-const char* hostIp() { return ""; }
+const char* deviceIp() { return ""; }
 
 const char* sdkVersion() {
     static char buf[48] = {};
@@ -597,7 +597,7 @@ void mdnsStop() { MDNS.end(); }
 void mdnsShutdown() { MDNS.end(); }
 
 // Unicast DNS through lwIP; lwIP's responder answers for this device but does not query, so a .local name fails.
-bool resolveHost(const char* name, uint8_t ip[4]) {
+bool resolveName(const char* name, uint8_t ip[4]) {
     IPAddress addr;
     if (!name || !ethConnected() || !DNSClient::getHostByName(name, addr, kResolveTimeoutMs)) return false;
     copyIp(addr, ip);
@@ -617,7 +617,7 @@ struct DnsStep {
 DnsStep g_dns;
 }  // namespace
 
-LookupStep resolveHostStep(const char* name, uint8_t ip[4]) {
+LookupStep resolveNameStep(const char* name, uint8_t ip[4]) {
     // A lookup the lost connection carried is abandoned, so a reconnect starts afresh and its late answer is ignored.
     if (!ethConnected()) {
         if (g_dns.state != DnsState::Idle) { ++g_dns.generation; g_dns.state = DnsState::Idle; }

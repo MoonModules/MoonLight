@@ -242,7 +242,7 @@ TEST_CASE("DevicesModule: a board heard announcing itself answers its name for i
     CHECK_FALSE(dev.addressOf("desk.local", ip));
 }
 
-// A board that changed its address leaves its old row listed until it ages out, so a host setting naming it must reach where it is now.
+// A board that changed its address leaves its old row listed until it ages out, so an address setting naming it must reach where it is now.
 TEST_CASE("DevicesModule: a board heard at a new address is looked up there, not at the address it left") {
     DevicesModule dev;
     mm::platform::setTestNowMs(1000);
@@ -261,28 +261,28 @@ TEST_CASE("DevicesModule: a status names a known peer by its board and an unknow
     dev.applyState();   // claims the seat a status reads through
     inject(dev, "MM-S31", /*mm=*/true, 192, 0, 2, 125);
     inject(dev, "MM-a-name-of-23-letters", /*mm=*/true, 255, 255, 255, 254);
-    char peer[HostResolver::kPeerChars];
+    char peer[NameResolver::kPeerChars];
     const uint8_t known[4] = {192, 0, 2, 125}, unknown[4] = {192, 0, 2, 9}, longest[4] = {255, 255, 255, 254};
-    HostResolver::formatPeer(peer, sizeof(peer), known);
+    NameResolver::formatPeer(peer, sizeof(peer), known);
     CHECK(std::string(peer) == "MM-S31 (192.0.2.125)");
-    HostResolver::formatPeer(peer, sizeof(peer), unknown);
+    NameResolver::formatPeer(peer, sizeof(peer), unknown);
     CHECK(std::string(peer) == "192.0.2.9");
-    HostResolver::formatPeer(peer, sizeof(peer), longest);
+    NameResolver::formatPeer(peer, sizeof(peer), longest);
     CHECK(std::string(peer) == "MM-a-name-of-23-letters (255.255.255.254)");   // the longest name a board holds fits whole
     dev.release();
 }
 
 // A host setting naming a board resolves from the boards' own announcements, before mDNS, whose multicast a router may drop.
-TEST_CASE("DevicesModule: a host setting naming a board resolves from the device list at once, with no lookup") {
+TEST_CASE("DevicesModule: an address setting naming a board resolves from the device list at once, with no lookup") {
     DevicesModule dev;
     dev.setup();
     dev.applyState();
     inject(dev, "MM-Bridge", /*mm=*/true, 192, 0, 2, 101);
     uint8_t ip[4] = {};
-    CHECK(HostResolver::lookup("MM-Bridge.local", ip) == HostResolver::State::Resolved);   // no pass of the lookup task ran
+    CHECK(NameResolver::lookup("MM-Bridge.local", ip) == NameResolver::State::Resolved);   // no pass of the lookup task ran
     CHECK(ip[3] == 101);
     dev.release();
-    CHECK(HostResolver::lookup("MM-Bridge.local", ip) != HostResolver::State::Resolved);   // gone with the module
+    CHECK(NameResolver::lookup("MM-Bridge.local", ip) != NameResolver::State::Resolved);   // gone with the module
 }
 
 TEST_CASE("DevicesModule: a peer serving on another port is linked and read at that port") {
@@ -385,7 +385,7 @@ TEST_CASE("DevicesModule: a silent added address is left after the probe's wait,
     bool moved = false;
     for (int i = 0; i < 10 && !moved; i++) {
         dev.stepProbeForTest();
-        moved = dev.probeHostForTest() != 0;
+        moved = dev.probeReceiverForTest() != 0;
     }
     CHECK(moved);
     CHECK_FALSE(dev.probeOpenForTest());   // the silent one's connection is closed, not left open
