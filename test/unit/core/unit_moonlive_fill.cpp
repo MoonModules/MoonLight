@@ -13,7 +13,7 @@
 #include <vector>
 
 // MoonLive Stage 1a: the load-bearing slice, emit a fixed-color fill as native code, place it in executable memory, and call it over a buffer.
-// These tests run the WHOLE path in-process on the desktop host backend (the host ISA's emit + platform::allocExec/ writeExec + a real call), so they prove emit → exec → call → buffer-write works off hardware.
+// These tests run the WHOLE path in-process on the host backend (the host ISA's emit + platform::allocExec/ writeExec + a real call), so they prove emit → exec → call → buffer-write works off hardware.
 // The Xtensa backend is validated by the live S3 run, not here.
 
 using namespace mm;
@@ -881,8 +881,8 @@ TEST_CASE("an int member is published as a control spanning its full range") {
     eng.free();
 
     // NOT ASSERTED HERE: that a LIVE EDIT is picked up, writing the slot and running again.
-    // On the desktop backend a second run() of an already-compiled program still renders the old value even though the arena holds the new one.
-    // That is an open bug (docs/backlog § Desktop backend: a control-arena write is not seen by a second run()), NOT a property to pin.
+    // On the host backend a second run() of an already-compiled program still renders the old value even though the arena holds the new one.
+    // That is an open bug (docs/backlog § Host backend: a control-arena write is not seen by a second run()), NOT a property to pin.
     // The assertion belongs with the fix, or it would encode the bug.
     //
     // The initial READ is fine, here and everywhere: what looked like a broken read was run() being called without an entry name, which starts at the block start, `defineControls`, not `tick`. a wide control is hardware-verified on both ISAs (S3 and S31 drive ember's `cycle` to 2000 and back).
@@ -1356,7 +1356,7 @@ TEST_CASE("a coordinate far outside the grid saturates at that edge, not the opp
     CHECK(px[6] == 7);           // same on the other axis
 }
 
-#endif  // MM_MOONLIVE_HAS_HOST_JIT: every case above needs compile() to succeed, and on a target with no backend (the x86-64 desktop) the helpers they call are compiled out with it.
+#endif  // MM_MOONLIVE_HAS_HOST_JIT: every case above needs compile() to succeed, and on a target with no backend (the x86-64 host) the helpers they call are compiled out with it.
 
 // Regression: the slot release checked only some of its sinks, so detaching one released the slot while the palette, flow or trail sink was still installed.
 TEST_CASE("a sink slot stays owned while any of its sinks is still installed") {

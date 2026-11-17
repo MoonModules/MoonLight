@@ -1,5 +1,5 @@
 // The host-download half of the install picker. The same picker offers two
-// different things: an ESP32 firmware that gets FLASHED onto a board, and a desktop
+// different things: an ESP32 firmware that gets FLASHED onto a board, and a host
 // archive that gets DOWNLOADED to the computer viewing the page. These tests pin the
 // rule that keeps those apart, because mixing them up means offering a .dmg as
 // something to write to a microcontroller.
@@ -20,7 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const asset = (name) => ({ name, browser_download_url: `https://gh/${name}` });
 
 // A release as the workflow actually publishes it: ESP32 firmware plus one archive per
-// desktop platform.
+// host platform.
 const RELEASE = [
     asset("manifest-esp32s3-n16r8.json"),
     asset("firmware-esp32s3-n16r8-v3.0.0.bin"),
@@ -35,9 +35,9 @@ const RELEASE = [
     asset("MoonLight-android-arm64-v3.0.0.apk"),
 ];
 
-test("a desktop archive is offered for download even though it has no manifest", () => {
-    // An ESP32 firmware needs a manifest to flash. A desktop archive has nothing to flash,
-    // so requiring one would drop every desktop build from the list.
+test("a host archive is offered for download even though it has no manifest", () => {
+    // An ESP32 firmware needs a manifest to flash. A host archive has nothing to flash,
+    // so requiring one would drop every host build from the list.
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0");
     const mac = got.find(f => f.firmware === "host-macos-arm64");
     assert.ok(mac, "the macOS archive should be offered");
@@ -45,7 +45,7 @@ test("a desktop archive is offered for download even though it has no manifest",
     assert.ok(mac.isHost);
 });
 
-test("each desktop platform is offered once, however many archives it ships", () => {
+test("each host platform is offered once, however many archives it ships", () => {
     const got = parseFirmwaresFromAssets(RELEASE, "v3.0.0").filter(f => f.isHost);
     assert.deepEqual(got.map(f => f.firmware).sort(),
         ["host-android-arm64", "host-linux-arm64", "host-linux-x64", "host-macos-arm64", "host-windows-x64"]);
@@ -64,7 +64,7 @@ test("a platform shipping both an installer and a tarball offers the installer",
     assert.match(got.find(f => f.firmware === "host-linux-arm64").binaryUrl, /_arm64\.deb$/);
 });
 
-test("every shipped desktop asset is recognized under its own platform, and an unrelated asset is not", () => {
+test("every shipped host asset is recognized under its own platform, and an unrelated asset is not", () => {
     // The names package_host.py writes, one per file the release carries.
     const SHIPPED = {
         "host-macos-arm64": ["MoonLight-macos-arm64-v3.0.0.dmg", "MoonLight-macos-arm64-v3.0.0.tar.gz"],
@@ -83,7 +83,7 @@ test("every shipped desktop asset is recognized under its own platform, and an u
     assert.deepEqual(none, []);
 });
 
-test("the picker's desktop list is the registry's desktop rows", () => {
+test("the picker's host list is the registry's host rows", () => {
     // HOST_BUILDS is generated from firmwares.py; each registry row must match an asset of its own.
     const rows = JSON.parse(readFileSync(join(ROOT, "mooninstaller", "firmwares.json"), "utf8"))
         .firmwares.filter(f => f.platform === "host");
@@ -114,7 +114,7 @@ test("a version with dots does not break the platform match", () => {
     assert.equal(got[0].firmware, "host-macos-arm64");
 });
 
-test("an ESP32 device is never offered a desktop archive to flash", () => {
+test("an ESP32 device is never offered a host archive to flash", () => {
     // The property this whole split exists for: a .dmg written to a board is a failed
     // flash at best.
     for (const own of ["esp32", "esp32s3-n16r8", "esp32-eth"]) {
@@ -124,15 +124,15 @@ test("an ESP32 device is never offered a desktop archive to flash", () => {
     }
 });
 
-test("a desktop is offered desktop programs alone, downloading or updating itself", () => {
-    // Whichever OS the page runs on, no ESP32 image is a desktop's download or its update.
+test("a host is offered host programs alone, downloading or updating itself", () => {
+    // Whichever OS the page runs on, no ESP32 image is a host's download or its update.
     for (const key of ["esp32", "esp32s3-n16r8", "esp32p4", "esp32-eth"]) {
         assert.equal(isCompatible(HOST_DOWNLOAD, key), false, `download mode must reject ${key}`);
-        assert.equal(isCompatible("host-linux-arm64", key), false, `a desktop must reject ${key}`);
+        assert.equal(isCompatible("host-linux-arm64", key), false, `a host must reject ${key}`);
     }
 });
 
-test("a desktop is offered exactly one archive: the one built for its own OS", () => {
+test("a host is offered exactly one archive: the one built for its own OS", () => {
     // Which OS this runs on depends on the host, so assert the SHAPE that must hold on any
     // of them: exactly one of the host keys matches, never two, never none. That
     // is what stops a Mac being offered the Windows .zip.
@@ -142,7 +142,7 @@ test("a desktop is offered exactly one archive: the one built for its own OS", (
 });
 
 test("an ESP32 firmware and its ethernet variant remain mutually flashable", () => {
-    // Pre-existing rule, re-pinned here because the desktop branch sits in front of it.
+    // Pre-existing rule, re-pinned here because the host branch sits in front of it.
     assert.ok(isCompatible("esp32", "esp32-eth"));
     assert.ok(isCompatible("esp32-eth-wifi", "esp32"));
     assert.equal(isCompatible("esp32", "esp32s3-n16r8"), false);
@@ -162,7 +162,7 @@ test("a release with only an archive still offers it, for every platform it has"
     assert.match(got.find(f => f.firmware === "host-windows-x64").binaryUrl, /\.zip$/);
 });
 
-test("installing a desktop's own program installs the program, and downloading it downloads the package, both in one release", () => {
+test("installing a host's own program installs the program, and downloading it downloads the package, both in one release", () => {
     // The package and the program share the key host-linux-x64; the install takes the one of the kind on offer.
     const firmwares = parseFirmwaresFromAssets([...RELEASE, asset("firmware-host-linux-x64-v3.0.0.bin")]);
     const program = pickedEntry(firmwares, "host-linux-x64", "host-linux-x64");

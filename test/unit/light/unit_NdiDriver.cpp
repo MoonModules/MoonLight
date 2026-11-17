@@ -1,7 +1,7 @@
 /// @module NdiDriver
 /// @also Drivers, Correction
 
-/// The NDI driver's frames, pinned without the proprietary runtime. CI never has one installed, so the desktop platform RECORDS what the driver handed over (platform.h § NDI test seam) exactly as it records raw-Ethernet frames for the panel driver. These tests state what a receiver would see; the bench then only has to confirm that a receiver does see it.
+/// The NDI driver's frames, pinned without the proprietary runtime. CI never has one installed, so the host platform RECORDS what the driver handed over (platform.h § NDI test seam) exactly as it records raw-Ethernet frames for the panel driver. These tests state what a receiver would see; the bench then only has to confirm that a receiver does see it.
 
 #include "doctest.h"
 #include "light/drivers/NdiDriver.h"

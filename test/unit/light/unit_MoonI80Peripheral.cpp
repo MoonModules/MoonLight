@@ -19,7 +19,7 @@
 //   - its own bus-pin validation, and the fact that it needs FEWER pins than the sibling: no DC at
 //     all, and WR only under the expander (owning the GPIO matrix is what buys that).
 //
-// The hardware half (our GDMA descriptor chain) is inert on the host, desktop stubs return false/nullptr and `lanesAvailable()` is 0, and is proven on the S3 bench.
+// The hardware half (our GDMA descriptor chain) is inert on the host, host stubs return false/nullptr and `lanesAvailable()` is 0, and is proven on the S3 bench.
 
 namespace {
 

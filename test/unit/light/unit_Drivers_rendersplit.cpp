@@ -444,7 +444,7 @@ private:
 };
 }  // namespace
 
-// A worker that misses the frame boundary drops the split to inline, and the drivers still read the shared buffer, so it must keep receiving frames: on 2026-11-17 a desktop under build load froze its preview and Network Send on the last frame here.
+// A worker that misses the frame boundary drops the split to inline, and the drivers still read the shared buffer, so it must keep receiving frames: on 2026-11-17 a host under build load froze its preview and Network Send on the last frame here.
 TEST_CASE("render-split: after a stalled worker drops the split to inline, new frames still reach the drivers") {
     mm::Layouts layouts;
     mm::GridLayout grid;

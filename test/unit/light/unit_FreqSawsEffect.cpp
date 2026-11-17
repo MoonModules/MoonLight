@@ -62,7 +62,7 @@ TEST_CASE("FreqSawsEffect keepOn draws bands even with no audio") {
 
 // Fed a live (simulated) audio frame, the effect reacts: loud bands rise and paint their columns, leaving the buffer non-black even with keepOn off (so the light comes from the audio, not keepOn).
 TEST_CASE("FreqSawsEffect reacts to a fed audio frame") {
-    // Claim the active-mic seat with a module synthesizing loud "music" every tick (desktop has no I2S mic, so simulate is the only source; music-always fills every band). latestFrame() then hands this module's frame to the effect.
+    // Claim the active-mic seat with a module synthesizing loud "music" every tick (host has no I2S mic, so simulate is the only source; music-always fills every band). latestFrame() then hands this module's frame to the effect.
     mm::AudioService mic;
     mic.defineControls();
     mic.mode = mm::AudioService::kSimMode;   // simulate mode

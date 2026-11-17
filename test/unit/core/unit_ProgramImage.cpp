@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins what a desktop program's first bytes say about it, the check a desktop runs before a new version replaces it, as a board checks its image's chip.
+/// Pins what a host program's first bytes say about it, the check a host runs before a new version replaces it, as a board checks its image's chip.
 ///
 /// An ELF, Mach-O or PE program for the right system and processor passes; another one, a library or an object file is refused with its reason, and a web page, an archive or a cut header is no program.
 

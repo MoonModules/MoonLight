@@ -57,19 +57,19 @@ TEST_CASE("TasksModule: a fixed System module (Generic role, no delete affordanc
     CHECK(tasks.role() == ModuleRole::Generic);
 }
 
-TEST_CASE("TasksModule: the empty desktop snapshot is safe (no RTOS on host)") {
+TEST_CASE("TasksModule: the empty host snapshot is safe (no RTOS on host)") {
     // tick1s refreshes the (empty on host) task snapshot + fills core0/core1 (empty strings). This just confirms the refresh path doesn't crash and the tasks list serializes to an empty array.
     platform::setTestTaskSnapshot(nullptr, 0, "");
     Scheduler scheduler;
     TasksModule tasks;
     scheduler.addModule(&tasks);
     scheduler.setup();
-    tasks.tick1s();   // platform::taskSnapshot returns 0 on desktop → 0 rows, no crash
+    tasks.tick1s();   // platform::taskSnapshot returns 0 on host → 0 rows, no crash
     CHECK(true);      // reaching here without a crash is the assertion
 }
 
 TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with their fields") {
-    // Inject a canned snapshot (desktop test seam) → the `tasks` List serializes those rows with name/state/core/prio/stack, and the CPU% and heap fields appear only when they are real measurements.
+    // Inject a canned snapshot (host test seam) → the `tasks` List serializes those rows with name/state/core/prio/stack, and the CPU% and heap fields appear only when they are real measurements.
     const platform::TaskInfo snap[] = {
         {"main",  platform::TaskState::Running, 0, 1, 2340, 479 /* 47.9% */},
         {"IDLE1", platform::TaskState::Ready,   1, 0, 1100, platform::kTaskCpuUnmeasured},

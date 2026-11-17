@@ -26,7 +26,7 @@ test("from expert mode up the header adds the rate and the memory after the upti
     assert.equal(headerStats(ctrls, true), "3h 12m · 🕒 120 fps · 🧠 200KB · 🧱 96KB");
 });
 
-test("a desktop's zero block size and a missing control leave their badge out", () => {
-    const desktop = [{ name: "uptime", value: "5m" }, { name: "maxBlock", value: "0KB" }];
-    assert.equal(headerStats(desktop, true), "5m");
+test("a host's zero block size and a missing control leave their badge out", () => {
+    const host = [{ name: "uptime", value: "5m" }, { name: "maxBlock", value: "0KB" }];
+    assert.equal(headerStats(host, true), "5m");
 });

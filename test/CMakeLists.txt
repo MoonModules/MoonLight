@@ -346,7 +346,7 @@ endif()
 
 add_test(NAME unit_tests COMMAND mm_tests)
 
-# Pin the desktop filesystem root into the build tree. ctest runs from the build directory, which
+# Pin the host filesystem root into the build tree. ctest runs from the build directory, which
 # is not a repo checkout, so the default would resolve to the OS per-user data directory and any
 # test touching the default root would write into the developer's real settings.
 set_tests_properties(unit_tests PROPERTIES

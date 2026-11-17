@@ -326,7 +326,7 @@ TEST_CASE("a scan the radio cannot start yet waits for it and starts once it can
     REQUIRE(w.status() != nullptr);
     CHECK(std::string(w.status()) == "the scan waits for the radio");
     mm::platform::setTestWifiScanRefused(false);
-    w.tick1s();   // the desktop's scan finishes in the tick it starts
+    w.tick1s();   // the host's scan finishes in the tick it starts
     const char* scanned = nullptr;
     for (uint8_t i = 0; i < w.controls().count(); i++)
         if (std::strcmp(w.controls()[i].name, "scanned") == 0) scanned = static_cast<const char*>(w.controls()[i].ptr);

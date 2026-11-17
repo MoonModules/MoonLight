@@ -11,7 +11,7 @@
 
 #include <cstring>
 
-// Host-side half of the LCD driver: lane slicing (the shared PinList semantics), the frame-byte arithmetic (latch pad, 64-byte alignment, RGBW growth), and the parse-error/recovery shape. The hardware half (bus init, DMA transmit) is inert on the host, desktop stubs return false/nullptr, and is proven on the S3.
+// Host-side half of the LCD driver: lane slicing (the shared PinList semantics), the frame-byte arithmetic (latch pad, 64-byte alignment, RGBW growth), and the parse-error/recovery shape. The hardware half (bus init, DMA transmit) is inert on the host, host stubs return false/nullptr, and is proven on the S3.
 //
 // mm::ParallelLedDriver is the ONE registered driver; this file drives it with an injected mm::I80Peripheral backend (the esp_lcd i80 bus), the backend this header defines and registers under the "i80" peripheral label.
 
@@ -77,7 +77,7 @@ TEST_CASE("I80Peripheral frame grows on RGBW preset") {
     CHECK(d.frameBytes() == mm::expectParallelFrame(50, 4));
 }
 
-// A whole-frame driver with a bounded DMA (the classic ESP32 i80 = internal-RAM-only I2S, no ring) must REFUSE cleanly when the frame won't fit, never choke the bus init (which can busy-wait to a watchdog reset on hardware). On desktop / PSRAM chips the budget is 0 (no bound), so the frame-fit gate NEVER triggers regardless of grid size: a large frame is never rejected for its size here (the classic-i80 branch is compiled out). Pins the "budget 0 = no bound" contract, the gate is inert off the classic chip, so this refactor changes nothing on every non-classic target. The hardware behavior (a too-big frame on the real classic i80 idles with the clear "over DMA" status) is proven on the Olimex.
+// A whole-frame driver with a bounded DMA (the classic ESP32 i80 = internal-RAM-only I2S, no ring) must REFUSE cleanly when the frame won't fit, never choke the bus init (which can busy-wait to a watchdog reset on hardware). On host / PSRAM chips the budget is 0 (no bound), so the frame-fit gate NEVER triggers regardless of grid size: a large frame is never rejected for its size here (the classic-i80 branch is compiled out). Pins the "budget 0 = no bound" contract, the gate is inert off the classic chip, so this refactor changes nothing on every non-classic target. The hardware behavior (a too-big frame on the real classic i80 idles with the clear "over DMA" status) is proven on the Olimex.
 TEST_CASE("I80Peripheral: the DMA-fit gate is inert off the classic i80 (budget 0)") {
     mm::I80Peripheral peripheral;
     mm::ParallelLedDriver d;
@@ -87,12 +87,12 @@ TEST_CASE("I80Peripheral: the DMA-fit gate is inert off the classic i80 (budget 
     std::strcpy(d.ledsPerPin, "");       // even-split all onto the one pin
     wire(d, peripheral, src, corr, 4096);            // a large grid, far past any real classic i80 DMA budget
 
-    // The frame was computed (a real size), and the status is NOT the size-rejection message, desktop dmaBudgetBytes() is 0, so frameFitsDmaBudget() always passes. (The desktop bus stub is inert, so the status may be the plain init-fail, but never the size gate, that only fires on the classic.)
+    // The frame was computed (a real size), and the status is NOT the size-rejection message, host dmaBudgetBytes() is 0, so frameFitsDmaBudget() always passes. (The host bus stub is inert, so the status may be the plain init-fail, but never the size gate, that only fires on the classic.)
     CHECK(d.frameBytes() > 0);
     CHECK(std::strstr(d.status() ? d.status() : "", "over i80 DMA") == nullptr);
 }
 
-// frameFitsDmaBudget() is the pure predicate the classic-i80 gate leans on; its logic is compiled out on desktop (budget always 0), so exercise it directly with synthetic budgets. A FINITE budget rejects an oversized frame and accepts one that fits; a ZERO budget ("no bound", the LCD_CAM/PSRAM/desktop case) never rejects, whatever the frame size.
+// frameFitsDmaBudget() is the pure predicate the classic-i80 gate leans on; its logic is compiled out on host (budget always 0), so exercise it directly with synthetic budgets. A FINITE budget rejects an oversized frame and accepts one that fits; a ZERO budget ("no bound", the LCD_CAM/PSRAM/desktop case) never rejects, whatever the frame size.
 TEST_CASE("I80Peripheral::frameFitsDmaBudget rejects only over a finite budget") {
     // frameFitsDmaBudget is a protected static on ParallelLedDriver; a tiny subclass exposes it for the test without widening the production class surface.
     struct Expose : mm::ParallelLedDriver {
@@ -199,7 +199,7 @@ TEST_CASE("I80Peripheral drives any pin count; the bus rounds up around it") {
     // (0 pins → idles: covered by "I80Peripheral with the empty default pins idles cleanly" above.)
 }
 
-// WR and DC are lines the LEDs never read, so what an UNSET one costs is the chip's business: the classic ESP32 sinks it onto an input-only pad (no GPIO spent), the LCD_CAM chips need a real pad because an invalid number reaches the ROM's matrix routine. The desktop emulates the LCD_CAM backend, so here an unset WR idles the driver with a status that names the chip's rule.
+// WR and DC are lines the LEDs never read, so what an UNSET one costs is the chip's business: the classic ESP32 sinks it onto an input-only pad (no GPIO spent), the LCD_CAM chips need a real pad because an invalid number reaches the ROM's matrix routine. The host emulates the LCD_CAM backend, so here an unset WR idles the driver with a status that names the chip's rule.
 TEST_CASE("I80Peripheral idles with a named status when DC is unset, on every chip") {
     mm::I80Peripheral peripheral;
     mm::ParallelLedDriver d;
@@ -368,12 +368,12 @@ TEST_CASE("I80Peripheral loopbackRxPin tracks the loopbackTest toggle") {
     CHECK(found);
 }
 
-// loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (lcdLanes==0 on desktop); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
+// loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (lcdLanes==0 on host); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
 TEST_CASE("I80Peripheral loopbackTxPin tracks the loopbackTest toggle") {
     mm::checkLoopbackTxPinTracksTest<mm::I80Peripheral>();
 }
 
-// The pinExpander switch is HIDDEN where the silicon can't host the '595 (supportsPinExpander() false: the classic ESP32 i80 = the I2S peripheral, whose DMA can't read PSRAM, so the ×8 expander frame has nowhere to live). Desktop has lcdLanes==0 too, so the control is hidden here, the same compile-time gate the classic build takes. On the LCD_CAM chips (S3/P4) the flag is true and the control shows; that path is exercised on-device. Turning it on where unsupported only ever yields a config error, so not offering the switch is the honest UI. (Before this, the toggle was shown on every chip.)
+// The pinExpander switch is HIDDEN where the silicon can't host the '595 (supportsPinExpander() false: the classic ESP32 i80 = the I2S peripheral, whose DMA can't read PSRAM, so the ×8 expander frame has nowhere to live). Host has lcdLanes==0 too, so the control is hidden here, the same compile-time gate the classic build takes. On the LCD_CAM chips (S3/P4) the flag is true and the control shows; that path is exercised on-device. Turning it on where unsupported only ever yields a config error, so not offering the switch is the honest UI. (Before this, the toggle was shown on every chip.)
 //
 // kSupportsPinExpander moved from a static constexpr on the driver to a virtual on the I80Peripheral backend (supportsPinExpander()), a bare I80Peripheral instance reaches it without needing a live driver's peripheral_ (which is protected).
 TEST_CASE("I80Peripheral hides pinExpander where the chip can't host it") {
@@ -388,14 +388,14 @@ TEST_CASE("I80Peripheral hides pinExpander where the chip can't host it") {
     for (uint8_t i = 0; i < d.controls().count(); i++) {
         if (std::strcmp(d.controls()[i].name, "pinExpander") == 0) {
             found = true;
-            // Hidden exactly when the chip can't host the expander, ties the assertion to the flag rather than to the desktop's happens-to-be-unsupported value, so it stays correct on any target.
+            // Hidden exactly when the chip can't host the expander, ties the assertion to the flag rather than to the host's happens-to-be-unsupported value, so it stays correct on any target.
             CHECK(d.controls()[i].hidden == !peripheral.supportsPinExpander());
         }
     }
     CHECK(found);   // still BOUND (a saved value survives), just not shown
 }
 
-// The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on desktop, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.
+// The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on host, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.
 TEST_CASE("I80Peripheral allocates a real host bus the driver can encode into") {
     mm::checkHostBusAllocates<mm::I80Peripheral>();
 }

@@ -96,7 +96,7 @@ test("a truncated preview frame feeds no adaptation counters: validate first, th
     assert.ok(body.indexOf("windowDrops_ +=") > lastCheck, "drops counted only after full validation");
 });
 
-// A slider's number box is sized to its range, so a five-digit value such as 11647 shows whole rather than cut to 1164 (desktop, 2026-11-07).
+// A slider's number box is sized to its range, so a five-digit value such as 11647 shows whole rather than cut to 1164 (host, 2026-11-07).
 test("every slider's number box comes from one helper that sizes it to its range", () => {
     const i = app.indexOf("function valueBox(min, max, value)");
     assert.ok(i > 0, "no valueBox helper");

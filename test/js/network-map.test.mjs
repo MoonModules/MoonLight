@@ -212,7 +212,7 @@ test("a node's popup lists its flavor as its type, and as its url the .local add
                      { name: "WLED-Troy", ip: "192.168.1.223", type: "WLED-MM" }, "the ip links to the device, so the same url goes");
     assert.equal(popupFields({ name: "ML-olimex", ip: "192.168.1.207", type: "MoonLight", url: "http://192.168.1.207/" }).url, "http://ML-olimex.local/");
     assert.equal(popupFields({ name: "m4-pc", ip: "192.168.1.147", type: "MoonLight", port: 8080, url: "http://192.168.1.147:8080/" }).url, undefined,
-                 "a desktop serves on a port and answers no mDNS");
+                 "a host serves on a port and answers no mDNS");
     assert.equal(popupFields({ name: "my lights", ip: "192.168.1.9", type: "MoonLight" }).url, undefined, "a name that is no hostname");
 });
 

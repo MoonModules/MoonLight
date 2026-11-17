@@ -312,7 +312,7 @@ TEST_CASE("a nested loop lays out a full grid, on every target's register budget
     CHECK(p[14] == Coord3D{4, 2, 0});
 }
 
-// A `for` counter must survive whatever the body does to it. The device backends built a light's byte address by multiplying the index register IN PLACE, fine when the index is a throwaway temp, wrong when it is the loop counter, which the step and the loop test read again afterwards. A gradient (`for (i…) { setRGB(i, …) }`) therefore ran the wrong number of times on Xtensa and RISC-V while being correct on the desktop host, which used a scratch register instead.
+// A `for` counter must survive whatever the body does to it. The device backends built a light's byte address by multiplying the index register IN PLACE, fine when the index is a throwaway temp, wrong when it is the loop counter, which the step and the loop test read again afterwards. A gradient (`for (i…) { setRGB(i, …) }`) therefore ran the wrong number of times on Xtensa and RISC-V while being correct on the host, which used a scratch register instead.
 //
 // Pinned through a LAYOUT because the count is the observable: the host executes this test, and the arithmetic the backends share is the same. addLight's index is likewise the counter.
 TEST_CASE("a loop counter survives the body that uses it") {

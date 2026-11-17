@@ -146,7 +146,7 @@ TEST_CASE("the station tries each known network in priority order before the acc
         w.wifi.remember("third", "pw3");
         w.wifi.remember("second", "pw2");
         w.wifi.remember("first", "pw1");
-        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi
+        w.net.setup();   // no Ethernet on the host, so it starts on WiFi
         CHECK(std::strcmp(mm::platform::testLastStaSsid(), "first") == 0);
         mm::platform::setTestNowMs(1000 + 11000);   // past the per-network grace
         w.net.tick1s();
@@ -687,7 +687,7 @@ TEST_CASE("the cascade waits for a WiFi coproc whose link is not up, and joins a
     {
         WiFiNetwork w;
         w.wifi.remember("coproc-home", "pw");
-        w.net.setup();   // no Ethernet on the desktop, so it starts on WiFi, which refuses
+        w.net.setup();   // no Ethernet on the host, so it starts on WiFi, which refuses
         CHECK(std::strstr(w.net.status(), "waiting for the WiFi radio") != nullptr);
         CHECK(std::strcmp(mm::platform::testLastStaSsid(), "coproc-home") != 0);
         mm::platform::setTestNowMs(1000 + 5000);

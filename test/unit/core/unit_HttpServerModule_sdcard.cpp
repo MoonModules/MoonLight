@@ -136,7 +136,7 @@ TEST_CASE("the root listing advertises /sd as a folder, so the tree can reach it
     }, &seen);
     REQUIRE(std::find(seen.names.begin(), seen.names.end(), "sd") != seen.names.end());
     CHECK(seen.sdIsDir);
-    // Not doubled: desktop backs /sd with a real folder under the same root, which the listing must skip.
+    // Not doubled: host backs /sd with a real folder under the same root, which the listing must skip.
     CHECK(std::count(seen.names.begin(), seen.names.end(), "sd") == 1);
 }
 
@@ -309,7 +309,7 @@ TEST_CASE("an SD upload that stalls mid-transfer is closed and its slot frees fo
     http.release();
 }
 
-// Point 7 of the review: release() left an active slot's stream and socket open, leaking a FIL (or its desktop equivalent) and a connection.
+// Point 7 of the review: release() left an active slot's stream and socket open, leaking a FIL (or its host equivalent) and a connection.
 TEST_CASE("release mid-transfer closes the slot's stream and socket, leaking neither") {
     SdFixture fix;
     mm::HttpServerModule http;

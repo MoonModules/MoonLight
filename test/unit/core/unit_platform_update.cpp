@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins a desktop installing a new version of itself as a board does, each test over a scratch copy standing in for the running program.
+/// Pins a host installing a new version of itself as a board does, each test over a scratch copy standing in for the running program.
 ///
 /// An image written through `otaBegin`, `otaWrite` and `otaEnd` replaces a program of this system and processor, the old one kept as `.prev`, the new one `.pending`.
 ///
@@ -107,7 +107,7 @@ bool runningAsRoot() {
 #endif
 }
 
-/// A container's program is its host's to replace, root's is updated by hand and an Android app is updated by its next APK, so the self-update cases run as a native user on a desktop only.
+/// A container's program is its host's to replace, root's is updated by hand and an Android app is updated by its next APK, so the self-update cases run as a native user on a host only.
 const auto kSelfUpdating = doctest::skip(platform::inContainer() || runningAsRoot() || mm::kHostIsAndroid);
 
 }  // namespace
@@ -164,7 +164,7 @@ TEST_CASE("an image missing the release's digest leaves the program as it was, a
     CHECK(readBytes(s.program) == s.realProgram);
 }
 
-TEST_CASE("a desktop has one program: MoonBase and the radio chip are refused") {
+TEST_CASE("a host has one program: MoonBase and the radio chip are refused") {
     Scratch s("target");
     char status[64] = {};
     uint32_t written = 0;

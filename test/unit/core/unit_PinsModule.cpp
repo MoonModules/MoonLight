@@ -297,7 +297,7 @@ TEST_CASE("PinsModule: a CSV with an out-of-range pin claims nothing, and never 
 }
 
 // --- severity flagging (increment #2) ---------------------------------------------------------
-// gpioCapability is stubbed "all safe" on desktop, so inject an unsafe capability for one gpio and assert PinsModule grades the claim: reserved→error, driven-role-on-strap/input-only→warn, else none.
+// gpioCapability is stubbed "all safe" on host, so inject an unsafe capability for one gpio and assert PinsModule grades the claim: reserved→error, driven-role-on-strap/input-only→warn, else none.
 
 TEST_CASE("PinsModule: a claim on a reserved pin is flagged severity error") {
     platform::clearTestGpioCapability();
@@ -412,7 +412,7 @@ TEST_CASE("PinsModule: a driven role on an input-only pin IS flagged warn") {
 }
 
 TEST_CASE("PinsModule: a safe pin carries no severity field") {
-    platform::clearTestGpioCapability();   // no override → desktop reports all safe
+    platform::clearTestGpioCapability();   // no override → host reports all safe
     Scheduler scheduler;
     FakePinModule drv("RmtLed");
     drv.sck = 18;
@@ -428,7 +428,7 @@ TEST_CASE("PinsModule: a safe pin carries no severity field") {
 }
 
 // --- live state (increment #4) ----------------------------------------------------------------
-// gpioLiveState is stubbed valid=false on desktop (no real pins), so inject a live state and assert PinsModule emits the level/drive columns; a pin with no live state omits them.
+// gpioLiveState is stubbed valid=false on host (no real pins), so inject a live state and assert PinsModule emits the level/drive columns; a pin with no live state omits them.
 
 TEST_CASE("PinsModule: a claimed pin with live state emits level + drive columns") {
     platform::clearTestGpioLiveState();
@@ -452,7 +452,7 @@ TEST_CASE("PinsModule: a claimed pin with live state emits level + drive columns
 }
 
 TEST_CASE("PinsModule: a pin with no live state (valid=false) omits the live columns") {
-    platform::clearTestGpioLiveState();   // no override → desktop stub returns valid=false
+    platform::clearTestGpioLiveState();   // no override → host stub returns valid=false
     Scheduler scheduler;
     FakePinModule drv("RmtLed");
     drv.sck = 18;

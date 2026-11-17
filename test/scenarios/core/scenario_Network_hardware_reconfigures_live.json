@@ -6,7 +6,7 @@
     "Mqtt": "MqttModule",
     "Network": "NetworkModule"
   },
-  "description": "The network settings a desktop cannot answer for: an Ethernet PHY cycled on real silicon, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
+  "description": "The network settings a host cannot answer for: an Ethernet PHY cycled on real silicon, and Home Assistant discovery announced and retracted against a real broker. The render loop has to survive every one of them.",
   "also": [
     "NetworkModule",
     "MqttModule",
@@ -256,7 +256,7 @@
     },
     {
       "name": "eth-lan8720",
-      "description": "An Ethernet PHY named on a running device, which calls ethStop and ethInit for real. On the desktop this is a seam that returns immediately.",
+      "description": "An Ethernet PHY named on a running device, which calls ethStop and ethInit for real. On the host this is a seam that returns immediately.",
       "op": "set_control",
       "id": "Ethernet",
       "key": "ethType",

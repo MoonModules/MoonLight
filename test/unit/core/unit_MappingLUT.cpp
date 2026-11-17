@@ -122,7 +122,7 @@ TEST_CASE("MappingLUT paged destinations read back identically") {
     CHECK(lut.destinationCount() == run0.size() + run1.size() + run2.size());
 }
 
-// build() returns false on genuine exhaustion, total free heap (minus the reserve) can't hold the destinations, so the caller degrades to 1:1. Forced here via a non-zero freeHeap is desktop-only-unavailable, so this case pins the paged path's success and the boundary; the tier-3 false path is covered by the Layer sparse-mapping degrade test on real heap limits.
+// build() returns false on genuine exhaustion, total free heap (minus the reserve) can't hold the destinations, so the caller degrades to 1:1. Forced here via a non-zero freeHeap is host-only-unavailable, so this case pins the paged path's success and the boundary; the tier-3 false path is covered by the Layer sparse-mapping degrade test on real heap limits.
 TEST_CASE("MappingLUT single-block path when a block fits (not paged)") {
     BlockCapGuard guard;
     mm::platform::setTestMaxAllocBlock(1 << 20);  // 1 MB block — fits any small LUT

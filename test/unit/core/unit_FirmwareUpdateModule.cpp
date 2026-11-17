@@ -4,7 +4,7 @@
 #include "core/system/FirmwareUpdateModule.h"
 #include <cstring>
 
-// The `firmware` control always carries a name: the variant from build_info.h, or "unknown" on a local desktop build.
+// The `firmware` control always carries a name: the variant from build_info.h, or "unknown" on a local host build.
 TEST_CASE("FirmwareUpdateModule firmware control populated") {
     // A release build gets the real variant, which the install picker reads.
     mm::FirmwareUpdateModule fw;
@@ -37,7 +37,7 @@ TEST_CASE("FirmwareUpdateModule firmware control populated") {
     }
     CHECK(hasVersion);
     CHECK(hasBuild);
-    // Not asserted present: the control is added only when the platform reports a partition size, and desktop reports 0. What is asserted is its TYPE when it does exist, which is what the old `firmwarePartition` spelling silently stopped checking.
+    // Not asserted present: the control is added only when the platform reports a partition size, and host reports 0. What is asserted is its TYPE when it does exist, which is what the old `firmwarePartition` spelling silently stopped checking.
     (void)hasPartition;
 }
 

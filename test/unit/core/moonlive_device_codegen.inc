@@ -311,7 +311,7 @@ TEST_CASE("a returned value reaches the return register on " MM_ISA_NAME) {
 }
 
 // Every script we SHIP has to compile on every backend, or a user's board choice silently decides
-// which effects exist. `plasma.mle` is why this test is here: it ran on an S3 and on desktop and was
+// which effects exist. `plasma.mle` is why this test is here: it ran on an S3 and on host and was
 // refused on an S31, because one `kCodeCap` constant was sized to the densest ISA while RISC-V emits
 // up to 1.9x more for identical source. The buffer is now sized per script, and this pins that every
 // shipped script still fits on every backend.

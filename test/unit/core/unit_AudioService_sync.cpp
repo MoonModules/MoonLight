@@ -11,13 +11,13 @@
 ///
 /// The receive path over a real localhost round trip: a frame replaced, then the fresh-to-stale fallback a pure sink falls back to.
 ///
-/// platform::networkReady() is true on desktop, so the lazy open fires on the first tick, as on a device once its interface is up.
+/// platform::networkReady() is true on host, so the lazy open fires on the first tick, as on a device once its interface is up.
 ///
 /// ## Leaving local clears the mic status
 ///
 /// The other modes report through the separate sync row and have no input to diagnose, so a stale mic message there points at nothing.
 ///
-/// What local leaves depends on the host: nothing on a capture-capable desktop, "capture init failed" on a locked-down one, a request for pins on an I2S target without them. Whatever it left, leaving local clears.
+/// What local leaves depends on the host: nothing on a capture-capable host, "capture init failed" on a locked-down one, a request for pins on an I2S target without them. Whatever it left, leaving local clears.
 ///
 /// ## Capture and send coexist
 ///
@@ -159,7 +159,7 @@ TEST_CASE("AudioService Local+send: lazy-opens once and reports sending") {
     a.applyState();                  // build: syncReinit(), socket NOT opened here (boot-safe)
     CHECK(std::strstr(status(a), "waiting") != nullptr);   // no tick() yet → still waiting
 
-    a.tick();                        // networkReady() true on desktop → opens now
+    a.tick();                        // networkReady() true on host → opens now
     CHECK(std::strcmp(status(a), "sending") == 0);
     CHECK(a.syncOpenForTest());
 

@@ -11,7 +11,7 @@
 
 #include <cstring>
 
-// Host-side half of the Parlio driver: lane slicing (the shared PinList semantics), the frame-byte arithmetic (latch pad, 64-byte alignment, RGBW growth), and the parse-error/recovery shape. The hardware half (TX unit init, DMA transmit) is inert on the host, desktop stubs return false/nullptr, and is proven on the P4. The encoder itself is shared with the LCD driver and is covered by unit_ParallelSlots.cpp, so it isn't re-tested here.
+// Host-side half of the Parlio driver: lane slicing (the shared PinList semantics), the frame-byte arithmetic (latch pad, 64-byte alignment, RGBW growth), and the parse-error/recovery shape. The hardware half (TX unit init, DMA transmit) is inert on the host, host stubs return false/nullptr, and is proven on the P4. The encoder itself is shared with the LCD driver and is covered by unit_ParallelSlots.cpp, so it isn't re-tested here.
 //
 // The one behavioral difference from the LCD driver pinned below: Parlio has NO exactly-8-pins rule, 1..8 lanes are all valid (it takes the data GPIOs directly, no all-lanes-required i80 bus).
 //
@@ -279,12 +279,12 @@ TEST_CASE("ParlioPeripheral loopbackRxPin tracks the loopbackTest toggle") {
     CHECK(found);
 }
 
-// loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (parlioLanes==0 on desktop); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
+// loopbackTxPin (optional lane-0 TX override) is bound always, hidden until the test is on, same conditional-control contract as loopbackRxPin. The override's lane-0 substitution is hardware-only (parlioLanes==0 on host); the visibility contract is host-testable here via the shared helper (toggles loopbackTest both ways and asserts the control stays bound while flipping visibility).
 TEST_CASE("ParlioPeripheral loopbackTxPin tracks the loopbackTest toggle") {
     mm::checkLoopbackTxPinTracksTest<mm::ParlioPeripheral>();
 }
 
-// The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on desktop, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.
+// The host bus is REAL MEMORY, not a refusal: `busInit` used to return false on host, so every bus assertion was unreachable off-device and the driver's encode path only ever ran on hardware. The contract is identical for all three peripherals, so it lives in one place.
 TEST_CASE("ParlioPeripheral allocates a real host bus the driver can encode into") {
     mm::checkHostBusAllocates<mm::ParlioPeripheral>();
 }

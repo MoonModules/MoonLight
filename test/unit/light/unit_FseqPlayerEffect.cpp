@@ -515,7 +515,7 @@ TEST_CASE("a header with 0 channels or 0 frames fails to load with its own statu
     expectRefused("/sd/empty.fseq", makeFseqV1Bytes(/*channelCount=*/10, /*frameCount=*/0), "empty show: 0 channels or frames");
 }
 
-TEST_CASE("a zlib file fails to load on desktop with its own status, not a generic read failure") {
+TEST_CASE("a zlib file fails to load on host with its own status, not a generic read failure") {
     expectRefused("/sd/z.fseq", makeFseqV2ZlibBytes(/*channelCount=*/10, /*frameCount=*/5, /*blockCount=*/2), "zlib plays on ESP32 only");
 }
 

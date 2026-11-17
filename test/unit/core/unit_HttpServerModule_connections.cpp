@@ -271,8 +271,8 @@ TEST_CASE("HttpServer: an embedded file carries its tag, and a request naming th
     http.release();
 }
 
-// A desktop running from a checkout loads the UI's own modules, which the embedded bundle holds inside app.js, from the folder; nothing outside it.
-TEST_CASE("HttpServer: a desktop serves a UI module from its folder, and no path out of it") {
+// A host running from a checkout loads the UI's own modules, which the embedded bundle holds inside app.js, from the folder; nothing outside it.
+TEST_CASE("HttpServer: a host serves a UI module from its folder, and no path out of it") {
     const std::string dir = (std::filesystem::temp_directory_path() / "mm_ui_disk").string();
     std::filesystem::create_directories(dir);
     { std::ofstream(dir + "/extra.js") << "export const x = 1;"; }

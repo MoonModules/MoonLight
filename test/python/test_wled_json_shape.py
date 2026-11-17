@@ -11,9 +11,9 @@ drops a field the library needs, this test fails locally BEFORE HA fails on the
 live device — the parse either raises or leaves a required attribute missing.
 
 The golden vector below is a byte-for-byte capture of `curl /json` from the
-desktop build, so a regression in the C++ writer is caught as a raw-string diff
+host build, so a regression in the C++ writer is caught as a raw-string diff
 on this constant; the `Device.from_dict` assertion then re-confirms python-wled
-still accepts the shape. Refresh the golden by running the desktop and pasting
+still accepts the shape. Refresh the golden by running the host and pasting
 the new /json body here — the point of the vector is that a change is a
 deliberate acknowledgement, not a silent drift.
 """
@@ -23,8 +23,8 @@ import json
 from wled.models import Device
 
 
-# Captured from `curl http://127.0.0.1:8080/json` against a Windows desktop
-# build (2026-07-07). MAC/IP are the desktop stub's synthetic values, but every
+# Captured from `curl http://127.0.0.1:8080/json` against a Windows host
+# build (2026-07-07). MAC/IP are the host stub's synthetic values, but every
 # WLED-shim field python-wled reads is present.
 GOLDEN_JSON = (
     '{"state":{"on":true,"bri":20,"transition":7,"ps":-1,"pl":-1,"nl":{},"udpn":{},"lor":0,"mainseg":0,'

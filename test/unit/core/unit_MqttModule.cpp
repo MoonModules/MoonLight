@@ -27,7 +27,7 @@
 ///
 /// ## The MAC is derived, never written out
 ///
-/// The desktop MAC is a per-install stored identity from platform_host.cpp's getMacAddress, so a literal would pin whatever this machine happened to generate.
+/// The host MAC is a per-install stored identity from platform_host.cpp's getMacAddress, so a literal would pin whatever this machine happened to generate.
 ///
 /// The derivation is what these cases check: the topic identity is the MAC, not the device name, so a rename cannot move the topics.
 ///

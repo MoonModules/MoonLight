@@ -16,7 +16,7 @@
 //
 //     applyControlValue writes peripheralSel_  →  rebuildControls()  →  onControlChanged("peripheral")
 //
-// The bug this pins (found in the parallel-driver consolidation review): rebuildControls() already swaps the backend (ensurePeripheralMatchesSelection) and binds its members into the control list, so onControlChanged must NOT swap AGAIN, a second swap frees the just-bound backend and leaves every backend-owned control dangling into freed memory. Desktop's own registry is empty, so only a test that populates it can catch this.
+// The bug this pins (found in the parallel-driver consolidation review): rebuildControls() already swaps the backend (ensurePeripheralMatchesSelection) and binds its members into the control list, so onControlChanged must NOT swap AGAIN, a second swap frees the just-bound backend and leaves every backend-owned control dangling into freed memory. Host's own registry is empty, so only a test that populates it can catch this.
 
 namespace {
 
@@ -68,7 +68,7 @@ private:
     size_t cap_ = 0;
 };
 
-// The peripheral registry is a static set built at static-init in production. On desktop the three real backends (i80/MoonI80/Parlio) DO register (their headers compile into this binary) but report 0 lanes, so they fill registry slots while being filtered out of the option list, leaving no room for two test mocks (kMaxPeripherals == 4). So a swap test SAVES the registry, installs exactly its two mocks, runs, and RESTORES it, scoped, and it can't perturb any other test's view of the set.
+// The peripheral registry is a static set built at static-init in production. On host the three real backends (i80/MoonI80/Parlio) DO register (their headers compile into this binary) but report 0 lanes, so they fill registry slots while being filtered out of the option list, leaving no room for two test mocks (kMaxPeripherals == 4). So a swap test SAVES the registry, installs exactly its two mocks, runs, and RESTORES it, scoped, and it can't perturb any other test's view of the set.
 struct RegistryScope {
     mm::ParallelLedDriver::PeripheralEntry saved[mm::ParallelLedDriver::kMaxPeripherals];
     uint8_t savedCount;
@@ -147,7 +147,7 @@ TEST_CASE("ParallelLedDriver: a peripheral swap does not double-free or dangle t
         // A→B destroys exactly ONE attached backend (the outgoing A). The double-swap bug destroys TWO (A replaced by B1 in the rebuild, then B1 replaced by B2 in onControlChanged), so a delta > 1 is the bug's fingerprint. This is what live/ctor counts miss: probe churn hides the ctor delta, and net-live is 1 either way; only counting ATTACHED destructions isolates the extra free.
         CHECK(SwapMock::attachedDtors - dtorsBefore == 1);
         CHECK(SwapMock::live == liveBefore + 1);
-        // busInit succeeds (a memory buffer, not an inert desktop stub), so the bus comes up and the inited_-gated hwBlock() reports B's block (LcdCam), proving the LIVE backend is B, not a dangling A: if the double-swap freed the rebuild-bound backend, hwBlock() would read freed memory.
+        // busInit succeeds (a memory buffer, not an inert host stub), so the bus comes up and the inited_-gated hwBlock() reports B's block (LcdCam), proving the LIVE backend is B, not a dangling A: if the double-swap freed the rebuild-bound backend, hwBlock() would read freed memory.
         CHECK(d.hwBlock() == mm::LedHwBlock::LcdCam);
 
         // The driver must still run: a tick after the swap encodes+transmits through the LIVE backend, not a freed one. If the control list dangled, this is a use-after-free (ASan/TSan would catch; the plain assert catches the "transmitted through a stale object" case).

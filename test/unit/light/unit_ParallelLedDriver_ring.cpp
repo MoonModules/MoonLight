@@ -9,7 +9,7 @@
 #include <cstring>
 #include <vector>
 
-// The DOMAIN half of the MoonI80 streaming ring (the platform GDMA half is bench-verified on the S3, desktop stubs return false, so busIsRing() is false on host and tick() never routes here).
+// The DOMAIN half of the MoonI80 streaming ring (the platform GDMA half is bench-verified on the S3, host stubs return false, so busIsRing() is false on host and tick() never routes here).
 // What this pins is the part where the prior ring attempt "rendered wrong": the slice tiling the platform's refill task drives through the encode seam.
 // The invariants:
 //

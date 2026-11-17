@@ -1,6 +1,6 @@
 /// @module platform
 
-/// A desktop's own address is its LAN's: the default route's when a LAN interface holds it, and the broadcasting interface's when a VPN holds the route.
+/// A host's own address is its LAN's: the default route's when a LAN interface holds it, and the broadcasting interface's when a VPN holds the route.
 
 #include "doctest.h"
 #include "platform/host/host_address.h"

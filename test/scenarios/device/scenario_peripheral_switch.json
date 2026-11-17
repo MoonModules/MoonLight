@@ -152,7 +152,7 @@
     },
     {
       "name": "measure-i80-single",
-      "description": "i80 single-buffer baseline. Only meaningful where the pins are valid (S3/desktop path); a classic/P4 records its own i80 backend.",
+      "description": "i80 single-buffer baseline. Only meaningful where the pins are valid (S3/host path); a classic/P4 records its own i80 backend.",
       "op": "measure",
       "measure": true,
       "optional": true,

@@ -1,6 +1,6 @@
 // Tab-visibility hibernation: a hidden tab must cost the device nothing and, critically, must not
 // keep MEASURING, its throttled timers read ~0 fps and would coarsen the shared preview for every
-// viewer (coarsest request wins; observed live on the desktop before this landed).
+// viewer (coarsest request wins; observed live on the host before this landed).
 //
 // app.js is a browser script, so these pin the contract in the source, like ui-render-guard does.
 
