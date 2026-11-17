@@ -2,7 +2,7 @@
 
 The refresh rate a chain of HUB75 panels reaches, worked out from the shift clock, the bit planes and each plane's on-time. Use it to size a chain before you wire it: driven from an ESP32's pins by the [HUB75 driver](../../moonmodules/light/drivers.md#hub75), from a Raspberry Pi's header by Henner Zeller's [`rpi-rgb-led-matrix`](https://github.com/hzeller/rpi-rgb-led-matrix), or by a ColorLight 5A-75 receiving card through [Panel Card](../../moonmodules/light/drivers.md#panelcard). Wiring and settings are in [Driving a HUB75 panel](hub75-panels.md). The figures are arithmetic from published driver timings, so each one is a ceiling: a real driver lands a little below it, and a bench reading or a camera confirms it.
 
-Sections run in the order you use them: how a chain refreshes, the formula with one worked example, how drivers set the LSB, then tables for 8, 11 and 16 bits per channel and what they mean for sizing a chain, and last the same arithmetic for ColorLight cards.
+Sections run in the order you use them: how a chain refreshes, the formula with one worked example, how drivers set the LSB, the plane weights and hold words of the ESP32 driver's encoder, then tables for 8, 11 and 16 bits per channel and what they mean for sizing a chain, and last the same arithmetic for ColorLight cards.
 
 ## How a chain refreshes
 
@@ -69,12 +69,28 @@ The ceiling for the same chain is 1 / (32 × 11 × 15.96 µs) ≈ 178 Hz. At the
 | Driver | What it holds fixed | What follows | Its highest rate |
 |---|---|---|---|
 | `rpi-rgb-led-matrix` | The LSB time, `--led-pwm-lsb-nanoseconds` | The refresh rate, from the formula | The formula's f, at up to 11 bit planes, `--led-pwm-bits` |
-| HUB75 driver, on an ESP32 | One shift per plane: S = W × 50 ns at its 20 MHz pixel clock, the latch riding the last pixel | The LSB, S ÷ 2^(P−1), shortened by brightness | The ceiling, at up to 6 bit planes, `bitDepth` |
+| HUB75 driver, on an ESP32 | One shift per plane: S = the pass × 50 ns at its 20 MHz pixel clock, the latch riding the last pixel, where the pass is `rowWords()`, W words a color pass, or 2^(P−1) + 1 where hold words stretch a narrow row | The LSB, S ÷ 2^(P−1), shortened by brightness | The ceiling, at up to 6 bit planes, `bitDepth` |
 | SmartMatrix | The refresh rate, 240 Hz by default | The LSB, shrunk until every plane fits the row's time | The ceiling, with planes shorter than S padded up to it |
 
 The ESP32 driver's ceiling for one 64×64 panel at 1/32 scan and 4 bits is 1 / (32 × 4 × 3.2 µs) ≈ 2,441 Hz; the bench reading is in [Depth, refresh and brightness](hub75-panels.md#depth-refresh-and-brightness).
 
 At its ceiling, SmartMatrix's LSB comes out as S ÷ 2^(P−1), which is a few nanoseconds at 11 or 16 planes. Its timer ticks at the bus clock ÷ 2, so planes shorter than one tick share a single on-time. The shortest LSB a panel's driver chip honors sets the depth a chain shows, and that figure is open.
+
+## Plane weights and hold words
+
+The ESP32 driver's encoder lights plane *b* for 2^*b* × (pass − 1) ÷ 2^(P−1) words of a row's pass, rounded, and the pass is the slot S of the formula. The weights are exact where hold words stretch a narrow row's pass, and carry the rounding of the pass elsewhere. The hold-word rule is in [`Hub75Bus.h`](https://github.com/MoonModules/MoonLight/blob/main/src/platform/Hub75Bus.h), and the weights and the brightness at which the lowest plane drops out are in [`Hub75Encode.h`](https://github.com/MoonModules/MoonLight/blob/main/src/platform/Hub75Encode.h). The table shows what they give.
+
+| Row (words) | Planes | Hold words | Pass (words) | Lit words, plane 0 to top, at full brightness |
+|---|---|---|---|---|
+| 16 | 6 | 17 | 33 | 1, 2, 4, 8, 16, 32 |
+| 17 | 6 | 0 | 17 | 1, 1, 2, 4, 8, 16 |
+| 64 | 6 | 0 | 64 | 2, 4, 8, 16, 32, 63 |
+| 64 | 8 | 65 | 129 | 1, 2, 4, 8, 16, 32, 64, 128 |
+| 256 | 8 | 0 | 256 | 2, 4, 8, 16, 32, 64, 128, 255 |
+
+Each row of the table is pinned by a test in `unit_Hub75Encode.cpp`. A stretched row costs refresh, since its frame grows with the pass: a 16-word row at 6 bits clocks 33 words a pass against 32 for a 32-word row, and a 64-word row at 8 bits doubles.
+
+The encoder reaches 8 planes, and the ESP32 driver's `bitDepth` stops at 6, for the reason beside `kHub75PortMaxBitDepth` in `Hub75Bus.h`; the backlog card "Repeated planes: full top brightness and 8-bit depth" lifts it.
 
 ## Refresh rates for 128×64 panels at 1/32 scan
 
@@ -220,7 +236,7 @@ At 1/32 scan, the on-time of 16 bits alone fills more than a 60 Hz frame: 65,535
 - [SmartMatrix's Teensy 4 shield timings](https://github.com/pixelmatix/SmartMatrix/blob/af288cb536bd934d09be309d2346f9a8ffb51f4e/src/MatrixHardware_Teensy4_ShieldV5.h), by Louis Beaudoin (Pixelmatix) under an MIT-style license. The pixel clock is 480 MHz ÷ 26, and the header allows (32 × 26 × 1000 / 480) + 200 = 1,933 ns per 32 pixels: 60.4 ns a pixel. The latch is 100 ns, plus up to 400 ns before the first clock.
 - [SmartMatrix's Teensy 4 refresh, `calculateTimerLUT`](https://github.com/pixelmatix/SmartMatrix/blob/af288cb536bd934d09be309d2346f9a8ffb51f4e/src/MatrixTeensy4Hub75Refresh_Impl.h), for how it fits the planes into a fixed refresh rate.
 - [The `rpi-rgb-led-matrix` README](https://github.com/hzeller/rpi-rgb-led-matrix/blob/51d3231e370593b60952b2c3b18d2e3802329f18/README.md), at commit 51d3231, by Henner Zeller and contributors under GPL-2.0-or-later, for `--led-pwm-bits`, `--led-pwm-lsb-nanoseconds` and its refresh tuning notes.
-- MoonLight's HUB75 encoder, [Hub75Slots.h](https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/Hub75Slots.h), for the ESP32 driver's one shift per plane and its lit windows.
+- MoonLight's HUB75 encoder, [Hub75Encode.h](https://github.com/MoonModules/MoonLight/blob/main/src/platform/Hub75Encode.h), for the ESP32 driver's one shift per plane and its lit windows.
 - ColorLight's specification sheets, copies on resellers' sites: [5A-75B V8.0](https://cdn.shopify.com/s/files/1/0333/6047/8343/files/5A-75B-Specification_V8.0.pdf) (2020), [5A-75B V7.1](https://cdn.shopify.com/s/files/1/0354/4763/6013/files/5A-75B-Specification_V7.1.pdf) (2019), [5A-75B V1.4](https://cdn.shopify.com/s/files/1/0556/0126/6762/files/56949bf6cea82.pdf) and [5A-75E V1.0](https://cdn.shopify.com/s/files/1/0556/0126/6762/files/55682c0bdbb93.pdf) (2015). The DCLK range, the 8 ns OE step and the 65,536 gray levels come from the 2015 sheets.
 - [Colorlit LED's performance settings for a receiver card](https://www.colorlitled.com/performance-settings-led-receiver-card/), for the refresh multiplier, DCLK, minimum OE and brightness percentage.
 - [The chubby75 reverse-engineering notes](https://github.com/q3k/chubby75), by q3k and contributors, for the 5A-75B and 5A-75E board versions and FPGA.

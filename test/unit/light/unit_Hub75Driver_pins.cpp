@@ -84,6 +84,16 @@ TEST_CASE("Hub75Driver offers the clock edge, defaults to rising, and re-inits o
     CHECK(d.affectsPrepare("clockEdge"));
 }
 
+TEST_CASE("Hub75Driver offers 2 to 6 bit planes, though the encoder reaches 8") {
+    // The encoder shifts and weights up to 8 planes, but the ESP32 port stops at 6 until the repeated-planes card lands (the reason is at `kHub75PortMaxBitDepth`), so the control and the port bound the depth rather than valid().
+    mm::Hub75Driver d;
+    d.defineControls();
+    const int i = mm::controlIndex(d, "bitDepth");
+    REQUIRE(i >= 0);
+    CHECK(d.controls()[i].min == 2);
+    CHECK(d.controls()[i].max == 6);
+}
+
 TEST_CASE("Hub75Driver reports a published board's lines as fixed pins while their controls hide") {
     Hub75Driver d;
     d.defineControls();

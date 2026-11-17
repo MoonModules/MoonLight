@@ -3935,7 +3935,7 @@
     },
     "bitDepth": {
      "line": "Bit planes per frame: color levels against refresh and memory.",
-     "more": "Depth costs refresh and memory linearly. Brightness shortens each plane's lit time, so full white lights about a third of the time at 6-bit."
+     "more": "Depth costs refresh and memory per plane, more on a layout 16 columns or less at 6-bit. Full white lights about a third of the time at 6-bit."
     },
     "clockEdge": {
      "line": "The edge the chips sample on; every pixel one column over means the other."
