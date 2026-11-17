@@ -1,6 +1,6 @@
 #pragma once
 
-/// What each desktop platform supplies to the HDMI output loop in platform_host_hdmi.cpp: find the display, set it up in a mode, hand out the buffer the next frame is drawn into, and show it. The loop calls these from its own thread only.
+/// What each host platform supplies to the HDMI output loop in platform_host_hdmi.cpp: find the display, set it up in a mode, hand out the buffer the next frame is drawn into, and show it. The loop calls these from its own thread only.
 
 #include "platform/edid.h"
 #include "platform/platform.h"

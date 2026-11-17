@@ -18,7 +18,7 @@
 
 #include "platform/eth_config.h"   // EthPhyType, EthPinConfig
 
-// Desktop code always executes from RAM, so the ISR-residency attribute is empty here.
+// Host code always executes from RAM, so the ISR-residency attribute is empty here.
 #define MM_RAMFUNC
 
 namespace mm::platform {
@@ -101,10 +101,10 @@ constexpr bool hasRawEthernet = false;
 #else
 /// True: Linux drives a card's HDMI port through DRM/KMS, and macOS and Windows cover a second display with a full-screen window.
 constexpr bool hasHdmi = true;
-/// True: a desktop sends a ColorLight panel card's raw Ethernet frames through the adapter it names.
+/// True: a host sends a ColorLight panel card's raw Ethernet frames through the adapter it names.
 constexpr bool hasRawEthernet = true;
 #endif
-/// False: a desktop's display has no bridge chip to read back, so the driver hides its readout.
+/// False: a host's display has no bridge chip to read back, so the driver hides its readout.
 constexpr bool hasHdmiBridge = false;
 
 /// False: a desk on the computer reaches the MIDI service through the browser.
@@ -121,7 +121,7 @@ constexpr bool hasNetwork = hasWiFi || hasEthernet;
 /// False: a host has no Ethernet to fix, so nothing overrides a catalog-supplied PHY type.
 constexpr bool ethPhyIsFixed = false;
 
-/// Headroom for a per-pixel float algorithm, which a desktop CPU has to spare.
+/// Headroom for a per-pixel float algorithm, which a host CPU has to spare.
 constexpr bool hasHeavyCompute = true;
 
 // A whole effect can be compiled out only by `#if`, which a constexpr cannot drive; keep the two in step.

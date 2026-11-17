@@ -89,7 +89,7 @@ uint32_t find(uint32_t current) {
     if (CGGetActiveDisplayList(16, displays, &count) != kCGErrorSuccess) return 0;
     uint32_t found = 0;
     for (uint32_t i = 0; i < count; i++) {
-        if (CGDisplayIsMain(displays[i]) || CGDisplayMirrorsDisplay(displays[i]) != kCGNullDirectDisplay) continue;   // the desktop's own display is never covered
+        if (CGDisplayIsMain(displays[i]) || CGDisplayMirrorsDisplay(displays[i]) != kCGNullDirectDisplay) continue;   // the host's own display is never covered
         if (!found || displays[i] == current) found = displays[i];
     }
     return found;

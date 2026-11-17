@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// What a desktop program says about itself in its first bytes: which system loads it and which processor runs it.
+/// What a host program says about itself in its first bytes: which system loads it and which processor runs it.
 ///
 /// @technical
 ///
-/// A desktop vets a new version of itself as a board vets an image (`FirmwareImage.h`), by the header its system's loader reads:
+/// A host vets a new version of itself as a board vets an image (`FirmwareImage.h`), by the header its system's loader reads:
 ///
 /// | System | Format | Magic | Processor field | Executable |
 /// |--------|--------|-------|-----------------|------------|
@@ -25,9 +25,9 @@
 
 namespace mm {
 
-/// The executable formats a desktop runs.
+/// The executable formats a host runs.
 enum class ProgramSystem : uint8_t { Linux, MacOS, Windows };
-/// The processors a desktop runs on.
+/// The processors a host runs on.
 enum class ProgramCpu : uint8_t { X64, Arm64 };
 
 namespace program_image {

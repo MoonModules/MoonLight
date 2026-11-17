@@ -30,7 +30,7 @@ public:
 
     /// The controls a user sets on the card.
     void defineControls() override {
-        // Typed dimensions rather than swept magnitudes, bounded where a desktop grid needs.
+        // Typed dimensions rather than swept magnitudes, bounded where a host grid needs.
         controls_.addControl("width",  width,  1, 3840);
         controls_.setNumberField(controls_.count() - 1);
         controls_.addControl("height", height, 1, 2160);

@@ -1,6 +1,6 @@
 #pragma once
 
-/// A responder the host lends the desktop platform's mDNS calls: an app shell that has one sets it, as the Android app does with NsdManager through main_android.cpp. Unset, the calls only remember what a test reads back.
+/// A responder the host lends the host platform's mDNS calls: an app shell that has one sets it, as the Android app does with NsdManager through main_android.cpp. Unset, the calls only remember what a test reads back.
 
 #include <cstdint>
 

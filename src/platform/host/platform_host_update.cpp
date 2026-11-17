@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-/// A desktop installing a new version of itself as a board installs an image into its other slot.
+/// A host installing a new version of itself as a board installs an image into its other slot.
 ///
 /// The image goes to `MoonLight.next` beside the running program; `otaEnd` vets it, keeps the running program as `MoonLight.prev` and renames the new one in.
 ///
@@ -42,7 +42,7 @@ namespace {
 
 fs::path g_testProgram;   // a test's stand-in for the running program, empty for the real one
 
-/// The largest image a desktop takes, some 80 times its program: a URL serving more fills the disk before its header could refuse it.
+/// The largest image a host takes, some 80 times its program: a URL serving more fills the disk before its header could refuse it.
 constexpr uint32_t kMaxProgramBytes = 256u * 1024 * 1024;
 
 /// The system and processor this build runs on, which a new program must be built for.
@@ -362,7 +362,7 @@ void confirmProgramWhenStable() {
 bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf, size_t statusBufLen, uint32_t* bytesOut) {
     if (bytesOut) *bytesOut = 0;
     if (target != OtaTarget::App) {
-        say(statusBuf, statusBufLen, "error: a desktop has one program, no MoonBase or radio chip");
+        say(statusBuf, statusBufLen, "error: a host has one program, no MoonBase or radio chip");
         return false;
     }
     if (updateMode() != UpdateMode::Self) {

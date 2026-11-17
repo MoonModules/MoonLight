@@ -14,7 +14,7 @@ import java.io.File
 import kotlin.system.exitProcess
 
 /**
- * The app installing a new version of itself, as a desktop puts a new program in place: the program downloads and vets the release's
+ * The app installing a new version of itself, as a host puts a new program in place: the program downloads and vets the release's
  * package (platform_host_update.cpp, host_update.h) and hands its path here, and Android's PackageInstaller replaces the app.
  *
  * Android asks the person to confirm unless this app installed the version running, which every update through here makes so.

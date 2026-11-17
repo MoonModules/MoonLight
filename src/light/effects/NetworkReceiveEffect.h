@@ -500,7 +500,7 @@ private:
     void replyToPoll(const uint8_t pollerIp[4]) {
         uint8_t myIp[4];
         platform::localIPv4(myIp);
-        // The desktop has no netif, so parse deviceIp()'s string as the last resort.
+        // The host has no netif, so parse deviceIp()'s string as the last resort.
         if (!myIp[0] && !myIp[1] && !myIp[2] && !myIp[3]) {
             if (!parseDottedQuad(platform::deviceIp(), myIp)) return;  // no usable IP, so stay silent
         }

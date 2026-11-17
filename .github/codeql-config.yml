@@ -7,13 +7,13 @@ name: "MoonLight CodeQL config"
 #
 # NB it does NOT suppress findings inside doctest.h. For C/C++ `paths-ignore` filters which files
 # are ANALYZED, not which are extracted through an `#include`: 143 test files include this header,
-# so its code reaches the database via them and alerts still land on it (measured — the critical
+# so its code reaches the database via them and alerts still land on it (measured, the critical
 # `cpp/use-after-free` at doctest.h:3705 stayed open across scans after this entry was added, and
 # was dismissed in the Security tab instead). Kept because it still drops the header as a
 # standalone analysis target; the dismissal is what actually silences it.
 paths-ignore:
   - test/doctest.h
-  # miniaudio: the vendored desktop audio-capture backend (same rule and same caveat as
+  # miniaudio: the vendored host audio-capture backend (same rule and same caveat as
   # doctest.h above; its 16 unsigned-overflow-pattern alerts were dismissed in the Security
   # tab as vendored third-party code).
   - src/platform/host/vendor/miniaudio.h

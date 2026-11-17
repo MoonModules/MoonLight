@@ -19,7 +19,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Warning flags differ between GCC/Clang and MSVC. Gate by compiler so the
-# desktop build runs cleanly on Windows runners (no -W flags on MSVC) and on
+# host build runs cleanly on Windows runners (no -W flags on MSVC) and on
 # macOS/Linux (no /W flags on Clang/GCC).
 if(MSVC)
     # /W4 /WX matches the GCC/Clang `-Wall -Wextra -Werror` discipline. A few
@@ -89,7 +89,7 @@ else()
     # (platform.h); -Wfunction-effects then checks TRANSITIVELY that nothing they reach
     # allocates or blocks, through the whole call graph. Clang 20+ only; the flag does not
     # exist on GCC, so the ESP32 build gets no hot-path check — src/platform/esp32/ is
-    # analyzed only where the desktop build reaches it (docs/reference/testing.md § Static analysis).
+    # analyzed only where the host build reaches it (docs/reference/testing.md § Static analysis).
     # Probe for the flag instead of inferring it from a version: AppleClang reports its own
     # version line (the CI macos-14 runner reads >= 20 while predating the warning), so a version
     # comparison enables -Wfunction-effects on toolchains that reject it — and it is -Werror.
@@ -112,13 +112,13 @@ else()
     endif()
 endif()
 
-# MM_MOONLIVE_NO_HOST_JIT builds this machine the way a desktop with NO MoonLive backend sees the
-# code. Every x86-64 desktop is one (Windows, Linux, Intel macOS ship no backend), so a test that
+# MM_MOONLIVE_NO_HOST_JIT builds this machine the way a host with NO MoonLive backend sees the
+# code. Every x86-64 host is one (Windows, Linux, Intel macOS ship no backend), so a test that
 # wrongly presumes a compile succeeds passes on the arm64 bench and fails only once CI runs it.
 # A compile DEFINITION rather than a CMAKE_CXX_FLAGS entry: this file configures warnings through
 # add_compile_options, which does not consume that variable, so a flag passed there would reach the
 # cache and never the compiler.
-option(MM_MOONLIVE_NO_HOST_JIT "Build as a desktop with no MoonLive backend" OFF)
+option(MM_MOONLIVE_NO_HOST_JIT "Build as a host with no MoonLive backend" OFF)
 if(MM_MOONLIVE_NO_HOST_JIT)
     add_compile_definitions(MM_MOONLIVE_FORCE_NO_HOST_JIT=1)
 endif()
@@ -139,7 +139,7 @@ add_library(mm_core STATIC
 )
 # Core sees only core, the platform and the UI: its include root links those three folders of src/ and not light/, so a core file including
 # light fails to compile (architecture: core without light). The links are symbolic, which Windows grants only in Developer Mode, so Windows
-# keeps src/ as the root and the other desktops and CI hold the boundary. A target that also builds light adds src/ itself.
+# keeps src/ as the root and the other hosts and CI hold the boundary. A target that also builds light adds src/ itself.
 set(MM_CORE_ROOT ${CMAKE_SOURCE_DIR}/src)
 if(NOT WIN32)
     set(MM_CORE_ROOT ${CMAKE_BINARY_DIR}/mm_core_root)
@@ -165,10 +165,10 @@ endif()
 # The computed semver (compute_version.py): the core for a stable tag, <core>-dev.<N> for a
 # moving latest build. Only the release pipeline sets it (package_host.py --version); a local
 # build falls through to build_info.cpp's #ifndef default, the same <core>-dev.<N> computed into
-# build_id.h, so a desktop built from main reports the version latest carries. The same override the
-# ESP32 build has (esp32/main/CMakeLists.txt), so a desktop binary reports the same precise
+# build_id.h, so a host built from main reports the version latest carries. The same override the
+# ESP32 build has (esp32/main/CMakeLists.txt), so a host binary reports the same precise
 # version its release assets are named with, which is what lets the UI's update badge compare
-# a running desktop against the `latest` channel at all. On build_info.cpp alone, so a new
+# a running host against the `latest` channel at all. On build_info.cpp alone, so a new
 # version leaves every other unit a compiler-cache hit (build_info.h).
 if(MM_VERSION)
     set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_VERSION="${MM_VERSION}")
@@ -202,7 +202,7 @@ if(MM_HOST_CPU)
     set_property(SOURCE src/core/util/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="host-${MM_HOST_OS}-${MM_HOST_CPU}")
 endif()
 
-# Platform library (desktop). moonlive_emit.cpp is the desktop MoonLive backend (host-ISA
+# Platform library (host). moonlive_emit.cpp is the host MoonLive backend (host-ISA
 # codegen) — it lives here because emitted machine code is platform/ISA-specific.
 add_library(mm_platform
     src/platform/host/platform_host.cpp
@@ -217,7 +217,7 @@ add_library(mm_platform
     src/platform/host/moonlive_asm_x86_64.cpp
 )
 target_include_directories(mm_platform PUBLIC ${MM_CORE_ROOT} src/platform/host/)
-# Winsock for the desktop socket surface; IPHLPAPI for real Ethernet link state and negotiated
+# Winsock for the host socket surface; IPHLPAPI for real Ethernet link state and negotiated
 # speed (PanelCardDriver warns below gigabit, and a ColorLight card tears rather than erroring).
 # Npcap is deliberately NOT linked: platform_host.cpp resolves wpcap.dll at run time so the
 # build needs no SDK and the binary runs without it.
@@ -273,7 +273,7 @@ elseif(DEFINED ENV{MM_PACKAGING} AND NOT WIN32)
     # Keyed on MM_PACKAGING, which package_host.py exports and nothing else sets. Two earlier
     # signals were both wrong. MM_RELEASE reaches the build as a CMake -D from build_esp32.py and
     # is never an environment variable, so that branch could not fire and three of the four
-    # published desktop binaries shipped with the feature compiled out. CI is set by every runner,
+    # published host binaries shipped with the feature compiled out. CI is set by every runner,
     # including the sanitizer lanes that configure CMake directly and legitimately have no libcurl,
     # so keying on it failed builds that produce no artifact at all.
     #

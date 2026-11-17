@@ -8,13 +8,13 @@
 /// ## Two ways to land here
 ///
 /// An instruction set nobody has written an assembler for, and a deliberate no-JIT build.
-/// That build is a pre-merge gate: it is how a contributor sees what an unsupported desktop sees.
+/// That build is a pre-merge gate: it is how a contributor sees what an unsupported host sees.
 /// Both must link and run everything that is not a script.
 ///
-/// ## Why a desktop may have no backend at all
+/// ## Why a host may have no backend at all
 ///
 /// The ESP32 side fails the build for an unknown instruction set, every chip being Xtensa or RISC-V, so a third is an unfinished port.
-/// A desktop legitimately has this case.
+/// A host legitimately has this case.
 
 #if !((defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64)) && !defined(MM_MOONLIVE_FORCE_NO_HOST_JIT))
 

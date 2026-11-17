@@ -614,7 +614,7 @@ export const IDENTITY = {
         ...["ipSettings", "ip", "gateway", "subnet", "dns",
             "ethBoard", "ethType", "ethPhyAddr", "ethRstGpio", "ethMdcGpio", "ethMdioGpio", "ethClockGpio", "ethClockExtIn",
             "ethSpiMiso", "ethSpiMosi", "ethSpiSck", "ethSpiCs", "ethSpiIrq"].map(k => ["Network", "Ethernet", k])],
-    "/.config/identity": [],   // the desktop's stored hardware address, which its name derives from
+    "/.config/identity": [],   // the host's stored hardware address, which its name derives from
 };
 /// Turn a backup's files into a clone of it for another device: the target's identity, from `targetFiles` (its own current files), replaces the bundle's.
 /// Returns {files, report}: a key the target holds is the target's, whether or not the backup has it, and a key the target lacks is dropped, so the device keeps what it holds.

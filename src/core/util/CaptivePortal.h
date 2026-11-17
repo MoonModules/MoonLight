@@ -1,6 +1,6 @@
 #pragma once
 
-/// The two pieces a captive portal is made of, as pure functions the desktop tests: a DNS reply (RFC 1035) and the HTTP redirect decision.
+/// The two pieces a captive portal is made of, as pure functions the host tests: a DNS reply (RFC 1035) and the HTTP redirect decision.
 
 #include <cstddef>
 #include <cstdint>

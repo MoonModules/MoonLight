@@ -1,4 +1,4 @@
-// The MoonLight Android app: a Kotlin shell around the desktop program, which build_android.py builds as libmoonlight.so.
+// The MoonLight Android app: a Kotlin shell around the host program, which build_android.py builds as libmoonlight.so.
 pluginManagement {
     repositories {
         google()

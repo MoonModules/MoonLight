@@ -30,7 +30,7 @@ jobs:
           curl -sSL https://github.com/errata-ai/vale/releases/download/v3.21.0/vale_3.21.0_Linux_64-bit.tar.gz | tar -xz -C "$RUNNER_TEMP" vale
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # check_code reads a configured tree; check_docgen parses the sources, and build_info.cpp includes the build_id.h the build generates.
-      - name: configure the desktop build, and generate build_id.h
+      - name: configure the host build, and generate build_id.h
         run: uv run moondeck/build/build_host.py --configure
       - name: check_code
         if: always()

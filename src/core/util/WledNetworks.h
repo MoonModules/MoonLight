@@ -12,7 +12,7 @@
 ///
 /// WLED names its Ethernet board by an index into its board table (`eth.type` in `cfg.json`), which maps to MoonLight's Ethernet settings here.
 ///
-/// It lives here once so the migration image (`moonbase/migrate/`) and a desktop test run the same code, on the standard C headers alone.
+/// It lives here once so the migration image (`moonbase/migrate/`) and a host test run the same code, on the standard C headers alone.
 
 #include "core/util/JsonEscape.h"
 

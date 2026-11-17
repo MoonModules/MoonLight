@@ -25,7 +25,7 @@ namespace mm {
 ///
 /// ## Compressed files need ESP32
 ///
-/// A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; desktop and Teensy builds show a clean error instead of playing it.
+/// A zlib-compressed FSEQ (xLights/FPP's default) plays only on ESP32 boards; host and Teensy builds show a clean error instead of playing it.
 ///
 /// Zstd-compressed files do not play on any target yet.
 ///
@@ -253,7 +253,7 @@ public:
         return true;
     }
 
-    // --- Test seams: inject state directly, since every real file call needs a test root to succeed on desktop ---
+    // --- Test seams: inject state directly, since every real file call needs a test root to succeed on host ---
 
     /// Test seam: inject a parsed header directly, skipping the real file read.
     void setHeaderForTest(const fseq::FseqHeader& h) {
@@ -297,7 +297,7 @@ public:
     uint32_t effectiveStepMsForTest() const { return effectiveStepMs(); }
     /// Run one tick20ms decode step without waiting out the real frame cadence.
     void decodeOneFrameForTest() { lastFrameMs_ = elapsed() - effectiveStepMs(); tick20ms(); }
-    /// Test seam for the scan's directory-join, the one piece of the scan desktop can exercise directly.
+    /// Test seam for the scan's directory-join, the one piece of the scan host can exercise directly.
     static bool joinPathForTest(const char* dir, const char* name, char* out, size_t outCap) {
         return joinPath(dir, name, out, outCap);
     }

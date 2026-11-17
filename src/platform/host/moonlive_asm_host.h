@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <cstddef>
 
-/// The desktop backend: a named-instruction assembler for arm64 and x86-64, in the textbook MacroAssembler shape.
+/// The host backend: a named-instruction assembler for arm64 and x86-64, in the textbook MacroAssembler shape.
 ///
 /// It appends one instruction at a time and back-patches label offsets, so a multi-op statement needs no hand-computed branch displacement. This header is the neutral surface; the per-ISA encodings live in the implementation.
 ///

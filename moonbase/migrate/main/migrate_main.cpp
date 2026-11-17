@@ -34,7 +34,7 @@
 #error "the S3's octal-flash capability is missing: the octal check would pass a quad bootloader onto octal flash"
 #endif
 
-#include "core/util/WledNetworks.h"   // WLED's saved networks, read as a desktop test reads them
+#include "core/util/WledNetworks.h"   // WLED's saved networks, read as a host test reads them
 
 #include <cstdint>
 #include <cstdio>

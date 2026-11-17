@@ -1,6 +1,6 @@
 /// The Android app's entry: the two JNI calls the app's service makes, the counterpart of main_host.cpp's main().
 ///
-/// The firmware is the desktop's, unchanged; this file gives it a data folder, a log, and a way to stop.
+/// The firmware is the host's, unchanged; this file gives it a data folder, a log, and a way to stop.
 
 #include <android/log.h>
 #include <jni.h>
@@ -23,7 +23,7 @@ namespace {
 
 std::atomic<bool> running{true};   // the service thread clears it, the program thread reads it; once per process, so a stop before the start holds
 
-// stdout and stderr into logcat, a line at a time under the tag MoonLight, since an app has no terminal: what a desktop prints there, `adb logcat -s MoonLight` shows.
+// stdout and stderr into logcat, a line at a time under the tag MoonLight, since an app has no terminal: what a host prints there, `adb logcat -s MoonLight` shows.
 void logToLogcat() {
     static int fds[2] = {-1, -1};
     if (fds[0] >= 0 || ::pipe(fds) != 0) return;   // once per process
@@ -169,7 +169,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_moonmodules_moonlight_MoonLightServic
     mm_main(running, static_cast<uint16_t>(httpPort));
 }
 
-/// Ask run() to return: the loop ends at its next pass, as a desktop's Ctrl+C ends it.
+/// Ask run() to return: the loop ends at its next pass, as a host's Ctrl+C ends it.
 extern "C" JNIEXPORT void JNICALL Java_org_moonmodules_moonlight_MoonLightService_stop(JNIEnv*, jclass) {
     running = false;
 }

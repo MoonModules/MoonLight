@@ -228,7 +228,7 @@ private:
         destinations_ = nullptr;
         destinationsBytes_ = 0;
 
-        // A zero maxAllocBlock means unlimited, so the desktop exercises the flat path too.
+        // A zero maxAllocBlock means unlimited, so the host exercises the flat path too.
         size_t maxBlock = platform::maxAllocBlock();
         if (maxBlock == 0 || maxBlock >= destBytes) {
             destinations_ = static_cast<nrOfLightsType*>(platform::alloc(destBytes));
@@ -238,7 +238,7 @@ private:
 
         // Refuse rather than cram the heap: starving the stacks fails somewhere else instead.
         size_t freeHeap = platform::freeHeap();
-        if (freeHeap != 0) {  // 0 == desktop (unlimited) → always page-able
+        if (freeHeap != 0) {  // 0 == host (unlimited) → always page-able
             size_t budget = freeHeap > platform::HEAP_RESERVE
                                 ? freeHeap - platform::HEAP_RESERVE : 0;
             if (budget < destBytes) return false;

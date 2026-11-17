@@ -1,6 +1,6 @@
-# MoonLight as a container: the desktop firmware, which is the whole system without an ESP32.
+# MoonLight as a container: the host firmware, which is the whole system without an ESP32.
 #
-# The desktop build is not a simulator. It runs the same effect pipeline, the same web UI and the
+# The host build is not a simulator. It runs the same effect pipeline, the same web UI and the
 # same driver stack as a board, and it drives real fixtures over Art-Net, DDP and E1.31, so a
 # container is a complete live installation for anyone whose fixtures are on the network.
 #
@@ -118,7 +118,7 @@ COPY --from=fetch /MoonLight /usr/bin/MoonLight
 # object file"; the release runs each image before it publishes one.
 COPY --from=fetch /deps/ /usr/lib/
 
-# WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The desktop
+# WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The host
 # build resolves its data directory from the environment (platform_host.cpp, userDataDir): on
 # Linux XDG_DATA_HOME first, then HOME/.local/share. A container has NEITHER, and the function then
 # returns empty, so without this the app has nowhere defined to write. Setting it explicitly also

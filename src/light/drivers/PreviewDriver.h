@@ -600,7 +600,7 @@ private:
         constexpr nrOfLightsType kFloor = 1024;      // always previewable (hard-downsampled) on any board
         constexpr uint32_t kTypeMax = static_cast<uint32_t>(std::numeric_limits<nrOfLightsType>::max());
         const size_t block = platform::maxAllocBlock();
-        // maxAllocBlock() returns 0 = "unlimited / not reported" (desktop, test default).
+        // maxAllocBlock() returns 0 = "unlimited / not reported" (host, test default).
         if (block == 0) return static_cast<nrOfLightsType>(kTypeMax);
         const size_t usable = block > kReserve ? block - kReserve : 0;
         uint32_t memPts = static_cast<uint32_t>(usable / kBytesPerPoint);

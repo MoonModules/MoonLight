@@ -6,7 +6,7 @@ idf_component_register(
         "main.cpp"
         "../../src/main.cpp"
         # The shared type registry, compiled beside main.cpp here and beside the scenario runner on
-        # desktop, so one list serves both: src/module_types.cpp carries the reason.
+        # host, so one list serves both: src/module_types.cpp carries the reason.
         "../../src/module_types.cpp"
         ${MM_CORE_SOURCES}
         "../../src/platform/esp32/platform_esp32.cpp"
@@ -96,7 +96,7 @@ set(BUILD_INFO_DIR ${COMPONENT_DIR}/../../src/core/util)
 #                Without the EMAC headers, the on-chip Ethernet code in
 #                platform_esp32.cpp won't compile; this define stubs the
 #                eth* platform functions to return false/empty, mirroring
-#                the desktop platform layer.
+#                the host platform layer.
 if(MM_FIRMWARE_NAME)
     # build_esp32.py passes the bare key and the quotes go on here, as the Teensy build does: idf.py
     # strips quotes from a -D value before comparing it with the cache, so a quoted value never
@@ -151,7 +151,7 @@ endif()
 # is named `python.exe` on Windows and `python3` on macOS/Linux; bare `python3`
 # fails on the Windows IDF venv. find_package(Python3) lets CMake locate the
 # interpreter via the same logic IDF uses (PATH, IDF env), so the same code
-# works on every host. The desktop CMakeLists routes through `uv run python`
+# works on every host. The host CMakeLists routes through `uv run python`
 # for the same reason — only for the IDF build path do we let CMake pick the
 # interpreter, because adding uv to ESP-IDF docker would be a bigger CI lift
 # than the portability win pays for.
@@ -175,7 +175,7 @@ set(MOONLIVE_DIR ${COMPONENT_DIR}/../../moonlive)
 set(MOONLIVE_GEN ${COMPONENT_DIR}/../../src/core/moonlive)
 file(GLOB_RECURSE MOONLIVE_SCRIPTS CONFIGURE_DEPENDS
      ${MOONLIVE_DIR}/*.mle ${MOONLIVE_DIR}/*.mll ${MOONLIVE_DIR}/*.mlm ${MOONLIVE_DIR}/*.mls ${MOONLIVE_DIR}/*.mlp)
-# See the desktop CMakeLists: the file LIST is a dependency, so a DELETED script regenerates the
+# See the host CMakeLists: the file LIST is a dependency, so a DELETED script regenerates the
 # catalog rather than lingering in it.
 string(REPLACE ";" "\n" MOONLIVE_SCRIPT_LIST "${MOONLIVE_SCRIPTS}")
 set(MOONLIVE_STAMP ${CMAKE_BINARY_DIR}/moonlive_scripts.stamp)

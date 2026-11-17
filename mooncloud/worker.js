@@ -360,7 +360,7 @@ async function handleStats(env, url) {
     { name: "256 KB+", max: Infinity },
   ];
   // Frame rate reads as thresholds rather than a scale: below 30 motion is visibly stepping, 30-60
-  // is watchable, 60+ is the target, and a desktop renders into the thousands where a board cannot.
+  // is watchable, 60+ is the target, and a host renders into the thousands where a board cannot.
   const kFpsBuckets = [
     { name: "<30", max: 29 }, { name: "30-59", max: 59 },
     { name: "60-119", max: 119 }, { name: "120-999", max: 999 },

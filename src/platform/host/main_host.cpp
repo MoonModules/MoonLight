@@ -140,7 +140,7 @@ static void openLocalUi(uint16_t port) {
 
 int main(int argc, char** argv) {
     // --port N: the HTTP port. Defaults to 8080 because ports below 1024 need root on POSIX, but
-    // Home Assistant's WLED integration hardcodes port 80 with no way to specify another, so testing that path on desktop needs `sudo MoonLight --port 80`.
+    // Home Assistant's WLED integration hardcodes port 80 with no way to specify another, so testing that path on host needs `sudo MoonLight --port 80`.
     uint16_t httpPort = 8080;
     bool openBrowser = true;
     for (int i = 1; i < argc; i++) {
@@ -212,7 +212,7 @@ int main(int argc, char** argv) {
 
     char tbuf[32];
     isoTimestamp(tbuf, sizeof(tbuf));
-    // The banner, the URL, then how to stop: this window is the app on a desktop, with no tray icon or GUI, and the tick lines below print for the first 60 s, then go quiet unless the log level asks.
+    // The banner, the URL, then how to stop: this window is the app on a host, with no tray icon or GUI, and the tick lines below print for the first 60 s, then go quiet unless the log level asks.
     std::printf("MoonLight started at %s\n", tbuf);
     std::printf("\n  MoonLight is running: http://localhost:%u/\n", static_cast<unsigned>(httpPort));
     std::printf("  Close this window (or press Ctrl-C) to stop.\n\n");

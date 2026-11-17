@@ -16,7 +16,7 @@ namespace mm {
 /// The wired interface: which board's wiring it uses, and how it gets an address.
 /// @card EthernetModule.png
 ///
-/// A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the desktop.
+/// A child of Network, which runs the cascade; it holds what Ethernet needs to join it. It exists where Ethernet is compiled in, and as a developer preview on the host.
 ///
 /// @guide
 ///
@@ -54,7 +54,7 @@ public:
     /// Declare the board, the PHY and its pins, then the IP settings.
     void defineControls() override {
         MoonModule::defineControls();
-        // Where a driver is compiled in, the type selecting which pin rows apply; a desktop builds the same rows with no interface behind them, to exercise the presets.
+        // Where a driver is compiled in, the type selecting which pin rows apply; a host builds the same rows with no interface behind them, to exercise the presets.
         if constexpr (platform::hasEthernet || platform::previewsHardwareControls) {
             buildEthPresetOptions();
             // A selection MOVED, so write its map. The restore path fires no onControlChanged, and this is what makes a saved `ethBoard` reach the pins; keyed on the move, or a rebuild would undo a Custom edit.
@@ -236,7 +236,7 @@ public:
     static constexpr EthChip kThisChip{platform::hasEthernet, platform::hasEthW5500, platform::isEsp32P4, platform::isEsp32S31,
                                        platform::ethPhyIsFixed};
 
-    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the desktop, which drives none and previews them all. A pin map persists with the preset, so one the chip cannot wire is excluded.
+    /// Whether a board preset with PHY `type` belongs on `chip`: Custom everywhere, and every board on the host, which drives none and previews them all. A pin map persists with the preset, so one the chip cannot wire is excluded.
     static constexpr bool presetFits(int8_t type, EthChip chip = kThisChip) {
         if (type == 0 || !chip.drivesEthernet) return true;
         if (chip.fixed) return false;        // the build chose the interface, so no board wiring applies

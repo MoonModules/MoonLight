@@ -111,7 +111,7 @@ void captureCallback(ma_device* /*dev*/, void* /*out*/, const void* in, ma_uint3
 }  // namespace
 
 bool audioCodecInit(CodecType /*type*/, uint8_t /*i2cAddr*/, uint32_t /*sampleRate*/, uint8_t /*gainDb*/) {
-    return true;   // no codec hardware on a desktop host; nothing to bring up
+    return true;   // no codec hardware on a host; nothing to bring up
 }
 void audioCodecDeinit() {}
 
@@ -227,7 +227,7 @@ bool audioCaptureInit(AudioMicHandle& h, uint8_t deviceIndex, uint32_t sampleRat
 }
 
 
-// The desktop captures from an OS device, which shares no peripheral with anything: never retries.
+// The host captures from an OS device, which shares no peripheral with anything: never retries.
 bool audioMicSharedBusFree(MicMode) { return false; }
 
 size_t audioMicRead(AudioMicHandle& /*h*/, int32_t* out, size_t maxSamples, uint32_t waitMs) {
@@ -249,7 +249,7 @@ void audioMicDeinit(AudioMicHandle& h) {
     h.impl = nullptr;
 }
 
-// The pin-based I2S init cannot exist on a desktop host; capture goes through audioCaptureInit. Kept failing (not asserting) so shared code degrades.
+// The pin-based I2S init cannot exist on a host; capture goes through audioCaptureInit. Kept failing (not asserting) so shared code degrades.
 bool audioMicInit(AudioMicHandle& /*h*/, uint16_t /*wsPin*/, uint16_t /*sdPin*/,
                   uint16_t /*sckPin*/, int16_t /*mclkPin*/, uint32_t /*sampleRate*/,
                   MicMode /*mode*/) {

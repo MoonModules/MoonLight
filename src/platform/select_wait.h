@@ -1,6 +1,6 @@
 #pragma once
 
-/// The select() wait the BSD-socket platforms share, desktop and ESP32; included after the platform's socket headers, which declare select and fd_set.
+/// The select() wait the BSD-socket platforms share, host and ESP32; included after the platform's socket headers, which declare select and fd_set.
 
 #include "platform/platform.h"   // delayMs
 

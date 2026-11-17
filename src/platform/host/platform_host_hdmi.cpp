@@ -1,6 +1,6 @@
 #include "platform/platform.h"
 
-/// The desktop half of the HDMI seam: one output loop over each platform's screen (screen.h), the kernel's display interface on Linux and a full-screen window on a second display on Windows and macOS, and a stand-in recording what the driver hands over, which the tests run against.
+/// The host half of the HDMI seam: one output loop over each platform's screen (screen.h), the kernel's display interface on Linux and a full-screen window on a second display on Windows and macOS, and a stand-in recording what the driver hands over, which the tests run against.
 ///
 /// @technical
 ///
@@ -22,11 +22,11 @@
 ///
 /// ## Linux: the console takes the screen back
 ///
-/// Without a desktop the first program to open the card sets its mode, and closing the card hands the screen back to the text console. With a desktop running, the desktop holds the screen and the link reports Down, retried each second.
+/// Without a host the first program to open the card sets its mode, and closing the card hands the screen back to the text console. With a host running, the host holds the screen and the link reports Down, retried each second.
 ///
 /// ## Windows and macOS: a second display
 ///
-/// The output is a display beside the one the desktop runs on, as a sending card or a projector is: a borderless window covers it, its mode changed for as long as the output runs and given back when it stops. With one display only there is no monitor to show on, so the desktop is never covered.
+/// The output is a display beside the one the host runs on, as a sending card or a projector is: a borderless window covers it, its mode changed for as long as the output runs and given back when it stops. With one display only there is no monitor to show on, so the host is never covered.
 ///
 /// The EDID comes from where each system keeps it: Windows in the monitor device's registry key, macOS in the I/O registry on the display's port. A built-in panel has none.
 ///
@@ -75,7 +75,7 @@ namespace mm::platform {
 
 namespace {
 
-// The ESP32's sizes first, so the default and the driver's mode control read alike everywhere, then the sizes a desktop runs beyond the ESP32's lanes: 1440p, the ultrawide 1440p and 4K. A display without the size keeps its own mode instead.
+// The ESP32's sizes first, so the default and the driver's mode control read alike everywhere, then the sizes a host runs beyond the ESP32's lanes: 1440p, the ultrawide 1440p and 4K. A display without the size keeps its own mode instead.
 constexpr HdmiMode kHdmiModes[] = {{800, 600, 60},   {1024, 768, 60},  {1280, 720, 60},  {1280, 800, 60},
                                    {1920, 1080, 60}, {2560, 1440, 60}, {3440, 1440, 60}, {3840, 2160, 60}};
 constexpr size_t kModeCount = sizeof(kHdmiModes) / sizeof(kHdmiModes[0]);
@@ -544,7 +544,7 @@ bool up(uint32_t display, const HdmiMode& want, HdmiMode& running) {
     k.shown = 0;
     k.flips = true;
     k.flipPending = false;
-    if (!setCrtc(0)) { down(); return false; }   // another program holds the screen, a desktop most often
+    if (!setCrtc(0)) { down(); return false; }   // another program holds the screen, a host most often
     running = {k.timing.hdisplay, k.timing.vdisplay, static_cast<uint8_t>(k.timing.vrefresh)};
     std::printf("HDMI: %ux%u %u Hz on connector %u\n", static_cast<unsigned>(k.timing.hdisplay),
                 static_cast<unsigned>(k.timing.vdisplay), static_cast<unsigned>(k.timing.vrefresh), static_cast<unsigned>(display));
@@ -646,7 +646,7 @@ BOOL CALLBACK pickMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
     Pick& p = *reinterpret_cast<Pick*>(user);
     MONITORINFOEXA info{};
     info.cbSize = sizeof(info);
-    if (!GetMonitorInfoA(monitor, &info) || (info.dwFlags & MONITORINFOF_PRIMARY)) return TRUE;   // the desktop's own display is never covered
+    if (!GetMonitorInfoA(monitor, &info) || (info.dwFlags & MONITORINFOF_PRIMARY)) return TRUE;   // the host's own display is never covered
     const uint32_t id = displayId(info.szDevice);
     if (!p.found || id == p.current) { p.found = id; std::strncpy(p.device, info.szDevice, sizeof(p.device) - 1); }
     return TRUE;
@@ -880,7 +880,7 @@ bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
     return true;
 }
 
-// A desktop has no bridge to read back; the stand-in reports what a test set.
+// A host has no bridge to read back; the stand-in reports what a test set.
 bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
     if (!hdmiStandIn_ || hdmiOpenMode_ < 0 || hdmiLink_ == HdmiLink::Down || !hdmiBridgeRead_) return false;
     out = hdmiBridge_;

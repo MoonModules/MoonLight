@@ -240,7 +240,7 @@ private:
     /// @guide Anything but letters, digits and hyphens is coerced to a valid hostname, and a rename reaches the network within a tick.
     char deviceName_[24] = {};
     /// How much of the UI is shown, cumulative.
-    /// @guide User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a desktop carries to exercise their settings. Only the UI reads it.
+    /// @guide User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it.
     uint8_t mode_ = 0;
     static constexpr const char* kModeOptions[3] = {"user", "expert", "developer"};
     /// Push the level to the logger, clamped so a corrupt value cannot index past the end.

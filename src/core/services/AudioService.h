@@ -38,7 +38,7 @@ namespace mm {
 ///
 /// ## Choosing a source
 ///
-/// Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on desktop.
+/// Simulate needs nothing. Receive network needs a MoonLight or WLED sender. Local idles on an ESP32 until real GPIOs are entered, and captures the picked device at once on a host.
 ///
 /// ## Wiring and capture
 ///
@@ -733,7 +733,7 @@ private:
         codecBusGen_ = platform::i2cBusGeneration();   // every path through here has seen this bus, so tick1s waits for the next change
         openedWith_ = micConfig();                     // the settings this attempt opens with
         if constexpr (platform::hasAudioCapture) {
-            // Desktop:
+            // Host:
             if (!deinit()) { reinitPending_ = true; return; }
             inited_ = platform::audioCaptureInit(mic_, device, sampleRate());
             if (!inited_) {

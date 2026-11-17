@@ -2058,7 +2058,7 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 }
 .fm-row:hover .fm-dl { opacity: 1; }
 .fm-dl:hover { color: var(--accent); }
-/* Drag-drop upload target highlight (a folder row or the tree while a desktop file hovers). */
+/* Drag-drop upload target highlight (a folder row or the tree while a host file hovers). */
 .fm-row--drop, .fm-tree.fm-row--drop {
     outline: 2px dashed var(--accent); outline-offset: -2px;
     background: color-mix(in srgb, var(--accent) 12%, transparent);

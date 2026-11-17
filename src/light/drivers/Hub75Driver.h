@@ -290,7 +290,7 @@ private:
             backendIndex_[backendOptionCount_] = b;
             backendOptionCount_++;
         }
-        if (backendOptionCount_ == 0) {      // no usable backend (desktop, classic ESP32)
+        if (backendOptionCount_ == 0) {      // no usable backend (host, classic ESP32)
             backendOptions_[0] = "(none)";
             backendIndex_[0] = platform::Hub75Backend::LcdCam;
             backendOptionCount_ = 1;
@@ -342,7 +342,7 @@ private:
         const char* current = (boardSel < boardOptionCount_) ? boardOptions_[boardSel] : nullptr;
         boardOptionCount_ = 0;
         for (uint8_t i = 0; i < kBoardCount; i++) {
-            // A desktop is none of the three chips and offers every row; silicon sees its own.
+            // A host is none of the three chips and offers every row; silicon sees its own.
             constexpr bool anyKnownChip =
                 platform::isEsp32S3 || platform::isEsp32P4 || platform::isEsp32S31;
             if constexpr (anyKnownChip) {

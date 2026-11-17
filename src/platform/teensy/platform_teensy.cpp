@@ -30,7 +30,7 @@ extern char* __brkval;
 extern char* __malloc_sbrk_base;   // newlib malloc's arena: where its first chunk starts
 extern void* __malloc_av_[];        // its bins (newlib's `mbinptr __malloc_av_[]`, pointers alike), whose third word is the top chunk
 
-// The desktop's live UI folder is tried through stdio first; with no stdio filesystem here, the open fails and the embedded UI is served.
+// The host's live UI folder is tried through stdio first; with no stdio filesystem here, the open fails and the embedded UI is served.
 int _open(const char*, int, ...) { errno = ENOSYS; return -1; }
 }
 

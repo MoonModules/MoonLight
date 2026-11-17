@@ -7,9 +7,9 @@
 ///
 /// ## One copy on every target
 ///
-/// ESP-IDF ships mbedtls and the desktop OpenSSL, and two implementations of one function must agree byte for byte; one vendored file of a frozen algorithm is less to own.
+/// ESP-IDF ships mbedtls and the host OpenSSL, and two implementations of one function must agree byte for byte; one vendored file of a frozen algorithm is less to own.
 ///
-/// `unit_sha256.cpp` pins it against FIPS 180-4's published test vectors. Its users: the MoonStats installation id, and a desktop's new program checked against the release's digest.
+/// `unit_sha256.cpp` pins it against FIPS 180-4's published test vectors. Its users: the MoonStats installation id, and a host's new program checked against the release's digest.
 ///
 /// ## One shot and truncated
 ///

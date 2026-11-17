@@ -1,6 +1,6 @@
 #pragma once
 
-/// Reading an HTTP/1.1 request head (RFC 9112), as pure functions the app's server and MoonBase share and the desktop tests.
+/// Reading an HTTP/1.1 request head (RFC 9112), as pure functions the app's server and MoonBase share and the host tests.
 ///
 /// @technical
 ///

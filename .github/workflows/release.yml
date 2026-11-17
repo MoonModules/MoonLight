@@ -1,6 +1,6 @@
 name: Release
 
-# The release pipeline. Builds every shipped ESP32 firmware (the matrix from mooninstaller/firmwares.json), the Teensy firmware and the desktop packages (macOS arm64, Windows x64, Linux x64 and arm64) in parallel, writes an ESP Web Tools manifest per firmware, attaches everything to the GitHub release, publishes the container image, and deploys the installer page to GitHub Pages.
+# The release pipeline. Builds every shipped ESP32 firmware (the matrix from mooninstaller/firmwares.json), the Teensy firmware and the host packages (macOS arm64, Windows x64, Linux x64 and arm64) in parallel, writes an ESP Web Tools manifest per firmware, attaches everything to the GitHub release, publishes the container image, and deploys the installer page to GitHub Pages.
 #
 # Two triggers produce a release:
 #   - push to main touching a path below → tags/publishes as `latest` (a moving prerelease, always the newest build from main)
@@ -18,7 +18,7 @@ on:
       - main
     paths:
       - 'src/**'
-      # The desktop jobs configure the whole tree, test/ included (CMakeLists adds it
+      # The host jobs configure the whole tree, test/ included (CMakeLists adds it
       # unconditionally), and build the MoonLight target alone, so a change under test/ can
       # break their configure step.
       - 'test/**'
@@ -27,7 +27,7 @@ on:
       # MoonBase and the migration image ship in the ESP32 jobs' assets.
       - 'moonbase/**'
       - 'moondeck/build/**'
-      # package_host.py builds and packages the three desktop jobs; without this line a
+      # package_host.py builds and packages the three host jobs; without this line a
       # packaging fix cannot trigger the jobs that run it (the NSIS-escape fix needed a
       # manual dispatch because only moondeck/ci changed).
       - 'moondeck/ci/**'
@@ -44,7 +44,7 @@ on:
       - 'docs/**'
       - 'mooninstaller/**'
       - 'mkdocs.yml'
-  # A pull request builds the desktop programs and uploads them as workflow artifacts, to install through a device's Firmware card before the
+  # A pull request builds the host programs and uploads them as workflow artifacts, to install through a device's Firmware card before the
   # merge; the release, container and Pages jobs run on main and tags only, so a pull request publishes nothing. The ESP32 matrix is built
   # locally and the Teensy by test.yml, so they stay off pull requests.
   pull_request:
@@ -229,7 +229,7 @@ jobs:
       # runners don't ship uv by default — install it before package_host.
       - uses: astral-sh/setup-uv@v3
       # Same tag + version resolution as build-esp32 (see the comments there): the computed
-      # semver must reach the DESKTOP binary too, or a desktop build reports library.json's bare
+      # semver must reach the HOST binary too, or a host build reports library.json's bare
       # core and the update badge can never see a `latest` (-dev.N) build as newer. shell: bash
       # keeps the three jobs' copies of this block identical; without it the Windows copy would
       # run under PowerShell and fail on the bash syntax.
@@ -272,7 +272,7 @@ jobs:
       # Same uv prerequisite as build-macos-arm64, see the comment there.
       - uses: astral-sh/setup-uv@v3
       # Same tag + version resolution as build-esp32 (see the comments there): the computed
-      # semver must reach the DESKTOP binary too, or a desktop build reports library.json's bare
+      # semver must reach the HOST binary too, or a host build reports library.json's bare
       # core and the update badge can never see a `latest` (-dev.N) build as newer. shell: bash
       # keeps the three jobs' copies of this block identical; without it the Windows copy would
       # run under PowerShell and fail on the bash syntax.
@@ -364,7 +364,7 @@ jobs:
       # non-fatal on GCC below 16: a from-source build on Debian or Raspberry Pi OS meets the same
       # GCC and deserves the same fix.
       # Same tag + version resolution as build-esp32 (see the comments there): the computed
-      # semver must reach the DESKTOP binary too, or a desktop build reports library.json's bare
+      # semver must reach the HOST binary too, or a host build reports library.json's bare
       # core and the update badge can never see a `latest` (-dev.N) build as newer. shell: bash
       # keeps the three jobs' copies of this block identical; without it the Windows copy would
       # run under PowerShell and fail on the bash syntax.
@@ -461,7 +461,7 @@ jobs:
           name: host-linux-arm64
           path: dist/
 
-  # The Android app: the desktop program built with the NDK, packed by Gradle with its Kotlin shell (android/), signed with the
+  # The Android app: the host program built with the NDK, packed by Gradle with its Kotlin shell (android/), signed with the
   # release key from the repository's secrets so a newer APK installs over an older one; a fork without the key builds it debug-signed.
   build-android-arm64:
     needs: verify-version

@@ -16,7 +16,7 @@ import android.os.IBinder
 import android.os.PowerManager
 
 /**
- * Runs MoonLight, the desktop program, on a thread of its own while the app is open or in the background.
+ * Runs MoonLight, the host program, on a thread of its own while the app is open or in the background.
  *
  * A foreground service, so Android keeps it running with the screen off; it holds a multicast lock, since mDNS, Art-Net
  * broadcast and the presence packets are multicast, and a partial wake lock, so the effects keep their rate. Its

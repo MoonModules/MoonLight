@@ -135,7 +135,7 @@ extern "C" uint8_t is_transport_tx_ready(void);
 #include "lwip/netdb.h"   // getaddrinfo: hostname resolution for TcpConnection::connect
 #include "lwip/etharp.h"  // etharp_get_entry: a neighbor's MAC (arpLookup)
 #include "lwip/tcpip.h"   // LOCK_TCPIP_CORE: the table is read under the stack's lock
-#include "platform/select_wait.h"   // the select() wait the desktop shares, after the socket headers
+#include "platform/select_wait.h"   // the select() wait the host shares, after the socket headers
 
 #include <atomic>
 #include <cstdarg>
@@ -208,7 +208,7 @@ void* allocExec(size_t bytes) {
 }
 
 void freeExec(void* ptr, size_t /*bytes*/) {
-    heap_caps_free(ptr);   // size is the desktop munmap's; IRAM free needs only the ptr
+    heap_caps_free(ptr);   // size is the host munmap's; IRAM free needs only the ptr
 }
 
 void writeExec(void* dst, const void* src, size_t len) {
@@ -262,7 +262,7 @@ void reboot() {
     esp_restart();
 }
 
-// The same three numbers the desktop counts by hand, from the allocator that already tracks them. USED rather than free, so the figure means the same on a 320 KB board and a laptop.
+// The same three numbers the host counts by hand, from the allocator that already tracks them. USED rather than free, so the figure means the same on a 320 KB board and a laptop.
 size_t allocatedBytes() {
     multi_heap_info_t info = {};
     heap_caps_get_info(&info, MALLOC_CAP_8BIT);
@@ -288,7 +288,7 @@ size_t freeInternalHeap() {
     return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
 
-// Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the desktop seam's cross-thread contract.
+// Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the host seam's cross-thread contract.
 static std::atomic<size_t> testMaxBlock{0};
 void setTestMaxAllocBlock(size_t bytes) { testMaxBlock.store(bytes, std::memory_order_relaxed); }
 
@@ -1280,7 +1280,7 @@ uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     }
 }
 
-#else // MM_NO_ETH: no EMAC support (chip-side, or the sdkconfig fragment was not layered). These stubs match the desktop no-eth behavior, so the cascade falls straight to WiFi or AP.
+#else // MM_NO_ETH: no EMAC support (chip-side, or the sdkconfig fragment was not layered). These stubs match the host no-eth behavior, so the cascade falls straight to WiFi or AP.
 
 void setEthConfig(const EthPinConfig&)  {}
 void ethStop()                          {}
@@ -2023,7 +2023,7 @@ LookupStep resolveNameStep(const char*, uint8_t*) { return LookupStep::Failed; }
 
 // Advertise-only: discovery is datagram presence, each device broadcasting and listening on its own port. Keeping it off this protocol keeps the advertisement stable, since a query for a service this device hosts destabilizes its own.
 
-// Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the desktop impl.
+// Outbound HTTP request (plain HTTP, LAN, no TLS), see platform.h. A bounded blocking lwIP call, which the caller (HueDriver) runs off the render path on tick1s. Mirrors the host impl.
 int httpRequest(const char* method, const char* host, uint16_t port, const char* path,
                 const char* reqBody, uint32_t timeoutMs, char* body, size_t bodyLen) {
     if (body && bodyLen) body[0] = '\0';

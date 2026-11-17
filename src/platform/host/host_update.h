@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// A desktop installing a new version of itself as a board does, the desktop half of `otaBegin`, `otaWrite`, `otaEnd` and `reboot`, and the seams a test drives it through.
+/// A host installing a new version of itself as a board does, the host half of `otaBegin`, `otaWrite`, `otaEnd` and `reboot`, and the seams a test drives it through.
 
 #include <cstddef>
 #include <cstdint>
