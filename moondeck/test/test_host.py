@@ -24,7 +24,7 @@ import test_runs  # noqa: E402
 
 
 def _host_build_dir() -> Path:
-    """Match build_host.py / run_host.py — one dir per host."""
+    """Match build_host.py / run_host.py: one dir per host."""
     return ROOT / "build" / {
         "Darwin":  "macos",
         "Linux":   "linux",
@@ -90,9 +90,9 @@ def main():
     print(f"Running tests from {build_dir.relative_to(ROOT)}/ ...")
     sys.stdout.flush()
     # Stream output line-by-line so the MoonDeck log updates as the test runs
-    # instead of dumping everything at the end. Without bufsize=1 + iter(), the
+    # instead of dumping everything at the end. Only bufsize=1 + iter() streams: otherwise the
     # full ~11k-line output buffers internally and only appears at exit.
-    # The data folder ctest pins too: from the build tree the default would be the developer's own settings, which a test must neither read nor write.
+    # The data folder ctest pins too: from the build tree the default would be the developer's own settings, which a test must leave untouched.
     env = dict(os.environ, MM_DATA_DIR=str(build_dir / "test" / "fs-root"))
     proc = subprocess.Popen(
         cmd, cwd=build_dir, env=env,

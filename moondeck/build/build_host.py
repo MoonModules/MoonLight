@@ -15,6 +15,7 @@ the ~130-file test suite (and vice-versa).
 import argparse
 import platform
 import shutil
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -156,11 +157,30 @@ def main():
     # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the host binary builds alone and a header edit leaves the test suite out of the compile.
     # `--tests` builds the test binaries instead: mm_tests (test_host.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
     targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
-    build_cmd = ["cmake", "--build", bdir, "--target", *targets]
+    if hasattr(os, "nice"):
+        os.nice(10)   # a build yields to MoonLight, the editor and the browser, whoever starts it; the compilers inherit it
+    build_cmd = ["cmake", "--build", bdir, "--target", *targets, "--parallel", str(build_jobs())]
     if is_windows:
         build_cmd += ["--config", "Release"]
     r = subprocess.run(build_cmd, cwd=ROOT)
     sys.exit(r.returncode)
+
+
+def build_jobs() -> int:
+    """Compile jobs at once: CMAKE_BUILD_PARALLEL_LEVEL when set, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and nothing swaps."""
+    level = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "")
+    if level.isdigit() and int(level) > 0:
+        return int(level)
+    by_cores = (os.cpu_count() or 2) - 2
+    return max(1, min(by_cores, memory_gb() - 4))
+
+
+def memory_gb() -> int:
+    """This machine's memory in whole GB, or a large number where it cannot be read, leaving the cores to bound the jobs."""
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") // (1024 ** 3)
+    except (ValueError, OSError, AttributeError):
+        return 1 << 10
 
 
 if __name__ == "__main__":

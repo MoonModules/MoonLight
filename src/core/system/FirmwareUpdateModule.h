@@ -270,8 +270,8 @@ private:
     uint32_t totalSnap_     = 0;        ///< the total the progress control was bound at
     /// The installed version.
     char     versionStr_[32] = {};
-    /// How this device takes a new version: self, host or manual.
-    char     updateStr_[8] = {};
+    /// How this device takes a new version: self, container or manual.
+    char     updateStr_[10] = {};   // "container", the longest mode, with its terminator
     /// The git id, then the build date.
     char     buildStr_[48]   = {};
     /// The build variant; on the MoonBase tab, its chip.

@@ -134,7 +134,7 @@ test("a host is offered host programs alone, downloading or updating itself", ()
 
 test("a host is offered exactly one archive: the one built for its own OS", () => {
     // Which OS this runs on depends on the host, so assert the SHAPE that must hold on any
-    // of them: exactly one of the host keys matches, never two, never none. That
+    // of them: exactly one of the host keys matches. That
     // is what stops a Mac being offered the Windows .zip.
     const keys = ["host-macos-arm64", "host-windows-x64", "host-linux-x64", "host-linux-arm64"];
     const matched = keys.filter(k => isCompatible(HOST_DOWNLOAD, k));

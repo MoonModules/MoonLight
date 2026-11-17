@@ -120,7 +120,7 @@ TEST_CASE("a native program in a folder it can write updates itself, one in a fo
     CHECK(platform::updateMode() == platform::UpdateMode::Manual);
 #endif
     CHECK(std::string(platform::updateModeName(platform::UpdateMode::Self)) == "self");
-    CHECK(std::string(platform::updateModeName(platform::UpdateMode::Host)) == "host");
+    CHECK(std::string(platform::updateModeName(platform::UpdateMode::Container)) == "container");
     CHECK(std::string(platform::updateModeName(platform::UpdateMode::Manual)) == "manual");
 }
 

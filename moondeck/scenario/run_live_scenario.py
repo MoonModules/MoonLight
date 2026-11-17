@@ -1399,7 +1399,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # Defaults reflect run-to-run variance, not "I don't care":
                 #   pc-*      : multi-process OS jitter, 20% pct + 200us absolute
                 #                floor. The floor dominates below ~1ms tick (the
-                #                realistic case for host scenarios today).
+                #                realistic case for host scenarios).
                 #   esp32-*   : bounded RTOS but lwIP/EMAC jitter, 10% pct + 5us
                 #                absolute floor.
                 # KEEP IN SYNC: the in-process runner re-declares the same defaults

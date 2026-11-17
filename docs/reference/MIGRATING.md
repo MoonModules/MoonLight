@@ -31,11 +31,11 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
-### A host's firmware id is `host-<os>-<arch>`
+### A `latest` host's firmware id is `host-<os>-<arch>`
 
-**Action: *install by hand*, once, on each host that updates itself.**
+**Action: *install by hand*, once, on each host program that updates itself.**
 
-A host, MoonLight as a program on macOS, Windows, Linux or Android, names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `desktop-<os>-<arch>`, and the release's program assets are `firmware-host-<os>-<arch>-v<version>.bin`. A host that updates itself (the Android app, or a program in a folder it can write) lists no update on its Firmware card while it runs an earlier build, so it installs this release once by hand, from the installer page or the package, after which the card updates it as before. A host in a container or installed by a package updates as it did. The card of a host on this release installs releases from this one on; an earlier release is installed from its package. MoonDeck shows a host on an earlier release as a board until it updates, and the KPI report compares host ticks with the previous release again from the next release on.
+A host, MoonLight as a program on macOS, Windows, Linux or Android, names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `desktop-<os>-<arch>`, and the release's program assets are `firmware-host-<os>-<arch>-v<version>.bin`. A program in a folder it can write (macOS, Windows, Linux) lists no update on its Firmware card while it runs an earlier build, so it installs this release once by hand, from the installer page or the package, after which the card updates it as before. The Android app offers the new APK on its card as before. A host in a container or installed by a package updates as it did. The card of a host on this release installs releases from this one on; an earlier release is installed from its package. MoonDeck shows a host on an earlier release as a board until it updates, and the KPI report compares host ticks with the previous release again from the next release on. `/api/system`'s `update` says `container` for a program in a container, where it said `host`; a script reading it compares with the new value.
 
 ### A new Network Send starts at the linear curve
 
@@ -53,7 +53,7 @@ The MIDI service's `host` control, the address of the desk or board it invites o
 
 **Action: *nothing* after a Restore; a script or API call naming the old controls uses the new names.**
 
-The `hosts` and `lightsPerHost` controls of Network Send, the audio sync send and OSC feedback are now `receivers` and `lightsPerReceiver`, the term sACN and Art-Net use for the devices a service sends to. A Restore renames them with their values. A script or API call that writes `hosts` or `lightsPerHost` writes `receivers` or `lightsPerReceiver`.
+The `hosts` control of Network Send, the audio sync send and OSC feedback, and Network Send's `lightsPerHost`, are now `receivers` and `lightsPerReceiver`, the term sACN and Art-Net use for the devices a service sends to. A Restore renames them with their values. A script or API call that writes `hosts` or `lightsPerHost` writes `receivers` or `lightsPerReceiver`.
 
 ### MoonMan and MoonInvaders join the sprite effects
 
@@ -73,11 +73,11 @@ The HUB75 driver leads each plane's row with hold words when the row is 2^(`bitD
 
 `/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
 
-### A desktop updates itself as a board does, and the Debian package installs a service
+### A host updates itself as a board does, and the Debian package installs a service
 
-**Action: *nothing* on most desktops; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
+**Action: *nothing* on most hosts; *update a file* on a Linux install from the `.deb` with a systemd unit written from the install guide.**
 
-A desktop build names its firmware `desktop-<os>-<arch>`, such as `desktop-linux-arm64`, where it said `unknown`, and installs `firmware-<firmware>-v<version>.bin` from a release through the Firmware card, the Devices map and `/api/firmware/url`, as a board does. `/api/reboot` restarts a desktop where it ended the process: in place, in its terminal window, under systemd or in a container alike. A script that stopped a desktop through `/api/reboot` stops it with Ctrl+C or its service manager instead.
+A host build names its firmware `host-<os>-<arch>`, such as `host-linux-arm64`, where it said `unknown`, and installs `firmware-<firmware>-v<version>.bin` from a release through the Firmware card, the Devices map and `/api/firmware/url`, as a board does. `/api/reboot` restarts a host where it ended the process: in place, in its terminal window, under systemd or in a container alike. A script that stopped a host through `/api/reboot` stops it with Ctrl+C or its service manager instead.
 
 The package now installs and starts `moonlight.service`, run as its own `moonlight` user from `/var/lib/moonlight/bin`, a folder that user owns, so the Devices map updates it like a board. The program moves from `/usr/bin/MoonLight` to `/usr/lib/moonlight/MoonLight`, the copy the service starts from, and the menu entry opens `http://localhost:8080/`.
 

@@ -40,7 +40,7 @@ Tests pin behavior that runs; static analysis catches what never gets exercised.
 Alongside them, **check_code** writes one report that only falls. It counts complexity, size, nesting and parameters from lizard, duplication from jscpd, the render path's blocking calls from the compiler, and the two boundaries. Beside that, **clang-query** is the home for bespoke AST rules we invent. The Python checks in `moondeck/check/` cover contracts whose other half is a Markdown page, a JSON catalog or a built binary. Every one has a MoonDeck card ([MoonDeck.md](../../moondeck/MoonDeck.md)).
 
 **Every one of these is a report, not a gate.** They state what they find; a consumer decides
-what to do about it. `WarningsAsErrors` is empty, CodeQL never runs on `pull_request`, and the hot-path check never fails the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed as they appear.
+what to do about it. `WarningsAsErrors` is empty, CodeQL stays off `pull_request`, and the hot-path check always passes the event. A gate nobody can satisfy gets disabled rather than obeyed, and it pushes people to suppress a finding under time pressure, which is the opposite of why the tool is there. The exception is layer 0: compiler warnings ARE `-Werror`, because they are few, actionable, and fixed as they appear.
 
 **One rule, one owner.** Each rule is enforced in exactly one place, so a finding has one home
 and cannot drift between two tools that half-agree:
@@ -69,7 +69,7 @@ An analyzer reporting "0 findings" is indistinguishable from one that read nothi
 | Same trap in `-checks` | The filter had never worked |
 | Compilation database records a different compiler than the tool runs | `'cstdint' file not found` on 129/129 files; unparsed files are never analyzed |
 | Missing `-isysroot` | Under-report, not an error: 5 matches where there were 14 |
-| A baseline keyed on a name the tool stopped emitting | Pins nothing while looking green, which is why `check_code` counts per file |
+| A baseline keyed on a name the tool stopped emitting | Looks green while pinning zero cases, which is why `check_code` counts per file |
 
 So: **run a control check that MUST fire.** After reaching 0, enabling a deliberately-disabled check (`--check readability-magic-numbers`) returned 3,307, that is what proves the pipeline reads the code. `check_clang_tidy.py` also refuses to report when more than ten files fail to compile, because "most files errored" is a broken run, not a result.
 
@@ -500,9 +500,9 @@ How to run one: [MoonTube](https://github.com/MoonModules/MoonLight/blob/main/mo
 
 The runs live in `moontube/clips/`, the engine in `moondeck/moontube/`. MoonTube sits at the root rather than under `test/`, which every other test family follows. A run file is the source of a published video as much as it is a test, and the series is what someone looks for. Tests are parameterized over the directory, so a new run file is a new test with nothing to wire up. Format and actions: [moontube.md](../../moondeck/moontube/moontube.md).
 
-**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves nothing about the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/moontube/`. A failing test means the UI differs from what a published video shows.
+**REST is read-only here.** Every state change goes through the affordance a person uses, because a step that POSTs its way to the outcome proves only the API, not the interface. The reads are what `expect` compares against. That lets one file be both a test and a documentation video: the same run recorded produces the clips under `docs/assets/moontube/`. A failing test means the UI differs from what a published video shows.
 
-**Opt-in, because it needs something running.** A bare `test_tooling.py` leaves this lane out, and it is never a gate: it runs on request only. `--ui` skips rather than fails when nothing answers, the same way the JS lane skips without node. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
+**Opt-in, because it needs something running.** A bare `test_tooling.py` leaves this lane out, and it runs on request only, outside every gate. `--ui` skips rather than fails when no server answers, the same way the JS lane skips when node is absent. A run that drives another surface names its own `host` (the installer's preview server). One that needs particular hardware names a `requires` capability resolved against the bench registry.
 
 ## The tempo harness
 

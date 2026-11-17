@@ -45,7 +45,7 @@ def run(cmd, label):
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     # Mutually exclusive: each flag means "ONLY this suite", so passing both asks for two
-    # contradictory things. Neither flag still means both suites, which is the common case.
+    # contradictory things. Omitting both flags means both suites, which is the common case.
     only = ap.add_mutually_exclusive_group()
     only.add_argument("--python", action="store_true", help="run only the Python suite")
     only.add_argument("--js", action="store_true", help="run only the JS suite")
@@ -59,7 +59,7 @@ def main() -> int:
         ap.error("--clip narrows the UI suite: pass --ui with it")
     # The UI lane is OPT-IN: it needs a MoonLight listening, so a bare run stays the
     # pure suites that work on any machine. It skips rather than fails when asked for
-    # without a device, which is what the tests themselves decide.
+    # on a machine lacking the device, which is what the tests themselves decide.
     both = not (args.python or args.js or args.ui)
 
     rc = 0

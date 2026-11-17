@@ -2622,7 +2622,7 @@ function createCard(mod, depth) {
         controlsBox.appendChild(available);
         controlsBox.appendChild(mount);
         // A program in a container is its host's to replace, by pulling the image, so its card says that rather than offering a package.
-        if (kind === "app" && ctrlValue("update") === "host") {
+        if (kind === "app" && ctrlValue("update") === "container") {
             const note = document.createElement("div");
             note.className = "control-row rp-status";
             note.textContent = "This program runs in a container: its host updates it, by docker pull and a new container, Watchtower or Podman's auto-update.";
@@ -5698,7 +5698,7 @@ function buildPeerSummary(row) {
         const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update });
         if (!u) { note.textContent = "Up to date."; return; }
         if (!u.url) {
-            note.textContent = update === "host"
+            note.textContent = update === "container"
                 ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
                 : `${u.label} is available: this device is updated by hand, from the release page.`;
             return;

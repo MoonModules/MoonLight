@@ -908,14 +908,16 @@ LookupStep resolveNameStep(const char* name, uint8_t ip[4]);
 /// Store the DHCP hostname the next bring-up advertises; call it before ethInit or wifiStaInit.
 void setHostname(const char* name);
 
-/// How this device takes a new version: it installs one itself, the host replaces it (a container), or someone does by hand (a program started from a terminal or an app).
-enum class UpdateMode : uint8_t { Self, Host, Manual };
+/// How this device takes a new version: it installs one itself, its container is replaced from outside, or someone installs it by hand (a program in a folder it cannot write, or an app with no installer lent).
+enum class UpdateMode : uint8_t { Self, Container, Manual };
 /// The mode's name, as `/api/system` reports it.
 constexpr const char* updateModeName(UpdateMode m) {
-    return m == UpdateMode::Self ? "self" : m == UpdateMode::Host ? "host" : "manual";
+    return m == UpdateMode::Self ? "self" : m == UpdateMode::Container ? "container" : "manual";
 }
 /// How this device takes a new version: a board installs its own images, a host installs itself when its program sits in a folder it may write, a container is its host's.
 UpdateMode updateMode();
+/// True once an installed image went to the operating system's installer, which replaces and restarts the program itself, so the caller leaves the restart to it and keeps running meanwhile.
+bool imageAwaitsInstaller();
 
 /// Fetch a firmware image from `url`, or `fallbackUrl` where that cannot be opened, and install it, returning at once; a host checks `sha256Hex` when it is non-empty, a board's image its own.
 bool http_fetch_to_ota(const char* url,

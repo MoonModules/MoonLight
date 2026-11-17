@@ -856,7 +856,7 @@ Record one UI clip: perform a run file against the interface while Playwright re
 uv run moondeck/moontube/mtvideo.py --run moontube/clips/06-layers.json
 ```
 
-The dropdown lists every run under `moontube/clips/`. A run drives the interface and nothing else: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_tooling.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/moontube/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [moontube.md](moontube/moontube.md).
+The dropdown lists every run under `moontube/clips/`. A run drives only the interface: the `+` tab, the type picker, the card's own buttons, the real inputs. REST is read-only, and is what each step's `expect` block checks against. That is what lets the same file be a UI test (`test_tooling.py --ui`) as well as a video source. The raw take lands in `media/video/` (ignored). The published clip lands in `docs/assets/moontube/` (tracked, embed this one) only when the run was clean. A take whose steps failed, or that left modules behind, is refused, so it cannot overwrite a good clip. Format and actions: [moontube.md](moontube/moontube.md).
 
 A run names its own `host` when it drives something other than the host UI. The installer clip records against the installer preview, and the audio clip against a device with a microphone. Start what a run needs before recording it.
 

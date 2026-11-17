@@ -182,6 +182,11 @@ bool installThroughHost(const fs::path& next, const char* sha256Hex, char* statu
     if (!refusal && g_installPackage && g_installPackage(next.c_str(), status, statusLen)) {
         g_installHandedOff = true;
         say(status, statusLen, "installing: confirm on the device if it asks");
+        // Android replaces the app and starts it again; a declined or failed install ends this run from the installer's answer (Updater.kt), and this is the fallback when none comes.
+        std::thread([] {
+            std::this_thread::sleep_for(std::chrono::minutes(2));
+            std::exit(0);   // NOLINT(concurrency-mt-unsafe): the sticky service starts the program again
+        }).detach();
         return true;
     }
     std::error_code ignored;
@@ -265,6 +270,7 @@ void fetchTask(const std::string& url, const std::string& fallbackUrl, const std
             continue;
         }
         if (otaEnd(w, true)) {
+            if (imageAwaitsInstaller()) return;   // the installer restarts the program; its status stays on screen
             say(status, statusLen, "rebooting");
             reboot();
         }
@@ -300,12 +306,20 @@ void setTestProgramPath(const fs::path& path) { g_testProgram = path; }
 
 void setHostInstaller(InstallPackageFn install) { g_installPackage = install; }
 
+bool imageAwaitsInstaller() {
+#ifdef __ANDROID__
+    return g_installHandedOff;
+#else
+    return false;   // a host program puts itself in place and restarts
+#endif
+}
+
 UpdateMode updateMode() {
 #ifdef __ANDROID__
     // The program is the package the OS installed: it updates itself through the installer the app lends, else the next APK installs over it by hand.
-    return g_installPackage ? UpdateMode::Self : UpdateMode::Host;
+    return g_installPackage ? UpdateMode::Self : UpdateMode::Manual;   // an app with no installer lent is installed by hand
 #endif
-    if (inContainer()) return UpdateMode::Host;
+    if (inContainer()) return UpdateMode::Container;
     const auto modeOf = [](const fs::path& program) {
 #ifndef _WIN32
         // Root writes every folder, the package's seed among them, so a program run as root is updated by hand, never on a request from the network.
@@ -436,11 +450,10 @@ bool http_fetch_to_ota(const char* url, char* statusBuf, size_t statusBufLen, ui
 }
 
 #ifdef __ANDROID__
-/// Android replaces the app once its installer has the package and starts the service again, so this run waits; a declined or failed install ends it from the installer's answer (Updater.kt), and two minutes is the fallback when none comes.
+/// A restart ends the process, and Android's sticky service starts the program again.
 void reboot() {
     std::printf("platform::reboot(): restarting\n");
     std::fflush(stdout);
-    if (g_installHandedOff) std::this_thread::sleep_for(std::chrono::minutes(2));
     std::exit(0);   // NOLINT(concurrency-mt-unsafe): the service runs again, a new process
 }
 #else

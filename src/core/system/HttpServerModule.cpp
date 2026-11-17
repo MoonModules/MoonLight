@@ -456,9 +456,9 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         return true;
     }
     if (length == http::Length::Valid) {
-        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), and a firmware image the platform's, whose otaBegin refuses an image larger than its slot or, on Android, its package.
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), and a program image the platform's, whose otaBegin refuses one larger than its slot or a host's 256 MB.
         const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
-        const bool imageUpload = isStreamingUpload(req) && std::strncmp(req, "POST /api/firmware/", 19) == 0;
+        const bool imageUpload = isStreamingUpload(req) && std::strncmp(req, "POST /api/firmware/upload ", 26) == 0;
         const uint64_t kContentLenMax = sdUpload || imageUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
         // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
         if (parsed > kContentLenMax) {
@@ -1232,6 +1232,7 @@ void HttpServerModule::answerFirmware(platform::TcpConnection& conn, bool ok, pl
     FilesystemModule::flushPending();
     sendResponse(conn, 200, "application/json", "{\"ok\":true}");
     conn.close();
+    if (platform::imageAwaitsInstaller()) return;   // the OS installer replaces and restarts the program; the loop runs on meanwhile
     platform::delayMs(200);
     platform::reboot();   // noreturn: boots the flashed image
 }

@@ -63,9 +63,9 @@
 #     180 KB-heap device for no correctness gain.
 #   bugprone-throwing-static-initialization — MEASURED 7/8 provably cannot throw: the peripheral
 #     registrations and the MoonLive builtin tables write into fixed-size static arrays with no heap
-#     and no std::string/vector, and Palette::fromBuiltin is plain array math. The 8th is a desktop
+#     and no std::string/vector, and Palette::fromBuiltin is plain array math. The 8th is a host
 #     std::filesystem::path built from a literal — theoretically bad_alloc, never reachable, and
-#     desktop-only. A check that is wrong 7 times out of 8 costs more attention than it earns.
+#     host-only. A check that is wrong 7 times out of 8 costs more attention than it earns.
 #   bugprone-infinite-loop — MEASURED 28/28 FALSE on this tree. It cannot track uint8_t loop
 #     counters, and `for (uint8_t i = ...; i > 0; i--)` is a house convention
 #     (coding-standards § Prefer integers); it also misfires on `while (b)` in a textbook

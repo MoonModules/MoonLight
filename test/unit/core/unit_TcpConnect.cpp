@@ -1,6 +1,10 @@
 /// @module platform
 
-/// Pins platform::TcpConnection::connectStart/connectPoll, the NON-BLOCKING outbound TCP client primitive MqttModule uses to reach a broker without stalling Scheduler::tick. connectStart resolves a host (name or dotted-quad via getaddrinfo) and kicks off a non-blocking connect; connectPoll reports Pending/Connected/Failed without blocking. Driven over loopback against a real TcpServer (deterministic on host): a listening port connects + the server accepts; a dead port / bad host fails cleanly (no hang, no crash).
+/// Pins platform::TcpConnection::connectStart/connectPoll, the NON-BLOCKING outbound TCP client primitive MqttModule uses to reach a broker without stalling Scheduler::tick.
+///
+/// connectStart resolves a host (name or dotted-quad via getaddrinfo) and kicks off a non-blocking connect; connectPoll reports Pending/Connected/Failed without blocking.
+///
+/// Driven over loopback against a real TcpServer (deterministic on host): a listening port connects + the server accepts; a dead port / bad host fails cleanly (no hang, no crash).
 
 #include "doctest.h"
 #include "platform/platform.h"

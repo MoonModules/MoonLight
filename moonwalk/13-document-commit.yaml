@@ -38,9 +38,9 @@ processes:
     dependsOn: [host-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. An applicable check skipped carries a one-line reason in the commit or pull request. A failure with a clear fix is fixed, and only its check reruns, with any check whose paths the fix touches; a failure that needs a decision is reported and waits.
+      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. A long run reports each minute: gates started, the one running, a failure at once. An applicable check skipped carries a one-line reason in the commit or pull request. A clear failure is fixed and rechecks only the checks its fix touches; one that needs a decision waits.
 
-      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in, such as an edit to a file already in the diff that triggers no new check. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_tooling --ui` is never a gate.
+      The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_tooling --ui` is never a gate.
     steps:
       - id: reviewer
         say: Have the Reviewer read the staged diff.

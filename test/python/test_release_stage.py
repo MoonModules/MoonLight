@@ -43,7 +43,7 @@ def test_the_esp32_matrix_lists_only_shipping_esp32_firmwares_as_compact_json():
     assert rs.esp32_matrix(REGISTRY) == '[{"firmware":"esp32","chip":"esp32"},{"firmware":"esp32s3-n16r8","chip":"esp32s3"}]'
 
 
-def test_manifests_cover_every_shipping_firmware_except_desktop():
+def test_manifests_cover_every_shipping_firmware_except_host():
     assert rs.shipping(REGISTRY, lambda platform: platform != "host") == ["esp32", "esp32s3-n16r8", "teensy41"]
 
 

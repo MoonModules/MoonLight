@@ -5070,7 +5070,7 @@
      "line": "The installed version."
     },
     "update": {
-     "line": "How this device takes a new version: self, host or manual."
+     "line": "How this device takes a new version: self, container or manual."
     },
     "moonbaseMismatch": {
      "line": "The installed version."

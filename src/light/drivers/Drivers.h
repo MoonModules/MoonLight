@@ -606,7 +606,7 @@ public:
         if (shouldSplit && !renderSplitActive_) {
             renderSplitActive_ = true;
             startEncodeTask();                 // spawns the task (at boot it parks in waitNotify)
-            // Keeping a buffer nothing composites into would freeze every driver on the last frame.
+            // An identity layer needs the shared buffer only for the split, so the inline path gives its memory and its copy back.
             if (!renderSplitActive_ && !needOutput) {
                 outputBuffer_.free();
                 setDynamicBytes(outputBuffer_.bytes());

@@ -26,7 +26,7 @@ struct Rig {
 };
 }  // namespace
 
-TEST_CASE("OSC feedback to a mistyped receiver list says why rather than sending to nobody") {
+TEST_CASE("OSC feedback to a mistyped receiver list says why and sends to nobody") {
     Rig rig;
     REQUIRE(rig.scheduler.setControl("Osc", "receivers", "{\"value\":\"192.168.1.999\"}") == Scheduler::SetControlResult::Ok);
     REQUIRE(rig.osc->status() != nullptr);

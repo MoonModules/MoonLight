@@ -92,7 +92,7 @@ TEST_CASE("I80Peripheral: the DMA-fit gate is inert off the classic i80 (budget 
     CHECK(std::strstr(d.status() ? d.status() : "", "over i80 DMA") == nullptr);
 }
 
-// frameFitsDmaBudget() is the pure predicate the classic-i80 gate leans on; its logic is compiled out on host (budget always 0), so exercise it directly with synthetic budgets. A FINITE budget rejects an oversized frame and accepts one that fits; a ZERO budget ("no bound", the LCD_CAM/PSRAM/desktop case) never rejects, whatever the frame size.
+// frameFitsDmaBudget() is the pure predicate the classic-i80 gate leans on; its logic is compiled out on host (budget always 0), so exercise it directly with synthetic budgets. A FINITE budget rejects an oversized frame and accepts one that fits; a ZERO budget ("no bound", the LCD_CAM/PSRAM/host case) never rejects, whatever the frame size.
 TEST_CASE("I80Peripheral::frameFitsDmaBudget rejects only over a finite budget") {
     // frameFitsDmaBudget is a protected static on ParallelLedDriver; a tiny subclass exposes it for the test without widening the production class surface.
     struct Expose : mm::ParallelLedDriver {

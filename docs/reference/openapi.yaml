@@ -816,8 +816,8 @@ components:
         firmware: { type: string, description: "The firmware variant, which names its image firmware-<firmware>-v<version>.bin: a board's variant, or a host's host-<os>-<arch>." }
         update:
           type: string
-          enum: [self, host, manual]
-          description: "How it takes a new version: it installs one itself (a board, or a host whose program sits in a folder it can write), its host replaces it (a container), or someone does by hand (a program in a folder it cannot write)."
+          enum: [self, container, manual]
+          description: "How it takes a new version: it installs one itself (a board, or a host whose program sits in a folder it can write), its container is replaced from outside, or someone installs it by hand (a program in a folder it cannot write)."
         mac: { type: string, description: "The MAC address, the device identity." }
         board: { type: string, description: "The board model tooling set, empty until set." }
         chip: { type: string }

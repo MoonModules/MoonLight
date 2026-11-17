@@ -821,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // when it's already selected doesn't fire — handled by the click
       // listener below.
       // The "this computer" option, offered in every state: a visitor with no device
-      // attached is the exact person who wants the desktop build, and they should not
+      // attached is the exact person who wants the build for this computer, and they should not
       // have to grant a serial port to discover it exists.
       const computerLabel = thisComputerLabel();
       const addHostOpt = () => {

@@ -361,6 +361,7 @@ const char* hostPlatform() {
 
 // A board installs every image it is handed, through its own update partition or MoonBase.
 UpdateMode updateMode() { return UpdateMode::Self; }
+bool imageAwaitsInstaller() { return false; }   // a board boots its own image
 
 const char* chipModel() {
     esp_chip_info_t info;

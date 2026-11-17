@@ -27,7 +27,7 @@ test("a board on firmware older than the update field installs as before", () =>
 });
 
 test("a container, a program in a read-only folder and a host older than its firmware name get a null address", () => {
-    assert.equal(updateAsset(release, { firmware: "host-linux-arm64", update: "host" }, "6.2.0").url, null);
+    assert.equal(updateAsset(release, { firmware: "host-linux-arm64", update: "container" }, "6.2.0").url, null);
     assert.equal(updateAsset(release, { firmware: "host-linux-arm64", update: "manual" }, "6.2.0").url, null);
     assert.equal(updateAsset(release, { firmware: null }, "6.2.0").url, null);
 });
