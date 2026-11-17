@@ -7,9 +7,9 @@
 
 namespace mm {
 
-/// HUB75 encode: the frame the driver hands a port, as bit planes of 16-bit bus words, one word per pixel clock (a slot). A pure data transform on the bus contract (platform/Hub75Bus.h); sibling of ParallelSlots.h.
+/// HUB75 encode: the frame the driver hands a port, as bit planes of 16-bit bus words, one word per pixel clock (a slot). A pure data transform on the bus contract (platform/Hub75Bus.h); the HUB75 counterpart of light/drivers/ParallelSlots.h.
 ///
-/// It lives in platform/ beside the bus contract it builds (Hub75Bus.h), since no platform file includes light/ (the MoonCore plan's rule). The driver in light/ is its one caller.
+/// It lives in platform/ beside the bus contract it builds (Hub75Bus.h), since the platform layer sits below light/, which calls down into it (docs/explanation/architecture/mooncore.md#platform-abstraction). The driver in light/ is its one caller.
 ///
 /// @attribution mrcodetastic, hzeller, ESPHome
 ///
@@ -42,7 +42,7 @@ namespace mm {
 
 namespace detail {
 
-/// One body, compiled twice: with `kHold` false the hold words are the constant 0, upstream's per-word loop. On an S3 the pair ticks 1.2 and 1.4% faster than one body at widths 128 and 32, 1.0% slower at 16, for 816 bytes.
+/// One body, compiled twice: with `kHold` false the hold words are the constant 0, a wide row's per-word loop. On an S3 the pair ticks 1.2 and 1.4% faster than one body at widths 128 and 32, 1.0% slower at 16, for 816 bytes.
 template <bool kHold>
 inline size_t hub75EncodeFrame(const uint8_t* rgb, uint8_t* out, const Hub75Geometry& geo) {
     // The default layout, a compile-time constant: every bit position below folds into an immediate.

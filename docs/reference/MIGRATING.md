@@ -35,7 +35,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 **Action: *nothing*; a wider layout or fewer planes if the refresh rate matters.**
 
-The HUB75 driver leads each plane's row with hold words when the row is 2^(depth−2) shift words or fewer, so the lowest plane lights a whole word instead of rounding to zero ([HUB75 refresh](hardware/hub75-refresh.md#plane-weights-and-hold-words)). At the default 6 bit planes that is a layout 16 columns wide or less at one color pass a step, whose pass grows from its width to 33 words: at 16 columns the frame doubles and the refresh rate roughly halves, measured on a MatrixPortal S3 as 5,279 to 2,798 Hz, and a narrower layout slows more. A wider layout, and every plane count with a wider row, keeps its frame and its rate byte for byte. No setting changes.
+The HUB75 driver leads each plane's row with hold words when the row is 2^(`bitDepth`−2) shift words or fewer, so the lowest plane lights a whole word instead of rounding to zero ([HUB75 refresh](hardware/hub75-refresh.md#plane-weights-and-hold-words)). At the default 6 bit planes that is a layout 16 columns wide or less at one color pass a step, whose pass grows from its width to 33 words: at 16 columns the frame doubles and the refresh rate roughly halves, measured on a MatrixPortal S3 as 5,279 to 2,798 Hz, and a narrower layout slows more. A wider layout, and every plane count with a wider row, keeps its frame and its rate byte for byte. No setting changes.
 
 ### An install by URL takes https only
 

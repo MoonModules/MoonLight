@@ -1,6 +1,6 @@
 # Plan: HUB75 on a Raspberry Pi, native outputs
 
-Plan of 2026-10-30, a Feature, rewritten on 2026-11-16 for the native route the maintainer chose in the [Pi HUB75 thread](https://discord.com/channels/700041398778331156/1571096940576510053). A Raspberry Pi drives HUB75 panels from its header through MoonLight's own outputs of `Hub75Driver`: the RP1's PIO on a Pi 5 and a CPU bit-bang engine with a PWM-timed OE on a Pi 3 or 4. The work lands as five pull requests, each reviewed alone, each bringing its own benchmarks.
+Plan of 2026-10-30, a Feature, rewritten on 2026-11-16 for the native route the product owner chose in the [Pi HUB75 thread](https://discord.com/channels/700041398778331156/1571096940576510053). A Raspberry Pi drives HUB75 panels from its header through MoonLight's own outputs of `Hub75Driver`: the RP1's PIO on a Pi 5 and a CPU bit-bang engine with a PWM-timed OE on a Pi 3 or 4. The work lands as five pull requests, each reviewed alone, each bringing its own benchmarks.
 
 ## The route
 
@@ -17,7 +17,7 @@ Plan of 2026-10-30, a Feature, rewritten on 2026-11-16 for the native route the 
 ## Steps
 
 1. ✅ **PR 0, the add retry** ([#249](https://github.com/MoonModules/MoonLight/pull/249)): an add retries only on a taken name and shows the server's refusal. Browser-checked; merged (upstream e54825cf).
-2. ✅ **This plan update**, before PR 1: delivered, read by the maintainer's agent (seven points, folded in here).
+2. ✅ **This plan update**, before PR 1: delivered, read by the product owner's agent (seven points, folded in here).
 3. ✅ **Before PR 1, the conditions:** on the fork's `moonpi` branch, `check_code` back to main's counts (1,607 findings, 710 duplicated blocks; the branch read 1,862 and 920), except 14 recorded HUB75 test pairs (1,618 findings against 1,607): the outputs' shared code pulled into their base, a shared test fixture, the engines' `double` to `float`; the Matrix output and its seam removed from that branch; the notes-style prose ✅ (the documentation sweep); the commit format ✅.
 4. 🧪 **PR 1, the shared encoder, alone:** in review. `Hub75Encode.h` moved to `platform/`, so that platform code can encode (no platform file includes light, and the Pi engines that encode from `platform/rpi` arrive in PR 3); hold words let a narrow row's lowest plane light a whole word, with exact binary weights on a stretched row and the rounding of the pass on a wider one, up to 8 planes. The ESP32 port keeps its 6-bit cap, for the reason beside `kHub75PortMaxBitDepth` in `Hub75Bus.h`; 8 bits on an ESP32 stays with the card "Repeated planes: full top brightness and 8-bit depth", which this PR names as its next step. Verified on an S3 with 16- and 32-column layouts at 6 bits (ewowi's MoonHub75 can run it too), with the cost of 33 words a pass instead of 16 on a 16-column row at 6 bits measured there; a 32-column row is unchanged. Docs: hub75-refresh.md (the plane weights and the hold words).
 5. ⏳ **PR 2, the output strategy:** `Hub75Driver` drives its panels through an output strategy, picked by backend, the ESP32 bus output its first strategy. Frames byte-identical on the S3. Docs: the Hub75Driver header and its generated help.
@@ -41,4 +41,4 @@ On the fork's `moonpi` branch: the library route and its plan, the Matrix output
 
 - Mappings beyond Stripe, and panel init (FM6126A and kin), for the native outputs.
 - The correction handing more than 8 bits to drivers that take them: a card to file.
-- The Pi's DPI video output as a DMA path to HUB75 (the owner's design of 2026-11-07), once a plan.
+- The Pi's DPI video output as a DMA path to HUB75 (the product owner's design of 2026-11-07), once a plan.
