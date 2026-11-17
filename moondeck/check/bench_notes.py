@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["mir_eval>=0.7", "mido>=1.3"]
 # ///
-"""Note harness: run music whose notes are known through the note effects on the desktop, and score each stage against the score.
+"""Note harness: run music whose notes are known through the note effects on the host, and score each stage against the score.
 
 Builds and runs the ``mm_tempo`` target in its ``--notes`` mode (``test/bench/bench_tempo.cpp``), which feeds decoded audio through the shipped block analysis and through the Keyboard and Strings effects' own ``keep``, and prints, a frame at a time, the keys every stage keeps: the engine's sounding keys, the sieve and peak picking (``no overtones``), Keyboard's hands and Strings' fretting hand, each with and without ``chord``, and the strings and frets the hand plays. A report, not a check: nothing passes or fails.
 

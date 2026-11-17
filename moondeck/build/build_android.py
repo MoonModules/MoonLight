@@ -2,9 +2,9 @@
 # /// script
 # dependencies = ["pillow"]
 # ///
-"""Build the desktop target for Android arm64 into ``build/android-arm64/``, with the NDK.
+"""Build the host target for Android arm64 into ``build/android-arm64/``, with the NDK.
 
-Android is the fourth desktop OS: the NDK's CMake toolchain compiles the same tree as Linux, and
+Android is the fourth host OS: the NDK's CMake toolchain compiles the same tree as Linux, and
 CMake names the program ``host-android-arm64``. Builds ONE thing: the program (``MoonLight``)
 by default, the unit tests (``--tests`` → ``mm_tests``), which test_android.py runs on a device, or
 the app (``--apk``): ``libmoonlight.so`` and the launcher icon, packed by Gradle into
@@ -107,7 +107,7 @@ def build_apk(version: str | None) -> int:
     if not env.get("JAVA_HOME") and Path("/opt/homebrew/opt/openjdk@17").exists():
         env["JAVA_HOME"] = "/opt/homebrew/opt/openjdk@17"   # Homebrew's JDK, which macOS does not put on the path
     gradlew = ROOT / "android" / ("gradlew.bat" if os.name == "nt" else "gradlew")
-    # A local build carries the version a local desktop build does, so its version code ranks with CI's and installs over one.
+    # A local build carries the version a local host build does, so its version code ranks with CI's and installs over one.
     from compute_version import compute
     app_version = version or compute("local")
     props = [f"-PmmVersion={app_version}", f"-PmmVersionCode={version_code(app_version)}"]
@@ -121,10 +121,10 @@ def build_apk(version: str | None) -> int:
     out = ROOT / BUILD_DIR / "MoonLight.apk"
     shutil.copy2(apk, out)
     print(f"Built {out.relative_to(ROOT)}")
-    if version:   # the release asset, named as the desktop packages are
+    if version:   # the release asset, named as the host packages are
         (ROOT / "dist").mkdir(exist_ok=True)
         shutil.copy2(apk, ROOT / "dist" / f"MoonLight-android-arm64-v{version}.apk")
-        # The same package as the program an Android device installs over itself, named as every desktop's own program is, which the Firmware card and the map look for.
+        # The same package as the program an Android device installs over itself, named as every host's own program is, which the Firmware card and the map look for.
         shutil.copy2(apk, ROOT / "dist" / f"firmware-host-android-arm64-v{version}.bin")
         print(f"Staged dist/MoonLight-android-arm64-v{version}.apk and dist/firmware-host-android-arm64-v{version}.bin")
     return 0

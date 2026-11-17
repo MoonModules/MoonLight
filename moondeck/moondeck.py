@@ -318,7 +318,7 @@ def _probe_device(ip, port=8080, timeout=0.4):
             return {
                 # `mac` is the stable device IDENTITY (per-chip, survives DHCP IP changes); the merge
                 # keys on it. `ip` is just the current location — omit the port when it's HTTP's
-                # default (80, the ESP32 devices), keep a non-default port (8080, the desktop build).
+                # default (80, the ESP32 devices), keep a non-default port (8080, the host build).
                 "mac": mac,
                 "ip": ip if port == 80 else f"{ip}:{port}",
                 "deviceName": device_name,
@@ -474,7 +474,7 @@ def discover_devices(subnet=""):
     if not subnet:
         subnet = _get_local_subnet()
 
-    # .1-.254 on port 80 (ESP32) and 8080 (desktop), plus localhost.
+    # .1-.254 on port 80 (ESP32) and 8080 (host), plus localhost.
     targets = [(f"{subnet}.{i}", port)
                for i in range(1, 255) for port in (80, 8080)]
     targets.append(("localhost", 8080))

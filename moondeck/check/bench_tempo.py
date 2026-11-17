@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tempo harness: run audio files through AudioService on the desktop and score the tempo against labels.
+"""Tempo harness: run audio files through AudioService on the host and score the tempo against labels.
 
 Builds and runs the ``mm_tempo`` target (``test/bench/bench_tempo.cpp``), which feeds decoded audio through the shipped block analysis faster than real time. A report, not a check: nothing passes or fails, and the figures are read per label source, since a score against a tapped label is accuracy and a score against another program's estimate is agreement.
 

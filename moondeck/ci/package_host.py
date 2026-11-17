@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build + package a release-ready desktop binary for the host platform.
+"""Build + package a release-ready host binary for the host platform.
 
 Runs under CI on macOS, Windows and Linux runners. The output lands in `dist/`:
 
@@ -8,7 +8,7 @@ Runs under CI on macOS, Windows and Linux runners. The output lands in `dist/`:
   Linux x64:    dist/MoonLight-linux-x64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_amd64.deb
   Linux arm64:  dist/MoonLight-linux-arm64-vX.Y.Z.tar.gz + dist/moonlight_X.Y.Z_arm64.deb
 
-and beside each the bare program, dist/firmware-host-<os>-<arch>-vX.Y.Z.bin, which a running desktop installs over the air.
+and beside each the bare program, dist/firmware-host-<os>-<arch>-vX.Y.Z.bin, which a running host installs over the air.
 
 Each archive carries the executable + a short README.txt with run instructions.
 
@@ -106,7 +106,7 @@ def configure_and_build_linux(version: str = "") -> Path:
 
 def stage_program(binary: Path, version: str, firmware: str) -> Path:
     """The bare program as a firmware image, `firmware-<name>-v<version>.bin`, the name a board's image takes and the one the
-    build names itself by (build_info.cpp), so the Firmware card, the map and Home Assistant install a desktop as they install a board."""
+    build names itself by (build_info.cpp), so the Firmware card, the map and Home Assistant install a host as they install a board."""
     DIST_DIR.mkdir(exist_ok=True)
     out = DIST_DIR / f"firmware-{firmware}-v{version}.bin"
     shutil.copy2(binary, out)

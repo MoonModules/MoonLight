@@ -2,10 +2,10 @@
 # /// script
 # requires-python = ">=3.10"
 # ///
-"""Generate a human-readable history report from git log + gh release list.
+r"""Generate a human-readable history report from git log + gh release list.
 
 The report is an **artifact**, not source — by default it writes to
-``build/history.md`` (which is gitignored, same shape as the desktop
+``build/history.md`` (which is gitignored, same shape as the host
 binaries that live under ``build/<host>/``). Every developer regenerates
 it locally from the MoonDeck button; storing it in the repo would
 duplicate what git log already carries.

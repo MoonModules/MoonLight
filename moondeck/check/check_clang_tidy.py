@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run clang-tidy over the desktop build and print a readable findings report.
+"""Run clang-tidy over the host build and print a readable findings report.
 
 The config is [.clang-tidy](../../.clang-tidy) at the repo root — the same file clangd reads,
 so the editor and this report never disagree. This script only adds what a raw `run-clang-tidy`
@@ -163,7 +163,7 @@ def run(build_dir, check_filter=None, tu_regex=None):
     if errors > 10:
         print(f"{errors} files failed to compile — clang-tidy analysed almost nothing.\n"
               f"Usually a toolchain mismatch: the compilation database was written by a\n"
-              f"different compiler than clang-tidy is using. Rebuild the desktop target, or\n"
+              f"different compiler than clang-tidy is using. Rebuild the host target, or\n"
               f"check _toolchain_args() covers this platform.", file=sys.stderr)
         return None
 

@@ -63,12 +63,12 @@ SOURCE_SUFFIXES = {".c", ".cpp", ".h", ".hpp", ".cmake", ".json", ".txt", ".py",
 SKIP_PARTS = {"build", "managed_components", "__pycache__", ".git"}
 
 # Generated headers that sit in the source tree but are build PRODUCTS (both gitignored).
-# A desktop build regenerates them after an ESP32 build, so treating them as inputs makes
+# A host build regenerates them after an ESP32 build, so treating them as inputs makes
 # the firmware look stale forever, one minute after it was built. What actually feeds them
 # — src/ui/*.js, library.json, the git hash — is already covered by the scan.
 SKIP_FILES = {"src/ui/ui_embedded.h", "src/core/util/build_id.h"}
 
-# The desktop-only platform never compiles into an ESP32 image, so an edit there cannot
+# The host-only platform never compiles into an ESP32 image, so an edit there cannot
 # stale the firmware. Kept in step with this check's trigger in CLAUDE.md § Commit,
 # which excludes the same path.
 SKIP_PREFIXES = ("src/platform/host/",)

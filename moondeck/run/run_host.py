@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the desktop executable as a detached background process.
+"""Run the host executable as a detached background process.
 
 Same shape as flashing ESP32: this script does the launch and exits cleanly.
 The app keeps running until the user (or another `run_host` invocation)
@@ -100,7 +100,7 @@ def _kill_running():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Run the desktop build in the background.")
+    ap = argparse.ArgumentParser(description="Run the host build in the background.")
     # Ports below 1024 need root, so the default stays 8080. Port 80 exists for Home Assistant's
     # WLED integration, which hardcodes port 80 and offers no way to specify another
     # (`sudo uv run moondeck/run/run_host.py --port 80`).

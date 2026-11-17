@@ -534,7 +534,7 @@ def main():
     # produce a finding, and building to discover that wastes a build and then reports a
     # failure the toolchain guarantees. Reading the cache says the same thing for free.
     #
-    # Skipping is safe here in a way it would not be for a normal gate: the desktop build that
+    # Skipping is safe here in a way it would not be for a normal gate: the host build that
     # DOES carry the flag is the one every contributor and CI runs, so the tree is still measured,
     # though not from this host. Say so loudly rather than printing a number, because this script's
     # standing rule is that a comfortable zero from a check that never ran is the worst outcome.

@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["mir_eval>=0.7"]
 # ///
-"""Drum harness: run drum recordings whose hits are labeled through the shipped analysis on the desktop, and score each onset the frame carries against the drums it stands for.
+"""Drum harness: run drum recordings whose hits are labeled through the shipped analysis on the host, and score each onset the frame carries against the drums it stands for.
 
 Builds and runs the ``mm_tempo`` target in its ``--drums`` mode (``test/bench/bench_tempo.cpp``), which feeds decoded audio through the boards' block analysis and prints each frame's ``onset``, ``onsetLow``, ``onsetMid`` and ``onsetHigh``. A frame whose field is above 0 is a hit of that field, scored with mir_eval's onset measure, a hit counting within 50 ms of a labeled one: ``onsetLow`` against the kick, ``onsetMid`` against the snare and the toms, ``onsetHigh`` against the hi-hat and the cymbals, ``onset`` against every drum. DrumKit's own drums are scored too, through its `hitsOf`: its kick, snare and hi-hat, and its four toms together against the toms. The latency is the median lag from a labeled hit to the frame that found it.
 

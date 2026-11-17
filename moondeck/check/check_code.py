@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The code check: counts that only fall, per rule and in total, as check_docgen and check_prose keep theirs.
 
-Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the desktop that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The counts committed in docs/reference/metrics/code.json are the number to beat, per rule and in total; the test page shows every finding.
+Each rule is a textbook measure with a known tool: cyclomatic complexity, function length, nesting depth and parameter count from lizard, duplicated blocks from jscpd, file length, the two architecture boundaries, module types named in the UI, name spread and buffers taken by hand in the light domain counted here, and the blocking calls the render path reaches and the stack frames over 512 bytes from the compiler's `-Wfunction-effects` and `-Wframe-larger-than` through check_nonblocking's build, a clean rebuild of the host that costs minutes. A finding is listed per file, so a touched file clears its own rows and leaves the list. The counts committed in docs/reference/metrics/code.json are the number to beat, per rule and in total; the test page shows every finding.
 
 Lizard tokenizes rather than parses, which is what lets it run in a second with no build; the cost is a mangled name on some template-dense bodies. Counting per FILE rather than whitelisting per function name is what makes that harmless: a file's count is right whatever lizard calls the function.
 
@@ -305,11 +305,11 @@ def spread_rows(types: set) -> list:
 
 
 class BuildMissing(Exception):
-    """The desktop build the hot path is read from is absent or does not compile."""
+    """The host build the hot path is read from is absent or does not compile."""
 
 
 def build_warnings() -> str | None:
-    """The desktop build's saved compiler warnings, which the hot path and the stack frames are read from.
+    """The host build's saved compiler warnings, which the hot path and the stack frames are read from.
 
     None when this host's compiler cannot measure them (no Clang 20 -Wfunction-effects), which skips both rules; BuildMissing when the build is absent or fails, which fails the run rather than reading as a clean tree.
     """
@@ -318,11 +318,11 @@ def build_warnings() -> str | None:
     if not (build_dir / "CMakeCache.txt").exists():
         raise BuildMissing(f"No build in {build_dir.relative_to(ROOT)}: run `uv run moondeck/build/build_host.py` first.")
     if not nb.function_effects_enabled(build_dir):
-        print("The desktop build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
+        print("The host build carries no -Wfunction-effects (it needs Clang 20+), so the hot path cannot be measured here.", file=sys.stderr)
         return None
     out = nb.build_output(build_dir)
     if out is None:
-        raise BuildMissing("The desktop build failed, so the hot path cannot be read.")
+        raise BuildMissing("The host build failed, so the hot path cannot be read.")
     return out
 
 

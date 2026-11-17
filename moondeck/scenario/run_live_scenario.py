@@ -64,7 +64,7 @@ class Client:
 
     def __init__(self, host: str):
         self.base = f"http://{host}"
-        # Whether the device is a process on THIS machine. A desktop build elsewhere is named after
+        # Whether the device is a process on THIS machine. A host build elsewhere is named after
         # its own platform and restarts itself, where a local one is named after this host and is
         # relaunched from here. Decided by name alone, so this machine reached by its own LAN
         # address or hostname counts as another one.
@@ -223,12 +223,12 @@ def _detect_target(state: dict, local: bool = True) -> str:
 
     ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
     `esp32s3-n16r8`, …): set at compile time from MM_FIRMWARE_NAME and
-    exposed through the `firmware` control. Desktop: its firmware names the release's program
+    exposed through the `firmware` control. Host: its firmware names the release's program
     (`host-macos-arm64`), and its metrics key is this host's, host-<host-os> (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick
     noticeably). See docs/explanation/architecture/index.md § Firmware vs board.
 
-    A desktop build on ANOTHER machine is named after the platform it reports about itself
+    A host build on ANOTHER machine is named after the platform it reports about itself
     (`host-docker-arm64`), because the measured machine is the one that reports it: a NanoPi measured
     from a Mac was recorded as `host-macos`, into the Mac's own figures.
     """
@@ -243,7 +243,7 @@ def _detect_target(state: dict, local: bool = True) -> str:
         return firmware
     if not local:
         return "host-" + str(model or "remote").strip().lower().replace(" ", "-")
-    # Desktop fallback, from the one home every script shares (moondeck/_host.py).
+    # Host fallback, from the one home every script shares (moondeck/_host.py).
     return host_target()
 
 
@@ -469,7 +469,7 @@ def _restore_controls(client, prior: dict) -> int:
 def _reboot_and_wait(client, target: str, timeout_s: float = 60.0) -> str:
     """Restart the device and wait for it to answer again, so a scenario can prove what survives.
 
-    Every device restarts itself on the endpoint, a board by rebooting and a desktop by starting its program again, in place,
+    Every device restarts itself on the endpoint, a board by rebooting and a host by starting its program again, in place,
     on the same data directory. Returns "" on success, or the reason it did not come back.
     """
     # Uptime before the restart, so the recovered instance can be told from the one still running.
@@ -892,12 +892,12 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
         try:
             if op == "write_file":
-                # Stage a script file, the same op the desktop runner has. Without it a migrated
+                # Stage a script file, the same op the host runner has. Without it a migrated
                 # scenario ran its set_control against a file that was never written, and every
-                # script step failed on hardware while passing on the desktop.
+                # script step failed on hardware while passing on the host.
                 # A failed write FAILS THE SCENARIO. Every later step runs against a stale or
                 # absent file, so reporting PASSED afterwards is the silent pass this op exists
-                # to prevent: the same rule the desktop runner applies.
+                # to prevent: the same rule the host runner applies.
                 path_ = step.get("path")
                 # `from` stages a file of the repository, such as a shipped script, so its source keeps one home.
                 body = (ROOT / step["from"]).read_text(encoding="utf-8") if "from" in step else step.get("value", "")
@@ -937,7 +937,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
 
             elif op == "delete_file":
                 # Remove a file the scenario staged, so a run leaves the device as it found it.
-                # A file already gone counts as removed, the same rule the desktop runner applies.
+                # A file already gone counts as removed, the same rule the host runner applies.
                 path_ = step.get("path")
                 if not path_:
                     print(f"  DELETE {step_name}: missing path")
@@ -1399,7 +1399,7 @@ def run_scenario(client: Client, scenario_path: Path, settle_s: float = 1.5,
                 # Defaults reflect run-to-run variance, not "I don't care":
                 #   pc-*      : multi-process OS jitter, 20% pct + 200us absolute
                 #                floor. The floor dominates below ~1ms tick (the
-                #                realistic case for desktop scenarios today).
+                #                realistic case for host scenarios today).
                 #   esp32-*   : bounded RTOS but lwIP/EMAC jitter, 10% pct + 5us
                 #                absolute floor.
                 # KEEP IN SYNC: the in-process runner re-declares the same defaults

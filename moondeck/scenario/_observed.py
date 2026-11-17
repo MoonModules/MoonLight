@@ -7,7 +7,7 @@ per-target measurements for each scalar, kept in a local store (see `record`), w
 WHY NOT [min, max]. The previous shape was a widen-only range, and widen-only is the
 flaw: nothing ever narrows it, so the max converges on the worst thing that ever
 happened on any machine rather than on what the code costs. One contended run pushed a
-step from 156 to 2131 us permanently (2026-08-28, a desktop build streaming while the
+step from 156 to 2131 us permanently (2026-08-28, a host build streaming while the
 scenarios measured). A number that only ever grows is not a signal, and comparing
 against it hides the regressions it exists to catch.
 
@@ -59,8 +59,8 @@ _FIELDS = ("tick_us", "free_heap", "max_alloc_block")
 #
 # A tick of 0 us means the step ran below the host clock's resolution, not that it was free; a
 # window holding those reports a median of 0, a step that looks infinitely fast. A free_heap or
-# max_alloc_block of 0 is the desktop platform saying "no meaningful ceiling", which is a
-# CONSTANT: the value never varies (verified across every scenario file: desktop has exactly one
+# max_alloc_block of 0 is the host platform saying "no meaningful ceiling", which is a
+# CONSTANT: the value never varies (verified across every scenario file: host has exactly one
 # distinct value, 0), so a 32-sample window of it is 32 copies of a fact that could not change.
 # Recording nothing leaves n=0, which the report already renders as "not measured here" -- the
 # honest answer for a target that has no such limit. Every ESP32 target reports real varying

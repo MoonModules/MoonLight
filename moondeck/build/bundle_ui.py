@@ -4,7 +4,7 @@
 `app.js` and the modules it imports become one minified `app.js`, and `style.css` is minified;
 `index.html`, the vendored `prism.js` and the logo are copied as they are. Comments are most of
 the source, so the embedded UI shrinks to about a third, and a page load sends a third of the
-bytes through the render loop. The desktop running from a checkout still serves `src/ui` itself.
+bytes through the render loop. The host running from a checkout still serves `src/ui` itself.
 
 esbuild does the work: a real JavaScript parser, so minifying never changes what the code does.
 The firmware builds need only Python, so this fetches esbuild's own platform binary from the npm

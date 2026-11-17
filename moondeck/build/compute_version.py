@@ -13,7 +13,7 @@
     which semver §11 orders numerically, so a device can tell it's behind the
     newest `latest`. Without N, every `latest` build claims the same version.
   - Local build: the same `<next>-dev.<N>` as a `latest` build of that commit, so a
-    desktop built from main reports the version `latest` carries and its update badge
+    host built from main reports the version `latest` carries and its update badge
     stays off; a dirty tree shows as the `+` on the build id, not in the version.
 
 N counts since the last `v*` tag specifically, NOT `git describe`'s nearest tag,

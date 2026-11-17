@@ -18,7 +18,7 @@ Saves to (by domain/type, mirroring src):
   docs/assets/light/{modifiers,layouts,drivers}/  — other light modules
   docs/assets/core/<TypeName>.png                 — core modules
   docs/assets/ui/ui_overview.png                  : MoonLight full-page screenshot
-  docs/assets/ui/moondeck_{desktop,esp32,live}.png     — MoonDeck tabs
+  docs/assets/ui/moondeck_{host,esp32,live}.png    : MoonDeck tabs
   docs/assets/ui/installer.png                    — web installer page
 
 Usage:
@@ -202,7 +202,7 @@ MODULES = [
     # Drivers
     ("NetworkSendDriver",    "Drivers",  {}, False),
     ("PreviewDriver",       "Drivers",  {}, False),
-    # The desktop build links every driver (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a runtime the user installs, PWM wants LEDC. The card and its controls are what a screenshot is for, and those are real on any host.
+    # The host build links every driver (MM_LINKS_ALL_LED_DRIVERS), so each renders its controls here even where the silicon or the runtime is absent: HUB75 wants LCD_CAM or Parlio, NDI wants a runtime the user installs, PWM wants LEDC. The card and its controls are what a screenshot is for, and those are real on any host.
     # The two LED drivers, each its own card: they share only `pins` and `ledsPerPin`, and a
     # screenshot of one describes the other's controls wrongly.
     ("RmtLedDriver",        "Drivers",  {}, False),
@@ -247,7 +247,7 @@ CORE_MODULES = [
     "MoonTalkModule",
     "TasksModule",
     "PinsModule",
-    # Present only in an ESP32 tree (services / provisioning) — skipped on desktop
+    # Present only in an ESP32 tree (services / provisioning): skipped on host
     # (not in state); capture these against a board when needed.
     "ImprovProvisioningModule",
     "AudioService",
@@ -282,7 +282,7 @@ CORE_NAV_ROOT = {
     "ImprovProvisioningModule": "NetworkModule",
     # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in
-    # the desktop tree — so they're captured against an ESP32, where these entries route the
+    # the host tree: so they're captured against an ESP32, where these entries route the
     # shot to the right nav root.
     "AudioService": "Services",
     "PictureService": "Services",
@@ -318,10 +318,10 @@ INSTALLER_URL  = "http://localhost:8000"
 EXTRA_SHOTS = [
     (
         "moondeck_host.png",
-        f"{MOONDECK_URL}/?tab=desktop",
+        f"{MOONDECK_URL}/?tab=host",
         ".tab-content.active",
         ["README.md", "moondeck/MoonDeck.md"],
-        "## Desktop Tab",
+        "## Host Tab",
     ),
     (
         "moondeck_esp32.png",
@@ -477,7 +477,7 @@ def push_script(host: str, name: str) -> bool:
     """Copy one script from the repo onto the device, so a capture needs no hand-copied file.
 
     A scripted module captures an empty card reading "script not found" unless the script it
-    names is on the device, and the desktop build's filesystem is a build directory nothing
+    names is on the device, and the host build's filesystem is a build directory nothing
     in the repo seeds. Pushing here keeps the run self-contained: check out, build, capture.
 
     Byte-exact through /api/file, the same request the File Manager's upload makes.

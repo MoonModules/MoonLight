@@ -132,7 +132,7 @@ def site_url(target: str, page: Path) -> str:
 
 # ---- clang ----------------------------------------------------------------------------------
 
-# The registry's compile flags. Its desktop entry in compile_commands.json holds these and only these, so the generator needs no build: the docs job parses the tree as it is checked out.
+# The registry's compile flags. Its host entry in compile_commands.json holds these and only these, so the generator needs no build: the docs job parses the tree as it is checked out.
 CLANG_ARGS = ["-x", "c++", "-std=c++20", "-DNDEBUG", f"-I{ROOT / 'src'}",
               f"-I{ROOT / 'src' / 'platform' / 'host'}", "-Wno-unknown-warning-option"]
 

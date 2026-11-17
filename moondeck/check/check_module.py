@@ -45,7 +45,7 @@ import check_clang_query  # noqa: E402  — the module→files resolver, one own
 # TABLE and always announces what it dropped, so the tail is one `--max-rows=0` away.
 #
 # `optional` marks a tool whose inputs may legitimately be absent — footprint reads an ESP32 ELF,
-# and a desktop-only checkout has none. That is a SKIP, not a failure: failing the whole card
+# and a host-only checkout has none. That is a SKIP, not a failure: failing the whole card
 # because the firmware was not built would train people to ignore its exit code.
 TOOLS = [
     ("clang-tidy", ["check_clang_tidy.py"], False),

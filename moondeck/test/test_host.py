@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run desktop unit tests from the per-host build dir.
+"""Run host unit tests from the per-host build dir.
 
 By default runs every TEST_CASE. Optional filters narrow the run:
   --module <Name>   only TEST_CASEs from files where @module == <Name>
@@ -55,7 +55,7 @@ def main():
     if test_exe is None:
         print(f"Test executable not found under "
               f"{build_dir.relative_to(ROOT)}/test/.")
-        print("Compile it first: uv run moondeck/build/build_host.py --tests (MoonDeck → desktop → Compile Tests).")
+        print("Compile it first: uv run moondeck/build/build_host.py --tests (MoonDeck → Host → Compile Tests).")
         sys.exit(1)
 
     # Default: summary-only output (`-s` dumps every passing assertion, ~11k lines

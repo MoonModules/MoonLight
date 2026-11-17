@@ -77,11 +77,11 @@ RUNNER = _resolve_runner()
 # test/ made every unit-test edit report the runner stale, and rebuilding did not clear it
 # because CMake correctly relinks nothing: a false alarm that trains people to ignore the guard.
 _RUNNER_SOURCE_DIRS = ("src",)
-# Every platform but the desktop is in the tree but NOT in this target: the runner links mm_platform's desktop half,
+# Every platform but the host is in the tree but NOT in this target: the runner links mm_platform's host half,
 # so an edit to another platform relinks nothing and rebuilding can never clear the warning. Left in scope it wedges
 # the gate permanently, which is the same false alarm the note above is about.
 def _other_platform(rel: str) -> bool:
-    """Whether a repo-relative path sits in a platform's own directory other than the desktop's."""
+    """Whether a repo-relative path sits in a platform's own directory other than the host's."""
     return rel.startswith("src/platform/") and rel.count("/") > 2 and not rel.startswith("src/platform/host/")
 _RUNNER_SOURCE_FILES = ("test/scenario_runner.cpp",)
 _RUNNER_SOURCE_SUFFIXES = {".c", ".cpp", ".h", ".hpp"}
@@ -160,7 +160,7 @@ def _require_fresh_runner() -> None:
 # `<step-name>` may contain hyphens and underscores. heap is the absolute free
 # heap after the measurement (what observed.free_heap consumes); the (step: ±N)
 # fragment is a human-readable delta for diagnostics — not captured here.
-# Both heap and block are 0 on desktop where the platform stubs return
+# Both heap and block are 0 on host where the platform stubs return
 # "unlimited".
 _MEASURE_RE = re.compile(
     r"^\s*MEASURE\s+(?P<name>\S+):\s+tick=(?P<tick>\d+)us\s+FPS=\d+\s+lights=\d+"
@@ -198,7 +198,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
         m = _MEASURE_RE.match(line)
         if m:
             # heap is absolute free-heap after measurement (the value the
-            # observed/contract blocks consume directly). On desktop
+            # observed/contract blocks consume directly). On host
             # freeHeap() returns 0 (unlimited) which the runner treats as
             # "no heap assertion". max_alloc_block is also absolute.
             observations[m["name"]] = {

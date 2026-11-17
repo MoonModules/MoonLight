@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Kernel micro-bench: ns per call for the power-function kernels, on this host.
 
-Builds and runs the ``mm_bench`` target (``test/bench/bench_kernels.cpp``) in the desktop build
+Builds and runs the ``mm_bench`` target (``test/bench/bench_kernels.cpp``) in the host build
 tree and prints its Markdown table. A report, not a check: nothing passes or fails, and the
 numbers are read against the previous rows in performance.md before a kernel swap is accepted
 (the generative-fields plan's 1.3x-per-sample bound on the gradient-noise swap is the first).
