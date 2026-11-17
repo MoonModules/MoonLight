@@ -378,6 +378,12 @@ TEST_CASE("HUB75 encode: an unusable geometry writes nothing") {
     CHECK(steps.valid() == false);
     CHECK(mm::hub75Encode(rgb.data(), out.data(), steps) == 0);
 
+    mm::Hub75Geometry huge;   // 4,295,098,368 encoded bytes at 8 bits, past the 4,294,967,295 that 32 bits hold; at 7 bits the same panel fits
+    huge.width = 32769; huge.height = 16384; huge.scanRate = 16; huge.bitDepth = 8;
+    CHECK(huge.valid() == false);
+    huge.bitDepth = 7;
+    CHECK(huge.valid());
+
     mm::Hub75Geometry ok;
     ok.width = 8; ok.height = 8; ok.scanRate = 4; ok.bitDepth = 4;
     CHECK(mm::hub75Encode(nullptr, out.data(), ok) == 0);

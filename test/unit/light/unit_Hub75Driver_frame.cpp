@@ -131,6 +131,9 @@ TEST_CASE("The HUB75 port opens at 6 bit planes and refuses 7, though the encode
     mm::platform::Hub75Pins pins;
     CHECK(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth));
     CHECK_FALSE(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth + 1));
+    // A refused re-init leaves the port closed, not on the frame it had: nothing to write into, nothing to start.
+    CHECK(mm::platform::hub75Buffer(handle) == nullptr);
+    CHECK_FALSE(mm::platform::hub75Start(handle));
     mm::platform::hub75Deinit(handle);
 }
 

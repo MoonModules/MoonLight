@@ -45,6 +45,8 @@ constexpr uint8_t kHub75PortMaxBitDepth = 6;
 struct Hub75Geometry {
     /// Bytes on the wire per pixel clock: one 16-bit bus word, sixteen rather than eight since the control lines live at bits 8-14.
     static constexpr size_t kBytesPerSlot = 2;
+    /// The largest frame, RGB or encoded, a geometry may need: what a 32-bit size_t holds.
+    static constexpr uint64_t kMaxFrameBytes = 0xFFFFFFFFu;
 
     /// Panel width in pixels.
     uint16_t width = 64;
@@ -70,7 +72,11 @@ struct Hub75Geometry {
         if (bitDepth < 2 || bitDepth > kHub75EncodeMaxBitDepth) return false;
         // The encoder has five address lines, so 32 steps: above that rows alias.
         if (scanRate == 0 || scanRate > 32 || height % scanRate != 0) return false;
-        return rowsPerScan() % 2 == 0;
+        if (rowsPerScan() % 2 != 0) return false;
+        // The RGB frame and the encoded frame fit 32 bits on every target, counted in 64, so a 32-bit size_t holds every size the encode and its buffers use.
+        const uint64_t rgbBytes = static_cast<uint64_t>(width) * height * 3;
+        const uint64_t encodedBytes = static_cast<uint64_t>(bitDepth) * scanRows() * (static_cast<uint64_t>(rowWords()) + holdWords()) * kBytesPerSlot;
+        return rgbBytes <= kMaxFrameBytes && encodedBytes <= kMaxFrameBytes;
     }
 
     /// Shift words one (plane, row) group clocks into the panel: the width times the color passes per address step.

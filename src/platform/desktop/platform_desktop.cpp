@@ -3016,6 +3016,7 @@ const char* hub75BackendLabel(Hub75Backend backend) {
 }
 bool hub75Init(Hub75Handle& /*h*/, Hub75Backend /*backend*/, const Hub75Pins& /*pins*/,
                uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
+    hub75TestFrame_.clear();   // closed first, as the ESP32 port deinits first, so a refused re-init leaves no frame behind
     if (!hub75TestOpen_) return false;
     Hub75Geometry geo;
     geo.width = width;
