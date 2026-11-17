@@ -2550,7 +2550,9 @@ function createCard(mod, depth) {
             }
         });
         urlRow.append(urlLabel, urlField, urlBtn);
-        extras.appendChild(urlRow);
+        // A device its host or its user updates installs no file itself, so it offers the download alone.
+        const selfInstalls = !ctrlValue("update") || ctrlValue("update") === "self";
+        if (selfInstalls) extras.appendChild(urlRow);
 
         const fileRow = document.createElement("div");
         fileRow.className = "control-row fw-upload-row";
@@ -2584,7 +2586,7 @@ function createCard(mod, depth) {
         });
         upBtn.addEventListener("click", () => upInput.click());
         fileRow.append(fileLabel, upBtn, upInput);
-        extras.appendChild(fileRow);
+        if (selfInstalls) extras.appendChild(fileRow);
         extras.appendChild(status);
 
         // -- the radio chip: one matching image per release, so a button rather than the picker --
@@ -2619,7 +2621,13 @@ function createCard(mod, depth) {
         mount.className = "install-picker-host";
         controlsHost.appendChild(available);
         controlsHost.appendChild(mount);
-        if (kind !== "coprocessor") installPicker.init({
+        // A program in a container is its host's to replace, by pulling the image, so its card says that rather than offering a package.
+        if (kind === "app" && ctrlValue("update") === "host") {
+            const note = document.createElement("div");
+            note.className = "control-row rp-status";
+            note.textContent = "This program runs in a container: its host updates it, by docker pull and a new container, Watchtower or Podman's auto-update.";
+            mount.appendChild(note);
+        } else if (kind !== "coprocessor") installPicker.init({
             container: mount,
             // MoonBase ships ONE image per chip rather than one per variant, so on that tab the
             // picker offers the shared-moonbase assets and matches on the CHIP the device
@@ -2632,6 +2640,8 @@ function createCard(mod, depth) {
             // ("ESP32-S3" -> "esp32s3") that merely coincided with the build system's naming.
             // A device its host or its user updates has its card offer the download in place of an install.
             ownFirmwareKey: ctrlValue("update") && ctrlValue("update") !== "self" ? DESKTOP_DOWNLOAD : moonbaseAssetKeyFrom(ctrlValue("firmware")),
+            // Its own build, as an Android device offers the APK whichever computer views its page.
+            downloadKey: /^desktop-/.test(ctrlValue("firmware") || "") ? ctrlValue("firmware") : null,   // a firmware an older build calls "unknown" names no package
             // Device already knows its deviceModel (SystemModule): picker is for releases +
             // firmware compatibility only. A board picker here would invite the user to
             // mis-narrow the firmware list.

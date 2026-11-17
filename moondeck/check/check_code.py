@@ -404,7 +404,7 @@ _CHAR_LITERAL_RE = re.compile(r"'(?:\\.|[^\\'])'")
 
 
 def _code_lines(lines) -> list:
-    """Each line's code, read in one lexical pass as a compiler does: a string or a character literal emptied, a comment cut, a block comment across every line it spans, so a quote inside a comment opens nothing and a `/*` inside a string opens nothing."""
+    """Each line's code, read in one lexical pass as a compiler does: a string or a character literal emptied, a comment cut, a block comment across every line it spans, so a quote inside a comment stays comment and a `/*` inside a string stays string."""
     out, in_block = [], False
     for line in lines:
         code, i, n = [], 0, len(line)

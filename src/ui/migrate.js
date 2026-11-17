@@ -35,6 +35,9 @@ export const TYPE_RENAMES = {
     "I2cScanModule": { type: "I2cBusModule", date: "2026-10-06" },
     // The library of named channel wirings takes the DMX industry term. Its list control follows (CONTROL_RENAMES).
     "LightPresetsModule": { type: "FixtureProfilesModule", date: "2026-10-03" },
+    // The two arcade effects took moon names: MoonMan chomps among the invaders, MoonInvaders marches ghosts. Their count controls follow (CONTROL_RENAMES).
+    "PacmanEffect": { type: "MoonManEffect", date: "2026-11-17" },
+    "SpaceInvadersEffect": { type: "MoonInvadersEffect", date: "2026-11-17" },
     "Layers": { type: "Effects", date: "2026-08-08" },
     // Noise2D folded into Noise, which is Dim::D3 and renders the same field on a panel. `scale`
     // carries; Noise2D's `speed` (a 0..15 divisor) has no equivalent, because Noise takes its rate
@@ -75,6 +78,8 @@ const AUDIO_SERVICE = ["AudioService"];
 export const CONTROL_RENAMES = {
     // The MIDI desk's USB switch names both places a desk can be: a `source` select, browser or USB.
     "usb": { name: "source", date: "2026-10-08", onTypes: ["MidiService"] },
+    "pacmen": { name: "moonmen", date: "2026-11-17", onTypes: ["MoonManEffect"] },
+    "ghosts": { name: "invaders", date: "2026-11-17", onTypes: ["MoonManEffect"] },
     // Light presets are fixture profiles: the library's row list, and the Select every driver uses to pick a row.
     "presets": { name: "profiles", date: "2026-10-03", onTypes: ["FixtureProfilesModule"] },
     "lightPreset": { name: "fixture", date: "2026-10-03", onTypes: ["*Driver"] },
@@ -89,8 +94,8 @@ export const CONTROL_RENAMES = {
     // declare it, per the rule above.
     "soundReactive": {
         name: "audioReactive", date: "2026-09-05",
-        onTypes: ["FishTankEffect", "FlyingToastersEffect", "PacmanEffect", "PongEffect",
-                  "SpaceInvadersEffect", "SpriteFountainEffect", "MovingHeadEffect"],
+        onTypes: ["FishTankEffect", "FlyingToastersEffect", "MoonManEffect", "PongEffect",
+                  "MoonInvadersEffect", "SpriteFountainEffect", "MovingHeadEffect"],
     },
     // AudioSpectrum's level bar grew into every readout drawn with the bars: the frequency, the gate, the ranges and the pitch classes.
     "levelBar": { name: "readouts", date: "2026-11-04", onTypes: ["AudioSpectrumEffect"] },
@@ -386,6 +391,13 @@ function renameKeys(obj, file, report) {
 function migrateDocument(doc, type, file, report) {
     let changed = false;
     const walk = (node, nodeType, where) => {
+        // A renamed type first, so the control renames below scope on the name it takes.
+        const tr = typeof node.type === "string" ? TYPE_RENAMES[node.type] : null;
+        if (tr) {
+            report.push({ kind: "renamed", where: `${file} ${where}`, detail: `type ${node.type} → ${tr.type} (${tr.date})` });
+            node.type = nodeType = tr.type;
+            changed = true;
+        }
         for (const [key, value] of Object.entries(node)) {
             if (isObject(value)) { walk(value, value.type, `${where}.${key}`); continue; }
             const retired = CONTROL_RETIREMENTS[key];

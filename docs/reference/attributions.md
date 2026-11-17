@@ -73,7 +73,6 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [ObjectFLED](https://github.com/KurtMF/ObjectFLED) | 🧰 | Parallel WS2812 output on the Teensy 4 by DMA to a GPIO port. |
 | [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html) | 🧰 | Paul Stoffregen's parallel WS2812 library for the Teensy, timer-driven DMA. |
 | [Olimex](https://www.olimex.com) | 🏢 | The ESP32-P4-PC, and its board demo whose HDMI bring-up the output follows. |
-| [Pac-Man](https://en.wikipedia.org/wiki/Pac-Man) | 🎨 | Namco's 1980 arcade game. |
 | [Philips Hue](https://developers.meethue.com) | 🏢 | The smart-light bridge and its local REST API. |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | 🧰 | OHF-Voice's offline text-to-speech that narrates the documentation clips, the voice you hear, with voice models from rhasspy. GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track. |
 | [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system) File:Examples_of_Polar_Coordinates.svg | 🧮 | A point as an angle and a radius. |
@@ -87,7 +86,6 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [RTP](https://www.rfc-editor.org/rfc/rfc6184) | 📜 | The RTP payload format for H.264, RFC 6184: how a frame is cut into packets. |
 | [RTSP](https://www.rfc-editor.org/rfc/rfc2326) | 📜 | The Real Time Streaming Protocol, RFC 2326: a player pulls a live stream. |
 | [Semi-implicit Euler](https://en.wikipedia.org/wiki/Semi-implicit_Euler_method) | 🧮 | The integration the particle kernel runs on: velocity from the forces, then position from the new velocity. |
-| [Space Invaders](https://en.wikipedia.org/wiki/Space_Invaders) | 🎨 | Taito's 1978 arcade game. |
 | [Stefan Petrick](https://github.com/StefanPetrick) | 🧑 | The shader vocabulary of the LED world. Its generative fields come from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](../moonmodules/light/effects.md#aurora), [PolarNoise](../moonmodules/light/effects.md#polarnoise), [Tunnel](../moonmodules/light/effects.md#tunnel) and [Trails](../moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath. |
 | [Stepko / St3p40](https://github.com/St3p40) | 🧑 | WLED's 2D effects, Soap and Octopus among them. |
 | [Sutaburosu](https://github.com/sutaburosu) | 🧑 | The fixed-point canvas demos. |

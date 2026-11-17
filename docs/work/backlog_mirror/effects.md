@@ -155,11 +155,11 @@ signature (the 2D-DMA blitter the WLED-MM-P4 world uses via LovyanGFX; ours woul
 platform layer, no vendored GFX library), Porter-Duff alpha when a real consumer arrives, and
 MoonLive sprite data (needs the stage-3 builtin table + arrays).
 
-### A real 2D/3D PacMan
+### A real 2D/3D MoonMan maze
 
 Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081828)
 
-The migrated 1D PacMan and 1D Ant effects were removed — a chase rendered on a single strip reads as a blob of moving dots, not a game, so they weren't worth keeping. A proper **2D (or 3D) PacMan** — an actual maze, Pac-Man and ghosts navigating it, power dots, the blue-ghost flee state — would be a genuinely fun signature effect. Build it fresh as a grid game (not a strip port); the WLED/MoonLight 1D versions are reference for the state machine only, not the rendering.
+The migrated 1D maze-chase and Ant effects were removed: a chase rendered on a single strip reads as a blob of moving dots, not a game, so they weren't worth keeping. A proper **2D (or 3D) MoonMan maze**, with an actual maze, MoonMan and the ghosts navigating it, power dots and a flee state for the ghosts, would be a genuinely fun signature effect. Build it fresh as a grid game, not a strip port; the earlier 1D versions are reference for the state machine only, not the rendering.
 
 ### Add real z-axis variation to 2D effects
 

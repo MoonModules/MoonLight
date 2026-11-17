@@ -633,7 +633,7 @@ TEST_CASE("one second of motion is the same amount of motion however fast the de
     }
 }
 
-// Slots map onto distinct lanes at any count: the interleave's step is coprime with the count, where `(i * 5) % 5` stacked Pacman's five on one row.
+// Slots map onto distinct lanes at any count: the interleave's step is coprime with the count, where `(i * 5) % 5` stacked MoonMan's five on one row.
 TEST_CASE("spreadLane gives every slot its own lane, for any count") {
     // The extent is a multiple of every count tested, so each lane lands on its own exact position and two slots sharing a lane is a real collision rather than a rounding artifact.
     constexpr mm::lengthType kExtent = 27720;   // lcm(1..12), divisible by every count below

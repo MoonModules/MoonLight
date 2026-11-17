@@ -65,6 +65,7 @@ class MoonLightService : Service() {
             wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MoonLight:program").apply { acquire() }
             Mdns.nsd = getSystemService(NsdManager::class.java)
+            Updater.context = applicationContext
             program = Thread({ run(filesDir.absolutePath, PORT) }, "MoonLight").apply { start() }
         }
         return START_STICKY

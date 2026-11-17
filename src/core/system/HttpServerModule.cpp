@@ -456,9 +456,10 @@ bool HttpServerModule::handleConnection(platform::TcpConnection& conn) {
         return true;
     }
     if (length == http::Length::Valid) {
-        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX).
+        // An /sd upload rides FAT32's own ceiling, 4 GiB-1 (UINT32_MAX), and a firmware image the platform's, whose otaBegin refuses an image larger than its slot or, on Android, its package.
         const bool sdUpload = std::strncmp(req, "POST /api/file", 14) == 0 && requestNamesSdPath(req);
-        const uint64_t kContentLenMax = sdUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
+        const bool imageUpload = isStreamingUpload(req) && std::strncmp(req, "POST /api/firmware/", 19) == 0;
+        const uint64_t kContentLenMax = sdUpload || imageUpload ? 0xFFFFFFFFULL : 8ULL * 1024 * 1024;
         // A well-formed number past the ceiling is too large, not malformed: 413, not 400.
         if (parsed > kContentLenMax) {
             sendResponse(conn, 413, "application/json",

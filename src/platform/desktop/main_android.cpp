@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "host_mdns.h"           // setHostMdns: Android's NsdManager as the platform's mDNS
+#include "host_update.h"         // setHostInstaller: Android's PackageInstaller as the program's own update
 #include "main.h"                // mm_main
 #include "platform/platform.h"   // fsSetRoot
 
@@ -107,6 +108,35 @@ void nsdEnd() {
     threw(env);
 }
 
+// The app's installer, the Kotlin object Updater over PackageInstaller.
+jclass updaterClass_ = nullptr;
+jmethodID updaterInstall_ = nullptr;
+
+bool installPackage(const char* path, char* status, size_t statusLen) {
+    JNIEnv* env = threadEnv();
+    jstring p = env->NewStringUTF(path);
+    auto failure = static_cast<jstring>(env->CallStaticObjectMethod(updaterClass_, updaterInstall_, p));
+    env->DeleteLocalRef(p);
+    if (threw(env)) { std::snprintf(status, statusLen, "error: the installer failed"); return false; }
+    if (!failure) return true;
+    const char* why = env->GetStringUTFChars(failure, nullptr);
+    std::snprintf(status, statusLen, "error: %s", why);
+    env->ReleaseStringUTFChars(failure, why);
+    env->DeleteLocalRef(failure);
+    return false;
+}
+
+// Lend the app's installer, found on the app's thread as Mdns is.
+void lendInstaller(JNIEnv* env) {
+    jclass local = env->FindClass("org/moonmodules/moonlight/Updater");
+    if (!local) { env->ExceptionClear(); return; }
+    updaterClass_ = static_cast<jclass>(env->NewGlobalRef(local));
+    env->DeleteLocalRef(local);
+    updaterInstall_ = env->GetStaticMethodID(updaterClass_, "install", "(Ljava/lang/String;)Ljava/lang/String;");
+    if (!updaterInstall_) { env->ExceptionClear(); return; }
+    mm::platform::setHostInstaller(installPackage);
+}
+
 // Find the Kotlin object on the app's thread, whose class loader knows it, and lend it to the platform.
 void lendMdns(JNIEnv* env) {
     env->GetJavaVM(&vm_);
@@ -135,6 +165,7 @@ extern "C" JNIEXPORT void JNICALL Java_org_moonmodules_moonlight_MoonLightServic
     env->ReleaseStringUTFChars(dataDir, dir);
     logToLogcat();
     lendMdns(env);
+    lendInstaller(env);
     mm_main(running, static_cast<uint16_t>(httpPort));
 }
 

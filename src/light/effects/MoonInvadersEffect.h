@@ -4,125 +4,30 @@
 #include "core/util/math16.h"
 #include "light/powerfunctions/draw.h"
 #include "light/effects/AudioEffectBase.h"   // the analysis, while this effect reads it
+#include "light/effects/ArcadeArt.h"         // moonart:: the ghosts in formation, invart:: the cannon
 #include "light/effects/PlayerSeat.h"   // a person takes the cannon, the game plays it again later
 
 namespace mm {
 
-namespace invart {
-
-/// The sprites index these and the effect fills them, so one drawing serves every rank in a color.
-enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kEye = 3 };
-inline constexpr uint8_t kPaletteCount = 4;
-
-/// The squid, top rank: 8x8, and the arcade's own two frames are what the march looks like.
-inline constexpr uint8_t W = 8, H = 8, F = 2;
-inline constexpr uint8_t kSquid[] = {
-    // frame 0: tentacles out
-    0,0,0,1,1,0,0,0,
-    0,0,1,1,1,1,0,0,
-    0,1,1,1,1,1,1,0,
-    1,1,3,1,1,3,1,1,
-    1,1,1,1,1,1,1,1,
-    0,0,1,0,0,1,0,0,
-    0,1,0,1,1,0,1,0,
-    1,0,1,0,0,1,0,1,
-    // frame 1: tentacles tucked
-    0,0,0,1,1,0,0,0,
-    0,0,1,1,1,1,0,0,
-    0,1,1,1,1,1,1,0,
-    1,1,3,1,1,3,1,1,
-    1,1,1,1,1,1,1,1,
-    0,1,0,1,1,0,1,0,
-    1,0,0,0,0,0,0,1,
-    0,1,0,0,0,0,1,0,
-};
-static_assert(sizeof(kSquid) == static_cast<size_t>(W) * H * F, "squid: 2 frames of 8x8");
-
-/// The crab (middle ranks): 11x8, the widest of the three, arms up and arms down.
-inline constexpr uint8_t CW = 11, CH = 8, CF = 2;
-inline constexpr uint8_t kCrab[] = {
-    // frame 0: arms up
-    0,0,1,0,0,0,0,0,1,0,0,
-    0,0,0,1,0,0,0,1,0,0,0,
-    0,0,1,1,1,1,1,1,1,0,0,
-    0,1,1,3,1,1,1,3,1,1,0,
-    1,1,1,1,1,1,1,1,1,1,1,
-    1,0,1,1,1,1,1,1,1,0,1,
-    1,0,1,0,0,0,0,0,1,0,1,
-    0,0,0,1,1,0,1,1,0,0,0,
-    // frame 1: arms down
-    0,0,1,0,0,0,0,0,1,0,0,
-    1,0,0,1,0,0,0,1,0,0,1,
-    1,0,1,1,1,1,1,1,1,0,1,
-    1,1,1,3,1,1,1,3,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,
-    0,1,1,1,1,1,1,1,1,1,0,
-    0,0,1,0,0,0,0,0,1,0,0,
-    0,1,0,0,0,0,0,0,0,1,0,
-};
-static_assert(sizeof(kCrab) == static_cast<size_t>(CW) * CH * CF, "crab: 2 frames of 11x8");
-
-/// The octopus (bottom ranks): 12x8, the squat one worth the fewest points and seen the longest.
-inline constexpr uint8_t OW = 12, OH = 8, OF = 2;
-inline constexpr uint8_t kOcto[] = {
-    // frame 0: legs apart
-    0,0,0,0,1,1,1,1,0,0,0,0,
-    0,1,1,1,1,1,1,1,1,1,1,0,
-    1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,3,3,1,1,3,3,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,
-    0,0,0,1,1,0,0,1,1,0,0,0,
-    0,0,1,1,0,1,1,0,1,1,0,0,
-    1,1,0,0,0,0,0,0,0,0,1,1,
-    // frame 1: legs together
-    0,0,0,0,1,1,1,1,0,0,0,0,
-    0,1,1,1,1,1,1,1,1,1,1,0,
-    1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,3,3,1,1,3,3,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,
-    0,0,1,1,1,0,0,1,1,1,0,0,
-    0,1,1,0,0,1,1,0,0,1,1,0,
-    0,0,1,1,0,0,0,0,1,1,0,0,
-};
-static_assert(sizeof(kOcto) == static_cast<size_t>(OW) * OH * OF, "octopus: 2 frames of 12x8");
-
-/// The cannon: 13x8, one frame. It does not animate; it moves.
-inline constexpr uint8_t GW = 13, GH = 8, GF = 1;
-inline constexpr uint8_t kCannon[] = {
-    0,0,0,0,0,0,1,0,0,0,0,0,0,
-    0,0,0,0,0,1,1,1,0,0,0,0,0,
-    0,0,0,0,0,1,1,1,0,0,0,0,0,
-    0,1,1,1,1,1,1,1,1,1,1,1,0,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,1,1,1,1,1,1,1,1,1,1,
-};
-static_assert(sizeof(kCannon) == static_cast<size_t>(GW) * GH * GF, "cannon: one 13x8 frame");
-
-}  // namespace invart
-
-/// The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.
-/// @card SpaceInvadersEffect.gif
+/// A formation of ghosts marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.
+/// @card MoonInvadersEffect.gif
 ///
 /// The march speeds up as the ranks thin, which is the defining mechanic.
 ///
-/// The game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The invaders take their body color from the active palette.
-///
-/// @attribution Space Invaders
+/// The game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The ghosts take their body color from the active palette, one per rank.
 ///
 /// @guide
 ///
 /// ## The game
 ///
-/// Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board.
+/// The ghosts fire down and the cannon fires back. A formation that lands, or a board cleared of ghosts, resets the board.
 ///
 /// @technical
 ///
 /// ## The march is the signature
 ///
 /// The arcade stepped every invader once per frame, so fewer invaders meant a shorter loop and a faster march. Our loop has no such limit, so `stepInterval` reproduces the relationship deliberately.
-class SpaceInvadersEffect : public AudioEffectBase {
+class MoonInvadersEffect : public AudioEffectBase {
 public:
     /// Catalog tags: the audio glyph applies when `audioReactive` is set.
     const char* tags() const override { return "💫🎵👾"; }
@@ -218,14 +123,10 @@ public:
     }
 
 private:
-    /// The arcade's own layout: one rank of squids, two of crabs, two of octopuses.
+    /// The formation: eight columns of five ranks, the arcade's own grid.
     static constexpr uint8_t kCols = 8;
     static constexpr uint8_t kRows = 5;
     static constexpr uint8_t kShots = 6;
-
-    /// One rank's species. Rank 0 is the squid at the top, the way the machine dealt them.
-    enum : uint8_t { kSquid = 0, kCrab, kOcto };
-    static uint8_t speciesFor(uint8_t row) { return row == 0 ? kSquid : (row < 3 ? kCrab : kOcto); }
 
     void reset() {
         alive_ = 0;
@@ -297,43 +198,27 @@ private:
         return false;
     }
 
-    /// Cell size comes from the widest sprite, so the ranks line up however their art differs.
+    /// The cell is the arcade formation's, its widest invader's plus a gap, so a ghost marches with the arcade's spacing and pace.
     uint8_t cell() const { return static_cast<uint8_t>((invart::OW + 2) * scale()); }
     uint8_t rowPitch() const { return static_cast<uint8_t>((invart::OH + 2) * scale()); }
     uint8_t scale() const { return size == 0 ? 1 : size; }
     int16_t formationWidth() const { return static_cast<int16_t>(cell() * kCols); }
     int16_t formationHeight() const { return static_cast<int16_t>(rowPitch() * kRows); }
 
-    /// Draw every live invader, one palette entry per rank.
+    /// Draw every live ghost, one palette entry per rank.
     void drawFormation(const draw::Canvas& cv) {
-        RGB pal[invart::kPaletteCount];
+        RGB pal[moonart::kPaletteCount];
+        const uint8_t sc = scale();
+        const lengthType inset = static_cast<lengthType>((invart::OW - moonart::SW) / 2 * sc);   // centered in its cell
         for (uint8_t r = 0; r < kRows; r++) {
-            // One entry per rank, so they read as different creatures from one drawing.
-            paletteFor(pal, static_cast<uint8_t>(r * 40 + 30));
+            // One entry per rank, so each rank reads as its own color from one drawing.
+            moonart::ghostPalette(pal, static_cast<uint8_t>(r * 40 + 30));
             for (uint8_t c = 0; c < kCols; c++) {
                 if (!grid_[r][c]) continue;
-                const lengthType px = static_cast<lengthType>(ox_ + c * cell());
+                const lengthType px = static_cast<lengthType>(ox_ + c * cell() + inset);
                 const lengthType py = static_cast<lengthType>(oy_ + r * rowPitch());
-                drawInvader(cv, speciesFor(r), pal, px, py);
+                draw::sprite(cv, {moonart::kGhostSmall, pal, moonart::SW, moonart::SH, moonart::SF, moonart::kPaletteCount}, frame_, px, py, sc);
             }
-        }
-    }
-
-    void drawInvader(const draw::Canvas& cv, uint8_t species,
-                     const RGB (&pal)[invart::kPaletteCount], lengthType px, lengthType py) {
-        const uint8_t sc = scale();
-        if (species == kSquid) {
-            const draw::sprites::Sprite s{invart::kSquid, pal, invart::W, invart::H,
-                                          invart::F, invart::kPaletteCount};
-            draw::sprite(cv, s, frame_, px, py, sc);
-        } else if (species == kCrab) {
-            const draw::sprites::Sprite s{invart::kCrab, pal, invart::CW, invart::CH,
-                                          invart::CF, invart::kPaletteCount};
-            draw::sprite(cv, s, frame_, px, py, sc);
-        } else {
-            const draw::sprites::Sprite s{invart::kOcto, pal, invart::OW, invart::OH,
-                                          invart::OF, invart::kPaletteCount};
-            draw::sprite(cv, s, frame_, px, py, sc);
         }
     }
 
@@ -437,15 +322,6 @@ private:
             && (hashInt(tickSeed_++, 9) & 3) == 0)
             spawnShot(static_cast<int16_t>(cannonX_ + (invart::GW * scale()) / 2),
                       static_cast<int16_t>(height() - invart::GH * scale()), -1);
-    }
-
-    /// Fill a rank's four palette slots from one palette entry.
-    void paletteFor(RGB (&pal)[invart::kPaletteCount], uint8_t entry) const {
-        const RGB body = colorFromPalette(*Palettes::active(), entry);
-        pal[invart::kClear] = RGB{0, 0, 0};
-        pal[invart::kBody]  = body;
-        pal[invart::kDark]  = blend(body, RGB{0, 0, 0}, 140);
-        pal[invart::kEye]   = RGB{10, 10, 14};
     }
 
     static constexpr int16_t kShotSpeed = 2;

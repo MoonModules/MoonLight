@@ -10,7 +10,7 @@
 /// @also AuroraEffect, BallpitEffect, BouncingBallsEffect, DissolveEffect, DistortionWavesEffect, EchoEffect,
 /// @also FireEffect, FireworksEffect, FishTankEffect, FixedRectangleEffect, FluidEffect,
 /// @also FlyingToastersEffect, GameOfLifeEffect, LavaLampEffect, LissajousEffect, MetaballsEffect,
-/// @also NebulaEffect, NoiseEffect, PacmanEffect, PlasmaEffect, PolarNoiseEffect, PraxisEffect,
+/// @also NebulaEffect, NoiseEffect, MoonManEffect, PlasmaEffect, PolarNoiseEffect, PraxisEffect,
 /// @also RainbowEffect, RingsEffect, RubiksCubeEffect, SdfShapesEffect, SineEffect, SolidEffect,
 /// @also SphereMoveEffect, SpiralEffect, StarFieldEffect, StarSkyEffect, TetrixEffect, TextEffect,
 /// @also RadialSpectrumEffect, VuMetersEffect, TrailsEffect, TruchetEffect, TunnelEffect, WaterRippleEffect, WaveEffect
@@ -63,7 +63,7 @@
 #include "light/effects/FireworksEffect.h"
 #include "light/effects/BallpitEffect.h"
 #include "light/effects/FishTankEffect.h"
-#include "light/effects/PacmanEffect.h"
+#include "light/effects/MoonManEffect.h"
 #include "light/effects/FlyingToastersEffect.h"
 #include "light/effects/TruchetEffect.h"
 #include "light/effects/SineEffect.h"
@@ -96,7 +96,7 @@ TEST_CASE("time-driven effects render byte-identical frames (migration guard)") 
     SUBCASE("shells rise, stall at their apex and burst into falling sparks")       { FireworksEffect e;       golden::checkGolden("FireworksEffect", golden::renderHash(e, 16, 16, 1), 0x7636d32bfb3f4b2bull); }
     SUBCASE("balls fall, pile up and shove each other aside")         { BallpitEffect e;         golden::checkGolden("BallpitEffect", golden::renderHash(e, 16, 16, 1), 0xdd4efe1ccba2a4b2ull); }
     SUBCASE("fish swim across the tank, each its own color from the palette")  { FishTankEffect e;  golden::checkGolden("FishTankEffect", golden::renderHash(e, 16, 16, 1), 0x3564663bebacac3aull); }
-    SUBCASE("Pacman and the ghosts cross the wall, each ghost its own color")  { PacmanEffect e;  golden::checkGolden("PacmanEffect", golden::renderHash(e, 16, 16, 1), 0x776b749b4d02eb9bull); }
+    SUBCASE("MoonMan and the invaders cross the wall, each invader its own color")  { MoonManEffect e;  golden::checkGolden("MoonManEffect", golden::renderHash(e, 16, 16, 1), 0x61a8334144208811ull); }
     // The hash moved 2026-08-28: launch() draws its speed span with next16() instead of an 8-bit value, which the old draw clamped at large sprite scales. Per-toaster velocities change, so the frame does; the effect is correct, the golden was re-recorded.
     SUBCASE("toasters flap and drift diagonally, toast trails along")  { FlyingToastersEffect e;  golden::checkGolden("FlyingToastersEffect", golden::renderHash(e, 16, 16, 1), 0x8958d378f86b9e3bull); }
     SUBCASE("arc tiles join into endless winding paths")         { TruchetEffect e;         golden::checkGolden("TruchetEffect", golden::renderHash(e, 16, 16, 1), 0xdcb9b41536eff043ull); }

@@ -175,7 +175,7 @@ add_executable(mm_tests
     unit/light/unit_PongEffect.cpp
     unit/light/unit_SpriteCast.cpp
     unit/light/unit_MoonLive_api.cpp
-    unit/light/unit_SpaceInvadersEffect.cpp
+    unit/light/unit_MoonInvadersEffect.cpp
     unit/light/unit_BlockModifier.cpp
     unit/light/unit_BlurzEffect.cpp
     unit/light/unit_BouncingBallsEffect.cpp

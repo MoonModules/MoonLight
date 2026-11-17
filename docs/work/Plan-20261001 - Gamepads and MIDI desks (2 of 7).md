@@ -2,7 +2,7 @@
 
 ## Why
 
-The arcade effects (Pong, Breakout, Space Invaders) play themselves. With a controller in hand they become games, which is what makes them worth standing in front of at an event. A motorized MIDI desk such as the Behringer X-Touch or the iCON QCon Pro G2 is the same wish from the performer's side: physical faders and knobs that drive the show, and that move by themselves when the show changes.
+The arcade effects (Pong, Breakout, MoonInvaders) play themselves. With a controller in hand they become games, which is what makes them worth standing in front of at an event. A motorized MIDI desk such as the Behringer X-Touch or the iCON QCon Pro G2 is the same wish from the performer's side: physical faders and knobs that drive the show, and that move by themselves when the show changes.
 
 ## What already exists
 
@@ -20,10 +20,10 @@ Everything this needs on the receiving side is built. The plan adds transports a
 
 - Pong: `player1` and `player2`, the paddle positions, 0 to 255.
 - Breakout: `player`, the paddle position.
-- Space Invaders: `player`, the cannon position, and `fire`, one shot in the air at a time as in the arcade.
+- MoonInvaders: `player`, the cannon position, and `fire`, one shot in the air at a time as in the arcade.
 - All are live controls. While the game plays itself it writes its own positions into them, so an assigned fader or encoder follows the paddle.
 - Any write through `setControl` hands that player to a person; ten seconds without one hands it back, so an installation never stands idle. The rule lives once, in `PlayerSeat`.
-- Wiring with what exists: a ControlModule fader assigned to `PongEffect.player1`, an `AnalogService` potentiometer onto that fader (a pot is the 1972 paddle), two `ButtonService` rows with Delta ±16 for left and right, a Set row onto `SpaceInvadersEffect.fire`.
+- Wiring with what exists: a ControlModule fader assigned to `PongEffect.player1`, an `AnalogService` potentiometer onto that fader (a pot is the 1972 paddle), two `ButtonService` rows with Delta ±16 for left and right, a Set row onto `MoonInvadersEffect.fire`.
 - A DIY controller needs nothing more: a gamepad's buttons wired to GPIOs are `ButtonService` rows, and a stick is two `AnalogService` channels.
 
 Also on this branch, from the same session: the Breakout effect (self-playing, the arcade's speed-ups and paddle halving, `descend` for a creeping wall, an audio-reactive wall that glows per band), a Pong score with first-to-11, independent paddles and `size` shown only with `spriteBall`, the beat-driven balls removed from Pong and Breakout, and Tetrix's stack drawn again with a per-run seed and staggered starts.

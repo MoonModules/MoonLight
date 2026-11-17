@@ -444,3 +444,13 @@ test("a retirement is scoped by module type: another module's gain stays", () =>
     const [other] = kids(rootOf(files, "/.config/Effects.json"), "SomeEffect");
     assert.equal(other.gain, 7);
 });
+
+test("a saved document's renamed type takes its new name, and its controls rename on that new type", () => {
+    const doc = { Effects: { "$patch": "replace", L: { type: "Layer",
+        P: { type: "PacmanEffect", pacmen: 2, ghosts: 3, soundReactive: true },
+        S: { type: "SpaceInvadersEffect", marchBpm: 90 } } } };
+    const { files } = applyMigrations({ "/.config/Effects.json": JSON.stringify(doc) }, []);
+    const L = JSON.parse(files["/.config/Effects.json"]).Effects.L;
+    assert.deepEqual(L.P, { type: "MoonManEffect", moonmen: 2, invaders: 3, audioReactive: true });
+    assert.deepEqual(L.S, { type: "MoonInvadersEffect", marchBpm: 90 });
+});

@@ -29,4 +29,9 @@ bool putProgramInPlace(const std::filesystem::path& next, const std::filesystem:
 /// Confirm a pending program once this run has stayed up `kBootStableMs`, which ends the service's rollback window; called once at start.
 void confirmProgramWhenStable();
 
+/// The installer a host lends for its own package, as the Android app's PackageInstaller: hand it the vetted package at `path`; false with the reason in `status`.
+using InstallPackageFn = bool (*)(const char* path, char* status, size_t statusLen);
+/// Lend the installer, which makes a program whose OS installed it update itself: update mode self.
+void setHostInstaller(InstallPackageFn install);
+
 }  // namespace mm::platform

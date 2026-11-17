@@ -35,7 +35,7 @@ One row per effect in the tree on 2026-09-03 (58), recording what each uses and 
 | MovingHead | N | beat sin pal audio | `BeatPhase` | `Oscillators` for formations | fixture roles, not pixels |
 | NetworkReceive | U | scratch | | widens into the 16-bit Layer | writes raw bytes by design |
 | NoiseMeter | M | noise beat sin fade pal audio | `smoothFollow` | gradient noise, `Oscillators` | |
-| Pacman | **A** | beat particles scratch rnd pal audio | on `particles` for motion | | game logic is the effect |
+| MoonMan | **A** | beat particles scratch rnd pal audio | on `particles` for motion | | game logic is the effect |
 | PaintBrush | N | polar beat sin fade geom rnd pal audio **float** | `lineAA` via `splat` | `lineAA`, `decay`, `PolarLut`, `Oscillators`; float to fixed | |
 | Particles | N | particles scratch rnd pal | on `particles` already | 16-bit `splat` | |
 | Plasma | N | beat sin pal | `sin16` | `PolarLut`, `fbm`/`warp` as a shader, `Oscillators`, 16-bit | |
@@ -50,7 +50,7 @@ One row per effect in the tree on 2026-09-03 (58), recording what each uses and 
 | SdfShapes | N | beat sin shader pal | on `shader.h` already | `Oscillators`, 16-bit coverage | |
 | Sine | N | beat sin **float** | `sin16` | 16-bit; float to fixed | |
 | Solid | U | scratch pal | | | |
-| SpaceInvaders | **A** | beat rnd pal audio | | | game |
+| MoonInvaders | **A** | beat rnd pal audio | | | game |
 | Spectrum | M | geom scratch pal audio | `bar`, `smoothFollow`, `peakHold` already | 16-bit bars | |
 | SphereMove | N | fade rnd pal **float** | `sdSphere` via `raymarch.h`/`shader.h` | 16-bit; float to fixed | |
 | SpriteFountain | N | beat sin particles scratch rnd audio | on `particles` already | `decay` | |

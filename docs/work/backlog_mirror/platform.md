@@ -476,3 +476,15 @@ Test with a USB grabber on the NanoPi R3S-LTS; an RK3588 board with HDMI in is i
 **Out.** The uncapped loop on a host, and the CPU it burns for frames nobody sees.
 
 **Size.** About half a day, with the tick matrix before and after.
+
+### MoonLight on iPhone and iPad: an interpreter backend for MoonLive, then the iOS app
+
+Kind: Investigation · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=307951024)
+
+MoonLight on iPhone and iPad, after the Android app (Plan-20261113, MoonLight on a phone or tablet) has been used on a trip.
+
+Two iOS rules bind:
+- **No executing memory the app wrote.** MoonLive compiles to machine code, which iOS forbids to every app but Safari. Two ways: an interpreter over MoonLive's IR, kept alive instead of discarded, as a backend file beside the others; or no MoonLive on iOS, which empties the use. An interpreter on an A-series chip outruns compiled code on an ESP32 at preview-sized layouts, so speed does not bind; the architecture does, since it is a second execution engine.
+- **Suspension.** iOS suspends an app about 30 s after a switch away. The `audio` background mode keeps an app with the mic open running, so an audio-reactive session survives a switch and a plain effect does not (Anjin, Discord, 2026-11-13).
+
+First step: a design study on the interpreter backend. Costs: an Apple developer account, TestFlight for every tester, the multicast entitlement. The Vision Pro waits on the same decision.

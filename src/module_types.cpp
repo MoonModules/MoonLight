@@ -62,7 +62,7 @@
 #include "light/effects/NoiseEffect.h"
 #include "light/effects/FixedPointEffect.h"
 #include "light/effects/MovingHeadEffect.h"
-#include "light/effects/PacmanEffect.h"
+#include "light/effects/MoonManEffect.h"
 #include "light/effects/PictureEffect.h"
 #include "light/effects/PlasmaEffect.h"
 #include "light/effects/PulseEffect.h"
@@ -112,7 +112,7 @@
 #include "light/effects/FlyingToastersEffect.h"
 #include "light/effects/PongEffect.h"
 #include "light/effects/BreakoutEffect.h"
-#include "light/effects/SpaceInvadersEffect.h"
+#include "light/effects/MoonInvadersEffect.h"
 #include "light/effects/SpriteFountainEffect.h"
 #include "light/effects/TruchetEffect.h"
 #include "light/effects/VectorBallsEffect.h"
@@ -310,11 +310,11 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::SpectrumEffect>("SpectrumEffect", "light/effects.md#spectrum");
     mm::ModuleFactory::registerType<mm::FireworksEffect>("FireworksEffect", "light/effects.md#fireworks");
     mm::ModuleFactory::registerType<mm::FishTankEffect>("FishTankEffect", "light/effects.md#fishtank");
-    mm::ModuleFactory::registerType<mm::PacmanEffect>("PacmanEffect", "light/effects.md#pacman");
+    mm::ModuleFactory::registerType<mm::MoonManEffect>("MoonManEffect", "light/effects.md#moonman");
     mm::ModuleFactory::registerType<mm::FixedPointEffect>("FixedPointEffect", "light/effects.md#fixedpoint");
     mm::ModuleFactory::registerType<mm::MovingHeadEffect>("MovingHeadEffect", "light/effects.md#movinghead");
     mm::ModuleFactory::registerType<mm::FlyingToastersEffect>("FlyingToastersEffect", "light/effects.md#flyingtoasters");
-    mm::ModuleFactory::registerType<mm::SpaceInvadersEffect>("SpaceInvadersEffect", "light/effects.md#spaceinvaders");
+    mm::ModuleFactory::registerType<mm::MoonInvadersEffect>("MoonInvadersEffect", "light/effects.md#mooninvaders");
     mm::ModuleFactory::registerType<mm::SpriteFountainEffect>("SpriteFountainEffect", "light/effects.md#spritefountain");
     mm::ModuleFactory::registerType<mm::PongEffect>("PongEffect", "light/effects.md#pong");
     mm::ModuleFactory::registerType<mm::BreakoutEffect>("BreakoutEffect", "light/effects.md#breakout");

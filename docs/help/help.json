@@ -2572,17 +2572,16 @@
    "doc": "light/effects.md#fishtank",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FishTankEffect.h"
   },
-  "PacmanEffect": {
-   "line": "The arcade cast crossing a light wall: Pacman chomps along while the ghosts drift past, wrapping around the edges forever.",
-   "summary": "The characters travel independently, each on its own path. Pacman keeps his yellow, and the ghosts take their colors from the active palette.",
-   "attribution": "[Pac-Man](https://moonmodules.org/MoonLight/reference/attributions.html#pac-man)",
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/PacmanEffect.gif",
+  "MoonManEffect": {
+   "line": "The arcade cast crossing a light wall: MoonMan chomps along while the invaders drift past, wrapping around the edges forever.",
+   "summary": "The characters travel independently, each on its own path. MoonMan keeps his yellow, and the invaders take their colors from the active palette.",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonManEffect.gif",
    "controls": {
-    "pacmen": {
-     "line": "How many Pacmen cross the wall, up to four."
+    "moonmen": {
+     "line": "How many MoonMen cross the wall, up to four."
     },
-    "ghosts": {
-     "line": "How many ghosts cross the wall, the arcade cast being four."
+    "invaders": {
+     "line": "How many invaders cross the wall, the three kinds taking turns."
     },
     "speed": {
      "line": "Travel rate in sprite widths, the same on any grid."
@@ -2597,8 +2596,8 @@
    "role": "effect",
    "tags": "💫🎶✨👾",
    "dim": 2,
-   "doc": "light/effects.md#pacman",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PacmanEffect.h"
+   "doc": "light/effects.md#moonman",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MoonManEffect.h"
   },
   "FixedPointEffect": {
    "line": "Shapes placed between pixels rather than on them.",
@@ -2710,17 +2709,16 @@
    "doc": "light/effects.md#flyingtoasters",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FlyingToastersEffect.h"
   },
-  "SpaceInvadersEffect": {
-   "line": "The 1978 formation marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.",
-   "summary": "The march speeds up as the ranks thin, which is the defining mechanic.\n\nThe game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The invaders take their body color from the active palette.",
-   "attribution": "[Space Invaders](https://moonmodules.org/MoonLight/reference/attributions.html#space-invaders)",
+  "MoonInvadersEffect": {
+   "line": "A formation of ghosts marching down the wall: five ranks stepping sideways in the two-frame wiggle, dropping a row and reversing at each wall.",
+   "summary": "The march speeds up as the ranks thin, which is the defining mechanic.\n\nThe game plays itself in attract mode, and `player` and `fire` hand the cannon to a person. The ghosts take their body color from the active palette, one per rank.",
    "guide": [
     {
      "title": "The game",
-     "text": "Invaders fire down and the cannon fires back. A formation that lands, or a board cleared of invaders, resets the board."
+     "text": "The ghosts fire down and the cannon fires back. A formation that lands, or a board cleared of ghosts, resets the board."
     }
    ],
-   "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpaceInvadersEffect.gif",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/MoonInvadersEffect.gif",
    "controls": {
     "marchBpm": {
      "line": "March beats per minute, two steps a beat, faster as ranks thin."
@@ -2747,13 +2745,13 @@
    "role": "effect",
    "tags": "💫🎵👾",
    "dim": 2,
-   "doc": "light/effects.md#spaceinvaders",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SpaceInvadersEffect.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#spaceinvaderseffect"
+   "doc": "light/effects.md#mooninvaders",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/MoonInvadersEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#mooninvaderseffect"
   },
   "SpriteFountainEffect": {
    "line": "A fountain that throws the project's whole sprite cast, launched from the floor on a sweeping nozzle and falling back under gravity.",
-   "summary": "The cast is fish, Pacman and his ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. Pacman, the toasters, Luna and Momo keep their own.\n\nWith `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: Pacman on the kick, a ghost on the snare, a small fish on the hats.",
+   "summary": "The cast is fish, MoonMan and the ghosts, toasters and toast, the three invaders, and Luna and Momo.\n\nColors come from the active palette, one per sprite, held for its whole flight. MoonMan, the toasters, Luna and Momo keep their own.\n\nWith `audioReactive` each loud band throws its own sprite, and each drum hit throws one more, the harder the hit the higher: MoonMan on the kick, a ghost on the snare, a small fish on the hats.",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/SpriteFountainEffect.gif",
    "controls": {
     "lift": {

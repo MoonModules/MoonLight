@@ -910,7 +910,7 @@
   "number": null
  },
  {
-  "title": "A real 2D/3D PacMan",
+  "title": "A real 2D/3D MoonMan maze",
   "area": "Effects",
   "module": "",
   "kind": "Feature",
@@ -1537,6 +1537,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287084833",
+  "number": null
+ },
+ {
+  "title": "MoonLight on iPhone and iPad: an interpreter backend for MoonLive, then the iOS app",
+  "area": "Platform",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=307951024",
   "number": null
  },
  {

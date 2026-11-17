@@ -22,7 +22,7 @@
       "module": "Pulse",
       "type": "BreakoutEffect",
       "as": "game",
-      "caption": "Breakout joins Pong, Space Invaders and Tetrix. Every game plays itself, and a game pad or a MIDI desk can take over a paddle.",
+      "caption": "Breakout joins Pong, MoonInvaders and Tetrix. Every game plays itself, and a game pad or a MIDI desk can take over a paddle.",
       "speech": 12.0
     },
     {

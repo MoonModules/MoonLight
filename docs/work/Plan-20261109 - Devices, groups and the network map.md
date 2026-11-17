@@ -91,7 +91,7 @@ An effect spreads over a group as easily as its output can be computed on each d
 | 3. Randomness, no memory | level 1, plus a random draw per frame | sparkles, twinkles | a draw from (seed, group tick, light), not from a stream |
 | 4. Memory of its own past | its previous frames | Fire, Particles, Bouncing Balls, Water Ripple | the same simulation steps at the same times: lockstep |
 | 5. Chaos, coupled across the canvas | its previous frames, every cell on its neighbors | Game of Life, ripples crossing devices | lockstep, plus detecting and repairing a divergence |
-| 6. Live input on one device | a gamepad or a touch | Space Invaders, Pong | the input as group state, applied at a time |
+| 6. Live input on one device | a gamepad or a touch | MoonInvaders, Pong | the input as group state, applied at a time |
 
 What breaks each level, which synced clocks and a shared seed alone leave open:
 
@@ -368,7 +368,7 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 
 - A gamepad or touch on one member becomes group state, stamped "apply at T" a little ahead, so every member applies it at the same step: the delay-based lockstep of networked games. Where the delay shows, the effect stays streamed.
 - **Pong across two boards**, a paddle on each and the ball crossing between them. Its attract mode re-rolls each paddle's aiming error per exchange; drawn as a hash of the exchange number, the rally is deterministic (levels 1 and 3), and a gamepad per board makes it level 6.
-- **Verified by:** Pong played with a gamepad on each of two boards, the bench's Xbox Series pad and 8BitDo Zero 2, each paired with the computer showing its board's page ([the gamepad plan](Plan-20261001%20-%20Gamepads%20and%20MIDI%20desks%20(2%20of%207).md) owns how a pad reaches a board); Space Invaders from one board's gamepad across three.
+- **Verified by:** Pong played with a gamepad on each of two boards, the bench's Xbox Series pad and 8BitDo Zero 2, each paired with the computer showing its board's page ([the gamepad plan](Plan-20261001%20-%20Gamepads%20and%20MIDI%20desks%20(2%20of%207).md) owns how a pad reaches a board); MoonInvaders from one board's gamepad across three.
 
 ### Beyond the LAN
 

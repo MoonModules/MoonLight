@@ -124,7 +124,9 @@ def build_apk(version: str | None) -> int:
     if version:   # the release asset, named as the desktop packages are
         (ROOT / "dist").mkdir(exist_ok=True)
         shutil.copy2(apk, ROOT / "dist" / f"MoonLight-android-arm64-v{version}.apk")
-        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk")
+        # The same package as the program an Android device installs over itself, named as every desktop's own program is, which the Firmware card and the map look for.
+        shutil.copy2(apk, ROOT / "dist" / f"firmware-desktop-android-arm64-v{version}.bin")
+        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk and dist/firmware-desktop-android-arm64-v{version}.bin")
     return 0
 
 
@@ -143,8 +145,9 @@ def main():
     configure = ["cmake", "-B", BUILD_DIR, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
                  f"-DCMAKE_TOOLCHAIN_FILE={ndk / 'build' / 'cmake' / 'android.toolchain.cmake'}",
                  "-DANDROID_ABI=arm64-v8a", f"-DANDROID_PLATFORM=android-{API_LEVEL}"]
-    if args.version:
-        configure.append(f"-DMM_VERSION={args.version}")   # bare: CMakeLists.txt adds the quotes
+    # Always set, so the program reports the version the app carries: a version left in CMake's cache by an earlier --version build stays otherwise.
+    from compute_version import compute
+    configure.append(f"-DMM_VERSION={args.version or compute('local')}")   # bare: CMakeLists.txt adds the quotes
     r = subprocess.run(configure, cwd=ROOT)
     if r.returncode != 0:
         sys.exit(r.returncode)

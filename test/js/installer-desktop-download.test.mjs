@@ -191,3 +191,9 @@ test("a phone, a tablet and a Quest are offered the Android app, not a Linux pac
         if (real) Object.defineProperty(globalThis, "navigator", real); else delete globalThis.navigator;
     }
 });
+
+test("a device's own card offers its own build for download, whichever computer views the page", () => {
+    // A Mac viewing a Quest's page: the APK, not the .dmg.
+    assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-android-arm64", "desktop-android-arm64"), true);
+    assert.equal(isCompatible(DESKTOP_DOWNLOAD, "desktop-macos-arm64", "desktop-android-arm64"), false);
+});

@@ -19,7 +19,7 @@
 
 namespace {
 
-constexpr uint16_t kTestPort = 18095;   // 18090 to 18094 belong to the core HTTP server tests
+constexpr uint16_t kTestPort = 18095;   // 18090 to 18094 and 18096 belong to the core HTTP server tests
 using namespace http_loopback;
 
 std::string request(mm::HttpServerModule& http, const std::string& head, const std::string& body) {

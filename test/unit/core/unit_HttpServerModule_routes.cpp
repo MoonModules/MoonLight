@@ -8,6 +8,7 @@
 #include "core/util/ModuleFactory.h"
 #include "core/system/HttpServerModule.h"
 #include "core/system/DevicesModule.h"   // the boards a hosts text names
+#include "core/system/FirmwareUpdateModule.h"   // g_otaBytesTotal: the size an accepted image announced
 #include "core/system/WledPacket.h"      // a board announcing itself
 #include "platform/platform.h"
 #include "http_loopback.h"
@@ -19,6 +20,7 @@
 namespace {
 
 constexpr uint16_t kTestPort = 18094;   // 18090 to 18093 belong to the connections, SD card, subscription and upload tests
+constexpr uint16_t kImagePort = 18096;  // the image upload left unfinished lingers on its port, as the upload tests' do, so it has its own
 using namespace http_loopback;
 
 struct Dial : public mm::MoonModule {};
@@ -147,6 +149,22 @@ TEST_CASE("a firmware upload without a Content-Length is refused with 411, as ev
     http.setup();
     CHECK(request(http, "POST /api/firmware/upload HTTP/1.1\r\n\r\nxx").rfind("HTTP/1.1 411", 0) == 0);
     http.release();
+}
+
+// An Android package runs to tens of megabytes, past the 8 MB a request body holds elsewhere: a firmware image meets the platform's own ceiling, which otaBegin applies.
+TEST_CASE("a firmware image past 8 MB reaches the install route rather than a 413"
+          * doctest::skip(mm::platform::updateMode() != mm::platform::UpdateMode::Self)) {
+    mm::HttpServerModule http;
+    http.port = kImagePort;
+    http.setup();
+    mm::g_otaBytesTotal = 0;
+    const std::string reply = requestOnce(http, kImagePort, "POST /api/firmware/upload HTTP/1.1\r\nContent-Length: 20000000\r\n\r\nPK");
+    CHECK(reply.rfind("HTTP/1.1 413", 0) != 0);
+    CHECK(mm::g_otaBytesTotal == 20000000u);   // the install route took the image and announced its size
+    CHECK(requestOnce(http, kImagePort, "POST /api/modules HTTP/1.1\r\nContent-Length: 20000000\r\n\r\n{").rfind("HTTP/1.1 413", 0) == 0);   // any other body keeps the cap
+    http.release();
+    std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));   // the abandoned install ends here, or the next install route answers 409
+    mm::g_otaBytesTotal = 0;
 }
 
 // The route reads the URL on a device that updates itself; a container or a read-only build folder answers 501 first.

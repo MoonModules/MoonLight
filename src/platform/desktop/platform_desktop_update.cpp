@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <atomic>
 #include <memory>
 #include <new>
 #include <string>
@@ -150,6 +151,46 @@ const char* swapIn(const fs::path& next, const fs::path& program) {
     return ec ? "error: cannot put the new program in place" : nullptr;
 }
 
+InstallPackageFn g_installPackage = nullptr;   ///< the installer the host lent, the Android app's
+
+/// Where a new program is written before it goes in place: beside the program, or on Android, whose program is the package the OS installed, in the app's own files.
+fs::path stagingPath(const fs::path& program) {
+#ifdef __ANDROID__
+    (void)program;
+    const char* home = std::getenv("HOME");   // NOLINT(concurrency-mt-unsafe): set once by main_android.cpp before the program starts
+    return fs::path(home ? home : ".") / "MoonLight.next";
+#else
+    return program.parent_path() / "MoonLight.next";
+#endif
+}
+
+#ifdef __ANDROID__
+std::atomic<bool> g_installHandedOff{false};   ///< a package went to the app's installer, which replaces this program itself
+
+/// Why the download at `next` is no package to install, or null: an APK is a zip archive, and a digest given must match it.
+const char* packageRefusal(const fs::path& next, const char* sha256Hex) {
+    static constexpr uint8_t kZipMagic[4] = {'P', 'K', 3, 4};
+    const std::vector<uint8_t> head = readHead(next);
+    if (head.size() < sizeof(kZipMagic) || std::memcmp(head.data(), kZipMagic, sizeof(kZipMagic)) != 0) return "error: the image is not an Android package";
+    if (sha256Hex && *sha256Hex && !digestMatches(next, sha256Hex)) return "error: the image does not match the release's digest";
+    return nullptr;
+}
+
+/// Hand a downloaded Android package to the app's installer once `packageRefusal` passes it.
+bool installThroughHost(const fs::path& next, const char* sha256Hex, char* status, size_t statusLen) {
+    const char* refusal = packageRefusal(next, sha256Hex);
+    if (!refusal && g_installPackage && g_installPackage(next.c_str(), status, statusLen)) {
+        g_installHandedOff = true;
+        say(status, statusLen, "installing: confirm on the device if it asks");
+        return true;
+    }
+    std::error_code ignored;
+    fs::remove(next, ignored);
+    if (refusal) say(status, statusLen, refusal);
+    return false;
+}
+#endif
+
 /// An image on its way to `MoonLight.next`, which `otaEnd` puts in place.
 struct ProgramWrite {
     fs::path next;
@@ -257,9 +298,12 @@ fs::path programPath() {
 
 void setTestProgramPath(const fs::path& path) { g_testProgram = path; }
 
+void setHostInstaller(InstallPackageFn install) { g_installPackage = install; }
+
 UpdateMode updateMode() {
 #ifdef __ANDROID__
-    return UpdateMode::Host;   // the program is the package the OS installed, and the next APK installs over it
+    // The program is the package the OS installed: it updates itself through the installer the app lends, else the next APK installs over it by hand.
+    return g_installPackage ? UpdateMode::Self : UpdateMode::Host;
 #endif
     if (inContainer()) return UpdateMode::Host;
     const auto modeOf = [](const fs::path& program) {
@@ -275,6 +319,10 @@ UpdateMode updateMode() {
 }
 
 bool putProgramInPlace(const fs::path& next, const fs::path& program, const char* sha256Hex, char* status, size_t statusLen) {
+#ifdef __ANDROID__
+    (void)program;
+    return installThroughHost(next, sha256Hex, status, statusLen);
+#endif
     char why[96];
     const auto refuse = [&](const char* reason) {
         std::error_code ignored;
@@ -328,7 +376,7 @@ bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf,
     auto img = std::unique_ptr<ProgramWrite>(new (std::nothrow) ProgramWrite);
     if (!img) { say(statusBuf, statusBufLen, "error: out of memory"); return false; }
     img->program = programPath();
-    img->next = img->program.parent_path() / "MoonLight.next";
+    img->next = stagingPath(img->program);
     img->status = statusBuf;
     img->statusLen = statusBufLen;
     img->bytesOut = bytesOut;
@@ -387,6 +435,15 @@ bool http_fetch_to_ota(const char* url, char* statusBuf, size_t statusBufLen, ui
     return true;
 }
 
+#ifdef __ANDROID__
+/// Android replaces the app once its installer has the package and starts the service again, so this run waits; a declined or failed install ends it from the installer's answer (Updater.kt), and two minutes is the fallback when none comes.
+void reboot() {
+    std::printf("platform::reboot(): restarting\n");
+    std::fflush(stdout);
+    if (g_installHandedOff) std::this_thread::sleep_for(std::chrono::minutes(2));
+    std::exit(0);   // NOLINT(concurrency-mt-unsafe): the service runs again, a new process
+}
+#else
 void reboot() {
     std::printf("platform::reboot(): restarting\n");
     std::fflush(stdout);
@@ -427,5 +484,6 @@ void reboot() {
 #endif
     std::exit(0);   // NOLINT(concurrency-mt-unsafe): on Windows the new program runs on; elsewhere exec failed, and exiting is what a reboot did before
 }
+#endif
 
 }  // namespace mm::platform

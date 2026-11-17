@@ -295,11 +295,11 @@ processes:
           It lights for a newer stable release; your settings stay. A program in a folder it can write installs it and restarts, as a board does; otherwise, download and install it again.
       - id: update-android
         section: Updating
-        say: Install the next APK over the app.
+        say: Install the newer release from the Firmware card.
         given: [{ input: platform, equals: Android }]
-        when: { manual: "Download the newer release's APK and install it as the first one; your settings stay." }
+        when: { manual: "Pick it and press Install, as on a board; your settings stay." }
         detail: |
-          The app reports `update: host`, so the ⬆ badge names the newer release rather than installing it.
+          Android asks you once to allow MoonLight to install apps, and to confirm the first update; the updates after it install on their own and the app starts again on the new version.
       - id: update-docker
         section: Updating
         say: Recreate the container from the new image.

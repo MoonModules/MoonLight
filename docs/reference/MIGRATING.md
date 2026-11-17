@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### MoonMan and MoonInvaders join the sprite effects
+
+**Action: *re-add a module* where a layer ran one of the two arcade effects, or Restore a backup, which turns them into MoonMan and MoonInvaders with their settings.**
+
+`MoonManEffect` draws a crescent moon chomping across the wall among the invaders, its count controls `moonmen` and `invaders`; `MoonInvadersEffect` is the marching formation with the cannon, its controls as they were. A layer saved with an earlier effect skips it at boot, and File Manager names it.
+
 ### An install by URL takes https only
 
 **Action: *nothing* for updates from the Firmware card; host the image on https, or upload it, where a script or an MQTT command named an `http://` address.**
@@ -130,7 +136,7 @@ Fireworks fill any grid: the shells burst at `burstHeight`, a share of the grid'
 
 **Action: *nothing*, or *re-set a control* to keep a look you tuned.**
 
-An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, Space Invaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
+An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, MoonInvaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
 
 ### ESP32-P4 boards read their flash over four lines
 

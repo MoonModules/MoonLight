@@ -85,6 +85,7 @@ function makeState() {
     return {
         container: null,
         ownFirmwareKey: null,
+        downloadKey: null,
         onInstall: null,
         onDetect: null,        // web installer only: opens serial, returns the
                                // detected chip-family string ("ESP32" / "ESP32-S3").
@@ -304,10 +305,10 @@ const isDesktopProgram = (firmware) => /^desktop-(?!download$)/.test(firmware ||
 // before it; it strips to `esp32` and stays OTA-compatible). `esp32s3-n16r8` is
 // only compatible with itself (different chip family AND different partition
 // table). Web installer passes ownFirmwareKey=null → all candidates compatible.
-function isCompatible(ownFirmwareKey, candidateFirmwareKey) {
-    // Download mode: the archive built for the OS the browser is running on, so a Mac is offered the .dmg and not the Windows .zip.
+function isCompatible(ownFirmwareKey, candidateFirmwareKey, downloadKey = desktopKeyForThisHost()) {
+    // Download mode: the package for `downloadKey`, a device's own build on its card, else the OS the browser runs on, so a Mac is offered the .dmg and not the Windows .zip.
     // The archive shares its key with the desktop's own program, which the caller's download filter keeps out of this list.
-    if (ownFirmwareKey === DESKTOP_DOWNLOAD) return candidateFirmwareKey === desktopKeyForThisHost();
+    if (ownFirmwareKey === DESKTOP_DOWNLOAD) return candidateFirmwareKey === downloadKey;
     // A desktop's own program installs on that desktop only; a board the web installer flashes takes its own firmware.
     if (isDesktopProgram(candidateFirmwareKey)) return ownFirmwareKey === candidateFirmwareKey;
     if (!ownFirmwareKey) return true;
@@ -316,10 +317,11 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey) {
 }
 
 // Whether the picker offers `firmware` to a board: its MoonBase key's chip exactly; a target chip's firmwares, narrowed by the variant the board runs when known, since another variant of the chip can panic on its PSRAM; else the variants compatible with its own.
-function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey }, firmware) {
+function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey, downloadKey }, firmware) {
     if (moonbaseOnly) return firmware === ownFirmwareKey;
-    if (targetChip) return firmwareChip(firmware) === targetChip && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware));
-    return isCompatible(ownFirmwareKey, firmware);
+    const target = downloadKey || desktopKeyForThisHost();
+    if (targetChip) return firmwareChip(firmware) === targetChip && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware, target));
+    return isCompatible(ownFirmwareKey, firmware, target);
 }
 
 // The chip a firmware variant is built for, as a device reports it: esp32s3 for esp32s3-n16r8, esp32p4 for esp32p4rev1-eth, esp32 for esp32-eth.
@@ -449,7 +451,7 @@ function render(state) {
     const deviceRow = (desktopMode && !state.enableDevicePicker) ? `
         <div class="control-row">
             <span class="control-label">Device</span>
-            <span class="rp-status">${DESKTOP_LABEL[desktopKeyForThisHost()] || "this computer"}</span>
+            <span class="rp-status">${DESKTOP_LABEL[state.downloadKey || desktopKeyForThisHost()] || "this computer"}</span>
         </div>` : (!desktopMode && state.enableDevicePicker && state.devices.length > 0) ? `
         <div class="control-row">
             <span class="control-label">Device</span>
@@ -618,8 +620,8 @@ function render(state) {
             //   - otherwise → genuinely no build for this device/firmware.
             let reason;
             if (state.ownFirmwareKey === DESKTOP_DOWNLOAD) {
-                reason = desktopKeyForThisHost()
-                    ? "this release has no desktop build for your OS"
+                reason = (state.downloadKey || desktopKeyForThisHost())
+                    ? "this release has no build for this host"
                     : "no desktop build is packaged for your OS: build from source";
             } else if (state.selectedDevice) {
                 const device = state.devices.find(b => b.name === state.selectedDevice);
@@ -911,7 +913,7 @@ export const installPicker = {
     async init({ container, ownFirmwareKey, onInstall, onDetect = null,
                  enableDevicePicker = true, installRowExtras = null, blocker = null,
                  moonbaseOnly = false, extrasAfterInstall = false,
-                 deviceSupport = null, extraFirmwaresByTag = null, targetChip = null }) {
+                 deviceSupport = null, extraFirmwaresByTag = null, targetChip = null, downloadKey = null }) {
         const state = makeState();
         state.container = container;
         state.ownFirmwareKey = ownFirmwareKey || null;
@@ -926,6 +928,8 @@ export const installPicker = {
         state.blocker = blocker;
         state.deviceSupport = deviceSupport;
         state.targetChip = targetChip;
+        // In download mode the package for this firmware key, a device's own build on its card; null is the computer viewing the page.
+        state.downloadKey = downloadKey;
 
         // Show the full field skeleton immediately (each select spins) instead of
         // a single "Loading…" row, so a slow GitHub fetch doesn't leave the form
