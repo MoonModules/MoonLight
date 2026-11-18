@@ -3028,17 +3028,24 @@ RmtLoopbackResult gpioDmaWs2812Loopback(const uint16_t* /*dataPins*/, uint8_t /*
 // No panel on a host: the init refuses, as on a chip without the silicon. setTestHub75 opens the port for a test, which reads the bit planes the driver packs into a frame sized as the ESP32 port sizes it.
 namespace {
 bool hub75TestOpen_ = false;
+bool hub75TestParlio_ = false;
+uint16_t hub75TestRefreshHz_ = 0;
+bool hub75TestStartFails_ = false;
+Hub75TestPort hub75TestPort_;
 std::vector<uint8_t> hub75TestFrame_;
 }  // namespace
 const char* hub75LastError() { return hub75TestOpen_ ? nullptr : "HUB75 needs an ESP32-S3, P4 or S31"; }
-bool hub75BackendAvailable(Hub75Backend backend, size_t /*frameBytes*/) {
-    return hub75TestOpen_ && backend == Hub75Backend::LcdCam;
+bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes) {
+    hub75TestPort_.offeredBytes = frameBytes;
+    return hub75TestOpen_ && (backend == Hub75Backend::LcdCam || hub75TestParlio_);
 }
 const char* hub75BackendLabel(Hub75Backend backend) {
     return backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
 }
-bool hub75Init(Hub75Handle& /*h*/, Hub75Backend /*backend*/, const Hub75Pins& /*pins*/,
+bool hub75Init(Hub75Handle& /*h*/, Hub75Backend backend, const Hub75Pins& pins,
                uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
+    hub75TestPort_.backend = backend;
+    hub75TestPort_.pins = pins;
     hub75TestFrame_.clear();   // closed first, as the ESP32 port deinits first, so a refused re-init leaves no frame behind
     if (!hub75TestOpen_) return false;
     Hub75Geometry geo;
@@ -3053,14 +3060,26 @@ bool hub75Init(Hub75Handle& /*h*/, Hub75Backend /*backend*/, const Hub75Pins& /*
 uint8_t* hub75Buffer(const Hub75Handle& /*h*/) MM_NONBLOCKING {
     return hub75TestFrame_.empty() ? nullptr : hub75TestFrame_.data();
 }
-bool hub75Start(Hub75Handle& /*h*/) { return !hub75TestFrame_.empty(); }
-uint16_t hub75RefreshHz(const Hub75Handle& /*h*/) MM_NONBLOCKING { return 0; }
-const char* hub75Backend(const Hub75Handle& /*h*/) { return hub75TestFrame_.empty() ? nullptr : "LCD_CAM"; }
-void hub75Deinit(Hub75Handle& /*h*/) { hub75TestFrame_.clear(); }
-void setTestHub75(bool on) {
-    hub75TestOpen_ = on;
+bool hub75Start(Hub75Handle& /*h*/) { return !hub75TestFrame_.empty() && !hub75TestStartFails_; }
+uint16_t hub75RefreshHz(const Hub75Handle& /*h*/) MM_NONBLOCKING { return hub75TestFrame_.empty() ? 0 : hub75TestRefreshHz_; }
+const char* hub75Backend(const Hub75Handle& /*h*/) {
+    return hub75TestFrame_.empty() ? nullptr : hub75BackendLabel(hub75TestPort_.backend);
+}
+void hub75Deinit(Hub75Handle& /*h*/) {
+    hub75TestPort_.deinits++;
     hub75TestFrame_.clear();
 }
+void setTestHub75(bool on, bool parlio) {
+    hub75TestOpen_ = on;
+    hub75TestParlio_ = parlio;
+    hub75TestRefreshHz_ = 0;
+    hub75TestStartFails_ = false;
+    hub75TestPort_ = Hub75TestPort{};
+    hub75TestFrame_.clear();
+}
+void setTestHub75RefreshHz(uint16_t hz) { hub75TestRefreshHz_ = hz; }
+void setTestHub75StartFails(bool fails) { hub75TestStartFails_ = fails; }
+const Hub75TestPort& hub75TestPort() { return hub75TestPort_; }
 const uint8_t* hub75TestFrame(size_t* bytes) {
     if (bytes) *bytes = hub75TestFrame_.size();
     return hub75TestFrame_.empty() ? nullptr : hub75TestFrame_.data();

@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "light/drivers/Hub75Driver.h"
+#include "hub75_port.h"
 #include "platform/Hub75Encode.h"
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
@@ -21,17 +22,11 @@
 
 namespace {
 
-// The port is process-global, so a guard closes it however a case ends.
-struct PortGuard {
-    PortGuard() { mm::platform::setTestHub75(true); }
-    ~PortGuard() { mm::platform::setTestHub75(false); }
-};
-
 // 16x32 at the driver's default 1/16 scan, the smallest box that pairs into rows; 6-bit, its default depth.
 constexpr uint16_t kWidth = 16;
 constexpr uint16_t kHeight = 32;
 
-// A driver on a 16x32 layout whose source holds `lights` lights, wired as production wires it, on the heap since a driver and a layer outgrow a test's stack frame.
+// A driver on a layout `kWidth` wide and `height` high, its source holding one light per pixel, wired as production wires it, on the heap since a driver and a layer outgrow a test's stack frame.
 struct Rig {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -39,30 +34,30 @@ struct Rig {
     mm::Buffer source;
     mm::Hub75Driver driver;
 
-    explicit Rig(mm::nrOfLightsType lights) {
+    explicit Rig(uint16_t height) {
         grid.width = kWidth;
-        grid.height = kHeight;
+        grid.height = height;
         grid.depth = 1;
         layouts.addChild(&grid);
         layouts.applyState();
         layer.setLayouts(&layouts);
         layer.setChannelsPerLight(3);
         layer.applyState();
-        REQUIRE(source.allocate(lights, 3));
+        REQUIRE(source.allocate(static_cast<mm::nrOfLightsType>(kWidth) * height, 3));
         driver.setLayer(&layer);
         driver.setSourceBuffer(&source);
     }
     // The owner releases a driver before destroying it, which frees what open() allocated.
     ~Rig() { driver.release(); }
 
-    // Open the port with a linear, full-brightness correction, so a frame's values read straight.
-    void open() {
+    // Open the port with a linear, full-brightness correction, so a frame's values read straight; `scanLabel` is the status the scan the driver is set to opens with.
+    void open(const char* scanLabel = "1/16 scan") {
         mm::Correction correction;
         mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
         driver.correctionForTest() = correction;
         driver.applyState();
         driver.prepare();
-        REQUIRE(std::string(driver.status() ? driver.status() : "").find("1/16 scan") != std::string::npos);
+        REQUIRE(std::string(driver.status() ? driver.status() : "").find(scanLabel) != std::string::npos);
     }
 
     void paint(mm::nrOfLightsType i, uint8_t r, uint8_t g, uint8_t b) {
@@ -71,8 +66,8 @@ struct Rig {
     }
 };
 
-std::unique_ptr<Rig> rig(mm::nrOfLightsType lights = static_cast<mm::nrOfLightsType>(kWidth) * kHeight) {
-    return std::make_unique<Rig>(lights);
+std::unique_ptr<Rig> rig(uint16_t height = kHeight) {
+    return std::make_unique<Rig>(height);
 }
 
 // A 16x32 RGB image, dark but for the one pixel at (x, y).
@@ -83,16 +78,17 @@ std::vector<uint8_t> onePixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint
     return rgb;
 }
 
-// Where the frame the driver packed first differs from the encoder's frame for `rgb`, or -1 where they match.
-long firstDifference(const std::vector<uint8_t>& rgb) {
+// Where the frame the driver packed first differs from the encoder's frame for `rgb`, a `kWidth`-wide image, at the scan, depth and brightness given, or -1 where they match.
+long firstDifference(const std::vector<uint8_t>& rgb, uint8_t scanRate = 16, uint8_t bitDepth = 6, uint8_t brightness = 255) {
     size_t bytes = 0;
     const uint8_t* frame = mm::platform::hub75TestFrame(&bytes);
     if (!frame) return -2;
     mm::Hub75Geometry geo;
     geo.width = kWidth;
-    geo.height = kHeight;
-    geo.scanRate = 16;
-    geo.bitDepth = 6;
+    geo.height = static_cast<uint16_t>(rgb.size() / (static_cast<size_t>(kWidth) * 3));
+    geo.scanRate = scanRate;
+    geo.bitDepth = bitDepth;
+    geo.brightness = brightness;
     std::vector<uint8_t> want(geo.frameBytes(), 0);
     if (bytes != want.size()) return -3;
     mm::hub75Encode(rgb.data(), want.data(), geo);
@@ -126,7 +122,7 @@ TEST_CASE("Hub75Driver on a host refuses with the cause, as on a chip without th
 
 TEST_CASE("The HUB75 port opens at 6 bit planes and refuses 7, though the encoder reaches 8") {
     // The port holds to its maximum depth: the encoder's range is wider, and the reason is at `kHub75PortMaxBitDepth`.
-    PortGuard guard;
+    mm::PortGuard guard;
     mm::platform::Hub75Handle handle;
     mm::platform::Hub75Pins pins;
     CHECK(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth));
@@ -138,7 +134,7 @@ TEST_CASE("The HUB75 port opens at 6 bit planes and refuses 7, though the encode
 }
 
 TEST_CASE("Hub75Driver packs an RGB light into the panel's bit planes") {
-    PortGuard guard;
+    mm::PortGuard guard;
     auto r = rig();
     r->open();
     CHECK(paintAndShow(*r, 0, 0, 0) == -1);
@@ -146,7 +142,7 @@ TEST_CASE("Hub75Driver packs an RGB light into the panel's bit planes") {
 
 TEST_CASE("Hub75Driver shows a wide profile's red, green and blue, wherever the profile puts them") {
     // A 32-channel moving head, its color at 9 to 11: correcting one light writes all 32 channels, past any small fixed array.
-    PortGuard guard;
+    mm::PortGuard guard;
     auto r = rig();
     r->open();
     mm::ChannelRole roles[32] = {};
@@ -158,7 +154,7 @@ TEST_CASE("Hub75Driver shows a wide profile's red, green and blue, wherever the 
 }
 
 TEST_CASE("Hub75Driver shows a green-first profile's red as red") {
-    PortGuard guard;
+    mm::PortGuard guard;
     auto r = rig();
     r->open();
     const mm::ChannelRole grb[3] = {mm::ChannelRole::Green, mm::ChannelRole::Red, mm::ChannelRole::Blue};
@@ -167,7 +163,7 @@ TEST_CASE("Hub75Driver shows a green-first profile's red as red") {
 }
 
 TEST_CASE("Hub75Driver shows a white-first profile's colors, not its white") {
-    PortGuard guard;
+    mm::PortGuard guard;
     auto r = rig();
     r->open();
     const mm::ChannelRole wrgb[4] = {mm::ChannelRole::White, mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::Blue};
@@ -176,9 +172,14 @@ TEST_CASE("Hub75Driver shows a white-first profile's colors, not its white") {
 }
 
 TEST_CASE("Hub75Driver lights a layout with fewer lights than its box, the rest of the panel dark") {
-    PortGuard guard;
-    auto r = rig(20);   // a ring or any shape short of its box
+    mm::PortGuard guard;
+    auto r = rig();
     r->open();
+    // A full frame first, so the correction scratch holds light where the short layout leaves none.
+    for (mm::nrOfLightsType i = 0; i < static_cast<mm::nrOfLightsType>(kWidth) * kHeight; i++) r->paint(i, 255, 255, 255);
+    r->driver.tick();
+    REQUIRE(r->source.allocate(20, 3));   // a ring or any shape short of its box
+    std::memset(r->source.data(), 0, static_cast<size_t>(20) * 3);
     CHECK(paintAndShow(*r, 19, 3, 1) == -1);   // (3, 1), the last light
 }
 
@@ -191,7 +192,7 @@ struct Parking : mm::MoonModule {
 }  // namespace
 
 TEST_CASE("Hub75Driver parks its container's worker before a wider wiring moves its scratch, and not for a brightness change") {
-    PortGuard guard;
+    mm::PortGuard guard;
     Parking owner;   // outlives the rig, whose driver points at it
     auto r = rig();
     owner.addChild(&r->driver);
@@ -204,4 +205,37 @@ TEST_CASE("Hub75Driver parks its container's worker before a wider wiring moves 
     CHECK(owner.parks == before + 1);
     CHECK(paintAndShow(*r, 0, 0, 0) == -1);
     owner.removeChild(&r->driver);
+}
+
+TEST_CASE("Hub75Driver packs the frame the encoder makes at 1/8, 1/16 and 1/32 scan, at every depth, and at full, dim and lowest brightness") {
+    // The bytes on the panel's wire are the encoder's, byte for byte.
+    mm::PortGuard guard;
+    // The layout's height pairs into rows at each scan: 32 rows at 1/8 and 1/16, 64 at 1/32.
+    struct Pass { uint8_t scanSel; uint8_t scanRate; uint16_t height; const char* status; };
+    const Pass passes[] = {{0, 8, 32, "1/8 scan"}, {1, 16, 32, "1/16 scan"}, {2, 32, 64, "1/32 scan"}};
+    const uint8_t brightnesses[] = {255, 100, 1};
+    for (const Pass& pass : passes) {
+        for (uint8_t depth = 2; depth <= mm::kHub75PortMaxBitDepth; depth++) {
+            for (uint8_t brightness : brightnesses) {
+                CAPTURE(pass.scanRate);
+                CAPTURE(depth);
+                CAPTURE(brightness);
+                auto r = rig(pass.height);
+                r->driver.scanSel = pass.scanSel;
+                r->driver.bitDepth = depth;
+                r->open(pass.status);
+                r->driver.rampBrightness(brightness);
+                const mm::nrOfLightsType last = static_cast<mm::nrOfLightsType>(kWidth) * pass.height - 1;
+                r->paint(0, 200, 100, 50);
+                r->paint(37, 10, 250, 90);
+                r->paint(last, 255, 255, 255);
+                r->driver.tick();
+                std::vector<uint8_t> rgb(static_cast<size_t>(kWidth) * pass.height * 3, 0);   // light order, one pixel per light
+                const uint8_t painted[3][3] = {{200, 100, 50}, {10, 250, 90}, {255, 255, 255}};
+                const size_t lights[3] = {0, 37, last};
+                for (size_t k = 0; k < 3; k++) std::memcpy(rgb.data() + lights[k] * 3, painted[k], 3);
+                CHECK(firstDifference(rgb, pass.scanRate, depth, brightness) == -1);
+            }
+        }
+    }
 }
