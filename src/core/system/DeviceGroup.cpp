@@ -1,6 +1,7 @@
 /// A device group's members against Discovery, and its definition merged and repeated, in a source of its own so Discovery's header can include the group's.
 #include "core/system/DeviceGroup.h"
 
+#include "core/module/Scheduler.h"       // noteDirty: a merged definition is saved
 #include "core/services/OscPacket.h"     // Writer, Reader: the definition's message
 #include "core/system/Devices.h"         // the fleet's clock
 #include "core/system/DevicesModule.h"   // Discovery: the devices a member is picked from, and whether one was heard lately
@@ -33,12 +34,19 @@ void formatStamp(char* out, size_t cap, const Stamp& s) {
     mm::formatTo(out, cap, "%" PRIx64 ":%" PRIx32, s.hlc, s.writer);
 }
 
+/// A stamp saved as "hlc:writer", the oldest one when it is not valid, so any copy's stamp beats it.
 Stamp parseStamp(const char* text) {
     Stamp s;
     char* end = nullptr;
     s.hlc = std::strtoull(text, &end, 16);
     if (end && *end == ':') s.writer = static_cast<uint32_t>(std::strtoul(end + 1, nullptr, 16));
-    return s;
+    return s.valid() ? s : Stamp{};
+}
+
+/// Mark `m` changed and ask for the debounced save, for a change no API request saves: a merged definition.
+void saveSoon(MoonModule& m) {
+    m.markDirty();
+    if (Scheduler* s = Scheduler::instance()) s->noteDirty();
 }
 
 /// The device an edit names, by its index in the offered devices (the UI) or by its MAC (an API caller); false when it names none.
@@ -215,7 +223,7 @@ bool DeviceGroup::addListRow(uint32_t& outId) {
 bool DeviceGroup::deleteListRow(uint32_t id) {
     Member* m = find(id);
     if (!m || m->removed) return false;
-    if (isZeroMac(m->mac)) {   // a row never given a device was never shared: it goes
+    if (isZeroMac(m->mac)) {   // a row still waiting for its device stayed local: it goes
         const ListRow at = static_cast<ListRow>(m - members_.data());
         for (ListRow j = at; j + 1u < count_; j++) members_[j] = members_[j + 1u];
         count_--;
@@ -250,22 +258,36 @@ bool DeviceGroup::setListRowField(uint32_t id, const char* field, const char* va
 }
 
 bool DeviceGroup::restoreList(const char* json, const char* key) {
+    // Parsed and given room before the members change, so a refused write leaves the group as it was.
+    json::JsonDoc* doc = nullptr;
+    const json::JsonNode* arr = json::parseListArray(json, key, doc);
+    if (!arr) return false;
+    const int rows = json::arraySize(*doc, arr);
+    if (rows > static_cast<int>(static_cast<ListRow>(~ListRow{0})) || !members_.ensure(static_cast<size_t>(rows))) {
+        setStatus("memory full: the members were not restored", Severity::Warning);
+        return false;
+    }
     count_ = 0;
     Hlc* c = clock();
-    return json::forEachListElement(json, key, [&](const json::JsonDoc& doc, const json::JsonNode* el) {
-        uint8_t mac[6];
-        char text[40] = "";
-        if (!json::readString(json::member(doc, el, "mac"), text, sizeof(text)) || !mdns::parseMac(text, mac)) return;   // only a row holding a device is worth restoring
-        if (findMac(mac) || !grow()) return;
-        Member& m = members_[count_++];
-        m = Member{};
-        m.id = nextId_++;
-        std::memcpy(m.mac, mac, 6);
-        json::readString(json::member(doc, el, "name"), m.name, sizeof(m.name));
-        m.removed = json::readBool(json::member(doc, el, "removed"));
-        if (json::readString(json::member(doc, el, "stamp"), text, sizeof(text))) m.stamp = parseStamp(text);
-        if (c) c->observe(m.stamp.hlc);   // later local edits are newer than every saved one
-    });
+    for (int i = 0; i < rows; i++) restoreMember(*doc, json::element(*doc, arr, i), c);
+    return true;
+}
+
+bool DeviceGroup::restoreMember(const json::JsonDoc& doc, const json::JsonNode* el, Hlc* c) {
+    uint8_t mac[6];
+    char text[40] = "";
+    if (!el || el->type != json::JsonType::Object) return false;
+    if (!json::readString(json::member(doc, el, "mac"), text, sizeof(text)) || !mdns::parseMac(text, mac)) return false;   // only a row holding a device is worth restoring
+    if (findMac(mac)) return false;
+    Member& m = members_[count_++];
+    m = Member{};
+    m.id = nextId_++;
+    std::memcpy(m.mac, mac, 6);
+    json::readString(json::member(doc, el, "name"), m.name, sizeof(m.name));
+    m.removed = json::readBool(json::member(doc, el, "removed"));
+    if (json::readString(json::member(doc, el, "stamp"), text, sizeof(text))) m.stamp = parseStamp(text);
+    if (c) c->observe(m.stamp.hlc);   // later local edits are newer than every saved one
+    return true;
 }
 
 bool DeviceGroup::hasMember(const uint8_t mac[6]) const MM_NONBLOCKING {
@@ -343,17 +365,18 @@ void DeviceGroup::writeMember(osc::Writer& w, const Member& m) {
 }
 
 bool DeviceGroup::merge(osc::Reader& r, const char*& wantName) {
+    wantName = nullptr;
+    if (!wellFormed(r)) return false;   // merged whole or not at all, as OscPacket's parse refuses a malformed message
     // The caller read the id; the name and its stamp come next, then the sender's digest, then the members.
     bool changed = mergeName(r, wantName);
     const uint32_t senderDigest = r.i32();
-    while (r.ok() && r.more()) {
+    while (r.more()) {
         const char* hex = r.str();
         const Stamp s{r.i64(), r.i32()};
         const bool removed = r.i32() != 0;
-        const char* name = r.str();
-        if (r.ok()) changed |= mergeMember(hex, s, removed, name);
+        changed |= mergeMember(hex, s, removed, r.str());
     }
-    if (changed) markDirty();
+    if (changed) saveSoon(*this);
     // Trickle: a copy that agrees counts toward silence; one that differs, before or after the merge, brings the interval back to 1 s.
     if (senderDigest == digest() && !changed) { if (heard_ < 255) heard_++; }
     else if (interval_ > 1) startInterval(1);   // RFC 6206 4.2 step 6: an inconsistency resets an interval above Imin
@@ -361,25 +384,46 @@ bool DeviceGroup::merge(osc::Reader& r, const char*& wantName) {
 }
 
 bool DeviceGroup::chunkHasMember(osc::Reader r, const uint8_t mac[6], const char*& name) {
+    name = "";
+    if (!wellFormed(r)) return false;
     name = r.str();
     r.i64(); r.i32(); r.i32();   // the shared name's stamp and the sender's digest
     bool found = false;
-    while (r.ok() && r.more()) {
-        uint8_t m[6];
-        const bool parsed = mdns::parseMac(r.str(), m);
+    while (r.more()) {
+        uint8_t m[6] = {};
+        mdns::parseMac(r.str(), m);
         r.i64(); r.i32();
         const bool removed = r.i32() != 0;
         r.str();
-        if (r.ok() && parsed && !removed && std::memcmp(m, mac, 6) == 0) found = true;
+        if (!removed && std::memcmp(m, mac, 6) == 0) found = true;
     }
-    return found && r.ok();
+    return found;
+}
+
+bool DeviceGroup::wellFormed(osc::Reader r) {
+    r.str();
+    bool valid = Stamp{r.i64(), r.i32()}.valid();
+    r.i32();   // the sender's digest
+    while (r.more()) {
+        uint8_t mac[6];
+        valid = mdns::parseMac(r.str(), mac) && !isZeroMac(mac) && valid;
+        valid = Stamp{r.i64(), r.i32()}.valid() && valid;
+        r.i32();
+        r.str();
+    }
+    return valid && r.ok();
+}
+
+bool DeviceGroup::isId(const char* text) {
+    size_t n = 0;
+    for (; text[n]; n++)
+        if (n >= kIdLen || !((text[n] >= '0' && text[n] <= '9') || (text[n] >= 'a' && text[n] <= 'f'))) return false;
+    return n == kIdLen;
 }
 
 bool DeviceGroup::mergeName(osc::Reader& r, const char*& wantName) {
-    wantName = nullptr;
     const char* n = r.str();
     const Stamp ns{r.i64(), r.i32()};
-    if (!r.ok()) return false;
     if (Hlc* c = clock()) c->observe(ns.hlc);
     if (!ns.newerThan(nameStamp_) || !n[0]) return false;
     mm::formatTo(groupName_, sizeof(groupName_), "%s", n);

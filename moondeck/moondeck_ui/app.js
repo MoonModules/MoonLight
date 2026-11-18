@@ -16,36 +16,24 @@ let uiProjects = [];  // [{name, description}] from moontube/projects/*.json
 let testModules = []; // ["CamelCaseName", ...]
 // Device-model catalog loaded from /api/device-models (served by moondeck.py from
 // mooninstaller/deviceModels.json) — the same file the web installer fetches. Empty until
-// init() loads it; renderDevices waits on init.
+// init() loads it.
 let deviceModels = []; // [{ name, firmwares: [...], ... }] — `name` is the identifier + label
                        // (single-name catalog, matched by b.name); firmwares[0] is the default.
-// State shape (post-networks refactor):
-//   { networks: [{name, subnet, wifi: {ssid, password}, port, devices: [...]}],
+// State shape:
+//   { networks: [{name, subnet, wifi: {ssid, password}, port}],
 //     active_network: "Home",
 //     active_network_user_pinned: bool,   // set true when user picks the dropdown
-//     firmware, scenario, module, tab, flag_* }
+//     firmware, scenario, module, tab, flag_*,
+//     usbMacs, liveTests }                // the server's own: the USB adapter to MAC cache and the live tests' MACs
 // `firmware` is the variant flashed onto the ESP32 (esp32 / esp32-eth /
-// esp32-16mb / esp32s3-n16r8) — separate from the per-device `deviceModel`
-// (physical hardware) inside each network's devices list. See
-// docs/explanation/architecture/mooninstaller.md § Firmware vs board.
-// Devices and the active serial port now live INSIDE the active network.
-// Migration from the legacy flat shape happens server-side in load_state().
+// esp32-16mb / esp32s3-n16r8), separate from a device's `deviceModel`
+// (physical hardware). See docs/explanation/architecture/mooninstaller.md § Firmware vs board.
+// An older moondeck.json is carried over server-side in load_state().
 let state = { networks: [], active_network: "", firmware: "", scenario: "", module: "" };
 
-// Helper: the network record currently selected. Every read that used to
-// touch state.devices or state.port now routes through this.
+// The selected network record, which holds the ESP32 tab's port and the WiFi credentials.
 function getActiveNetwork() {
     return (state.networks || []).find(n => n.name === state.active_network) || null;
-}
-
-// A fetch abort signal that fires after `ms`. AbortSignal.timeout is unsupported on older browsers
-// (and throws if called), which would abort the fetch before it starts — fall back to an
-// AbortController + setTimeout so the request still runs.
-function timeoutSignal(ms) {
-    if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) return AbortSignal.timeout(ms);
-    const c = new AbortController();
-    setTimeout(() => c.abort(), ms);
-    return c.signal;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,10 +64,6 @@ async function init() {
         state.provisionDeviceModel = state.provisionBoard;
         delete state.provisionBoard;
     }
-    // Restore the "online only" device filter from the persisted state (absent = show all).
-    const onlineOnlyInit = document.getElementById("online-only");
-    if (onlineOnlyInit) onlineOnlyInit.checked = !!state.onlineOnly;
-
     const scenResp = await fetch("/api/scenarios");
     const scenData = await scenResp.json();
     scenarios = scenData.scenarios || [];
@@ -110,7 +94,6 @@ async function init() {
     renderDeviceModelSelect();
     renderScripts();
     renderNetworkBar();
-    try { renderDevices(); } catch (e) { console.error("renderDevices:", e); }
     await updateRunningState();
     refreshPorts();
     setupTabs();
@@ -163,6 +146,7 @@ function setupTabs() {
         }
         applyNetworkBarVisibility(activeTab);
     }
+    applyMapPane(activeTab);
 
     document.querySelectorAll(".tab").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -173,18 +157,26 @@ function setupTabs() {
             state.tab = btn.dataset.tab;
             saveState();
             applyNetworkBarVisibility(btn.dataset.tab);
+            applyMapPane(btn.dataset.tab);
         });
     });
 }
 
-// The network bar (selector + WiFi panel) only matters when the workflow
-// involves a device on the LAN — ESP32 tab uses the active network's port
-// + WiFi creds (Improv), Live tab uses the device list. The Host tab runs on
-// localhost and has no network concept; hide the bar so it doesn't add noise.
+// The device map is the Live tab's own pane: first of the panes there and shown on arriving, hidden on every other tab.
+function applyMapPane(tab) {
+    const mapTab = document.querySelector('.pane-tab[data-pane="map"]');
+    const live = tab === "live";
+    mapTab.hidden = !live;
+    if (live) switchPane("map");
+    else if (mapTab.classList.contains("active")) switchPane("log");
+}
+
+// The network bar (selector + WiFi panel) holds what the ESP32 tab uses: the active network's
+// port and its WiFi credentials (Improv). Every other tab hides it so it doesn't add noise.
 function applyNetworkBarVisibility(tab) {
     const bar = document.getElementById("network-bar");
     if (!bar) return;
-    bar.style.display = (tab === "esp32" || tab === "live") ? "" : "none";
+    bar.style.display = tab === "esp32" ? "" : "none";
 }
 
 // ---------------------------------------------------------------------------
@@ -600,55 +592,37 @@ async function runScript(script, btn) {
         return;
     }
 
-    // Live tab scripts: run against each selected device in the active network.
-    //
-    // ONLINE ones only. A checkbox survives a device going offline (the flag is user state,
-    // deliberately kept across scans), so a stale tick would otherwise send the run at a board
-    // that is not there — and each one costs a ~16 s connect timeout before failing, which buries
-    // the results of the boards that did run. Offline picks are reported rather than dropped
-    // silently, so a device that was expected to run and did not is visible.
+    // Live tab scripts: run against each device selected for the live tests (the checkbox in a map node's popup), found by its MAC at
+    // the address it answers on now. A selected device that no presence packet or Discovery list names is reported, not run.
     if (script.tab === "live" && script.needs_device) {
-        const active = getActiveNetwork();
-        const picked = ((active && active.devices) || []).filter(d => d.selected);
-        // `online !== false`, the same predicate the device list and the status dot use: a device
-        // discovered but never probed has NO `online` field, and treating that as offline would
-        // refuse to run on a board that is very likely up.
-        const devices = picked.filter(d => d.online !== false);
-        const skipped = picked.filter(d => d.online === false);
-        if (devices.length === 0) {
+        let sel = { devices: [], missing: [] };
+        try { sel = await (await fetch("/api/live-tests")).json(); } catch { /* MoonDeck answers its own page; an empty selection then */ }
+        if (sel.missing.length) {
             switchPane("log");
-            appendLog(picked.length
-                ? `\n--- No ONLINE devices selected. ${skipped.length} selected `
-                  + `device(s) are offline: ${skipped.map(d => d.deviceName || d.ip).join(", ")}. `
-                  + `Scan to refresh. ---\n`
-                : "\n--- No devices selected. Use Discover and check devices first. ---\n");
+            appendLog(`\n--- Not found on the network, skipped: ${sel.missing.join(", ")} ---\n`);
+        }
+        if (!sel.devices.length) {
+            switchPane("log");
+            appendLog("\n--- No device selected for the live tests: tick \"Use in live tests\" in a device's popup on the Map. ---\n");
             return;
         }
-        if (skipped.length) {
-            switchPane("log");
-            appendLog(`\n--- Skipping ${skipped.length} offline device(s): `
-                      + `${skipped.map(d => d.deviceName || d.ip).join(", ")} ---\n`);
-        }
-        let allPassed = true;
-        for (const device of devices) {
-            const ok = await runScriptOnce(script, btn, { host: device.ip });
-            if (!ok) allPassed = false;
-        }
+        for (const device of sel.devices) await runScriptOnce(script, btn, { host: device.host });
         return;
     }
 
     await runScriptOnce(script, btn, {});
 }
 
+// `extraParams` wins over the tab's selections: a map node's popup names its board's MAC, firmware and device model.
 async function runScriptOnce(script, btn, extraParams) {
     const params = { ...extraParams };
-    if (script.needs_firmware) params.firmware = state.firmware;
-    if (script.needs_port) params.port = (getActiveNetwork()?.port) || "";
+    if (script.needs_firmware && !params.firmware) params.firmware = state.firmware;
+    if (script.needs_port && !params.port && !params.mac) params.port = (getActiveNetwork()?.port) || "";
     if (script.needs_scenario) params.scenario = state.scenario;
     if (script.needs_uiclip) params.uiclip = state.uiclip || "";
     if (script.needs_uiproject) params.uiproject = state.uiproject || "";
     if (script.needs_module) params.module = state.module;
-    if (script.pass_device_model) params.device_model = state.provisionDeviceModel || "";
+    if (script.pass_device_model && !params.device_model) params.device_model = state.provisionDeviceModel || "";
     for (const flag of (script.flags || [])) {
         const stateKey = `flag_${script.id}_${flag.id}`;
         params[`flag_${flag.id}`] = stateKey in state ? state[stateKey] : flag.default;
@@ -792,20 +766,6 @@ function renderFirmwareSelect() {
     });
 }
 
-// Show which device MoonDeck last flashed on `port` — matched by the `last_port`
-// breadcrumb on the active network's devices (set at flash time, keyed per-device by
-// MAC). Names the board you're about to reflash so the port isn't just an opaque
-// /dev/cu.* string. Blank when the port maps to no known device.
-function updatePortDeviceHint(port) {
-    const hint = document.getElementById("port-device-hint");
-    if (!hint) return;
-    const devices = getActiveNetwork()?.devices || [];
-    const dev = port ? devices.find(d => d.last_port === port) : null;
-    if (!dev) { hint.textContent = ""; return; }
-    const model = dev.deviceModel ? ` · ${dev.deviceModel}` : "";
-    hint.textContent = `last flashed: ${dev.deviceName || dev.ip}${model}`;
-}
-
 // Last port list from /api/ports, kept so the Identify button knows which
 // entries are still path-only (no board match) and worth probing.
 let lastPorts = [];
@@ -818,9 +778,8 @@ function renderPortOptions(ports) {
     // selected value follows the active network's last-used port.
     const current = getActiveNetwork()?.port || "";
     select.innerHTML = '<option value="">--</option>';
-    // Each entry is {path, chip, board, ip}: three levels of identity that
-    // degrade gracefully (path always; chip when the USB descriptor or registry
-    // knows it; board when a registry match exists). Show the richest we have.
+    // Each entry is {path, chip, mac, board}: the chip where the USB descriptor or an
+    // Identify knows it, and the name the device with the port's MAC announces.
     for (const p of ports) {
         const opt = document.createElement("option");
         opt.value = p.path;
@@ -831,10 +790,6 @@ function renderPortOptions(ports) {
         if (p.path === current) opt.selected = true;
         select.appendChild(opt);
     }
-    // Hint the port the dropdown ACTUALLY shows: `current` only when it's still a present port,
-    // else the blank selection (the "--" the select falls back to when the stored port is gone).
-    const effective = ports.some(p => p.path === current) ? current : "";
-    updatePortDeviceHint(effective);
     // `.onchange = ...` (not addEventListener) so the handler is REPLACED on
     // each render rather than stacking — this re-runs on every network switch +
     // every Refresh/Identify, so addEventListener would queue up duplicate
@@ -842,7 +797,6 @@ function renderPortOptions(ports) {
     select.onchange = async () => {
         const active = getActiveNetwork();
         if (active) active.port = select.value;
-        updatePortDeviceHint(select.value);
         await saveState();
     };
 }
@@ -863,7 +817,7 @@ async function refreshPorts() {
 // without feedback the click looks like it did nothing and invites a second press. Spin the
 // ↻ glyph for one turn: the affordance the icon already implies, and it confirms the action
 // ran without adding a message to read. The spin is on the click handler rather than inside
-// refreshPorts() because the other callers (after a flash, after a scan) are not user
+// refreshPorts() because the other callers (at load, after a network switch) are not user
 // clicks and should not animate.
 document.getElementById("refresh-ports").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
@@ -874,11 +828,11 @@ document.getElementById("refresh-ports").addEventListener("click", async (e) => 
     btn.classList.remove("spinning");
 });
 
-// Identify: probe EVERY ESP-capable port with esptool to read chip + MAC. This
-// is a dev bench where boards move between ports constantly, so it always does a
-// full probe — including already-labeled ports — because a fresh read beats a
-// cache a swap may have staled. Non-ESP devices (a monitor) are skipped. Probing
-// RESETS each board, so it only runs on an explicit click.
+// Identify: probe EVERY ESP-capable port with esptool to read chip + MAC, each MAC then
+// remembered by its USB adapter's serial (moondeck/_usb.py). A dev bench moves boards
+// between ports, so it probes already-labeled ports too: a fresh read beats a cache a swap
+// may have staled. Non-ESP devices (a monitor) are skipped. Probing RESETS each board, so
+// it only runs on an explicit click.
 document.getElementById("identify-ports").addEventListener("click", async () => {
     const btn = document.getElementById("identify-ports");
     const targets = lastPorts.filter(p => p.probeable).map(p => p.path);
@@ -1027,57 +981,9 @@ function stopWatch(reason) {
 // Live tab
 // ---------------------------------------------------------------------------
 
-// "Online only" — a view filter over the same device list, persisted with the rest of the
-// state so the choice survives a reload. It hides nothing permanently: the records stay in
-// moondeck.json and reappear the moment the box is unticked (or the device answers again).
-const onlineOnlyBox = document.getElementById("online-only");
-if (onlineOnlyBox) {
-    onlineOnlyBox.addEventListener("change", () => {
-        state.onlineOnly = onlineOnlyBox.checked;
-        saveState();
-        renderDevices();
-    });
-}
-
-// Scan — the Live tab's single action. A subnet scan both finds new devices and settles
-// online/offline for every device already registered, so it is a superset of the old
-// separate "refresh known devices" step (which is why that button is gone: pressing both
-// was the only way to get one complete picture). The /api/refresh endpoint stays for
-// scripts and for a device on a subnet this machine isn't scanning.
-document.getElementById("discover-btn").addEventListener("click", async () => {
-    appendLog("\n--- Scanning for devices ---\n");
-    switchPane("log");
-    const resp = await fetch("/api/discover", { method: "POST" });
-    // Server attributes found devices to the matching network (or creates a
-    // new one) and returns the whole updated state — the JS just adopts it.
-    // Client-side merging used to live here; moving it server-side keeps the
-    // network-membership rule in one place.
-    state = await resp.json();
-    // Report which subnet was actually scanned + how many answered, so a
-    // wrong/unset-network scan (finds nothing on a subnet with no devices)
-    // reads differently from "no devices online". The scan uses the machine's
-    // auto-detected /24 — see the server's _scanned_subnet.
-    const scanned = state._scanned_subnet;
-    const found = state._found_count ?? 0;
-    if (scanned) appendLog(`Scanned ${scanned}.1-254 — ${found} device(s) answered\n`);
-    if (scanned && found === 0)
-        appendLog(`  (nothing on ${scanned}.x — check this machine is on the devices' subnet, no VPN)\n`);
-    renderNetworkBar();
-    renderDevices();
-    refreshPorts();
-    // A scan can re-attribute last_port (it consumes the flash breadcrumb and can strip a
-    // stale link), so the "last flashed: X" hint under the port dropdown is restated too.
-    updatePortDeviceHint(getActiveNetwork()?.port || "");
-    const active = getActiveNetwork();
-    const count = (active && active.devices) ? active.devices.length : 0;
-    const onCount = active ? active.devices.filter(d => d.online).length : 0;
-    appendLog(`Active network "${state.active_network}": ${onCount}/${count} online\n`);
-});
-
 // Network bar — rebuilds the dropdown options from state.networks and
 // syncs the WiFi panel to the active network's credentials. Called from
-// init and after any state mutation that touches networks (add, rename,
-// discover, refresh).
+// init and after any state mutation that touches networks (add, rename).
 function renderNetworkBar() {
     const select = document.getElementById("network-select");
     if (!select) return;
@@ -1123,7 +1029,6 @@ function setupNetworkBar() {
         state.active_network_user_pinned = true;  // user override sticks
         await saveState();
         renderNetworkBar();
-        renderDevices();
         refreshPorts();
     });
 
@@ -1149,19 +1054,14 @@ function setupNetworkBar() {
             appendLog(`A network named "${name}" already exists.\n`);
             return;
         }
-        // We don't know the new network's subnet up front — the user is
-        // probably about to move to it, or they're adding it speculatively.
-        // Discover/refresh will populate the subnet from the actual scan.
+        // The server gives a network without a subnet the one this computer is on, as it saves.
         state.networks = state.networks || [];
-        state.networks.push({
-            name, subnet: "", wifi: { ssid: "", password: "" },
-            port: "", devices: [],
-        });
+        state.networks.push({ name, subnet: "", wifi: { ssid: "", password: "" }, port: "" });
         state.active_network = name;
         state.active_network_user_pinned = true;
         await saveState();
+        state = await (await fetch("/api/state")).json();
         renderNetworkBar();
-        renderDevices();
         refreshPorts();
     });
 
@@ -1180,302 +1080,14 @@ function setupNetworkBar() {
     if (pwInput) pwInput.addEventListener("blur", saveWifi);
 }
 
-// Each device's OTA install as MoonDeck reports it, by ip: {stage, pct, done, ok, error}.
-const otaStatus = {};
-
-// The OTA button's text for an install: its stage while it runs, its outcome once it ends.
-function otaLabel(ota) {
-    if (!ota) return "OTA";
-    if (ota.done) return ota.ok ? "flashed ✓" : "failed ✗";
-    if (ota.stage === "uploading" && ota.pct != null) return `uploading ${ota.pct}%`;
-    return `${ota.stage || "starting"}…`;
+// A card's script run from outside its card, by a map node's popup (popup.js): the card's button and status dot show it, the Log pane its output.
+function runCard(id, params) {
+    const script = scripts.find(s => s.id === id);
+    const btn = document.querySelector(`.run-btn[data-id="${id}"]`);
+    if (!script || !btn) { appendLog(`\nNo card runs ${id}.\n`); return Promise.resolve(false); }
+    return runScriptOnce(script, btn, params);
 }
-
-// Repaint the OTA button of one device in place, between full redraws of the rows.
-function showOta(ip) {
-    const btn = document.querySelector(`button[data-ota-ip="${CSS.escape(ip)}"]`);
-    if (!btn) return;
-    const ota = otaStatus[ip];
-    btn.textContent = otaLabel(ota);
-    btn.disabled = !!(ota && !ota.done);
-    btn.title = ota && ota.error ? ota.error : "Flash the local build to this device over WiFi (no USB)";
-}
-
-// Poll MoonDeck for one install until it ends, or past the longest one MoonDeck runs (MoonBase's 120 s and the upload's 180 s); the outcome stays on the button for a minute.
-async function followOta(ip) {
-    const deadline = Date.now() + 330000;
-    for (;;) {
-        await new Promise(r => setTimeout(r, 1000));
-        if (Date.now() > deadline) { otaStatus[ip] = {done: true, ok: false, error: "MoonDeck lost the install: check the device"}; showOta(ip); break; }
-        try {
-            const res = await fetch(`/api/ota-status?ip=${encodeURIComponent(ip)}`, {signal: timeoutSignal(5000)});
-            const st = await res.json();
-            if (st.stage || st.done) otaStatus[ip] = st;
-        } catch { continue; }   // MoonDeck busy for a moment: ask again
-        showOta(ip);
-        if (otaStatus[ip].done) break;
-    }
-    const finished = otaStatus[ip];   // this install's record, so a later install's survives this one's clearing
-    setTimeout(() => { if (otaStatus[ip] === finished) { delete otaStatus[ip]; showOta(ip); } }, 60000);
-}
-
-function renderDevices() {
-    const el = document.getElementById("device-list");
-    const active = getActiveNetwork();
-    const allDevices = (active && active.devices) || [];
-    if (allDevices.length === 0) {
-        el.textContent = "No devices discovered yet.";
-        return;
-    }
-    // "Online only" hides what didn't answer the last probe. `online !== false` is the same
-    // test the status dot uses: a device discovered but never probed has no `online` field,
-    // and treating that as offline would hide a board that may well be up.
-    const devices = state.onlineOnly
-        ? allDevices.filter(d => d.online !== false)
-        : allDevices;
-    const hidden = allDevices.length - devices.length;
-    el.innerHTML = "";
-    if (devices.length === 0) {
-        // Say why the list is empty. Without this, filtering everything out looks identical
-        // to "discovery found nothing" — and the fix (untick the box) isn't discoverable.
-        el.textContent = `No online devices (${hidden} offline hidden).`;
-        return;
-    }
-    for (const device of devices) {
-        // A plain <div>, NOT a <label>: a <label> wrapper toggles its checkbox on a click
-        // ANYWHERE inside it (native behaviour), so clicking the IP/name to open the device
-        // UI also flipped the selection. The checkbox has its own change handler, so it
-        // toggles only when clicked directly.
-        const label = document.createElement("div");
-        label.className = "device-item";
-
-        const dot = document.createElement("span");
-        dot.className = "device-status " + (device.online !== false ? "online" : "offline");
-        dot.title = device.online !== false ? "online" : "offline";
-
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = !!device.selected;
-        cb.addEventListener("change", () => {
-            device.selected = cb.checked;
-            saveState();
-        });
-
-        // Two-row layout: row 1 carries identity at-a-glance (dot, checkbox,
-        // deviceName). Row 2 carries secondary info (IP + fw:<firmware>) plus
-        // the device picker + remove button. The deviceName is the prominent
-        // line — it's how a human recognises the device ("the S31") — with the
-        // IP demoted to the info row (still clickable to open the device UI).
-        // A device with no name yet falls back to showing its IP as the primary.
-        // A <button> (not a clickable <span>) so it's keyboard-focusable and Enter/Space activate it
-        // — the .link-button class strips the button chrome to read as inline text.
-        const nameText = document.createElement("button");
-        nameText.type = "button";
-        nameText.className = "device-name link-button";
-        nameText.textContent = device.deviceName || device.ip;
-        const tooltipLines = ["Open this device's UI in the view pane", device.ip];
-        if (device.last_port) tooltipLines.push(`last flashed via ${device.last_port}`);
-        nameText.title = tooltipLines.join("\n");
-        nameText.addEventListener("click", () => showInView("http://" + device.ip));
-
-        // Info row: clickable IP · fw. The IP is its own button so activating it opens the
-        // device UI in the view pane (same as the name), while the fw text stays inert.
-        const infoText = document.createElement("span");
-        infoText.className = "device-info";
-        const ipLink = document.createElement("button");
-        ipLink.type = "button";
-        ipLink.className = "device-ip-link link-button";
-        ipLink.textContent = device.ip;
-        ipLink.title = "Open this device's UI in the view pane";
-        ipLink.addEventListener("click", () => showInView("http://" + device.ip));
-        infoText.appendChild(ipLink);
-
-        // ↗ — the same device UI in a real browser tab, next to (not instead of) the view
-        // pane. The pane keeps MoonDeck's context; a tab gives the device its own window,
-        // devtools, and a bookmarkable URL. An <a target="_blank"> rather than a button
-        // calling window.open, so the browser's own affordances work: middle-click,
-        // cmd-click, "Open in new window", copy-link-address. rel="noopener" because a
-        // target="_blank" link otherwise hands the opened page a window.opener handle
-        // back into MoonDeck.
-        const ipNewTab = document.createElement("a");
-        ipNewTab.className = "device-ip-newtab";
-        ipNewTab.href = "http://" + device.ip;
-        ipNewTab.target = "_blank";
-        ipNewTab.rel = "noopener noreferrer";
-        ipNewTab.textContent = "↗";
-        ipNewTab.title = "Open this device's UI in a new browser tab";
-        infoText.appendChild(ipNewTab);
-        if (device.firmware) {
-            infoText.appendChild(document.createTextNode(` · fw:${device.firmware}`));
-        }
-
-        // last_port — the serial port this exact device (by MAC) was last flashed via. Click it to
-        // set it as the active network's flash port, so "flash the SE16" is one click → run Flash.
-        // The port lives per-device (keyed by MAC), the flash uses the network-level port; this
-        // chip bridges them. Absent until the device has been flashed once through MoonDeck.
-        if (device.last_port) {
-            const portChip = document.createElement("button");
-            portChip.className = "device-port-chip";
-            portChip.textContent = "⚡ " + device.last_port.replace("/dev/cu.", "").replace("/dev/tty.", "");
-            portChip.title = `Select this device model for flashing: set the port` +
-                (device.firmware ? `, firmware (${device.firmware})` : "") +
-                (device.deviceModel ? ` and deviceModel` : "");
-            const active = getActiveNetwork();
-            if (active && active.port === device.last_port) portChip.classList.add("active");
-            // Selecting a device model for flashing means matching what it actually runs: the port, AND the
-            // firmware + deviceModel MoonDeck learned from discovery — so Build/Flash target the right
-            // binary for this device model (flashing the wrong firmware would brick it). One click, all in sync.
-            portChip.addEventListener("click", async (e) => {
-                e.preventDefault();
-                const a = getActiveNetwork();
-                if (a) a.port = device.last_port;
-                // Set the flash target to THIS device's firmware/deviceModel — and clear it when this
-                // device doesn't have one, so the next Build/Flash can't reuse the PREVIOUS device's
-                // values (flashing the wrong firmware would brick it). The reset is unconditional.
-                state.firmware = (device.firmware && firmwares.includes(device.firmware)) ? device.firmware : "";
-                state.provisionDeviceModel = device.deviceModel || "";
-                await saveState();
-                refreshPorts();
-                renderFirmwareSelect();
-                renderDeviceModelSelect();
-                renderDevices();
-            });
-            infoText.appendChild(document.createTextNode(" "));
-            infoText.appendChild(portChip);
-        }
-
-        // Device-model picker — options derived from deviceModels.json (loaded via
-        // /api/device-models). Auto-deduced for firmwares that map to a single
-        // deviceModel (probe sets device.deviceModel); user-set when the firmware can
-        // run on multiple device models (e.g. `esp32` on LOLIN D32 vs generic
-        // DevKit). A device-reported value that isn't in the catalog gets
-        // prepended as <key> (unknown) so the selection survives — without
-        // that, <select> would silently snap to "" and the next saveState
-        // would clobber the device's stored value with empty.
-        const deviceModelPicker = document.createElement("select");
-        deviceModelPicker.className = "devicemodel-picker";
-        deviceModelPicker.title = "Device model (pick when firmware can't tell us)";
-        // Only offer deviceModels that can run this device's firmware — a model whose `firmwares`
-        // don't include it is not a valid choice for this unit (same filter the provisioning picker
-        // uses). If the firmware is unknown (empty), we can't filter, so show all.
-        const fwModels = device.firmware
-            ? deviceModels.filter(b => (b.firmwares || []).includes(device.firmware))
-            : deviceModels;
-        const deviceModelOptions = [
-            ["", "(unknown model)"],
-            // Each entry is [value, label] for the <select>; with the
-            // single-name catalog (no separate key/label), they're identical.
-            ...fwModels.map(b => [b.name, b.name]),
-        ];
-        const deviceModel = device.deviceModel || "";
-        if (deviceModel && !deviceModelOptions.some(([k]) => k === deviceModel)) {
-            // Keep the current value selectable even if it's filtered out (firmware mismatch) or
-            // not in the catalog — marked (unknown) so the selection survives.
-            deviceModelOptions.push([deviceModel, `${deviceModel} (unknown)`]);
-        }
-        for (const [val, lbl] of deviceModelOptions) {
-            const opt = document.createElement("option");
-            opt.value = val;
-            opt.textContent = lbl;
-            if (deviceModel === val) opt.selected = true;
-            deviceModelPicker.appendChild(opt);
-        }
-        deviceModelPicker.addEventListener("change", () => {
-            device.deviceModel = deviceModelPicker.value;
-            saveState();   // MoonDeck's own record; the device takes its defaults from the Devices map or the web installer
-        });
-
-        // "OTA": wireless flash of the local build for this device's firmware. MoonDeck uploads
-        // the app image in build/esp32-<fw>/ to the device (POST /api/ota), through MoonBase where the
-        // variant has it. No USB. Needs a local build for the device's firmware. The install's state
-        // lives in otaStatus, so a redraw of the rows keeps showing it.
-        const otaBtn = document.createElement("button");
-        otaBtn.className = "device-action";
-        const otaFw = device.firmware && device.firmware !== "unknown" ? device.firmware : "";
-        // A host's local build is no board image under build/esp32-<fw>/: it updates from its own Firmware card, from a release.
-        const isHost = otaFw.startsWith("host-");
-        const ota = otaStatus[device.ip];
-        otaBtn.textContent = otaLabel(ota);
-        otaBtn.disabled = !otaFw || isHost || (ota && !ota.done);
-        otaBtn.title = ota && ota.error ? ota.error
-            : isHost ? "A host updates from its own Firmware card"
-            : otaFw ? `Flash the local ${otaFw} build to this device over WiFi (no USB)`
-            : "OTA needs the device's firmware known (discover it first)";
-        otaBtn.dataset.otaIp = device.ip;
-        otaBtn.addEventListener("click", async (e) => {
-            e.preventDefault();
-            if (!otaFw) return;
-            otaStatus[device.ip] = {stage: "starting", done: false};
-            showOta(device.ip);
-            try {
-                const res = await fetch("/api/ota", {
-                    method: "POST", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ip: device.ip, firmware: otaFw}),
-                    signal: timeoutSignal(15000),
-                });
-                const j = await res.json();
-                if (!j.ok) { otaStatus[device.ip] = {done: true, ok: false, error: j.error || `HTTP ${res.status}`}; showOta(device.ip); return; }
-            } catch (err) {
-                otaStatus[device.ip] = {done: true, ok: false, error: String(err)};
-                showOta(device.ip);
-                return;
-            }
-            followOta(device.ip);
-        });
-
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "device-remove";
-        removeBtn.textContent = "x";
-        removeBtn.title = "Remove device";
-        removeBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            // Remove from the active network's device list; other networks
-            // are untouched even if (theoretically) the same IP shows up.
-            const a = getActiveNetwork();
-            if (a) a.devices = a.devices.filter(d => d.ip !== device.ip);
-            saveState();
-            renderDevices();
-        });
-
-        // Three-row layout, each row a flex-basis:100% wrapper inside
-        // .device-item (which is flex-wrap:wrap):
-        //   row 1 — dot · checkbox · deviceName · X  (identity + remove)
-        //   row 2 — IP · fw:firmware                  (secondary info)
-        //   row 3 — [device picker]                   (right-aligned)
-        // Splitting like this keeps each row narrow enough to fit the
-        // sidebar without truncation, and puts the most-clicked items
-        // (checkbox, name, device picker) at predictable y-positions.
-        const row1 = document.createElement("div");
-        row1.className = "device-row device-row-identity";
-        row1.appendChild(dot);
-        row1.appendChild(cb);
-        row1.appendChild(nameText);
-        row1.appendChild(removeBtn);
-
-        const row2 = document.createElement("div");
-        row2.className = "device-row device-row-info";
-        row2.appendChild(infoText);
-
-        const row3 = document.createElement("div");
-        row3.className = "device-row devicemodel-row";
-        row3.appendChild(deviceModelPicker);
-        row3.appendChild(otaBtn);
-
-        label.appendChild(row1);
-        label.appendChild(row2);
-        label.appendChild(row3);
-        el.appendChild(label);
-    }
-
-    // Account for what the filter removed, so a short list is never mistaken for the
-    // whole registry — the count is the reminder that more devices exist.
-    if (hidden > 0) {
-        const note = document.createElement("div");
-        note.className = "device-filter-note";
-        note.textContent = `${hidden} offline device${hidden === 1 ? "" : "s"} hidden`;
-        el.appendChild(note);
-    }
-}
+window.moondeck = { runCard };
 
 // ---------------------------------------------------------------------------
 // State persistence

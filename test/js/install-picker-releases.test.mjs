@@ -9,7 +9,7 @@ globalThis.sessionStorage = { getItem: (k) => stored.get(k) ?? null, setItem: (k
 globalThis.fetch = async () => { throw new Error("offline"); };
 const { loadReleases } = await import("../../src/ui/install-picker.js");
 
-test("a failed first fetch is kept in memory, never in the session's storage a refresh reads", async () => {
+test("a failed first fetch stays in memory, outside the session's storage a refresh reads", async () => {
     assert.equal(await loadReleases(), null);
     assert.equal(stored.size, 0);
 });

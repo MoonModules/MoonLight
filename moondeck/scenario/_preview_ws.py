@@ -24,31 +24,36 @@ import socket
 import time
 
 
+def handshake(host: str, path: str, timeout_s: float = 5.0):
+    """Open `path` on `host` ("ip[:port]") as a WebSocket: the socket and the bytes read past the 101 headers, which are already the
+    first frame(s). Status 101 is proof enough; skipping the Sec-WebSocket-Accept check saves the SHA-1 dance against our own firmware."""
+    h, _, p = host.partition(":")
+    sock = socket.create_connection((h, int(p or 80)), timeout=timeout_s)
+    key = base64.b64encode(os.urandom(16)).decode()
+    sock.sendall(
+        (f"GET {path} HTTP/1.1\r\nHost: {host}\r\n"
+         f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+         f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+    raw = b""
+    while b"\r\n\r\n" not in raw:
+        chunk = sock.recv(1024)
+        if not chunk:
+            raise ConnectionError("WS handshake: connection closed")
+        raw += chunk
+    head, _, rest = raw.partition(b"\r\n\r\n")
+    status = head.split(b"\r\n", 1)[0]
+    if b" 101" not in status:
+        sock.close()
+        raise ConnectionError("WS handshake refused: the device serves at most 4 preview clients; close open preview browser tabs "
+                              "and retry. Got: " + status.decode(errors="replace"))
+    return sock, rest
+
+
 class PreviewSocket:
     """One /wsp connection. `host` is the device's HTTP address ("ip[:port]")."""
 
     def __init__(self, host: str, timeout_s: float = 5.0):
-        h, _, p = host.partition(":")
-        self.sock = socket.create_connection((h, int(p or 80)), timeout=timeout_s)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self.sock.sendall(
-            (f"GET /wsp HTTP/1.1\r\nHost: {host}\r\n"
-             f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
-             f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-        raw = b""
-        while b"\r\n\r\n" not in raw:
-            chunk = self.sock.recv(1024)
-            if not chunk:
-                raise ConnectionError("WS handshake: connection closed")
-            raw += chunk
-        head, _, rest = raw.partition(b"\r\n\r\n")
-        if b" 101" not in head.split(b"\r\n", 1)[0]:
-            self.sock.close()
-            raise ConnectionError(
-                "WS handshake refused — the device serves at most 4 preview "
-                "clients; close open preview browser tabs and retry. Got: "
-                + head.split(b"\r\n", 1)[0].decode(errors="replace"))
-        # Bytes after the handshake headers are already the first frame(s).
+        self.sock, rest = handshake(host, "/wsp", timeout_s)
         self._buf = rest
         # The pull model: a client that asks for nothing receives nothing. Post the standing
         # frame request ([0x51][stride][fps]) as a masked client frame (RFC 6455 requires it).
@@ -57,8 +62,6 @@ class PreviewSocket:
         frame = bytes([0x82, 0x80 | len(payload)]) + mask + bytes(
             b ^ mask[i % 4] for i, b in enumerate(payload))
         self.sock.sendall(frame)
-        # Status 101 is proof enough; skipping the Sec-WebSocket-Accept check
-        # saves the SHA-1 dance against our own firmware.
 
     def close(self):
         try:

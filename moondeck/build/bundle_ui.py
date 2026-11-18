@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bundle and minify the web UI into the files the firmware serves.
 
-`app.js` and the modules it imports become one minified `app.js`, and `style.css` is minified;
+`app.js` and the modules it imports become one minified `app.js`, and `style.css` with the sheets it imports one minified `style.css`;
 `index.html`, the vendored `prism.js` and the logo are copied as they are. Comments are most of
 the source, so the embedded UI shrinks to about a third, and a page load sends a third of the
 bytes through the render loop. The host running from a checkout still serves `src/ui` itself.
@@ -80,7 +80,7 @@ def main() -> int:
     tool = str(esbuild())
     common = ["--minify", "--legal-comments=none", "--log-level=warning"]
     subprocess.run([tool, str(ui / "app.js"), "--bundle", "--format=esm", f"--outfile={stage / 'app.js'}", *common], check=True)
-    subprocess.run([tool, str(ui / "style.css"), f"--outfile={stage / 'style.css'}", *common], check=True)
+    subprocess.run([tool, str(ui / "style.css"), "--bundle", f"--outfile={stage / 'style.css'}", *common], check=True)
     for f in COPIED:
         shutil.copyfile(ui / f, stage / Path(f).name)
     return 0

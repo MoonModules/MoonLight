@@ -586,6 +586,7 @@ public:
 
         const bool haveLights = out && out->physicalLightCount() > 0;
         const bool splitWanted = multicore && anyDriver() && haveLights;
+        const bool sameConfig = splitWanted == splitWanted_ && sourceShape() == preparedShape_;   // a retry of the configuration the last prepare saw
         splitWanted_ = splitWanted;
         const bool wantOutput = (needOutput && haveLights) || splitWanted;
 
@@ -602,7 +603,8 @@ public:
         }
         setDynamicBytes(outputBuffer_.bytes());
         wiredLast_ = false;   // a reallocated output holds no frame yet
-        splitBufferFits_ = outputBuffer_.data() != nullptr;   // read before a failed worker gives an identity layer's buffer back, which a retry claims again
+        // Read before a failed worker gives an identity layer's buffer back, which a retry claims again; a configuration whose buffer fit keeps fitting through one refusal, so a passing shortage leaves the retry running.
+        splitBufferFits_ = outputBuffer_.data() != nullptr || (sameConfig && splitBufferFits_);
 
         // Decided from the alloc OUTCOME, so a board that cannot claim the buffer runs inline.
         const bool shouldSplit = splitWanted && outputBuffer_.data();
@@ -712,7 +714,7 @@ private:
     bool wiredLast_ = false;   ///< the last frame went out as a wiring-order copy, so the output already holds it
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
     bool splitWanted_ = false;         // the last prepare wanted the split, so tick1s retries one that is off
-    bool splitBufferFits_ = false;     // the last prepare could claim the split's buffer: a board where it cannot stays inline and the retry rests
+    bool splitBufferFits_ = false;     // this configuration has claimed the split's buffer: one that never could stays inline and the retry rests
     uint8_t splitRetryDelayS_ = 1;     // seconds between attempts, doubling up to kSplitRetryCapS
     uint8_t splitRetryInS_ = 0;        // seconds off since the last attempt
     uint8_t splitEngagedS_ = 0;        // seconds engaged since the last attempt, which resets the delay at the cap

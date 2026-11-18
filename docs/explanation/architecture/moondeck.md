@@ -1,6 +1,6 @@
 # MoonDeck
 
-The developer console: one page that builds, flashes, runs, tests and monitors across every target, and discovers devices on the network. The per-script reference is [MoonDeck.md](../../moondeck/MoonDeck.md). What follows is why it is shaped this way.
+The developer console: one page that builds, flashes, runs, tests and monitors across every target, and shows the devices on the network and on its USB ports on the device UI's own map. The per-script reference is [MoonDeck.md](../../moondeck/MoonDeck.md). What follows is why it is shaped this way.
 
 The shape comes first, then how it pairs with MoonWalk, why the scripts are ours, and where the state lives.
 
@@ -45,10 +45,10 @@ The ESP32 build is ESP-IDF-native. MoonLight tracks the IDF against a pinned com
 
 ## State, and where it lives
 
-Script definitions are committed in `moondeck/moondeck_config.json`. Runtime state, meaning the selected network, the known devices and the last-used serial port, lives in `moondeck/moondeck.json` and is gitignored: it describes one developer's bench rather than the project.
+Script definitions are committed in `moondeck/moondeck_config.json`. Runtime state, meaning the selected network, its serial port and WiFi credentials, this computer's USB adapter to MAC cache and the live tests' devices by MAC, lives in `moondeck/moondeck.json` and is gitignored: it describes one developer's bench rather than the project. It holds no device list: the map reads the devices from a MoonLight's Discovery list and from the presence packets MoonDeck hears, and a device is known by its MAC, never by a stored address or port.
 
-**Networks are the unit of bench state.** Each holds its own device list, serial port and WiFi credentials. The console selects the network whose subnet matches the host, so moving a laptop between networks usually needs no clicks.
+**Networks are the unit of bench state.** Each holds its own serial port and WiFi credentials. The console selects the network whose subnet matches the host, so moving a laptop between networks usually needs no clicks.
 
-**The device-model picker reads the installer's catalog.** The same `deviceModels.json` the web installer uses, so a device configured through either route ends up with the same module tree. Selecting a model pushes its full config: add the modules, then set their controls.
+**The device-model picker reads the installer's catalog.** The same `deviceModels.json` the web installer uses picks the board whose flash baud and provisioning settings the ESP32 tab's scripts take; a device takes a model's full config from Apply device defaults in its map popup or from the web installer.
 
 Logs and run counts under `build/moondeck-logs/` are derived state. Deleting `build/` resets them, and a missing file costs the count rather than the run.

@@ -546,7 +546,7 @@ private:
         for (const DevicePlugin* p : plugins_)
             if (p->discoveryPort() != port) return;   // divergent ports unsupported yet: see note
         if (!listener_.open()) return;
-        if (listener_.bind(port)) {
+        if (listener_.bindShared(port)) {   // beside another listener on this computer, MoonDeck's or a second desktop's
             listenerBound_ = true;
             boundMs_ = platform::millis();
             listener_.joinMulticast(kDiscoveryGroup);   // best-effort: a stack without multicast still hears the broadcast half
@@ -716,9 +716,10 @@ private:
             // A multicast copy from any peer proves the group arrives, a slow join being the likelier story.
             d->broadcastRun = 0;
             dropped = false;
-        } else if (d->broadcastRun < 255 && ++d->broadcastRun == kEvidence) {
+        } else if (d->broadcastRun < 255) {
+            d->broadcastRun++;
             // Only the run reaching the threshold sets it, so a peer whose group never arrives cannot undo another's multicast every ten seconds.
-            dropped = true;
+            if (d->broadcastRun == kEvidence) dropped = true;
         }
         if (dropped != NetworkPath::multicastDropped) {
             NetworkPath::multicastDropped = dropped;
@@ -788,19 +789,21 @@ private:
     /// Keep our own row at the current address, re-sorting only on a real change.
     void upsertSelf(const uint8_t ip[4]) {
         bool changed = false;
-        // Demote any prior row at another address, so it expires rather than staying immortal.
-        for (ListRow i = 0; i < deviceCount_; i++)
-            if (devices_[i].self && !ipEq(devices_[i].ip, ip)) { devices_[i].self = false; changed = true; }
-
-        Device* d = findByIp(ip);
+        uint8_t mac[6];
+        platform::getMacAddress(mac);   // the identity a group keeps this device by
+        // The row holding this device's MAC moves to a new address, so one row stays this device and a group lists it once.
+        Device* d = rowFor(ip, mac, changed);
         if (!d) {
             d = addRow(ip, kWorthSelf);
             if (!d) { refreshStatus(); return; }   // no row at all to take: an empty block memory refuses to grow
             changed = true;
         }
+        // Demote any other row still marked this device, so it expires rather than staying immortal.
+        for (ListRow i = 0; i < deviceCount_; i++)
+            if (&devices_[i] != d && devices_[i].self) { devices_[i].self = false; changed = true; }
         if (d->type != DevType::MoonLight) { d->type = DevType::MoonLight; changed = true; }
         if (!d->self) { d->self = true; changed = true; }
-        if (!hasMac(d->mac)) platform::getMacAddress(d->mac);   // the identity a group keeps this device by
+        if (!hasMac(d->mac)) std::memcpy(d->mac, mac, 6);
         std::memcpy(selfIp_, ip, 4);
         d->lastSeenMs = platform::millis();
         if (!d->name[0]) {

@@ -1,4 +1,4 @@
-// The Devices map (app.js, a list drawn as a graph): where the nodes go, which color each kind
+// The Devices map (devicemap.js, a list drawn as a graph): where the nodes go, which color each kind
 // takes, and that a peer gone from the list leaves the map. Run without a browser, on the
 // functions' own source.
 // Run: `node --test test/js/network-map.test.mjs`.
@@ -193,7 +193,7 @@ test("a board MoonBase holds shows a lifebuoy for its lights", () => {
 });
 
 test("a WLED offers Update to MoonLight for a chip MoonLight builds for, its migration image from the installer's mirror", () => {
-    const installerUrl = src.split("\n").find(l => l.startsWith("const INSTALLER_URL"));
+    const installerUrl = src.split("\n").find(l => l.startsWith("export const INSTALLER_URL")).replace(/^export /, "");
     const { wledChip, migrateImageUrl, wledFamily } = load(["wledChip", "migrateImageUrl", "wledFamily"], installerUrl);
     assert.equal(wledChip({ arch: "esp32-c3" }), "esp32c3");
     assert.equal(wledChip({ arch: "esp32" }), "esp32");
@@ -215,6 +215,20 @@ test("a node's popup lists its flavor as its type, and as its url the .local add
     assert.equal(popupFields({ name: "m4-pc", ip: "192.168.1.147", type: "MoonLight", port: 8080, url: "http://192.168.1.147:8080/" }).url, undefined,
                  "a host serves on a port and answers no mDNS");
     assert.equal(popupFields({ name: "my lights", ip: "192.168.1.9", type: "MoonLight" }).url, undefined, "a name that is no hostname");
+});
+
+test("a page without the list's renderer, MoonDeck's, shows a node's detail as plain rows, its ip where the popup links it", () => {
+    const element = () => ({ children: [], dataset: {}, textContent: "", className: "",
+                             append(...els) { this.children.push(...els); }, appendChild(el) { this.children.push(el); },
+                             replaceChildren() { this.children = []; } });
+    const plainDetail = new Function("document", `${fnSource("fmtTime")}\n${fnSource("plainDetail")}\nreturn plainDetail;`)({ createElement: element });
+    const panel = element();
+    plainDetail(panel, { name: "ML-olimex", ip: "192.168.1.207", ageSec: 65, services: ["http", "ddp"], edges: [{ to: "x" }], url: null });
+    const rows = panel.children.map(r => [r.children[0].textContent, r.children[1].dataset.key, r.children[1].textContent, r.children[1].className]);
+    assert.deepEqual(rows, [["name", "name", "ML-olimex", "display"], ["ip", "ip", "192.168.1.207", "display"],
+                            ["last seen", "last seen", "1m 5s ago", "display"], ["services", "services", "http, ddp", "display"]],
+                     "a list of objects and an empty value leave no row");
+    assert.match(fnSource("openDevicePopup"), /hooks\(opts\)\.detail\(detail, popupFields\(row\), opts\)/, "a page's own detail hook draws it instead");
 });
 
 test("a WLED on Ethernet hears whether the move carries its wiring over or brings it back on WiFi", () => {
@@ -252,7 +266,8 @@ test("a device group is one box however many graphs name it, its members pulled 
     const { graphGroups, groupLinks, groupBox } = load(["graphGroups", "groupLinks", "groupBox"]);
     const index = new Map([["10.0.0.1", 0], ["10.0.0.2", 1], ["10.0.0.3", 2]]);
     const kitchen = { id: "aabbccddeeff00000001", name: "Kitchen" };
-    const own = [{ ip: "10.0.0.1", groups: [kitchen] }, { ip: "10.0.0.2", groups: [kitchen], missing: true }];
+    const own = [{ ip: "10.0.0.1", groups: [kitchen] }, { ip: "10.0.0.2", groups: [kitchen], missing: true },
+                 { ip: "10.0.0.3", groups: [kitchen] }];   // a device only a peer saw joins the map with its row
     const peers = [{ ip: "10.0.0.3", groups: [kitchen] }, { ip: "10.0.0.1", groups: [kitchen] }];   // a peer naming the same group
     const groups = graphGroups([own, peers], index);
     assert.equal(groups.size, 1);
@@ -263,4 +278,29 @@ test("a device group is one box however many graphs name it, its members pulled 
     assert.equal(groupLinks(groups).length, 2);              // a star: each member to the first
     const b = groupBox([{ x: 100, y: 50 }, { x: 300, y: 120 }]);
     assert.ok(b.x < 100 && b.x + b.w > 300 && b.y < 50 && b.y + b.h > 120);   // every member's dot and label inside
+});
+
+test("a member this device removed from a group stays out while a cached peer report still lists it", () => {
+    const { graphGroups } = load(["graphGroups"]);
+    const index = new Map([["10.0.0.1", 0], ["10.0.0.2", 1], ["10.0.0.3", 2]]);
+    const g = { id: "aabbccddeeff00000001", name: "Kitchen" }, other = { id: "aabbccddeeff00000002", name: "Hall" };
+    const own = [{ ip: "10.0.0.1", groups: [g] }, { ip: "10.0.0.2" }];
+    const peer = [{ ip: "10.0.0.2", groups: [g, other], missing: true }, { ip: "10.0.0.3", groups: [other] }];
+    const groups = graphGroups([own, peer], index);
+    assert.deepEqual([...groups.get(g.id).members], [0], "this device's rows decide a group it names");
+    assert.deepEqual([...groups.get(g.id).missing], []);
+    assert.deepEqual([...groups.get(other.id).members].sort(), [1, 2], "a group only the peer names is the peer's");
+});
+
+test("two settled nodes newly linked by a group are relaxed together", () => {
+    const { layoutForce } = load(["graphHash", "layoutForce", "graphInside"]);
+    const nodes = [{ key: "a", self: true, row: {} }, { key: "b", self: false, row: {} }];
+    const pos = new Map();
+    layoutForce(nodes, [], [0, 1], pos, 400, 800);
+    pos.get("a").x = 200; pos.get("b").x = 600;
+    const before = Math.abs(pos.get("a").x - pos.get("b").x);
+    layoutForce(nodes, [], [0, 1], pos, 400, 800);
+    assert.equal(Math.abs(pos.get("a").x - pos.get("b").x), before, "an unchanged graph stays put");
+    layoutForce(nodes, [[0, 1, "", false, true]], [0, 1], pos, 400, 800);
+    assert.ok(Math.abs(pos.get("a").x - pos.get("b").x) < before, "a new group link pulls them together");
 });

@@ -105,22 +105,29 @@ struct HookGuard {
     ~HookGuard() { mm::MoonModule::setQuiesceRenderHook(nullptr); g_hookDrivers = nullptr; }
 };
 
-}  // namespace
-
-// The bench flap: one layer, one driver, multicore. needOutput is false (one layer, no LUT), so only splitWanted holds the split; many ticks with no config change must keep it engaged.
-TEST_CASE("render-split: a single-layer multicore config stays engaged across many ticks (no flap)") {
+// One layer of 64 lights, no LUT (the bench config): needOutput is false, so only the split holds the output buffer.
+struct OneLayerRig {
     mm::Layouts layouts;
     mm::GridLayout grid;
     mm::Effects layers;
     mm::Layer layer;
     mm::Drivers drivers;
-    grid.width = 64; grid.height = 1; grid.depth = 1;
-    layouts.addChild(&grid);
-    layer.setChannelsPerLight(3);
-    layers.addChild(&layer);          // ONE layer (the bench config), not two
-    layers.setLayouts(&layouts);
-    drivers.setEffects(&layers);
-    layers.applyState();
+    OneLayerRig() {
+        grid.width = 64; grid.height = 1; grid.depth = 1;
+        layouts.addChild(&grid);
+        layer.setChannelsPerLight(3);
+        layers.addChild(&layer);
+        layers.setLayouts(&layouts);
+        drivers.setEffects(&layers);
+        layers.applyState();
+    }
+};
+}  // namespace
+
+// The bench flap: one layer, one driver, multicore. needOutput is false (one layer, no LUT), so only splitWanted holds the split; many ticks with no config change must keep it engaged.
+TEST_CASE("render-split: a single-layer multicore config stays engaged across many ticks (no flap)") {
+    OneLayerRig r;
+    mm::Drivers& drivers = r.drivers;
 
     MockDriver d;
     drivers.addChild(&d);
@@ -471,6 +478,7 @@ private:
 
 // A worker that misses the frame boundary drops the split to inline, and the drivers still read the shared buffer, so it must keep receiving frames: on 2026-11-17 a host under build load froze its preview and Network Send on the last frame here.
 TEST_CASE("render-split: after a stalled worker drops the split to inline, new frames still reach the drivers") {
+    StallingDriver d;                 // declared first, so a failed REQUIRE destroys Drivers, which joins the worker, while d still exists
     mm::Layouts layouts;
     mm::GridLayout grid;
     mm::Effects layers;
@@ -484,7 +492,6 @@ TEST_CASE("render-split: after a stalled worker drops the split to inline, new f
     drivers.setEffects(&layers);
     layers.applyState();
 
-    StallingDriver d;
     drivers.addChild(&d);
     drivers.setup();
     drivers.prepare();
@@ -506,8 +513,8 @@ TEST_CASE("render-split: after a stalled worker drops the split to inline, new f
 
 // One stall must not cost the second core for good: a split that is wanted but off asks for a prepare on a back-off of 1, 2, 4 up to 64 seconds, counted on tick1s, and 64 seconds engaged bring the wait back to 1.
 TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer each time it stalls again") {
+    StallingDriver d;                                  // declared first, so a failed REQUIRE destroys the rig's Drivers, which joins the worker, while d still exists
     Rig r(16);
-    StallingDriver d;
     r.drivers.addChild(&d);
     mm::Scheduler s;                                   // the retry asks it for a prepare at the next frame boundary
     s.addModule(&r.drivers);
@@ -528,7 +535,7 @@ TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer ea
     const int prepared = d.prepares;
     stall();
     second();
-    CHECK(r.drivers.renderSplitActive());              // back after 1 s
+    REQUIRE(r.drivers.renderSplitActive());            // back after 1 s, required: an inline tick would pass the worker check below
     CHECK(d.prepares == prepared);                     // Drivers re-engaged alone: the driver kept its peripheral
     const int before = d.tickCount();
     r.drivers.tick();
@@ -549,4 +556,32 @@ TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer ea
     CHECK(r.drivers.renderSplitActive());              // so the next stall waits 1 s again
 
     r.drivers.release();                               // joins the worker
+}
+
+// A shortage that passes must not cost the second core for good: one layer, so a refused worker gives the split's buffer back, and the next retry meeting a refused buffer keeps retrying, since this configuration's buffer has fit.
+TEST_CASE("render-split: a split whose buffer once fit keeps retrying through a refused buffer, and engages once memory returns") {
+    struct SeamGuard { ~SeamGuard() { mm::platform::setTestSpawnFails(false); mm::platform::setTestAllocRefusedFrom(0); } } seams;
+    MockDriver d;                                      // declared first, so a failed REQUIRE destroys the Drivers, which joins any worker, while d still exists
+    OneLayerRig r;                                     // one layer, no LUT: only the split holds the buffer
+    mm::Drivers& drivers = r.drivers;
+    drivers.addChild(&d);
+    mm::Scheduler s;                                   // the retry asks it for a prepare at the next frame boundary
+    s.addModule(&drivers);
+    const auto second = [&] { drivers.tick1s(); s.preparePending(); };
+
+    mm::platform::setTestSpawnFails(true);             // the buffer fits, the worker is refused
+    s.setup();
+    s.preparePending();
+    REQUIRE_FALSE(drivers.renderSplitActive());
+
+    mm::platform::setTestSpawnFails(false);
+    mm::platform::setTestAllocRefusedFrom(64 * 3);     // the next retry finds the buffer refused
+    second();
+    REQUIRE_FALSE(drivers.renderSplitActive());
+
+    mm::platform::setTestAllocRefusedFrom(0);          // the shortage passes
+    for (int i = 0; i < 8; i++) second();              // past the next back-off waits of 2 and 4 s
+    CHECK(drivers.renderSplitActive());
+
+    drivers.release();                                 // joins the worker
 }

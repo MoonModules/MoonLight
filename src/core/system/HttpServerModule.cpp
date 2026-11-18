@@ -509,10 +509,10 @@ void HttpServerModule::deferRequest(platform::TcpConnection& conn, const char* r
     t->conn = std::move(conn);
 }
 
-// Whether a request names a JavaScript module, the one kind of UI file the embedded bundle folds into app.js.
-static bool isScriptName(const char* path) {
+// Whether a request names a file the embedded bundle folds into another: a JavaScript module into app.js, an imported sheet into style.css.
+static bool isBundledName(const char* path) {
     const size_t n = std::strlen(path);
-    return n > 3 && std::strcmp(path + n - 3, ".js") == 0;
+    return (n > 3 && std::strcmp(path + n - 3, ".js") == 0) || (n > 4 && std::strcmp(path + n - 4, ".css") == 0);
 }
 
 // One request of `len` bytes, its body whole or, for an upload, its first part: the method and path pick the handler.
@@ -601,8 +601,8 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         else if (std::strcmp(path, "/json") == 0) serveWledDeviceJson(conn);
         // /presets.json: python-wled fetches it after /json and a 404 aborts HA's config flow; the truthy-but-empty `{"0":{}}` yields zero presets where `{}` fails its `not presets` guard.
         else if (std::strcmp(path, "/presets.json") == 0) serveWledPresets(conn);
-        // A host running from a checkout serves the UI's own modules, which the embedded bundle holds inside app.js: scripts only, so the folder's other files stay private.
-        else if (isScriptName(path) && serveUiFromDisk(conn, path + 1)) {}
+        // A host running from a checkout serves the UI's own modules and imported sheets, which the embedded bundle holds inside app.js and style.css: those kinds only, so the folder's other files stay private.
+        else if (isBundledName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");
     } else if (std::strcmp(method, "POST") == 0) {
         // POST /api/modules/<name>/move with body {"to":N}. Strict-suffix check: path must end with "/move" exactly (rejects "/movex").

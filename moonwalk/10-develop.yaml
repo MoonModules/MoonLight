@@ -40,12 +40,15 @@ processes:
     steps:
       - id: build-tests
         say: Build the unit tests and the scenario runner.
+        cores: all
         when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
       - id: test
         say: Run the unit tests.
+        needs: [build-tests]
         when: { run: { script: moondeck/test/test_host.py } }
       - id: scenarios
         say: Replay the scenarios in-process.
+        needs: [build-tests]
         when: { run: { script: moondeck/scenario/run_scenario.py } }
         detail: |
           Select what the change touched, as [Run a scenario in-process](moonwalk.md#run-scenario) describes. Ask before anything slow, such as a full scenario sweep, a gate list or a repo-wide sweep. Run the cheapest thing that answers the question, and say what the expensive one is and why.

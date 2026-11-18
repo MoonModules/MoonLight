@@ -12,6 +12,7 @@
 namespace mm {
 
 namespace osc { class Writer; class Reader; }
+namespace json { struct JsonDoc; struct JsonNode; }
 
 /// Devices that act as one, picked from Discovery and kept by their MAC, so a rename or a new address keeps the group.
 /// @card DeviceGroup.png
@@ -28,6 +29,8 @@ namespace osc { class Writer; class Reader; }
 ///
 /// The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.
 ///
+/// A device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again.
+///
 /// @technical
 ///
 /// **Identity.** A member is its MAC, the identity every network name derives from, so a rename or a new lease keeps it; its name is kept beside it for a member Discovery has dropped. The group is its id, the creating device's MAC and the moment it was made, as an RFC 4122 version 1 UUID is.
@@ -40,7 +43,7 @@ namespace osc { class Writer; class Reader; }
 ///
 /// **Repeats by Trickle** (RFC 6206). The definition goes out at a random moment in the second half of an interval unless a member was heard sending the same one, the interval doubling from 1 s to 64 s while the members agree and back to 1 s on any difference, so the traffic stays near flat as a group grows.
 ///
-/// **What it costs.** Zero work on the render path. A member is 48 bytes, grown by doubling against the heap's reserve; a refused growth refuses the row and says so.
+/// **What it costs.** Zero work on the render path. A member is 56 bytes, grown by doubling against the heap's reserve; a refused growth refuses the row, or the whole restored list, and says so.
 class DeviceGroup : public MoonModule, public ListSource {
 public:
     /// A device group, so Devices accepts it as a child.
@@ -93,7 +96,7 @@ public:
     /// Set a member's device, by its index in the offered devices or by its MAC.
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override;
 
-    /// Rebuild the members from the saved list, their stamps observed so later edits are newer.
+    /// Rebuild the members from the saved list, their stamps observed so later edits are newer; a list that does not parse or fit leaves the members as they were.
     bool restoreList(const char* json, const char* key) override;
 
     // --- What Discovery, the map and DeviceGroupSync read ---------------------------------------
@@ -107,8 +110,14 @@ public:
     /// This device's writer id: the low four bytes of its MAC, which tell two of a vendor's boards apart.
     static uint32_t selfWriter();
 
-    /// Whether a received chunk, its id read, lists `mac` as a member, and its shared name: read before any module is made for it.
+    /// Whether a received chunk, its id read, is whole and lists `mac` as a member, and its shared name: read before any module is made for it.
     static bool chunkHasMember(osc::Reader r, const uint8_t mac[6], const char*& name);
+
+    /// Whether `text` is a group id as makeId writes it: twenty lowercase hex digits, so a short or long one names no group.
+    static bool isId(const char* text);
+
+    /// The length of a group id, twelve hex digits of the creating MAC and eight of the moment.
+    static constexpr size_t kIdLen = 20;
 
     /// Whether the device with this MAC is a member.
     bool hasMember(const uint8_t mac[6]) const MM_NONBLOCKING;
@@ -131,7 +140,7 @@ public:
     /// Write chunk `chunk` of the definition, `per` members, the name and the whole definition's digest in each.
     size_t writeChunk(uint8_t* out, size_t cap, uint16_t chunk, uint16_t per) const;
 
-    /// Merge one received chunk, its id read by the caller; true when it changed the definition. `wantName` names a newer name the module should take.
+    /// Merge one received chunk, its id read by the caller, whole or not at all; true when it changed the definition, which is then saved. `wantName` names a newer name the module should take.
     bool merge(osc::Reader& r, const char*& wantName);
 
     /// The OSC address the definition travels on.
@@ -172,6 +181,10 @@ private:
     ListRow membersFrom(ListRow from, uint16_t per) const;
     /// One member's part of a chunk: MAC, stamp, removed, name.
     static void writeMember(osc::Writer& w, const Member& m);
+    /// Whether a received chunk, its id read, carries every field its tags promise, each MAC a device's and each stamp valid.
+    static bool wellFormed(osc::Reader r);
+    /// One saved row restored as a member, its stamp taken into the clock; false for a row holding no device, or one already restored.
+    bool restoreMember(const json::JsonDoc& doc, const json::JsonNode* el, Hlc* c);
     /// The received shared name merged, the newer stamp winning; `wantName` names it when the module should take it.
     bool mergeName(osc::Reader& r, const char*& wantName);
     /// One received member merged, the newer stamp winning; true when it changed this group.
@@ -180,7 +193,7 @@ private:
     ScratchBuffer<Member> members_{*this};   ///< its count() is the capacity, doubled as members are added
     ListRow  count_ = 0;     ///< members held, removed ones included
     uint32_t nextId_ = 1;    ///< the next row id
-    char     id_[21] = "";   ///< twelve hex digits of the creating MAC, then eight of the moment, saved hidden
+    char     id_[kIdLen + 1] = "";   ///< twelve hex digits of the creating MAC, then eight of the moment, saved hidden
     char     groupName_[24] = "";   ///< the shared name, a last-writer-wins register, saved hidden
     Stamp    nameStamp_{};   ///< when and by whom the shared name was last set
     char     nameHlc_[40] = "";   ///< the name's stamp as "hlc:writer" in hex, saved hidden

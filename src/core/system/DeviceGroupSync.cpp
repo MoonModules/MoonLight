@@ -18,16 +18,24 @@ namespace mm {
 
 void DeviceGroupSync::tick(MoonModule& devices, char* saved, size_t savedCap) {
     if (!loaded_) { loadTombs(saved); loaded_ = true; }
-    if (!ensureOpen()) return;
-    for (int n = 0; n < 16; n++) {   // a bounded drain, as Discovery's
-        const int len = sock_.recvFrom(buf_.data(), buf_.count());
-        if (len <= 0) break;
-        handle(devices, buf_.data(), static_cast<size_t>(len));
+    if (ensureOpen()) {
+        for (int n = 0; n < 16; n++) {   // a bounded drain, as Discovery's
+            const int len = sock_.recvFrom(buf_.data(), buf_.count());
+            if (len <= 0) break;
+            handle(devices, buf_.data(), static_cast<size_t>(len));
+        }
     }
-    noticeDeleted(devices);
-    sendDue(devices);
-    for (uint8_t i = 0; i < tombCount_; i++) if (tombs_[i].sendsLeft) { sendDeletion(tombs_[i]); tombs_[i].sendsLeft--; }
-    if (tombsChanged_) { saveTombs(saved, savedCap); tombsChanged_ = false; }
+    noticeDeleted(devices);   // with the socket closed too, so a deletion is marked and kept until it can go out
+    if (open_) {
+        sendDue(devices);
+        for (uint8_t i = 0; i < tombCount_; i++) if (tombs_[i].sendsLeft) { sendDeletion(tombs_[i]); tombs_[i].sendsLeft--; }
+    }
+    if (tombsChanged_) {
+        saveTombs(saved, savedCap);
+        tombsChanged_ = false;
+        owner_.markDirty();   // the markers are Discovery's saved text, written here rather than through the API, so the save is asked for here
+        if (Scheduler* s = Scheduler::instance()) s->noteDirty();
+    }
 }
 
 bool DeviceGroupSync::ensureOpen() {
@@ -56,9 +64,10 @@ void DeviceGroupSync::handle(MoonModule& devices, const uint8_t* pkt, size_t len
 bool DeviceGroupSync::handleDefinition(MoonModule& devices, const uint8_t* pkt, size_t len) {
     osc::Reader r(pkt, len, DeviceGroup::kAddress);
     if (!r.ok()) return false;
-    char id[21];
-    mm::formatTo(id, sizeof(id), "%s", r.str());
-    if (!r.ok() || !id[0]) return true;
+    const char* received = r.str();
+    if (!r.ok() || !DeviceGroup::isId(received)) return true;
+    char id[DeviceGroup::kIdLen + 1];   // copied, since an answer reuses the receive buffer
+    mm::formatTo(id, sizeof(id), "%s", received);
     if (answerIfDeleted(id)) return true;
     DeviceGroup* g = groupById(devices, id);
     if (!g) {
@@ -81,9 +90,9 @@ void DeviceGroupSync::settle(MoonModule& devices, DeviceGroup& g, const char* wa
 }
 
 bool DeviceGroupSync::answerIfDeleted(const char* id) {
-    for (uint8_t i = 0; i < tombCount_; i++)
-        if (std::strcmp(tombs_[i].id, id) == 0) { sendDeletion(tombs_[i]); return true; }   // a late copy of a deleted group hears it was deleted
-    return false;
+    const int i = tombIndex(id);
+    if (i >= 0) sendDeletion(tombs_[i]);   // a late copy of a deleted group hears it was deleted
+    return i >= 0;
 }
 
 DeviceGroup* DeviceGroupSync::adopt(MoonModule& devices, const char* id, osc::Reader& r) {
@@ -111,10 +120,9 @@ void DeviceGroupSync::rename(MoonModule& devices, DeviceGroup& g, const char* to
 void DeviceGroupSync::handleDeletion(MoonModule& devices, const uint8_t* pkt, size_t len) {
     osc::Reader r(pkt, len, kDeletedAddress);
     if (!r.ok()) return;
-    char id[21];
-    mm::formatTo(id, sizeof(id), "%s", r.str());
+    const char* id = r.str();
     const Stamp s{r.i64(), r.i32()};
-    if (!r.ok() || !id[0]) return;
+    if (!r.ok() || !DeviceGroup::isId(id) || !s.valid()) return;
     DeviceGroup* g = groupById(devices, id);
     if (g && !s.newerThan(g->newest())) return;   // edited after the deletion: the group stands, and its next copy says so
     markDeleted(id, s, 0);
@@ -126,6 +134,11 @@ void DeviceGroupSync::noticeDeleted(MoonModule& devices) {
     for (uint16_t i = 0; i < seenCount_; i++) {
         if (groupById(devices, seen_[i].id) || deleted(seen_[i].id)) continue;
         markDeleted(seen_[i].id, stampNow(devices), 3);
+    }
+    // A group held under a marker goes: a removal memory refused is tried again each second until the group is gone.
+    for (uint8_t c = devices.childCount(); c > 0; c--) {
+        MoonModule* m = devices.child(c - 1);
+        if (m->role() == ModuleRole::DeviceGroup && deleted(static_cast<DeviceGroup*>(m)->groupId())) removeLocal(devices, *static_cast<DeviceGroup*>(m));
     }
     uint16_t n = 0;
     for (uint8_t c = 0; c < devices.childCount(); c++) {
@@ -156,18 +169,34 @@ Stamp DeviceGroupSync::stampNow(MoonModule& devices) {
 }
 
 bool DeviceGroupSync::deleted(const char* id) const {
-    for (uint8_t i = 0; i < tombCount_; i++) if (std::strcmp(tombs_[i].id, id) == 0) return true;
-    return false;
+    return tombIndex(id) >= 0;
+}
+
+int DeviceGroupSync::tombIndex(const char* id) const {
+    for (uint8_t i = 0; i < tombCount_; i++) if (std::strcmp(tombs_[i].id, id) == 0) return i;
+    return -1;
+}
+
+DeviceGroupSync::Tomb* DeviceGroupSync::tombSlot() {
+    if (tombCount_ < kMaxTombs && tombs_.ensure(tombCount_ + 1u)) return &tombs_[tombCount_++];
+    if (!tombCount_) return nullptr;   // memory refused the first marker
+    Tomb* oldest = &tombs_[0];   // full, or memory refused one more: the oldest marker gives way
+    for (uint8_t i = 1; i < tombCount_; i++) if (oldest->stamp.newerThan(tombs_[i].stamp)) oldest = &tombs_[i];
+    return oldest;
 }
 
 void DeviceGroupSync::markDeleted(const char* id, const Stamp& stamp, uint8_t sends) {
-    Tomb* t = nullptr;
-    for (uint8_t i = 0; i < tombCount_ && !t; i++) if (std::strcmp(tombs_[i].id, id) == 0) t = &tombs_[i];
-    if (!t && tombCount_ < kMaxTombs && tombs_.ensure(tombCount_ + 1u)) t = &tombs_[tombCount_++];
-    if (!t) {   // full: the oldest marker gives way
-        t = &tombs_[0];
-        for (uint8_t i = 1; i < tombCount_; i++) if (t->stamp.newerThan(tombs_[i].stamp)) t = &tombs_[i];
+    if (const int i = tombIndex(id); i >= 0) {
+        // One marker per group, which only grows newer: an equal or older deletion, its own copy looping back among them, leaves it and its sends as they are.
+        Tomb& held = tombs_[i];
+        if (!stamp.newerThan(held.stamp)) return;
+        held.stamp = stamp;
+        if (sends > held.sendsLeft) held.sendsLeft = sends;
+        tombsChanged_ = true;
+        return;
     }
+    Tomb* t = tombSlot();
+    if (!t) return;   // memory refused the first marker: the deletion stays on this device
     mm::formatTo(t->id, sizeof(t->id), "%s", id);
     t->stamp = stamp;
     t->sendsLeft = sends;
@@ -206,9 +235,10 @@ bool DeviceGroupSync::parseTomb(char* entry, Tomb& t) {
     char* c2 = c1 ? std::strchr(c1 + 1, ':') : nullptr;
     if (!c1 || !c2) return false;
     *c1 = 0;
+    if (!DeviceGroup::isId(entry)) return false;
     mm::formatTo(t.id, sizeof(t.id), "%s", entry);
     t.stamp = Stamp{std::strtoull(c1 + 1, nullptr, 16), static_cast<uint32_t>(std::strtoul(c2 + 1, nullptr, 16))};
-    return true;
+    return t.stamp.valid();
 }
 
 void DeviceGroupSync::saveTombs(char* saved, size_t cap) const {
@@ -234,14 +264,10 @@ void DeviceGroupSync::apply(const char* doc) {
 }
 
 void DeviceGroupSync::create(MoonModule& devices, const char* id, const char* name) {
-    // The group's name, or with its id's last four digits when a module here holds that name already.
-    char unique[40];
-    mm::formatTo(unique, sizeof(unique), "%s", name);
-    for (uint8_t c = 0; c < devices.childCount(); c++)
-        if (devices.child(c)->name() && std::strcmp(devices.child(c)->name(), unique) == 0) {
-            mm::formatTo(unique, sizeof(unique), "%s %s", name, id + std::strlen(id) - 4);
-            break;
-        }
+    // A name no module in the tree holds, so the document makes a module rather than editing one; the shared name arrives with the merge.
+    Scheduler* s = Scheduler::instance();
+    char unique[MoonModule::kNameLen];
+    if (!s || !s->freeName(name, unique, sizeof(unique))) return;
     JsonSink doc;
     doc.append("{");
     doc.writeJsonString(devices.name());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/system/DeviceGroup.h"   // kIdLen: the width of a group id
 #include "core/util/Hlc.h"
 #include "core/util/ScratchBuffer.h"
 #include "platform/platform.h"
@@ -24,12 +25,16 @@ namespace osc { class Reader; }
 /// **Who keeps a group.** Its members and the device that made it. A member that hears of a group it lacks creates it, as the API adds a module, so it saves and shows like any other; a device the group's members leave out drops it.
 ///
 /// **Deleted is deleted everywhere.** A group the user deletes leaves a marker, its id and a stamp, saved in Discovery's hidden `deletedGroups`: sent three times, answered to any late copy, and newer than the group's every edit, so it holds against a member that was off. The newest eight markers are kept, the oldest giving way.
+///
+/// **A marker only grows newer.** An equal or older deletion leaves it as it is, and a group held under a marker goes, retried each second until it has.
+///
+/// **What it accepts.** A message whose id is not twenty lowercase hex digits, or whose stamp leaves the clock no room to grow, is ignored, and a definition is merged whole or not at all.
 class DeviceGroupSync {
 public:
     /// Its buffers belong to `owner`, Discovery, which frees them on release.
-    explicit DeviceGroupSync(MoonModule& owner) : buf_(owner), seen_(owner), tombs_(owner) {}
+    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), buf_(owner), seen_(owner), tombs_(owner) {}
 
-    /// Once a second: open the socket, read what arrived, notice a group deleted here, and send what Trickle says is due.
+    /// Once a second: read what arrived, notice a group deleted here, send what Trickle says is due, and save the markers when they changed.
     void tick(MoonModule& devices, char* saved, size_t savedCap);
 
     /// Close the socket and free the buffers.
@@ -49,9 +54,9 @@ public:
     static constexpr const char* kDeletedAddress = "/moonlight/devicegroup/deleted";
 
 private:
-    struct GroupId { char id[21]; };
+    struct GroupId { char id[DeviceGroup::kIdLen + 1]; };
     /// A deleted group's marker, and how many more times it goes out.
-    struct Tomb { char id[21]; Stamp stamp; uint8_t sendsLeft; };
+    struct Tomb { char id[DeviceGroup::kIdLen + 1]; Stamp stamp; uint8_t sendsLeft; };
 
     bool ensureOpen();
     /// True when the datagram is a definition, handled or not.
@@ -67,6 +72,10 @@ private:
     static Stamp stampNow(MoonModule& devices);
     void sendDue(MoonModule& devices);
     void markDeleted(const char* id, const Stamp& stamp, uint8_t sends);
+    /// The index of the group's marker, or -1 when it has none.
+    int tombIndex(const char* id) const;
+    /// A slot for a new marker: one more while room and memory allow, else the oldest; null when memory refuses the first.
+    Tomb* tombSlot();
     void sendDeletion(const Tomb& t);
     void send(const uint8_t* data, size_t len);
     void loadTombs(const char* saved);
@@ -76,6 +85,7 @@ private:
     void create(MoonModule& devices, const char* id, const char* name);
     void removeLocal(MoonModule& devices, DeviceGroup& g);
 
+    MoonModule& owner_;            ///< Discovery, which saves the markers
     platform::UdpSocket sock_;
     bool open_ = false, loaded_ = false, tombsChanged_ = false;
     ScratchBuffer<uint8_t> buf_;   ///< one datagram, taken when the socket opens

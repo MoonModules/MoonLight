@@ -174,6 +174,10 @@ using WorkerFn = void(*)(void* user);
 /// Spawn `fn(user)` pinned to `core`, where -1 means no affinity; false when the task cannot be created.
 bool spawnPinnedTask(WorkerTask& t, const char* name, WorkerFn fn, void* user,
                      size_t stackBytes, uint8_t priority, int core);
+#ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
+/// Make spawnPinnedTask refuse, as a board out of task memory does, so a test reaches the inline fallback; false restores.
+void setTestSpawnFails(bool fail);
+#endif
 /// Wake the task blocked in waitNotify, safe from any task on any core.
 void notifyTask(WorkerTask& t);
 /// Block inside the spawned fn until notifyTask fires or `timeoutMs` elapses; false on timeout.
@@ -1021,6 +1025,8 @@ public:
     bool open();
     /// Listen on a port, on one local address or on any interface; false when it is taken. Listening flips the whole socket non-blocking, sends included.
     bool bind(uint16_t port, const uint8_t localIp[4] = nullptr);
+    /// Listen on a discovery port on any interface beside the other listeners of that port, each hearing every broadcast and multicast datagram, as mDNS responders share theirs; a board runs one process, so there it is bind.
+    bool bindShared(uint16_t port);
     /// Receive one datagram without blocking: bytes copied, or -1 when nothing is pending; a datagram longer than `maxLen` is truncated, and `srcIp` and `srcPort` answer who sent it.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
     /// The most sockets one wait watches.

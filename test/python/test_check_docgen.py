@@ -1230,3 +1230,16 @@ def test_missing_stage_table_markers_are_a_finding_that_says_so(monkeypatch, tmp
     findings = _stage_table_findings(monkeypatch, tmp_path, "a CLAUDE.md without the markers\n")
     assert len(findings) == 1 and findings[0][0] == "CLAUDE.md"
     assert "markers are missing" in findings[0][1]
+
+
+def test_a_git_failure_is_an_incomplete_check_and_not_a_file_that_is_not_ignored(monkeypatch):
+    import subprocess
+
+    import check_docgen
+    for status, expected in ((0, False), (1, True)):
+        monkeypatch.setattr(check_docgen.subprocess, "run", lambda cmd, status=status, **k: subprocess.CompletedProcess(cmd, status))
+        assert check_docgen._covered("src/core/Thing.h") is expected   # 0 means git ignores it, 1 that it does not
+    monkeypatch.setattr(check_docgen.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 128))
+    import pytest
+    with pytest.raises(RuntimeError, match="check-ignore failed"):
+        check_docgen._covered("src/core/Thing.h")

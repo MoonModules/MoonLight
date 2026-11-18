@@ -1,17 +1,22 @@
-// MoonLight Web UI: all logic in one hand-maintained file per CLAUDE.md.
+// MoonLight Web UI: the device page's logic, hand-maintained; the parts MoonDeck shares (the device map, its node popup, the update
+// rules and the page helpers they use) are modules of their own.
 // Loaded as <script type="module"> so it can import the shared install-picker
 // component used by both the device UI (here, OTA flash) and the GitHub Pages
 // installer (first flash via Web Serial). Module loading is deferred by
 // default; entry-point is the WS init at the bottom: no ordering surprises.
-import { installPicker, HOST_DOWNLOAD, loadReleases, latestStable, releaseByTag, releaseAsset, firmwareAssetName, moonbaseAssetName,
-         migrateAssetName, mirrorUrl, chipKey } from "./install-picker.js";
+import { installPicker, HOST_DOWNLOAD, loadReleases } from "./install-picker.js";
 import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
-import { isNewer, parse } from "./semver.js";
+import { mountDeviceMap } from "./devicemap.js";
+import { openDevicePopup } from "./devicepopup.js";
+import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
+import { UPDATE_TTL_MS, channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
+import { installFirmware, INSTALL_KINDS, MOONBASE_SILENT_MSG, moonbaseStatus, waitForMoonBase } from "./deviceinstall.js";
+import { isNewer } from "./semver.js";
 import { collectFiles, restoreBundle } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
-         emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName } from "./help.js";
+         emojiTagsFor, emojiChipRow, chipsMatch } from "./help.js";
 
 // Sections (top to bottom):
 //   1. State + storage
@@ -611,17 +616,6 @@ function userIsEditing() {
     if (typing || (el && el.closest("select")) || document.querySelector('select[data-open="true"]')) return true;
     const sel = window.getSelection();
     return !!(sel && !sel.isCollapsed && sel.rangeCount > 0 && String(sel).length > 0);
-}
-
-// The message for a failed fetch Response: the server's own `{"error": …}` body (JSON, e.g.
-// "not enough space (N free)") when present, else a bare `HTTP <status>`. Every /api/* handler
-// returns errors as that JSON shape, so this is the one place the extraction lives.
-async function errorMessage(res) {
-    try {
-        const j = await res.json();
-        if (j && j.error) return j.error;
-    } catch (_) { /* non-JSON error body: fall through to the status code */ }
-    return `HTTP ${res.status}`;
 }
 
 // A write over the open /ws socket rather than a POST: the input bridges write up to 30 times a second, and a board
@@ -1563,164 +1557,7 @@ async function allowAddressEdit(moduleName, field, value) {
     return confirmAddressMove(addressMoveTarget(field, value, ip));
 }
 
-// Byte counts out of a device status line, or null when it carries none.
-//
-// ONE PARSER for one wire shape. Every image writer reports progress as "<phase>: N of M bytes",
-// and the phase word differs by writer (`flashing`, `writing MoonBase`, MoonBase's own
-// `downloading`), so matching the numbers rather than the phrase is what lets one reader serve
-// them all. Two hand-written regexes had already drifted apart on whether `bytes` was required.
-//
-// An ERROR line can carry the same shape ("upload ended early (12 of 34 bytes)"), so it is
-// rejected here rather than left to the caller's check order.
-function installProgress(text) {
-    if (!text || text.startsWith("error")) return null;
-    const m = /(\d+) of (\d+) bytes/.exec(text);
-    if (!m) return null;
-    const read = parseInt(m[1], 10), total = parseInt(m[2], 10);
-    return total > 0 ? { read, total } : null;
-}
-
-// Raise the overlay over an install the DEVICE is performing, and follow it to the end.
-//
-// Every in-place install (a URL or a release, either image) answers 202 and then works on its own
-// task, so the only way to know how far it has got is to ask. The device puts its byte counts in
-// its status line, which is where both the text and the bar come from: one watcher, whichever
-// image is being written.
-//
-// TWO ENDINGS, because the two installs end differently and getting this wrong is what made an
-// overlay hang on a board where the install had actually succeeded:
-//   MoonBase   leaves the app running, so the status falls back to rest and the card is redrawn.
-//   the app    reboots into the image just written, so the device goes SILENT and comes back on
-//              the same address. Silence after work is therefore success, not a stall.
-//
-// Polls the device rather than the cached `state`: across a reboot the WebSocket is down and the
-// cache is frozen at the last frame before it went, which reads as an install that stopped.
-//
-// Not to be confused with moonbaseUpdateFlow, which carries an install across TWO reboots (into
-// MoonBase and back) and has its own retry and handoff handling.
-// The device's own Firmware status, or null when it is not answering.
-async function probeFirmwareStatus() {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 2500);
-    try {
-        const r = await fetch("/api/modules/Firmware", { cache: "no-store", signal: ctl.signal });
-        if (!r.ok) return null;
-        const mod = await r.json();
-        return (mod && mod.status) || "";
-    } catch (_) {
-        return null;
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-// Wait for a device that reboots after an install: gone at least once and answering again, or answering throughout past a grace period, false at the deadline.
-// A fixed wait reloaded a Teensy still copying its image onto the browser's connection-refused page.
-async function waitForReboot(timeoutMs = 120000) {
-    const start = Date.now();
-    let wentDown = false;
-    while (Date.now() - start < timeoutMs) {
-        const up = (await probeFirmwareStatus()) !== null;
-        if (!up) wentDown = true;
-        else if (wentDown || Date.now() - start > 15000) return true;
-        await fwSleep(1000);
-    }
-    return false;
-}
-
-function watchInstall(kind) {
-    const ui = showUpdateOverlay();
-    ui.status(`Installing ${kind.label.toLowerCase()}\u2026`);
-    const deadline = Date.now() + 300000;
-    // Only treat an ending as SUCCESS once work was actually seen: the first poll can land before
-    // the install task has written anything, and rest or silence then means "not started yet".
-    let sawWork = false;
-    let silent = 0;
-    const probe = probeFirmwareStatus;
-
-    const tick = async () => {
-        if (Date.now() > deadline) { ui.fail("Install timed out."); return; }
-        const text = await probe();
-
-        if (text === null) {
-            // Not answering. During a rebooting install that is the reboot itself.
-            silent++;
-            if (kind.reboots && sawWork) {
-                ui.busy("Rebooting\u2026");
-                if (silent > 90) { ui.fail(MOONBASE_SILENT_MSG); return; }
-            } else if (silent >= 4) {
-                ui.status("The device is not answering\u2026");
-            }
-        } else {
-            if (text.startsWith("error")) { ui.fail(text); return; }
-            const p = installProgress(text);
-            if (p) {
-                ui.status(`Installing ${fmSize(p.total)}\u2026`);
-                ui.progress(p.read, p.total);
-                sawWork = true;
-            } else if (text && text !== "idle") {
-                // A WORKING PHASE counts as work even with no byte counts. The device reports
-                // counts only when it knows the content length, and a chunked response (any
-                // proxy, or a server that does not send Content-Length) leaves it with none: the
-                // status then walks checking -> erasing -> writing -> idle without ever matching,
-                // so an install that SUCCEEDED sat behind the overlay until the five-minute
-                // timeout. The bar stays indeterminate there, which is honest: the total is
-                // genuinely unknown.
-                ui.status(`Installing ${kind.label.toLowerCase()}\u2026`);
-                sawWork = true;
-            }
-            // Back to rest with no error is the success: a fresh run starts at rest, so a rebooting
-            // install that comes back between two probes shows it too. ANSWERING AGAIN AFTER SILENCE
-            // is a rebooting install's success as well: the image it wrote is the one now running.
-            if (sawWork && (text === "" || text === "idle" || (kind.reboots && silent > 0))) {
-                ui.status(`${kind.label} installed`);
-                await fwSleep(1200);
-                location.reload();
-                return;
-            }
-            silent = 0;
-        }
-        await fwSleep(1000);
-        tick();
-    };
-    tick();
-}
-
-// POST a file and paint a REAL progress bar while it uploads.
-//
-// fetch() cannot report upload progress at all (its streaming request bodies are not available
-// here), so this is the one place an XMLHttpRequest earns its keep: xhr.upload.onprogress is the
-// only way to know how far a browser-pushed install has got. The device-fetched installs report
-// through the byte counts in their status line instead, so every install has a bar.
-function uploadWithProgress(route, file, ui, signal) {
-    return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        // The overlay's cancel aborts through `signal`, which an XMLHttpRequest takes as a listener rather than an option.
-        if (signal) {
-            if (signal.aborted) { reject(new Error("canceled")); return; }
-            signal.addEventListener("abort", () => xhr.abort(), { once: true });
-        }
-        // The install overlay watches for stalls; the File Manager's drop upload shows only progress.
-        if (ui.watchStalls) ui.watchStalls();
-        xhr.open("POST", route);
-        xhr.setRequestHeader("Content-Type", "application/octet-stream");
-        xhr.upload.addEventListener("progress", (e) => {
-            if (e.lengthComputable) ui.progress(e.loaded, e.total);
-        });
-        xhr.addEventListener("load", () => {
-            // The device answers before it reboots, so a 2xx is the real success signal. Anything
-            // else carries the device's own reason in the JSON body.
-            if (xhr.status >= 200 && xhr.status < 300) { resolve(); return; }
-            let msg = `HTTP ${xhr.status}`;
-            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) { msg = xhr.responseText || msg; }   // MoonBase answers in plain text
-            reject(new Error(msg));
-        });
-        xhr.addEventListener("error", () => reject(new Error("the connection dropped")));
-        xhr.addEventListener("abort", () => reject(new Error("canceled")));
-        xhr.send(file);
-    });
-}
-
+// The full-screen overlay every install on the Firmware card runs behind: the UI deviceinstall.js reports on, its done reloading the page.
 function showUpdateOverlay() {
     const ov = document.createElement("div");
     ov.className = "fw-overlay";
@@ -1767,6 +1604,7 @@ function showUpdateOverlay() {
             if (r !== read) { read = r; total = t; lastMove = Date.now(); if (stalled) show(false); }
         },
         fail(text) { clearInterval(watch); base = text; show(false); bar.remove(); cancel.remove(); dismiss.style.display = ""; },
+        done(text) { clearInterval(watch); base = text; show(false); fwSleep(1200).then(() => location.reload()); },
         watchStalls() {
             watch = setInterval(() => {
                 const on = read > 0 && read < total && Date.now() - lastMove > 1500;
@@ -1777,31 +1615,11 @@ function showUpdateOverlay() {
     };
 }
 
-const fwSleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Probe GET /moonbase once: "up" (200 + status text), "app" (404: the application is answering),
-// or "silent" (no answer: the device is mid-reboot). Never throws.
-async function probeMoonBase() {
-    // Bounded: against a powered-off device an untimed fetch hangs for up to a minute on the
-    // TCP connect, which starves the poll loop of the very silence it is trying to measure.
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 2500);
-    try {
-        const r = await fetch("/moonbase", { cache: "no-store", signal: ctl.signal });
-        if (r.ok) return { state: "up", text: await r.text() };
-        return { state: "app" };
-    } catch (_) {
-        return { state: "silent" };
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
 // When this app page finds MoonBase answering underneath it (a cached or suspended tab over
 // a device that switched images), say so and load MoonBase's real page: the cache-busting
 // query makes the browser fetch it instead of re-serving this one. True when the handoff ran.
 async function moonbaseHandoff() {
-    if ((await probeMoonBase()).state !== "up") return false;
+    if ((await moonbaseStatus("")) === null) return false;
     document.body.innerHTML = "";
     const note = document.createElement("p");
     note.style.cssText = "font:16px system-ui;margin:3rem auto;max-width:30rem;text-align:center";
@@ -1809,142 +1627,6 @@ async function moonbaseHandoff() {
     document.body.appendChild(note);
     setTimeout(() => location.replace("/?" + Date.now()), 1200);
     return true;
-}
-
-// The one-click cycle. opts is {url} (device installs it unattended off the NVS-staged URL) or
-// {file} (the browser holds the image and pushes it to MoonBase once MoonBase answers).
-const MOONBASE_SILENT_MSG = "MoonBase did not answer. If its WiFi fell back, join the " +
-                            "MoonBase access point and open http://4.3.2.1";
-
-// Ask `read` every `everyMs` until `done` holds for its answer or `ms` pass, `onWait` hearing each other answer; that answer, or null. The one
-// wait for a device the Firmware card and the Devices map share.
-async function pollUntil(read, done, ms, everyMs = 3000, onWait = null) {
-    const deadline = Date.now() + ms;
-    while (Date.now() < deadline) {
-        await fwSleep(everyMs);
-        const got = await read();
-        if (got && done(got)) return got;
-        if (got && onWait) await onWait(got);
-    }
-    return null;
-}
-
-// Poll until MoonBase serves (a 200 on the probe). False on deadline: the device never came up,
-// or came up unreachable (AP fallback).
-async function waitForMoonBase(deadline) {
-    return !!(await pollUntil(probeMoonBase, (p) => p.state === "up", deadline - Date.now(), 2000));
-}
-
-async function moonbaseUpdateFlow(opts) {
-    const ui = showUpdateOverlay();   // opens before the reboot: no dead gap
-    try {
-        ui.status("Restarting into MoonBase\u2026");
-        // The kickoff response can be cut off by the reboot; a dead socket here is not a failure.
-        let res = null;
-        try {
-            res = opts.url
-                ? await fetch("/api/firmware/url", {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ url: opts.url }) })
-                : await fetch("/api/firmware/moonbase", { method: "POST" });
-        } catch (_) {}
-        if (res && !res.ok && res.status !== 202) throw new Error(await errorMessage(res));
-
-        if (opts.file) {
-            // The upload needs MoonBase serving before the browser can push the image.
-            if (!(await waitForMoonBase(Date.now() + 120000))) throw new Error(MOONBASE_SILENT_MSG);
-            ui.status(`Installing ${fmSize(opts.file.size)}\u2026`);
-            const uploadCtl = new AbortController();
-            ui.setUpload(uploadCtl);
-            try {
-                await uploadWithProgress("/api/firmware/upload", opts.file, ui, uploadCtl.signal);
-            } catch (err) {
-                if (uploadCtl.signal.aborted) {
-                    // The user's cancel, not a failure: the dropped connection aborts the
-                    // write on the device, which stays waiting in MoonBase.
-                    ui.fail("Install canceled: the device is waiting in MoonBase.");
-                    return;
-                }
-                if (err instanceof Error && err.message.startsWith("error")) throw err;
-                // A dead socket mid-upload (power cut, WiFi drop) is not a verdict: the watch
-                // loop below sees where the device lands and retries the upload from there.
-            } finally {
-                ui.setUpload(null);
-            }
-        }
-
-        // Watch until the app answers again. On the unattended URL path MoonBase installs BEFORE
-        // it ever serves, so a successful cycle is silence followed by the new app's 404 on the
-        // probe; MoonBase answering (200) is the upload path's install window, and on the URL
-        // path its failure parking spot (the probe body is its status). The dying OLD app also
-        // 404s the probe for a moment, so "app" only counts as done once the device has been
-        // seen away, or after a grace period long enough that the kickoff reboot must have run.
-        const watchStart = Date.now();
-        let deadline = watchStart + 300000;
-        let sawAway = false;
-        let silentStreak = 0;
-        let retries = 0;
-        while (Date.now() < deadline) {
-            await fwSleep(2000);
-            const probe = await probeMoonBase();
-            if (probe.state !== "silent") silentStreak = 0;
-            if (probe.state === "silent") {
-                sawAway = true;
-                // A reboot is a few silent probes; many in a row is a device that lost power or
-                // the network. Say so instead of freezing on the last byte count.
-                if (++silentStreak >= 4) {
-                    ui.status("The device is not answering, waiting for it to come back\u2026");
-                }
-            } else if (probe.state === "up" && probe.text === "idle" && sawAway) {
-                // MoonBase is up with NOTHING running after the cycle already started: the
-                // install was interrupted (a power cut lands exactly here: blank otadata boots
-                // MoonBase, and the staged URL was already consumed). The browser still holds
-                // the payload, so the one click survives the cut: hand it over again.
-                if (retries >= 2) throw new Error("the install keeps getting interrupted");
-                retries++;
-                deadline += 180000;   // a retry restarts the ~40 s install; extend the watch
-                ui.status("The install was interrupted, retrying\u2026");
-                try {
-                    if (opts.url) {
-                        await fetch("/api/firmware/url", { method: "POST", body: opts.url });
-                    } else {
-                        await fetch("/api/firmware/upload", {
-                            method: "POST", headers: { "Content-Type": "application/octet-stream" },
-                            body: opts.file });
-                    }
-                    // The response itself is not consumed: MoonBase reboots on success and the
-                    // probes below see the outcome either way.
-                } catch (_) {}
-            } else if (probe.state === "up") {
-                sawAway = true;   // MoonBase answering means the old app is gone
-                if (probe.text === "canceled") {
-                    ui.fail("Install canceled: the device is waiting in MoonBase.");
-                    return;
-                }
-                if (probe.text.startsWith("error")) throw new Error(probe.text);
-                // The unattended install reports "downloading: N of M bytes"; render it the
-                // way the file path reads, with a real bar.
-                const dl = installProgress(probe.text);
-                if (dl) {
-                    ui.status(`Installing ${fmSize(dl.total || dl.read)}\u2026`);
-                    ui.progress(dl.read, dl.total);
-                } else {
-                    // "idle" is MoonBase's quiescent state; mid-cycle it means the install
-                    // has not started yet, which deserves better words than "Idle".
-                    ui.status(!probe.text || probe.text === "idle"
-                              ? "Preparing the install\u2026" : probe.text);
-                }
-            } else if (probe.state === "app" && (sawAway || Date.now() - watchStart > 20000)) {
-                ui.status("Done, reloading\u2026");
-                await fwSleep(1000);
-                location.reload();
-                return;
-            }
-        }
-        throw new Error("timed out waiting for the new firmware");
-    } catch (err) {
-        ui.fail("Update failed: " + err.message);
-    }
 }
 
 // Which surface bank a control belongs to, or null for an ordinary row. A surface strip is
@@ -2407,30 +2089,7 @@ function createCard(mod, depth) {
         const KIND_OF = { App: "app", MoonBase: "moonbase", "WiFi coproc": "coprocessor" };
         const images = firmwareImages(mod);
         const kind = KIND_OF[images[ctrlValue("image") || 0]] || "app";
-        const KINDS = {
-            app: {
-                label: "App",
-                urlRoute: "/api/firmware/url",
-                uploadRoute: "/api/firmware/upload",
-                confirm: null,
-                reboots: true,
-            },
-            moonbase: {
-                label: "MoonBase",
-                urlRoute: "/api/firmware/moonbase-update-url",
-                uploadRoute: "/api/firmware/moonbase-update",
-                confirm: askMoonBaseInstall,
-                reboots: false,
-            },
-            coprocessor: {
-                label: "WiFi coproc",
-                urlRoute: "/api/firmware/coprocessor-update-url",
-                uploadRoute: "/api/firmware/coprocessor-update",
-                confirm: null,
-                reboots: true,
-            },
-        };
-        const k = KINDS[kind];
+        const k = INSTALL_KINDS[kind];
 
         // WHICH IMAGE, as a tab strip: the control chooses what every row is about, which reads
         // as a tab rather than as one setting among the settings it governs. The device holds the
@@ -2446,7 +2105,7 @@ function createCard(mod, depth) {
                 tab.className = tabKind === kind ? "tab tab-active" : "tab";
                 tab.setAttribute("role", "tab");
                 tab.setAttribute("aria-selected", tabKind === kind ? "true" : "false");
-                tab.textContent = KINDS[tabKind].label;
+                tab.textContent = INSTALL_KINDS[tabKind].label;
                 tab.addEventListener("click", () => {
                     if (tabKind !== kind) sendControl(mod.name, "image", i);
                 });
@@ -2460,68 +2119,10 @@ function createCard(mod, depth) {
             controlsBox.insertBefore(strip, titleRow ? titleRow.nextSibling : controlsBox.firstChild);
         }
 
-        const status = document.createElement("span");
-        status.className = "fw-upload-status";
-        const say = (t) => { status.textContent = t; };
-
-        // Upload an image the browser holds, behind the overlay every install shows; the request stays open while it writes, so the bar follows the upload itself.
-        const installBlob = async (blob, ui = showUpdateOverlay(), ctl = new AbortController()) => {
-            ui.setUpload(ctl);
-            if (ctl.signal.aborted) { ui.fail("Install canceled."); return; }
-            ui.status(`Installing ${fmSize(blob.size)}…`);
-            try {
-                await uploadWithProgress(k.uploadRoute, blob, ui, ctl.signal);
-                if (k.reboots) {
-                    ui.busy("Rebooting…");
-                    if (!await waitForReboot()) { ui.fail("The device did not come back within two minutes: check it, then reload."); return; }
-                } else {
-                    ui.status(`${k.label} installed`);
-                    await fwSleep(1200);
-                }
-                location.reload();
-            } catch (err) {
-                ui.fail("Install failed: " + err.message);
-            }
-        };
-
-        // For a device without TLS the browser downloads the image and uploads it; a release asset comes from its Pages copy, since GitHub's refuses a cross-origin read.
-        const installViaBrowser = async (url) => {
-            const source = mirrorUrl(url, INSTALLER_URL);
-            const ui = showUpdateOverlay();
-            // One controller for both transfers, so cancel stops the download and the upload that follows it.
-            const ctl = new AbortController();
-            ui.setUpload(ctl);
-            ui.status("Downloading the image…");
-            let blob;
-            try {
-                const res = await fetch(source, { signal: ctl.signal });
-                if (!res.ok) throw new Error(`HTTP ${res.status} from ${source}`);
-                blob = await res.blob();
-            } catch (err) {
-                ui.fail(ctl.signal.aborted ? "Install canceled." : "Download failed: " + err.message);
-                return;
-            }
-            await installBlob(blob, ui, ctl);
-        };
-
-        // Hand a URL to the device. Every install route answers 202 and works on its own task, so
-        // the overlay reports progress rather than this response.
-        const installUrl = async (url, sha256) => {
-            if (kind === "app" && hasMoonBase) {
-                // The app is written FROM MoonBase, so this reboots twice and moonbaseUpdateFlow
-                // carries it across the handover.
-                moonbaseUpdateFlow({ url });
-                return;
-            }
-            const res = await fetch(k.urlRoute, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(url ? { url, sha256: sha256 || undefined } : {}),
-            });
-            if (res.status === 501 && kind === "app") { await installViaBrowser(url); return; }
-            if (!res.ok) throw new Error(await errorMessage(res));
-            watchInstall(k);
-        };
+        // Every install on this card, behind the overlay; the app of a board with MoonBase is written from there.
+        const install = (source) => installFirmware("", kind, source, showUpdateOverlay(), { viaMoonBase: hasMoonBase });
+        // A MoonBase install asks first: while it is written, the device has no recovery image.
+        const confirmed = async () => kind !== "moonbase" || askMoonBaseInstall();
 
         // -- the rows that ride the picker's seam ---------------------------------------
         const extras = document.createElement("div");
@@ -2541,17 +2142,7 @@ function createCard(mod, depth) {
         urlBtn.textContent = "Install";
         urlBtn.addEventListener("click", async () => {
             const url = urlField.value.trim();
-            if (!url) return;
-            if (k.confirm && !await k.confirm()) return;
-            urlBtn.disabled = true;
-            say("installing…");
-            try {
-                await installUrl(url);
-            } catch (err) {
-                say("install failed: " + err.message);
-            } finally {
-                urlBtn.disabled = false;
-            }
+            if (url && await confirmed()) install({ url });
         });
         urlRow.append(urlLabel, urlField, urlBtn);
         // A device its host or its user updates installs no file itself, so it offers the download alone.
@@ -2566,7 +2157,7 @@ function createCard(mod, depth) {
         const upBtn = document.createElement("button");
         upBtn.className = "fm-tool fm-tool--icon";
         upBtn.textContent = "↥";
-        upBtn.title = `Install ${k.label.toLowerCase()} from a file on your computer`;
+        upBtn.title = `Install ${k.name} from a file on your computer`;
         const upInput = document.createElement("input");
         upInput.type = "file";
         upInput.accept = ".bin,application/octet-stream";
@@ -2574,24 +2165,11 @@ function createCard(mod, depth) {
         upInput.addEventListener("change", async () => {
             const file = (upInput.files || [])[0];
             upInput.value = "";                   // re-picking the same file re-fires change
-            if (!file) return;
-            if (k.confirm && !await k.confirm()) return;
-            if (kind === "app" && hasMoonBase) {
-                // The app cannot flash itself: the browser pushes this file to MoonBase.
-                moonbaseUpdateFlow({ file });
-                return;
-            }
-            upBtn.disabled = true;
-            try {
-                await installBlob(file);
-            } finally {
-                upBtn.disabled = false;
-            }
+            if (file && await confirmed()) install({ file });
         });
         upBtn.addEventListener("click", () => upInput.click());
         fileRow.append(fileLabel, upBtn, upInput);
         if (selfInstalls) extras.appendChild(fileRow);
-        extras.appendChild(status);
 
         // -- the radio chip: one matching image per release, so a button rather than the picker --
         if (kind === "coprocessor") {
@@ -2604,17 +2182,7 @@ function createCard(mod, depth) {
             relBtn.className = "fm-tool";
             relBtn.textContent = "Install the matching image";
             relBtn.title = "The device fetches the image built for its ESP-Hosted release from GitHub, which needs internet on the device";
-            relBtn.addEventListener("click", async () => {
-                relBtn.disabled = true;
-                say("installing…");
-                try {
-                    await installUrl("");   // the device names the matching asset itself
-                } catch (err) {
-                    say("install failed: " + err.message);
-                } finally {
-                    relBtn.disabled = false;
-                }
-            });
+            relBtn.addEventListener("click", () => install({ url: "" }));   // the device names the matching asset itself
             relRow.append(relLabel, relBtn);
             controlsBox.appendChild(relRow);
             controlsBox.appendChild(extras);
@@ -2666,8 +2234,7 @@ function createCard(mod, depth) {
                     a.remove();
                     return;
                 }
-                if (k.confirm && !await k.confirm()) return;
-                await installUrl(binaryUrl, entry?.sha256);
+                if (await confirmed()) install({ url: binaryUrl, sha256: entry?.sha256 });
             },
         });
 
@@ -2684,7 +2251,7 @@ function createCard(mod, depth) {
                 const ui = showUpdateOverlay();
                 ui.status("Restarting into MoonBase…");
                 try { await fetch("/api/firmware/moonbase", { method: "POST" }); } catch (_) {}
-                if (await waitForMoonBase(Date.now() + 120000)) { location.reload(); return; }
+                if (await waitForMoonBase("", 120000)) { location.reload(); return; }
                 ui.fail(MOONBASE_SILENT_MSG);
             });
             mbRow.appendChild(mbBtn);
@@ -2735,52 +2302,6 @@ function createCard(mod, depth) {
     }
 
     return { card, childrenEl };
-}
-
-// Wire a button as a press-twice confirm: the first click arms it (adds the
-// `armed` class, optional armed label/title), a second click runs `onConfirm`.
-// Disarms after 3s or when the pointer leaves. Used by the delete and reboot
-// buttons: no browser confirm() popup. `armedText` is optional (delete swaps
-// 🗑 → ✓; reboot keeps its glyph). The pre-arm title is captured live so a
-// title updated elsewhere (e.g. reboot's crashed-state text) restores correctly.
-function armPressTwice(btn, onConfirm, opts = {}) {
-    let armed = false;
-    let disarmTimer = null;
-    let savedText = "";
-    let savedTitle = "";
-    const disarm = () => {
-        // Only restore label/title if we actually armed: otherwise a mouseleave before the first
-        // click would write the initial empty savedText/savedTitle over the button, collapsing a
-        // text-sized button (e.g. "🗑 delete") to an empty sliver.
-        if (!armed) return;
-        armed = false;
-        btn.classList.remove("armed");
-        if (opts.armedText !== undefined) btn.textContent = savedText;
-        btn.title = savedTitle;
-        if (disarmTimer) { clearTimeout(disarmTimer); disarmTimer = null; }
-    };
-    btn.addEventListener("click", () => {
-        // Disarm before running the action so a stray second click can't fire
-        // it twice (e.g. two /api/reboot requests).
-        if (armed) { disarm(); onConfirm(); return; }
-        armed = true;
-        savedText = btn.textContent;
-        savedTitle = btn.title;
-        btn.classList.add("armed");
-        if (opts.armedText !== undefined) btn.textContent = opts.armedText;
-        if (opts.armedTitle !== undefined) btn.title = opts.armedTitle;
-        disarmTimer = setTimeout(disarm, 3000);
-    });
-    btn.addEventListener("mouseleave", disarm);
-}
-
-// Compact byte formatter: the largest of B, KB, MB and GB that keeps the number at 1 or more, with one decimal under 10.
-function fmtBytes(n) {
-    if (n < 1024) return n + "B";
-    const units = ["KB", "MB", "GB"];
-    let k = n / 1024, u = 0;
-    while (k >= 1024 && u < units.length - 1) { k /= 1024; u++; }
-    return (k < 10 ? k.toFixed(1) : Math.round(k)) + units[u];
 }
 
 // Stats line: timing (🕒, fps or µs/ms per the global toggle) + memory
@@ -2955,7 +2476,7 @@ function docPathForType(moduleType) {
 //
 // help.json is generated from the module headers (moondeck/docs/gen_help.py). Each release carries its own copy, mirrored on Pages beside its binaries, so a device reads the help of the firmware it runs; the docs site's copy serves a release Pages does not mirror. The Pages host sends `access-control-allow-origin: *`, so a page served by a device may read either. A device's page is plain HTTP, which has no Cache API, so the last copy lives in localStorage and shows at once, offline included; the fetch then revalidates it with the ETag Pages sends.
 const HELP_URL = "https://moonmodules.org/MoonLight/help/help.json";
-const HELP_URL_RELEASE = (tag) => `https://moonmodules.org/MoonLight/install/releases/${tag}/MoonLight-help.json`;
+const HELP_URL_RELEASE = (tag) => `${INSTALLER_URL}releases/${tag}/MoonLight-help.json`;
 const LS_HELP = "mm_help";            // the last help.json fetched with its address, as {url, text}
 // While developing help: `?help=local` reads the file gen_help last wrote, which preview_installer serves on this machine, and `?help=published` returns to the docs site. A fixed address, so a shared link cannot point the help anywhere else.
 const HELP_URL_LOCAL = "http://localhost:8421/help/help.json";
@@ -4589,1306 +4110,16 @@ function buildListPads(container, rows, opts) {
     });
 }
 
-// A list drawn as a graph (ListSource::listAsGraph): each row a node, keyed by `ip` or else `name`,
-// colored by `type`, ringed when `self`, faded by its detail's age, and linked by an `edges` array of
-// {to, label}, the adjacency list. The linked nodes, this device among them, are placed by
-// Fruchterman-Reingold force-directed layout, hand-written: nodes repel, edges attract, a cooling
-// step limits each move, and positions are kept on the container, so a new device settles into the
-// picture rather than reshuffling it; this device sits fixed at the center. The nodes without a link
-// sit in a grid beneath, by name, so a swarm of idle devices reads as a list rather than a cloud.
-const GRAPH_W = 600, GRAPH_LINKED_H = 300, GRAPH_CELL_W = 120, GRAPH_CELL_H = 76;   // GRAPH_W: the width before the map's box is measured
-const GRAPH_MARGIN_X = GRAPH_CELL_W / 2, GRAPH_MARGIN_TOP = 24, GRAPH_MARGIN_BOTTOM = 60;   // a label fits inside
-const GRAPH_PAD_X = 12;
-const GRAPH_SHOW = [["ip", "IP", false], ["version", "version", false], ["traffic", "traffic", true]];   // what a viewer shows or hides, and its default; a node's lights and services, its emoji, always show
-const GRAPH_SHOW_KEY = "MoonLight.graph.show.v2";   // v2: address and version start hidden
-const GRAPH_ZOOM_MAX = 8;   // the closest the map zooms in, eight times
-const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its four label lines inside the cell
-const GRAPH_LABEL_DY = 20, GRAPH_LINE_H = { "graph-label": 12, "graph-sublabel": 11, "graph-services": 13 };   // a node's first baseline below its dot, and each line's height
-const GRAPH_CHAR_W = { "graph-label": 6.2, "graph-sublabel": 5, "graph-services": 13, "graph-edge-label": 5.4 };   // a character's width, about, at each line's font size
-// Each kind Discovery names its own color (devTypeStr), and a WLED flavor its own; a kind it does not name is generic, white on dark.
-const GRAPH_KIND_COLORS = { MoonLight: "var(--accent)", WLED: "var(--yellow)", "Hue bridge": "var(--green)", group: "var(--accent-soft)", generic: "var(--fg)", MoonBase: "var(--red)", ESPHome: "var(--teal)", Tasmota: "var(--blue)", "WLED-MM": "var(--orange)" };
-// Each light output's driver type as the kind of light it drives, which a node shows; a driver it does not name shows its type, and moving heads show 🎯 whatever drives them.
-const GRAPH_OUTPUT_EMOJI = { RmtLedDriver: "\u{1F4A1}", ParallelLedDriver: "\u{1F4A1}", PwmLightDriver: "\u{1F506}", Hub75Driver: "\u{1F532}", HdmiDriver: "\u{1F4FA}", PanelCardDriver: "\u{1F9F1}", HueDriver: "\u{1F3EE}", NetworkSendDriver: "\u{1F4E1}", NdiDriver: "\u{1F3A5}", HlsDriver: "\u{1F3A5}", RtspDriver: "\u{1F3A5}" };
-// Each protocol a module reports, a service it offers (NetworkUse::service) or traffic (NetworkUse::flow), as the emoji its node or line shows; one it does not name shows its name.
-const GRAPH_PROTOCOL_EMOJI = { HTTP: "\u{1F310}", OSC: "\u{1F39B}\uFE0F", "RTP-MIDI": "\u{1F3B9}", "audio sync": "\u{1F50A}", "Art-Net": "\u{1F3AD}", "E1.31": "\u{1F39A}\uFE0F", DDP: "\u{1F4E6}", ColorLight: "\u{1F9F1}", "WLED API": "\u{1F419}", Hue: "\u{1F3EE}" };
-
-// The kind a node is colored by: a WLED's flavor, WLED or WLED-MM, once its /json/info says which, and generic until then, so a WLED-MM
-// that does not answer never shows as a plain WLED; every other row its type.
-function graphKind(row) {
-    if (row.type === "WLED") return row.flavor ?? "generic";
-    return String(row.type ?? "generic");
-}
-
-function graphHash(text) {
-    let h = 2166136261;   // FNV-1a, so a kind keeps its color and a node its seed spot
-    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-    return h >>> 0;
-}
-
-// Place the nodes into `pos` and answer the picture's height: the linked ones by force in the top
-// area, the rest in rows of cells beneath it.
-function layoutGraph(nodes, links, pos, w = GRAPH_W, minH = 0) {
-    const linked = new Set(links.flatMap(([i, j]) => [i, j]));
-    nodes.forEach((node, i) => { if (node.self) linked.add(i); });
-    const force = [...linked];
-    // Room for every linked node's cell twice over, so the force layout spreads them rather than pinning them to the edges.
-    let areaH = force.length > 1 ? Math.max(GRAPH_LINKED_H, Math.ceil((force.length * GRAPH_CELL_W * GRAPH_CELL_H * 2) / w))
-                                 : (force.length ? GRAPH_CELL_H + GRAPH_MARGIN_TOP : 0);
-    const idle = nodes.map((node, i) => i).filter(i => !linked.has(i))
-        .sort((a, b) => String(nodes[a].row.name ?? nodes[a].key).localeCompare(String(nodes[b].row.name ?? nodes[b].key)));
-    const cols = Math.max(1, Math.floor(w / GRAPH_CELL_W)), cellW = w / cols;
-    const gridH = GRAPH_CELL_H * Math.ceil(idle.length / cols);
-    const natural = areaH + gridH;
-    if (force.length > 1) areaH += Math.max(0, minH - natural);   // a taller box gives the linked nodes the room
-    // A resized picture carries its nodes with it, in proportion, so it grows rather than reshuffles.
-    const was = pos.frame;
-    if (was && (was.w !== w || was.areaH !== areaH)) {
-        for (const p of pos.values()) if (!p.idle) { p.x *= w / was.w; p.y *= areaH / was.areaH; }
-    }
-    pos.frame = { w, areaH, natural };
-    layoutForce(nodes, links, force, pos, areaH, w);
-    separateNodes(nodes, force, pos, areaH, w);
-    idle.forEach((i, at) => {
-        pos.set(nodes[i].key, { x: cellW * (at % cols) + cellW / 2,
-                                y: areaH + GRAPH_CELL_H * Math.floor(at / cols) + GRAPH_CELL_DOT, idle: true });
-    });
-    return Math.max(areaH + gridH, minH);
-}
-
-// A linked node kept within the force area, its labels inside the picture.
-function graphInside(p, areaH, w = GRAPH_W) {
-    p.x = Math.min(w - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, p.x));
-    p.y = Math.min(areaH - GRAPH_MARGIN_BOTTOM, Math.max(GRAPH_MARGIN_TOP, p.y));
-}
-
-// Node overlap removal after the force layout: two nodes whose cells, a dot and its labels, overlap are pushed
-// apart along the axis that overlaps least, this device staying put, until none overlaps or the passes run out.
-function separateNodes(nodes, members, pos, areaH, w = GRAPH_W) {
-    const cw = GRAPH_CELL_W, ch = GRAPH_CELL_H - 10;
-    for (let pass = 0; pass < 60; pass++) {
-        let moved = false;
-        for (let a = 0; a < members.length; a++) {
-            for (let b = a + 1; b < members.length; b++) {
-                const na = nodes[members[a]], nb = nodes[members[b]];
-                const pa = pos.get(na.key), pb = pos.get(nb.key);
-                const dx = pb.x - pa.x, dy = pb.y - pa.y;
-                const ox = cw - Math.abs(dx), oy = ch - Math.abs(dy);
-                if (ox <= 0 || oy <= 0) continue;
-                moved = true;
-                const shareA = na.self ? 0 : (nb.self ? 1 : 0.5);
-                if (ox < oy) {
-                    const sx = dx < 0 ? -1 : 1;
-                    pa.x -= sx * ox * shareA; pb.x += sx * ox * (1 - shareA);
-                } else {
-                    const sy = dy < 0 ? -1 : 1;
-                    pa.y -= sy * oy * shareA; pb.y += sy * oy * (1 - shareA);
-                }
-                if (!na.self) graphInside(pa, areaH, w);
-                if (!nb.self) graphInside(pb, areaH, w);
-            }
-        }
-        if (!moved) return;
-    }
-}
-
-function layoutForce(nodes, links, members, pos, areaH, w = GRAPH_W) {
-    const n = members.length;
-    const cx = w / 2, cy = areaH / 2;
-    const inside = (p) => graphInside(p, areaH, w);
-    let fresh = 0;
-    for (const i of members) {
-        const key = nodes[i].key;
-        const p = pos.get(key);
-        if (p && !p.idle) { inside(p); continue; }
-        const h = graphHash(key);
-        pos.set(key, { x: cx + (h % 200) - 100, y: cy + ((h >>> 8) % 120) - 60 });
-        fresh++;
-    }
-    if (n < 2) { for (const i of members) if (nodes[i].self) pos.set(nodes[i].key, { x: cx, y: cy }); return; }
-    const k = 0.8 * Math.sqrt((w * areaH) / n);   // the ideal distance
-    // A settled picture with a newcomer or two needs few rounds; a fresh one more, fewer as it grows (O(n²) a round).
-    const rounds = fresh === 0 ? 0 : Math.max(20, Math.min(200, Math.floor(60000 / (n * n)) + 20));
-    const at = new Map(members.map((i, m) => [i, m]));
-    let heat = w / 8;
-    for (let r = 0; r < rounds; r++) {
-        const disp = members.map(() => ({ x: 0, y: 0 }));
-        for (let a = 0; a < n; a++) {
-            const pa = pos.get(nodes[members[a]].key);
-            for (let b = a + 1; b < n; b++) {
-                const pb = pos.get(nodes[members[b]].key);
-                let dx = pa.x - pb.x, dy = pa.y - pb.y;
-                const d = Math.max(0.5, Math.hypot(dx, dy));
-                const f = (k * k) / d;
-                dx /= d; dy /= d;
-                disp[a].x += dx * f; disp[a].y += dy * f;
-                disp[b].x -= dx * f; disp[b].y -= dy * f;
-            }
-        }
-        for (const [i, j] of links) {
-            const a = at.get(i), b = at.get(j);
-            const pa = pos.get(nodes[i].key), pb = pos.get(nodes[j].key);
-            let dx = pa.x - pb.x, dy = pa.y - pb.y;
-            const d = Math.max(0.5, Math.hypot(dx, dy));
-            const f = (d * d) / k;
-            dx /= d; dy /= d;
-            disp[a].x -= dx * f; disp[a].y -= dy * f;
-            disp[b].x += dx * f; disp[b].y += dy * f;
-        }
-        for (let a = 0; a < n; a++) {
-            const node = nodes[members[a]];
-            const p = pos.get(node.key);
-            if (node.self) { p.x = cx; p.y = cy; continue; }
-            disp[a].x += (cx - p.x) * 0.05;   // a little gravity, so a group not linked to this device stays in view
-            disp[a].y += (cy - p.y) * 0.05;
-            const d = Math.max(0.5, Math.hypot(disp[a].x, disp[a].y));
-            const step = Math.min(d, heat);
-            p.x += (disp[a].x / d) * step;
-            p.y += (disp[a].y / d) * step;
-            inside(p);
-        }
-        heat *= 0.95;
-    }
-}
-
-// The peers' own graphs, merged into this one: every node of the same kind as this device's own
-// node serves the same list at its `url`, so the page reads it from there, a few at a time, while
-// the map is on screen, again five seconds after the last round. A link one end reports and the
-// other, a peer that answered, does not, is drawn broken; a peer that does not answer, unreachable.
-const PEER_REFRESH_MS = 5000, PEER_TIMEOUT_MS = 3000, PEER_PARALLEL = 4;
-
-const graphKey = (row) => String(row.ip ?? row.name);
-
-async function fetchPeerGraph(url, opts) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), PEER_TIMEOUT_MS);
-    try {
-        const res = await fetch(`${url.replace(/\/$/, "")}/api/modules/${encodeURIComponent(opts.moduleName)}`, { signal: ctl.signal });
-        if (!res.ok) return { state: "absent", rows: [] };   // it answers, but serves no such list: older firmware
-        const mod = await res.json();
-        const c = (mod.controls || []).find(x => x.name === opts.ctrlName);
-        if (!c) return { state: "absent", rows: [] };
-        const value = Array.isArray(c.value) ? c.value : [];
-        const detail = Array.isArray(c.detail) ? c.detail : [];
-        return { state: "ok", rows: value.map((r, i) => Object.assign({}, r, detail[i] || {})) };
-    } catch (_) {
-        return { state: "silent", rows: [] };
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-// What a MoonLight node has behind, for its mark and its tooltip: its app behind its channel, a MoonBase or a WiFi coprocessor behind its app; "" when all are current.
-function nodeBehind(row, releases) {
-    const u = channelUpdate(row, releases);
-    return [u ? `${u.label} available` : "", row.moonbaseMismatch ? "MoonBase behind the app" : "",
-            row.coprocessorMismatch ? "WiFi coprocessor behind the app" : ""].filter(Boolean).join(", ");
-}
-
-// The release list the map marks nodes behind their channel by, loaded at most once an hour and drawn into when it arrives; null until then.
-function graphReleases(container) {
-    const now = Date.now();
-    if (!container._releasesAt || now - container._releasesAt > UPDATE_TTL_MS) {
-        container._releasesAt = now;
-        loadReleases({ maxAgeMs: UPDATE_TTL_MS }).then(list => { container._releases = list; if (list) redrawGraph(container); });
-    }
-    return container._releases || null;
-}
-
-function redrawGraph(container) {
-    if (container._graphPanning) return;   // the pan's end redraws
-    const a = container._graphArgs;
-    const old = container.querySelector("svg.list-graph");
-    if (!a || !old) return;
-    const focused = old.contains(document.activeElement) ? document.activeElement.closest("g.graph-link")?.dataset.key : null;
-    const fresh = buildListGraph(container, a.rows, a.details, a.opts);
-    old.replaceWith(fresh);
-    // The node a keyboard user is on keeps the focus, though the redraw, about once a second, replaced it.
-    if (focused != null) fresh.querySelector(`g.graph-link[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
-}
-
-function refreshPeerGraphs(container) {
-    const a = container._graphArgs;
-    if (!a || !a.opts || container._peerFetching) return;
-    if (Date.now() - (container._peerAt || 0) < PEER_REFRESH_MS) return;
-    if (!container.isConnected || container.offsetParent === null) return;   // asked only while the map shows
-    const own = a.rows.map((r, i) => Object.assign({}, r, a.details[i] || {}));
-    const self = own.find(r => r.self);
-    if (!self) return;
-    const queue = own.filter(r => !r.self && r.type === self.type && r.url);
-    const peers = container._peerGraphs || (container._peerGraphs = new Map());
-    // A peer gone from this device's list takes its graph, and what only it saw, off the map.
-    const asked = new Set(queue.map(graphKey));
-    for (const key of [...peers.keys()]) if (!asked.has(key)) peers.delete(key);
-    container._peerFetching = true;
-    const worker = async () => {
-        for (let r = queue.shift(); r; r = queue.shift()) peers.set(graphKey(r), await fetchPeerGraph(r.url, a.opts));
-    };
-    Promise.all(Array.from({ length: Math.min(PEER_PARALLEL, queue.length) }, worker)).then(() => {
-        container._peerFetching = false;
-        container._peerAt = Date.now();
-        redrawGraph(container);
-        setTimeout(() => redrawGraph(container), PEER_REFRESH_MS);   // which asks again while the map still shows
-    });
-}
-
-// The device groups the graphs name, by id: each its name, its members' node indices, and those missing. A row of any graph, this device's or
-// a peer's, adds its device to each group it names, so a group a peer defines merges with this device's own by its id.
-function graphGroups(graphs, index) {
-    const groups = new Map();
-    for (const g of graphs) {
-        for (const row of g) {
-            const i = index.get(graphKey(row));
-            if (i === undefined) continue;
-            for (const grp of row.groups || []) {
-                if (!grp || !grp.id) continue;
-                const entry = groups.get(grp.id) || groups.set(grp.id, { name: grp.name || "", members: new Set(), missing: new Set() }).get(grp.id);
-                entry.members.add(i);
-                if (row.missing) entry.missing.add(i);
-            }
-        }
-    }
-    return groups;
-}
-
-// The invisible links that pull a group's members together in the force layout, each member to the first: a star, n - 1 links a group.
-function groupLinks(groups) {
-    const out = [];
-    for (const { members } of groups.values()) {
-        const [first, ...rest] = [...members];
-        for (const m of rest) out.push([first, m, "", false]);
-    }
-    return out;
-}
-
-// The box drawn around a group's members: their dots' extent, wide enough for a label cell and tall enough for the label lines beneath.
-function groupBox(points) {
-    const xs = points.map(p => p.x), ys = points.map(p => p.y);
-    return { x: Math.min(...xs) - GRAPH_CELL_W / 2 + 4, y: Math.min(...ys) - 22,
-             w: Math.max(...xs) - Math.min(...xs) + GRAPH_CELL_W - 8, h: Math.max(...ys) - Math.min(...ys) + GRAPH_CELL_H };
-}
-
-function buildListGraph(container, rows, details, opts) {
-    const NS = "http://www.w3.org/2000/svg";
-    container._graphArgs = { rows, details, opts };   // what a peer round redraws from
-    const nodes = rows.map((item, i) => {
-        const row = Object.assign({}, item, details[i] || {});
-        return { row, key: graphKey(row), self: !!row.self };
-    });
-    const index = new Map(nodes.map((node, i) => [node.key, i]));
-    const peers = container._peerGraphs || new Map();
-    // A device a peer sees and this one does not joins the map, and a peer's own row adds what it runs and offers to its node.
-    for (const [, pg] of peers) {
-        for (const row of pg.rows) {
-            const key = graphKey(row);
-            if (index.has(key)) {
-                if (row.self) {
-                    const node = nodes[index.get(key)];
-                    // Only what the peer reports: an older one sends fewer fields, and a key with an undefined value shows as an empty line.
-                    const own = ["version", "firmware", "mode", "moonbaseMismatch", "coprocessorMismatch", "services", "outputs"].filter(k => row[k] !== undefined);
-                    node.row = Object.assign({}, node.row, Object.fromEntries(own.map(k => [k, row[k]])));
-                }
-                continue;
-            }
-            index.set(key, nodes.length);
-            nodes.push({ row: Object.assign({}, row, { self: false }), key, self: false });
-        }
-    }
-    // Every graph's rows: this device's own, and each peer's, its own row among them.
-    const graphs = [nodes.map(n => n.row)];
-    for (const [, pg] of peers) if (pg.state === "ok") graphs.push(pg.rows);
-    // In a graph its own row's edges are what it sends, another row's what it receives from that row.
-    const owners = new Set(), received = new Set();
-    for (const g of graphs) {
-        const owner = g.find(r => r.self);
-        if (owner) owners.add(graphKey(owner));
-        for (const row of g) if (!row.self) for (const e of row.edges || []) received.add(`${graphKey(row)}|${e.to}|${String(e.label || "").split(" ")[0]}`);
-    }
-    const links = [];   // [from, to, label, broken]
-    const seen = new Set();
-    for (const senders of [true, false]) {   // a sender's report first, so its label wins
-        for (const g of graphs) {
-            for (const row of g) {
-                if (!!row.self !== senders) continue;
-                const i = index.get(graphKey(row));
-                for (const e of row.edges || []) {
-                    const j = index.get(String(e && e.to));
-                    if (i === undefined || j === undefined || i === j) continue;
-                    const id = `${graphKey(row)}|${e.to}|${String(e.label || "").split(" ")[0]}`;
-                    if (seen.has(id)) continue;
-                    seen.add(id);
-                    links.push([i, j, e.label || "", senders && owners.has(String(e.to)) && !received.has(id)]);
-                }
-            }
-        }
-    }
-    const groups = graphGroups(graphs, index);
-    refreshPeerGraphs(container);
-    const pos = container._graphPos || (container._graphPos = new Map());
-    for (const key of [...pos.keys()]) if (!index.has(key)) pos.delete(key);   // a device gone takes its spot with it
-    // Drawn in real pixels at its box's size: a wider or taller box gives the nodes more room, the text staying its size.
-    const box = container.querySelector(".graph-box");
-    const w = Math.max(2 * GRAPH_CELL_W, box && box.clientWidth ? box.clientWidth - 2 * GRAPH_PAD_X : GRAPH_W);
-    const assigned = box ? parseFloat(box.style.height) || 0 : 0;
-    const height = layoutGraph(nodes, links.concat(groupLinks(groups)), pos, w, assigned);
-    const boxH = assigned || height;   // a box shorter than the picture shows it zoomed out to fit
-    container._graphDrawn = { w: box ? box.clientWidth : 0, h: assigned };
-    if (box && box.dataset.base !== String(pos.frame.natural)) {
-        markExpandable(box, pos.frame.natural);
-        panelRefit();   // its natural height moved, so the panel shares its room again
-    }
-
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("class", "list-graph");
-    const full = { x: -GRAPH_PAD_X, y: 0, w: w + 2 * GRAPH_PAD_X, h: height };
-    container._graphFull = full;
-    svg.setAttribute("viewBox", graphViewBox(full, container._graphView || {}).join(" "));
-    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    svg.style.height = `${boxH}px`;
-    wireGraphZoom(container, svg);
-    svg.setAttribute("role", "group");   // its nodes are buttons, each reached on its own
-    svg.setAttribute("aria-label", `${nodes.length} device${nodes.length === 1 ? "" : "s"}`);
-    const show = container._graphShow || {};
-    fillWledInfo(container, nodes);
-    const boxes = nodes.map(node => graphNodeBox(pos.get(node.key), graphNodeLines(node.row, node.key, show)));
-    const traffic = graphShown(show, "traffic");
-    for (const [id, grp] of groups) {   // behind the edges and the nodes
-        const b = groupBox([...grp.members].map(i => pos.get(nodes[i].key)));
-        const rect = document.createElementNS(NS, "rect");
-        rect.setAttribute("x", b.x); rect.setAttribute("y", b.y); rect.setAttribute("width", b.w); rect.setAttribute("height", b.h);
-        rect.setAttribute("rx", 8);
-        rect.setAttribute("class", "graph-group" + (grp.missing.size ? " graph-group-missing" : ""));
-        rect.dataset.group = id;
-        const tip = document.createElementNS(NS, "title");
-        tip.textContent = `${grp.name}: ${grp.members.size} member${grp.members.size === 1 ? "" : "s"}${grp.missing.size ? `, ${grp.missing.size} missing` : ""}`;
-        rect.appendChild(tip);
-        svg.appendChild(rect);
-        const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", b.x + 6); label.setAttribute("y", b.y + 12);
-        label.setAttribute("class", "graph-group-label");
-        label.textContent = grp.name;
-        svg.appendChild(label);
-    }
-    const labelAt = placeEdgeLabels(links.map(([i, j, label]) => [pos.get(nodes[i].key), pos.get(nodes[j].key), traffic ? graphTrafficLabel(label) : ""]), boxes);
-    links.forEach(([i, j, label, broken], li) => {
-        const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
-        const line = document.createElementNS(NS, "line");
-        line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
-        line.setAttribute("x2", b.x); line.setAttribute("y2", b.y);
-        line.setAttribute("class", "graph-edge" + (broken ? " graph-edge-broken" : ""));
-        if (broken) {
-            const why = document.createElementNS(NS, "title");
-            why.textContent = "sent, but the receiver reports nothing arriving";
-            line.appendChild(why);
-        }
-        svg.appendChild(line);
-        if (labelAt[li]) {
-            const t = document.createElementNS(NS, "text");
-            t.setAttribute("x", labelAt[li].x); t.setAttribute("y", labelAt[li].y);
-            t.setAttribute("class", "graph-edge-label");
-            t.textContent = graphTrafficLabel(label);
-            const whole = document.createElementNS(NS, "title");   // the protocol by name, on hover
-            whole.textContent = label;
-            t.appendChild(whole);
-            svg.appendChild(t);
-        }
-    });
-    const releases = graphReleases(container);
-    for (const node of nodes) {
-        const p = pos.get(node.key);
-        const g = document.createElementNS(NS, "g");
-        const age = rowAgeClass(node.row);
-        const behind = node.row.type === "MoonLight" ? nodeBehind(node.row, releases) : "";
-        g.setAttribute("class", "graph-node" + (node.self ? " graph-self" : "") +
-                                (age === "age-stale" ? " graph-faded" : "") +
-                                (behind ? " graph-behind" : "") +
-                                (node.row.missing ? " graph-missing" : "") +
-                                (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
-        const kind = graphKind(node.row);
-        const dot = document.createElementNS(NS, "circle");
-        dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
-        dot.setAttribute("fill", GRAPH_KIND_COLORS[kind] ?? GRAPH_KIND_COLORS.generic);
-        g.appendChild(dot);
-        if (behind) {
-            const mark = document.createElementNS(NS, "text");   // ⬆ beside the dot: its channel offers a newer version
-            mark.setAttribute("x", p.x + (node.self ? 9 : 7) + 2); mark.setAttribute("y", p.y - 4);
-            mark.setAttribute("class", "graph-behind-mark");
-            mark.textContent = "⬆";
-            g.appendChild(mark);
-        }
-        let y = p.y + GRAPH_LABEL_DY;
-        for (const [line, cls] of graphNodeLines(node.row, node.key, show)) {
-            const text = document.createElementNS(NS, "text");
-            text.setAttribute("x", p.x); text.setAttribute("y", y);
-            text.setAttribute("class", cls);
-            text.textContent = line;
-            g.appendChild(text);
-            y += GRAPH_LINE_H[cls];
-        }
-        const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
-        const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
-        const inGroups = (node.row.groups || []).map(grp => grp.name).filter(Boolean).join(", ");
-        const membership = inGroups ? (node.row.missing ? `missing from ${inGroups}` : `in ${inGroups}`) : "";
-        const summary = [node.row.name, where, kind, node.row.version, behind, membership, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
-        const title = document.createElementNS(NS, "title");
-        title.textContent = summary;
-        g.appendChild(title);
-        // A button, reached by Tab and pressed by Enter or Space as by a click.
-        g.classList.add("graph-link");
-        g.dataset.key = node.key;   // which node, so a redraw gives the focus back to it
-        g.setAttribute("tabindex", "0");
-        g.setAttribute("role", "button");
-        g.setAttribute("aria-label", summary);
-        g.addEventListener("click", () => openGraphNode(node.row, opts));
-        g.addEventListener("keydown", (e) => {
-            if (e.key !== "Enter" && e.key !== " ") return;
-            e.preventDefault();
-            openGraphNode(node.row, opts);
-        });
-        svg.appendChild(g);
-    }
-    return svg;
-}
-
-// The kind of light an output drives, as its emoji: moving heads, or its driver's kind.
-function graphOutputEmoji(o) {
-    return o.movingHeads ? "\u{1F3AF}" : (GRAPH_OUTPUT_EMOJI[o.driver] ?? "");
-}
-
-// What drives a device's lights, "🔲 Hub75 4096 @ 60/s, 💡 RmtLed 300 @ 60/s": each output's kind, its driver without its role noun, its lights and frames a second;
-// `short` leaves the driver's name out where the kind has an emoji, as a node's label does.
-function graphOutputs(row, short = false) {
-    return (Array.isArray(row.outputs) ? row.outputs : []).map(o => {
-        const kind = graphOutputEmoji(o), name = typeDisplayName(String(o.driver));
-        return [kind, short && kind ? "" : name, o.lights, o.fps ? `@ ${o.fps}/s` : ""].filter(x => x !== "").join(" ");
-    }).join(short ? "  " : ", ");
-}
-
-// A node's label lines under its dot, each cut to its cell: its name, what drives its lights, where it
-// answers and what it runs, and what it offers as emoji, which is never cut so no emoji is halved.
-function graphNodeLines(row, key, show = {}) {
-    const on = (what) => graphShown(show, what);
-    const where = row.port ? `${row.ip}:${row.port}` : row.ip;
-    const offered = Array.isArray(row.services) ? row.services : [];
-    return [[graphFit(String(row.name ?? key), 18), "graph-label"],
-            [row.type === "MoonBase" ? "\u{1F6DF} MoonBase" : graphFit(graphOutputs(row, true), 28), "graph-sublabel"],   // a board MoonLight's installer holds
-            [graphFit([on("ip") && where !== row.name ? where : "", on("version") ? row.version : ""].filter(Boolean).join(" · "), 22), "graph-sublabel"],
-            [offered.map(graphServiceEmoji).join(" "), "graph-services"]].filter(([line]) => line);
-}
-
-// The part of the picture `full` the map shows: all of it at zoom 1, a 1/z part around (cx, cy) zoomed in, kept inside the picture.
-function graphViewBox(full, view) {
-    const z = Math.min(GRAPH_ZOOM_MAX, Math.max(1, view.z || 1)), vw = full.w / z, vh = full.h / z;
-    const within = (c, lo, len, span) => Math.min(lo + len - span / 2, Math.max(lo + span / 2, c ?? lo + len / 2));
-    const cx = within(view.cx, full.x, full.w, vw), cy = within(view.cy, full.y, full.h, vh);
-    return [cx - vw / 2, cy - vh / 2, vw, vh];
-}
-
-// The view zoomed by `factor` around the point at fractions (fx, fy) of what the map shows, which stays where it is: zoom at the pointer.
-function graphZoom(full, view, factor, fx = 0.5, fy = 0.5) {
-    const [x, y, vw, vh] = graphViewBox(full, view);
-    const z = Math.min(GRAPH_ZOOM_MAX, Math.max(1, (view.z || 1) * factor)), nw = full.w / z, nh = full.h / z;
-    const nx = x + fx * vw - fx * nw, ny = y + fy * vh - fy * nh;
-    return { z, cx: nx + nw / 2, cy: ny + nh / 2 };
-}
-
-// Zoom and pan as a map does, and as the preview does: the scroll wheel or a pinch zooms at the pointer,
-// a drag on the background pans and a double-click on it fits the whole picture again.
-function wireGraphZoom(container, svg) {
-    const apply = () => svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView || {}).join(" "));
-    const fraction = (e) => {
-        const ctm = svg.getScreenCTM();
-        if (!ctm) return [0.5, 0.5];
-        const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
-        const [x, y, vw, vh] = graphViewBox(container._graphFull, container._graphView || {});
-        return [(p.x - x) / vw, (p.y - y) / vh];
-    };
-    svg.addEventListener("wheel", (e) => {
-        // The map's, as the preview's wheel is, when it zooms; at the whole picture a wheel outward scrolls the page instead. A trackpad pinch arrives as a Ctrl-wheel.
-        if (e.deltaY > 0 && !(((container._graphView || {}).z || 1) > 1)) return;
-        e.preventDefault();
-        const [fx, fy] = fraction(e);
-        const rate = e.ctrlKey ? 0.01 : 0.0015;   // a wheel notch at the preview's rate; a pinch sends smaller steps
-        container._graphView = graphZoom(container._graphFull, container._graphView || {}, Math.exp(-e.deltaY * rate), fx, fy);
-        apply();
-    }, { passive: false });
-    svg.addEventListener("pointerdown", (e) => {
-        if (e.target.closest(".graph-node") || !((container._graphView || {}).z > 1)) return;
-        const ctm = svg.getScreenCTM();
-        if (!ctm) return;
-        const start = { x: e.clientX, y: e.clientY, view: graphViewBox(container._graphFull, container._graphView) };
-        container._graphPanning = true;
-        svg.setPointerCapture(e.pointerId);
-        const move = (m) => {
-            const [x, y, vw, vh] = start.view;
-            container._graphView = { z: container._graphView.z, cx: x + vw / 2 - (m.clientX - start.x) / ctm.a, cy: y + vh / 2 - (m.clientY - start.y) / ctm.d };
-            apply();
-        };
-        const end = () => {
-            svg.removeEventListener("pointermove", move);
-            container._graphPanning = false;
-            redrawGraph(container);
-        };
-        svg.addEventListener("pointermove", move);
-        svg.addEventListener("pointerup", end, { once: true });
-        svg.addEventListener("pointercancel", end, { once: true });
-    });
-    svg.addEventListener("dblclick", (e) => {
-        if (e.target.closest(".graph-node")) return;
-        container._graphView = {};
-        apply();
-    });
-}
-
-// Whether the map shows `what`: the viewer's choice, else its default in GRAPH_SHOW.
-function graphShown(show, what) {
-    return what in show ? !!show[what] : !!(GRAPH_SHOW.find(([w]) => w === what) || [])[2];
-}
-
-// A WLED's version and flavor for its node, read from its /json/info, which WLED serves cross-origin; its presence packet carries neither.
-// WLED-MM answers product "MoonModules", WLED "FOSS". Asked once, and again a minute after a WLED that did not answer, as the device asks its added addresses.
-function fillWledInfo(container, nodes, now = Date.now()) {
-    const known = container._wledInfo || (container._wledInfo = new Map());
-    for (const node of nodes) {
-        if (node.row.type !== "WLED" || !node.row.ip) continue;
-        const k = known.get(node.key);
-        if (k && k.ver) { node.row = Object.assign({}, node.row, { version: k.ver, flavor: k.flavor }); continue; }
-        if (k && now - k.at < 60000) continue;   // asked within the minute
-        known.set(node.key, { at: now });
-        fetch(`http://${node.row.ip}/json/info`).then(r => r.json()).then(info => {
-            if (!info || !info.ver) return;
-            known.set(node.key, { at: now, ver: String(info.ver), flavor: info.product === "MoonModules" ? "WLED-MM" : "WLED" });
-            redrawGraph(container);
-        }).catch(() => { /* no answer: asked again in a minute */ });
-    }
-}
-
-// What this viewer chose to show on the map; kept in this browser only.
-function graphShowLoad() {
-    try { return JSON.parse(localStorage.getItem(GRAPH_SHOW_KEY) || "{}") || {}; } catch (_) { return {}; }
-}
-
-// A row of toggles above the map, one per thing a node or a line can show; a toggle redraws the map at once.
-function buildGraphFilters(container) {
-    const bar = document.createElement("div");
-    bar.className = "graph-filters";
-    bar.setAttribute("role", "group");
-    bar.setAttribute("aria-label", "What the map shows");
-    const show = graphShowLoad();
-    for (const [what, label] of GRAPH_SHOW) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "graph-filter";
-        btn.textContent = label;
-        btn.setAttribute("aria-pressed", String(graphShown(show, what)));
-        btn.addEventListener("click", () => {
-            const now = graphShowLoad();
-            now[what] = !graphShown(now, what);
-            try { localStorage.setItem(GRAPH_SHOW_KEY, JSON.stringify(now)); } catch (_) { /* a private window keeps it for this draw only */ }
-            container._graphShow = now;
-            btn.setAttribute("aria-pressed", String(now[what]));
-            redrawGraph(container);
-        });
-        bar.appendChild(btn);
-    }
-    // The whole map again, after the scroll wheel zoomed in.
-    const fit = document.createElement("button");
-    fit.type = "button";
-    fit.className = "graph-filter graph-zoom";
-    fit.textContent = "\u2316";   // ⌖, the preview's reset-view glyph
-    fit.title = "Reset the view: the whole map";
-    fit.setAttribute("aria-label", fit.title);
-    fit.addEventListener("click", () => {
-        const svg = container.querySelector("svg.list-graph");
-        if (!svg || !container._graphFull) return;
-        container._graphView = {};
-        svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView).join(" "));
-    });
-    bar.appendChild(fit);
-    container._graphShow = show;
-    return bar;
-}
-
-// The box a node's dot and labels cover, from the lines' estimated widths, which an edge label keeps clear of.
-function graphNodeBox(p, lines) {
-    const w = Math.max(18, ...lines.map(([line, cls]) => [...line].length * GRAPH_CHAR_W[cls]));
-    const h = GRAPH_LABEL_DY + lines.reduce((sum, [, cls]) => sum + GRAPH_LINE_H[cls], 0);
-    return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - 10, y1: p.y + h - 8 };
-}
-
-// Where each edge's label goes, or null for an edge without one: greedy label placement, each label
-// at the first spot along its edge, from the middle outward, that covers no node and no label placed
-// before it; with none free, the spot covering least, so a crowded map still shows every label.
-function placeEdgeLabels(edges, nodeBoxes) {
-    const placed = [];
-    const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
-    return edges.map(([a, b, label]) => {
-        if (!label) return null;
-        const w = label.length * GRAPH_CHAR_W["graph-edge-label"], h = 11;
-        let best = null;
-        for (const t of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
-            const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - 3;   // its baseline 3 px above the line
-            const box = { x0: x - w / 2, x1: x + w / 2, y0: y - h + 2, y1: y + 2 };
-            const cost = [...nodeBoxes, ...placed].reduce((sum, o) => sum + overlap(box, o), 0);
-            if (!best || cost < best.cost) best = { x, y, box, cost };
-            if (cost === 0) break;
-        }
-        placed.push(best.box);
-        return { x: best.x, y: best.y };
-    });
-}
-
-// A line's label, "audio sync 23 fps", with its protocol as its emoji: "🔊 23 fps"; a protocol without one keeps its name.
-function graphTrafficLabel(label) {
-    const protocol = Object.keys(GRAPH_PROTOCOL_EMOJI).filter(p => label.startsWith(p)).sort((a, b) => b.length - a.length)[0];
-    return protocol ? GRAPH_PROTOCOL_EMOJI[protocol] + label.slice(protocol.length) : label;
-}
-
-// A reported service, "HTTP 80" or "ColorLight", as its emoji: the protocol without its port, looked up.
-function graphServiceEmoji(service) {
-    const protocol = service.replace(/ \d+$/, "");
-    return GRAPH_PROTOCOL_EMOJI[protocol] ?? protocol;
-}
-
-// A label cut to `max` characters with an ellipsis, so it stays within its cell; the tooltip has it whole.
-function graphFit(text, max) {
-    const chars = [...text];   // by code point, so no emoji is split into halves
-    return chars.length > max ? `${chars.slice(0, max - 1).join("")}…` : text;
-}
-
-// A node's row in a popup: its detail, as the list would have shown it, and for a MoonLight
-// device the firmware it runs, the release it could run, and a button that installs it.
-function openGraphNode(row, opts) {
-    const dlg = document.createElement("dialog");
-    dlg.className = "graph-popup";
-    const head = document.createElement("form");
-    head.method = "dialog";
-    head.className = "graph-popup-head";
-    const title = document.createElement("span");
-    title.textContent = row.name ?? row.ip ?? "";
-    const close = document.createElement("button");
-    close.value = "close";
-    close.title = "close";
-    close.textContent = "✕";
-    head.append(title, close);
-    const detail = document.createElement("div");
-    detail.className = "list-detail";
-    fillListDetail(detail, popupFields(row), listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName));
-    linkIp(detail, row);
-    dlg.append(head, detail);
-    if (row.type === "MoonLight") dlg.appendChild(buildPeerSummary(row));
-    if (row.type === "MoonBase") dlg.appendChild(buildMoonBaseInstall(row));
-    if (row.type === "WLED") dlg.appendChild(buildWledMigrate(row));
-    if (row.type === "Tasmota") dlg.appendChild(buildTasmotaMigrate(row));
-    if (row.type === "ESPHome") dlg.appendChild(buildEsphomeMigrate(row));
-    document.body.appendChild(dlg);
-    // A click on the backdrop closes it, except while a move runs in it: its steps run in the browser, and closing would hide them.
-    const mayClose = () => !dlg.dataset.busy || confirm("A move is running. Close this popup? It goes on, out of sight, until the app reloads.");
-    dlg.addEventListener("click", (e) => { if (e.target === dlg && !dlg.dataset.busy) dlg.close(); });
-    dlg.addEventListener("cancel", (e) => { if (!mayClose()) e.preventDefault(); });   // Escape
-    close.addEventListener("click", (e) => { if (!mayClose()) e.preventDefault(); });
-    dlg.addEventListener("close", () => dlg.remove(), { once: true });
-    dlg.showModal();
-}
-
-// The fields a node's popup lists: its flavor as its type (WLED-MM), and as its url the `<name>.local` address a MoonLight board answers on;
-// the ip links to the address the device was found on, so a url saying the same goes. A host serves on a port and answers no mDNS.
-function popupFields(row) {
-    const shown = Object.assign({}, row);
-    if (shown.flavor) { shown.type = shown.flavor; delete shown.flavor; }
-    delete shown.url;
-    if (row.type === "MoonLight" && !row.port && /^[a-z0-9-]+$/i.test(row.name || "")) shown.url = `http://${row.name}.local/`;
-    return shown;
-}
-
-// The popup's ip as a link to the device's page.
-function linkIp(detail, row) {
-    const span = detail.querySelector('.display[data-key="ip"]');
-    if (!span || !row.ip) return;
-    const a = document.createElement("a");
-    a.className = "display control-url";
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.href = `${peerBase(row)}/`;
-    a.textContent = row.ip;
-    span.replaceWith(a);
-}
-
-// A device's JSON, or null when it does not answer within `ms`: a hung device leaves a popup saying so rather than reading for ever.
-async function fetchJsonWithin(url, ms = 4000) { return fetchWithin(url, ms, (r) => r.json()); }
-
-// A reply read by `read` within `ms`, body included, or null: a device that answers and then stalls releases its caller at the time.
-async function fetchWithin(url, ms, read) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), ms);
-    try { return await read(await fetch(url, { signal: ctl.signal })); }
-    catch (_) { return null; }
-    finally { clearTimeout(timer); }
-}
-
-// Where a device's API answers: the UI's own origin for the device serving it, its address for another.
-function peerBase(row) {
-    if (row.self) return location.origin;
-    return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
-}
-
-// A device's version and firmware, and its summary, /api/system, which carries them; a device on older
-// firmware has them only in its state, on the Firmware and System cards. Null when it does not answer.
-async function peerFirmware(base) {
-    try {
-        const sys = await (await fetch(`${base}/api/system`)).json();
-        if (sys && sys.version) return { version: sys.version, firmware: sys.firmware, summary: sys };
-        const st = await (await fetch(`${base}/api/state`)).json();
-        const all = [];
-        const walk = (mods) => { for (const m of mods || []) { all.push(m); walk(m.children); } };
-        walk(st.modules);
-        const value = (type, name) => (all.find(m => m.type === type)?.controls || []).find(c => c.name === name)?.value;
-        const version = value("FirmwareUpdateModule", "appVersion");
-        return version ? { version, firmware: value("SystemModule", "firmware") } : null;
-    } catch (_) {
-        return null;
-    }
-}
-
-// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
-// a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
-function updateAsset(rel, dev, version) {
-    const installs = !!dev.firmware && (!dev.update || dev.update === "self");
-    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version)) : { url: null, sha256: null };
-}
-
-// The release a device could move to and the asset that installs it, by the same checks the update badge makes for this device.
-async function peerUpdate(dev) {
-    const u = channelUpdate(dev, await loadReleases({ maxAgeMs: UPDATE_TTL_MS }));
-    return u ? { label: u.label, ...updateAsset(u.rel, dev, u.version) } : null;
-}
-
-// The Ethernet boards of WLED's table the migration carries over, by WLED's `eth.type`, as kWledEthernet in WledNetworks.h maps them.
-const WLED_ETHERNET_MAPPED = [1, 2, 3, 4, 5, 6, 8, 9, 10];
-
-// What the move does with a WLED's Ethernet: nothing to say without one, its wiring carried over for a board the migration maps, else a warning
-// that it comes back on its saved WiFi or as an access point.
-function wledEthernetNote(type) {
-    if (!type) return "";
-    return WLED_ETHERNET_MAPPED.includes(type)
-        ? " On Ethernet: MoonLight takes over its wiring and comes back on the cable."
-        : ` On Ethernet board ${type}, which the move does not carry over: it comes back on its saved WiFi, else as an access point to join.`;
-}
-
-// The chip a WLED's /json/info names, as MoonLight's files spell it: "esp32-c3" is esp32c3; null for one MoonLight does not build for.
-function wledChip(info) {
-    const key = chipKey(info?.arch);
-    return /^esp32[a-z0-9]*$/.test(key) ? key : null;
-}
-
-// The migration image a WLED takes: its chip's, and on a P4 from revision 3 that revision line's, which WLED-MM's chip model names ("ESP32-P4 rev.301").
-function wledFamily(info, chip) {
-    const rev = Number(/rev\.(\d+)/.exec(String(info?.e32model || ""))?.[1] || 0);
-    return chip === "esp32p4" && rev >= 300 ? "esp32p4rev3" : chip;
-}
-
-// The web installer's Pages site, which serves its files cross-origin where GitHub's own downloads do not.
-const INSTALLER_URL = "https://moonmodules.org/MoonLight/install/";
-
-// The way back from MoonLight, which a move's confirm names: the firmware's own installer over USB, linked from the web installer's page.
-function goingBackLink(firmware) {
-    const line = document.createElement("div");
-    line.className = "graph-popup-note";
-    const a = document.createElement("a");
-    a.href = `${INSTALLER_URL}#other-firmware`;
-    a.target = "_blank";
-    a.rel = "noopener";
-    a.textContent = `Going back to ${firmware}: its own installer, over USB`;
-    line.appendChild(a);
-    return line;
-}
-
-// Where the browser takes a release's migration image: the installer's mirror of the release.
-function migrateImageUrl(tag, chip) {
-    return `${INSTALLER_URL}releases/${tag}/${migrateAssetName(chip)}`;
-}
-
-// A WLED device's way to MoonLight without a cable, in one go: the install picker for its chip, a confirm that going back needs a cable,
-// then the migration image through WLED's update page, MoonLight from MoonBase, and the device's defaults.
-function buildWledMigrate(row) {
-    const box = document.createElement("div");
-    box.className = "graph-popup-firmware";
-    const line = document.createElement("div");
-    line.textContent = "WLED: reading…";
-    box.appendChild(line);
-    const base = `http://${row.ip}`;
-    (async () => {
-        const [info, cfg] = await Promise.all([fetchJsonWithin(`${base}/json/info`), fetchJsonWithin(`${base}/json/cfg`)]);
-        if (!info) { line.textContent = "WLED does not answer."; return; }
-        const chip = wledChip(info);
-        line.textContent = `WLED ${info.ver || ""} on ${info.arch || "an unknown chip"}.${wledEthernetNote(cfg?.eth?.type)}`;
-        if (!chip) { line.textContent += " MoonLight does not run on it."; return; }
-        // A migration image from this computer, a build or a download, for a release that carries none for this chip.
-        const file = document.createElement("label");
-        file.className = "graph-popup-file";
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = ".bin";
-        file.append("Migration image, for a release without one ", input);
-        box.appendChild(goingBackLink("WLED"));
-        mountMapPicker(box, base, chip, null, file, async (binaryUrl, tag, note) => {
-            if (!confirm("Move this WLED device to MoonLight over the network? Going back to WLED needs a USB cable.")) return null;
-            await wledToMoonBase(base, input.files[0] || migrateImageUrl(tag, wledFamily(info, chip)), tag, chip, note);
-            return moonBaseToMoonLight(base, binaryUrl, note);
-        });
-    })();
-    return box;
-}
-
-// A board MoonBase holds: its chip from MoonBase's /api/system, and the install picker for it.
-function buildMoonBaseInstall(row) {
-    const box = document.createElement("div");
-    box.className = "graph-popup-firmware";
-    const line = document.createElement("div");
-    line.textContent = "MoonBase: reading…";
-    box.appendChild(line);
-    const base = peerBase(row);
-    (async () => {
-        const sys = await fetchJsonWithin(`${base}/api/system`);
-        if (!sys || !sys.moonbase) { line.textContent = "MoonBase does not answer."; return; }
-        line.textContent = `MoonBase ${sys.version} on an ${sys.chip}: MoonLight's installer holds this board.`;
-        mountMapPicker(box, base, sys.chip, sys.firmware, null, (binaryUrl, _tag, note) => moonBaseToMoonLight(base, binaryUrl, note));
-    })();
-    return box;
-}
-
-// The web installer's Device row for a map's install: its own helpers and catalog from its Pages site, which serves both cross-origin, so
-// none of it ships in the firmware. The module's loadDevices reads the catalog beside the page, the installer's, so this one reads it beside
-// the module. Null offline, which leaves the picker Release and Firmware.
-let mapDeviceSupport = null;
-function loadMapDeviceSupport() {
-    mapDeviceSupport ??= import(`${INSTALLER_URL}install-picker-devices.js`)
-        .then(m => ({ ...m, loadDevices: async () => (await fetchJsonWithin(`${INSTALLER_URL}deviceModels.json`)) || [] }))
-        .catch(() => null);
-    return mapDeviceSupport;
-}
-
-// The shared install picker on a node's popup, as the web installer shows it: Release, Device and Firmware for `chip`, and Apply device defaults.
-// `move(binaryUrl, tag, note)` puts MoonLight on the board and answers its /api/system once MoonLight runs, or null when the user stops;
-// the picked device's defaults follow, and the status line says how it ended.
-async function mountMapPicker(box, base, chip, ranFirmware, extra, move, blocker = null) {
-    const note = document.createElement("div");
-    note.className = "graph-popup-note";
-    const defaults = document.createElement("label");
-    defaults.className = "graph-popup-defaults";
-    const tick = document.createElement("input");
-    tick.type = "checkbox";
-    tick.checked = true;
-    defaults.append(tick, " Apply device defaults sets this device model's recommended modules/settings.");
-    const extras = document.createElement("div");
-    extras.className = "graph-popup-extras";
-    if (extra) extras.appendChild(extra);
-    extras.append(defaults, note);
-    const mount = document.createElement("div");
-    mount.className = "install-picker-host";
-    box.appendChild(mount);
-    const picker = await installPicker.init({
-        container: mount, targetChip: chip, ownFirmwareKey: ranFirmware || null,
-        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, blocker,
-        onInstall: async (_firmware, _manifestUrl, binaryUrl, _entry, label, tag) => {
-            const dlg = box.closest("dialog");
-            if (dlg) dlg.dataset.busy = "1";   // the move runs in the browser: openGraphNode keeps the popup open meanwhile
-            const device = picker?.selectedDeviceEntry();   // the device the firmware was picked for, whatever the selector shows by the end
-            try {
-                const sys = await move(binaryUrl, tag, note);
-                if (!sys) return "Not started.";
-                const applied = tick.checked ? await applyDeviceDefaults(base, device) : "";
-                return `✓ MoonLight ${sys.version || label} runs.${applied}`;
-            } finally {
-                if (dlg) delete dlg.dataset.busy;
-            }
-        },
-    });
-    return picker;
-}
-
-// Upload the migration image, `source` a chosen file or the mirror's address, as WLED's update page does, field `update`, with skipValidation
-// for WLED 16's release-name check; the reply is unreadable cross-origin, so the board's own answer says how it went: MoonBase on /api/system.
-async function wledToMoonBase(base, source, tag, chip, note) {
-    const image = await migrationImage(source, tag, chip, note);
-    note.textContent = "Uploading to WLED: keep the power on for the next minutes…";
-    const form = new FormData();
-    form.append("skipValidation", "1");
-    form.append("update", image, "shared-migrate.bin");
-    try { await fetch(`${base}/update`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
-    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
-    throw new Error("still WLED after a minute and a half: WLED refused the upload. A newer WLED checks the release name until Skip validation is ticked on its update page; an update lock or password refuses it too");
-}
-
-// The migration image: a chosen file as it is, else downloaded from the release's mirror.
-async function migrationImage(source, tag, chip, note) {
-    if (typeof source !== "string") return source;
-    note.textContent = "Fetching the migration image…";
-    const res = await fetch(source).catch(() => null);
-    if (!res || !res.ok) throw new Error(`${tag} carries no migration image for the ${chip}: choose one from this computer, or move it by cable through the web installer`);
-    return res.blob();
-}
-
-// A Tasmota device's way to MoonLight without a cable: its chip from Discovery, the owner's one-time SetOption128 in Tasmota's console, then the install picker.
-function buildTasmotaMigrate(row) {
-    const box = document.createElement("div");
-    box.className = "graph-popup-firmware";
-    const line = document.createElement("div");
-    line.textContent = `Tasmota ${row.version || ""}${row.chip ? ` on an ${row.chip}` : ""}.`;
-    box.appendChild(line);
-    if (!row.chip) { line.textContent += " Its chip shows once Discovery has asked its page."; return box; }
-    const base = `http://${row.ip}`;
-    const extra = document.createElement("div");
-    extra.className = "graph-popup-extras";
-    const how = document.createElement("div");
-    how.className = "graph-popup-file";
-    // Until Tasmota answers the map: where to switch it on. The link is Tasmota's main page, since its console serves only a request whose Referer is Tasmota itself until SetOption128 is 1.
-    const ask = document.createElement("span");
-    const tasmotaLink = document.createElement("a");
-    tasmotaLink.href = `${base}/`;
-    tasmotaLink.target = "_blank";
-    tasmotaLink.rel = "noopener";
-    tasmotaLink.textContent = "open Tasmota";
-    ask.append("First, once: ", tasmotaLink, ", go to Tools → Console and enter SetOption128 1, which lets the map reach Tasmota's update.");
-    const done = document.createElement("span");
-    done.textContent = "✓ SetOption128 is on: the map reaches Tasmota's update.";
-    done.hidden = true;
-    how.append(ask, done);
-    const file = document.createElement("label");
-    file.className = "graph-popup-file";
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".bin";
-    file.append("Migration image, for a release without one ", input);
-    extra.append(how, file);
-    // Install waits until Tasmota answers the map, which it does once SetOption128 is 1, checked again every few seconds while the popup shows.
-    let open = false, picker = null;
-    const check = async () => {
-        if (!box.isConnected) return;   // the popup closed: the box is in it from the moment it opens
-        open = await tasmotaApiOpen(base);
-        ask.hidden = open;
-        done.hidden = !open;
-        picker?.refresh();
-        setTimeout(check, 3000);
-    };
-    box.appendChild(goingBackLink("Tasmota"));
-    mountMapPicker(box, base, row.chip, null, extra, async (binaryUrl, tag, note) => {
-        if (!confirm("Move this Tasmota device to MoonLight over WiFi? Going back to Tasmota needs a USB cable.")) return null;
-        await tasmotaToMoonBase(base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
-        return moonBaseToMoonLight(base, binaryUrl, note);
-    }, () => (open ? "" : "Enter SetOption128 1 in Tasmota's Console first")).then((p) => { picker = p; check(); });
-    return box;
-}
-
-// An ESPHome device's way to MoonLight without a cable: ESPHome takes an image only through its own update protocol, which a browser cannot speak,
-// so the device serving the app hands it on (`/api/relay/esphome`), the image's MD5 computed here since ESPHome asks for it before the image.
-function buildEsphomeMigrate(row) {
-    const box = document.createElement("div");
-    box.className = "graph-popup-firmware";
-    const line = document.createElement("div");
-    line.textContent = `ESPHome ${row.version || ""}${row.chip ? ` on an ${row.chip}` : ""}.`;
-    box.appendChild(line);
-    if (!row.chip) { line.textContent += " Its chip shows once its mDNS record has named it."; return box; }
-    const file = document.createElement("label");
-    file.className = "graph-popup-file";
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".bin";
-    file.append("Migration image, for a release without one ", input);
-    const base = `http://${row.ip}`;
-    box.appendChild(goingBackLink("ESPHome"));
-    mountMapPicker(box, base, row.chip, null, file, async (binaryUrl, tag, note) => {
-        if (!confirm("Move this ESPHome device to MoonLight over WiFi? Going back to ESPHome needs a USB cable, or ESPHome's own tools.")) return null;
-        await esphomeToMoonBase(row.ip, base, input.files[0] || migrateImageUrl(tag, row.chip), tag, row.chip, note);
-        return moonBaseToMoonLight(base, binaryUrl, note);
-    });
-    return box;
-}
-
-// The image to the ESPHome device at `ip` through the app's own device, which speaks ESPHome's update protocol and answers how it went; then MoonBase.
-async function esphomeToMoonBase(ip, base, source, tag, chip, note) {
-    const image = await migrationImage(source, tag, chip, note);
-    note.textContent = "Handing the image to ESPHome through this device: keep the power on for the next minutes…";
-    const md5 = md5Hex(new Uint8Array(await image.arrayBuffer()));
-    const res = await fetch(`/api/relay/esphome?host=${encodeURIComponent(ip)}&md5=${md5}`, {
-        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: image }).catch(() => null);
-    if (!res) throw new Error("this device did not answer the relay");
-    if (!res.ok) throw new Error(`ESPHome refused the image: ${await errorMessage(res)}`);
-    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
-    throw new Error("ESPHome took the image but no MoonBase answered within a minute and a half");
-}
-
-// The MD5 of `bytes` as 32 hex digits (RFC 1321), which ESPHome's update asks for before the image; the browser's own crypto has no MD5.
-function md5Hex(bytes) {
-    const s = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
-    const k = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0);
-    const padded = new Uint8Array(((bytes.length + 8) >> 6 << 6) + 64);
-    padded.set(bytes);
-    padded[bytes.length] = 0x80;
-    const view = new DataView(padded.buffer);
-    view.setUint32(padded.length - 8, (bytes.length * 8) >>> 0, true);
-    view.setUint32(padded.length - 4, Math.floor(bytes.length / 2 ** 29), true);
-    let [a0, b0, c0, d0] = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
-    for (let off = 0; off < padded.length; off += 64) {
-        let [a, b, c, d] = [a0, b0, c0, d0];
-        for (let i = 0; i < 64; i++) {
-            const r = i >> 4;
-            const f = r === 0 ? (b & c) | (~b & d) : r === 1 ? (d & b) | (~d & c) : r === 2 ? b ^ c ^ d : c ^ (b | ~d);
-            const g = r === 0 ? i : r === 1 ? (5 * i + 1) & 15 : r === 2 ? (3 * i + 5) & 15 : (7 * i) & 15;
-            const sum = (a + f + k[i] + view.getUint32(off + g * 4, true)) | 0;
-            const sh = s[r * 4 + (i & 3)];
-            [a, d, c] = [d, c, b];
-            b = (b + ((sum << sh) | (sum >>> (32 - sh)))) | 0;
-        }
-        [a0, b0, c0, d0] = [(a0 + a) | 0, (b0 + b) | 0, (c0 + c) | 0, (d0 + d) | 0];
-    }
-    return [a0, b0, c0, d0].map(w => Array.from({ length: 4 }, (_, i) => ((w >>> (8 * i)) & 255).toString(16).padStart(2, "0")).join("")).join("");
-}
-
-// Whether Tasmota answers a command from the map: with SetOption128 off it drops the request unanswered, which the browser reports as a network error;
-// on, it answers, which a no-cors request sees without reading it.
-async function tasmotaApiOpen(base) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 2500);
-    try { await fetch(`${base}/cm?cmnd=SetOption128`, { mode: "no-cors", signal: ctl.signal }); return true; }
-    catch (_) { return false; }
-    finally { clearTimeout(timer); }
-}
-
-// The two steps Tasmota's own update page runs: `/u4?u4=fct` restarts it into safeboot, then the image goes to `/u2`, field `u2`. Safeboot takes an upload only
-// after a `fct` it answered itself marked one as coming, and each upload clears the mark, so `fct` goes again before every upload, as Tasmota's page repeats it.
-// Tasmota sends no CORS header, so the page reads none of its answers: it watches the board drop off and come back, and confirms by MoonBase answering on /api/system.
-async function tasmotaToMoonBase(base, source, tag, chip, note) {
-    const image = await migrationImage(source, tag, chip, note);
-    note.textContent = "Restarting Tasmota into its safeboot…";
-    await fetch(`${base}/u4?u4=fct&api=`, { mode: "no-cors" }).catch(() => null);
-    if (await waitForRestart(base, 12000, 30000)) await fwSleep(3000);   // back, its web server answers before its upload is ready; never dropped, it was in safeboot already
-    // Twice at most: an upload safeboot was not ready for, or cut off, reads here like a refusal, the reply being unreadable.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        await fetch(`${base}/u4?u4=fct&api=`, { mode: "no-cors" }).catch(() => null);   // the mark safeboot needs before it takes an upload
-        note.textContent = `Uploading to Tasmota's safeboot${attempt > 1 ? ", again" : ""}: keep the power on for the next minutes…`;
-        const form = new FormData();
-        form.append("u2", image, "shared-migrate.bin");
-        try { await fetch(`${base}/u2?fsz=${image.size}`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
-        if (await waitForSystem(base, (sys) => sys.moonbase, 60000)) return;
-    }
-    throw new Error("still Tasmota after two uploads: its safeboot did not take the image, or SetOption128 is not 1 in its Console");
-}
-
-// Whether the board at `base` dropped off within `dropMs` and answered again within `ms`, as a restart does; read without CORS, so only whether it answers.
-async function waitForRestart(base, dropMs, ms) {
-    const start = Date.now(), deadline = start + ms;
-    let dropped = false;
-    while (Date.now() < deadline) {
-        if (!dropped && Date.now() - start > dropMs) return false;   // it never went down: nothing to wait for
-        await fwSleep(1000);
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 1500);
-        const up = await fetch(`${base}/`, { mode: "no-cors", signal: ctl.signal }).then(() => true, () => false);
-        clearTimeout(timer);
-        if (!up) dropped = true;
-        else if (dropped) return true;
-    }
-    return false;
-}
-
-// Hand MoonBase the firmware's address as its own page does and follow its progress; MoonLight's /api/system once it runs.
-async function moonBaseToMoonLight(base, binaryUrl, note) {
-    note.textContent = "Handing MoonBase the firmware…";
-    const res = await fetch(`${base}/api/firmware/url`, { method: "POST", body: binaryUrl }).catch(() => null);
-    if (!res) throw new Error("MoonBase does not answer");
-    if (!res.ok) throw new Error(`MoonBase refused: ${await res.text()}`);
-    const progress = async () => {
-        const st = await fetchWithin(`${base}/moonbase`, 2500, (r) => r.text());   // bounded, so the five-minute deadline holds
-        if (st) note.textContent = `MoonBase: ${st}`;
-    };
-    const sys = await waitForSystem(base, (s) => !s.moonbase, 300000, progress);
-    if (!sys) throw new Error("no MoonLight after five minutes: open the board's address to see where MoonBase stands");
-    note.textContent = "";
-    return sys;
-}
-
-// The board's /api/system every three seconds until `done` holds for it or `ms` pass, `onWait` hearing each other answer; the answer, or null.
-async function waitForSystem(base, done, ms, onWait) {
-    return pollUntil(() => fetchJsonWithin(`${base}/api/system`, 2500), done, ms, 3000, onWait);
-}
-
-// A device model's defaults onto the new MoonLight as one state document, the one the web installer sends over serial; WiFi and Ethernet
-// are wired in code, so a model's Network replace keeps them and the board stays reachable.
-async function applyDeviceDefaults(base, model) {
-    if (!model || !model.state) return "";
-    try {
-        const res = await fetch(`${base}/api/state`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(model.state) });
-        return res.ok ? ` ${model.name}'s defaults applied.` : ` ${model.name}'s defaults refused: ${await errorMessage(res)}.`;
-    } catch (_) {
-        return ` ${model.name}'s defaults did not reach it.`;
-    }
-}
-
-// A running MoonLight takes a device model's defaults as a moved one does: the models its firmware runs on, the one it reports picked, pressed
-// twice since the defaults replace the modules they name. Offline, where the catalog does not load, the popup leaves the row out.
-async function offerDeviceDefaults(summary, base, fw) {
-    const support = await loadMapDeviceSupport();
-    const fits = ((support && await support.loadDevices()) || []).filter(m => m.state && (m.firmwares || []).includes(fw.firmware));
-    if (!fits.length) return;
-    const row = document.createElement("div");
-    row.className = "graph-popup-defaults";
-    const select = document.createElement("select");
-    for (const m of fits) {
-        const opt = document.createElement("option");
-        opt.value = opt.textContent = m.name;
-        opt.selected = m.name === fw.summary?.board;
-        select.appendChild(opt);
-    }
-    const btn = document.createElement("button");
-    btn.className = "graph-popup-update";
-    btn.textContent = "Apply device defaults";
-    btn.title = "Set this device model's recommended modules and settings, replacing the modules it names";
-    const note = document.createElement("div");
-    armPressTwice(btn, async () => {
-        btn.disabled = true;
-        note.textContent = "Applying…";
-        note.textContent = (await applyDeviceDefaults(base, fits.find(m => m.name === select.value))).trim();
-        btn.disabled = false;
-    }, { armedText: "✓ Apply device defaults" });
-    row.append(select, btn);
-    summary.append(row, note);
-}
-
-// A device's summary lines, each only when the device reports it: its board, identity, health, what
-// drives its lights and the effects it runs.
-function peerSummaryLines(sys) {
-    const lines = [];
-    const board = [sys.board, sys.chip].filter(Boolean).join(" · ");
-    if (board) lines.push(`Board: ${board}`);
-    if (sys.mac) lines.push(`MAC: ${sys.mac}`);
-    const health = [sys.uptime !== undefined ? `up ${fmtTime(sys.uptime)}` : "", sys.fps !== undefined ? `${sys.fps} fps` : "",
-                    sys.freeHeap ? `${fmtBytes(sys.freeHeap)} free` : "", sys.rssi ? `WiFi ${sys.rssi} dBm` : ""].filter(Boolean);   // 0 heap on a host, 0 signal off WiFi
-    if (health.length) lines.push(`Health: ${health.join(" · ")}`);
-    const outputs = graphOutputs(sys);
-    if (outputs) lines.push(`Lights: ${outputs}`);
-    if (Array.isArray(sys.effects) && sys.effects.length) lines.push(`Effects: ${sys.effects.join(", ")}`);
-    return lines;
-}
-
-// Blink a device's lights, through its own Drivers card's identify button.
-async function identifyPeer(base, note) {
-    note.textContent = "Blinking for five seconds…";
-    try {
-        const res = await fetch(`${base}/api/control`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ module: "Drivers", control: "identify", value: 1 }) });
-        if (!res.ok) note.textContent = `Refused: ${await errorMessage(res)}`;
-    } catch (_) {
-        note.textContent = "The device does not answer.";
-    }
-}
-
-function buildPeerSummary(row) {
-    const box = document.createElement("div");
-    box.className = "graph-popup-firmware";
-    const summary = document.createElement("div");
-    summary.className = "graph-popup-summary";
-    const line = document.createElement("div");
-    line.textContent = "Firmware: reading…";
-    const note = document.createElement("div");
-    box.append(summary, line, note);
-    const base = peerBase(row);
-    (async () => {
-        const fw = await peerFirmware(base);
-        if (!fw) { line.textContent = "Firmware: the device does not answer."; return; }
-        if (fw.summary) {
-            for (const text of peerSummaryLines(fw.summary)) {
-                const el = document.createElement("div");
-                el.textContent = text;
-                summary.appendChild(el);
-            }
-            // A device that reports its outputs has the identify button: older firmware has neither.
-            if (Array.isArray(fw.summary.outputs)) {
-                const idNote = document.createElement("div");
-                const btn = document.createElement("button");
-                btn.className = "graph-popup-identify";
-                btn.textContent = "Identify";
-                btn.title = "Blink this device's lights for five seconds, at their own brightness";
-                btn.addEventListener("click", () => identifyPeer(base, idNote));
-                summary.append(btn, idNote);
-            }
-            offerDeviceDefaults(summary, base, fw);
-        }
-        line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
-        const update = fw.summary?.update;
-        const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update, mode: fw.summary?.mode });
-        if (!u) { note.textContent = "Up to date."; await offerImageUpdates(box, base, fw, note); return; }
-        if (!u.url) {
-            note.textContent = update === "container"
-                ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
-                : `${u.label} is available: this device is updated by hand, from the release page.`;
-            return;
-        }
-        note.textContent = `${u.label} is available.`;
-        const btn = document.createElement("button");
-        btn.className = "graph-popup-update";
-        btn.textContent = `Update to ${u.label}`;
-        armPressTwice(btn, () => startPeerInstall(base, "/api/firmware/url", { url: u.url, sha256: u.sha256 }, {
-            starting: `Starting the update to ${u.label}…`, installing: "Installing: the device restarts when it is done…",
-            done: (now) => now.version !== fw.version ? `Updated to ${now.version}.` : null }, note, btn), { armedText: "✓ " + btn.textContent });
-        box.appendChild(btn);
-    })();
-    return box;
-}
-
-// The image that brings a device's MoonBase level with its app, shared-moonbase-<chip>.bin of the release its app ships in, with the SHA-256 GitHub
-// names for it; a null url when that release carries none for the chip.
-function moonbaseAsset(rel, chip) {
-    return chip ? releaseAsset(rel, moonbaseAssetName(moonbaseAssetKeyFrom(chip))) : { url: null, sha256: null };
-}
-
-// With the app current, MoonBase and the WiFi coprocessor are each offered while the device reports them behind it, pressed twice like the app's
-// update. The coprocessor takes the image of the device's own release by itself; MoonBase takes the one the app's release carries for its chip.
-async function offerImageUpdates(box, base, fw, note) {
-    const sys = fw.summary || {};
-    const offers = [];
-    if (sys.moonbaseMismatch) {
-        const a = moonbaseAsset(releaseOfVersion(await loadReleases({ maxAgeMs: UPDATE_TTL_MS }), fw.version), sys.chip);
-        if (a.url) offers.push({ label: "MoonBase", route: "/api/firmware/moonbase-update-url", body: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch",
-                                 installing: "Installing MoonBase: the app keeps running…" });
-    }
-    if (sys.coprocessorMismatch) offers.push({ label: "WiFi coprocessor", route: "/api/firmware/coprocessor-update-url", body: {}, flag: "coprocessorMismatch",
-                                                installing: "Installing the WiFi coprocessor: the device restarts when it is done…" });
-    if (!offers.length) return;
-    note.textContent = `The app is up to date; ${offers.map(o => o.label).join(" and ")} ${offers.length > 1 ? "are" : "is"} behind it.`;
-    for (const o of offers) {
-        const btn = document.createElement("button");
-        btn.className = "graph-popup-update";
-        btn.textContent = `Update ${o.label}`;
-        armPressTwice(btn, () => startPeerInstall(base, o.route, o.body, {
-            starting: `Starting the ${o.label} update…`, installing: o.installing,
-            done: (now) => now.summary && !now.summary[o.flag] ? `${o.label} matches the app.` : null }, note, btn), { armedText: "✓ " + btn.textContent });
-        box.appendChild(btn);
-    }
-}
-
-// Hand a device an install, as its own Firmware card does, and watch its summary until `say.done` reads the outcome from it: one path for the
-// app, MoonBase and the WiFi coprocessor. A device lacking TLS answers 501 and installs from its own Firmware card instead.
-async function startPeerInstall(base, route, body, say, note, btn) {
-    btn.disabled = true;
-    note.textContent = say.starting;
-    let res = null;
-    try {
-        res = await fetch(`${base}${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    } catch (_) { /* a reboot can cut the reply off; the watch below sees the outcome */ }
-    if (res && res.status === 501) {
-        note.textContent = "This device has no TLS: open its page and install from its Firmware card.";
-        return;
-    }
-    if (res && !res.ok && res.status !== 202) {
-        note.textContent = `Refused: ${await errorMessage(res)}`;
-        btn.disabled = false;
-        return;
-    }
-    note.textContent = say.installing;
-    const now = await pollUntil(() => peerFirmware(base), (fw) => !!say.done(fw), 300000);
-    note.textContent = now ? say.done(now) : "No change after five minutes: open the device's page to see where it stands.";
-}
+// What the device map (devicemap.js) asks of the app: the node popup (devicepopup.js) with its detail drawn by the list's own
+// renderer, the list's row age, the update badge's rule and release list, and the panel's room for the picture.
+const MAP_HOOKS = {
+    openNode: (row, opts) => openDevicePopup(row, opts),
+    detail: (panel, fields, opts) => fillListDetail(panel, fields, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName)),
+    rowAge: (row) => rowAgeClass(row),
+    update: (row, releases) => channelUpdate(row, releases),
+    releases: () => loadReleases({ maxAgeMs: UPDATE_TTL_MS }),
+    fit(box, natural) { if (natural !== undefined) markExpandable(box, natural); panelRefit(); },
+};
 
 function buildListEntries(container, rows, details, openSet, opts) {
     if (opts && opts.pads) { buildListPads(container, rows, opts); return; }
@@ -5899,29 +4130,12 @@ function buildListEntries(container, rows, details, openSet, opts) {
     const ctrlName = opts && opts.ctrlName;
     const optionSets = (opts && opts.optionSets) || {};   // shared option arrays, keyed by name (optionsRef)
     const fieldHelp = listFieldHelp(moduleName, ctrlName);   // once per list, not per row
-    // A map already drawn redraws its picture in place: its box keeps the height the panel gave it, so an update every second does not make it jump.
-    if (opts && opts.graph && rows.length && container.querySelector(":scope > .graph-box")) {
-        container._graphArgs = { rows, details, opts };
-        redrawGraph(container);
+    // A graph replaces the rows: a node is a row, and a click opens what the row's detail would have shown; the panel's grips give its box height.
+    if (opts && opts.graph && rows.length) {
+        mountDeviceMap(container, rows, details, { ...opts, hooks: MAP_HOOKS });
         return;
     }
     container.replaceChildren();
-    // A graph replaces the rows: a node is a row, and a click opens what the row's detail would have shown.
-    if (opts && opts.graph && rows.length) {
-        container.appendChild(buildGraphFilters(container));
-        // The map's box is an expandable area: the panel's grips give it height, and any change of its size redraws the map to fit.
-        const box = document.createElement("div");
-        box.className = "graph-box";
-        container.appendChild(box);
-        box.appendChild(buildListGraph(container, rows, details, opts));
-        new ResizeObserver(() => {
-            const d = container._graphDrawn, h = parseFloat(box.style.height) || 0;
-            if (d && d.w === box.clientWidth && d.h === h) return;
-            requestAnimationFrame(() => redrawGraph(container));
-        }).observe(box);
-        panelRefit();   // a rebuilt box takes back its share of the panel
-        return;
-    }
     if (rows.length === 0 && (!editable || fixedRows)) {
         const empty = document.createElement("div");
         empty.className = "list-empty";
@@ -6314,19 +4528,6 @@ function decodePassword(encoded) {
     }
 }
 
-function fmtTime(sec) {
-    sec = Math.max(0, Math.floor(Number(sec) || 0));
-    const d = Math.floor(sec / 86400); sec -= d * 86400;
-    const h = Math.floor(sec / 3600);  sec -= h * 3600;
-    const m = Math.floor(sec / 60);    sec -= m * 60;
-    const parts = [];
-    if (d) parts.push(d + "d");
-    if (d || h) parts.push(h + "h");
-    if (d || h || m) parts.push(m + "m");
-    parts.push(sec + "s");
-    return parts.join(" ");
-}
-
 // "used / total", each sized by fmtBytes from the unit the device declares; a count unit shows plain numbers.
 function fmtProgressLabel(ctrl) {
     if (ctrl.unit === "count") return (Number(ctrl.value) || 0) + " / " + (Number(ctrl.total) || 0);
@@ -6528,7 +4729,7 @@ function allModules() {
 
 // Reconcile a card's control rows when its set of VISIBLE controls changed (a
 // `hidden` flag flipped at runtime, e.g. NetworkModule's static-IP fields or
-// RmtLedDriver's loopbackRxPin). The value-patch path in updateModuleControls
+// a driver's loopback pin while its self-test runs). The value-patch path in updateModuleControls
 // can't add or remove rows, so this handles that half. Returns true if it
 // changed the DOM. No-op (returns false) on the common frame where nothing moved.
 //
@@ -6624,7 +4825,7 @@ function updateModuleControls(mod) {
     if (!mod.controls) return;
 
     // Conditional controls: a module can flip a control's `hidden` flag at runtime
-    // (e.g. RmtLedDriver reveals loopbackRxPin while the test is on, NetworkModule
+    // (e.g. a driver reveals its loopback pin while its self-test runs, NetworkModule
     // reveals static-IP fields). The value-patch loop below only updates controls
     // already in the DOM: it can't add or remove one. So first detect whether the
     // set of VISIBLE controls drifted from what's rendered, and if so re-render
@@ -6712,7 +4913,7 @@ function updateModuleControls(mod) {
                 // set on pointerdown/focus and cleared on change/blur, more reliable than
                 // document.activeElement while a native popup is up (a separate OS layer on macOS).
                 if (el.dataset.open === "true" || el.contains(document.activeElement)) break;
-                // Some selects are populated asynchronously (HueDriver learns its rooms ~1-2s after boot,
+                // Some selects are populated asynchronously (a driver learning a bridge's rooms ~1-2s after boot,
                 // growing from ["All"] to the full list), and a list outgrowing the segments changes its form,
                 // so a changed option list rebuilds the control in place.
                 const opts = ctrl.options || [];
@@ -7711,7 +5912,6 @@ function updateStatusBar() {
 // slow page load; a fresh check is forced when the Firmware card opens. Best-effort: any
 // failure hides the badge, never throws.
 
-const UPDATE_TTL_MS = 60 * 60 * 1000;                     // 1 h: the age of release list the update badge settles for
 const PICKER_RELEASE_KEY = "MoonLight.picker.releaseTag"; // install-picker restores from this on init
 
 function safeLocalGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
@@ -7789,18 +5989,6 @@ function deviceFirmwareInfo() {
                        moonbase: value(fw, "moonbaseMismatch") || null, mode: uiMode() } : null;
 }
 
-// The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
-function releaseTagOf(version) {
-    return (parse(version)?.prerelease.length || 0) > 0 ? "latest" : `v${version}`;
-}
-
-// The release holding exactly this version, or null: `latest` moves on, so it counts only while its name, its version, is still this one.
-// MoonBase is offered from it alone, since the pair of an app and its own release's MoonBase is the pair that was tested.
-function releaseOfVersion(releases, version) {
-    const rel = releaseByTag(releases, releaseTagOf(version));
-    return rel && (rel.tag_name !== "latest" || rel.name === version) ? rel : null;
-}
-
 // Light the badge for an available update. `tag` is the release the picker should pre-select
 // (a vX.Y.Z stable tag, or "latest"); `label` is what the badge shows.
 function showUpdateBadge(badge, tag, label, byHand) {
@@ -7828,41 +6016,6 @@ function showMoonBaseBadge(badge, dev) {
     badge.dataset.byhand = "";
     badge.dataset.moonbase = "1";
     badge.hidden = false;
-}
-
-// The key that names a release asset, from the device's own `firmware` control. On the app tab
-// that is already the variant ("esp32s3-n16r8"); on the MoonBase tab the device reports the chip
-// ("ESP32-S3"), which the asset spells "esp32s3" after the build directory's IDF target.
-//
-// Null when the control has not arrived: the picker treats that as "offer everything" rather than
-// as a key nothing matches, which is the difference between a full list and a silently empty one.
-function moonbaseAssetKeyFrom(fw) {
-    if (!fw) return null;
-    return /^ESP32/.test(fw) ? chipKey(fw) : fw;
-}
-
-
-// The System mode that shows everything, and puts a device on the `latest` channel as a -dev build is.
-const MODE_DEVELOPER = 2;
-
-// Whether a device follows the moving `latest` build: one running a -dev build, or one its reader put in developer mode.
-function followsLatest(dev) {
-    return (parse(dev.version)?.prerelease.length || 0) > 0 || dev.mode === MODE_DEVELOPER;
-}
-
-// The update a device's channel offers from `releases`, or null. A newer official release, first, for every device; then, for a device that
-// follows `latest`, a newer `latest`. Only a release carrying the device's own image counts. The one rule behind the status bar's badge, a
-// node's popup and its mark on the map. `latest`'s version is its release name (release.yml), which GitHub's API serves cross-origin.
-function channelUpdate(dev, releases) {
-    if (!dev?.version || !dev.firmware) return null;
-    const ships = (rel, v) => !!releaseAsset(rel, firmwareAssetName(dev.firmware, v)).url;
-    const stable = latestStable(releases);
-    if (stable?.tag_name && isNewer(stable.tag_name, dev.version) && ships(stable, stable.tag_name.replace(/^v/, "")))
-        return { rel: stable, tag: stable.tag_name, label: stable.tag_name, version: stable.tag_name.replace(/^v/, "") };
-    if (!followsLatest(dev)) return null;
-    const latest = releaseByTag(releases, "latest");
-    const v = latest?.name;
-    return v && isNewer(v, dev.version) && ships(latest, v) ? { rel: latest, tag: "latest", label: `latest (${v})`, version: v } : null;
 }
 
 // Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` bypasses the cache (used when the Firmware card opens).

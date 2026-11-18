@@ -40,7 +40,7 @@
 ///
 /// ## Parsing is the security surface
 ///
-/// It reads an unauthenticated datagram off the LAN, so every read is length-checked against the buffer end, nothing is allocated, and a malformed packet returns false having read only its own length.
+/// It reads an unauthenticated datagram off the LAN, so every read is length-checked against the buffer end, works in the caller's buffer alone, and a malformed packet returns false having read only its own length.
 ///
 /// Bundles are recognized and refused: controllers send plain messages, and a bundle is a timed batch.
 ///

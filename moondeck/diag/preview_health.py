@@ -24,22 +24,20 @@ What it reports (the honest "what does the user see" metrics):
   - verdict: SMOOTH (no long gaps, frames flowing) / CHOPPY (frames but long gaps or reconnects) /
     DEAD (no color frames at all).
 
-Stdlib-only (socket/base64/os/struct/time/json/urllib), like the scenario helpers — runs anywhere uv
-runs, no third-party deps. Devices come from an explicit ip[:port] argument, or (no arg) every online
-device on moondeck.json's active network.
+Stdlib-only (os/struct/time/json/urllib, the handshake _preview_ws.py's), like the scenario helpers — runs anywhere uv
+runs, no third-party deps. Devices come from an explicit ip[:port] argument, or (no arg) every device
+selected for the live tests in MoonDeck's map popup.
 
 Usage:
   uv run moondeck/diag/preview_health.py <ip[:port]> [--seconds N] [--grid SIZE]
-  uv run moondeck/diag/preview_health.py            # all online devices on the active network
+  uv run moondeck/diag/preview_health.py            # every device selected for the live tests
     --seconds N   measurement window per device (default 30)
     --grid SIZE   POST Grid width/height=SIZE, depth=1 before measuring (default: leave grid as-is)
 """
 
 import argparse
-import base64
 import json
 import os
-import socket
 import struct
 import sys
 import time
@@ -47,9 +45,13 @@ import urllib.request
 
 # Repo root: moondeck/diag/preview_health.py → ../../
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(_ROOT, "moondeck"))
+sys.path.insert(0, os.path.join(_ROOT, "moondeck", "scenario"))
+from _moondeck_config import live_test_devices  # noqa: E402
+from _preview_ws import handshake  # noqa: E402
 
 
-# --- minimal RFC 6455 client (one connection), mirroring moondeck/scenario/_preview_ws.py -----------
+# --- minimal RFC 6455 client (one connection), its handshake moondeck/scenario/_preview_ws.py's -----------
 
 class _Ws:
     """One /ws connection to host "ip[:port]". Reads server frames; can send a text frame (the
@@ -57,23 +59,7 @@ class _Ws:
     reader handles only FIN frames with the 7/16-bit length forms."""
 
     def __init__(self, host, timeout_s=5.0):
-        h, _, p = host.partition(":")
-        self.sock = socket.create_connection((h, int(p or 80)), timeout=timeout_s)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self.sock.sendall(
-            (f"GET /ws HTTP/1.1\r\nHost: {host}\r\n"
-             f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
-             f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-        raw = b""
-        while b"\r\n\r\n" not in raw:
-            chunk = self.sock.recv(1024)
-            if not chunk:
-                raise ConnectionError("WS handshake: connection closed")
-            raw += chunk
-        head, _, rest = raw.partition(b"\r\n\r\n")
-        if b" 101" not in head.split(b"\r\n", 1)[0]:
-            self.sock.close()
-            raise ConnectionError("WS handshake refused (max 4 clients — close preview tabs?)")
+        self.sock, rest = handshake(host, "/ws", timeout_s)
         self._buf = bytearray(rest)
 
     def _need(self, n, deadline):
@@ -233,33 +219,21 @@ def _read_grid(host):
     return out
 
 
-def _online_devices():
-    """ip[:port] for every online device on moondeck.json's active network."""
-    with open(os.path.join(_ROOT, "moondeck", "moondeck.json")) as f:
-        cfg = json.load(f)
-    nets = cfg.get("networks", [])
-    active = cfg.get("active_network")
-    net = next((n for n in nets if n.get("name") == active), nets[0] if nets else None)
-    if not net:
-        return []
-    return [d["ip"] for d in net.get("devices", []) if d.get("online") and d.get("ip")]
-
-
 def main():
     ap = argparse.ArgumentParser(description="Browser-faithful preview-stream health probe.")
     # Positional for CLI convenience; --host is the MoonDeck convention (the UI forwards the selected
     # device as --host, matching run_network_live.py). Either works; --host wins if both are given.
     ap.add_argument("host_pos", nargs="?", metavar="host",
-                    help="device ip[:port]; omit to probe all online devices on the active network")
+                    help="device ip[:port]; omit to probe every device selected for the live tests")
     ap.add_argument("--host", dest="host_opt", help="device ip[:port] (MoonDeck forwards this)")
     ap.add_argument("--seconds", type=int, default=30, help="measurement window per device")
     ap.add_argument("--grid", type=int, default=0, help="set Grid to SIZE×SIZE before measuring")
     args = ap.parse_args()
 
     host = args.host_opt or args.host_pos
-    hosts = [host] if host else _online_devices()
+    hosts = [host] if host else [d["ip"] for d in live_test_devices()]
     if not hosts:
-        print("No devices to probe (give an ip[:port] or mark devices online in moondeck.json).")
+        print("No devices to probe: give an ip[:port], or tick \"use in live tests\" in a device's popup on the Live tab's map.")
         return 1
     print(f"Preview health — {args.seconds}s per device"
           f"{f', grid {args.grid}²' if args.grid else ''}:")

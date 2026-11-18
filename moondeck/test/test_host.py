@@ -113,10 +113,12 @@ def main():
     code = proc.wait()
     stop.set()
     follower.join()
-    if not filtered:
-        _suite_output.keep(test_exe, "".join(output))   # the KPI reads this run's case count instead of running the suite again
+    console = ""
     if junit.exists():
-        test_runs.record(test_runs.doctest_runs(test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))[1]))   # each case's last result, with the tree it saw
+        console, xml = test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))
+        test_runs.record(test_runs.doctest_runs(xml))   # each case's last result, with the tree it saw
+    if not filtered:
+        _suite_output.keep(test_exe, "".join(output) + console)   # the console text, with the case count, is in the out file: the KPI reads it instead of running the suite again
     sys.exit(code)
 
 

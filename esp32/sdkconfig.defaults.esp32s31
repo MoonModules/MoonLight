@@ -17,6 +17,9 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb.csv"
 
 # Flash size override (the CoreBoard ships 16 MB).
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# Quad I/O, as the S3 builds run: the CoreBoard's 16 MB flash (JEDEC 0x46 0x4018) is a quad part, and IDF's default, DIO, halves what the
+# cache fetches per clock.
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 
 # CPU at the S31's rated maximum, 320 MHz. The shared sdkconfig.defaults sets 240 (the
 # rated max for the chips that came before), so this target has to override it or it

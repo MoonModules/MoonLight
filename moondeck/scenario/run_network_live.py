@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Live lights-over-UDP matrix test across every online board in moondeck.json.
+"""Live lights-over-UDP matrix test across the boards selected for the live tests.
 
 Proves the multi-protocol network path (ArtNet, E1.31/sACN, DDP) end-to-end on
-real firmware. Devices come from moondeck/moondeck.json (the MoonDeck device
-list, active network, online only). Each round one device is the SENDER and
-every other device LISTENS:
+real firmware. Devices are the ones selected for the live tests in MoonDeck's
+map popup, by MAC, each found at its address when the run starts (see
+_net_probe.py). Each round one device is the SENDER and every other device
+LISTENS:
 
   1. The host seeds the sender three times: once per protocol, each with its own
      color: to the sender's protocol ports (6454/5568/4048); the
@@ -20,18 +21,16 @@ every other device LISTENS:
 With one online device only step 1 runs (the matrix needs ≥2 boards). All
 mutated state (grid size, NetworkSend receivers/protocol/enabled, the added effects)
 is restored in a finally block. Exit codes follow improv_smoke_test.py: 0 =
-all legs passed, 1 = a leg failed, 2 = environment problem (no devices,
-moondeck.json missing).
+all legs passed, 1 = a leg failed, 2 = environment problem (no selected
+device answers).
 
 Run:  uv run moondeck/scenario/run_network_live.py [--device NAME] [--host IP]
 """
 
 import argparse
-import json
 import sys
 import time
 import socket
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -42,7 +41,7 @@ import _preview_ws  # noqa: E402
 # _net_probe.py; the matrix-only color-correction/Board logic stays below.
 from _net_probe import (  # noqa: E402
     ARTNET_PORT, E131_PORT, DDP_PORT, CHANNELS_PER_UNIVERSE, PROTOCOLS,
-    MOONDECK_STATE, build_artdmx, build_e131, build_ddp, load_selected_devices,
+    build_artdmx, build_e131, build_ddp, load_selected_devices,
 )
 
 # Round colors: channel values far apart so they stay distinct after the
@@ -109,10 +108,6 @@ def send_solid(host: str, rgb, protocol: str = "ArtNet", universes: int = 2,
             time.sleep(pace_ms / 1000.0)
     finally:
         sock.close()
-
-
-# load_selected_devices now lives in _net_probe.py (imported above): shared
-# with the latency probe.
 
 
 def find_module(state: dict, name: str):
@@ -221,8 +216,7 @@ def main() -> int:
 
     devices = load_selected_devices()
     if not devices:
-        print("FAIL  no selected+reachable devices in moondeck.json's active "
-              "network: check device boxes in the Live tab")
+        print("FAIL  no selected device answers: tick \"use in live tests\" in a device's popup on the Live tab's map")
         return 2
     print(f"devices: {len(devices)} selected: "
           + ", ".join(f"{d.get('deviceName', '?')} ({d['ip']})" for d in devices), flush=True)

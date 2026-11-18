@@ -192,10 +192,11 @@ def collect_host():
         # the default that fits a quick command. A timeout here is reported as a crashed check
         # rather than a slow one, so the budget tracks the suite rather than the other way round.
         # The scenario gate's run of this binary when it kept one, else a run of its own through run_scenario.py, which keeps it: one order, sorted by path.
-        out = _suite_output.kept(scenarios)
+        files = _suite_output.scenario_files()   # run_scenario.py's whole run reads these, so they key its output
+        out = _suite_output.kept(scenarios, files)
         if out is None:
             run(["uv", "run", str(ROOT / "moondeck" / "scenario" / "run_scenario.py")], cwd=ROOT, timeout=300)
-            out = _suite_output.kept(scenarios) or ""
+            out = _suite_output.kept(scenarios, files) or ""
         # One tick per scenario: the slowest MEASURE step (the contract-
         # relevant worst-case timing). The KPI one-liner becomes a
         # 10-number-ish series that maps 1:1 to the scenario list, so a
@@ -381,13 +382,11 @@ def _live_capture(log, seconds=15):
         return False
     try:
         state = json.loads(cfg.read_text(encoding="utf-8"))
-        # Port lives inside the active network record (post-networks refactor
-        # in moondeck.py). Fall back to the legacy top-level `port` so an
-        # un-migrated moondeck.json still works.
+        # The ESP32 tab's port, kept on the active network record.
         active_name = state.get("active_network")
         active = next((n for n in (state.get("networks") or [])
                        if n.get("name") == active_name), None)
-        port = (active or {}).get("port") or state.get("port")
+        port = (active or {}).get("port")
     except Exception:
         return False
     if not port or not Path(port).exists():
@@ -399,7 +398,7 @@ def _live_capture(log, seconds=15):
     print(f"  ESP32 KPI: capturing {seconds}s from {port}...")
     ips = device_ips_for_port(port)
     if not ips:
-        print(f"  no device in the registry was last flashed on {port}: its log level is not raised, so the tick lines show only at Info", flush=True)
+        print(f"  the board on {port} has no known MAC or address (Identify it from its node on MoonDeck's map): its log level is not raised, so the tick lines show only at Info", flush=True)
     with raised_log_level(ips, LOG_INFO):
         try:
             ser = open_serial(port)

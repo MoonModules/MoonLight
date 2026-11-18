@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _ratchet  # noqa: E402
-from _ratchet import risen  # noqa: E402
+from _ratchet import rise_line, risen  # noqa: E402
 import _findings  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -67,6 +67,8 @@ FIRMWARE_DOUBLE = "double in firmware code"
 DEFINE_CONSTANT = "#define used as a constant"
 RTTI = "dynamic_cast or typeid in firmware"
 RELATIVE_INCLUDE = "relative include path"
+# The rules a file alone cannot show: a type's spread and a clone span files, and the hot path and the stack read the whole build.
+WHOLE_TREE = {SPREAD, "duplicated block", HOT_PATH, STACK}
 # The rules swept to zero, where one finding fails the check outright rather than waiting for the ratchet to notice a rise.
 ERROR_RULES = {PLATFORM, NO_PRAGMA, HEADER_USING, FIRMWARE_DOUBLE, RTTI, RELATIVE_INCLUDE}
 
@@ -180,11 +182,11 @@ def owned_files() -> list:
     # A git that does not answer raises: an empty list would read as a tree with nothing to measure.
     # `:(glob)` makes `**` match zero directories too, so src/main.cpp counts as src/**/*.cpp does in a shell.
     globs = [":(glob)" + g for g in FILE_GLOBS]
-    proc = subprocess.run(["git", "ls-files", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
-    files = proc.stdout.split()
+    proc = subprocess.run(["git", "ls-files", "-z", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+    files = [f for f in proc.stdout.split("\0") if f]   # NUL-separated, so a name with a space stays whole
     if NAMED:   # an untracked file is owned once named, when FILE_GLOBS match it, as git's own pathspecs decide
-        new = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "--", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
-        files += [rel for rel in new.stdout.split() if rel in NAMED]
+        new = subprocess.run(["git", "ls-files", "-z", "--others", "--exclude-standard", "--", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+        files += [rel for rel in new.stdout.split("\0") if rel in NAMED]
     # The working tree is what is measured, so a tracked file deleted on disk counts for nothing.
     return [rel for rel in files if not rel.startswith(FILE_EXCLUDE) and (ROOT / rel).exists()]
 
@@ -663,7 +665,7 @@ def main() -> int:
     if rose:
         print("\nROSE against the committed counts. These only shrink:")
         for rule, was, now in rose:
-            print(f"  {rule}: {was} -> {now}")
+            print(rise_line(rule, was, now, WHOLE_TREE))
         print("  Simplify what this change touched, or say in the commit why the rule itself changed.")
     errors = errors_in(rows)
     if errors:

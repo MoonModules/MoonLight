@@ -168,6 +168,7 @@ processes:
         detail: |
           The commit gates CI does not run, each marked `ci: true` where it does: the strict docs build, the backlog against the Project, the ESP32 firmware's freshness and Improv with a board attached. Their triggers read `git diff --name-only main...`, so they catch what a green series of commits hides.
       - id: gcc
+        cores: all
         say: Build with GCC when CI asks.
         actor: contributor
         when: { run: { script: moondeck/build/build_host.py, args: "--gcc --tests" } }

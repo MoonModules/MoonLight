@@ -32,32 +32,115 @@ def test_an_excluding_glob_is_an_excluding_pathspec():
     assert run_gates.pathspecs([]) == ["."]
 
 
-def test_a_build_or_a_suite_runs_one_at_a_time_and_a_quick_check_beside_them():
-    assert run_gates.heavy({"script": "moondeck/build/build_host.py", "args": "--tests"})
-    assert run_gates.heavy({"script": "moondeck/test/test_tooling.py", "args": "--python"})
-    assert not run_gates.heavy({"script": "moondeck/test/test_tooling.py", "args": "--js"})
-    assert not run_gates.heavy({"script": "moondeck/check/check_specs.py", "args": ""})
-    assert run_gates.heavy({"script": "moondeck/check/check_esp32_built.py", "args": "--firmware esp32s3-n16r8 --build"})   # it may build
+def test_each_gate_declares_what_it_needs_and_the_cores_it_holds():
+    gates = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
+    assert gates["host-tests/test"]["needs"] == ["host-tests/build-tests"]          # a step id of its own process
+    assert "host-tests/scenarios" in gates["commit-code/kpi"]["needs"]               # process/step for another's
+    assert gates["commit-code/code"]["needs"] == ["commit-code/build-host"]          # it reads the warnings that build saved
+    assert gates["host-tests/build-tests"]["cores"] == "all" and gates["commit-code/kpi"]["cores"] == "all"
+    assert gates["commit-web/js"]["cores"] == 1                                      # a gate naming none holds one
 
 
-def test_a_ratchet_rise_is_read_from_the_checks_own_report():
+def _schedule(monkeypatch, run, tokens=4):
+    """Run `run` through the scheduler with a fake gate that sleeps a moment; each gate's start and end order."""
+    import threading
+    import time
+    log, lock = [], threading.Lock()
+
+    def fake(g, budget, logdir, cores=1):
+        with lock:
+            log.append(("start", g["id"], cores))
+        time.sleep(0.05)
+        with lock:
+            log.append(("end", g["id"], cores))
+        return {"result": "FAIL" if g.get("fails") else "PASS", "seconds": 0.05}
+
+    monkeypatch.setattr(run_gates, "run_gate", fake)
+    monkeypatch.setattr(run_gates, "_line", lambda g: g["id"])
+    with JobBudget(tokens, scheduler=True) as budget:
+        done = run_gates.execute(run, budget, Path("."), [], every=60)
+    return log, {g["id"]: g for g in done}
+
+
+def test_a_gate_starts_after_its_needs_and_an_all_cores_gate_runs_alone(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    run = [{"id": "p/build", "needs": [], "cores": "all"}, {"id": "p/test", "needs": ["p/build"], "cores": 1},
+           {"id": "p/lint", "needs": [], "cores": 1}, {"id": "p/kpi", "needs": ["p/test"], "cores": "all"}]
+    log, done = _schedule(monkeypatch, run)
+    order = [(e, gid) for e, gid, _ in log]
+    assert order.index(("start", "p/test")) > order.index(("end", "p/build"))
+    for alone in ("p/build", "p/kpi"):                                              # it runs alone, from its start to its end
+        s, e = order.index(("start", alone)), order.index(("end", alone))
+        assert e == s + 1
+    assert all(g["result"] == "PASS" for g in done.values())
+
+
+def test_a_failed_need_skips_its_dependents_and_theirs(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    run = [{"id": "p/build", "needs": [], "cores": 1, "fails": True}, {"id": "p/test", "needs": ["p/build"], "cores": 1},
+           {"id": "p/kpi", "needs": ["p/test"], "cores": 1}, {"id": "p/other", "needs": ["q/untriggered"], "cores": 1}]
+    import time
+    t = time.monotonic()
+    _, done = _schedule(monkeypatch, run)
+    assert time.monotonic() - t < 5                                                  # it leaves once the skips empty the run, not after its 60 s progress line
+    assert done["p/test"]["result"] == "SKIP" and "p/build" in done["p/test"]["why"]
+    assert done["p/kpi"]["result"] == "SKIP"
+    assert done["p/other"]["result"] == "PASS"                                       # a need the change does not trigger is met
+
+
+def test_the_longest_path_to_the_end_starts_first():
+    run = [{"id": "p/lint", "needs": []}, {"id": "p/build", "needs": []}, {"id": "p/test", "needs": ["p/build"]}]
+    past = [{"gates": [{"id": "p/lint", "result": "PASS", "seconds": 50.0}, {"id": "p/build", "result": "PASS", "seconds": 30.0},
+                       {"id": "p/test", "result": "PASS", "seconds": 40.0}]}]
+    prio = run_gates.priorities(run, past)
+    assert prio == {"p/lint": 50.0, "p/build": 70.0, "p/test": 40.0}                 # the build heads the 70 s chain
+
+
+def test_a_ratchet_rise_is_read_from_the_checks_own_report_with_its_whole_tree_mark():
+    import _ratchet
     tail = ["Docgen check: 0 error(s), 5 warning(s).", "", "ROSE against the committed counts. These only shrink:",
-            "  member comment > 1 line: 30 -> 32", "  (total): 1715 -> 1717", "  Fix them, or say in the commit why."]
-    assert run_gates.rises(tail) == [("member comment > 1 line", 30, 32), ("(total)", 1715, 1717)]
+            _ratchet.rise_line("member comment > 1 line", 30, 32, set()), _ratchet.rise_line("name spread", 4, 5, {"name spread"}),
+            _ratchet.rise_line("(total)", 1715, 1717, set()), "  Fix them, or say in the commit why."]
+    assert run_gates.rises(tail) == [("member comment > 1 line", 30, 32, False), ("name spread", 4, 5, True), ("(total)", 1715, 1717, True)]
 
 
-def test_a_run_proposes_a_write_time_check_for_each_rise_and_names_a_gate_grown_slower():
-    record = {"gates": [{"id": "commit-docs/docgen", "result": "FAIL", "seconds": 60.0, "rises": [("hard wrap", 3, 4)]},
+def test_a_rise_the_hook_reports_per_file_names_the_bypassed_hook_and_a_whole_tree_rise_asks_for_a_design():
+    record = {"gates": [{"id": "commit-docs/docgen", "result": "FAIL", "seconds": 1.0,
+                         "rises": [("hard wrap", 3, 4, False), ("name spread", 4, 5, True), ("(total)", 7, 9, True)]}]}
+    ideas = run_gates.proposals(record, [])
+    assert any("hard wrap rose 3 -> 4" in i and "bypassed the hook" in i for i in ideas)
+    assert any("name spread rose 4 -> 5" in i and "design change" in i for i in ideas)
+    assert not any("(total)" in i for i in ideas)                 # the total rises with a rule, which carries the proposal
+    old = {"gates": [{"id": "commit-docs/docgen", "result": "FAIL", "seconds": 1.0, "rises": [["hard wrap", 3, 4]]}]}
+    assert any("bypassed the hook" in i for i in run_gates.proposals(old, []))   # a record written before the mark reads as per file
+
+
+def test_a_gate_grown_slower_names_its_causes_from_the_record():
+    record = {"gates": [{"id": "host-tests/test", "result": "PASS", "start": 10.0, "seconds": 60.0, "compiled": 202, "load": None,
+                         "trigger": ["src/core/Scheduler.h", "src/a.cpp"]},
+                        {"id": "commit-docs/prose", "result": "PASS", "start": 30.0, "seconds": 5.0},
                         {"id": "commit/improv", "result": "SKIP", "tail": None}]}   # a skipped gate carries no output
-    past = [{"gates": [{"id": "commit-docs/docgen", "result": "PASS", "seconds": 30.0}]} for _ in range(3)]
-    ideas = run_gates.proposals(record, past)
-    assert any("hard wrap rose 3 -> 4" in i and "hook_written.py" in i for i in ideas)
-    assert any("took 60.0 s, up from a median of 30.0 s" in i for i in ideas)
+    past = [{"gates": [{"id": "host-tests/test", "result": "PASS", "seconds": 30.0}]} for _ in range(3)]
+    slower = next(i for i in run_gates.proposals(record, past) if "took 60.0 s, up from a median of 30.0 s" in i)
+    assert "compiled 202 objects" in slower and "beside it ran commit-docs/prose" in slower and "Scheduler.h" in slower
+    bare = {"gates": [{"id": "host-tests/test", "result": "PASS", "seconds": 60.0}]}
+    assert any("names no cause" in i for i in run_gates.proposals(bare, past))
 
 
 def test_a_gate_that_passed_its_last_ten_runs_is_proposed_for_ci_or_the_merge_gate_alone():
     runs = [{"gates": [{"id": "commit-web/devices", "result": "PASS", "seconds": 1.0}]} for _ in range(10)]
     assert any("commit-web/devices passed its last 10 runs" in i for i in run_gates.proposals(runs[-1], runs[:-1]))
+
+
+def test_a_schedulers_budget_hands_out_every_token_all_at_once_or_none(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    with JobBudget(3, scheduler=True) as budget:                  # the dispatcher runs no job, so its implicit token is in the pipe too
+        assert budget.try_acquire(2)
+        assert not budget.try_acquire(2)                          # one left: none taken rather than one of the two
+        assert budget.try_acquire(1)
+        budget.release()
+        budget.release()
+        assert budget.try_acquire(2)
 
 
 def test_the_budget_hands_out_its_tokens_less_the_implicit_one_and_takes_them_back(monkeypatch):
@@ -110,8 +193,35 @@ def test_a_git_that_cannot_answer_stops_the_run_rather_than_reading_as_an_empty_
 
 
 def test_without_a_named_pipe_the_budget_is_the_runs_own_semaphore(monkeypatch):
-    monkeypatch.delattr(os, "mkfifo")                 # Windows has none
+    monkeypatch.delattr(os, "mkfifo", raising=False)   # Windows has none: there the attribute is already gone
     with JobBudget(2) as budget:
         assert budget.path is None and budget.env() == dict(os.environ)   # a child is told of no pipe
         budget.acquire()                              # the one token beside the implicit one
         budget.release()
+
+
+def test_a_filtered_run_writes_only_the_generated_files_a_kept_gate_depends_on(monkeypatch):
+    gen = {"id": "commit-docs/help", "script": "g.py", "args": "", "globs": ["src/**"], "generates": "docs/help/help.json", "needs": []}
+    docs = {"id": "commit-docs/docs", "script": "d.py", "args": "", "globs": ["docs/**"], "needs": []}
+    js = {"id": "commit-web/js", "script": "j.py", "args": "", "globs": ["src/ui/**"], "needs": []}
+    docgen = {"id": "commit-docs/docgen", "script": "c.py", "args": "", "globs": ["src/**"], "needs": ["commit-docs/help"]}
+    kpi = {"id": "commit-code/kpi", "script": "k.py", "args": "", "globs": ["src/**"], "needs": []}
+    monkeypatch.setattr(run_gates, "processes", lambda: {})
+    monkeypatch.setattr(run_gates, "gates", lambda *_: [gen, docs, js, docgen, kpi])
+    monkeypatch.setattr(run_gates, "changed_files", lambda base, specs: ["src/core/a.h"] if ":(glob)src/**" in specs else [])
+    monkeypatch.setattr(run_gates, "reads", lambda gate, path: gate is docs)
+    assert run_gates.generators("commit", "HEAD") == [gen]                     # unfiltered: as before
+    assert run_gates.generators("commit", "HEAD", {"js"}) == []                # `--only js` leaves help.json alone
+    assert run_gates.generators("commit", "HEAD", {"kpi"}) == []               # a gate reading the same sources, not the file, leaves it alone
+    assert run_gates.generators("commit", "HEAD", {"docs"}) == [gen]           # the docs gate's globs name it, so it is written first
+    assert run_gates.generators("commit", "HEAD", {"docgen"}) == [gen]         # docgen needs it, though its globs do not name it
+    assert run_gates.generators("commit", "HEAD", {"help"}) == [gen]           # named itself
+
+
+def test_a_gate_checking_a_firmware_image_is_rerun_once_the_image_is_gone(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_gates, "ROOT", tmp_path)
+    (tmp_path / "build" / "esp32-esp32s3-n16r8").mkdir(parents=True)
+    assert run_gates.firmware_state("--firmware esp32s3-n16r8 --build") == "False"
+    (tmp_path / "build" / "esp32-esp32s3-n16r8" / "MoonLight.bin").write_bytes(b"x")
+    assert run_gates.firmware_state("--firmware esp32s3-n16r8 --build") == "True"
+    assert run_gates.firmware_state("--no-jit") == ""                           # a gate naming no firmware keeps its key

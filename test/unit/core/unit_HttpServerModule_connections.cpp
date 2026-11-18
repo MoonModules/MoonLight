@@ -115,11 +115,12 @@ std::string getUntilClosed(mm::HttpServerModule& http, mm::platform::TcpConnecti
 
 }  // namespace
 
-TEST_CASE("HttpServer: a checkout's UI folder serves its script modules and nothing else in it") {
+TEST_CASE("HttpServer: a checkout's UI folder serves its script modules and imported sheets and nothing else in it") {
     const auto dir = std::filesystem::temp_directory_path() / "mm_ui_folder_test";
     const std::string dirName = dir.string();   // the platform keeps the pointer, so the string outlives the server
     std::filesystem::create_directories(dir);
     std::ofstream(dir / "panel.js") << "export const x = 1;";
+    std::ofstream(dir / "devicemap.css") << ".list-graph {}";   // a sheet style.css imports, which the embedded bundle inlines
     std::ofstream(dir / "ui_embedded.h") << "secret";
     mm::HttpServerModule http;
     http.port = kTestPort;
@@ -134,6 +135,7 @@ TEST_CASE("HttpServer: a checkout's UI folder serves its script modules and noth
         return reply.substr(0, 12);
     };
     CHECK(statusOf("/panel.js") == "HTTP/1.1 200");
+    CHECK(statusOf("/devicemap.css") == "HTTP/1.1 200");
     CHECK(statusOf("/ui_embedded.h") == "HTTP/1.1 404");
 #ifndef _WIN32
     // On Windows a colon names a drive or a data stream, a way out of the folder, so a name holding one is refused. A file here can carry one, which shows the refusal.

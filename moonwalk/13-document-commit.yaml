@@ -93,7 +93,7 @@ processes:
         detail: |
           Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
 
-          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line the KPI gate wrote, read from the last gate run's log (`build/gates/run-<time>/commit-code__kpi.log`) rather than measured again; a source change after that run reruns the gate. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
   - id: commit-docs
     title: The docs checks
     actor: contributor
@@ -107,11 +107,13 @@ processes:
         detail: |
           Once per gate run, before any other gate, so every header edit of the round lands in it and the docs build and docgen read the help the source says.
       - id: docs
+        needs: [help]
         say: Build the docs, strict.
         given: [{ changed: ["**/*.md", "docs/**", mkdocs.yml, moonwalk/**, "moondeck/docs/**"] }]
         when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
       - id: docgen
         ci: true
+        needs: [help]
         say: Check the headers' documentation.
         given: [{ changed: ["**/*.md", src/**, test/**, moonwalk/**, moondeck/docs/gen_moonwalk.py] }]
         when: { run: { script: moondeck/check/check_docgen.py } }
@@ -134,6 +136,7 @@ processes:
     steps:
       - id: build-host
         ci: true
+        cores: all
         say: Build the host firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_host.py } }
@@ -141,6 +144,7 @@ processes:
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
       - id: code
         ci: true
+        needs: [build-host]
         say: Check the code's boundaries and complexity.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
@@ -152,29 +156,34 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { process: host-tests }
       - id: esp32-fresh
+        cores: all
         say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/host/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8 --build" } }
         detail: |
-          It compares the binary with every source it compiles, which catches an edit the binary lacks, and rebuilds a stale one once, then checks again: in the one-at-a-time lane, after the C++ gates and before the KPI reads its size. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments; the rest wait for the release workflow.
+          It compares the binary with every source it compiles, which catches an edit the binary lacks, and rebuilds a stale one once, then checks again, before the KPI reads its size. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments; the rest wait for the release workflow.
       - id: esp32-fresh-moonbase
+        cores: all
         say: Check the classic firmware and MoonBase are current.
         given: [{ changed: [moonbase/**] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32 --build" } }
         detail: |
           The classic is the firmware that carries the MoonBase image, so a MoonBase change is checked there.
       - id: no-jit
+        cores: all
         say: Build the host without the MoonLive backend.
         given: [{ changed: ["src/*/moonlive/**"] }]
         when: { run: { script: moondeck/build/build_host.py, args: "--no-jit" } }
         detail: |
           It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
       - id: kpi
+        cores: all
+        needs: [host-tests/test, host-tests/scenarios, esp32-fresh, esp32-fresh-moonbase, code]
         say: Record the repo's health.
-        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**", docs/reference/metrics/code.json] }]
         when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
         detail: |
-          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message. It runs when the code changes, since every commit is measured (CLAUDE.md principle 4) and its timings drift with the host.
+          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message, the code account read from the counts the code check's run wrote, so it runs after it. It runs when the code changes, since every commit is measured (CLAUDE.md principle 4) and its timings drift with the host; it holds every core, so no gate beside it skews a timing.
   - id: commit-web
     title: The web page checks
     actor: contributor
@@ -197,6 +206,7 @@ processes:
     steps:
       - id: python
         ci: true
+        cores: all
         say: Run the Python tests.
         given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
         when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }

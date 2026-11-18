@@ -1,6 +1,6 @@
 /// @module DeviceGroup
 ///
-/// Pins a group under Devices: members kept by their MAC through a rename and a new address, picked from Discovery's devices, marked missing when unheard, saved and restored, and named on each member's row for the map.
+/// Pins a group under Devices: members kept by their MAC through a rename and a new address, picked from Discovery's devices, marked missing when unheard, saved and restored, and named on each member's row for the map; and the definitions and deletions DeviceGroupSync carries between devices, merged whole or refused.
 
 #include "doctest.h"
 #include "discovery_rows.h"
@@ -11,7 +11,9 @@
 #include "core/util/JsonSink.h"
 #include "platform/platform.h"
 
+#include <cinttypes>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -138,9 +140,58 @@ TEST_CASE("DeviceGroup: the members survive a save and a restore, the name kept 
     CHECK(restored.restoreList(saved.data(), "members"));
     CHECK(restored.listRowCount() == 1);
     CHECK(restored.hasMember(kMacA));
+    b.discovery->release();   // Discovery drops every row, so the name shown is the one restored
     JsonSink row;
     restored.writeListRow(row, 0);
     CHECK(std::string(row.data()).find("\"device\":\"MM-A\"") != std::string::npos);
+}
+
+TEST_CASE("DeviceGroup: a list write that is not a list leaves the members as they were, and an empty list clears them") {
+    Bench b;
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
+    pickFirst(*b.group);
+    CHECK_FALSE(b.group->restoreList("{\"members\":false}", "members"));
+    CHECK(b.group->hasMember(kMacA));
+    CHECK(b.group->restoreList("{\"members\":[]}", "members"));
+    CHECK_FALSE(b.group->hasMember(kMacA));
+}
+
+TEST_CASE("DeviceGroup: a restored list memory cannot hold is refused whole, the members kept") {
+    struct AllocGuard { ~AllocGuard() { platform::setTestAllocRefusedFrom(0); } } alloc;
+    Bench b;
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
+    pickFirst(*b.group);
+    std::string json = "{\"members\":[";
+    for (int i = 0; i < 64; i++) {
+        char row[80];
+        std::snprintf(row, sizeof(row), "%s{\"mac\":\"10:00:00:00:00:%02x\",\"stamp\":\"10000:1\"}", i ? "," : "", i);
+        json += row;
+    }
+    json += "]}";
+    platform::setTestAllocRefusedFrom(1024);   // the first rows fit the room held, the rest need more than memory gives
+    CHECK_FALSE(b.group->restoreList(json.c_str(), "members"));
+    platform::setTestAllocRefusedFrom(0);
+    CHECK(b.group->listRowCount() == 1);
+    CHECK(b.group->hasMember(kMacA));
+}
+
+TEST_CASE("DeviceGroup: this device keeps one row through a new address, so a group lists it once and present") {
+    ClockGuard clock;
+    AddressGuard address;
+    const uint8_t first[4] = {192, 168, 1, 2}, moved[4] = {192, 168, 1, 9};
+    platform::setTestEthIPv4(first);
+    platform::setTestNowMs(1000);
+    DevicesModule dev;
+    dev.tick1s();
+    platform::setTestEthIPv4(moved);
+    platform::setTestNowMs(1000 + 31000);   // past three announcements, so a row left at the old address reads missing
+    dev.tick1s();
+    uint8_t self[6];
+    platform::getMacAddress(self);
+    CHECK(discovery_rows::rowAt(dev, "192.168.1.2").empty());
+    CHECK_FALSE(discovery_rows::rowAt(dev, "192.168.1.9").empty());
+    CHECK(dev.heardLately(self));
+    dev.release();
 }
 
 TEST_CASE("DeviceGroup: a deleted member leaves the group") {
@@ -177,6 +228,8 @@ struct Copy {
             if (std::strcmp(group->controls()[i].name, "id") == 0) std::snprintf(static_cast<char*>(group->controls()[i].ptr), 21, "%s", id);
         group->onControlChanged("id");
     }
+    /// This copy renamed by its user, "Kitchen" to `to`, at `ms`: an edit stamped then.
+    void rename(const char* to, uint32_t ms) { platform::setTestNowMs(ms); group->setName(to); group->onModuleRenamed("Kitchen", to); }
     void add(const char* mac) { uint32_t row = 0; REQUIRE(group->addListRow(row)); REQUIRE(group->setListRowField(row, "mac", (std::string("{\"value\":\"") + mac + "\"}").c_str())); }
     /// Every chunk of this copy, merged into `to`; true when any changed it.
     bool sendTo(Copy& to, const char** wantName = nullptr) {
@@ -231,9 +284,7 @@ TEST_CASE("DeviceGroup: a rename on one device is the name on the other, the new
     ClockGuard clock;
     Copy a;
     Copy b(a.group->groupId());
-    platform::setTestNowMs(3000);
-    a.group->setName("Hall");
-    a.group->onModuleRenamed("Kitchen", "Hall");
+    a.rename("Hall", 3000);
     const char* want = nullptr;
     a.sendTo(b, &want);
     REQUIRE(want);
@@ -249,9 +300,7 @@ TEST_CASE("DeviceGroup: a rename the tree refuses still converges: the shared na
     Copy a;
     Copy b(a.group->groupId());
     a.sendTo(b);
-    platform::setTestNowMs(3000);
-    a.group->setName("Hall");
-    a.group->onModuleRenamed("Kitchen", "Hall");
+    a.rename("Hall", 3000);
     const char* want = nullptr;
     CHECK(a.sendTo(b, &want));            // B's tree has "Hall" taken elsewhere: B keeps its module name
     REQUIRE(want);
@@ -303,34 +352,282 @@ TEST_CASE("DeviceGroupSync: a device a group names creates it, and a deletion ma
     devices->setName("Devices");
     s.addModule(devices);
     s.setup();
-    DeviceGroupSync sync(*devices);
+    {   // the sync registers its buffers with Devices, so it ends before the release frees Devices, as the module's own member does
+        DeviceGroupSync sync(*devices);
 
+        Copy origin;
+        const std::string kId = origin.group->groupId();
+        uint8_t self[6];
+        platform::getMacAddress(self);
+        char mac[18];
+        std::snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", self[0], self[1], self[2], self[3], self[4], self[5]);
+        origin.add(mac);   // this device is a member
+        uint8_t buf[1472];
+        size_t len = origin.group->writeChunk(buf, sizeof(buf), 0, 16);
+        sync.handle(*devices, buf, len);
+        REQUIRE(devices->childCount() == 1);
+        CHECK(static_cast<DeviceGroup*>(devices->child(0))->groupId() == kId);
+        CHECK(std::string(devices->child(0)->name()) == "Kitchen");
+
+        platform::setTestNowMs(60000);   // deleted later than every edit
+        osc::Writer w(buf, sizeof(buf), DeviceGroupSync::kDeletedAddress, ",shi");
+        w.str(kId.c_str());
+        w.i64(static_cast<uint64_t>(60000) << 16);
+        w.i32(1);
+        sync.handle(*devices, buf, w.size());
+        CHECK(devices->childCount() == 0);
+        CHECK(sync.deleted(kId.c_str()));
+        len = origin.group->writeChunk(buf, sizeof(buf), 0, 16);
+        sync.handle(*devices, buf, len);   // a late copy brings nothing back
+        CHECK(devices->childCount() == 0);
+        sync.close();                      // a release frees the markers: the next tick reloads them from the saved text
+        CHECK_FALSE(sync.deleted(kId.c_str()));
+    }
+    s.release();
+}
+
+TEST_CASE("Hlc: a reading with no room above it is ignored, so the clock never wraps") {
+    ClockGuard clock;
+    platform::setTestNowMs(1000);
+    Hlc c;
+    const Stamp prev = c.now(1);
+    c.observe(UINT64_MAX);   // a corrupt or crafted stamp
+    CHECK(c.now(1).newerThan(prev));
+}
+
+TEST_CASE("DeviceGroup: a chunk cut short anywhere changes nothing, and the whole chunk merges") {
+    ClockGuard clock;
+    Copy a;
+    Copy b(a.group->groupId());
+    a.rename("Hall", 3000);   // a newer name, which a cut chunk applies no more than its members
+    a.add("10:00:00:00:00:01");
+    a.add("10:00:00:00:00:02");
+    uint8_t buf[1472];
+    const size_t len = a.group->writeChunk(buf, sizeof(buf), 0, 16);
+    REQUIRE(len > 0);
+    const uint32_t before = b.group->digest();
+    unsigned merged = 0;
+    for (size_t cut = 0; cut < len; cut++) {
+        osc::Reader r(buf, cut, DeviceGroup::kAddress);
+        r.str();   // the id, which the sync reads first
+        const char* want = nullptr;
+        if (b.group->merge(r, want) || want) merged++;
+    }
+    CHECK(merged == 0);
+    CHECK(b.group->digest() == before);
+    osc::Reader r(buf, len, DeviceGroup::kAddress);
+    r.str();
+    const char* want = nullptr;
+    CHECK(b.group->merge(r, want));
+    CHECK(b.group->digest() == a.group->digest());
+}
+
+TEST_CASE("DeviceGroup: a member stamped with no room above it is refused, since no later edit could beat it") {
+    ClockGuard clock;
+    Copy b;
+    uint8_t buf[256];
+    osc::Writer w(buf, sizeof(buf), DeviceGroup::kAddress, ",sshiishiis");
+    w.str(b.group->groupId()); w.str("Kitchen"); w.i64(1); w.i32(1); w.i32(0);
+    w.str("100000000001"); w.i64(UINT64_MAX); w.i32(1); w.i32(0); w.str("A");
+    osc::Reader r(buf, w.size(), DeviceGroup::kAddress);
+    r.str();
+    const char* want = nullptr;
+    CHECK_FALSE(b.group->merge(r, want));
+    const uint8_t m1[6] = {0x10, 0, 0, 0, 0, 1};
+    CHECK_FALSE(b.group->hasMember(m1));
+}
+
+namespace {
+
+int g_saves = 0;   ///< saves asked for through a Scheduler's dirty hook
+
+}  // namespace
+
+TEST_CASE("DeviceGroup: a received change is saved soon, and a repeated copy asks for no save") {
+    ClockGuard clock;
+    Scheduler s;
+    s.setNoteDirtyHook([] { g_saves++; });
+    s.setup();
+    Copy a;
+    Copy b(a.group->groupId());
+    a.add("10:00:00:00:00:01");
+    b.group->clearDirty();
+    g_saves = 0;
+    CHECK(a.sendTo(b));
+    CHECK(b.group->dirty());
+    CHECK(g_saves > 0);
+    g_saves = 0;
+    CHECK_FALSE(a.sendTo(b));
+    CHECK(g_saves == 0);
+}
+
+// --- The sync: definitions and deletions arriving at a device's tree ------------------------------------------------------------
+
+#include "core/module/StateDocument.h"
+
+#include <memory>
+
+namespace {
+
+/// This device's MAC as an API caller writes it, and as a chunk carries it.
+std::string selfMac(bool colons) {
+    uint8_t m[6];
+    platform::getMacAddress(m);
+    char text[18];
+    std::snprintf(text, sizeof(text), colons ? "%02x:%02x:%02x:%02x:%02x:%02x" : "%02x%02x%02x%02x%02x%02x", m[0], m[1], m[2], m[3], m[4], m[5]);
+    return text;
+}
+
+/// A definition of one member, written by hand, so its id and stamps can be what no device writes.
+size_t rawChunk(uint8_t* buf, size_t cap, const char* id, const char* name, const char* memberHex, uint64_t hlc, bool removed) {
+    osc::Writer w(buf, cap, DeviceGroup::kAddress, ",sshiishiis");
+    w.str(id); w.str(name); w.i64(hlc); w.i32(1); w.i32(0);
+    w.str(memberHex); w.i64(hlc); w.i32(1); w.i32(removed ? 1 : 0); w.str("");
+    return w.size();
+}
+
+/// One device's tree, Devices under a Scheduler, and the sync carrying definitions and deletions into it.
+struct Tree {
+    struct BindGuard { ~BindGuard() { platform::setTestBindFails(false); } };
+    ClockGuard clock;
+    BindGuard bind;
+    Scheduler s;
+    MoonModule* devices = nullptr;
+    std::unique_ptr<DeviceGroupSync> sync;   ///< ends before the release frees Devices, which holds its buffers
+    char saved[400] = "";                    ///< the markers' saved text, Discovery's hidden control on a device
+    Tree() {
+        registerModuleTypes();
+        devices = ModuleFactory::create("Devices");
+        devices->setName("Devices");
+        s.addModule(devices);
+        s.setNoteDirtyHook([] { g_saves++; });
+        s.setup();
+        sync = std::make_unique<DeviceGroupSync>(*devices);
+        tick();   // the first second loads the saved markers, before anything arrives, as on a device
+        g_saves = 0;
+    }
+    ~Tree() { sync.reset(); s.release(); }
+    /// Every chunk of a copy, arriving here.
+    void hear(Copy& from) {
+        uint8_t buf[1472];
+        for (uint16_t k = 0; k < from.group->chunkCount(16); k++) sync->handle(*devices, buf, from.group->writeChunk(buf, sizeof(buf), k, 16));
+    }
+    /// A deletion marker for `id`, arriving here.
+    void hearDeletion(const char* id, uint64_t hlc) {
+        uint8_t buf[128];
+        osc::Writer w(buf, sizeof(buf), DeviceGroupSync::kDeletedAddress, ",shi");
+        w.str(id); w.i64(hlc); w.i32(1);
+        sync->handle(*devices, buf, w.size());
+    }
+    /// One second of the sync with its socket refused, so nothing reaches the network.
+    void tick() {
+        platform::setTestBindFails(true);
+        sync->tick(*devices, saved, sizeof(saved));
+    }
+    DeviceGroup* byId(const char* id) {
+        for (uint8_t c = 0; c < devices->childCount(); c++)
+            if (devices->child(c)->role() == ModuleRole::DeviceGroup && std::strcmp(static_cast<DeviceGroup*>(devices->child(c))->groupId(), id) == 0)
+                return static_cast<DeviceGroup*>(devices->child(c));
+        return nullptr;
+    }
+};
+
+const char* const kOtherId = "0123456789abcdef0123";   ///< a group id no copy in these tests holds
+
+}  // namespace
+
+TEST_CASE("DeviceGroupSync: a definition whose id is not a group id creates nothing and edits no group") {
+    Tree t;
     Copy origin;
-    const std::string kId = origin.group->groupId();
+    origin.add(selfMac(true).c_str());
+    t.hear(origin);   // the tree holds "Kitchen"
+    REQUIRE(t.devices->childCount() == 1);
+    uint8_t buf[256];
+    const uint64_t later = uint64_t{1} << 62;
+    t.sync->handle(*t.devices, buf, rawChunk(buf, sizeof(buf), "ab", "Kitchen", selfMac(false).c_str(), later, false));   // short, its name taken
+    const std::string longer = std::string(origin.group->groupId()) + "ff";   // its first twenty digits name the group held
+    t.sync->handle(*t.devices, buf, rawChunk(buf, sizeof(buf), longer.c_str(), "Kitchen", selfMac(false).c_str(), later, true));
+    CHECK(t.devices->childCount() == 1);
     uint8_t self[6];
     platform::getMacAddress(self);
-    char mac[18];
-    std::snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", self[0], self[1], self[2], self[3], self[4], self[5]);
-    origin.add(mac);   // this device is a member
-    uint8_t buf[1472];
-    size_t len = origin.group->writeChunk(buf, sizeof(buf), 0, 16);
-    sync.handle(*devices, buf, len);
-    REQUIRE(devices->childCount() == 1);
-    CHECK(static_cast<DeviceGroup*>(devices->child(0))->groupId() == kId);
-    CHECK(std::string(devices->child(0)->name()) == "Kitchen");
+    CHECK(static_cast<DeviceGroup*>(t.devices->child(0))->hasMember(self));
+}
 
-    platform::setTestNowMs(60000);   // deleted later than every edit
-    osc::Writer w(buf, sizeof(buf), DeviceGroupSync::kDeletedAddress, ",shi");
-    w.str(kId.c_str());
-    w.i64(static_cast<uint64_t>(60000) << 16);
-    w.i32(1);
-    sync.handle(*devices, buf, w.size());
-    CHECK(devices->childCount() == 0);
-    CHECK(sync.deleted(kId.c_str()));
-    len = origin.group->writeChunk(buf, sizeof(buf), 0, 16);
-    sync.handle(*devices, buf, len);   // a late copy brings nothing back
-    CHECK(devices->childCount() == 0);
-    sync.close();                      // a release frees the markers: the next tick reloads them from the saved text
-    CHECK_FALSE(sync.deleted(kId.c_str()));
-    s.release();
+TEST_CASE("DeviceGroupSync: a group arriving under a name the tree holds gets a free one, and no group held changes") {
+    Tree t;
+    platform::setTestNowMs(1000);
+    Copy first;
+    first.add(selfMac(true).c_str());
+    platform::setTestNowMs(2000);
+    Copy second;
+    second.group->setName("Kitchen 1234");
+    second.group->onModuleRenamed("Kitchen", "Kitchen 1234");
+    second.add(selfMac(true).c_str());
+    platform::setTestNowMs(0x11234);   // an id ending in the digits the second group's name carries
+    Copy third;
+    third.add(selfMac(true).c_str());
+    REQUIRE(std::string(third.group->groupId()).substr(16) == "1234");
+    t.hear(first);
+    t.hear(second);
+    t.hear(third);
+    CHECK(t.devices->childCount() == 3);
+    CHECK(t.byId(first.group->groupId()));
+    CHECK(t.byId(second.group->groupId()));
+    CHECK(t.byId(third.group->groupId()));
+}
+
+TEST_CASE("DeviceGroupSync: a rename the tree refuses keeps the module's name, and the shared name takes the new one") {
+    Tree t;
+    platform::setTestNowMs(1000);
+    Copy kitchen;
+    kitchen.add(selfMac(true).c_str());
+    platform::setTestNowMs(2000);
+    Copy hall;
+    hall.group->setName("Hall");
+    hall.group->onModuleRenamed("Kitchen", "Hall");
+    hall.add(selfMac(true).c_str());
+    t.hear(kitchen);
+    t.hear(hall);   // the tree holds "Kitchen" and "Hall"
+    platform::setTestNowMs(3000);
+    kitchen.group->setName("Hall");
+    kitchen.group->onModuleRenamed("Kitchen", "Hall");
+    t.hear(kitchen);
+    DeviceGroup* g = t.byId(kitchen.group->groupId());
+    REQUIRE(g);
+    CHECK(std::string(g->groupName()) == "Hall");
+    CHECK(std::string(g->name()) == "Kitchen");
+}
+
+TEST_CASE("DeviceGroupSync: a marker only grows newer, and a changed one is saved") {
+    Tree t;
+    t.hearDeletion(kOtherId, uint64_t{5000} << 16);
+    t.hearDeletion(kOtherId, uint64_t{4000} << 16);   // an older deletion of the same group
+    t.devices->clearDirty();
+    t.tick();
+    char want[64];
+    std::snprintf(want, sizeof(want), "%s:%" PRIx64 ":", kOtherId, uint64_t{5000} << 16);
+    CHECK(std::string(t.saved).find(want) != std::string::npos);
+    CHECK(t.devices->dirty());
+    CHECK(g_saves > 0);
+}
+
+TEST_CASE("DeviceGroupSync: a group held under a marker goes at the next second, as a removal memory refused is retried") {
+    Tree t;
+    t.hearDeletion(kOtherId, uint64_t{5000} << 16);
+    REQUIRE(t.sync->deleted(kOtherId));
+    // The group back in the tree, as a removal memory refused leaves it, or a saved file brings it at boot.
+    const std::string doc = std::string("{\"Devices\":{\"Kitchen\":{\"type\":\"DeviceGroup\",\"id\":\"") + kOtherId + "\"}}}";
+    applyStateDocument(t.s, doc.c_str());
+    REQUIRE(t.byId(kOtherId));
+    t.tick();
+    CHECK_FALSE(t.byId(kOtherId));
+}
+
+TEST_CASE("DeviceGroupSync: a deletion memory refuses a marker for leaves no marker, and nothing is written") {
+    Tree t;
+    struct AllocGuard { ~AllocGuard() { platform::setTestAllocRefusedFrom(0); } } alloc;
+    platform::setTestAllocRefusedFrom(16);   // the markers' first block refused
+    t.hearDeletion(kOtherId, uint64_t{5000} << 16);
+    platform::setTestAllocRefusedFrom(0);
+    CHECK_FALSE(t.sync->deleted(kOtherId));
 }

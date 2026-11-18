@@ -61,3 +61,12 @@ def risen(base: dict | None, now: dict) -> list:
     rows = [(rule, base.get(rule, 0), now.get(rule, 0)) for rule in set(base) | set(now)
             if now.get(rule, 0) > base.get(rule, 0)]
     return sorted(rows, key=lambda r: (r[1] - r[2], r[0]))
+
+
+WHOLE_TREE = " [whole tree]"   # a rule the check's `--files` view cannot see, so only the full run reports it
+
+
+def rise_line(rule: str, was: int, now: int, whole_tree) -> str:
+    """One rise as a check prints it, marked when only the whole tree shows the rule, so the gate runner proposes a design change for it
+    rather than the write-time hook; `whole_tree` is the check's set of such rules, and the total is always one."""
+    return f"  {rule}: {was} -> {now}" + (WHOLE_TREE if rule in whole_tree or rule == "(total)" else "")

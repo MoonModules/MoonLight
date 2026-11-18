@@ -279,6 +279,7 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
 def _run_many(paths, args, whole: bool = False) -> int:
     """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints; a `whole` run keeps its output for the KPI."""
     codes, results, output = [], [], []
+    key = _suite_output.fingerprint(RUNNER, paths) if whole else None   # the definitions as this run reads them, before it can rewrite any
     for p in paths:
         started = time.time()
         code = _run_one(p, args.update_contract, args.reason, args.update_observed, output)
@@ -291,7 +292,7 @@ def _run_many(paths, args, whole: bool = False) -> int:
     summary = f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, {failed} failed, {skipped} skipped ==="
     print(summary)
     if whole:
-        _suite_output.keep(RUNNER, "".join(output) + summary + "\n")   # the KPI reads this run's ticks instead of running every scenario again
+        _suite_output.keep(RUNNER, "".join(output) + summary + "\n", key)   # the KPI reads this run's ticks instead of running every scenario again
     return 1 if failed else 0
 
 
@@ -342,10 +343,9 @@ def main():
         print(f"Module filter: {module_filter} ({len(paths)} scenario(s))")
         sys.exit(_run_many(paths, args))
 
-    # Run all scenarios. We iterate per-file (instead of letting the C++ runner
-    # auto-discover) because _run_one captures MEASURE lines and writes
-    # observed.<target> blocks back into each scenario JSON on every run.
-    paths = sorted((ROOT / "test" / "scenarios").rglob("scenario_*.json"))
+    # Run all scenarios, per file rather than by the C++ runner's own discovery: _run_one captures each file's MEASURE lines and writes
+    # observed.<target> blocks back into its scenario JSON when asked to (--update-observed, --update-contract).
+    paths = _suite_output.scenario_files()
     sys.exit(_run_many(paths, args, whole=True))
 
 

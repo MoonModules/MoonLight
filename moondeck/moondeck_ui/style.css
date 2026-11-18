@@ -75,7 +75,7 @@ nav { display: flex; gap: 4px; }
     /* Breathing room above each dropdown so the rows feel like new
        sections rather than crowding the script card above. The first
        dropdown (Firmware) sits below Setup; the second (Port) sits
-       below Build — both need the same separation. */
+       below Build: both need the same separation. */
     margin-top: 16px;
     margin-bottom: 12px;
     display: flex;
@@ -98,17 +98,6 @@ nav { display: flex; gap: 4px; }
 }
 
 .esp32-controls select { width: 100%; }
-/* Which device MoonDeck last flashed on the selected port — a small muted line under
-   the port dropdown. Empty (collapses) when the port maps to no known device. */
-.port-device-hint {
-    font-size: 11px;
-    color: #7a8a9a;
-    margin-top: 3px;
-    min-height: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 select {
     background: #1a1a2e;
@@ -184,7 +173,7 @@ select {
 
 /* Duration hint (⚡ / 🐌). Sits between the label and the buttons; slightly dimmed so it
    reads as metadata rather than competing with the status dot. */
-/* Every card carries one, so these form a column — a fixed width keeps them aligned rather
+/* Every card carries one, so these form a column; a fixed width keeps them aligned rather
    than letting each emoji's natural advance shift the buttons (⏱️ is wider than ⚡). */
 .speed-badge {
     flex-shrink: 0;
@@ -196,7 +185,7 @@ select {
     cursor: default;
 }
 
-/* Replays this script's last run. Same shape as the `?` next to it — an emoji alone would be
+/* Replays this script's last run. Same shape as the `?` next to it, as an emoji alone would be
    ambiguous, but a button with a tooltip in a row that already has one reads as a control. */
 .script-card .log-btn {
     background: transparent;
@@ -292,154 +281,12 @@ select {
     user-select: none;
 }
 
-/* Live tab */
-/* Scan + its "Online only" filter on one row: the action and what it displays belong
-   together. Baseline-aligned so the checkbox label sits level with the button text. */
-.live-controls {
-    display: flex; align-items: center; gap: 12px;
-    margin-bottom: 12px;
-}
+/* MoonDeck's section of a map node's popup (popup.js): a row of its actions. */
+.moondeck-popup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
-#device-list {
-    font-size: 12px;
-    color: #a0a0b0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.device-item {
-    background: #1a1a2e;
-    border: 1px solid #0f3460;
-    border-radius: 4px;
-    padding: 6px 10px;
-    font-size: 12px;
-    /* Children are .device-row blocks (full-width flex containers); the
-       outer .device-item just stacks them vertically. */
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-/* Each device card uses three rows: identity (dot/cb/ip/x), info (name + fw),
-   device model (picker). Sized full-width and laid out with flex so each row can
-   align its own children independently. */
-.device-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-}
-.device-row-identity .device-remove { margin-left: auto; }
-.device-item:hover { border-color: #e94560; }
-.device-item input[type="checkbox"] { margin: 0; cursor: pointer; }
-.device-item span { cursor: pointer; }
-.device-item span:hover { color: #e94560; }
-.device-status {
-    width: 8px; height: 8px; border-radius: 50%;
-    display: inline-block; flex-shrink: 0;
-}
-.device-status.online { background: #4caf50; }
-.device-status.offline { background: #666; }
-/* Device name — the prominent identity line (how a human recognises the device,
-   e.g. "MM-S31"). Bigger + bolder than the secondary IP/fw info row below it. */
-/* A <button> that reads as inline text: strip the native chrome so device-name / device-ip-link
-   keep their text styling, while staying keyboard-focusable (Enter/Space activate). */
-.link-button {
-    appearance: none;
-    background: none;
-    border: none;
-    padding: 0;
-    margin: 0;
-    font: inherit;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-}
-.link-button:focus-visible { outline: 2px solid #8ab4f8; outline-offset: 2px; }
-.device-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: #e8eef5;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-}
-.device-info {
-    color: #7a8a9a;
-    font-size: 11px;
-}
-/* The IP in the info row — clickable to open the device UI in the view pane. Underline
-   on hover marks it as the link, distinct from the inert fw text beside it. */
-.device-ip-link { cursor: pointer; }
-.device-ip-link:hover { color: #8ab4f8; text-decoration: underline; }
-
-/* ↗ beside the IP — the same device UI in a real browser tab. Muted by default so it
-   reads as a secondary affordance next to the IP, not a second primary action. */
-.device-ip-newtab {
-    color: #7a8a9a; text-decoration: none; cursor: pointer;
-    margin-left: 4px; font-size: 11px;
-}
-.device-ip-newtab:hover { color: #8ab4f8; }
-
-/* "Online only" — sits on the Scan row (see .live-controls), so it carries no margin of
-   its own; the row owns the spacing. */
-.device-filter {
-    display: flex; align-items: center; gap: 6px;
-    color: #7a8a9a; font-size: 11px;
-    cursor: pointer; user-select: none;
-}
-.device-filter:hover { color: #9aaaba; }
-.device-filter-note {
-    color: #5a6a7a; font-size: 10px; font-style: italic;
-    margin-top: 6px; padding-left: 2px;
-}
-
-/* last_port chip — click to set this device's known flash port as the network port. */
-.device-port-chip {
-    font-size: 10px; background: #1c2535; color: #8ab4d8;
-    border: 1px solid #2a3547; border-radius: 4px;
-    padding: 1px 5px; cursor: pointer; font-family: inherit;
-}
-.device-port-chip:hover { background: #243044; color: #a9cdf0; }
-.device-port-chip.active { background: #2d4a2d; color: #9fe09f; border-color: #3a5a3a; }
-
-/* The picker and the OTA button share the deviceModel row; the picker flexes, the button
-   stays its natural width. */
-.devicemodel-row { display: flex; gap: 6px; align-items: center; }
-.devicemodel-picker {
-    font-size: 11px; background: #1c2535; color: #c0c0c0;
-    border: 1px solid #2a3548; border-radius: 3px; padding: 1px 4px;
-    /* Flexes to fill the row; max-width/ellipsis clamp long labels (e.g.
-       "Olimex ESP32-Gateway Rev G" = 26ch) so the dropdown text doesn't push
-       the OTA button off the card's right edge. */
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-/* A per-device action button: dark, bordered, compact, sitting beside the deviceModel
-   picker so the row reads as one control set rather than a styled dropdown + native button. */
-.device-action {
-    flex: 0 0 auto;
-    font-size: 11px; background: #1c2535; color: #8ab4f8;
-    border: 1px solid #2a3548; border-radius: 3px; padding: 1px 6px;
-    cursor: pointer; white-space: nowrap;
-}
-.device-action:hover:not(:disabled) { border-color: #8ab4f8; }
-.device-action:disabled { opacity: 0.6; cursor: default; }
-
-.device-remove {
-    background: none; border: none; color: #666;
-    cursor: pointer; font-size: 11px; padding: 0 4px;
-}
-.device-remove:hover { color: #e94560; }
-
-/* Network bar — app-wide selector for the active LAN. Lives above the
-   per-tab content, applies to all tabs. The WiFi sub-panel is the SSID +
-   password the active network uses (consumed by Improv provisioning). */
+/* Network bar: the ESP32 tab's selector for the active LAN, above the tab's
+   content. The WiFi sub-panel is the SSID + password the active network uses
+   (consumed by Improv provisioning). */
 .network-bar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
     padding: 6px 10px; margin: 0 0 8px 0;
@@ -523,7 +370,7 @@ select {
     overflow-y: auto;
     padding: 8px 16px;
     /* A real monospace stack, not the body font's trailing `monospace` fallback (which never
-       wins on macOS). Script output is column-aligned with spaces — a proportional font makes
+       wins on macOS). Script output is column-aligned with spaces, and a proportional font makes
        every table ragged. */
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     font-size: 12px;
@@ -564,12 +411,12 @@ button#identify-ports:hover, button#watch-ports:hover {
 button#refresh-ports { padding: 3px 6px; font-size: 12px; }
 /* One turn of the ↻ glyph confirms a manual port refresh ran: the list usually comes back
    identical, so without this the click reads as a no-op and invites a second press.
-   The animation targets the GLYPH, not the button — rotating the button would spin its
+   The animation targets the GLYPH, not the button: rotating the button would spin its
    border into a diamond. inline-block because transforms don't apply to an inline box. */
 @keyframes refresh-spin { to { transform: rotate(360deg); } }
 button#refresh-ports .refresh-glyph { display: inline-block; }
 button#refresh-ports.spinning .refresh-glyph { animation: refresh-spin 0.5s linear; }
-/* Someone who asked the OS for less motion still needs the confirmation — a brief
+/* Someone who asked the OS for less motion still needs the confirmation: a brief
    highlight on the button instead of the rotation. */
 @media (prefers-reduced-motion: reduce) {
     button#refresh-ports.spinning .refresh-glyph { animation: none; }
@@ -593,3 +440,24 @@ button#watch-ports.watching:hover { border-color: #2e9e63; color: #d6ffe6; }
     --md-default-fg-color--lightest: #0f3460; --md-default-fg-color--light: #8892b0;
 }
 .mm-walk-dialog .mm-map { --mw-panel: 20rem; }
+
+/* The map pane: the device UI's map (devicemap.css) in the device UI's dark palette, under a bar naming the MoonLight it reads. */
+#pane-map { flex-direction: column; overflow: auto; padding: 8px 12px; background: #1f2c4f; }   /* the device UI's nested card, as the map shows on a board's page */
+/* The palette on the pane and on a node's popup, a dialog on the page's body, rather than on :root, where MoonDeck's own --accent would change. */
+#pane-map, dialog.graph-popup {
+    --fg: #e0e0e0; --fg-muted: #a0a0b0; --fg-subtle: #8788a2; --accent: #a78bfa; --accent-soft: #6b5b9a; --border: #2a3a6a;
+    --green: #30c040; --red: #d04040; --yellow: #d0a040; --teal: #30b0b0; --blue: #4a90e2; --orange: #e0662a;
+    --card-bg-1: #1f2c4f;
+}
+.map-source { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; color: #8892b0; font-size: 0.85rem; }
+
+/* The device popup's install picker draws the device UI's form rows (src/ui/style.css: .control-row, .control-label, its selects and
+   button.action-btn), which MoonDeck does not load whole, since they would restyle MoonDeck: the same rules, scoped to the popup. */
+dialog.graph-popup .control-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+dialog.graph-popup .control-label { flex: 0 0 clamp(100px, 25%, 160px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--fg); }
+dialog.graph-popup .control-row select, dialog.graph-popup .control-row input[type="text"] {
+    flex: 1; background: #1a1a2e; border: 1px solid var(--border); color: var(--fg); padding: 4px 8px; border-radius: 4px; font-size: 13px;
+}
+dialog.graph-popup .control-row button.action-btn { background: var(--accent); border: none; color: white; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
+dialog.graph-popup .control-row button.action-btn:hover:not(:disabled) { filter: brightness(1.15); }
+dialog.graph-popup .control-row button.action-btn:disabled { opacity: 0.45; cursor: default; }

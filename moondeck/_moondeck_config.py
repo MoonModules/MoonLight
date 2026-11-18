@@ -11,6 +11,8 @@ import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 
+import _presence
+
 _ROOT = Path(__file__).resolve().parent.parent
 _STATE = _ROOT / "moondeck" / "moondeck.json"
 
@@ -19,23 +21,35 @@ _STATE = _ROOT / "moondeck" / "moondeck.json"
 LOG_NONE, LOG_ERROR, LOG_WARN, LOG_INFO, LOG_DEBUG, LOG_VERBOSE = range(6)
 
 
-def device_ips_for_port(port):
-    """The IP of the device moondeck.json last saw on `port`, as a one-element list, so a tool watching one board changes only that board; [] when none matches. A tty and a cu name of one port match."""
-    if not port or not _STATE.exists():
-        return []
-    key = Path(port).name.replace("tty.", "cu.", 1)
+def _state():
+    """moondeck.json as it is, {} when it is absent or unreadable."""
     try:
-        state = json.loads(_STATE.read_text(encoding="utf-8"))
-        active = next((n for n in (state.get("networks") or [])
-                       if n.get("name") == state.get("active_network")), None)
-        matches = [d for d in (active or {}).get("devices", [])
-                   if d.get("ip") and ":" not in d["ip"]
-                   and Path(d.get("last_port") or "").name.replace("tty.", "cu.", 1) == key]
-        # A port reused by a new board can leave the old one's record behind, offline: the online board is the one on the port.
-        matches.sort(key=lambda d: not d.get("online"))
-        return [d["ip"] for d in matches[:1]]
-    except Exception:
+        return json.loads(_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def device_ips_for_port(port):
+    """The address of the board on `port`, by the MAC its USB serial or this computer's adapter cache gives it, among the devices a running
+    MoonDeck hears and the Discovery lists they lead to, as a one-element list, so a tool watching one board changes only that board; []
+    when the board or its address is unknown."""
+    import _usb
+    mac = _usb.port_mac(port, _usb.present_ports(), _state().get("usbMacs") or {})
+    if not mac:
         return []
+    found = _presence.resolve([mac], _presence.known_rows(_presence.heard_from_moondeck()))
+    return [found[mac]["host"]] if mac in found else []
+
+
+def live_test_devices():
+    """The devices selected for the live tests in MoonDeck's map popup, stored by MAC in moondeck.json's `liveTests`, each as {ip, deviceName,
+    mac} at the address it answers on now; a selected MAC that no device MoonDeck hears or a Discovery list names is reported and left out."""
+    macs = _state().get("liveTests") or []
+    found = _presence.resolve(macs, _presence.known_rows(_presence.heard_from_moondeck())) if macs else {}
+    for mac in macs:
+        if mac not in found:
+            print(f"  WARN  {mac} is selected for the live tests but no device answers with it: is MoonDeck running, the device on?")
+    return [{"ip": d["host"], "deviceName": d["name"], "mac": d["mac"]} for d in found.values()]
 
 
 def open_serial(port, baud=115200, timeout=1):

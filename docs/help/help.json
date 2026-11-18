@@ -5369,7 +5369,7 @@
     },
     {
      "title": "Shared",
-     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it."
+     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.\n\nA device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DeviceGroup.png",

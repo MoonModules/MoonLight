@@ -103,10 +103,9 @@ def main():
     print("Press Ctrl+C (or Stop in MoonDeck) to stop.\n")
     sys.stdout.flush()
 
-    # OPEN THE PORT FIRST. raised_log_level contacts every device in moondeck.json over HTTP at a
-    # 3 s timeout each — with a dozen registered and most powered off, that is half a minute of
-    # blocking before a single byte is read, and the boot output you were monitoring FOR is already
-    # gone. The log level is a nicety; the serial stream is the point.
+    # OPEN THE PORT FIRST. Finding the board's address and raising its log level takes HTTP calls of up
+    # to 3 s each, and a board that is off costs them all before a single byte is read, while the boot
+    # output you were monitoring FOR is already gone. The log level is a nicety; the serial stream is the point.
     try:
         ser = open_serial(args.port, args.baud)
     except serial.SerialException as e:

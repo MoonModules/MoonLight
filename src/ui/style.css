@@ -1,7 +1,8 @@
 /* ============================================================
-   MoonLight UI styles — single hand-maintained sheet.
+   MoonLight UI styles, hand-maintained; the device map's rules are devicemap.css's.
    Layered as: variables → light overrides → structure → components.
    ============================================================ */
+@import "devicemap.css";   /* the device map's rules, shared with MoonDeck; the firmware's bundle inlines them */
 
 :root {
     --bg-0:        #1a1a2e;
@@ -1194,56 +1195,6 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
     accent-color: var(--accent);
 }
 
-/* A list drawn as a graph above its rows (listAsGraph): nodes and edges in the theme's own colors. */
-.list-graph {
-    display: block;
-    width: 100%;
-    touch-action: none;    /* a pinch and a drag are the map's, as the preview's are */
-}
-.graph-box { overflow: hidden; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
-.graph-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
-.graph-filter { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: none; color: var(--fg-muted); cursor: pointer; }
-.graph-filter[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); }
-.graph-filter:not(.graph-zoom) + .graph-zoom { margin-left: auto; }   /* the zoom buttons at the bar's right end */
-.list-graph .graph-edge { stroke: var(--fg-subtle); stroke-width: 1.5; }
-.list-graph .graph-edge-label { fill: var(--fg-muted); font-size: 10px; text-anchor: middle; }
-.list-graph .graph-label { fill: var(--fg); font-size: 11px; text-anchor: middle; }
-.list-graph .graph-sublabel { fill: var(--fg-muted); font-size: 9px; text-anchor: middle; }
-.list-graph .graph-services { font-size: 11px; text-anchor: middle; }
-.list-graph .graph-self circle { stroke: var(--fg); stroke-width: 3; }
-.list-graph .graph-faded { opacity: 0.35; }
-.list-graph .graph-link { cursor: pointer; }
-.list-graph .graph-edge-broken { stroke: var(--red); stroke-dasharray: 5 3; }
-.list-graph .graph-behind circle { stroke: var(--yellow); stroke-width: 2; }   /* its channel offers a newer version */
-.list-graph .graph-behind-mark { fill: var(--yellow); font-size: 11px; }
-.list-graph .graph-unreachable circle { stroke: var(--red); stroke-width: 2; stroke-dasharray: 2 2; }   /* after .graph-behind: not answering outranks behind */
-.list-graph .graph-group { fill: var(--accent-soft); fill-opacity: 0.12; stroke: var(--accent); stroke-opacity: 0.5; stroke-width: 1; }   /* a device group, behind its members */
-.list-graph .graph-group-missing { stroke: var(--yellow); stroke-dasharray: 4 3; }   /* a member is missing */
-.list-graph .graph-group-label { font-size: 10px; fill: var(--accent); font-weight: 600; }
-.list-graph .graph-missing circle { fill-opacity: 0.35; stroke: var(--yellow); stroke-width: 2; stroke-dasharray: 2 2; }   /* a member its group has not heard lately */
-
-/* A node's row in a popup: its detail, and for a MoonLight device its firmware and update. */
-dialog.graph-popup {
-    color: var(--fg);
-    background: var(--card-bg-1);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem 1rem 1rem;
-    min-width: 18rem;
-    max-width: min(28rem, calc(100vw - 32px));
-}
-dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
-.graph-popup-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.5rem; font-weight: 600; }
-.graph-popup-head button { background: none; border: none; color: var(--fg-muted); cursor: pointer; font-size: 1rem; }
-.graph-popup-firmware { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
-.graph-popup-update, .graph-popup-identify { align-self: flex-start; }
-.graph-popup-extras { display: flex; flex-direction: column; gap: 0.3rem; }
-.graph-popup-file, .graph-popup-defaults { color: var(--fg-muted); font-size: 0.9em; }
-.graph-popup-summary { display: flex; flex-direction: column; gap: 0.25rem; }
-.list-graph .graph-link:hover circle { stroke: var(--accent); stroke-width: 2; }
-.list-graph .graph-link:focus { outline: none; }
-.list-graph .graph-link:focus-visible circle { stroke: var(--accent); stroke-width: 3; }
-
 .list-pads {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
@@ -1716,21 +1667,6 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
     font-variant-numeric: tabular-nums;
 }
 
-/* Inline spinner shown while a picker field is still fetching (install-picker
-   renderSkeleton). Mirrors the installer page's .rp-spinner so the on-device
-   OTA picker shows the same waiting state. */
-.rp-spinner {
-    display: inline-block;
-    width: 1em; height: 1em;
-    vertical-align: -0.15em;
-    margin-right: 0.4em;
-    border: 2px solid var(--fg-muted);
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: rp-spin 0.7s linear infinite;
-}
-@keyframes rp-spin { to { transform: rotate(360deg); } }
-
 /* A status is a value, so it reads as one: high emphasis, a display value's size, figures that hold still. */
 .status-value { flex: 1; font-variant-numeric: tabular-nums; }
 .status-value[data-sev="error"]   { color: #e94560; }
@@ -2000,7 +1936,6 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 .fw-upload-row {
     flex-wrap: wrap; gap: 8px;
 }
-.fw-upload-status { color: var(--fg-muted); font-size: 0.85em; }
 /* The URL a device should fetch. Grows to fill the row so a long release URL stays readable. */
 .fw-url-field {
     flex: 1 1 12em; min-width: 0; padding: 4px 8px;

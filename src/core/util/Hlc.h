@@ -15,9 +15,12 @@ struct Stamp {
 
     /// Whether this stamp is newer than `o`: the later reading, and the higher writer on a tie, the last-writer-wins order.
     bool newerThan(const Stamp& o) const MM_NONBLOCKING { return hlc != o.hlc ? hlc > o.hlc : writer > o.writer; }
+
+    /// Whether the reading leaves the clock room to grow past it: below 2^63, thousands of years of milliseconds, which no clock reaches and a corrupt or crafted stamp does.
+    bool valid() const MM_NONBLOCKING { return hlc < (uint64_t{1} << 63); }
 };
 
-/// A hybrid logical clock (Kulkarni et al., *Logical Physical Clocks*, 2014): a reading never runs behind any the device has seen, so an edit made after hearing another is stamped newer.
+/// A hybrid logical clock (Kulkarni et al., *Logical Physical Clocks*, 2014): each reading is newer than every reading the device has seen, so an edit made after hearing another is stamped newer.
 ///
 /// @technical
 ///
@@ -30,8 +33,8 @@ public:
         return {last_, writer};
     }
 
-    /// Take in a reading heard from another device or restored from a file, so later local readings are newer than it.
-    void observe(uint64_t seen) MM_NONBLOCKING { advance(seen); }
+    /// Take in a reading heard from another device or restored from a file, so later local readings are newer than it; an invalid one is ignored, so the clock keeps room to count up.
+    void observe(uint64_t seen) MM_NONBLOCKING { if (Stamp{seen, 0}.valid()) advance(seen); }
 
     /// The latest reading, for a test.
     uint64_t last() const MM_NONBLOCKING { return last_; }

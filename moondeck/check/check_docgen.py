@@ -215,6 +215,11 @@ def _is_structural(body: str) -> bool:
 # Every rule this check emits, longest first so "details table cell" wins over
 # "details table". The FULL name, not a first word: "no image" and "one control" each
 # truncate to a word that names nothing, and the two details-table rules share theirs.
+# The rules `--files` cannot see, since they read help.json, the stage files or every header's @xref: the full run alone reports them.
+_WHOLE_TREE_RULES = {_STALE_HELP_RULE, _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
+                     _TAG_GROUP_RULE, "one control", "no image", "image is", _UNREFERENCED_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
+                     _MOONWALK_BUILD_RULE, _STALE_STAGE_TABLE_RULE}
+
 _RULE_NAMES = (
     "public function has no", "public variable has no",
     "file opens with //", "file lead missing", "@technical on a member", "@xref",
@@ -1272,7 +1277,10 @@ def _covered(rel: str) -> bool:
         return False
     if not any(Path(rel).match(s) for s in HEADER_SUFFIXES):
         return False
-    return subprocess.run(["git", "check-ignore", "-q", rel], cwd=ROOT, check=False).returncode != 0
+    status = subprocess.run(["git", "check-ignore", "-q", rel], cwd=ROOT, check=False).returncode
+    if status not in (0, 1):   # 0 ignored, 1 not ignored; any other is git failing, which leaves this file unjudged
+        raise RuntimeError(f"git check-ignore failed ({status}) for {rel}")
+    return status == 1
 
 
 def file_findings(paths) -> list:
@@ -1342,7 +1350,7 @@ def main() -> int:
     if risen:
         print("ROSE against the committed counts. These only shrink:")
         for rule, was, now in risen:
-            print(f"  {rule}: {was} -> {now}")
+            print(ratchet.rise_line(rule, was, now, {_rule_label(n) for n in _WHOLE_TREE_RULES}))
         print("  Fix them, or say in the commit why the rule itself changed.\n")
     if errors:
         _report(errors, "ERRORS. These fail the gate.")

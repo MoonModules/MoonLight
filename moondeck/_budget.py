@@ -23,14 +23,19 @@ from build_host import build_jobs  # noqa: E402  (the one bound on jobs)
 
 
 class JobBudget:
-    """`tokens` jobs at once, through a jobserver pipe of `tokens - 1` bytes plus the implicit one; joins the pipe `MAKEFLAGS` names."""
+    """`tokens` jobs at once, through a jobserver pipe of `tokens - 1` bytes plus the implicit one; joins the pipe `MAKEFLAGS` names.
 
-    def __init__(self, tokens: int | None = None):
+    A `scheduler` runs no job itself, as the gate runner only dispatches: its implicit token goes in the pipe too, so the jobs it starts
+    take all `tokens` from there, each as many as it needs at once (`try_acquire`).
+    """
+
+    def __init__(self, tokens: int | None = None, scheduler: bool = False):
         self.tokens = max(1, tokens or build_jobs())
         self._dir = None
         self._sem = None
+        own = self.tokens - (0 if scheduler else 1)
         if not hasattr(os, "mkfifo"):   # Windows: the run's own semaphore, which no child sees
-            self.path, self._fd, self._sem = None, None, threading.Semaphore(self.tokens - 1)
+            self.path, self._fd, self._sem = None, None, threading.Semaphore(own)
             return
         joined = _announced_fifo(os.environ.get("MAKEFLAGS", ""))
         if joined:
@@ -42,7 +47,7 @@ class JobBudget:
         # Read and write on one descriptor, so opening returns at once, with this process as both ends.
         self._fd = os.open(self.path, os.O_RDWR)
         if not joined:
-            os.write(self._fd, b"+" * (self.tokens - 1))
+            os.write(self._fd, b"+" * own)
 
     def acquire(self) -> None:
         """Take one token beyond the implicit one, waiting until a job ends."""
@@ -50,6 +55,28 @@ class JobBudget:
             self._sem.acquire()
             return
         os.read(self._fd, 1)
+
+    def try_acquire(self, n: int) -> bool:
+        """Take all `n` tokens or none, at once, so two jobs each holding part of what they need cannot deadlock."""
+        got = 0
+        if self._sem:
+            while got < n and self._sem.acquire(blocking=False):
+                got += 1
+        else:
+            os.set_blocking(self._fd, False)
+            try:
+                while got < n:
+                    os.read(self._fd, 1)
+                    got += 1
+            except BlockingIOError:
+                pass
+            finally:
+                os.set_blocking(self._fd, True)
+        if got == n:
+            return True
+        for _ in range(got):
+            self.release()
+        return False
 
     def release(self) -> None:
         """Give a token back."""

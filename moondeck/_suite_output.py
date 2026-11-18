@@ -8,30 +8,48 @@ stdlib only and cheap to import, as `_host.py` is, so a PEP-723 script imports i
 
 import hashlib
 import json
+import sys
 from pathlib import Path
+
+
+def scenario_files() -> list:
+    """The scenario definitions a whole scenario run reads, sorted by path: the inputs besides the binary that its output is a function of."""
+    return sorted((Path(__file__).resolve().parent.parent / "test" / "scenarios").rglob("scenario_*.json"))
 
 
 def _record(exe: Path) -> Path:
     return exe.parent / f"{exe.name}.output.json"
 
 
-def _hash(exe: Path) -> str:
+def _hash(exe: Path, inputs=()) -> str:
+    """The binary's digest and, for each input file in sorted order, its path and contents: what a run is a function of."""
     h = hashlib.sha256()
-    with exe.open("rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
+    for path in (exe, *sorted(inputs)):
+        if path is not exe:
+            h.update(path.name.encode() + b"\0")
+        with path.open("rb") as f:
+            for block in iter(lambda: f.read(1 << 20), b""):
+                h.update(block)
     return h.hexdigest()
 
 
-def keep(exe: Path, output: str) -> None:
-    """Keep a whole run's output of `exe`, keyed on the binary as it is now."""
-    _record(exe).write_text(json.dumps({"sha256": _hash(exe), "output": output}), encoding="utf-8")
+def fingerprint(exe: Path, inputs=()) -> str:
+    """The key of a run of `exe` over `inputs` as they are now, taken before the run so a run that rewrites its inputs is not kept under their new text."""
+    return _hash(exe, inputs)
 
 
-def kept(exe: Path) -> str | None:
-    """The output a whole run of this binary printed, or None when it was rebuilt since or ran only filtered."""
+def keep(exe: Path, output: str, key: str | None = None) -> None:
+    """Keep a whole run's output of `exe` under `key`, the binary's own hash by default. Best effort: the reader runs the suite itself when the output is not kept."""
+    try:
+        _record(exe).write_text(json.dumps({"sha256": key or _hash(exe), "output": output}), encoding="utf-8")
+    except OSError as e:
+        print(f"Output of {exe.name} not kept: {e}", file=sys.stderr)
+
+
+def kept(exe: Path, inputs=()) -> str | None:
+    """The output a whole run of this binary over `inputs` printed, or None when either changed since, or it ran only filtered."""
     try:
         rec = json.loads(_record(exe).read_text(encoding="utf-8"))
+        return rec.get("output") if rec.get("sha256") == _hash(exe, inputs) else None
     except (OSError, ValueError):
         return None
-    return rec.get("output") if rec.get("sha256") == _hash(exe) else None

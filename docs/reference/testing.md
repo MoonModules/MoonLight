@@ -480,7 +480,7 @@ A step can also set `"measure": true` on a non-measure op (e.g. mark the last `a
 
 Live scenarios run the same JSON against a running device via the REST API. Steps: [Run a scenario against a live device](../moonwalk.md#run-live-scenario).
 
-MoonDeck's Live tab wraps the same workflow: the Network bar at the top selects the LAN, Discover/Refresh populates the device list, the Live Scenarios card runs the selected scenario against every checked device.
+MoonDeck's Live tab wraps the same workflow: its map shows the devices, **Use in live tests** in a device's popup selects it by MAC, and the Live Scenarios card runs the selected scenario against every selected device, found at its address when the run starts.
 
 ![MoonDeck Live tab](../assets/ui/moondeck_live.png)
 
@@ -517,4 +517,4 @@ All live scenarios pass on both host and ESP32. Steps to verify on boards: [Run 
 - 128×128 grid (16,384 lights), all live scenarios pass.
 - Memory tracking verified: mirror toggle shows heap changes, returns to baseline (no leaks).
 - Ethernet (LAN8720 RMII) connects via DHCP.
-- Device discovery from MoonDeck finds the ESP32 on port 80.
+- MoonDeck's map finds the ESP32 on port 80.

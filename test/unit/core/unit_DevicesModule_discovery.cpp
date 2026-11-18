@@ -557,3 +557,15 @@ TEST_CASE("DevicesModule: a device that changes kind drops what its old kind ann
     platform::setTestArpEntry(nullptr, nullptr);
     dev.release();
 }
+
+// Discovery's port is shared on a computer: a second listener, MoonDeck's or a second desktop's, binds beside the first, so each hears presence whichever started first.
+TEST_CASE("DevicesModule: the presence port takes a second listener beside the first") {
+    mm::platform::UdpSocket first, second;
+    REQUIRE(first.open());
+    REQUIRE(second.open());
+    constexpr uint16_t kPort = 65431;   // a port of the test's own, so a desktop running beside the suite keeps its presence port
+    CHECK(first.bindShared(kPort));
+    CHECK(second.bindShared(kPort));
+    first.close();
+    second.close();
+}

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MoonDeck</title>
     <link rel="icon" type="image/png" href="/assets/momo.png">
+    <link rel="stylesheet" href="/ui/devicemap.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,10 +25,9 @@
 
     <div class="content">
         <aside class="sidebar">
-            <!-- Network bar: app-wide selector for the active LAN. Holds the
-                 active port (serial), WiFi credentials (used by Improv), and
-                 the device list (rendered on the Live tab). Auto-selected
-                 from the host's current subnet on each /api/state load. -->
+            <!-- Network bar: the ESP32 tab's selector for the active LAN. Holds the
+                 active port (serial) and the WiFi credentials (used by Improv).
+                 Auto-selected from the host's current subnet on each /api/state load. -->
             <div id="network-bar" class="network-bar">
                 <label>Network:
                     <select id="network-select"></select>
@@ -66,9 +66,9 @@
                         <!-- The glyph is wrapped so the spin-on-refresh animation rotates the
                              ↻ alone; rotating the button would tilt its border into a diamond. -->
                         <button type="button" id="refresh-ports" title="Refresh"><span class="refresh-glyph">&#x21bb;</span></button>
-                        <!-- Probes ports still shown as path-only (no board match) with esptool
-                             to read chip + MAC. RESETS each probed board, so it's opt-in, never
-                             automatic; results cache to moondeck.json so it's a one-time cost. -->
+                        <!-- Probes each ESP32-capable port with esptool to read chip + MAC. RESETS
+                             each probed board, so it's opt-in, never automatic; each MAC is cached by
+                             its USB adapter's serial in moondeck.json, so it's a one-time cost. -->
                         <button type="button" id="identify-ports" title="Identify unlabeled ports (probes the chip — resets the board)">Identify</button>
                         <!-- Passive plug/unplug watcher: polls the port list and narrates what
                              was added/removed with its 3-level identity. Read-only (USB descriptor
@@ -77,10 +77,6 @@
                         <button type="button" id="watch-ports" title="Watch for plugged/unplugged devices">Watch</button>
                     </div>
                     <select id="port-select"><option value="">--</option></select>
-                    <!-- Names the device MoonDeck last flashed on the selected port (from
-                         moondeck.json's last_port breadcrumb) so you know which board you're
-                         about to reflash. Empty when the port has no known device. -->
-                    <div id="port-device-hint" class="port-device-hint"></div>
                 </div>
                 <div id="scripts-esp32" class="script-grid"></div>
             </section>
@@ -96,25 +92,7 @@
             </section>
 
             <section id="tab-live" class="tab-content">
-                <!-- One button, because the subnet scan is a superset of a known-device
-                     re-probe: it finds new boards AND settles online/offline for every
-                     device already in the registry. Two buttons meant pressing both every
-                     time to get one complete picture. -->
-                <!-- Scan and its filter share one row: the filter changes what that scan's
-                     result shows, so they read as one control group rather than the filter
-                     looking like a property of the device list below it.
-                     "Online only" hides devices that didn't answer the last probe — the bench
-                     registry accumulates boards that are unplugged or powered down, and they
-                     push the handful actually reachable off the visible list. The setting
-                     persists (moondeck.json), so it survives a reload. -->
-                <div class="live-controls">
-                    <button id="discover-btn" title="Scan the subnet: find new devices and update online/offline for known ones">Scan</button>
-                    <label class="device-filter" title="Hide devices that did not respond to the last scan">
-                        <input type="checkbox" id="online-only">
-                        <span>Online only</span>
-                    </label>
-                </div>
-                <div id="device-list"></div>
+                <!-- The devices are on the Map pane: a node's popup holds MoonDeck's USB actions and the live-test selection. -->
                 <div id="scripts-live" class="script-grid"></div>
             </section>
         </aside>
@@ -122,6 +100,7 @@
         <main class="main-pane">
             <div class="pane-header">
                 <div class="pane-tabs">
+                    <button class="pane-tab" data-pane="map" hidden>Map</button>
                     <button class="pane-tab active" data-pane="log">Log</button>
                     <button class="pane-tab" data-pane="view">View</button>
                 </div>
@@ -138,6 +117,11 @@
             <div id="pane-log" class="pane-content active">
                 <pre id="log"></pre>
             </div>
+            <div id="pane-map" class="pane-content">
+                <!-- The device map, the device UI's own (src/ui/devicemap.js); the status names the MoonLight whose Discovery list it draws. -->
+                <div class="map-source"><span id="map-status"></span></div>
+                <div id="device-map"></div>
+            </div>
             <div id="pane-view" class="pane-content">
                 <!-- allow-modals: the embedded device UI uses window.prompt/alert/confirm (e.g. the
                      File Manager's new-folder/new-file name prompt). Without this flag a sandboxed
@@ -149,5 +133,6 @@
     </div>
 
     <script src="app.js"></script>
+    <script type="module" src="map.js"></script>
 </body>
 </html>

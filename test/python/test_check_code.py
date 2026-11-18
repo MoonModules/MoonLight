@@ -361,3 +361,14 @@ def test_dynamic_cast_and_typeid_are_findings_in_firmware_and_a_comment_saying_t
     import check_code as c
     assert [r[1] for r in c.rtti_findings("src/core/A.cpp", ["auto* d = dynamic_cast<D*>(b);\n"])] == [c.RTTI]
     assert c.rtti_findings("src/core/A.cpp", ["// absent: no dynamic_cast here\n"]) == []
+
+
+def test_an_untracked_file_named_with_a_space_is_owned_whole(monkeypatch):
+    """git lists names NUL-separated, so `New Device.h` is one file and not two fragments no glob matches."""
+    import subprocess
+    name = "src/core/New Device.h"
+    fake = lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, stdout=(f"{name}\0" if "--others" in cmd else ""), stderr="")
+    monkeypatch.setattr(check_code.subprocess, "run", fake)
+    monkeypatch.setattr(check_code, "NAMED", [name])
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    assert check_code.owned_files() == [name]

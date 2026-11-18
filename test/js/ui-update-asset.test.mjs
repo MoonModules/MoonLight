@@ -92,16 +92,23 @@ test("a device on an official release is offered only a newer official release",
     assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32" }, releases), null);   // latest is newer, but not its channel
 });
 
-test("a device on a -dev build, or in developer mode, is also offered a newer latest, an official release first", () => {
-    assert.equal(channelUpdate({ version: "7.1.0-dev.9", firmware: "esp32" }, releases).tag, "v7.1.0");   // official first
+test("a device on a -dev build, or in developer mode, follows latest, an official release only when it is newer than latest", () => {
+    assert.equal(channelUpdate({ version: "7.1.0-dev.9", firmware: "esp32" }, releases).label, "latest (7.2.0-dev.5)");   // latest, past v7.1.0
     assert.equal(channelUpdate({ version: "7.2.0-dev.1", firmware: "esp32" }, releases).label, "latest (7.2.0-dev.5)");
+    const justReleased = [{ tag_name: "latest", name: "7.1.0-dev.150", prerelease: true, assets: [img("esp32", "7.1.0-dev.150")] },
+                          { tag_name: "v7.1.0", assets: [img("esp32", "7.1.0")] }];
+    assert.equal(channelUpdate({ version: "7.1.0-dev.100", firmware: "esp32" }, justReleased).tag, "v7.1.0");   // the release outranks its dev builds
     assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32", mode: 2 }, releases).label, "latest (7.2.0-dev.5)");
     assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32", mode: 1 }, releases), null);   // expert is no channel of its own
 });
 
+test("a device too old to name its firmware is still behind a newer release on its channel, which its popup installs once it reads the firmware", () => {
+    assert.equal(channelUpdate({ version: "7.0.0" }, releases).tag, "v7.1.0");
+    assert.equal(channelUpdate({ version: "6.1.0-dev" }, releases).label, "latest (7.2.0-dev.5)");
+});
+
 test("a release lacking the device's own image offers no update", () => {
     assert.equal(channelUpdate({ version: "7.0.0", firmware: "esp32s3-n16r8" }, releases), null);
-    assert.equal(channelUpdate({ version: "7.0.0", firmware: null }, releases), null);
 });
 
 test("a chip is a family as the catalog and esptool name it and a key as firmware and assets spell it, each turning into the other", () => {
