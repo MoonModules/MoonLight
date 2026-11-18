@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _findings  # noqa: E402
 
 # Third-party code that lives inside our tree. Findings here are upstream's to fix.
-VENDORED = ("test/doctest.h", "src/platform/host/vendor/miniaudio.h")
+VENDORED = ("test/doctest.h", "src/platform/host/vendor/miniaudio.h", "src/platform/rpi/hub75.pio.h")   # the last is pioasm output
 
 # A diagnostic line: path:line:col: severity: message [check-name]
 #

@@ -126,6 +126,8 @@ add_executable(mm_tests
     unit/core/unit_platform_worker.cpp
     unit/core/unit_platform_httpfetch.cpp
     unit/core/unit_platform_update.cpp
+    unit/core/unit_platform_hub75pio_options.cpp
+    unit/core/unit_platform_machine.cpp
     unit/core/unit_ReceiverList.cpp
     unit/core/unit_Addressing.cpp
     unit/core/unit_NameResolver.cpp
@@ -319,6 +321,18 @@ add_custom_target(effect_sweep_gen ALL
     VERBATIM
 )
 
+# The PIO engine's tests drive the engine and its stub backend, which MSVC does not build (the root CMakeLists.txt, MM_HUB75_PIO_ENGINE).
+if(MM_HUB75_PIO_ENGINE)
+    target_sources(mm_tests PRIVATE
+        unit/core/unit_platform_hub75pio.cpp
+        unit/core/unit_platform_hub75pio_engine.cpp
+        unit/core/unit_platform_hub75pio_buffer.cpp
+        unit/core/unit_platform_hub75pio_stub.cpp
+        unit/core/unit_platform_hub75pio_piolib.cpp
+        unit/core/unit_platform_hub75pio_c_api.cpp)
+endif()
+# The C shim's test includes the shim's own source, which includes "piolib.h": a stand-in header stands in for piolib, for that one file. The file compiles to nothing where the real piolib is linked, so the stand-in and the real shim never meet at link time.
+set_source_files_properties(unit/core/unit_platform_hub75pio_c_api.cpp PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/unit/core/piolib_fake)
 target_include_directories(mm_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(mm_tests PRIVATE mm_core mm_platform)
 

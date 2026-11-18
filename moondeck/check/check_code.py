@@ -53,7 +53,7 @@ LIZARD_ROOT = ["src/"]   # what lizard walks, unless `--files` names the few to 
 LIZARD_ARGS = ["-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/host/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
-FILE_EXCLUDE = ("src/platform/host/vendor/", "src/ui/vendor/", "test/doctest.h")
+FILE_EXCLUDE = ("src/platform/host/vendor/", "src/ui/vendor/", "test/doctest.h", "src/platform/rpi/hub75.pio.h")   # the last is pioasm output
 
 HOT_PATH = "blocking call on the render path"
 PLATFORM = "platform code outside src/platform"

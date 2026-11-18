@@ -213,11 +213,8 @@ bool buildPinOrder(const Hub75Pins& p, uint8_t scanRate, gpio_num_t* out) {
 
 const char* hub75LastError() { return g_lastError; }
 
-const char* hub75BackendLabel(Hub75Backend backend) {
-    return backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
-}
-
 bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes) {
+    if (backend == Hub75Backend::Pio) return false;   // the Pi 5's PIO backend: no RP1 PIO block on an ESP32, and this guard keeps a Pio ask out of the Parlio branch below
     if (backend == Hub75Backend::LcdCam) {
 #if MM_HUB75_LCDCAM
         // LCD_CAM has no transfer-size cap of its own: the frame size is a memory question (internal DRAM first, see the allocation in hub75Init).
@@ -240,6 +237,11 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
                uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
     hub75Deinit(h);
     g_lastError = nullptr;
+
+    if (backend == Hub75Backend::Pio) {
+        g_lastError = "Pi PIO drives a Raspberry Pi's header, not an ESP32";
+        return false;
+    }
 
     // The port's own rule: a real panel is 1/8, 1/16 or 1/32, and buildPinOrder derives the address width from it, so a config file's 3 would ask for an address no panel has. The rest of the geometry is `valid()`'s, below.
     if (scanRate != 8 && scanRate != 16 && scanRate != 32) {
@@ -454,9 +456,6 @@ namespace mm::platform {
 // Inert on silicon without the peripheral (the classic ESP32). The driver reports the cause, the same allocate-and-degrade rule every other output seam follows.
 const char* hub75LastError() { return "HUB75 needs an ESP32-S3, P4 or S31"; }
 bool hub75BackendAvailable(Hub75Backend, size_t) { return false; }
-const char* hub75BackendLabel(Hub75Backend backend) {
-    return backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
-}
 bool hub75Init(Hub75Handle&, Hub75Backend, const Hub75Pins&, uint16_t, uint16_t,
                uint8_t, uint8_t) {
     return false;
