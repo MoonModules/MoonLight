@@ -1505,8 +1505,21 @@ const char* hub75Backend(const Hub75Handle& h);
 void hub75Deinit(Hub75Handle& h);
 
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Open the host's HUB75 port on LCD_CAM with a frame of the geometry's size, so a test drives the driver's tick into bit planes; off, the port refuses as on a chip without the silicon.
-void setTestHub75(bool on);
+/// Open the host's HUB75 port on LCD_CAM, and on Parlio too when `parlio`, with a frame of the geometry's size; off, the port refuses as on a chip without the silicon. Each call resets what hub75TestPort() holds and the two answers below.
+void setTestHub75(bool on, bool parlio = false);
+/// What hub75RefreshHz answers while the test port is open.
+void setTestHub75RefreshHz(uint16_t hz);
+/// Make hub75Start refuse while the test port is open, as a bus that will not arm.
+void setTestHub75StartFails(bool fails);
+/// What the test port was handed, which a test reads.
+struct Hub75TestPort {
+    Hub75Backend backend = Hub75Backend::LcdCam;   ///< the backend the last hub75Init asked for
+    Hub75Pins pins;                                ///< the pins the last hub75Init was handed, the clock edge among them
+    size_t offeredBytes = 0;                       ///< the frame bytes the last hub75BackendAvailable asked about
+    uint32_t deinits = 0;                          ///< the hub75Deinit calls so far
+};
+/// The test port's record of what the driver handed it.
+const Hub75TestPort& hub75TestPort();
 /// The frame the driver last packed while the test port is open, `bytes` long; null while closed.
 const uint8_t* hub75TestFrame(size_t* bytes);
 #endif

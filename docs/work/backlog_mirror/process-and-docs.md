@@ -428,3 +428,10 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A MoonDeck check asks `gh` for the state of each row of [Issues in other projects](https://moonmodules.org/MoonLight/reference/issues-in-other-projects.html) and of the release that carries its fix, and flags a row whose issue closed or whose fix shipped, so a workaround does not outlive its reason.
 
 From the Processes plan's step 20.
+
+### Name spread counts code references, not words
+
+Kind: Restructure · Stage: Document and commit · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=308902635)
+
+`check_code`'s name-spread rule counts a registered type's name as a word in every file, comments, strings and URLs included, so prose that names a feature counts as code that depends on its type. The generic names sit highest for that reason: `Layer` in 151 files, `Layouts` 111, `Effects` 67. On 2026-11-17 `Devices` crossed the limit of 10 through MoonDeck reading the `/api/modules/Devices` route and the web installer telling a user where "the Devices map" is, neither of them a dependency on the class.
+The textbook measure is code references: the identifiers a C++ or JavaScript file uses, with comments and string literals stripped first (the clang tokenizer `check_clang_query.py` already drives for C++, a tokenizer for JavaScript). `spread_rows` in [check_code.py](moondeck/check/check_code.py) counts those, and the committed `name spread` count is recorded again at the lower figure the change measures, a drop the commit names.
