@@ -37,7 +37,7 @@ TEST_CASE("MoonLive emitFill/emitAnimatedFill reject a null output buffer (no cr
     CHECK(moonlive::emitAnimatedFill(nullptr, 256) == 0);
 }
 
-// The compile-through-call tests below need a working host JIT (emit blob + assembler); on x86_64 hosts (Windows, Linux/macOS Intel) MoonLive::compile fails cleanly and the tests would fail on the REQUIRE. Guarded on the emit-header capability macro so they compile out where the backend is unimplemented, the same "runs dark" degradation on-device.
+// The compile-through-call tests need a host JIT; the capability macro compiles them out where the backend is absent, as on-device MoonLive runs dark.
 #if MM_MOONLIVE_HAS_HOST_JIT
 TEST_CASE("MoonLive compiles and fills a buffer with the chosen color") {
     moonlive::MoonLive engine;

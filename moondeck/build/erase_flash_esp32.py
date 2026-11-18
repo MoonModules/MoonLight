@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import find_idf, idf_env, find_idf_python
+from idf_env import find_idf, idf_env, find_idf_python
 
 def main():
     parser = argparse.ArgumentParser()

@@ -151,6 +151,10 @@ void Scheduler::preparePending() {
         if (MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed)) scopes[scopeCount++] = m;
     if (prepareRequested_.exchange(false, std::memory_order_relaxed)) prepareTree();   // the tree covers every scope
     else if (scopeCount) prepareSubtrees(scopes, scopeCount);
+    for (auto& slot : prepareSelfPending_) {
+        MoonModule* m = slot.exchange(nullptr, std::memory_order_relaxed);
+        if (m && inTree(m) && m->effectivelyEnabled()) m->prepare();   // a module gone since the request is skipped
+    }
     settleDemands();   // last, so the demands these prepares changed settle in this same frame
 }
 
@@ -197,11 +201,15 @@ bool holds(const MoonModule* root, const MoonModule* m) {
 }
 }  // namespace
 
+bool Scheduler::inTree(const MoonModule* m) const {
+    for (uint8_t i = 0; i < moduleCount_; i++)
+        if (modules_[i] && holds(modules_[i], m)) return true;
+    return false;
+}
+
 void Scheduler::prepareSubtrees(MoonModule* const* scopes, uint8_t count) {
     for (uint8_t s = 0; s < count; s++) {
-        bool present = false;
-        for (uint8_t i = 0; i < moduleCount_ && !present; i++) present = modules_[i] && holds(modules_[i], scopes[s]);
-        if (!present) { prepareTree(); return; }   // gone since the request: the tree it changed is rebuilt whole
+        if (!inTree(scopes[s])) { prepareTree(); return; }   // gone since the request: the tree it changed is rebuilt whole
     }
     for (uint8_t s = 0; s < count; s++) scopes[s]->applyState();
     applyDeferredControls(*this);

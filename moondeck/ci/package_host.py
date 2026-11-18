@@ -28,6 +28,9 @@ import tarfile
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Per-host build dirs to match the ESP32 ``build/esp32-<board>/`` shape.
 # Each host gets its own; CI runners use exactly one, but on a developer
@@ -71,7 +74,7 @@ def configure_and_build_macos(version: str = "") -> Path:
     ] + version_args(version))
     # --target MoonLight: packaging ships one binary; the test suite builds and runs in the
     # test workflow, and compiling its ~200 files here roughly doubled the packaging build.
-    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
+    run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
     binary = BUILD_DIR_MACOS / "MoonLight"
     if not binary.exists():
         print(f"package_host: expected binary not found at {binary}")
@@ -96,7 +99,7 @@ def configure_and_build_linux(version: str = "") -> Path:
     """Configure + build for Linux. Returns the built binary path."""
     bdir = str(BUILD_DIR_LINUX.relative_to(ROOT))
     run(["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"] + version_args(version))
-    run(["cmake", "--build", bdir, "--config", "Release", "-j", "--target", "MoonLight"])
+    run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
     binary = BUILD_DIR_LINUX / "MoonLight"
     if not binary.exists():
         print(f"package_host: expected binary not found at {binary}")
@@ -231,7 +234,7 @@ def configure_and_build_windows(version: str = "") -> Path:
         "cmake", "-B", bdir,
         "-DCMAKE_BUILD_TYPE=Release",
     ] + version_args(version))
-    run(["cmake", "--build", bdir, "--config", "Release", "--target", "MoonLight"])
+    run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
     # MSVC multi-config places binaries under <build-dir>/Release/.
     binary = BUILD_DIR_WIN / "Release" / "MoonLight.exe"
     if not binary.exists():

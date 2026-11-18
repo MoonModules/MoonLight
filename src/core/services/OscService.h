@@ -40,6 +40,10 @@ namespace mm {
 ///
 /// A client learns the state on its first write, on an address change and on asking. The last exists because a restart on the same address is invisible to the other two. A value never returns to its source host.
 ///
+/// ## A device group as the receivers
+///
+/// A group's name in `receivers` sends feedback to each member by unicast, on the OSC port a member listens on, for a cue list or a show controller feeding every board in a room. Keeping the members' controls equal is the group's own job ([DeviceGroupSync.h](DeviceGroupSync.h)).
+///
 /// ## What it refuses
 ///
 /// The port is unauthenticated and writes controls, so it is off until turned on. Feedback is off for the same reason, sending unasked-for traffic to whatever last wrote.
@@ -132,7 +136,7 @@ public:
             secondsSinceRefresh_ = 0;
             if (auto* c = ControlModule::active()) c->resendPaced(this);
         }
-        refreshNamedReceivers(receivers_, receiverList_, receiverCount_);
+        followReceivers();
         const bool fresh = peerFresh();
         if (fresh != peerWasFresh_) { peerWasFresh_ = fresh; reportPeer(); }
     }
@@ -197,8 +201,14 @@ public:
 protected:
     /// Send one datagram to a feedback destination, the seam a test captures.
     virtual void transmit(const uint8_t ip[4], const uint8_t* pkt, size_t len) {
-        if (open_) sock_.sendToAddr(ip, feedbackPort, pkt, len);
+        if (open_) sock_.sendToAddr(ip, destinationPort(ip), pkt, len);
     }
+
+public:
+    /// Where a datagram to `ip` goes: a device group's member listens on the OSC port, as this device does, and any other receiver on `feedbackPort`.
+    uint16_t destinationPort(const uint8_t ip[4]) const { return isMember(ip) ? port : feedbackPort; }
+
+protected:
 
 private:
     static constexpr long   kSurfaceWidth = 8;    ///< how wide the surface is
@@ -214,6 +224,20 @@ private:
             if (skip && std::memcmp(ip, skip, 4) == 0) return;
             transmit(ip, pkt, len);
         });
+    }
+
+    /// Whether `ip` is a device group's member among the receivers.
+    bool isMember(const uint8_t ip[4]) const {
+        for (uint8_t i = 0; i < receiverCount_; i++)
+            if (receiverList_[i].member && std::memcmp(receiverList_[i].ip, ip, 4) == 0) return true;
+        return false;
+    }
+
+    /// Resolve the receivers again, a group's members following their leases and its edits.
+    void followReceivers() {
+        if (!receiversParsed_ || receiversError_) return;
+        const uint8_t left = resolveReceivers(receivers_, receiverList_, receiverCount_);
+        if (left != receiversLeft_) { receiversLeft_ = left; reportPeer(); }
     }
 
     /// Whether a packet has come in, so feedback has someone to answer.
@@ -277,8 +301,7 @@ private:
         if (end == indexText || *end != '\0') return;
         if (idx < 1 || idx > ControlModule::kMaxPresets) return;
         auto* c = ControlModule::active();
-        if (!c) return;
-        if (osc::isTruthy(m)) c->pressPad(static_cast<uint8_t>(idx - 1));
+        if (c && osc::isTruthy(m)) c->pressPad(static_cast<uint8_t>(idx - 1));
     }
 
     /// Whether a socket is needed: to listen, or to send feedback, which a leader does without listening.
@@ -322,25 +345,22 @@ private:
 
     /// The modes OSC offers, the first three of Addressing.
     static constexpr uint8_t kModeCount = 3;
-    /// How many receivers feedback reaches by unicast: a few devices, not a wall.
-    static constexpr uint8_t kMaxReceivers = 8;
 
     /// Parse the receiver list, an invalid one sending to nobody rather than to a guess, with the parser's reason on the status.
     void parseReceivers(bool mayStart) {
         receiversParsed_ = true;
         receiversError_ = parseReceiverList(receivers_, receiverList_, kMaxReceivers, receiverCount_);
         if (receiversError_) { receiverCount_ = 0; return; }
-        if (!mayStart) return;
-        startResolverForNames(receiverList_, receiverCount_);
-        refreshNamedReceivers(receivers_, receiverList_, receiverCount_);
+        if (mayStart) startResolverForNames(receivers_, receiverList_, receiverCount_);
+        receiversLeft_ = resolveReceivers(receivers_, receiverList_, receiverCount_);
     }
 
     /// Parse the group once, rather than on every feedback message.
     void parseGroup() { groupValid_ = parseDottedQuad(group_, groupIp_); }
 
 
-    /// Addresses or names feedback goes to (unicast).
-    /// @guide Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else.
+    /// Addresses, names or a device group's name feedback goes to (unicast).
+    /// @guide Empty answers whoever wrote last, which finds a surface on its own; a group: @xref{a-device-group-as-the-receivers}.
     char     receivers_[64] = {};
     /// The multicast group feedback goes to and this device joins.
     /// @guide Every listening device with the same group joins it. The default sits beside discovery's own group, so a second rig on the same network picks another.
@@ -348,6 +368,7 @@ private:
     static_assert(sizeof(osc::kDefaultGroup) <= sizeof(group_), "the default group fits its control");
     Receiver     receiverList_[kMaxReceivers] = {};
     uint8_t  receiverCount_ = 0;
+    uint8_t  receiversLeft_ = 0;          ///< receivers past kMaxReceivers, left out, which the status names
     bool     receiversParsed_ = false;    ///< the list is parsed on first use and after every edit
     const char* receiversError_ = nullptr;   ///< why the receiver list was refused, shown on the status
     uint8_t  groupIp_[4] = {};
@@ -357,6 +378,8 @@ private:
     void reportPeer() {
         if (feedback && addressing == static_cast<uint8_t>(Addressing::Unicast) && receiversError_)
             setStatusf(Severity::Error, "receivers: %s", receiversError_);
+        else if (feedback && addressing == static_cast<uint8_t>(Addressing::Unicast) && receiversLeft_)
+            setStatusf(Severity::Warning, "%u receiver%s past %u left out", static_cast<unsigned>(receiversLeft_), receiversLeft_ == 1 ? "" : "s", static_cast<unsigned>(kMaxReceivers));
         else if (feedback && addressing != static_cast<uint8_t>(Addressing::Unicast) && !groupValid_)
             setStatusf(Severity::Warning, "multicast needs a group address");
         else if (!enabledOsc)

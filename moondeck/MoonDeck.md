@@ -1,10 +1,10 @@
 # MoonDeck Script Reference
 
-MoonDeck is MoonLight's browser-based developer console. One page builds, flashes, runs, tests, monitors and checks the project across every target, and discovers and drives devices on the network. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code. Agents typically use the CLI, humans MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [the MoonDeck architecture page](../docs/explanation/architecture/moondeck.md). What follows is the per-script reference.
+MoonDeck is MoonLight's browser-based developer console. One page builds, flashes, runs, tests, monitors and checks the project across every target, and shows and drives the devices on the network and on its USB ports. Every action it offers is a thin wrapper around a script under `moondeck/`, so the CLI (`uv run moondeck/<group>/<name>.py`) and MoonDeck run exactly the same code. Agents typically use the CLI, humans MoonDeck. For what MoonDeck *is* and where it sits in the workflow see [the MoonDeck architecture page](../docs/explanation/architecture/moondeck.md). What follows is the per-script reference.
 
 Launch it with `uv run moondeck/moondeck.py` and open <http://localhost:8420>. The console has five tabs. **Repo**, where MoonDeck opens, holds the tests, checks, tools and docs.
-**Host**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** discovers networked devices and runs against them.
-A network bar and per-device deviceModel pickers sit above them. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, `?every=1` takes every step, as a release does. A step that runs a subprocess, as `commit` runs its four groups, stands for that subprocess's steps. `?model=1` adds the map itself, so the map draws from one generation. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state (selected network, devices, ports) persists in `moondeck/moondeck.json` (gitignored).
+**Host**, **ESP32** and **Teensy** build, run or flash, and monitor a target, and **Live** shows the device map and runs against the devices selected on it.
+A network bar sits above the ESP32 tab. The 🗺️ MoonWalk button in the header opens the map of every process on the contributor's stages. Each step that runs a script shows whether the change needs it, whether its pass still holds and how long it took, from `GET /api/gates`. The change is against HEAD for a commit, `?base=main` for a merge's branch, `?every=1` takes every step, as a release does. A step that runs a subprocess, as `commit` runs its four groups, stands for that subprocess's steps. `?model=1` adds the map itself, so the map draws from one generation. **Run** names the step, and MoonDeck reads its call from the process file, so a request can never add arguments of its own. A pass holds while the paths the step covers are unchanged since it ran, the tree each run saw recorded in `build/moondeck-logs/walk-runs.json`; the rule is `moondeck/docs/walk_status.py`. Script definitions live in `moondeck/moondeck_config.json` (committed); runtime state persists in `moondeck/moondeck.json` (gitignored): each network's name, subnet, WiFi credentials and port, MoonDeck's preferences, `usbMacs` (this computer's USB adapter serial to MAC cache, which Identify writes) and `liveTests` (the MACs of the devices the live tests run against). MoonDeck carries an older file's device list over on load: a ticked device into `liveTests`, an identified one into `usbMacs`.
 
 Below: the UI behaviors common to every card, described once, then one section per script grouped by the tab it appears on. Each section gives the equivalent CLI invocation, so the page doubles as the command reference for running anything without the browser.
 
@@ -19,9 +19,7 @@ Below: the UI behaviors common to every card, described once, then one section p
 - **Destructive-action confirm**: scripts flagged `destructive: true` (e.g. Erase Flash) pop a native confirm dialog before running.
 - **Tab persistence**: the selected tab survives page refresh.
 - **Process detection**: on page load, MoonDeck checks whether MoonLight or idf.py is running and shows Stop.
-- **Network bar** (top of the sidebar): switches between known networks. Each network holds its own device list, last-used serial port, and WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
-- **Device-model picker** on each device row: a text dropdown of device models from [mooninstaller/deviceModels.json](../mooninstaller/deviceModels.json), the catalog the web installer's flash-time picture picker also reads. When the firmware uniquely identifies one deviceModel (e.g. `esp32-eth` is Olimex Gateway), MoonDeck deduces it and mirrors it to the `deviceModel` control on [SystemModule](../docs/moonmodules/core/SystemModule.md) via `PATCH /api/state` on next discover. Where the firmware fits several models (`esp32`), the user picks and MoonDeck pushes that value. A device-reported model not in the catalog shows as `<key> (unknown)`. Selecting a model pushes its catalog `state` document (the [device catalog](../mooninstaller/README.md#the-device-catalog)) in one `PATCH /api/state`; see `_push_device` in [moondeck.py](moondeck.py).
-- **OTA button** on each device row: uploads the local build for the device's firmware (`build/esp32-<firmware>/`) over WiFi, rebooting the device into MoonBase first where its variant has it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand; see `_ota_upload` in [moondeck.py](moondeck.py).
+- **Network bar** (top of the ESP32 tab): switches between known networks. Each network holds its last-used serial port and its WiFi credentials (consumed by Improv). On startup MoonDeck selects the network whose subnet matches the host's LAN. The dropdown pins a selection until the pinned subnet stops matching. Add / Rename buttons manage the catalog, a network added taking the subnet this computer is on. State lives in `moondeck/moondeck.json` under `networks` + `active_network`.
 
 ## Host Tab
 
@@ -247,11 +245,7 @@ uv run moondeck/test/test_tooling.py --ui --clip 16-restore-a-backup   # one run
 uv run moondeck/test/test_tooling.py --python --junit-dir results      # as CI runs it: the results where its annotations read them
 ```
 
-The tests the C++ binary cannot reach: the cross-language contracts (the Improv frame's wire format,
-WLED's `/json` shape), the MoonDeck scripts themselves, the browser code under `src/ui`, and the
-claim that every shipped MoonLive script is valid C++ (`test_scripts_are_cpp.py` hands each one to a
-real compiler). The commit gate and CI run the same two commands; this is the card in front of them.
-JS reports SKIP rather than failing when node is absent, since a Python-only bench is a normal setup.
+The tests the C++ binary cannot reach: the cross-language contracts (the Improv frame's wire format, WLED's `/json` shape), the MoonDeck scripts themselves, the browser code under `src/ui`, and the claim that every shipped MoonLive script is valid C++ (`test_scripts_are_cpp.py` hands each one to a real compiler). The Python suite runs on as many workers as a build has jobs (pytest-xdist). The commit gate and CI run the same two commands; this is the card in front of them. JS reports SKIP rather than failing when node is absent, since a Python-only bench is a normal setup.
 
 `--ui` is the odd one and is OPT-IN, which is why a bare run leaves it out.
 It drives a real browser against a running MoonLight with [pytest-playwright](https://playwright.dev/python/docs/test-runners), performing a [run file](moontube/moontube.md) from `moontube/clips/` through the interface and checking each step against the device over REST.
@@ -297,6 +291,18 @@ uv run moondeck/check/check_taglines.py
 ```
 
 The front pages are `README.md` and `CLAUDE.md`, listed in the script; the site's home embeds README, and a new front page joins that list the day it is written.
+
+### run_gates
+
+Run the gates a change triggers, once each, read from the [MoonWalk](../docs/moonwalk.md) trigger table: the commit gate by default, the merge gate with `--process pre-merge`.
+
+```bash
+uv run moondeck/check/run_gates.py             # the commit gates this diff triggers
+uv run moondeck/check/run_gates.py --list      # which would run and why, running none
+uv run moondeck/check/run_gates.py --only docgen,js --no-cache
+```
+
+A step that `generates` a committed file (help.json) runs first, before any gate reads that file, and leaves its rewrite unstaged; a merge leaves it out. A gate runs when a file its `given: changed:` globs name differs from HEAD (from the merge base for `pre-merge`), and a gate that passed is cached under a hash of its inputs and of the files its `outputs:` declare (a build directory, a firmware image), so a rerun runs only what moved, and a deleted output reruns the gate that makes it. Gates are scheduled as make schedules jobs: a gate starts once the gates its `needs` names finished, holding the tokens its `cores` names from the machine's job budget (`moondeck/_budget.py`, GNU make's jobserver protocol), every core for a compile, the Python suite and the KPI, one for a step that names none, all niced. The count reaches the gate's builds and its test workers. The ready gate on the longest path to the end starts first, by the times the earlier records hold. A merge (`--process pre-merge`) leaves out the gates marked `ci: true`, whose results the merge process's `gh pr checks` step reads; the runner's exit status covers only the gates it ran. It prints one line per gate and one each minute, lists the judgment steps for the reader, writes a record to `build/gates/`, and ends with improvements it proposes from the records: a ratchet that rose (an edit that bypassed the write-time hook, or a design question for a rule only the whole tree shows), a gate grown slower with its causes, a gate that passes every run.
 
 ### check_prose
 
@@ -349,9 +355,10 @@ Check that a firmware binary exists and is newer than every source that feeds it
 
 ```bash
 uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8
+uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8 --build   # the commit gate: rebuild a stale one once
 ```
 
-The cheap stand-in for a full `idf.py build` in the commit and merge checks. Freshness is measured against the **sources**, not the clock: a wall-clock rule ("built in the last hour") passes a binary that predates an edit made twenty minutes ago, which is the stale-artifact trap that sends debugging at the wrong image. On failure it names the newer file and prints the rebuild command. `--max-age-hours N` adds an optional age rule on top; the default (0) disables it.
+The cheap stand-in for a full `idf.py build` in the commit and merge checks. Freshness is measured against the **sources**, not the clock: a wall-clock rule ("built in the last hour") passes a binary that predates an edit made twenty minutes ago, which is the stale-artifact trap that sends debugging at the wrong image. On failure it names the newer file and prints the rebuild command; `--build` runs that rebuild once and checks again. `--max-age-hours N` adds an optional age rule on top; the default (0) disables it.
 
 ### check_devices
 
@@ -383,7 +390,7 @@ uv run moondeck/check/collect_kpi.py --commit                 # the commit-messa
 uv run moondeck/check/collect_kpi.py --commit --no-live-capture   # skip the serial read
 ```
 
-Captures a live tick from a connected ESP32 (and the host scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records.
+Captures a live tick from a connected ESP32 (and the host scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records. The host's case count and scenario ticks come from the test gates' own runs, which `test_host.py` and `run_scenario.py` keep beside each binary with its hash (`moondeck/_suite_output.py`); a binary rebuilt since is run again through those same scripts.
 
 The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes. That reading is accurate, but takes ~80 s and a bench board. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
 
@@ -817,6 +824,14 @@ The preview binds **:8422**: the [Installer Preview](#preview_installer) owns :8
 
 ![Moondeck Live](../docs/assets/ui/moondeck_live.png)
 
+The **Map** pane, the Live tab's first and the one it opens on, draws the device map, the device UI's own (`src/ui/devicemap.js` and `devicemap.css`, which MoonDeck serves from the checkout at `/ui/` with the modules they import), from the Discovery list of one MoonLight, which sits at its center: the desktop app on `localhost:8080` when it runs, else the first MoonLight in name order of those MoonDeck hears announce themselves (`moondeck/_presence.py`, a passive listener on UDP 65506 sharing the port with a desktop app), the status line naming which; with none heard, it draws what MoonDeck heard and the boards on this computer's USB ports, which join the map in every case. That MoonLight's peers merge in as on a board's page, a node whose channel offers a newer release is marked as it is there, and a click on a node opens the popup a board's page opens (`devicepopup.js`): its detail, identify, its update, its device defaults, and the move to MoonLight for a WLED, Tasmota, ESPHome or MoonBase device. The map redraws every two seconds while its pane shows.
+
+MoonDeck adds its own section to the popup (`moondeck_ui/popup.js`, the popup's `actions` hook):
+
+- **USB**, for a board on this computer's USB ports. A port is found by MAC when used ([`_usb.py`](_usb.py)): a native-USB board reports its MAC as its USB serial; a board behind a UART bridge is known by the adapter's serial, mapped to its MAC in `usbMacs`. **Identify** reads the chip and MAC of every ESP32-capable port with esptool, which resets every board it probes, labeled or not, and caches the MAC by its adapter. **Flash local build** flashes a build of the board's chip on the port its MAC is on, and `flash_esp32.py --mac` stops on another board. **Monitor** runs the serial monitor there. Both run their ESP32 tab card into the Log pane.
+- **Use in live tests**, for a MoonLight device: stored by MAC in `liveTests`; the Live tab's tests find each at its address when they start (`GET /api/live-tests`) and report a missing one.
+- **Install local build**: the board's firmware build, which MoonDeck serves as a file (`GET /api/local-build/<firmware>`), goes up through the install flow the Firmware card and the popup's updates share (`src/ui/deviceinstall.js`): an upload with its bar, through MoonBase where the board writes its app from it, as the [network update process](../docs/moonwalk.md#ota-board) does by hand.
+
 ### live_scenario
 
 Run scenario tests against a live running device via HTTP.
@@ -904,26 +919,26 @@ It runs the UI's own `restoreBundle` (`src/ui/migrate.js`) in Node, then reads e
 
 ### run_network_live
 
-End-to-end lights-over-UDP matrix test across every online board in moondeck.json's active network: the live proof for [NetworkReceiveEffect](../docs/moonmodules/light/effects.md#networkreceive) and [NetworkSendDriver](../docs/moonmodules/light/drivers.md#networksend). Each round one device is the sender and every other device listens: the host seeds the sender **three times, once per protocol (ArtNet, E1.31, DDP), each with its own color**, asserting the sender's `/ws` preview stream shows each one, then points the sender's own NetworkSendDriver at each listener with the protocol control cycled round-robin and asserts the listener's preview shows the sender's corrected color (brightness + channel order replicated host-side). With one device online only the host→device sweep runs.
+End-to-end lights-over-UDP matrix test across the devices selected for the live tests (**Use in live tests** in a node's popup): the live proof for [NetworkReceiveEffect](../docs/moonmodules/light/effects.md#networkreceive) and [NetworkSendDriver](../docs/moonmodules/light/drivers.md#networksend). Each round one device is the sender and every other device listens: the host seeds the sender **three times, once per protocol (ArtNet, E1.31, DDP), each with its own color**, asserting the sender's `/ws` preview stream shows each one, then points the sender's own NetworkSendDriver at each listener with the protocol control cycled round-robin and asserts the listener's preview shows the sender's corrected color (brightness + channel order replicated host-side). With one device selected only the host→device sweep runs.
 
 ```bash
-uv run moondeck/scenario/run_network_live.py                      # full matrix over all online devices
+uv run moondeck/scenario/run_network_live.py                      # full matrix over the selected devices
 uv run moondeck/scenario/run_network_live.py --device MM-70BC     # only rounds with this sender
 uv run moondeck/scenario/run_network_live.py --tolerance 1        # loosen the per-channel byte match
 ```
 
-Everything it mutates (grid size → 16×16 for the run, NetworkSend `ip`/`protocol`/`enabled`, the temporarily added NetworkReceive effect) is restored afterwards, also on failure. Exit codes: `0` = all legs passed, `1` = a leg failed, `2` = environment problem (no online devices / no moondeck.json). Host listeners may need the OS firewall to allow UDP 6454/5568/4048.
+Everything it mutates (grid size → 16×16 for the run, NetworkSend `ip`/`protocol`/`enabled`, the temporarily added NetworkReceive effect) is restored afterwards, also on failure. Exit codes: `0` = all legs passed, `1` = a leg failed, `2` = environment problem (no selected device answers). Host listeners may need the OS firewall to allow UDP 6454/5568/4048.
 
 ### run_network_roundtrip
 
-Minimal **host→device→host latency probe** across **all three protocols**: per device, the host sends one solid-color frame over ArtNet, then E1.31, then DDP, each time timing how long until that color appears in the device's `/ws` preview stream (host → NetworkReceiveEffect → PreviewDriver → host). The receiver autodetects each protocol on its own port, so there's no device reconfig between them. Reports min / median / max over N repeats per protocol and a per-device median-per-protocol comparison line: the spread is the signal for the latency / hiccup symptom, the protocol comparison shows which transport is fastest on a given board, and running across boards makes the per-chip difference visible (a classic ESP32 measures slower than an S3). Runs against **every device checked in the Live tab** (the same `selected` set the matrix test uses); unreachable checked devices are warned and skipped. The measured time includes the PreviewDriver's own fps quantisation (≈42 ms at the 24 fps default), so it's "state visible within" latency, not wire latency; raise the device's Preview fps to tighten it. Deliberately minimal, per-frame sequence matching, the device→device chain, and jitter/drop histograms are left as later extensions.
+Minimal **host→device→host latency probe** across **all three protocols**: per device, the host sends one solid-color frame over ArtNet, then E1.31, then DDP, each time timing how long until that color appears in the device's `/ws` preview stream (host → NetworkReceiveEffect → PreviewDriver → host). The receiver autodetects each protocol on its own port, so there's no device reconfig between them. Reports min / median / max over N repeats per protocol and a per-device median-per-protocol comparison line: the spread is the signal for the latency / hiccup symptom, the protocol comparison shows which transport is fastest on a given board, and running across boards makes the per-chip difference visible (a classic ESP32 measures slower than an S3). Runs against **every device selected for the live tests** (the same set the matrix test uses); a selected device that does not answer is warned and skipped. The measured time includes the PreviewDriver's own fps quantisation (≈42 ms at the 24 fps default), so it's "state visible within" latency, not wire latency; raise the device's Preview fps to tighten it. Deliberately minimal, per-frame sequence matching, the device→device chain, and jitter/drop histograms are left as later extensions.
 
 ```bash
 uv run moondeck/scenario/run_network_roundtrip.py                  # every checked device, 10 probes each
 uv run moondeck/scenario/run_network_roundtrip.py --host 192.168.1.156 --repeats 20   # one explicit device
 ```
 
-Captures and restores each device's grid and removes the temporary NetworkReceive on exit (also on failure). Exit codes match the matrix test: `0` = at least one device measured, `1` = none returned a frame, `2` = environment problem (no checked/reachable devices).
+Captures and restores each device's grid and removes the temporary NetworkReceive on exit (also on failure). Exit codes match the matrix test: `0` = at least one device measured, `1` = none returned a frame, `2` = environment problem (no selected device answers).
 
 ### fseq_play
 
@@ -940,16 +955,16 @@ FSEQ is xLights' and Falcon Player's file of channel data, frame by frame in wir
 
 ### preview_health
 
-Browser-faithful **3D-preview stream health probe** — measures the device's `/ws` preview the way a real browser tab experiences it, so the numbers match what a person watching the [PreviewDriver](../docs/moonmodules/light/drivers.md#preview) preview sees. A plain one-shot WebSocket reader gives up the moment the device closes the socket, so it reports stalls a browser never shows (the browser reconnects) and misses the brief blips a browser does show; this probe replicates the real client in [app.js](../src/ui/app.js)'s `connectWs` — reads the binary frames, sends a `"ping"` text frame every 25 s, and **auto-reconnects on close with 500 ms→5 s backoff** — so a momentary device-side close registers as a short blip, not a frozen preview. Pure WebSocket client: **no device-side changes**, it observes the unmodified stream the device already broadcasts. Reports, per device: color frames + sustained fps, reconnects (each a visible blip), `maxgap` (the longest stretch with no color frame — the real "did it freeze?" number), and a `SMOOTH` / `CHOPPY` / `DEAD` verdict. Diagnostic, not a gate — it always exits `0`; read the verdict. Runs against **every device checked in the Live tab** (or an explicit `--host`); with no host it sweeps every online device on the active network.
+Browser-faithful **3D-preview stream health probe**: it measures the device's binary preview on `/wsp` the way a real browser tab experiences it, so the numbers match what a person watching the [PreviewDriver](../docs/moonmodules/light/drivers.md#preview) preview sees. A plain one-shot WebSocket reader gives up the moment the device closes the socket, so it reports stalls a browser hides by reconnecting and misses the brief blips a browser does show; this probe replicates the real client in [app.js](../src/ui/app.js)'s `connectWs`: it reads the binary frames, sends a `"ping"` text frame every 25 s, and **auto-reconnects on close with 500 ms→5 s backoff**, so a momentary device-side close registers as a short blip, not a frozen preview. On every connection it posts the standing frame request the preview's pull model needs. A run that leaves the grid alone (no `--grid`) is a pure WebSocket client with **no device-side changes**; `--grid SIZE` sets the Grid to SIZE×SIZE for the run, so it changes the device while it runs, and restores the original width, height and depth afterward. Reports, per device: color frames + sustained fps, reconnects (each a visible blip), `maxgap` (the longest stretch with no color frame, the real "did it freeze?" number), and a `SMOOTH` / `CHOPPY` / `DEAD` verdict. It exits `0` when every probed device is `SMOOTH` and every selected device was probed, else `1`, and prints each verdict. Runs against **every device selected for the live tests** (or an explicit `--host`).
 
 ```bash
-uv run moondeck/diag/preview_health.py                              # every online device, 30s each
+uv run moondeck/diag/preview_health.py                              # every selected device, 30s each
 uv run moondeck/diag/preview_health.py --host 192.168.1.156         # one explicit device
 uv run moondeck/diag/preview_health.py localhost:8080 --grid 128    # host build, force a 128×128 grid first
 uv run moondeck/diag/preview_health.py 192.168.1.132 --seconds 60   # longer window to catch rare stalls
 ```
 
-When the verdict is `CHOPPY`/`DEAD`, the *cause* (which close path fired on the device) needs device-side serial logging — that scaffolding is added on-demand during diagnosis, separate from this always-on probe. Stamps nothing on the device; safe to run against a live preview a browser is also watching (subject to the 4-client `/ws` limit).
+When the verdict is `CHOPPY`/`DEAD`, the *cause* (which close path fired on the device) needs device-side serial logging: that scaffolding is added on demand during diagnosis, separate from this always-on probe. Run with its grid left as it is, it is safe beside a live preview a browser is also watching (subject to the 4-client preview limit).
 
 ## ESP32 Tab
 
@@ -1031,7 +1046,7 @@ Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware
 
 The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits cleanly with a "no build for <firmware> — run Build first" message when that dir doesn't exist. The log line up front confirms which build is being flashed and how old it is, e.g.:
 
-**Flash baud** defaults to **921600** here (the CLI/MoonDeck path assumes a modern bench bridge — ~2x faster than the installer's safe 460800). A board with a flaky bridge pins a lower `flashBaud` in `deviceModels.json` to slow down (the LOLIN's CH340 → 460800); `--baud` overrides either. To resolve that per the *exact* board rather than the shared firmware, MoonDeck maps the selected Port → the device last flashed on it (its `last_port`) and forwards that device's deviceModel as `--device-model` — so one board's opt-down never leaks to a firmware-sibling with a fine bridge.
+**Flash baud** defaults to **921600** here (the CLI/MoonDeck path assumes a modern bench bridge, ~2x faster than the installer's safe 460800). A board with a flaky bridge pins a lower `flashBaud` in `deviceModels.json` to slow down (the LOLIN's CH340 → 460800); `--baud` overrides either. To resolve that per the *exact* board rather than the shared firmware, MoonDeck forwards a device model as `--device-model`: the board a map node reports, or the ESP32 tab's **Device model** pick, so one board's opt-down never leaks to a firmware-sibling with a fine bridge. Flashed from a node's popup, the script also takes `--mac`, reads the board's MAC with esptool before writing and stops on another board.
 
 ```text
 ==> flashing esp32 build (1267 KB, built 3m ago) to /dev/tty.usbserial-0001

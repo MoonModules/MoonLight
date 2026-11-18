@@ -253,7 +253,7 @@ def main() -> int:
 
     print(f"==> staged {STAGE_DIR}")
 
-    # Look for local ESP32 builds and stage them under LOCAL_TAG (= "latest", which overlays the real `latest` tag the picker surfaces from the GitHub API; clicking Install on `latest` then resolves to our local bins via toLocalUrl). When no builds exist, the preview runs in render-only mode (picker works against the real GitHub API, Install fails for lack of bins).
+    # Look for local ESP32 builds and stage them under LOCAL_TAG (= "latest", which overlays the real `latest` tag the picker surfaces from the GitHub API; clicking Install on `latest` then resolves to our local bins via the picker's mirrorUrl). When no builds exist, the preview runs in render-only mode (picker works against the real GitHub API, Install fails for lack of bins).
     local_builds = find_local_builds()
     teensy = stage_teensy_builds()
     if local_builds or teensy:

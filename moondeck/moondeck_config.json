@@ -208,6 +208,14 @@
       "script": "check/check_specs.py"
     },
     {
+      "id": "run_gates",
+      "tab": "repo",
+      "group": "check",
+      "label": "Run Gates",
+      "help": "run_gates",
+      "script": "check/run_gates.py"
+    },
+    {
       "id": "check_prose",
       "tab": "repo",
       "group": "check",
@@ -439,7 +447,8 @@
       "script": "build/flash_esp32.py",
       "needs_port": true,
       "needs_firmware": true,
-      "pass_port_device_model": true
+      "pass_device_model": true,
+      "mac_guard": true
     },
     {
       "id": "check_encodings",

@@ -159,7 +159,7 @@ void writeControlValue(JsonSink& sink, const ControlDescriptor& c, bool saving) 
             const auto* src = static_cast<const ListSource*>(c.ptr);
             sink.append("[");
             if (src) {
-                const ListRow n = src->listRowCount();
+                const ListRow n = saving ? src->listSavedRowCount() : src->listRowCount();
                 for (ListRow r = 0; r < n; r++) {
                     if (r > 0) sink.append(",");
                     // Saving writes what the file keeps, which may be more than the collapsed row shows.

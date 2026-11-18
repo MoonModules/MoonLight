@@ -90,6 +90,8 @@ TEST_CASE("the network document the migration writes is what MoonBase reads: the
     CHECK(std::string(ssid) == "Home");
     CHECK(std::string(pw) == "secret12");
     CHECK(mm::wlednet::networkDocument(doc, 40, nets, 1, &eth) == 0);   // too small a buffer writes nothing usable
+    char tiny[8];                                            // smaller than the document's opening, so the Ethernet card has no room at all
+    CHECK(mm::wlednet::networkDocument(tiny, sizeof(tiny), nets, 1, &eth) == 0);   // and stays inside the buffer
     REQUIRE(mm::wlednet::networkDocument(doc, sizeof(doc), nets, 1, nullptr) > 0);
     CHECK(std::strstr(doc, "EthernetModule") == nullptr);   // no Ethernet card for a board on WiFi only
 }

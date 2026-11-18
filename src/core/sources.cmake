@@ -14,6 +14,11 @@ set(MM_CORE_SOURCES
     util/sha256.cpp
     system/HttpServerModule.cpp
     system/HttpServerState.cpp
+    system/DeviceSummary.cpp
+    system/DevicesModule.cpp
+    system/DeviceGroup.cpp
+    system/DeviceGroupSync.cpp
+    system/SharedControls.cpp
     system/HttpServerWled.cpp
     system/FilesystemModule.cpp
     system/FileManagerModule.cpp

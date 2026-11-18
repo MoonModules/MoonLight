@@ -7,8 +7,8 @@ WebSocket stream. The path is host → device's NetworkReceiveEffect (writes the
 layer buffer) → PreviewDriver (broadcasts the buffer over /ws) → host. It sweeps
 all three protocols — ArtNet, E1.31, DDP — per device (the receiver autodetects
 each on its own port, so no reconfig between them), and prints a per-device
-median-per-protocol comparison. Runs against every device CHECKED in MoonDeck's
-Live tab (the `selected` flag); `--host` overrides to a single explicit device.
+median-per-protocol comparison. Runs against every device selected for the
+live tests in MoonDeck's map popup; `--host` overrides to a single explicit device.
 Works with as few as one board reachable.
 
 Deliberately minimal. The measured time includes the PreviewDriver's own
@@ -22,8 +22,7 @@ the device→device forwarding chain, jitter/drop histograms. This version sweep
 the three protocols with one probe color, N repeats each.
 
 Exit codes follow the other live scripts: 0 = measured ok, 1 = no frame came
-back (a real failure), 2 = environment problem (no device, moondeck.json
-missing).
+back (a real failure), 2 = environment problem (no selected device answers).
 
 Run:  uv run moondeck/scenario/run_network_roundtrip.py [--host IP] [--repeats N]
 """
@@ -201,7 +200,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", help="run only this device host[:port]; default = "
-                                   "every device checked in MoonDeck's Live tab")
+                                   "every device ticked \"use in live tests\" in MoonDeck's map popup")
     ap.add_argument("--repeats", type=int, default=10, help="probes per protocol per device")
     ap.add_argument("--timeout", type=float, default=5.0,
                     help="seconds to wait for the probe color per repeat")
@@ -212,7 +211,7 @@ def main() -> int:
     else:
         devices = load_selected_devices()
         if not devices:
-            print("FAIL  no selected+reachable devices — check device boxes in the Live tab")
+            print("FAIL  no selected device answers: tick \"use in live tests\" in a device's popup on the Live tab's map")
             return 2
         hosts = [(d["ip"], d.get("deviceName", "?")) for d in devices]
         print(f"devices: {len(hosts)} selected — "

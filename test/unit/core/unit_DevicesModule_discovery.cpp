@@ -363,6 +363,17 @@ TEST_CASE("DevicesModule: an added address whose page says Tasmota is listed as 
     CHECK(dev.listRowCount() == 1);
 }
 
+// Any other page is named by its <title>, the document's own name, rather than a section heading: a Hue bridge's page has "Open Source" as its first <h2>.
+TEST_CASE("DevicesModule: an added address that is not a Tasmota is named by its page's title, whatever its headings say") {
+    DevicesModule dev;
+    std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.105");
+    dev.onControlChanged("addedIps");
+    dev.injectPageForTest("HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n<html><head>\n<TITLE>\n  Hue Bridge\n</TITLE></head><body><h1>hue</h1><h2>Open Source</h2></body></html>", 5);
+    const std::string row = rowFor(dev, "192.0.2.105");
+    CHECK(std::strstr(row.c_str(), "\"name\":\"Hue Bridge\"") != nullptr);
+    CHECK(std::strstr(row.c_str(), "Open Source") == nullptr);
+}
+
 TEST_CASE("DevicesModule: an added address that is not a Tasmota is listed as generic, and a name is refused") {
     DevicesModule dev;
     std::snprintf(dev.addedIps, sizeof(dev.addedIps), "192.0.2.104");
@@ -545,4 +556,17 @@ TEST_CASE("DevicesModule: a device that changes kind drops what its old kind ann
     CHECK(std::strstr(row.c_str(), "\"chip\"") == nullptr);
     platform::setTestArpEntry(nullptr, nullptr);
     dev.release();
+}
+
+// Discovery's port is shared on a computer: a second listener, MoonDeck's or a second desktop's, binds beside the first, so each hears presence whichever started first.
+TEST_CASE("DevicesModule: the presence port takes a second listener beside the first") {
+    mm::platform::UdpSocket first, second;
+    REQUIRE(first.open());
+    REQUIRE(second.open());
+    uint16_t port = 65431;   // ports of the test's own, so a desktop running beside the suite keeps its presence port
+    while (port < 65441 && !first.bindShared(port)) port++;   // the first one no other process holds alone
+    REQUIRE(port < 65441);
+    CHECK(second.bindShared(port));
+    first.close();
+    second.close();
 }

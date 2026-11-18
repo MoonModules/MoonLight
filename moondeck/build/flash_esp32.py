@@ -11,7 +11,6 @@ from yesterday vs an edit five minutes ago) is visible in the log.
 """
 
 import argparse
-import json
 import re
 import shutil
 import subprocess
@@ -23,7 +22,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import find_idf, idf_env, idf_cmd, FIRMWARES, build_dir_for, APP_BIN
+from build_esp32 import FIRMWARES, build_dir_for, APP_BIN
+from idf_env import find_idf, idf_env, idf_cmd
+sys.path.insert(0, str(ROOT / "moondeck"))
+import _usb  # noqa: E402
 
 
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
@@ -43,7 +45,7 @@ def _catalog_flash_baud(firmware: str, device_model: str | None = None) -> int:
     (a CH340 clone at 460800) or up/explicit for a verified one (the S31 at 921600).
 
     Resolution:
-      - When the EXACT `device_model` is known (MoonDeck maps it from the port's device):
+      - When the EXACT `device_model` is known (MoonDeck passes the board a map node reports, or the ESP32 tab's pick):
         that entry's `flashBaud` if it sets one, else DEFAULT_FLASH_BAUD. Keying on the
         exact board stops a per-model opt-down leaking to firmware-siblings — the LOLIN's
         460800 must not slow the Dig-Uno, which shares the `esp32` firmware but has a fine
@@ -121,10 +123,14 @@ def main():
                              "unknown walk-up hardware.)")
     parser.add_argument("--device-model", dest="device_model", default=None,
                         help="The deviceModel of the board being flashed (MoonDeck passes "
-                             "it, mapped from the port's device). Lets the baud resolve by "
-                             "the EXACT board so a per-model flashBaud opt-down doesn't leak "
-                             "to firmware-siblings. Optional — omitted flashes resolve by "
-                             "firmware then the fast default.")
+                             "the board its map node reports, or the ESP32 tab's pick). Lets "
+                             "the baud resolve by the EXACT board so a per-model flashBaud "
+                             "opt-down doesn't leak to firmware-siblings. Optional: omitted "
+                             "flashes resolve by firmware then the fast default.")
+    parser.add_argument("--mac", default=None,
+                        help="The MAC of the board meant (MoonDeck passes it when it found the "
+                             "port by that MAC). esptool reads the board's MAC before anything "
+                             "is written, and the flash stops on another board.")
     args = parser.parse_args()
 
     # Default fast (921600) for the DIY bench; a deviceModel with a flaky bridge pins its
@@ -147,6 +153,10 @@ def main():
         print(f"       Run Build with --firmware {args.firmware} first, then "
               f"Flash again.")
         sys.exit(2)
+
+    if args.mac and (stranger := _stranger(args.port, args.mac, _usb.probe_port_chip)):
+        print(stranger)
+        sys.exit(3)
 
     size_kb = image.stat().st_size // 1024
     age = _fmt_age(time.time() - image.stat().st_mtime)
@@ -172,13 +182,7 @@ def main():
     # -b sets the esptool flash baud (idf.py's own default is also 460800).
     # --baud 921600 matches the web installer for ~2x speed, but isn't the
     # default because some USB bridges can't sustain it (see --baud help).
-    # Tee the output: esptool prints the board's efuse MAC during its connect
-    # phase ("MAC: xx:xx:..."), which we parse to key the flash breadcrumb by the
-    # board's stable identity — so MoonDeck records last_port on the exact device,
-    # even when two boards share a firmware. Streaming keeps the live progress on
-    # the console; we just also scan it.
     print(f"==> flash baud: {baud}")
-    mac = ""
     # A MoonBase variant cannot use `idf.py flash`: with a factory + ota_0 table, IDF stages the
     # application at the FACTORY offset (0x10000), which is MoonBase's slot and too small for it.
     # The parts are placed at explicit offsets instead, the same shape the mooninstaller manifest
@@ -187,80 +191,18 @@ def main():
         flash_cmd = _moonbase_flash_cmd(build_dir, args.firmware, args.port, baud, env)
     else:
         flash_cmd = cmd + b_arg + ["flash", "-p", args.port, "-b", str(baud)]
-    proc = subprocess.Popen(flash_cmd,
-                            cwd=ESP32_DIR, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    for line in proc.stdout:
-        sys.stdout.write(line)          # keep the live flash output visible
-        if not mac:
-            m = re.search(r"MAC:\s*([0-9A-Fa-f:]{17})", line)
-            if m:
-                mac = m.group(1).upper()
-    proc.wait()
-    if proc.returncode == 0:
-        _record_flash_event(args.port, args.firmware, mac)
-    sys.exit(proc.returncode)
+    sys.exit(subprocess.run(flash_cmd, cwd=ESP32_DIR, env=env).returncode)
 
 
-def _record_flash_event(port: str, firmware: str, mac: str) -> None:
-    """Record the just-flashed serial port against the exact device, keyed by `mac`
-    (the board's efuse MAC parsed from esptool's flash output — the stable identity,
-    unambiguous when two boards share a firmware).
-
-    Two writes, because two callers consume this:
-    - `moondeck.json` `last_port` is set DIRECTLY here, so a CLI flash (no MoonDeck
-      GUI running) still records the port. Without this, `last_port` only ever got
-      written by MoonDeck's discover/refresh, so a board flashed purely from the CLI
-      (the agent path) never gained a `last_port` and every later flash had to
-      re-probe every serial port to find it.
-    - the `moondeck/.last_flash.json` breadcrumb is still dropped for MoonDeck's
-      discover/refresh, which additionally records the drift-immune `usbSerial` and
-      strips the port from stale holders (see moondeck.py `_link_last_flash`)."""
-    import json, time
-    _set_last_port_in_catalog(mac, port)
-    marker = ROOT / "moondeck" / ".last_flash.json"
-    marker.write_text(json.dumps({
-        "port": port,
-        "firmware": firmware,
-        "mac": mac,
-        "ts": time.time(),
-    }))
-
-
-def _set_last_port_in_catalog(mac: str, port: str) -> None:
-    """Set `last_port` on the moondeck.json device with this MAC, and strip the port
-    from any OTHER device that still carries it (a physical port maps to exactly one
-    board at a time; boards get swapped on the same USB port). No MAC, or no matching
-    device, is a no-op — the breadcrumb path still covers the MoonDeck-GUI case.
-
-    Matching goes through MoonDeck's `_mac_matches`, not plain equality: esptool
-    reports the board's raw EFUSE MAC, but an S31 device REPORTS the EUI-64-truncated
-    form of it (FF:FE inserted after the OUI, cut to 6 bytes) — the same alias the
-    breadcrumb path already tolerates. A plain compare would silently never link the
-    S31's port (the exact regression `_mac_matches` exists for)."""
-    import json
-    if not mac:
-        return
-    sys.path.insert(0, str(ROOT / "moondeck"))
-    from moondeck import _mac_matches
-    catalog = ROOT / "moondeck" / "moondeck.json"
-    try:
-        data = json.loads(catalog.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return
-    changed = False
-    for network in data.get("networks", []):
-        for device in network.get("devices", []):
-            same = _mac_matches(mac, device.get("mac", "") or "")
-            if same:
-                if device.get("last_port") != port:
-                    device["last_port"] = port
-                    changed = True
-            elif device.get("last_port") == port:   # stale link on a swapped-out board
-                device.pop("last_port", None)
-                changed = True
-    if changed:
-        catalog.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+def _stranger(port: str, mac: str, probe) -> str:
+    """Why the flash stops: the board `probe` reads on `port` is not the one with `mac`, or none answers; "" when it is that board. `probe`
+    is _usb.probe_port_chip, which resets the board, as the flash that follows does anyway."""
+    found = probe(port).get("mac", "")
+    if not found:
+        return f"STOP: no board answers on {port}, so its MAC could not be checked against {mac}; nothing was written."
+    if not _usb.mac_matches(found, mac):
+        return f"STOP: the board on {port} is {found}, not {mac}; nothing was written. Identify it again from its node on the Live tab's map."
+    return ""
 
 
 if __name__ == "__main__":

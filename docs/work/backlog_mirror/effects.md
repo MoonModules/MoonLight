@@ -202,3 +202,11 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 **Why.** Art-Net 4 and E1.31 fix their ports, and senders send there without asking, so a second port is no answer. A multi-port Art-Net node runs one listener and splits by the universe in each packet.
 
 **What.** Core opens one listener per fixed port, first receiver in and last out, and hands each packet to the receivers whose `universe_start` range covers it; E1.31 joins the union of their multicast groups; DDP stays per receiver on its `ddp_port`. Overlapping ranges show a status naming the other receiver. The hard part: one task writing into several receivers' buffers without breaking each one's render copy. Removes the "a port binds once per device" rule from the NetworkReceive guide. About 200 to 300 lines plus tests.
+
+### Measure MoonFlock, Flock and Raymarch on the C3 before keeping them compiled out
+
+Kind: Investigation · Platform: C3 · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=310113018)
+
+MoonFlock, Flock and Raymarch compile out where the chip has no hardware FPU (`MM_HEAVY_COMPUTE`, from ESP-IDF's `SOC_CPU_HAS_FPU`, `src/platform/esp32/platform_config.h`), which among the targets is the ESP32-C3 alone. Software float on the C3 is roughly 10 to 30 times slower; an estimate puts MoonFlock (88 boids, cost by boids squared, not by layout) near 20 ms a frame and Raymarch (per pixel) near 25 fps at 16x16 and 100 fps at 8x8.
+
+Measure before deciding: build the C3 with the guard lifted, run each effect on a C3 (.115) at 8x8 and 16x16, and read the tick times. Then keep the compile-out, or include them everywhere and let the effect's fps say what a layout costs (degrade visibly), weighing a few KB of flash each.

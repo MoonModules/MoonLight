@@ -165,7 +165,7 @@ inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
 /// The reason this is not a co-processor image for `chip` matching the host's ESP-Hosted `hostVersion`, or null when it is; a mismatched major.minor would leave the link's calls timing out.
 inline const char* coprocessorRejection(const ImageInfo& info, ChipId chip, const char* hostVersion) {
     if (const char* why = imageRejection(info, chip, [](const char* p) { return isCoprocessorImage(p); }, "not a radio chip image")) return why;
-    if (!sameMajorMinor(info.version, hostVersion)) return "image's ESP-Hosted version does not match this firmware's";
+    if (!sameMajorMinor(info.version, hostVersion)) return "image's ESP-Hosted version differs from this firmware's";
     return nullptr;
 }
 

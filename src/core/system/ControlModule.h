@@ -45,6 +45,10 @@ namespace mm {
 ///
 /// @technical
 ///
+/// ## A device group
+///
+/// On a member of a device group, a switch, encoder or fader's change reaches the other members as what it drives, and an effects preset applied here is applied on each of them, as the Device group card says.
+///
 /// ## The three banks read as one desk
 ///
 /// Switches, encoders and faders are declared in render order, and the preset grid sits after them so its pads never push the faders off the card.
@@ -70,6 +74,8 @@ public:
     static constexpr uint8_t kMaxPresets = kGridCols * kGridRows;
     /// The longest preset name, which becomes a file name.
     static constexpr uint8_t kMaxNameLen = 32;
+    /// What each surface control drives, as "Module.control", empty when unassigned.
+    static constexpr uint8_t kTargetLen = 40;
     /// The top-level subtrees a preset can carry: @xref{what-a-preset-holds}.
     static constexpr const char* kCapturable[] = {"Layouts", "Effects", "Drivers", "Services"};
     /// What each capturable subtree covers, named after the CONTAINER rather than after a module.
@@ -82,6 +88,10 @@ public:
     static constexpr uint8_t kEffectsRole = 1;
     static_assert(kCapturable[kEffectsRole][0] == 'E' && kCapturable[kEffectsRole][1] == 'f' &&
                   kCapturable[kEffectsRole][6] == 's', "kEffectsRole must index Effects");
+    /// Index of "Drivers" within kCapturable, whose own card holds the look-wide brightness, palette and power.
+    static constexpr uint8_t kDriversRole = 2;
+    static_assert(kCapturable[kDriversRole][0] == 'D' && kCapturable[kDriversRole][1] == 'r',
+                  "kDriversRole must index Drivers");
 
     /// How many faders the bank shows.
     static constexpr uint8_t kFaderCount = 8;
@@ -102,8 +112,8 @@ public:
 
     // --- Control surfaces -------------------------------------------------------------------  A.
 
-    /// How a surface attaching learns the values: all at once, or one per tick for a network that drops bursts.
-    enum class Seed : uint8_t { Burst, Paced };
+    /// How a surface attaching learns the values: all at once, one per tick for a network that drops bursts, or not at all for one that passes on changes rather than showing the state.
+    enum class Seed : uint8_t { Burst, Paced, None };
 
     /// Attach a surface, seeded as `seed` says.
     void addSurface(ControlSurface* s, Seed seed = Seed::Burst) {
@@ -117,7 +127,7 @@ public:
         // Read the targets BEFORE seeding:
         followTargets();
         if (seed == Seed::Paced) resendPaced(s);
-        else resendTo(s);
+        else if (seed == Seed::Burst) resendTo(s);
         s->sendDisplay(display_);
     }
 
@@ -1149,7 +1159,7 @@ private:
         return true;
     }
 
-    /// Put the device into a preset's state, by applying its document.
+    /// Put the device into a preset's state, by applying its document; a look also goes to this device's groups: @xref{a-device-group}.
     bool applyPreset(const char* presetName) {
         auto* sched = Scheduler::instance();
         if (!sched) return false;
@@ -1173,6 +1183,8 @@ private:
         for (uint8_t i = 0; p && i < kCaptureCount; i++)
             if (p->roles & (1u << i)) std::snprintf(current_[i], sizeof(current_[i]), "%s", presetName);
         padsRevision_++;
+        if (p && isLookOnly(static_cast<uint8_t>(p - presets_)))   // only a look leaves the board: the rule Home Assistant follows
+            for (uint8_t s = 0; s < surfaceCount_; s++) surfaces_[s]->lookApplied(presetName);
         setSurfaceStatusf("applied %s", presetName);
         return true;
     }
@@ -1296,8 +1308,6 @@ private:
     /// What each attached surface was last SENT, so a value it already has is not echoed back.
     uint8_t sentEncoders_[kEncoderCount] = {};
 
-    /// What each surface control drives, as "Module.control", empty when unassigned.
-    static constexpr uint8_t kTargetLen = 40;
     /// The control NAMES for those assignments ("fader1Target"), built once and borrowed by the control descriptors.
     static constexpr uint8_t kTargetNameLen = 20;
     char targetNames_[kSwitchCount + kEncoderCount + kFaderCount][kTargetNameLen] = {};

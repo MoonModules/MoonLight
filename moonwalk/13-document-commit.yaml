@@ -38,21 +38,23 @@ processes:
     dependsOn: [host-build-test, document]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner initiates every event and every gate list. On "run pre-commit", run each check the change triggers, once. Report one line each, PASS, FAIL or SKIP with the reason. A long run reports each minute: gates started, the one running, a failure at once. An applicable check skipped carries a one-line reason in the commit or pull request. A clear failure is fixed and rechecks only the checks its fix touches; one that needs a decision waits.
+      The product owner initiates every event and every gate list. On "run pre-commit", `moondeck/check/run_gates.py` runs each check the change triggers, once, from this table. Report one line each, PASS, FAIL or SKIP with the reason. A long run reports each minute: gates started, the one running, a failure at once. An applicable check skipped carries a one-line reason in the commit or pull request. A clear failure is fixed and rechecks only the checks its fix touches; one that needs a decision waits.
 
       The scope freezes at the words: a request made during a run goes to the next commit. The product owner can bring one in. After a run, a change re-checks only itself on the product owner's go, a cosmetic one rides along, and "restart" reruns everything. `test_tooling --ui` is never a gate.
     steps:
       - id: reviewer
         say: Have the Reviewer read the staged diff.
         actor: agent
-        when: { manual: "First, on about ten files across areas or on request: every check waits until its findings are processed." }
+        when: { manual: "Per finished step of a plan while it is written, so the review at commit reads only the last step; beside the first gate run, on about ten files across areas or on request." }
         detail: |
-          A review finding changes the diff, and a check run before it would have to run again: the Reviewer first is what lets every check run once. Its findings are processed as [Process a review finding](moonwalk.md#review-finding) says.
+          The Reviewer uses no local core, so `run_gates.py` runs while it reads; its findings and the run's then go in one batch and one rerun, which the cache keeps to the gates whose inputs moved. A review reads a frozen diff, so a file restaged while it reads is read again. Its findings are processed as [Process a review finding](moonwalk.md#review-finding) says.
       - id: specs
+        ci: true
         section: Every change
         say: Check the specs.
         when: { run: { script: moondeck/check/check_specs.py } }
       - id: prose
+        ci: true
         say: Check the prose of the added lines.
         when: { run: { script: moondeck/check/check_prose.py } }
         detail: |
@@ -91,17 +93,27 @@ processes:
         detail: |
           Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
 
-          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line from `collect_kpi.py --commit`. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line the KPI gate wrote, read from the last gate run's log (`build/gates/run-<time>/commit-code__kpi.log`), not measured again; a later source change reruns the gate. A `CACHED` KPI writes no log: use the last passing run's. Without a KPI gate the lines go. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
   - id: commit-docs
     title: The docs checks
     actor: contributor
     goal: Every documentation check the change triggers passed.
     steps:
+      - id: help
+        say: Regenerate the app's help.
+        given: [{ changed: [src/**, "test/**/unit_*.cpp", "docs/moonmodules/**", "docs/assets/**", moondeck/docs/gen_help.py] }]
+        when: { run: { script: moondeck/docs/gen_help.py } }
+        generates: docs/help/help.json
+        detail: |
+          Once per gate run, before any other gate, so every header edit of the round lands in it and the docs build and docgen read the help the source says.
       - id: docs
+        needs: [help]
         say: Build the docs, strict.
         given: [{ changed: ["**/*.md", "docs/**", mkdocs.yml, moonwalk/**, "moondeck/docs/**"] }]
         when: { run: { script: moondeck/docs/build_docs.py, args: "--strict" } }
       - id: docgen
+        ci: true
+        needs: [help]
         say: Check the headers' documentation.
         given: [{ changed: ["**/*.md", src/**, test/**, moonwalk/**, moondeck/docs/gen_moonwalk.py] }]
         when: { run: { script: moondeck/check/check_docgen.py } }
@@ -113,6 +125,7 @@ processes:
         detail: |
           The cards are the backlog's home and `docs/work/backlog_mirror/` their generated copy, so the repository versions every card edit. A FAIL means a card changed since the last render or a file was edited by hand: run the script without `--check` and stage what it writes. Without a network it skips.
       - id: taglines
+        ci: true
         say: Check the front pages agree on the platforms.
         given: [{ changed: [README.md, CLAUDE.md] }]
         when: { run: { script: moondeck/check/check_taglines.py } }
@@ -121,56 +134,70 @@ processes:
     actor: contributor
     goal: Every code check the change triggers passed, and the repo's health is recorded.
     steps:
-      - id: code
-        say: Check the code's boundaries and complexity.
-        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
-        when: { run: { script: moondeck/check/check_code.py } }
-        detail: |
-          A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
       - id: build-host
+        ci: true
+        cores: all
+        outputs: ["{host_build}/CMakeCache.txt"]
         say: Build the host firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_host.py } }
         detail: |
           Warning-free beyond the two kinds the code check counts, a stack frame over 512 bytes and a blocking call on the render path: [why they stay warnings](../moondeck/MoonDeck.md#check_code).
+      - id: code
+        ci: true
+        needs: [build-host]
+        say: Check the code's boundaries and complexity.
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        when: { run: { script: moondeck/check/check_code.py } }
+        detail: |
+          It runs after build-host and reads the warnings that build saved beside each object, so the tree compiles once per run. CI's findings job runs check_code without that build, so the stack-frame and blocking-call rules, which only compiler warnings show, ratchet in this local run alone, and a pre-merge run, which leaves out `ci: true` gates, does not repeat them. A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
       - id: tests
         say: Test the change on the host.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { process: host-tests }
       - id: esp32-fresh
+        cores: all
+        outputs: ["build/esp32-esp32s3-n16r8/*.bin"]
         say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/host/**"] }]
-        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8" } }
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8 --build" } }
         detail: |
-          It compares the binary against every source in a tenth of a second, and catches the edit that was never compiled. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments, since a family's variants compile the same code and differ only in their fragments; the rest wait for the release workflow. A stale one is rebuilt without asking, [one at a time](moonwalk.md#esp32-build-flash).
+          It compares the binary with every source it compiles, which catches an edit the binary lacks, and rebuilds a stale one once, then checks again, before the KPI reads its size. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments; the rest wait for the release workflow.
       - id: esp32-fresh-moonbase
+        cores: all
+        outputs: ["build/esp32-esp32/*.bin"]
         say: Check the classic firmware and MoonBase are current.
         given: [{ changed: [moonbase/**] }]
-        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32" } }
+        when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32 --build" } }
         detail: |
           The classic is the firmware that carries the MoonBase image, so a MoonBase change is checked there.
       - id: no-jit
+        cores: all
         say: Build the host without the MoonLive backend.
         given: [{ changed: ["src/*/moonlive/**"] }]
         when: { run: { script: moondeck/build/build_host.py, args: "--no-jit" } }
         detail: |
           It catches a helper left unused outside its guard, fatal under GCC while clang stays silent.
       - id: kpi
+        cores: all
+        needs: [host-tests/test, host-tests/scenarios, esp32-fresh, esp32-fresh-moonbase, code]
         say: Record the repo's health.
-        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
+        given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**", docs/reference/metrics/code.json] }]
         when: { run: { script: moondeck/check/collect_kpi.py, args: "--commit" } }
         detail: |
-          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message. It runs when the code changes, since its timings drift with the host.
+          Flash and DRAM per target, binary size, the tick matrix, line counts and complexity: its diff belongs in the commit and its deltas in the message, the code account read from the counts the code check's run wrote, so it runs after it. It runs when the code changes, since every commit is measured (CLAUDE.md principle 4) and its timings drift with the host; it holds every core, so no gate beside it skews a timing.
   - id: commit-web
     title: The web page checks
     actor: contributor
     goal: Every web page check the change triggers passed.
     steps:
       - id: js
+        ci: true
         say: Run the JavaScript tests.
         given: [{ changed: [src/ui/**, mooninstaller/**, "docs/assets/*.js", test/js/**] }]
         when: { run: { script: moondeck/test/test_tooling.py, args: "--js" } }
       - id: devices
+        ci: true
         say: Check the installer's device catalog.
         given: [{ changed: [src/ui/**, mooninstaller/**] }]
         when: { run: { script: moondeck/check/check_devices.py } }
@@ -180,10 +207,13 @@ processes:
     goal: Every script check the change triggers passed.
     steps:
       - id: python
+        ci: true
+        cores: all
         say: Run the Python tests.
         given: [{ changed: [moondeck/**, moonlive/**, moonwalk/**, test/python/**, "docs/moonmodules/**/*.md"] }]
         when: { run: { script: moondeck/test/test_tooling.py, args: "--python" } }
       - id: firmwares
+        ci: true
         say: Check the firmware list.
         given: [{ changed: [moondeck/**, moonlive/**] }]
         when: { run: { script: moondeck/check/check_firmwares.py } }

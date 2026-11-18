@@ -1022,18 +1022,19 @@ def test_a_control_guide_repeating_its_line_is_reported_and_one_adding_to_it_is_
 def test_the_app_help_fits_a_glance_per_control_per_section_and_in_total():
     """A control's longer help shows inline under it, a guide section under the arrow: each is capped in words, and so is the whole, so tables and steps go to a how-to page."""
     long = " ".join(["word"] * 70)
+    longer = " ".join(["word"] * 130)   # past a control's cap, which leaves room for a control that is a whole view, as Discovery's map
     help_file = {"catalogs": {"light/demo.md": {}},
                  "modules": {"DemoDriver": {"doc": "light/demo.md#demo", "source": "https://x/blob/main/src/light/DemoDriver.h",
-                                            "summary": "", "controls": {"pins": {"line": "The pins.", "more": long}},
+                                            "summary": "", "controls": {"pins": {"line": "The pins.", "more": longer}},
                                             "guide": [{"title": "Wiring", "text": long}, {"title": "Tips", "text": "Short."}]},
                              "OtherModule": {"doc": "core/other.md#other", "controls": {"x": {"more": long}}}}}
     import check_docgen
     found = check_docgen._help_size(help_file)
-    assert ("src/light/DemoDriver.h", "app help too long: `pins`'s guide 70 words > 40") in found
+    assert ("src/light/DemoDriver.h", f"app help too long: `pins`'s guide 130 words > {check_docgen.MAX_MORE_WORDS}") in found
     assert ("src/light/DemoDriver.h", "app help too long: guide 'Wiring' 70 words > 60") in found
-    assert not any("Tips" in msg or "> 250" in msg for _, msg in found)   # 141 words in all
+    assert not any("Tips" in msg or "> 250" in msg for _, msg in found)   # 201 words in all
     help_file["modules"]["DemoDriver"]["summary"] = long + " " + long
-    assert any(msg.startswith("app help too long: 281 words > 250") for _, msg in check_docgen._help_size(help_file))
+    assert any(msg.startswith("app help too long: 341 words > 250") for _, msg in check_docgen._help_size(help_file))
     assert not any("other" in src for src, _ in found)   # a page still written by hand is not measured
     help_file["modules"]["DemoDriver"]["summary"] = ""
     help_file["modules"]["DemoDriver"]["guide"] = [{"title": "Wiring", "text": long}, {"title": "Wiring", "text": long}]
@@ -1230,3 +1231,16 @@ def test_missing_stage_table_markers_are_a_finding_that_says_so(monkeypatch, tmp
     findings = _stage_table_findings(monkeypatch, tmp_path, "a CLAUDE.md without the markers\n")
     assert len(findings) == 1 and findings[0][0] == "CLAUDE.md"
     assert "markers are missing" in findings[0][1]
+
+
+def test_a_git_failure_is_an_incomplete_check_and_not_a_file_that_is_not_ignored(monkeypatch):
+    import subprocess
+
+    import check_docgen
+    for status, expected in ((0, False), (1, True)):
+        monkeypatch.setattr(check_docgen.subprocess, "run", lambda cmd, status=status, **k: subprocess.CompletedProcess(cmd, status))
+        assert check_docgen._covered("src/core/Thing.h") is expected   # 0 means git ignores it, 1 that it does not
+    monkeypatch.setattr(check_docgen.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 128))
+    import pytest
+    with pytest.raises(RuntimeError, match="check-ignore failed"):
+        check_docgen._covered("src/core/Thing.h")

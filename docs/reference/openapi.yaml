@@ -818,8 +818,12 @@ components:
           type: string
           enum: [self, container, manual]
           description: "How it takes a new version: it installs one itself (a board, or a host whose program sits in a folder it can write), its container is replaced from outside, or someone installs it by hand (a program in a folder it cannot write)."
+        moonbaseMismatch: { type: string, description: "MoonBase's version, present only while it differs from the app's, so a map offers the matching one." }
+        coprocessorMismatch: { type: string, description: "The WiFi coprocessor's firmware line, present only while it differs from what the app needs." }
         mac: { type: string, description: "The MAC address, the device identity." }
+        name: { type: string, description: "The device name, which every network name derives from." }
         board: { type: string, description: "The board model tooling set, empty until set." }
+        mode: { type: integer, enum: [0, 1, 2], description: "How much of the UI its reader sees: 0 user, 1 expert, 2 developer, which also puts the device on the latest update channel." }
         chip: { type: string }
         rssi: { type: integer, description: "The WiFi signal in dBm, 0 off WiFi." }
         outputs:

@@ -530,8 +530,12 @@ struct HostWorker {
 };
 }  // namespace
 
+static std::atomic<bool> testSpawnFails{false};
+void setTestSpawnFails(bool fail) { testSpawnFails.store(fail, std::memory_order_relaxed); }
+
 bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* user,
                      size_t /*stackBytes*/, uint8_t /*priority*/, int /*core*/) {
+    if (testSpawnFails.load(std::memory_order_relaxed)) return false;
     auto* w = new (std::nothrow) HostWorker();
     if (!w) return false;
     t.impl = w;
@@ -2459,6 +2463,16 @@ bool UdpSocket::open() {
 static std::atomic<bool> testBindFails{false};
 void setTestBindFails(bool fail) { testBindFails.store(fail, std::memory_order_relaxed); }
 
+// The bind both binds share, once the address options are set: one local address, or every interface.
+static bool bindAddress(decltype(sock(0)) fd, uint16_t port, const uint8_t localIp[4]) {   // SOCKET on Windows, int elsewhere
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
+    else addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    return ::bind(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
+}
+
 bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     if (fd_ < 0) return false;
     if (testBindFails.load(std::memory_order_relaxed)) return false;
@@ -2468,12 +2482,21 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     ::setsockopt(sock(fd_), SOL_SOCKET, SO_REUSEADDR,
                  reinterpret_cast<const char*>(&reuse), sizeof(reuse));
 #endif
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    if (localIp) std::memcpy(&addr.sin_addr.s_addr, localIp, 4);   // octets are network order
-    else addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    return ::bind(sock(fd_), reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
+    return bindAddress(sock(fd_), port, localIp);
+}
+
+bool UdpSocket::bindShared(uint16_t port) {
+    if (fd_ < 0) return false;
+    if (testBindFails.load(std::memory_order_relaxed)) return false;
+    int reuse = 1;
+    // Every listener sets it, so they share the port: on Windows the address option already means sharing, elsewhere the port option does.
+#ifdef _WIN32
+    ::setsockopt(sock(fd_), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#else
+    ::setsockopt(sock(fd_), SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    ::setsockopt(sock(fd_), SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+#endif
+    return bindAddress(sock(fd_), port, nullptr);
 }
 
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {

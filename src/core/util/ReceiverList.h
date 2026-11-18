@@ -13,9 +13,7 @@ namespace mm {
 ///
 /// ## Why a list rather than one receiver per service
 ///
-/// This sits beside `parsePinList`, the GPIO CSV parser, as the same shape of thing: a human-typed list of hardware endpoints.
-/// Art-Net 4 requires ArtDmx to be unicast to the node that owns each universe, so driving several receivers means several entries.
-/// One control keeps the common case, a row of identical tubes on consecutive addresses, to a single field.
+/// Art-Net 4 unicasts ArtDmx to the node owning each universe, so several receivers mean several entries; one field holds a row of tubes on consecutive addresses, as `parsePinList` holds a list of GPIOs.
 ///
 /// ## The syntaxes, which mix freely
 ///
@@ -25,19 +23,29 @@ namespace mm {
 /// | `192.168.1.60,61,62,65` | after one full dotted quad, a bare number is the next receiver on the same `/24` |
 /// | `192.168.1.60, 10.0.0.5` | explicit full quads, across any subnets |
 /// | `panel-01.local, panel-02.lan` | names, resolved in the background: `.local` by mDNS, anything else by DNS |
+/// | `Stage` | a device group's name: each of its members at its current address, this device left out |
 ///
 /// An entry with a letter in it is a name, and anything else must parse as numbers, so a mistyped address is refused rather than taken for a name.
-/// A name is kept as its place in the text rather than copied, so a list of 32 receivers costs 192 bytes.
 ///
-/// The parser returns null on success, or a static error literal the caller hands straight to `setStatus`.
+/// ## Parsed, then resolved
+///
+/// The parser reads the syntax and returns null, or a static error literal the caller hands straight to `setStatus`; a name is kept as its place in the text, so 32 receivers cost 224 bytes.
+///
+/// `resolveReceivers` in NameResolver.h then turns a name into its address and a group's name into its members.
 
-/// One receiver: a literal address, or a name and the address it last resolved to.
+/// The most receivers one list holds, every service's the same: a device group of up to 32 members, or a wall of tubes, not a subnet scan.
+inline constexpr uint8_t kMaxReceivers = 32;
+
+/// One receiver: a literal address, a name and the address it last resolved to, or a device group's member: @xref{parsed-then-resolved}.
 struct Receiver {
-    uint8_t ip[4] = {};    ///< the address; for a name, 0.0.0.0 until it first resolves
+    uint8_t ip[4] = {};    ///< the address; for a name, 0.0.0.0 until it first resolves, and for a member while it is unheard
     uint8_t nameAt = 0;    ///< where the name starts in the list's text
     uint8_t nameLen = 0;   ///< the name's length, 0 for a literal address
+    bool    member = false;   ///< one of a device group's members, which a group's name in the list expanded to
     /// Whether this receiver is a name to resolve.
     bool isName() const { return nameLen != 0; }
+    /// Whether this receiver has an address to send to.
+    bool hasAddress() const { return ip[0] || ip[1] || ip[2] || ip[3]; }
 };
 
 /// The longest name an entry may carry, a DNS label's own limit.

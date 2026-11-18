@@ -40,7 +40,8 @@
 // 1. Constants + module state
 // ---------------------------------------------------------------------------
 
-const API_URL = "https://api.github.com/repos/MoonModules/MoonLight/releases?per_page=10";
+const RELEASES_API = "https://api.github.com/repos/MoonModules/MoonLight/releases";
+const API_URL = `${RELEASES_API}?per_page=10`;
 const CACHE_KEY = "MoonLight.releases.v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;  // 5 min — short enough to surface new RCs, long enough to avoid rate-limit thrash
 
@@ -107,7 +108,7 @@ function makeState() {
         installRowExtras: null,
         extrasAfterInstall: false,
         moonbaseOnly: false,
-        targetChip: null,      // another device's chip ("esp32s3"), which a device's map installs onto: firmwares and devices of that chip only
+        targetChip: null,      // another device's chip ("esp32s3"), or its revision line ("esp32p4rev3"), which a device's map installs onto: firmwares and devices of it only
         releases: [],          // normalized release records from the API
         sortedReleases: [],    // releases sorted newest-first; render() fills this
         releaseIdx: 0,         // index into sortedReleases
@@ -160,37 +161,81 @@ function safeLocalSet(key, value) {
     try { localStorage.setItem(key, value); } catch (_) { /* ignore */ }
 }
 
-// Returns the parsed releases array, or null on hard failure (network, 403).
-// Stale cache is served on transient failures so the dropdown doesn't go empty.
-async function loadReleases({ bypassCache = false } = {}) {
+// The one fetch in flight, shared: the device UI asks from its update badge every second and from the map, and a cold cache must start one request.
+let releasesInFlight = null;
+// The parsed list and when it was fetched, kept in memory: the badge asks every second, and parsing the stored list each time costs a phone a
+// megabyte of JSON a second. sessionStorage is read once, on a cold start.
+let releasesMemo = null;   // { ts, data }
+
+// Returns the parsed releases array, newest first, or null on hard failure (network, 403): the one release list the picker, the update badge
+// and the network map read, each accepting a list up to `maxAgeMs` old (the badge asks every second and settles for an hour's). Stale cache is
+// served on transient failures so the dropdown doesn't go empty, and a failure is cached too, so an offline device does not ask again each second.
+async function loadReleases({ bypassCache = false, maxAgeMs = CACHE_TTL_MS } = {}) {
     if (!bypassCache) {
-        const raw = safeStorageGet(CACHE_KEY);
-        if (raw) try {
-            const obj = JSON.parse(raw);
-            if (Date.now() - obj.ts < CACHE_TTL_MS) return obj.data;
-        } catch (_) { /* corrupt cache — fall through to fetch */ }
+        if (!releasesMemo) {
+            try { releasesMemo = JSON.parse(safeStorageGet(CACHE_KEY) || "null"); } catch (_) { /* corrupt cache: fetch */ }
+        }
+        if (releasesMemo && Date.now() - releasesMemo.ts < maxAgeMs) return releasesMemo.data;
     }
+    releasesInFlight ??= fetchReleases().finally(() => { releasesInFlight = null; });
+    return releasesInFlight;
+}
+
+// The fetch behind loadReleases. When GitHub does not answer (offline, or 403 at the anonymous 60 an hour) it serves the stale list, else
+// null, and stamps either as fresh, so the next attempt waits a whole cache age; a null stays in memory, so a refresh asks again.
+async function fetchReleases() {
     try {
         const res = await fetch(API_URL);
-        if (!res.ok) {
-            // 403 = anonymous rate-limit (60/hr). Fall back to stale cache if any.
-            const raw = safeStorageGet(CACHE_KEY);
-            if (raw) try { return JSON.parse(raw).data; } catch (_) { /* fall through */ }
-            return null;
+        if (res.ok) {
+            const data = await res.json();
+            if (!latestStable(data)) await addLatestStable(data);
+            releasesMemo = { ts: Date.now(), data };
+            safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
+            return data;
         }
-        const data = await res.json();
-        safeStorageSet(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-        return data;
-    } catch (_) {
-        const raw = safeStorageGet(CACHE_KEY);
-        if (raw) try { return JSON.parse(raw).data; } catch (_) { /* fall through */ }
-        return null;
-    }
+    } catch (_) { /* no network: the stale list below */ }
+    let stale = releasesMemo?.data ?? null;
+    if (stale === null) try { stale = JSON.parse(safeStorageGet(CACHE_KEY) || "null")?.data ?? null; } catch (_) { /* corrupt: none */ }
+    releasesMemo = { ts: Date.now(), data: stale };
+    if (stale !== null) safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
+    return stale;
 }
+
+// A first page of prereleases completed with the newest stable release GitHub's /releases/latest names, so the official channel still finds
+// it; a list it cannot complete stays as it is.
+async function addLatestStable(data) {
+    try {
+        const res = await fetch(`${RELEASES_API}/latest`);
+        if (res.ok) data.push(await res.json());
+    } catch (_) { /* no network: the first page alone */ }
+}
+
+// The newest published, stable release, what GitHub's /releases/latest answers, from a list newest first that holds it (addLatestStable).
+const latestStable = (releases) => (releases || []).find(r => !r.prerelease && !r.draft) || null;
+// The release tagged `tag`, such as the moving `latest`, or null.
+const releaseByTag = (releases, tag) => (releases || []).find(r => r.tag_name === tag) || null;
 
 // ---------------------------------------------------------------------------
 // 3. Asset parsing
 // ---------------------------------------------------------------------------
+
+// The release assets' names, one home for each: an app image for a board and a host alike, MoonBase per chip, the migration image per chip.
+const firmwareAssetName = (firmware, version) => `firmware-${firmware}-v${version}.bin`;
+const moonbaseAssetName = (chip) => `shared-moonbase-${chip}.bin`;
+const migrateAssetName = (chip) => `shared-migrate-${chip}.bin`;
+
+// The asset of `rel` named `name`: its address and the SHA-256 GitHub names for it, both null when the release carries none.
+function releaseAsset(rel, name) {
+    const asset = (rel?.assets || []).find(a => a.name === name);
+    return { url: asset?.browser_download_url ?? null, sha256: asset?.digest?.replace(/^sha256:/, "") ?? null };
+}
+
+// A release asset's copy on the web installer's site under `base`, which serves it cross-origin where GitHub's own download does not; any
+// other address as given.
+function mirrorUrl(url, base) {
+    const m = /^https:\/\/github\.com\/MoonModules\/MoonLight\/releases\/download\/([^/]+)\/([^/]+)$/.exec(url || "");
+    return m ? `${base}releases/${m[1]}/${m[2]}` : url;
+}
 
 // Each release's `assets[]` contains both manifest-<firmware>.json and
 // firmware-<firmware>-v<ver>(.bin|-bootloader.bin|-partition-table.bin|-ota-data.bin).
@@ -316,11 +361,14 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey, downloadKey = hostKe
     return strip(ownFirmwareKey) === strip(candidateFirmwareKey);
 }
 
-// Whether the picker offers `firmware` to a board: its MoonBase key's chip exactly; a target chip's firmwares, narrowed by the variant the board runs when known, since another variant of the chip can panic on its PSRAM; else the variants compatible with its own.
+// Whether the picker offers `firmware` to a board: its MoonBase key's chip exactly; a target chip's firmwares, or a revision line's when the target
+// names one, since a P4 app built for another revision does not boot, narrowed by the variant the board runs when known, since another variant of
+// the chip can panic on its PSRAM; else the variants compatible with its own.
 function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey, downloadKey }, firmware) {
     if (moonbaseOnly) return firmware === ownFirmwareKey;
     const target = downloadKey || hostKeyForThisHost();
-    if (targetChip) return firmwareChip(firmware) === targetChip && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware, target));
+    const onTarget = /rev\d+$/.test(targetChip || "") ? firmware.split("-")[0] === targetChip : firmwareChip(firmware) === targetChip;
+    if (targetChip) return onTarget && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware, target));
     return isCompatible(ownFirmwareKey, firmware, target);
 }
 
@@ -332,6 +380,12 @@ function firmwareChip(firmware) {
 // A catalog chip family as firmware keys spell it: "ESP32-S3" is esp32s3.
 function chipKey(family) {
     return String(family || "").toLowerCase().replace(/-/g, "");
+}
+
+// The other way: a chip key as the catalog and esptool name the family, esp32s3 is "ESP32-S3", esp32 the classic "ESP32"; another key as given.
+function chipFamilyOf(key) {
+    const k = String(key || "");
+    return k === "esp32" ? "ESP32" : /^esp32[a-z]/.test(k) ? `ESP32-${k.slice(5).toUpperCase()}` : k;
 }
 
 // The host builds of the firmware registry (moondeck/build/firmwares.py), written here by
@@ -844,7 +898,8 @@ function render(state) {
 // Pure helpers exported for unit testing (test/js/installer-firmware-merge.test.mjs).
 // They take data and return data — no DOM, no fetch — so a node test can exercise
 // the real functions rather than a re-implemented copy.
-export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, offersFirmware, releaseLabel, firmwareChip, chipKey };
+export { parseFirmwaresFromAssets, mergeFirmwares, isCompatible, offersFirmware, releaseLabel, firmwareChip, chipKey, chipFamilyOf,
+         loadReleases, latestStable, releaseByTag, releaseAsset, firmwareAssetName, moonbaseAssetName, migrateAssetName, mirrorUrl };
 
 export const installPicker = {
     /**
@@ -892,7 +947,7 @@ export const installPicker = {
      *   uses this for the "Erase chip first" checkbox; on-device OTA omits
      *   it. The picker re-attaches the SAME node on every render(), so
      *   listeners the caller wired on the element keep firing.
-     * @param {string} [opts.targetChip] - another device's chip ("esp32s3"), for a device's
+     * @param {string} [opts.targetChip] - another device's chip ("esp32s3") or revision line ("esp32p4rev3"), for a device's
      *   map installing onto it: the firmware and device lists hold that chip's only.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection
      *   helpers ({ loadDevices, fillDeviceOptions, applyDetectedChip }) from
@@ -945,7 +1000,7 @@ export const installPicker = {
             loadReleases({ bypassCache: bypass }),
             (enableDevicePicker && deviceSupport) ? deviceSupport.loadDevices() : Promise.resolve([]),
         ]);
-        state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === targetChip) : devices;
+        state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === firmwareChip(targetChip)) : devices;
         _lastState = state;
         // Honour a mode the host chose while the release fetch was still in flight.
         if (_pendingHostMode !== null) {

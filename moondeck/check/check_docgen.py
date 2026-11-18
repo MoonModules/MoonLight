@@ -20,6 +20,7 @@ not only staying quiet on one that obeys.
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -120,7 +121,7 @@ _HELP_LINE_RULE = "help line missing"
 _TAG_GROUP_RULE = "tag emoji on one module"
 # A declaration's comment is its `///`, which the help, the docs and the IDE hover read; a `//` above it reaches none of them, so a note there is either the declaration's doc or a line of the body.
 _NOTE_ON_DECL_RULE = "// on a declaration"
-MAX_MORE_WORDS = 40      # a control's longer help, its `@guide` section titled with the control
+MAX_MORE_WORDS = 120     # a control's longer help, its `@guide` section titled with the control: room for a control that is a whole view, as Discovery's map with its legend
 MAX_GUIDE_WORDS = 60     # any other `@guide` section
 MAX_HELP_WORDS = 250     # the summary, the guide and every control's longer help together
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.
@@ -214,6 +215,11 @@ def _is_structural(body: str) -> bool:
 # Every rule this check emits, longest first so "details table cell" wins over
 # "details table". The FULL name, not a first word: "no image" and "one control" each
 # truncate to a word that names nothing, and the two details-table rules share theirs.
+# The rules `--files` cannot see, since they read help.json, the stage files or every header's @xref: the full run alone reports them.
+_WHOLE_TREE_RULES = {_STALE_HELP_RULE, _RESTATES_RULE, _GUIDE_REPEATS_RULE, _HELP_SIZE_RULE, _GUIDE_NAMES_CONTROL_RULE, _HELP_LINE_RULE,
+                     _TAG_GROUP_RULE, "one control", "no image", "image is", _UNREFERENCED_RULE, _PROCESS_SIZE_RULE, _PROCESS_REPEAT_RULE,
+                     _MOONWALK_BUILD_RULE, _STALE_STAGE_TABLE_RULE}
+
 _RULE_NAMES = (
     "public function has no", "public variable has no",
     "file opens with //", "file lead missing", "@technical on a member", "@xref",
@@ -300,7 +306,6 @@ def _headers():
 
 def _tracked_files():
     """The repo's tracked paths, or None outside a git checkout, where every file on disk counts."""
-    import subprocess
     r = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     return set(r.stdout.split("\n")) if r.returncode == 0 else None
 
@@ -1266,9 +1271,47 @@ def _ratchet(found) -> list:
     return ratchet.risen(base, _counts(found))
 
 
+def _covered(rel: str) -> bool:
+    """Whether the header rules cover this file by its place and kind, tracked or untracked: a generated header is the one git ignores."""
+    if rel.startswith(HEADER_EXEMPT) or not rel.startswith(tuple(r + "/" for r in HEADER_ROOTS)):
+        return False
+    if not any(Path(rel).match(s) for s in HEADER_SUFFIXES):
+        return False
+    status = subprocess.run(["git", "check-ignore", "-q", rel], cwd=ROOT, check=False).returncode
+    if status not in (0, 1):   # 0 ignored, 1 not ignored; any other is git failing, which leaves this file unjudged
+        raise RuntimeError(f"git check-ignore failed ({status}) for {rel}")
+    return status == 1
+
+
+def file_findings(paths) -> list:
+    """The per-file rules on `paths` alone, a file written a moment ago included: a header's documentation rules, a page's hard wraps; the whole-tree rules need the full run."""
+    out = []
+    for name in paths:
+        p = Path(name).resolve()
+        try:
+            rel = p.relative_to(ROOT).as_posix()
+        except ValueError:
+            continue
+        if not p.is_file():
+            continue
+        if _covered(rel):
+            out.extend(_header_rules(rel, p.read_text(encoding="utf-8")))
+        elif rel.startswith("docs/") and rel.endswith(".md") and not rel.startswith("docs/work/"):
+            out.extend(_md_hard_wraps(rel.removeprefix("docs/"), p.read_text(encoding="utf-8")))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.parse_args()
+    ap.add_argument("--files", nargs="+", help="Report only these files' findings from the per-file rules, without recording counts: "
+                                               "the write-time hook's view and a commit round's quick look.")
+    args = ap.parse_args()
+    if args.files:
+        found = file_findings(args.files)
+        errors = [f for f in found if _blocks(f[0], f[1])]
+        if found:
+            _report(found, f"Docgen, {len(args.files)} file(s): {len(errors)} error(s), {len(found) - len(errors)} warning(s).")
+        return 1 if errors else 0
 
     try:
         fresh, measured = _help_freshness(), True
@@ -1307,7 +1350,7 @@ def main() -> int:
     if risen:
         print("ROSE against the committed counts. These only shrink:")
         for rule, was, now in risen:
-            print(f"  {rule}: {was} -> {now}")
+            print(ratchet.rise_line(rule, was, now, {_rule_label(n) for n in _WHOLE_TREE_RULES}))
         print("  Fix them, or say in the commit why the rule itself changed.\n")
     if errors:
         _report(errors, "ERRORS. These fail the gate.")

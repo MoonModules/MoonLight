@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 import test_runs  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck"))
+import _suite_output  # noqa: E402
 
 
 def _host_build_dir() -> Path:
@@ -94,6 +96,7 @@ def main():
     # full ~11k-line output buffers internally and only appears at exit.
     # The data folder ctest pins too: from the build tree the default would be the developer's own settings, which a test must leave untouched.
     env = dict(os.environ, MM_DATA_DIR=str(build_dir / "test" / "fs-root"))
+    key = _suite_output.fingerprint(test_exe)   # the binary as this run starts, before anything can rebuild it
     proc = subprocess.Popen(
         cmd, cwd=build_dir, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -103,14 +106,21 @@ def main():
     stop = threading.Event()
     follower = threading.Thread(target=test_runs.follow_console, args=(junit, stop, sys.stdout), daemon=True)
     follower.start()
+    output = []
     for line in proc.stdout:
         sys.stdout.write(line)
         sys.stdout.flush()
+        output.append(line)
     code = proc.wait()
     stop.set()
     follower.join()
+    console = ""
     if junit.exists():
-        test_runs.record(test_runs.doctest_runs(test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))[1]))   # each case's last result, with the tree it saw
+        console, xml = test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))
+        test_runs.record(test_runs.doctest_runs(xml))   # each case's last result, with the tree it saw
+    kept = "".join(output) + console   # the console text, with the case count, is in the out file: the KPI reads it instead of running the suite again
+    if not filtered:
+        _suite_output.keep_complete(test_exe, kept, key, "test cases:")
     sys.exit(code)
 
 

@@ -14,6 +14,7 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/DevicesModule.h"
+#include "core/system/FirmwareUpdateModule.h"   // a MoonBase behind the app, which this device's row names
 #include "core/util/JsonSink.h"
 #include "fake_light_output.h"   // a light output, whose drivers this device's row names
 #include "platform/platform.h"
@@ -115,6 +116,25 @@ TEST_CASE("DevicesModule: this device's row names what drives its lights, while 
     CHECK(std::strstr(self.c_str(), "\"outputs\":[{\"driver\":\"Hub75Driver\",\"lights\":4096}]") != nullptr);
     CHECK(std::strstr(detailFor(*rig.dev, "192.0.2.50").c_str(), "\"outputs\"") == nullptr);   // a peer's row carries its own, from its own list
     lights.outputSeat_.vacate();
+}
+
+// A peer's map marks a node whose MoonBase is behind its app, from the node's own row, so the row carries the flag exactly while it is behind.
+TEST_CASE("DevicesModule: this device's row names a MoonBase behind the app, and its mode, for a peer's map to mark") {
+    std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
+    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr); } } noMoonBaseAfter;
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
+    Rig rig;
+    auto* fw = new mm::FirmwareUpdateModule();
+    fw->setTypeName("FirmwareUpdateModule");   // the factory key the row finds it by
+    rig.scheduler.addModule(fw);
+    fw->defineControls();
+    fw->setup();
+    const std::string behind = detailFor(*rig.dev, "192.0.2.1");
+    CHECK(std::strstr(behind.c_str(), "\"moonbaseMismatch\":\"0.0.1\"") != nullptr);
+    CHECK(std::strstr(behind.c_str(), "\"mode\":0") != nullptr);   // no System module: the user level
+    mm::platform::setTestMoonBase(nullptr, nullptr);
+    fw->setup();
+    CHECK(std::strstr(detailFor(*rig.dev, "192.0.2.1").c_str(), "moonbaseMismatch") == nullptr);
 }
 
 TEST_CASE("DevicesModule: a peer a module names, such as Home Assistant from its User-Agent, is listed by that name") {

@@ -12,8 +12,9 @@
 ///
 /// @technical
 ///
-/// This follows the same convention the Art-Net and audio-sync packets do, pinned by a golden byte vector so it cannot drift from the spec.
-/// The OSC module receives with it, and nothing sends yet.
+/// It follows the convention of the Art-Net and audio-sync packets, pinned by a golden byte vector so it holds to the spec.
+///
+/// The OSC module receives and sends its feedback with it; a device group's definition travels as one of its messages, written by Writer and read by Reader.
 ///
 /// ## The message layout
 ///
@@ -25,32 +26,27 @@
 /// | type tag string | a string starting with a comma, one character per argument |
 /// | arguments | in tag order, each aligned to four bytes |
 ///
-/// Two type tags are read, a 32-bit integer and a 32-bit float.
-/// The spec also has strings, blobs and four tags carrying no payload at all; a control value is a number, so the rest are skipped rather than rejected.
-/// A controller that appends a label must not make the whole message unusable.
+/// A control message reads two type tags, a 32-bit integer and a 32-bit float; Reader reads strings and 64-bit integers too, for a message of several arguments.
+///
+/// A control value is a number, so a control message skips the spec's other tags (strings, blobs, the four with no payload): a controller that appends a label keeps its message usable.
 ///
 /// ## What each value form means
 ///
-/// Applications overwhelmingly send a float between zero and one, while hardware bridges usually send an integer in the target's own range.
-/// Both are accepted and clamped rather than rejected.
-/// A controller sending a narrower range must not appear dead, and a float slightly past one is a rounding artifact rather than an error.
+/// Applications mostly send a float between zero and one, hardware bridges an integer in the target's range; both are accepted and clamped, so a narrower range still moves the control and a float past one rounds.
 ///
-/// The boolean reading is separate from the byte one, because scaling to a byte rounds a small float to zero.
-/// A tiny value is not off; it is a controller sending a range where a switch wanted a flag.
+/// The boolean reading is apart from the byte one, since scaling to a byte rounds a small float to zero: a tiny value is a controller sending a range where a switch wanted a flag, and it reads as on.
 ///
-/// The encoder is deliberately the only one, and emits a float: every value we send is a number, and that is what applications expect.
-/// The parser accepts an integer too, because bridges send those, but nothing forces us to emit one.
+/// A control's message goes out as a float, what applications expect; the parser takes an integer too, because bridges send those.
 ///
 /// ## Parsing is the security surface
 ///
-/// This reads an unauthenticated datagram off the LAN, so every read is length-checked against the buffer end and nothing is allocated.
-/// A malformed packet returns false and never reads past the length it was given.
+/// It reads an unauthenticated datagram off the LAN, so every read is length-checked against the buffer end, works in the caller's buffer alone, and a malformed packet returns false having read only its own length.
 ///
-/// Bundles are recognized and rejected: controllers send plain messages, and a bundle is a timed batch we have no use for yet.
+/// Bundles are recognized and refused: controllers send plain messages, and a bundle is a timed batch.
 ///
-/// One guard needs naming. A padded string length overshoots whenever the terminator sits in the last few bytes of the buffer, so it must be tested against what remains as well as against zero.
-/// Subtracting an overshoot from an unsigned remaining count wraps it to a huge number.
-/// Every later size guard then passes, and the next argument is read off the end of the datagram.
+/// One guard needs naming: a padded string length overshoots when the terminator sits in the buffer's last bytes, so it is tested against what remains as well as against zero.
+///
+/// An overshoot subtracted from an unsigned remaining count wraps it to a huge number, every later size guard then passes, and the next argument is read off the end of the datagram.
 
 namespace mm::osc {
 
@@ -219,5 +215,86 @@ inline uint8_t toByte(const Message& m) {
     }
     return static_cast<uint8_t>(m.i <= 0 ? 0 : (m.i >= 255 ? 255 : m.i));
 }
+
+/// A message of several arguments, strings and 32- and 64-bit integers (OSC 1.0's `s`, `i` and `h`), its type tags given up front; `size()` is 0 once anything did not fit.
+class Writer {
+public:
+    /// Begin a message to `address` whose arguments follow `tags`, such as ",shi".
+    Writer(uint8_t* out, size_t cap, const char* address, const char* tags) : out_(out), cap_(cap) {
+        str(address);
+        str(tags);
+    }
+    /// A string argument.
+    void str(const char* s) {
+        const size_t n = std::strlen(s), padded = pad4(n + 1);
+        if (!room(padded)) return;
+        std::memset(out_ + len_, 0, padded);
+        std::memcpy(out_ + len_, s, n);
+        len_ += padded;
+    }
+    /// A 32-bit integer argument.
+    void i32(uint32_t v) { word(v); }
+    /// A 64-bit integer argument, high word first.
+    void i64(uint64_t v) { word(static_cast<uint32_t>(v >> 32)); word(static_cast<uint32_t>(v)); }
+    /// The message's length, or 0 when it overflowed its buffer.
+    size_t size() const { return ok_ ? len_ : 0; }
+
+private:
+    bool room(size_t n) { if (!ok_ || len_ + n > cap_) ok_ = false; return ok_; }
+    void word(uint32_t v) {
+        if (!room(4)) return;
+        for (int b = 0; b < 4; b++) out_[len_ + b] = static_cast<uint8_t>(v >> (24 - 8 * b));
+        len_ += 4;
+    }
+    uint8_t* out_;
+    size_t cap_, len_ = 0;
+    bool ok_ = true;
+};
+
+/// The arguments of one message, read in order against its type tags, every read length-checked: @xref{parsing-is-the-security-surface}.
+class Reader {
+public:
+    /// Open the message in `pkt`; `ok()` is false unless it addresses `address` and its tags are readable.
+    Reader(const uint8_t* pkt, size_t len, const char* address) : p_(pkt), end_(pkt + len) {
+        const size_t a = stringLen(p_, len);
+        if (!a || a > len || std::strcmp(reinterpret_cast<const char*>(p_), address) != 0) { ok_ = false; return; }
+        p_ += a;
+        const size_t t = stringLen(p_, remaining());
+        if (!t || t > remaining() || p_[0] != ',') { ok_ = false; return; }   // a string's padding past the end is a truncated datagram
+        tags_ = reinterpret_cast<const char*>(p_) + 1;
+        p_ += t;
+    }
+    /// Whether every read so far found its tag and its bytes.
+    bool ok() const { return ok_; }
+    /// Whether another argument follows.
+    bool more() const { return ok_ && *tags_; }
+    /// The next argument as a string, or "" when it is none.
+    const char* str() {
+        if (!take('s')) return "";
+        const size_t n = stringLen(p_, remaining());
+        if (!n || n > remaining()) { ok_ = false; return ""; }
+        const char* s = reinterpret_cast<const char*>(p_);
+        p_ += n;
+        return s;
+    }
+    /// The next argument as a 32-bit integer, or 0 when it is none.
+    uint32_t i32() { return take('i') && fits(4) ? word() : 0; }
+    /// The next argument as a 64-bit integer, or 0 when it is none.
+    uint64_t i64() {
+        if (!take('h') || !fits(8)) return 0;
+        const uint64_t hi = word();
+        return (hi << 32) | word();
+    }
+
+private:
+    bool take(char tag) { if (!ok_ || *tags_ != tag) { ok_ = false; return false; } tags_++; return true; }
+    size_t remaining() const { return static_cast<size_t>(end_ - p_); }
+    bool fits(size_t n) { if (remaining() < n) ok_ = false; return ok_; }
+    uint32_t word() { const uint32_t v = static_cast<uint32_t>(beInt32(p_)); p_ += 4; return v; }
+    const uint8_t* p_;
+    const uint8_t* end_;
+    const char* tags_ = "";
+    bool ok_ = true;
+};
 
 } // namespace mm::osc

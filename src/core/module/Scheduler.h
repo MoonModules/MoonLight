@@ -79,8 +79,18 @@ public:
         }
         requestPrepareTree();
     }
+    /// Ask for one module's own prepare at the next frame boundary, its children left as they are, safe from any task; a full set of slots widens to its subtree.
+    void requestPrepareSelf(MoonModule* m) MM_NONBLOCKING {
+        for (auto& slot : prepareSelfPending_) {
+            MoonModule* expected = nullptr;
+            if (slot.compare_exchange_strong(expected, m, std::memory_order_relaxed) || expected == m) return;
+        }
+        requestPrepare(m);
+    }
     /// Rebuild these subtrees now, then let every top module react once, so a reader of what they reshaped re-prepares itself; the whole tree when one has left it.
     void prepareSubtrees(MoonModule* const* scopes, uint8_t count);
+    /// Whether `m` is in the tree, so a request made before a removal reaches no freed module.
+    bool inTree(const MoonModule* m) const;
     /// The same for one subtree.
     void prepareSubtree(MoonModule* scope) { prepareSubtrees(&scope, 1); }
     /// Run what was asked for since the last frame, at the frame boundary: the live documents, then the rebuild of the tree or the subtrees.
@@ -164,6 +174,8 @@ private:
     static constexpr uint8_t kPendingScopes = 4;
     /// Pending subtree rebuilds, null where free.
     std::array<std::atomic<MoonModule*>, kPendingScopes> preparePending_{};
+    /// Pending prepares of one module alone, null where free.
+    std::array<std::atomic<MoonModule*>, kPendingScopes> prepareSelfPending_{};
     /// The providers a demand changed on since the last frame boundary, null where free; one more than fits tells every provider.
     std::array<std::atomic<const char*>, kPendingScopes> demandPending_{};
     /// Set when a demand changed with every slot taken, so the next boundary tells every module.

@@ -10,11 +10,11 @@ Usage:
 """
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
 import sys
-import os
 import time
 from pathlib import Path
 
@@ -23,8 +23,9 @@ ESP32_DIR = ROOT / "esp32"
 
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
+from _moondeck_config import device_ips_for_port, saved_state, open_serial, raised_log_level, LOG_INFO  # noqa: E402
 from _host import host_target  # noqa: E402
+import _suite_output  # noqa: E402
 
 # Same directory; imported by path so this needs no PYTHONPATH tweak (the pattern the
 # other cross-script imports here use).
@@ -171,7 +172,11 @@ def collect_host():
         # 30s covers on a fast host and does not on a slower one (71s on this Windows bench). A
         # timeout here reports a KPI run as broken when nothing is, so it is sized to catch a hang
         # rather than to police the runtime, which repo-health already tracks as a number.
-        out, rc = run([str(test_exe)], cwd=BUILD_DIR, timeout=600)
+        # The test gate's run of this binary when it kept one, else a run of its own through test_host.py, which keeps it.
+        out = _suite_output.kept(test_exe)
+        if out is None:
+            run(["uv", "run", str(ROOT / "moondeck" / "test" / "test_host.py")], cwd=ROOT, timeout=600)
+            out = _suite_output.kept(test_exe) or ""
         for line in out.splitlines():
             if "test cases:" in line:
                 kpi["tests"] = line.strip()
@@ -186,7 +191,12 @@ def collect_host():
         # The whole scenario suite, which runs every measure step in every file, so it outgrows
         # the default that fits a quick command. A timeout here is reported as a crashed check
         # rather than a slow one, so the budget tracks the suite rather than the other way round.
-        out, rc = run([str(scenarios)], cwd=ROOT, timeout=300)
+        # The scenario gate's run of this binary when it kept one, else a run of its own through run_scenario.py, which keeps it: one order, sorted by path.
+        files = _suite_output.scenario_files()   # run_scenario.py's whole run reads these, so they key its output
+        out = _suite_output.kept(scenarios, files)
+        if out is None:
+            run(["uv", "run", str(ROOT / "moondeck" / "scenario" / "run_scenario.py")], cwd=ROOT, timeout=300)
+            out = _suite_output.kept(scenarios, files) or ""
         # One tick per scenario: the slowest MEASURE step (the contract-
         # relevant worst-case timing). The KPI one-liner becomes a
         # 10-number-ish series that maps 1:1 to the scenario list, so a
@@ -271,7 +281,7 @@ def collect_esp32():
     kpi["firmware"] = esp32_build.name[len("esp32-"):]
 
     try:
-        from build_esp32 import find_idf, idf_env, idf_cmd
+        from idf_env import find_idf, idf_env, idf_cmd
         idf_path = find_idf()
         if idf_path:
             env = idf_env(idf_path)
@@ -366,33 +376,20 @@ def _live_capture(log, seconds=15):
         print("  ESP32 KPI: live capture disabled (--no-live-capture); "
               "using monitor.log if present")
         return False
-    import json
-    cfg = ROOT / "moondeck" / "moondeck.json"
-    if not cfg.exists():
-        return False
-    try:
-        state = json.loads(cfg.read_text(encoding="utf-8"))
-        # Port lives inside the active network record (post-networks refactor
-        # in moondeck.py). Fall back to the legacy top-level `port` so an
-        # un-migrated moondeck.json still works.
-        active_name = state.get("active_network")
-        active = next((n for n in (state.get("networks") or [])
-                       if n.get("name") == active_name), None)
-        port = (active or {}).get("port") or state.get("port")
-    except Exception:
-        return False
+    # The ESP32 tab's port, on the active network record; an older file's top-level port is carried over by saved_state.
+    state = saved_state()
+    active = next((n for n in state.get("networks") or [] if n.get("name") == state.get("active_network")), None)
+    port = (active or {}).get("port")
     if not port or not Path(port).exists():
         print(f"  ESP32 KPI: configured port {port} not present, skipping live capture")
         return False
-    try:
-        import serial
-    except ImportError:
+    if importlib.util.find_spec("serial") is None:   # pyserial, which the capture below needs
         return False
     # The board on this port raised to Info so its tick line prints (it rests at Warn), and restored to its own level on exit, the serial-open failure included.
     print(f"  ESP32 KPI: capturing {seconds}s from {port}...")
     ips = device_ips_for_port(port)
     if not ips:
-        print(f"  no device in the registry was last flashed on {port}: its log level is not raised, so the tick lines show only at Info", flush=True)
+        print(f"  the board on {port} has no known MAC or address (Identify it from its node on MoonDeck's map): its log level is not raised, so the tick lines show only at Info", flush=True)
     with raised_log_level(ips, LOG_INFO):
         try:
             ser = open_serial(port)

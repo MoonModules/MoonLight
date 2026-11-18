@@ -31,6 +31,18 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A `receivers` field takes a device group's name, and holds up to 32
+
+**Action: *nothing*.**
+
+The `receivers` of OSC, audio sync and Network Send take a device group's name beside addresses and names, reaching each member at its current address. Each holds up to 32 receivers, where OSC and audio sync held 8; a group past the bound has the rest left out, and the card says how many. A name equal to a group's now reaches the group rather than a host of that name.
+
+### A device group's members share their controls and looks
+
+**Action: *remove* an OscService set up only to keep group members in step; membership alone keeps them in step now.**
+
+A member of a device group follows the group's switches, encoders and faders, each as the parameter it drives (`Drivers.brightness`), and its effects presets, with no OSC set up: membership is the one setting. A change made on any member sets that parameter on every other member, whatever their own slots drive, and the newer change wins when two meet. An effects preset applied on one member is fetched from it and applied on the others; a driver or layout preset stays on its board. A member back from a restart takes the group's values within seconds. These travel on the groups' address, 239.255.77.79 port 65510.
+
 ### A `latest` host's firmware id is `host-<os>-<arch>`
 
 **Action: *install by hand*, once, on each host program that updates itself.**
@@ -71,7 +83,7 @@ The HUB75 driver leads each plane's row with hold words when the row is 2^(`bitD
 
 **Action: *nothing* for updates from the Firmware card; host the image on https, or upload it, where a script or an MQTT command named an `http://` address.**
 
-`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or MoonDeck's OTA button, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
+`/api/firmware/url` and MoonBase's install field refuse an `http://` address with `400 url must start with https://`, since TLS is what authenticates an image in transit; ESP-IDF's `esp_https_ota` refuses it too from v6.1.1. A release on GitHub is already https. An image built on a computer reaches a board by upload instead: the Firmware card's file picker, `POST /api/firmware/upload`, or **Install local build** in a node's popup on MoonDeck's map, which uploads the build. A board's MoonBase follows once it is updated from the Firmware card's MoonBase tab: an app update leaves the MoonBase in place, and an older one still takes an `http://` address.
 
 ### A host updates itself as a board does, and the Debian package installs a service
 
@@ -167,6 +179,12 @@ Fireworks fill any grid: the shells burst at `burstHeight`, a share of the grid'
 **Action: *nothing*, or *re-set a control* to keep a look you tuned.**
 
 An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, MoonInvaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
+
+### ESP32-S31 boards read their flash over four lines
+
+**Action: *install over USB* once, on an `esp32s31` device.**
+
+The S31 image reads code from flash over four data lines (QIO) where v7.0.0 used two (DIO), which halved what the cache fetched per clock: 13 fps against 500 on the bench CoreBoard. An update over the air replaces only the app, and ESP-IDF refuses an app whose flash mode differs from the bootloader's (`ESP_ERR_OTA_SPI_MODE_MISMATCH`), so install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), as for the S3 boards below.
 
 ### ESP32-P4 boards read their flash over four lines
 

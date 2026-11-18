@@ -22,6 +22,7 @@
 #include "core/system/Base64.h"
 #include "core/system/FilesystemModule.h"
 #include "core/system/FirmwareUpdateModule.h"
+#include "core/system/DeviceSummary.h"     // writeDeviceFacts: what the summary and the map's row both carry
 #include "core/system/SystemModule.h"      // the device name and model a request is judged and answered by
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
@@ -508,10 +509,10 @@ void HttpServerModule::deferRequest(platform::TcpConnection& conn, const char* r
     t->conn = std::move(conn);
 }
 
-// Whether a request names a JavaScript module, the one kind of UI file the embedded bundle folds into app.js.
-static bool isScriptName(const char* path) {
+// Whether a request names a file the embedded bundle folds into another: a JavaScript module into app.js, an imported sheet into style.css.
+static bool isBundledName(const char* path) {
     const size_t n = std::strlen(path);
-    return n > 3 && std::strcmp(path + n - 3, ".js") == 0;
+    return (n > 3 && std::strcmp(path + n - 3, ".js") == 0) || (n > 4 && std::strcmp(path + n - 4, ".css") == 0);
 }
 
 // One request of `len` bytes, its body whole or, for an upload, its first part: the method and path pick the handler.
@@ -532,7 +533,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     std::memset(method, 0, sizeof(method));
     std::memset(path, 0, sizeof(path));
     std::sscanf(req, "%7s %127s", method, path);
-    // Strip the query string (RFC 3986 §3.4) before routing; the web installer's Inject button hands off `/?deviceModel=<name>` (see SystemModule.md).
+    // Strip the query string (RFC 3986 §3.4) before routing, since a page's own parameters (`?help=`, `?walked=`, `?open=`) are the browser's.
     char* queryStart = std::strchr(path, '?');
     if (queryStart) *queryStart = 0;
 
@@ -600,8 +601,8 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         else if (std::strcmp(path, "/json") == 0) serveWledDeviceJson(conn);
         // /presets.json: python-wled fetches it after /json and a 404 aborts HA's config flow; the truthy-but-empty `{"0":{}}` yields zero presets where `{}` fails its `not presets` guard.
         else if (std::strcmp(path, "/presets.json") == 0) serveWledPresets(conn);
-        // A host running from a checkout serves the UI's own modules, which the embedded bundle holds inside app.js: scripts only, so the folder's other files stay private.
-        else if (isScriptName(path) && serveUiFromDisk(conn, path + 1)) {}
+        // A host running from a checkout serves the UI's own modules and imported sheets, which the embedded bundle holds inside app.js and style.css: those kinds only, so the folder's other files stay private.
+        else if (isBundledName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");
     } else if (std::strcmp(method, "POST") == 0) {
         // POST /api/modules/<name>/move with body {"to":N}. Strict-suffix check: path must end with "/move" exactly (rejects "/movex").
@@ -726,16 +727,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 }
 
 void HttpServerModule::sendPreflightResponse(platform::TcpConnection& conn) {
-    // 204 No Content with the Access-Control-Allow-* headers; Max-Age caches the preflight for an hour.
-    const char* response =
-        "HTTP/1.1 204 No Content\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n"
-        "Access-Control-Max-Age: 3600\r\n"
-        "Connection: close\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(response), std::strlen(response));
+    char response[256];
+    const size_t n = http::preflightResponse(response, sizeof(response), "GET, POST, PATCH, DELETE, OPTIONS");
+    conn.write(reinterpret_cast<const uint8_t*>(response), n);
 }
 
 // The reason phrase for each status this server answers (RFC 9110 section 15); a code not listed reads "Error", which a client ignores.
@@ -1480,11 +1474,15 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     sink.flush();
 }
 
-// Who the device is and what it runs, the part of the summary a peer's map shows: its MAC-derived identity, how it takes a new version, its board, its WiFi signal (0 off WiFi), its light outputs and its effects.
+// Who the device is and what it runs, the part of the summary a peer's map shows: its update path and images behind the app, its MAC-derived identity, name, board, mode (developer follows `latest`), WiFi signal (0 off WiFi), outputs and effects.
 void HttpServerModule::writeDeviceSummary(JsonSink& sink) {
-    sink.appendf("\"update\":\"%s\",\"mac\":", platform::updateModeName(platform::updateMode()));
+    sink.appendf("\"update\":\"%s\"", platform::updateModeName(platform::updateMode()));
+    writeDeviceFacts(sink);   // the mode and the images behind the app, as this device's row on the map carries them
+    sink.append(",\"mac\":");
     sink.writeJsonString(platform::macString());
     const MoonModule* sys = findModuleByName("System");
+    sink.append(",\"name\":");
+    sink.writeJsonString(sys ? static_cast<const SystemModule*>(sys)->deviceName() : "");
     sink.append(",\"board\":");
     sink.writeJsonString(sys ? static_cast<const SystemModule*>(sys)->deviceModel() : "");
     sink.append(",\"chip\":");
@@ -2211,7 +2209,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         sendError(conn, 500, g_otaStatus[0] ? g_otaStatus : "ota start failed");   // the platform's own reason when it wrote one
         return;
     }
-    // 202 Accepted: task running; UI polls FirmwareUpdate.update_status.
+    // 202 Accepted: the install runs in a task, and the page follows it on the Firmware card's status (/api/modules/Firmware) until the device restarts.
     sendResponse(conn, 202, "application/json", "{\"ok\":true}");
 }
 

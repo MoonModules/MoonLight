@@ -62,10 +62,11 @@ Treating a slow socket as a fault is the trap: it converts ordinary congestion i
 
 ## Multi-device runtime
 
-Three domain-neutral services let several controllers act as one installation. They're core because nothing about them is light-specific; any domain spanning multiple devices uses the same three.
+Four domain-neutral services let several controllers act as one installation. They're core because they hold no light-specific part; any domain spanning multiple devices uses the same four.
 
 - **Discovery**: devices find each other by presence packets on a multicast group and the broadcast address WLED listens on, and `NetworkModule` advertises each over mDNS. Live.
-- **Shared controls**: boards follow each other's control surface over [OSC](../../moonmodules/core/services.md#osc), the industry-standard protocol for it. A surface change on one board goes to the others as feedback, by unicast to `receivers` or to a multicast group. Each writes it onto its own surface and may send it on once, back to its origin too. Only a changed value is sent, so the origin, already holding it, stops it there. Live.
+- **Device groups**: a group made on one device is held by every member it names and edited from any of them ([DeviceGroup.h](../../../src/core/system/DeviceGroup.h), [DeviceGroupSync.h](../../../src/core/system/DeviceGroupSync.h)): the name a last-writer-wins register, the members a last-writer-wins element set, every part stamped by a hybrid logical clock ([Hlc.h](../../../src/core/util/Hlc.h)), carried as OSC on one multicast address and repeated by Trickle. A deletion wins and leaves a marker. Live.
+- **Shared controls**: a group's members follow each other's control surface by membership alone ([SharedControls.h](../../../src/core/system/SharedControls.h)): a slot's change travels as the parameter it drives, by name, value and stamp, the newest stamp winning on every member, and an effects preset travels as a recall each member fetches from its maker. Only what an effects preset may set crosses. [OSC](../../moonmodules/core/services.md#osc) stays for a console or a show controller, which a group's name in its `receivers` reaches. Live.
 - **Clock sync**: a shared monotonic clock, so boards with the same controls also render the same moment. Its design is the backlog card Clock sync.
 
 What the synced clock is *for* is a domain question; the light domain's use of it (synced animation across a wall) is in [Multi-device sync](moonlight.md#multi-device-sync).

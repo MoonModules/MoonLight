@@ -59,30 +59,13 @@ else()
                         -Wshadow -Wnon-virtual-dtor -Wdouble-promotion
                         -Wimplicit-fallthrough -Wnull-dereference)
 
-    # GCC through 15 raises four of these on code that is provably correct, and -Werror turns
-    # each into a failed build. They stay ON (a real one still has to be read and dismissed);
-    # they just stop being fatal on the versions that cry wolf:
-    #   -Wnull-dereference   fires on a plain `return member_` inlined through a lambda
-    #                        trampoline, where GCC cannot prove `this` across the thunk, and on
-    #                        `buf.data()[15]` after an allocate(10, 3) it cannot see through.
-    #   -Wrestrict           fires on snprintf(dst, n, "%s", src) where both are members of the
-    #                        same object, which GCC reads as a possible overlap.
-    #   -Wstringop-overflow  fires inside <bits/stl_algobase.h> with a bound "between 2^63 and
-    #                        2^64-1", a range no call in this codebase can produce.
-    #   -Wformat-truncation  fires on snprintf(ssid_, 33, "%s", ssid) because a 99-char SSID
-    #                        would not fit. Truncating there is the documented intent (see
-    #                        NetworkModule.h): an over-long SSID is invalid, and snprintf
-    #                        terminates what it writes.
-    # Five of the twelve are inside libstdc++ and glibc headers (<bits/stl_algobase.h>,
-    # <streambuf>, <stdio2.h>), so no source change can reach them. GCC 16 is clean, which is
-    # why this went unnoticed locally: the maintainer's GCC is 16 and CI's is 13.
-    # A version test rather than a flag probe, deliberately: the flags all EXIST here, it is
-    # their judgment that is wrong, so CheckCXXCompilerFlag would happily confirm them.
-    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-        add_compile_options(-Wno-error=null-dereference
-                            -Wno-error=restrict
-                            -Wno-error=stringop-overflow
-                            -Wno-error=format-truncation)
+    # GCC decides seven warnings from what its optimizer inlined, so whether one fires depends on the build type: GCC 16.1 in Release
+    # raises 937 across 120 files that GCC 13 in Debug, CI's build, never sees, nearly all on a pointer GCC cannot follow through an
+    # inlined call, some inside libstdc++, glibc and miniaudio, where no source change reaches. In an optimized build they print, to be
+    # read, and stop failing it; in Debug, where they fire only on a real fault, they stay fatal. Clang reports -Wnull-dereference only
+    # for a provable null, so there it stays fatal everywhere.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-Wno-error=null-dereference;-Wno-error=array-bounds;-Wno-error=stringop-overflow;-Wno-error=stringop-overread;-Wno-error=restrict;-Wno-error=maybe-uninitialized;-Wno-error=format-truncation>")
     endif()
 
     # Hot-path discipline, enforced by the compiler. MM_NONBLOCKING marks tick/tick20ms/tick1s

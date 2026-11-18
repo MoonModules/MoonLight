@@ -138,7 +138,7 @@
     },
     "multicore": {
      "line": "Run the output stage on the second core.",
-     "more": "It falls back to one core by itself when the extra frame buffer does not fit. The switch exists to compare the two."
+     "more": "It falls back to one core by itself when the extra frame buffer does not fit or the second core stalls, and tries two again, waiting at most about a minute between tries. The switch exists to compare the two."
     },
     "renderWait": {
      "line": "How long core 0 waited for core 1 at the frame boundary.",
@@ -3543,8 +3543,8 @@
      ]
     },
     "receivers": {
-     "line": "Receiver addresses or names, in fan-out order; blank idles.",
-     "more": "A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting."
+     "line": "Receiver addresses, names or a device group's name, in fan-out order; blank idles.",
+     "more": "A name resolves by mDNS for `.local`, else by DNS, keeping its last address while silent. A group's name is its members, a slice each."
     },
     "lightsPerReceiver": {
      "line": "Lights per receiver; blank splits evenly, one number to all, a list each."
@@ -4278,7 +4278,7 @@
     },
     "mode": {
      "line": "How much of the UI is shown, cumulative.",
-     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build has none of, which a host carries to exercise their settings. Only the UI reads it."
+     "more": "User shows the essentials, expert adds the 🎚️ controls, developer the 🔧 ones and the cards of hardware this build lacks, and offers every new `latest` build as an update."
     },
     "factory reset": {
      "line": "Delete every setting and preset and restart as freshly installed.",
@@ -4465,7 +4465,8 @@
      "more": "Unicast to `receivers` reaches a few MoonLight boards faster on WiFi, which retries it."
     },
     "receivers": {
-     "line": "The boards a unicast send reaches, addresses or names."
+     "line": "The boards a unicast send reaches: addresses, names or a device group's name.",
+     "more": "A group's members are found by MAC each second, so a new address follows."
     },
     "simulate": {
      "line": "The pattern: a plausible song, or a test march."
@@ -4568,8 +4569,8 @@
      "line": "Where feedback goes: `unicast` to the receivers, or `multicast` to the group."
     },
     "receivers": {
-     "line": "Addresses or names feedback goes to (unicast).",
-     "more": "Empty answers whoever wrote last, which finds a surface on its own. Fill it to send feedback somewhere else."
+     "line": "Addresses, names or a device group's name feedback goes to (unicast).",
+     "more": "Empty answers whoever wrote last, which finds a surface on its own; a group: a-device-group-as-the-receivers."
     },
     "group": {
      "line": "The multicast group feedback goes to and this device joins.",
@@ -5292,14 +5293,6 @@
    "summary": "The Discovery card under Devices, listening once the network is up; the list is rebuilt within seconds of boot.",
    "guide": [
     {
-     "title": "The map",
-     "text": "This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html)."
-    },
-    {
-     "title": "The emoji",
-     "text": "Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls."
-    },
-    {
      "title": "As many devices as memory holds",
      "text": "When memory runs short the card says \"memory full\", and a new device replaces the one heard longest ago, MoonLight boards kept longest."
     },
@@ -5327,8 +5320,12 @@
     "addedIps": {
      "line": "Devices that announce nothing, a Tasmota among them, by IP address, comma-separated."
     },
+    "deletedGroups": {
+     "line": "the groups deleted anywhere, \"id:hlc:writer;\" each, the newest eight"
+    },
     "devices": {
      "line": "The discovered devices; a row expands to its details.",
+     "more": "The map: this device is the ringed center, lines are traffic, quiet devices sit beneath. Scroll zooms, drag pans, ⌖ resets; the bar searches, greying out the rest, and shows IP, version and traffic. A node opens its details and Identify, a group's box its update. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html). Emoji for lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.",
      "fields": {
       "name": {
        "line": "The device's name, else its address."
@@ -5355,6 +5352,63 @@
    "dim": 0,
    "doc": "core/devices.md#discovery",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DevicesModule.h"
+  },
+  "DeviceGroup": {
+   "line": "Devices that act as one, picked from Discovery and kept by their MAC, so a rename or a new address keeps the group.",
+   "summary": "A device group under Devices, added and removed as an effect is; every member holds it and may edit it, and the map draws it as a box around its members.",
+   "guide": [
+    {
+     "title": "Members",
+     "text": "Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements is marked missing, here and on the map."
+    },
+    {
+     "title": "Shared",
+     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.\n\nA device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again."
+    },
+    {
+     "title": "Shared controls",
+     "text": "Membership alone makes a device follow the group's controls. A switch, encoder or fader changed on one member sets what it drives on every member; an effects preset applied on one is applied on the others. Members restarting take the group's values. A slot holds a byte, so a wider control is shared as its slot sees it."
+    },
+    {
+     "title": "Updating the members",
+     "text": "Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The first failure stops the waves."
+    },
+    {
+     "title": "Reaching the members",
+     "text": "Type the group's name, one word, in the `receivers` of OSC, audio sync or Network Send to reach each member by unicast, this device left out. A missing member is skipped until heard again."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/core/DeviceGroup.png",
+   "controls": {
+    "id": {
+     "line": "twelve hex digits of the creating MAC, then eight of the moment, saved hidden"
+    },
+    "groupName": {
+     "line": "the shared name, a last-writer-wins register, saved hidden"
+    },
+    "nameStamp": {
+     "line": "the name's stamp as \"hlc:writer\" in hex, saved hidden"
+    },
+    "members": {
+     "line": "The devices in this group.",
+     "fields": {
+      "device": {
+       "line": "The device, by name and address; it stays the member through a rename or a new address."
+      },
+      "mac": {
+       "line": "Its identity."
+      },
+      "status": {
+       "line": "Present when it was heard within three of its announcements, missing otherwise."
+      }
+     }
+    }
+   },
+   "role": "generic",
+   "dim": 0,
+   "doc": "core/devices.md#devicegroup",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DeviceGroup.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#devicegroup"
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",

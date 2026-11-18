@@ -39,7 +39,7 @@ import littlefs
 import serial
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import find_idf, idf_env   # noqa: E402
+from idf_env import find_idf, idf_env   # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -156,7 +156,8 @@ class Bench:
         return self.page()
 
     def upload(self, image: Path) -> None:
-        subprocess.run(["curl", "-s", "-m", "120", "-o", "/dev/null", "-F", f"update=@{image}",
+        # The fields the device UI's map sends, skipValidation ahead of the file, which WLED 16 needs to take an image that is not its own.
+        subprocess.run(["curl", "-s", "-m", "120", "-o", "/dev/null", "-F", "skipValidation=1", "-F", f"update=@{image}",
                         f"http://{self.ip}/update"])
 
     # The board as a WLED device ships: WLED's images, an empty app choice and an empty filesystem, joined to the WiFi.

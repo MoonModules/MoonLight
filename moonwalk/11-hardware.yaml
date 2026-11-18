@@ -116,7 +116,7 @@ processes:
         say: Confirm the board answers on its port.
         when: { run: { script: moondeck/build/improv_probe.py, args: "--port <port>" } }
         detail: |
-          The port is the one MoonDeck's Port dropdown shows, or the device's `last_port` in `moondeck/moondeck.json`; ports drift between sessions. Never open a bench port with a bare serial library. Opening it asserts the reset lines on many boards and reboots them, which also fabricates boot chatter that looks like a fault. Use the MoonDeck scripts, and attach a monitor before the event you want to see, never after.
+          The port is the one MoonDeck's Port dropdown shows; ports drift between sessions, and a board's node on the Live tab's map finds its port by the MAC Identify recorded, which resets the boards it probes. Two boards of one name and chip are told apart by the Identify log. Never open a bench port with a bare serial library. Opening it asserts the reset lines on many boards and reboots them, which also fabricates boot chatter that looks like a fault. Use the MoonDeck scripts, and attach a monitor before the event you want to see, never after.
       - id: provision
         say: Provision WiFi and the device model.
         when: { run: { script: moondeck/build/improv_provision.py, args: "--port <port> --device-model \"<Name>\"" } }

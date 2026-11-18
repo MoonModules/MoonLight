@@ -197,22 +197,24 @@ public:
         return true;
     }
 
-    /// Parse `receivers`, starting the name lookups here where allocating is allowed.
+    /// Parse `receivers`, starting the name lookups here where allocating is allowed, and resolve it.
     void parseReceivers(const char* receivers) {
         receiversError_ = parseReceiverList(receivers, receivers_, kMaxReceivers, receiverCount_);
         if (receiversError_) { receiverCount_ = 0; return; }
-        startResolverForNames(receivers_, receiverCount_);
-        refreshNamedReceivers(receivers, receivers_, receiverCount_);
+        startResolverForNames(receivers, receivers_, receiverCount_);
+        receiversLeft_ = resolveReceivers(receivers, receivers_, receiverCount_);
     }
 
-    /// Take the names in `receivers` that have resolved since.
-    void refreshReceivers(const char* receivers) { refreshNamedReceivers(receivers, receivers_, receiverCount_); }
+    /// Resolve `receivers` again: the names that resolved since, and a device group's members at their current addresses.
+    void refreshReceivers(const char* receivers) {
+        if (!receiversError_) receiversLeft_ = resolveReceivers(receivers, receivers_, receiverCount_);
+    }
 
     /// The live state on the owner's status line, once a second: sending, receiving from whom, or listening.
     void report(Role role) {
         if constexpr (!platform::hasNetwork) return;
         if (role == kNone || !open_) return;
-        if (role == kSend) { owner_.setStatus("sending"); return; }
+        if (role == kSend) { reportSendingLive(); return; }
         if (lastRecvMs_ == 0 || platform::millis() - lastRecvMs_ >= kFallbackMs) { reportListening(); return; }
         // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
         char peer[NameResolver::kPeerChars];
@@ -259,7 +261,6 @@ private:
     static constexpr platform::UdpSocket::MulticastGroup kGroups[] = {{{239, 0, 0, 2}}, {{239, 0, 0, 1}}};
     static constexpr uint8_t kGroupCount = sizeof(kGroups) / sizeof(kGroups[0]);
     static constexpr int kMaxRecvPerTick = 8;         // bounded non-blocking drain (sync is low-rate)
-    static constexpr uint8_t kMaxReceivers = 8;           // how many boards a unicast send reaches
 
     MoonModule& owner_;
     platform::UdpSocket sock_;       // one socket, either format, bound only in send or receive
@@ -269,6 +270,7 @@ private:
     AudioHits rxHits_;               // the hits of the packets since the last frame taken, late ones among them
     Receiver     receivers_[kMaxReceivers] = {};
     uint8_t  receiverCount_ = 0;
+    uint8_t  receiversLeft_ = 0;             // receivers past kMaxReceivers, left out, which the status names
     const char* receiversError_ = nullptr;   // why the receiver list was refused, shown on the status
     uint32_t lastSendMs_ = 0;        // the send throttle
     uint32_t sendCount_ = 0;
@@ -312,6 +314,13 @@ private:
         if (unicast && receiversError_) owner_.setStatus(receiversError_, MoonModule::Severity::Error);
         else if (unicast && receiverCount_ == 0) owner_.setStatus("set receivers to send to", MoonModule::Severity::Warning);
         else owner_.setStatus("sending");
+    }
+
+    /// A send under way, saying so when a device group had more members than the list holds.
+    void reportSendingLive() {
+        if (!receiversLeft_) { owner_.setStatus("sending"); return; }
+        mm::formatTo(status_, sizeof(status_), "sending, %u receiver%s past %u left out", static_cast<unsigned>(receiversLeft_), receiversLeft_ == 1 ? "" : "s", static_cast<unsigned>(kMaxReceivers));
+        owner_.setStatus(status_, MoonModule::Severity::Warning);
     }
 
     /// An open receive socket, saying so when only unicast can reach it.

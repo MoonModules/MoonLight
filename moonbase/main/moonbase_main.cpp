@@ -845,6 +845,14 @@ void serveOne(int sock) {
         return;
     }
 
+    // A CORS preflight, answered as the app answers it (HttpServerModule::sendPreflightResponse), so a page served elsewhere on this network, MoonDeck's, can install here.
+    if (std::strncmp(head, "OPTIONS ", 8) == 0) {
+        char preflight[256];
+        sendAll(sock, preflight, mm::http::preflightResponse(preflight, sizeof(preflight), "GET, POST, OPTIONS"));
+        ::close(sock);
+        return;
+    }
+
     // A phone on the access point asking for its own captive-check page gets this one, which is what shows it the sign-in screen.
     if (std::strncmp(head, "GET ", 4) == 0) {
         const char* host = mm::http::findHeader(head, "Host:");

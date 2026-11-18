@@ -138,13 +138,13 @@ processes:
     dependsOn: [ci-on-pr]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner pushes, the external review runs on the pull request, and its findings are processed on the branch. On "run pre-merge", the same checks as a commit run over the whole branch, then the judgment no script makes, once per request as at a commit. The gate list is written out before any of it runs, judgment gates included, and every line is reported, since a judgment gate stays silent until someone asks.
+      The product owner pushes, the external review runs on the pull request, and its findings are processed on the branch. On "run pre-merge", `moondeck/check/run_gates.py --process pre-merge` runs the same checks as a commit over the whole branch, its `--list` the gate list with the judgment gates named, which no script runs and the reader reads once per request as at a commit. The gate list is written out before any of it runs, judgment gates included, and every line is reported, since a judgment gate stays silent until someone asks.
     steps:
       - id: reviewer
         section: Review
         say: Have the Reviewer read the branch.
         actor: agent
-        when: { run: { command: "git diff main...HEAD" } }
+        when: { run: { command: "git diff origin/main...HEAD" } }
         detail: |
           The Reviewer reads before the checks run.
 
@@ -154,17 +154,23 @@ processes:
         when: { process: review-finding }
         detail: |
           The external review's and the Reviewer's alike. CodeRabbit reviews on request only, within its hourly budget, so the product owner asks for it on the pull request: `@coderabbitai review`.
-      - id: checks
+      - id: ci
         section: Checks
-        say: Run the commit checks over the branch.
+        say: Read CI's checks on the pull request.
+        actor: contributor
+        when: { run: { command: "gh pr checks" } }
+        detail: |
+          CI runs on every push what a merge gate would otherwise repeat: the host build and suite, the sanitizers, the Python and JavaScript tests, Teensy, the live restore, and the findings job's check_code, check_docgen, check_prose, check_specs, check_taglines, check_devices, check_firmwares and generated files. A green run is their gate, read rather than rerun.
+      - id: checks
+        say: Run the commit checks CI skips.
         actor: contributor
         when: { process: commit }
         detail: |
-          Their triggers read `git diff --name-only main...`, so they catch what a green series of commits hides.
+          The commit gates CI does not run, each marked `ci: true` where it does: the strict docs build, the backlog against the Project, the ESP32 firmware's freshness and Improv with a board attached. The runner skips Improv, whose `--port <port>` needs a value: pick the port and run its MoonDeck card. The host build without the MoonLive backend and the KPI are local gates that run when their triggers match. Their triggers read `git diff --name-only origin/main...`, so they catch what a green series of commits hides.
       - id: gcc
         say: Build with GCC when CI asks.
         actor: contributor
-        when: { run: { script: moondeck/build/build_host.py, args: "--gcc --tests" } }
+        when: { run: { command: "uv run moondeck/build/build_host.py --gcc --tests" } }
         detail: |
           CI asks when it failed on something clang builds cleanly.
 

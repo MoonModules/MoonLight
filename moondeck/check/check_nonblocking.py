@@ -38,6 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_clang_query  # noqa: E402  — the module→files resolver, one owner
 import check_clang_tidy   # noqa: E402  — build-dir resolution, one owner
 import _findings  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
+from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
 
 # `path:line:col: warning: <msg> [-Wfunction-effects]`
 _WARN = re.compile(r"^(?P<file>\S+?):(?P<line>\d+):(?P<col>\d+): warning: "
@@ -394,7 +396,7 @@ def launcher_configured(build_dir) -> bool:
 
 def _build(build_dir, clean) -> bool:
     """Build the tree, incrementally or from clean, saying why when it fails."""
-    cmd = ["cmake", "--build", str(build_dir)] + (["--clean-first"] if clean else [])
+    cmd = ["cmake", "--build", str(build_dir), "--parallel", str(build_jobs())] + (["--clean-first"] if clean else [])
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
     if proc.returncode == 0:
         return True

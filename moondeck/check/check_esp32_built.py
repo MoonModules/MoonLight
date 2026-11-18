@@ -170,8 +170,19 @@ def main():
                         help="Also fail if the binary is older than this many hours, even "
                              "when no source is newer. 0 (default) disables the age rule — "
                              "source freshness is the check that matters.")
+    parser.add_argument("--build", action="store_true",
+                        help="Rebuild a missing or stale firmware once and check it again: the commit gate's form, which the commit process allows without asking.")
     args = parser.parse_args()
+    code = check(args)
+    if code and args.build:
+        print(f"Rebuilding {args.firmware} once, then checking again.", flush=True)
+        if subprocess.run(["uv", "run", "moondeck/build/build_esp32.py", "--firmware", args.firmware], cwd=ROOT, check=False).returncode == 0:
+            code = check(args)
+    return code
 
+
+def check(args):
+    """The firmware's verdict, 0 fresh and 1 missing, stale or old, recorded and printed with what to run."""
     binary = ROOT / "build" / f"esp32-{args.firmware}" / APP_BIN
     build_cmd = f"uv run moondeck/build/build_esp32.py --firmware {args.firmware}"
 

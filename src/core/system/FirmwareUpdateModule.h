@@ -84,6 +84,16 @@ inline bool otaInFlight() {
 /// A wrong image fails at the start or at boot, and is recoverable over USB. On a device with one app slot the recovery image installs and reboots back.
 class FirmwareUpdateModule : public MoonModule {
 public:
+    /// MoonBase's version while it does not match this app, else null, so a peer's map offers the matching one.
+    const char* moonbaseMismatch() const { return moonbaseOutdated_ ? moonbaseStr_ : nullptr; }
+    /// The WiFi coprocessor's firmware line while it does not match this app, else null.
+    static const char* coprocessorMismatch() {
+        if constexpr (platform::hasWifiCoprocessor) {
+            if (platform::coprocessorOutdated()) return platform::coprocessorLine();
+        }
+        return nullptr;
+    }
+
     /// Keep reporting whatever the toggle says, as the other fixed modules do.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }
 
@@ -166,12 +176,10 @@ public:
 
     /// The images this device carries, in tab order, and the selector over them; the WiFi coproc's mismatch rides beside them for the tab's warning.
     void listImages() {
-        if constexpr (platform::hasWifiCoprocessor) {
-            if (platform::coprocessorOutdated()) {
-                /// The radio chip's firmware, published only while it does not match this app.
-                controls_.addReadOnly("coprocessorMismatch", const_cast<char*>(platform::coprocessorLine()));
-                controls_.setHidden(controls_.count() - 1, true);
-            }
+        if (const char* line = coprocessorMismatch()) {
+            /// The radio chip's firmware, published only while it does not match this app.
+            controls_.addReadOnly("coprocessorMismatch", const_cast<char*>(line));
+            controls_.setHidden(controls_.count() - 1, true);
         }
         // The images this device carries, in tab order; the selector indexes this list.
         imageCount_ = 0;

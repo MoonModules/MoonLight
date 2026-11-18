@@ -65,7 +65,7 @@ def test_the_ratchet_refuses_a_rise_per_rule_and_in_total_over_the_union():
 
 def test_a_measurement_that_reads_nothing_is_a_failure_not_a_clean_report(tmp_path, monkeypatch):
     """A zero from a tool that read nothing looks like a sweep; lizard over an empty tree must answer None so the run fails loudly."""
-    monkeypatch.setattr(check_code, "LIZARD_ARGS", [str(tmp_path), "-l", "cpp"])
+    monkeypatch.setattr(check_code, "LIZARD_ROOT", [str(tmp_path)])
     assert check_code.measure() is None
 
 
@@ -179,7 +179,7 @@ def test_the_tree_is_read_from_every_files_saved_findings_after_an_incremental_b
     (tmp_path / "CMakeFiles/t.dir/gone.cpp.o.diag").write_text("stale [-Wfunction-effects]", encoding="utf-8")
     out = nb.build_output(tmp_path)
     assert "a.h:1:2" in out and "stale" not in out   # a source the build dropped leaves nothing behind
-    assert builds == [["cmake", "--build", str(tmp_path)]]   # incremental only
+    assert builds == [["cmake", "--build", str(tmp_path), "--parallel", str(nb.build_jobs())]]   # incremental only
 
 
 def test_a_build_from_before_the_launcher_is_rebuilt_clean_once(monkeypatch, tmp_path):
@@ -197,7 +197,7 @@ def test_a_build_running_another_launcher_is_told_to_reconfigure_without_a_clean
     (tmp_path / "CMakeFiles/t.dir").mkdir(parents=True)
     (tmp_path / "CMakeFiles/t.dir/build.make").write_text("ccache c++ -c a.cpp", encoding="utf-8")
     assert nb.build_output(tmp_path) is None
-    assert builds == [["cmake", "--build", str(tmp_path)]]   # minutes of clean rebuild that could never save a finding are skipped
+    assert builds == [["cmake", "--build", str(tmp_path), "--parallel", str(nb.build_jobs())]]   # minutes of clean rebuild that could save no finding are skipped
 
 
 def test_silence_with_the_warning_on_is_a_measured_zero_and_without_it_unmeasured(monkeypatch, tmp_path):
@@ -361,3 +361,58 @@ def test_dynamic_cast_and_typeid_are_findings_in_firmware_and_a_comment_saying_t
     import check_code as c
     assert [r[1] for r in c.rtti_findings("src/core/A.cpp", ["auto* d = dynamic_cast<D*>(b);\n"])] == [c.RTTI]
     assert c.rtti_findings("src/core/A.cpp", ["// absent: no dynamic_cast here\n"]) == []
+
+
+def test_an_untracked_file_named_with_a_space_is_owned_whole(monkeypatch):
+    """git lists names NUL-separated, so `New Device.h` is one file and not two fragments no glob matches."""
+    import subprocess
+    name = "src/core/New Device.h"
+    def fake(cmd, **k):
+        if "--others" in cmd:
+            assert "-z" in cmd                                    # git lists one name per line and quotes an odd one unless given -z, so the exact lookup would miss
+        return subprocess.CompletedProcess(cmd, 0, stdout=(f"{name}\0" if "--others" in cmd else ""), stderr="")
+    monkeypatch.setattr(check_code.subprocess, "run", fake)
+    monkeypatch.setattr(check_code, "NAMED", [name])
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    assert check_code.owned_files() == [name]
+
+
+def _files_run(tmp_path, monkeypatch, capsys, files: dict, named: str, funcs):
+    """`check_code.py --files <named>` over a miniature repository, lizard answering `funcs`; its exit code and what it printed."""
+    _tree(tmp_path, monkeypatch, files)
+    monkeypatch.setattr(check_code, "ROOT", tmp_path.resolve())
+    monkeypatch.setattr(check_code, "NAMED", [])
+    monkeypatch.setattr(check_code, "measure", lambda extra=None, targets=None: funcs)
+    monkeypatch.setattr(check_code, "registered_types", lambda: set())
+    monkeypatch.setattr(sys, "argv", ["check_code.py", "--files", str(tmp_path / named)])
+    code = check_code.main()
+    return code, capsys.readouterr()
+
+
+def test_a_header_written_while_lizard_fails_still_gets_its_file_rules_and_the_exit_says_the_functions_were_not_measured(tmp_path, monkeypatch, capsys):
+    code, out = _files_run(tmp_path, monkeypatch, capsys, {"src/core/New.h": "class New {};\n"}, "src/core/New.h", None)
+    assert check_code.NO_PRAGMA in out.out and code == 2          # the missing pragma shows; the exit names the incomplete measurement
+
+
+def test_the_write_time_view_leaves_a_types_whole_tree_spread_to_the_commit_gate(tmp_path, monkeypatch, capsys):
+    files = {"src/light/Foo.h": "#pragma once\nclass Foo {};\n", **{f"src/a{i}.h": "#pragma once\nFoo* p;\n" for i in range(check_code.MAX_SPREAD + 1)}}
+    monkeypatch.setattr(check_code, "registered_types", lambda: {"Foo"})
+    _tree(tmp_path, monkeypatch, files)
+    assert check_code.spread_rows({"Foo"})                         # the whole tree shows it
+    code, out = _files_run(tmp_path, monkeypatch, capsys, files, "src/light/Foo.h", [])
+    assert check_code.SPREAD not in out.out and code == 0
+
+
+def test_a_per_file_rule_reads_only_the_named_files_while_the_flag_context_reads_them_all(tmp_path, monkeypatch):
+    _tree(tmp_path, monkeypatch, {"src/core/a.h": "#pragma once\ndouble x;\n", "src/core/b.h": "#pragma once\ndouble y;\n"})
+    monkeypatch.setattr(check_code, "NAMED", ["src/core/a.h"])
+    assert [r[0] for r in check_code.style_rows() if r[1] == check_code.FIRMWARE_DOUBLE] == ["src/core/a.h"]
+    assert check_code.scoped_files() == ["src/core/a.h"]
+
+
+def test_lizard_file_names_come_back_with_forward_slashes(tmp_path, monkeypatch):
+    import subprocess
+    row = "5,1,20,8,6,f@1-6@src\\core\\New.cpp,src\\core\\New.cpp,f,f(),1,6,1\n"
+    monkeypatch.setattr(check_code.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, stdout=row, stderr=""))
+    assert check_code.measure()[0]["file"] == "src/core/New.cpp"
+    assert check_code.findings(check_code.measure())[0][0] == "src/core/New.cpp"   # the `--files` filter keys on this spelling

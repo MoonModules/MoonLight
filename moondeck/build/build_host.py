@@ -78,7 +78,7 @@ def build_target(name, quiet=False):
     bdir = str(ROOT / host_build_dir())
     out = subprocess.DEVNULL if quiet else None
     for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"],
-                ["cmake", "--build", bdir, "--target", name] + (["--config", "Release"] if platform.system() == "Windows" else [])):
+                ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
         rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
         if rc != 0:
             return rc
@@ -99,6 +99,16 @@ def gcc_pair():
             return cxx.replace("g++", "gcc"), cxx
     sys.exit("no GCC found — `brew install gcc` (macOS) or `apt install g++` (Linux).\n"
              "Note /usr/bin/g++ on macOS is clang in disguise; it will NOT catch these.")
+
+
+def lower_priority(by: int = 10) -> None:
+    """Run this process `by` steps nicer, where the system has priorities; one already at the lowest stays there, as a caller that niced it
+    (the gate runner's `nice -n 10`) leaves it, since macOS refuses a step past the lowest with EPERM rather than clamping."""
+    if hasattr(os, "nice"):
+        try:
+            os.nice(by)
+        except OSError:
+            pass
 
 
 def main():
@@ -157,8 +167,7 @@ def main():
     # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the host binary builds alone and a header edit leaves the test suite out of the compile.
     # `--tests` builds the test binaries instead: mm_tests (test_host.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
     targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
-    if hasattr(os, "nice"):
-        os.nice(10)   # a build yields to MoonLight, the editor and the browser, whoever starts it; the compilers inherit it
+    lower_priority()   # a build yields to MoonLight, the editor and the browser, whoever starts it; the compilers inherit it
     build_cmd = ["cmake", "--build", bdir, "--target", *targets, "--parallel", str(build_jobs())]
     if is_windows:
         build_cmd += ["--config", "Release"]
@@ -167,10 +176,12 @@ def main():
 
 
 def build_jobs() -> int:
-    """Compile jobs at once: CMAKE_BUILD_PARALLEL_LEVEL when set, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and nothing swaps."""
+    """Compile jobs at once, for every build a script starts: CMAKE_BUILD_PARALLEL_LEVEL when set, every core on CI, where the build runs alone, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and memory stays in RAM."""
     level = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "")
     if level.isdigit() and int(level) > 0:
         return int(level)
+    if os.environ.get("CI"):
+        return os.cpu_count() or 2
     by_cores = (os.cpu_count() or 2) - 2
     return max(1, min(by_cores, memory_gb() - 4))
 

@@ -40,6 +40,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _host import host_target  # noqa: E402
+import _suite_output  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_host import host_build_dir  # noqa: E402 (one home for the build-dir name)
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
@@ -174,7 +175,7 @@ _MEASURE_RE = re.compile(
 SKIPPED = 2
 
 
-def _run_one(path: Path, update_contract: bool, update_reason: str | None, update_observed: bool = False) -> int:
+def _run_one(path: Path, update_contract: bool, update_reason: str | None, update_observed: bool = False, output: list | None = None) -> int:
     """Run one scenario and keep each measured step's sample window on this machine. The scenario file changes only with
     --update-observed, which writes the window's statistics, or --update-contract, which renegotiates the contract; the
     live runner does the same."""
@@ -195,6 +196,8 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     observations: dict[str, dict] = {}  # step-name → {tick_us, free_heap, max_alloc_block}
     for line in proc.stdout:
         sys.stdout.write(line)
+        if output is not None:
+            output.append(line)
         m = _MEASURE_RE.match(line)
         if m:
             # heap is absolute free-heap after measurement (the value the
@@ -273,20 +276,36 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     return 0
 
 
-def _run_many(paths, args) -> int:
-    """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints."""
-    codes, results = [], []
+def _unchanged(key: str, paths) -> bool:
+    """Whether the runner and definitions still fingerprint as `key`: a definition edited while the run went is one some scenario did not read, so that run is not kept."""
+    try:
+        return _suite_output.fingerprint(RUNNER, paths) == key
+    except OSError:
+        return False
+
+
+def _run_many(paths, args, whole: bool = False) -> int:
+    """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints; a `whole` run keeps its output for the KPI."""
+    codes, results, output = [], [], []
+    key = None   # the definitions as this run reads them, before it can rewrite any; None keeps no output
+    if whole:
+        try:
+            key = _suite_output.fingerprint(RUNNER, paths)
+        except OSError as e:   # an unreadable runner or definition only costs the kept output: the scenarios still run
+            print(f"Output of {RUNNER.name} will not be kept: {e}", file=sys.stderr)
     for p in paths:
         started = time.time()
-        code = _run_one(p, args.update_contract, args.reason, args.update_observed)
+        code = _run_one(p, args.update_contract, args.reason, args.update_observed, output)
         codes.append(code)
         live = bool(json.loads(p.read_text(encoding="utf-8")).get("live_only"))
         results.append(("live" if live else "scenario", p.stem, "skip" if code == SKIPPED else "pass" if code == 0 else "fail", time.time() - started))
     test_runs.record(test_runs.scenario_runs(results))   # each scenario's last result, with the tree it saw
     skipped = sum(1 for c in codes if c == SKIPPED)
     failed = sum(1 for c in codes if c not in (0, SKIPPED))
-    print(f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, "
-          f"{failed} failed, {skipped} skipped ===")
+    summary = f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, {failed} failed, {skipped} skipped ==="
+    print(summary)
+    if whole and key is not None and not failed and _unchanged(key, paths):   # a failed scenario's measurements are no ticks the KPI may reuse
+        _suite_output.keep(RUNNER, "".join(output) + summary + "\n", key)   # the KPI reads this run's ticks instead of running every scenario again
     return 1 if failed else 0
 
 
@@ -337,11 +356,10 @@ def main():
         print(f"Module filter: {module_filter} ({len(paths)} scenario(s))")
         sys.exit(_run_many(paths, args))
 
-    # Run all scenarios. We iterate per-file (instead of letting the C++ runner
-    # auto-discover) because _run_one captures MEASURE lines and writes
-    # observed.<target> blocks back into each scenario JSON on every run.
-    paths = sorted((ROOT / "test" / "scenarios").rglob("scenario_*.json"))
-    sys.exit(_run_many(paths, args))
+    # Run all scenarios, per file rather than by the C++ runner's own discovery: _run_one captures each file's MEASURE lines and writes
+    # observed.<target> blocks back into its scenario JSON when asked to (--update-observed, --update-contract).
+    paths = _suite_output.scenario_files()
+    sys.exit(_run_many(paths, args, whole=True))
 
 
 if __name__ == "__main__":

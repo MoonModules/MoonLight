@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from setup_teensy import gcc_bin, missing, sdk_root, teensyduino_define  # noqa: E402
+from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 # The Teensy slice of the firmware registry (firmwares.py joins it with the ESP32 one), with the installer's fields as build_esp32.FIRMWARES carries them.
@@ -63,7 +64,7 @@ def build(firmware: str, release: str, version: str) -> int:
                         f"-DMM_RELEASE={release}", f"-DMM_VERSION={version}"], cwd=ROOT)
     if r.returncode != 0:
         return r.returncode
-    return subprocess.run(["cmake", "--build", str(build_dir)], cwd=ROOT).returncode
+    return subprocess.run(["cmake", "--build", str(build_dir), "--parallel", str(build_jobs())], cwd=ROOT).returncode
 
 
 def main():

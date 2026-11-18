@@ -32,7 +32,8 @@ BUILD = os.path.join(ROOT, "build", "esp32-qemu")
 # knows how to find the right one (there can be several IDF versions installed), so reuse that rather
 # than re-deriving the path here.
 sys.path.insert(0, os.path.join(ROOT, "moondeck", "build"))
-from build_esp32 import APP_BIN, APP_ELF, MOONBASE_BIN, find_idf_python  # noqa: E402
+from build_esp32 import APP_BIN, APP_ELF, MOONBASE_BIN  # noqa: E402
+from idf_env import find_idf_python  # noqa: E402
 
 
 def qemu_binary() -> str:

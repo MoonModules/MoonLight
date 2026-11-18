@@ -781,3 +781,10 @@ TEST_CASE("deleting and moving playlist rows keeps each row's own path") {
     CHECK(path(0) == "/sd/b.fseq");
     CHECK(path(1) == "/sd/a.fseq");
 }
+
+// An effect built as a probe, as the type list builds one of each type, has no layer: preparing it sizes zero lights rather than reading a missing layer. GCC 16 in Release found the path.
+TEST_CASE("an FSEQ player with no layer prepares to zero lights") {
+    FseqPlayerEffect e;
+    e.prepare();                              // crashed through channelsPerLight() before the guard
+    CHECK_FALSE(e.deliversWiringOrder());     // a frame with no layer is placed nowhere, so it is not in wiring order
+}

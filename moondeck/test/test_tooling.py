@@ -24,10 +24,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 import test_runs  # noqa: E402
+from build_host import build_jobs  # noqa: E402   (the one bound on jobs, which the gate runner sets per gate)
 
 # Named here rather than in a requirements file: each is a test's own dependency (pyserial for the flash tests, wled for the /json shim, markdown for the docs checks, requests for the MoonTube recorder, libclang for the help generator, pyyaml and jsonschema for MoonWalk's generator, jsonschema for the device catalog too), and `uv run --with` is how every other script in MoonDeck reaches one.
-PY_DEPS = ("pytest", "pyserial", "markdown", "wled", "requests", "libclang", "pyyaml", "jsonschema", "mir_eval", "mido")
+PY_DEPS = ("pytest", "pytest-xdist", "pyserial", "markdown", "wled", "requests", "libclang", "pyyaml", "jsonschema", "mir_eval", "mido")
 
 # The UI suite's own deps. Separate because it is the only lane that drives a browser
 # against a RUNNING device: pytest-playwright is Playwright's documented Python runner
@@ -70,7 +72,7 @@ def main() -> int:
         junit = args.junit_dir / "junit-python.xml"   # the results beside the console, to be kept as runs
         junit.parent.mkdir(parents=True, exist_ok=True)
         junit.unlink(missing_ok=True)   # a run that writes none records none, rather than the last one's results as this tree's
-        cmd += ["pytest", "test/python", "-q", f"--junitxml={junit}"]
+        cmd += ["pytest", "test/python", "-q", "-n", str(build_jobs()), f"--junitxml={junit}"]   # workers in parallel, as the build's jobs
         rc |= run(cmd, "Python (test/python)")
         if junit.exists():
             test_runs.record(test_runs.pytest_runs(junit))

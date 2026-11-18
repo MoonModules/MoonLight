@@ -12,13 +12,16 @@
 #include "core/system/DeviceIdentify.h"   // DevType, devTypeStr (the device-kind enum + its labels)
 #include "core/system/DevicePlugin.h"     // the interop plugin seam + the bundled plugins
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
+#include "core/system/DeviceProbe.h"      // PageProbe: the request that names a device known only by its address
+#include "core/system/DeviceSummary.h"    // writeDeviceFacts: what this device's own row and its summary both carry
+#include "core/system/DeviceGroup.h"       // the groups under Devices, which a row names and whose missing members it marks
+#include "core/system/DeviceGroupSync.h"   // the groups' definitions between devices, on the socket this module owns beside the presence one
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
-#include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board resolves from this list, and a status names it
+#include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board or a group resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
 #include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
 #include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
 #include "core/util/ReceiverList.h"           // parseReceiverList: the added addresses, as every receiver list is read
-#include "core/util/HttpHead.h"           // findHeader: the probe reads a page's Server header as the server reads a request's
 #include "platform/platform.h"
 
 #include <cstdint>
@@ -34,14 +37,6 @@ namespace mm {
 /// The Discovery card under Devices, listening once the network is up; the list is rebuilt within seconds of boot.
 ///
 /// @guide
-///
-/// ## The map
-///
-/// This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html).
-///
-/// ## The emoji
-///
-/// Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.
 ///
 /// ## As many devices as memory holds
 ///
@@ -73,6 +68,8 @@ namespace mm {
 ///
 /// **The summary is `/api/system`.** A node's details read the device's own health endpoint, which leads with who it is and what it runs, the light outputs and effects through `LightOutput`. This device's row carries its outputs too, so a peer's map labels its node without a request per node. Identify presses the device's own Drivers `identify` button through `/api/control`.
 ///
+/// **Behind, and defaults.** A node whose app is behind its update channel, or whose MoonBase or WiFi coprocessor (`moonbaseMismatch`, `coprocessorMismatch`, which its own row carries) is behind its app, gets an amber ring, a ⬆ and an update button in its popup, which also offers Apply device defaults.
+///
 /// **The map's edges come from the modules.** Once a second every enabled module reports its services and traffic (NetworkUse). A peer gets a row, a group address one of kind group. This device's row carries its outbound flows and services, a peer's row its inbound flow. A flow from a peer is a sighting; one to a silent receiver is not, so a dead receiver ages out.
 ///
 /// **Growth, and what memory refuses.** The rows are one block that doubles when a device needs a row, checked against the heap's reserve, so N devices cost about log₂ N allocations. A refused growth replaces the least recently heard row of the lowest worth: other devices, then MoonLight boards, never this device.
@@ -100,41 +97,7 @@ public:
     }
 
     /// Append one device's detail, which adds its address and how long since it was heard.
-    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
-        if (row >= deviceCount_) { sink.append("{}"); return; }
-        const Device& d = devices_[row];
-        char ip[16];
-        openRow(sink, d, ip);
-        if (d.httpPort != WledPacket::kDefaultHttpPort) sink.appendf(",\"url\":\"http://%s:%u/\"", ip, static_cast<unsigned>(d.httpPort));
-        else sink.appendf(",\"url\":\"http://%s/\"", ip);
-        if (d.self) {
-            sink.append(",\"self\":true");   // always now, so no age is meaningful
-        } else {
-            // Computed here so the UI gets one finished number, and wrap-safe.
-            uint32_t ageSec = (platform::millis() - d.lastSeenMs) / 1000u;
-            sink.appendf(",\"ageSec\":%u", static_cast<unsigned>(ageSec));
-        }
-        writeEdges(sink, d);
-        if (d.self) {
-            // What this device runs, so a peer merging this graph shows it on this device's node.
-            sink.append(",\"version\":");
-            sink.writeJsonString(kVersion);
-            sink.append(",\"firmware\":");
-            sink.writeJsonString(kFirmwareName);
-            writeServices(sink);
-            // What drives its lights, which a peer's map shows under this device's name.
-            if (const LightOutput* out = LightOutput::active()) {
-                sink.append(",\"outputs\":[");
-                out->writeOutputs(sink);
-                sink.append("]");
-            }
-        } else if (d.version[0]) {
-            sink.append(",\"version\":");   // what another ecosystem's device announced it runs
-            sink.writeJsonString(d.version);
-        }
-        if (!d.self && d.chip[0]) sink.appendf(",\"chip\":\"%s\"", d.chip);
-        sink.append("}");
-    }
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override;
 
     /// The rows are rebuilt from what is heard, so the list is never saved.
     bool persistsList() const override { return false; }
@@ -152,7 +115,10 @@ public:
         MoonModule::defineControls();
         controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
         controls_.addText("addedIps", addedIps, sizeof(addedIps));
+        controls_.addText("deletedGroups", deletedGroups_, sizeof(deletedGroups_));
+        controls_.setHidden(controls_.count() - 1, true);   // saved, so a group deleted anywhere stays deleted here across a reboot
         /// The discovered devices; a row expands to its details.
+        /// @guide The map: this device is the ringed center, lines are traffic, quiet devices sit beneath. Scroll zooms, drag pans, ⌖ resets; the bar searches, greying out the rest, and shows IP, version and traffic. A node opens its details and Identify, a group's box its update. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html). Emoji for lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.
         /// @field name The device's name, else its address.
         /// @field ip Its address on the network.
         /// @field url Its own page, opened in a new tab.
@@ -176,7 +142,7 @@ public:
         addedCount_ = err ? 0 : n;
         addedError_ = err;
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         probeTick_ = kProbeEverySec;   // ask the new list now
         refreshStatus();
     }
@@ -209,6 +175,24 @@ public:
         return true;
     }
 
+    /// The devices a group member is picked from, those whose MAC a source named, as the option set `key`: each its name and address.
+    void writeMemberOptions(JsonSink& sink, const char* key) const;
+
+    /// The MAC and name of the `index`th device writeMemberOptions offers; false past the end.
+    bool memberOption(uint32_t index, uint8_t mac[6], const char*& name) const;
+
+    /// The name of the device with this MAC, or null when none is listed.
+    const char* nameOfMac(const uint8_t mac[6]) const MM_NONBLOCKING {
+        const Device* d = rowOfMac(mac);
+        return d && d->name[0] ? d->name : nullptr;
+    }
+
+    /// Whether the device with this MAC was heard within three of its announcements, ten seconds apart for a board of ours and a minute for the rest; this device always.
+    bool heardLately(const uint8_t mac[6]) const MM_NONBLOCKING {
+        const Device* d = rowOfMac(mac);
+        return d && (d->self || platform::millis() - d->lastSeenMs <= (ours(d->type) ? 3u * kBroadcastEverySec * 1000u : 3u * 60u * 1000u));
+    }
+
     /// Register a bridge a driver found out of band, updating its row or inserting one.
     void upsertHueBridge(const uint8_t ip[4], const char* name, uint8_t color) {
         Device* d = findByIp(ip);
@@ -232,7 +216,7 @@ public:
     /// Offer this list as the source address settings resolve board names from.
     void setup() override {
         MoonModule::setup();
-        NameResolver::setNameSource(&resolveBoard, &boardNameAt);
+        NameResolver::setNameSource(&resolveBoard, &boardNameAt, &groupMembersOf);
         setStatus(statusBuf_);
         parseAdded();   // a saved list is restored without a change hook
     }
@@ -250,10 +234,23 @@ public:
         mdns_.close();
         mdnsOpen_ = false;
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
+        groupSync_.close();
         deviceCount_ = flowCount_ = serviceCount_ = 0;   // the base frees their blocks
         MoonModule::release();
     }
+
+    /// Read the groups' messages, so a shared control changed on a member applies here within a frame or two.
+    void tick20ms() MM_NONBLOCKING override {
+        MoonModule::tick20ms();
+        if (parent()) groupSync_.receive(*parent());
+    }
+
+    /// Whether a deletion marker names the group with this id, so a new group takes another.
+    bool groupDeleted(const char* id) const { return groupSync_.deleted(id); }
+
+    /// What a group's status adds about the shared controls, or null.
+    const char* sharedNote() const MM_NONBLOCKING { return groupSync_.sharedNote(); }
 
     /// Drain inbound packets, announce ourselves on a slow cadence, and age out the silent.
     void tick1s() MM_NONBLOCKING override {
@@ -278,6 +275,7 @@ public:
 
         browseMdns();
         probeAdded();
+        if (parent()) groupSync_.tick(*parent(), deletedGroups_, sizeof(deletedGroups_));
 
         // Broadcast our own presence every kBroadcastEverySec ticks so peers discover us.
         if (++broadcastTick_ >= kBroadcastEverySec) {
@@ -298,10 +296,10 @@ public:
     bool probeOpenForTest() const { return probe_.conn.valid(); }
     /// Test-only: the first added address's page arriving in pieces of `piece` bytes, as the probe's reads take it.
     void injectPageForTest(const char* page, size_t piece) {
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         const size_t len = std::strlen(page);
         for (size_t at = 0; at < len; at += piece)
-            if (scanPage(reinterpret_cast<const uint8_t*>(page) + at, len - at < piece ? len - at : piece)) break;
+            if (probe_.scan(reinterpret_cast<const uint8_t*>(page) + at, len - at < piece ? len - at : piece)) break;
         finishProbe();
     }
     /// Test-only: an mDNS reply arriving from `srcIp`, as the browse's read takes it.
@@ -369,22 +367,9 @@ private:
     Receiver    addedReceivers_[kMaxAdded] = {};
     uint8_t addedCount_ = 0;
     const char* addedError_ = nullptr;   // why `addedIps` was refused, kept in the status until it is fixed
-    /// One HTTP request for an added address's page: its Server header names the firmware, its first <h2> the name a Tasmota was given.
-    struct Probe {
-        platform::TcpConnection conn;   ///< the request's connection
-        uint8_t receiver = 0;  ///< which added address
-        uint8_t state = 0;     ///< 0 idle, 1 connecting, 2 sending, 3 reading
-        uint8_t sent = 0;      ///< how much of the request the socket took
-        uint8_t ticks = 0;     ///< ticks in this state, which bounds a silent address
-        uint8_t h2At = 0;      ///< how much of "<h2>" the page has matched across reads
-        bool    inH2 = false;  ///< inside the first <h2>, whose text is the name
-        char    server[40] = {};   ///< the Server header's value
-        char    h2[24] = {};       ///< the first <h2>'s text
-        uint8_t h2Len = 0;     ///< its length so far
-        char    line[48] = {}; ///< the header line being read, for the Server one
-        uint8_t lineLen = 0;   ///< its length so far
-        bool    body = false;  ///< past the headers
-    } probe_;
+    PageProbe probe_;   ///< the added-address request in flight
+    DeviceGroupSync groupSync_{*this};   ///< the device groups' definitions on the network
+    char deletedGroups_[400] = "";       ///< the groups deleted anywhere, "id:hlc:writer;" each, the newest eight
     uint32_t probeTick_ = 0;
     /// How often each added address is asked, in ticks, and how many ticks a probe waits for it.
     static constexpr uint32_t kProbeEverySec = 60;
@@ -410,7 +395,7 @@ private:
     }
 
     /// Whether a kind is one of ours, a board MoonLight or MoonBase holds, each marked by its own sentinel.
-    static bool ours(DevType t) { return t == DevType::MoonLight || t == DevType::MoonBase; }
+    static bool ours(DevType t) MM_NONBLOCKING { return t == DevType::MoonLight || t == DevType::MoonBase; }
 
     /// What this row is worth keeping when memory is full.
     static uint8_t worth(const Device& d) {
@@ -515,34 +500,17 @@ private:
         return added;
     }
 
+    /// What this device runs, its mode and its images behind the app, its services and its outputs, so a peer merging this graph shows them on its node.
+    void writeSelfDetail(JsonSink& sink) const;
+
     /// A row's edges, the adjacency list the map draws: this device's outbound flows from its own row, a peer's inbound flow from the peer's row to this device.
-    void writeEdges(JsonSink& sink, const Device& d) const {
-        bool first = true;
-        for (ListRow i = 0; i < flowCount_; i++) {
-            const Flow& f = flows_[i];
-            if (d.self ? !f.outbound : (f.outbound || !ipEq(f.peer, d.ip))) continue;
-            char to[16];
-            formatDottedQuad(to, d.self ? f.peer : selfIp_);
-            sink.append(first ? ",\"edges\":[" : ",");
-            first = false;
-            sink.appendf("{\"to\":\"%s\",\"label\":\"%s", to, f.protocol);
-            if (f.rate) sink.appendf(" %u%s", static_cast<unsigned>(f.rate), f.unit);   // "46/s"
-            sink.append("\"}");
-        }
-        if (!first) sink.append("]");
-    }
+    void writeEdges(JsonSink& sink, const Device& d) const;
+
+    /// The groups under Devices holding this row's device, each its id and name, and whether it is missing from them: the boxes the map draws.
+    void writeGroups(JsonSink& sink, const Device& d) const;
 
     /// This device's services, each a protocol and its port.
-    void writeServices(JsonSink& sink) const {
-        if (!serviceCount_) return;
-        sink.append(",\"services\":[");
-        for (ListRow i = 0; i < serviceCount_; i++) {
-            const Service& s = services_[i];
-            if (s.port) sink.appendf("%s\"%s %u\"", i ? "," : "", s.protocol, static_cast<unsigned>(s.port));
-            else sink.appendf("%s\"%s\"", i ? "," : "", s.protocol);   // a service with no port, raw Ethernet's
-        }
-        sink.append("]");
-    }
+    void writeServices(JsonSink& sink) const;
 
     /// The row a newcomer replaces: lowest worth first, then heard longest ago; never this device, never one worth more than the newcomer.
     Device* leastWorthKeeping(uint8_t newcomerWorth) {
@@ -583,7 +551,7 @@ private:
         for (const DevicePlugin* p : plugins_)
             if (p->discoveryPort() != port) return;   // divergent ports unsupported yet: see note
         if (!listener_.open()) return;
-        if (listener_.bind(port)) {
+        if (listener_.bindShared(port)) {   // beside another listener on this computer, MoonDeck's or a second desktop's
             listenerBound_ = true;
             boundMs_ = platform::millis();
             listener_.joinMulticast(kDiscoveryGroup);   // best-effort: a stack without multicast still hears the broadcast half
@@ -643,7 +611,7 @@ private:
     /// Ask each added address for its page, one at a time and once a minute, never waiting: a connect and a read move one step a tick.
     void probeAdded() {
         if (!addedCount_) return;
-        Probe& p = probe_;
+        PageProbe& p = probe_;
         if (p.state == 0) {
             if (p.receiver == 0 && ++probeTick_ < kProbeEverySec) return;
             probeTick_ = 0;
@@ -676,45 +644,19 @@ private:
             const int n = p.conn.read(buf, sizeof(buf));
             if (n < 0) return;                       // nothing yet: next tick
             if (n == 0) { finishProbe(); return; }  // the page ended
-            if (scanPage(buf, static_cast<size_t>(n))) { finishProbe(); return; }
+            if (p.scan(buf, static_cast<size_t>(n))) { finishProbe(); return; }
         }
-    }
-
-    /// Read a piece of the page: the Server header among the headers, then the first <h2>'s text; true once that text is complete.
-    bool scanPage(const uint8_t* b, size_t n) {
-        Probe& p = probe_;
-        static constexpr char kH2[] = "<h2>";
-        for (size_t i = 0; i < n; i++) {
-            const char c = static_cast<char>(b[i]);
-            if (!p.body) {
-                if (c == '\n') {
-                    p.line[p.lineLen] = 0;
-                    if (p.lineLen == 0) p.body = true;   // the blank line ends the headers
-                    else if (const char* h = http::findHeader(p.line, "Server:")) mm::formatTo(p.server, sizeof(p.server), "%s", http::skipSpace(h + 7));
-                    p.lineLen = 0;
-                } else if (c != '\r' && p.lineLen + 1u < sizeof(p.line)) {
-                    p.line[p.lineLen++] = c;
-                }
-            } else if (p.inH2) {
-                if (c == '<') return true;
-                if (p.h2Len + 1u < sizeof(p.h2)) { p.h2[p.h2Len++] = c; p.h2[p.h2Len] = 0; }
-            } else {
-                p.h2At = (c == kH2[p.h2At]) ? p.h2At + 1 : (c == kH2[0] ? 1 : 0);
-                if (p.h2At == sizeof(kH2) - 1) p.inH2 = true;
-            }
-        }
-        return false;
     }
 
     /// What the page said about the device, its row named and versioned by it, and the next address.
     void finishProbe() {
-        Probe& p = probe_;
+        PageProbe& p = probe_;
         if (p.server[0]) {
             DiscoveredDevice found;
             const char* slash = std::strchr(p.server, '/');
             const bool tasmota = std::strncmp(p.server, "Tasmota/", 8) == 0;
             found.type = tasmota ? DevType::Tasmota : DevType::Generic;
-            setDeviceName(found, p.h2[0] ? p.h2 : "");
+            setDeviceName(found, p.name);
             const uint8_t* ip = addedReceivers_[p.receiver].ip;
             platform::arpLookup(ip, found.mac);   // the probe's connection put its MAC in the address table: the identity a page need not give
             upsertDevice(ip, found);
@@ -741,7 +683,7 @@ private:
     void nextAdded() {
         const uint8_t next = static_cast<uint8_t>((probe_.receiver + 1) % (addedCount_ ? addedCount_ : 1));
         probe_.conn.close();
-        probe_ = Probe{};
+        probe_ = PageProbe{};
         probe_.receiver = next;
     }
 
@@ -779,9 +721,10 @@ private:
             // A multicast copy from any peer proves the group arrives, a slow join being the likelier story.
             d->broadcastRun = 0;
             dropped = false;
-        } else if (d->broadcastRun < 255 && ++d->broadcastRun == kEvidence) {
+        } else if (d->broadcastRun < 255) {
+            d->broadcastRun++;
             // Only the run reaching the threshold sets it, so a peer whose group never arrives cannot undo another's multicast every ten seconds.
-            dropped = true;
+            if (d->broadcastRun == kEvidence) dropped = true;
         }
         if (dropped != NetworkPath::multicastDropped) {
             NetworkPath::multicastDropped = dropped;
@@ -851,18 +794,21 @@ private:
     /// Keep our own row at the current address, re-sorting only on a real change.
     void upsertSelf(const uint8_t ip[4]) {
         bool changed = false;
-        // Demote any prior row at another address, so it expires rather than staying immortal.
-        for (ListRow i = 0; i < deviceCount_; i++)
-            if (devices_[i].self && !ipEq(devices_[i].ip, ip)) { devices_[i].self = false; changed = true; }
-
-        Device* d = findByIp(ip);
+        uint8_t mac[6];
+        platform::getMacAddress(mac);   // the identity a group keeps this device by
+        // The row holding this device's MAC moves to a new address, so one row stays this device and a group lists it once.
+        Device* d = rowFor(ip, mac, changed);
         if (!d) {
             d = addRow(ip, kWorthSelf);
             if (!d) { refreshStatus(); return; }   // no row at all to take: an empty block memory refuses to grow
             changed = true;
         }
+        // Demote any other row still marked this device, so it expires rather than staying immortal.
+        for (ListRow i = 0; i < deviceCount_; i++)
+            if (&devices_[i] != d && devices_[i].self) { devices_[i].self = false; changed = true; }
         if (d->type != DevType::MoonLight) { d->type = DevType::MoonLight; changed = true; }
         if (!d->self) { d->self = true; changed = true; }
+        if (!hasMac(d->mac)) std::memcpy(d->mac, mac, 6);
         std::memcpy(selfIp_, ip, 4);
         d->lastSeenMs = platform::millis();
         if (!d->name[0]) {
@@ -905,9 +851,17 @@ private:
     }
 
     /// Whether a source named a MAC: all zero means it did not.
-    static bool hasMac(const uint8_t mac[6]) {
+    static bool hasMac(const uint8_t mac[6]) MM_NONBLOCKING {
         for (int i = 0; i < 6; i++) if (mac[i]) return true;
         return false;
+    }
+
+    /// The device with this MAC, read-only, or null.
+    const Device* rowOfMac(const uint8_t mac[6]) const MM_NONBLOCKING {
+        if (!hasMac(mac)) return nullptr;
+        for (ListRow i = 0; i < deviceCount_; i++)
+            if (std::memcmp(devices_[i].mac, mac, 6) == 0) return &devices_[i];
+        return nullptr;
     }
 
     /// The device with this MAC, or null.
@@ -946,6 +900,18 @@ private:
         const DevicesModule* devices = active();
         return devices && devices->addressOf(name, ip);
     }
+
+    /// A receiver list's group name as its members, through whichever instance is active: NameResolver::GroupSource.
+    static bool groupMembersOf(const char* name, Receiver* out, uint8_t& n, uint8_t cap, uint8_t& left) MM_NONBLOCKING {
+        const DevicesModule* devices = active();
+        return devices && devices->appendGroupMembers(name, out, n, cap, left);
+    }
+
+    /// The device group under Devices whose shared name is `name`, letter case aside as a host name's is, or null.
+    const DeviceGroup* groupNamed(const char* name) const MM_NONBLOCKING;
+
+    /// The members of the group named `name` as receivers, each at its row's address while heard lately: NameResolver::GroupSource.
+    bool appendGroupMembers(const char* name, Receiver* out, uint8_t& n, uint8_t cap, uint8_t& left) const MM_NONBLOCKING;
 
     /// Drop whatever has gone unheard past its window, compacting in place.
     void ageOut(const uint8_t local[4]) {

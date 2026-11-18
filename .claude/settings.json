@@ -1,12 +1,24 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "SessionStart": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_prose.py\""
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_written.py\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "FileChanged": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_written.py\"",
+            "async": true,
+            "timeout": 120
           }
         ]
       }

@@ -179,7 +179,7 @@ TEST_CASE("the config scraper reads each interface's IP settings, by the app's r
 }
 
 // The page keeps calling the same paths across the hand-over to MoonBase, which shares no sources, so a renamed route fails only on a device mid-update.
-TEST_CASE("the two boot images serve the OTA routes under the same names" * doctest::skip(!mm::sourceTreePresent())) {
+TEST_CASE("the two boot images serve the OTA routes under the same names, and answer a CORS preflight from one home" * doctest::skip(!mm::sourceTreePresent())) {
     // Resolved from this file rather than the working directory: ctest runs the binary from the build tree, where a relative path finds nothing.
     const std::filesystem::path repo =
         mm::sourceRoot();
@@ -196,6 +196,11 @@ TEST_CASE("the two boot images serve the OTA routes under the same names" * doct
         CHECK_MESSAGE(moonbase.find(route) != std::string::npos, "MoonBase must serve " << route);
         CHECK_MESSAGE(app.find(route) != std::string::npos, "the app must serve " << route);
     }
+
+    // A CORS preflight, which a page served elsewhere on the network sends before installing, is answered from the one home the app uses.
+    CHECK_MESSAGE(moonbase.find("mm::http::preflightResponse(") != std::string::npos, "MoonBase must answer OPTIONS through http::preflightResponse");
+    CHECK_MESSAGE(moonbase.find("Access-Control-Allow-Methods") == std::string::npos, "MoonBase keeps no copy of the preflight headers");
+    CHECK_MESSAGE(app.find("Access-Control-Allow-Methods") == std::string::npos, "the app keeps no copy of the preflight headers");
 
     // The old names stay gone: a leftover is a second way to say one thing.
     for (const char* gone : {"\"POST /install\"", "\"POST /install-url\"", "'/install'", "'/install-url'"}) {
@@ -219,8 +224,9 @@ TEST_CASE("the two boot images serve the OTA routes under the same names" * doct
     CHECK_MESSAGE(app.find("/api/firmware/moonbase-update-url") != std::string::npos,
                   "the app must also install a MoonBase from a URL");
 
-    // The UI detects MoonBase by a control the module publishes only there, so both name the same one, or the card silently loses its way in.
-    const std::string ui = read("src/ui/app.js");
+    // The UI, the Firmware card with the install flow and page helpers it shares with the map's popup, detects MoonBase by a control the module publishes only there.
+    const std::string card = read("src/ui/app.js");
+    const std::string ui = card + read("src/ui/deviceinstall.js") + read("src/ui/uikit.js");
     CHECK_MESSAGE(ui.find("c.name === \"image\"") != std::string::npos,
                   "the UI must detect MoonBase by the control the module actually publishes");
 
@@ -238,14 +244,15 @@ TEST_CASE("the two boot images serve the OTA routes under the same names" * doct
     CHECK_MESSAGE(read("src/core/system/FirmwareUpdateModule.h").find("addSelect(\"image\"") != std::string::npos,
                   "the module must publish that control");
 
-    // Every install shows progress, all six ways in: one with none is indistinguishable from one that hung.
-    for (const char* raiser : {"watchInstall(k)", "moonbaseUpdateFlow({ url })",
-                               "moonbaseUpdateFlow({ file })", "uploadWithProgress("}) {
-        CHECK_MESSAGE(ui.find(raiser) != std::string::npos,
+    // Every install shows progress, since one with none looks hung: the card hands each to the shared flow behind its overlay, which reports the device's progress.
+    CHECK_MESSAGE(card.find("installFirmware(\"\", kind, source, showUpdateOverlay()") != std::string::npos,
+                  "every install on the card must run the shared flow behind the progress overlay");
+    for (const char* raiser : {"install({ url })", "install({ file })", "install({ url: \"\" })", "install({ url: binaryUrl"}) {
+        CHECK_MESSAGE(card.find(raiser) != std::string::npos,
                       "every install path must show progress: missing " << raiser);
     }
-    CHECK_MESSAGE(ui.find("showUpdateOverlay()") != std::string::npos,
-                  "the progress overlay must exist");
+    CHECK_MESSAGE(ui.find("uploadWithProgress(`${base}${route}`") != std::string::npos,
+                  "the flow must upload with progress");
 
     // Progress rides the status in one shape, read once by the app and once by MoonBase's own page, so both readers are pinned.
     CHECK_MESSAGE(ui.find("function installProgress(") != std::string::npos,

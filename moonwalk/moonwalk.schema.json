@@ -142,7 +142,10 @@
         },
         "asks": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "minItems": 1,
           "description": "What the person answers at this step in their own words, one question each: the headings of a pull request's description, the fields of an issue form."
         },
@@ -171,6 +174,28 @@
         },
         "detail": {
           "$ref": "#/$defs/markdown"
+        },
+        "ci": {
+          "type": "boolean",
+          "description": "CI runs this gate on every push, so a merge reads its result from the pull request's checks rather than running it (run_gates.py --process pre-merge)."
+        },
+        "generates": {
+          "type": "string",
+          "description": "The committed file this step writes. run_gates.py runs it before every other gate of a commit, as make builds a target before what reads it, and a merge leaves it out, since a stale file there is a failure to fix, not to regenerate."
+        },
+        "needs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The gates that finish before this one starts, as GitHub Actions' needs: a step id of this process, or process/step for another. A need that fails skips this gate; one the change does not trigger is met."
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The files this step leaves behind, as globs from the repo root ({host_build} stands for the host's build directory). run_gates.py adds their state to the cache key, as make rebuilds a target whose file is gone or newer, so a deleted output reruns the gate that made it."
+        },
+        "cores": {
+          "oneOf": [{ "type": "integer", "minimum": 1 }, { "const": "all" }],
+          "description": "The job budget's tokens this gate holds while it runs, 1 when absent: all for a compile, which fills every core, and for a measure no other gate may skew. run_gates.py hands the count to the gate's builds and its test workers."
         }
       }
     },

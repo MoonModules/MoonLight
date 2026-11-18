@@ -2144,6 +2144,8 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     return ::bind(fd_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) == 0;
 }
 
+bool UdpSocket::bindShared(uint16_t port) { return bind(port); }   // one process on the board, so nothing to share with
+
 int UdpSocket::recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4], uint16_t* srcPort) {
     if (fd_ < 0) return -1;
     sockaddr_in src{};

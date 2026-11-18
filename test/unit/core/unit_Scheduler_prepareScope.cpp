@@ -119,3 +119,25 @@ TEST_CASE("a live write marks nothing dirty, and the same write from a person do
     t.s.setControl("l1", "enabled", "{\"value\":false}", /*live=*/true);   // a switch a service flips
     CHECK_FALSE(t.leaf[1].dirty());
 }
+
+// A module re-acquiring what it alone owns, as Drivers re-engages its split after a stall, must leave its children's peripherals alone.
+TEST_CASE("a module asking for its own prepare is prepared at the frame boundary, its children left as they are") {
+    Tree t;
+    t.zero();
+    t.s.requestPrepareSelf(&t.box[2]);
+    t.s.preparePending();
+    CHECK(t.box[2].prepares == 1);
+    CHECK(t.leaf[2].prepares == 0);   // its child keeps its state
+    CHECK(t.top.prepares == 0);
+    t.s.preparePending();
+    CHECK(t.box[2].prepares == 1);    // asked once, prepared once
+}
+
+TEST_CASE("a module removed after asking for its own prepare is left alone") {
+    Tree t;
+    t.zero();
+    t.s.requestPrepareSelf(&t.box[3]);
+    t.top.removeChild(&t.box[3]);
+    t.s.preparePending();
+    CHECK(t.box[3].prepares == 0);
+}

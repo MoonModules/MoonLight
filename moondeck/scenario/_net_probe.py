@@ -15,13 +15,13 @@ duplication is unavoidable here; keep each in sync with its `.h`:
   build_ddp    ↔ src/light/util/DdpPacket.h::buildDdpPacket
 """
 
-import json
 import sys
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-MOONDECK_STATE = ROOT / "moondeck" / "moondeck.json"
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _moondeck_config import live_test_devices  # noqa: E402
 
 ARTNET_PORT = 6454
 E131_PORT = 5568
@@ -74,29 +74,13 @@ def build_ddp(offset: int, push: bool, data: bytes) -> bytes:
 
 
 def load_selected_devices():
-    """The devices the user CHECKED in MoonDeck's Live tab (the `selected` flag,
-    persisted to moondeck.json), of the active network, re-probed for
-    reachability (a stale flag must not hang the run on a 15 s mutating-call
-    timeout). The checkbox is the run set — it's what the UI implies and what
-    app.js filters Live-tab runs by. A device with no `selected` key (older
-    state) counts as selected, so a freshly-discovered list still runs."""
-    if not MOONDECK_STATE.exists():
-        print(f"FAIL  {MOONDECK_STATE} not found — run MoonDeck once to discover devices")
-        sys.exit(2)
-    state = json.loads(MOONDECK_STATE.read_text())
-    nets = state.get("networks", [])
-    net = next((n for n in nets if n.get("name") == state.get("active_network")),
-               nets[0] if nets else None)
-    if not net:
-        print("FAIL  moondeck.json has no networks")
-        sys.exit(2)
+    """The devices selected for the live tests in MoonDeck's map popup, by MAC, at the address each answers on now, re-probed for
+    reachability so a device that went away does not hang the run on a 15 s mutating-call timeout."""
     devices = []
-    for dev in net.get("devices", []):
-        if not dev.get("selected", True):   # unchecked → skip; missing key → run
-            continue
+    for dev in live_test_devices():
         try:  # quick reachability probe, far shorter than Client's mutate timeout
             with urllib.request.urlopen(f"http://{dev['ip']}/api/state", timeout=3):
                 devices.append(dev)
         except OSError:
-            print(f"  WARN  {dev.get('deviceName', dev['ip'])} checked but unreachable — skipped")
+            print(f"  WARN  {dev['deviceName']} ({dev['ip']}) is selected but does not answer: skipped")
     return devices
