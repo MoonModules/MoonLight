@@ -308,7 +308,7 @@ uv run moondeck/check/run_gates.py --list      # which would run and why, runnin
 uv run moondeck/check/run_gates.py --only docgen,js --no-cache
 ```
 
-A gate runs when a file its `given: changed:` globs name differs from HEAD (from the merge base for `pre-merge`), and a gate that passed is cached under a hash of its inputs, so a rerun runs only what moved. Builds and suites run one at a time in the process's order; the quick checks run beside them, as many at once as the machine's job budget (`moondeck/_budget.py`, GNU make's jobserver protocol) holds tokens, all niced; a build keeps its own job count. A merge (`--process pre-merge`) leaves out the gates marked `ci: true`, whose result it reads from the pull request's checks. It prints one line per gate and one each minute, lists the judgment steps for the reader, writes a record to `build/gates/`, and ends with improvements it proposes from the records: a ratchet that rose and the write-time check that would catch it, a gate grown slower, a gate that passes every run.
+A step that `generates` a committed file (help.json) runs first, before any gate reads that file, and leaves its rewrite unstaged; a merge leaves it out. A gate runs when a file its `given: changed:` globs name differs from HEAD (from the merge base for `pre-merge`), and a gate that passed is cached under a hash of its inputs, so a rerun runs only what moved. Builds and suites run one at a time in the process's order; the quick checks run beside them, as many at once as the machine's job budget (`moondeck/_budget.py`, GNU make's jobserver protocol) holds tokens, all niced; a build keeps its own job count. A merge (`--process pre-merge`) leaves out the gates marked `ci: true`, whose results the merge process's `gh pr checks` step reads; the runner's exit status covers only the gates it ran. It prints one line per gate and one each minute, lists the judgment steps for the reader, writes a record to `build/gates/`, and ends with improvements it proposes from the records: a ratchet that rose and the write-time check that would catch it, a gate grown slower, a gate that passes every run.
 
 ### check_prose
 
@@ -361,9 +361,10 @@ Check that a firmware binary exists and is newer than every source that feeds it
 
 ```bash
 uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8
+uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8 --build   # the commit gate: rebuild a stale one once
 ```
 
-The cheap stand-in for a full `idf.py build` in the commit and merge checks. Freshness is measured against the **sources**, not the clock: a wall-clock rule ("built in the last hour") passes a binary that predates an edit made twenty minutes ago, which is the stale-artifact trap that sends debugging at the wrong image. On failure it names the newer file and prints the rebuild command. `--max-age-hours N` adds an optional age rule on top; the default (0) disables it.
+The cheap stand-in for a full `idf.py build` in the commit and merge checks. Freshness is measured against the **sources**, not the clock: a wall-clock rule ("built in the last hour") passes a binary that predates an edit made twenty minutes ago, which is the stale-artifact trap that sends debugging at the wrong image. On failure it names the newer file and prints the rebuild command; `--build` runs that rebuild once and checks again. `--max-age-hours N` adds an optional age rule on top; the default (0) disables it.
 
 ### check_devices
 
@@ -395,7 +396,7 @@ uv run moondeck/check/collect_kpi.py --commit                 # the commit-messa
 uv run moondeck/check/collect_kpi.py --commit --no-live-capture   # skip the serial read
 ```
 
-Captures a live tick from a connected ESP32 (and the host scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records.
+Captures a live tick from a connected ESP32 (and the host scenario ticks) plus source/test line counts, emitting the `tick:Xus(FPS:Y)` one-liner the commit message records. The host's case count and scenario ticks come from the test gates' own runs, which `test_host.py` and `run_scenario.py` keep beside each binary with its hash (`moondeck/_suite_output.py`); a binary rebuilt since is run again through those same scripts.
 
 The ESP32 half reads `esp32/monitor.log`, and refreshes it by opening the serial port for 15 s when that log is older than 5 minutes. That reading is accurate, but takes ~80 s and a bench board. `--no-live-capture` skips that refresh and uses whatever log exists (a few seconds, no board needed); the ESP32 tick line is then absent rather than stale when no recent log is around. The gate lists pass the flag so their cost stays predictable; omit it when composing a commit message, where the fresh reading is the point.
 

@@ -37,6 +37,7 @@ def test_a_build_or_a_suite_runs_one_at_a_time_and_a_quick_check_beside_them():
     assert run_gates.heavy({"script": "moondeck/test/test_tooling.py", "args": "--python"})
     assert not run_gates.heavy({"script": "moondeck/test/test_tooling.py", "args": "--js"})
     assert not run_gates.heavy({"script": "moondeck/check/check_specs.py", "args": ""})
+    assert run_gates.heavy({"script": "moondeck/check/check_esp32_built.py", "args": "--firmware esp32s3-n16r8 --build"})   # it may build
 
 
 def test_a_ratchet_rise_is_read_from_the_checks_own_report():
@@ -83,6 +84,14 @@ def test_a_nested_run_joins_the_budget_its_parent_announces(monkeypatch):
             assert child.path == parent.path and child.tokens >= 1
 
 
+def test_a_generated_file_is_written_before_the_gates_and_left_out_of_a_merge():
+    commit = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
+    assert commit["commit-docs/help"]["generates"] == "docs/help/help.json"
+    run, skipped, _ = run_gates.select("commit", "HEAD", False, None)
+    assert all(g["id"] != "commit-docs/help" for g in run + skipped)   # generate() runs it, before the selection hashes its output
+    assert run_gates.generators("pre-merge", "HEAD") == []                # a stale file at a merge is a failure to fix
+
+
 def test_a_merge_leaves_out_the_gates_ci_runs_and_runs_a_command_once():
     commit = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
     assert commit["commit-docs/docgen"]["ci"] and commit["host-tests/test"]["ci"]   # a process a ci step names is ci too
@@ -92,3 +101,17 @@ def test_a_merge_leaves_out_the_gates_ci_runs_and_runs_a_command_once():
     assert "CI runs it" in why["commit-docs/docgen"]
     assert all(not g.get("ci") for g in run)
     assert not any(g["id"] == "commit-code/kpi" and g.get("ci") for g in run)   # the KPI CI cannot measure runs at the merge
+
+
+def test_a_git_that_cannot_answer_stops_the_run_rather_than_reading_as_an_empty_diff():
+    import pytest
+    with pytest.raises(RuntimeError, match="git diff"):
+        run_gates.changed_files("no-such-revision", ["."])
+
+
+def test_without_a_named_pipe_the_budget_is_the_runs_own_semaphore(monkeypatch):
+    monkeypatch.delattr(os, "mkfifo")                 # Windows has none
+    with JobBudget(2) as budget:
+        assert budget.path is None and budget.env() == dict(os.environ)   # a child is told of no pipe
+        budget.acquire()                              # the one token beside the implicit one
+        budget.release()

@@ -5,7 +5,8 @@ keep their cores. The tokens sit in a named pipe as make's jobserver keeps them 
 ninja 1.13): a process holds one implicit token and reads one byte from the pipe for each further job, writing it back when the job ends.
 `MAKEFLAGS` announces the pipe to every child, so a nested run joins the same budget instead of opening its own. A build keeps its own
 job count (`--parallel`, `IDF_PY_BUILD_JOBS`), which takes it out of the pipe, and macOS's make 3.81 reads no `fifo:` pipe at all:
-the budget bounds how many gates run at once, and a build beside them still runs its own count.
+the budget bounds how many gates run at once, and a build beside them still runs its own count. Windows has no named pipe of this kind
+(`os.mkfifo` is POSIX), so there the budget is a semaphore inside the run: the gates still share it, and a child cannot join it.
 
 stdlib only and cheap to import, as `_host.py` is, so a PEP-723 script imports it after adding moondeck/ to sys.path.
 """
@@ -14,6 +15,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "build"))
@@ -26,6 +28,10 @@ class JobBudget:
     def __init__(self, tokens: int | None = None):
         self.tokens = max(1, tokens or build_jobs())
         self._dir = None
+        self._sem = None
+        if not hasattr(os, "mkfifo"):   # Windows: the run's own semaphore, which no child sees
+            self.path, self._fd, self._sem = None, None, threading.Semaphore(self.tokens - 1)
+            return
         joined = _announced_fifo(os.environ.get("MAKEFLAGS", ""))
         if joined:
             self.path = joined
@@ -40,17 +46,27 @@ class JobBudget:
 
     def acquire(self) -> None:
         """Take one token beyond the implicit one, waiting until a job ends."""
+        if self._sem:
+            self._sem.acquire()
+            return
         os.read(self._fd, 1)
 
     def release(self) -> None:
         """Give a token back."""
+        if self._sem:
+            self._sem.release()
+            return
         os.write(self._fd, b"+")
 
     def env(self) -> dict:
-        """The environment a child runs in, its MAKEFLAGS naming this budget's pipe."""
+        """The environment a child runs in, its MAKEFLAGS naming this budget's pipe; unchanged where the budget has no pipe."""
+        if self._sem:
+            return dict(os.environ)
         return {**os.environ, "MAKEFLAGS": f"-j{self.tokens} --jobserver-auth=fifo:{self.path}"}
 
     def close(self) -> None:
+        if self._fd is None:
+            return
         os.close(self._fd)
         if self._dir:
             shutil.rmtree(self._dir, ignore_errors=True)

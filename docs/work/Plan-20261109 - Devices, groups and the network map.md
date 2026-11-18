@@ -7,9 +7,9 @@ Devices becomes a top-level module that shows what is on the network, lets devic
 | Phase | Steps | What it gives | Its demo |
 |--|--|--|--|
 | **See the network** | 1 to 5 | a map of every device, what each offers and sends, its health, and a blink to find it | the bench drawn as one map |
-| **Act as a group** | 6 to 10 | groups, shared controls and presets without typing addresses, group updates, one clock | a line sweeping straight across boards |
-| **One effect across the group** | 11 to 15 | supersync, from streaming to every board computing its own part | a ball crossing screens; Pong with two gamepads |
-| **Beyond the LAN** | 16 and 17 | the same groups across the internet, and help for another user by looking at their device | a Pong rally between two homes; a user's setup replicated on a helper's desktop |
+| **Act as a group** | 6 to 9 | groups, shared controls and presets without typing addresses, group updates, one clock | a line sweeping straight across boards |
+| **One effect across the group** | 10 to 14 | supersync, from streaming to every board computing its own part | a ball crossing screens; Pong with two gamepads |
+| **Beyond the LAN** | 15 and 16 | the same groups across the internet, and help for another user by looking at their device | a Pong rally between two homes; a user's setup replicated on a helper's desktop |
 
 ## The design basis
 
@@ -71,13 +71,13 @@ No new protocol (product owner, 2026-11-09): each kind of message already has it
 
 - **Audio sync stays its own packet.** It is a stream at ~42 packets a second, WLED-compatible in one format; carrying must-arrive state in it would tie that state to a lossy stream.
 - **State, not commands.** A group's state is published as absolute values ("preset X, apply at T"), on a change at once and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice changes nothing, so no acknowledgements are needed and a swarm costs one multicast send. Presence already works this way. REST stays for what is not state: an update, identify, reading a peer.
-- **Apply at a time.** OSC bundles carry an NTP timetag, OSC 1.0's own "execute at T". [OscPacket.h](../../src/core/services/OscPacket.h) recognizes bundles and rejects them today, "a timed batch we have no use for yet"; step 10 gives them their use.
+- **Apply at a time.** OSC bundles carry an NTP timetag, OSC 1.0's own "execute at T". [OscPacket.h](../../src/core/services/OscPacket.h) recognizes bundles and rejects them today, "a timed batch we have no use for yet"; step 9 gives them their use.
 - **No races, no loops:**
-  - **Leaderless: every member may write** (product owner, 2026-11-09). Each value is a last-writer-wins register (Shapiro et al., *Conflict-free Replicated Data Types*, 2011): it carries a timestamp and its writer's device id, a device applies only a newer one, and a tie goes to the higher id. Every member converges on the same value whatever order packets arrive in, so concurrent edits do not race: two people on one slider at once, one edit wins and all agree which. The timestamp is a hybrid logical clock (Kulkarni et al., 2014), which orders edits before step 10 syncs the clocks and by real time after. Duplicates, reordering and stale values are ignored for the same reason. Today's shared controls are peer-to-peer with an echo check ([OscService.h](../../src/core/services/OscService.h)); whether two boards changing one control at once can end apart is a hypothesis, which the registers settle either way.
+  - **Leaderless: every member may write** (product owner, 2026-11-09). Each value is a last-writer-wins register (Shapiro et al., *Conflict-free Replicated Data Types*, 2011): it carries a timestamp and its writer's device id, a device applies only a newer one, and a tie goes to the higher id. Every member converges on the same value whatever order packets arrive in, so concurrent edits do not race: two people on one slider at once, one edit wins and all agree which. The timestamp is a hybrid logical clock (Kulkarni et al., 2014), which orders edits before step 9 syncs the clocks and by real time after. Duplicates, reordering and stale values are ignored for the same reason. Today's shared controls are peer-to-peer with an echo check ([OscService.h](../../src/core/services/OscService.h)); whether two boards changing one control at once can end apart is a hypothesis, which the registers settle either way.
   - **No forwarding.** A device publishes only what it wrote itself and never re-sends what it received, so no loop can form.
   - **Coalescing.** A slider drag publishes at most ~20 times a second, the latest value winning.
   - **Repeats by Trickle** (RFC 6206, the IETF's for low-power networks, used by RPL): a member stays quiet when it has lately heard others send the same version, its interval doubling while the group agrees and snapping back to fast on any difference. Traffic stays near flat as a group grows, where every member repeating every second would cost each device N packets a second.
-  - **Roles, derived, not elected.** A job needing one doer, the clock reference, the member that renders in step 11 and sends keyframes in step 14, the one running a group update, goes to the lowest live device id unless the owner pins one. Every member computes the same answer from the same membership, so no messages are exchanged to agree.
+  - **Roles, derived, not elected.** A job needing one doer, the clock reference, the member that renders in step 10 and sends keyframes in step 13, the one running a group update, goes to the lowest live device id unless the owner pins one. Every member computes the same answer from the same membership, so no messages are exchanged to agree.
 - **MoonOrbit carries the same messages.** One WebSocket per device to the relay carries the same OSC packets and request/response pairs, so a group behaves alike on the LAN and over the internet.
 
 ## One effect across the group: the complexity levels
@@ -116,7 +116,7 @@ What breaks each level, which synced clocks and a shared seed alone leave open:
 
 - **The clock:** `strip.now`, WLED's time with its UDP-synced offset, in place of `millis()`.
 - **Levels 1 and 2, done by hand per effect.** Soap, Octopus, Crazy Bees and Polar Lights replaced per-frame accumulation (`noise += mov` each call, `step++`) with a function of `strip.now`: frame count out, time in. MoonLight's effects already animate off `elapsed()`.
-- **Level 3, begun:** a random seed set once at the effect's start, fixed (`random16_set_seed(535)`) or from the clock (`random16_set_seed(strip.now)`). It gives the same start where devices start together, and a stream that drifts with the frame rate after it, the gap step 13 closes.
+- **Level 3, begun:** a random seed set once at the effect's start, fixed (`random16_set_seed(535)`) or from the clock (`random16_set_seed(strip.now)`). It gives the same start where devices start together, and a stream that drifts with the frame rate after it, the gap step 12 closes.
 - **The group canvas by configuration:** every node's matrix set to the whole canvas, its panel 0 placed at its offset; a SuperSync checkbox per effect made a node compute its panel only.
 - **Fleet consistency:** the Nodes popup fetched each node's info and config, compared version, build, brightness scale, fps, matrix size and panel layout, marked "update needed", and a SuperSync button pushed the LED and light config to each node and rebooted it.
 - **Two code paths per effect**, deterministic only while sync was on (`notifyDirect`), kept to compare both modes.
@@ -183,7 +183,7 @@ Asked by the product owner (2026-11-12): one way to update any MoonLight device,
 - **The Firmware card on a desktop** installs as a board's does, by URL from its picker or by upload, when the update mode is `self`; otherwise it offers the download. The shared install picker tells a desktop's own image (`firmware-desktop-…bin`) from the installer's download of the same name.
 - **Built (2026-11-13).** The image writer, the swap and the restart in [platform_host_update.cpp](../../src/platform/host/platform_host_update.cpp), the header vetting in [ProgramImage.h](../../src/platform/host/ProgramImage.h), the download through the one HTTP client (`httpDownload`), the firmware name from CMake, the sockets closed on exec, `hasOta` gone, the bare programs staged by `package_host.py`, the Firmware card installing on `self` and offering the download otherwise, the picker telling a desktop's program from its download, the live scenario leaving a desktop to restart itself. Tests: `unit_platform_update.cpp`, `unit_ProgramImage.cpp`, `ui-update-asset.test.mjs`, `test_package_deb.py`. CodeRabbit's 15 findings and a CodeQL alert fixed in the PR's second commit, among them the Linux restart, which read `/proc/self/exe` after the swap and found the old program "(deleted)".
 - **Removes:** the archive path, the reboot button hidden on desktops, `unknown` as a desktop's firmware name, the Firmware card's desktop download in place of an install, MoonWalk's hand-written unit steps. **Fixed on the way:** the reboot button hidden for a container (`^docker$` never matched `docker-arm64`). From belrik's review: the desktop's audio context picked its backend once at start, so a PulseAudio or PipeWire server started after MoonLight was never found without a restart; the context is now created anew whenever the device list is read while no device is open, and the Linux page names the drop-in that points the service at the server.
-- **Costs** a MIGRATING entry: the hand-written unit goes, the program moves from `/usr/bin` to `/usr/lib/moonlight`, and settings move from the old user's home to `/var/lib/moonlight` with one copy command. The Dockerfile copies the program from the new seed path. Unblocks step 9 for a group that mixes boards and desktops.
+- **Costs** a MIGRATING entry: the hand-written unit goes, the program moves from `/usr/bin` to `/usr/lib/moonlight`, and settings move from the old user's home to `/var/lib/moonlight` with one copy command. The Dockerfile copies the program from the new seed path. Unblocks step 8 for a group that mixes boards and desktops.
 - **Tested (2026-11-13), by the product owner and the agent.** This Mac: an upload installs and restarts in place, same PID, `.pending` cleared after a minute; a board image refused as no program; a URL with a wrong digest refused, with the right one installed and restarted. .204, the Raspberry Pi 5, from the PR's CI `.deb`: the service runs as `moonlight` holding `CAP_NET_RAW` alone, `update: self`; an upload restarts it in place, same PID, no start counted; `/bin/false` installed as an update rolls back to `.prev` within a second; an `apt install` puts the package's program back and drops `.prev`; HDMI shows the effect under the service user. .156, the NanoPi: the PR's program in its container image says `update: host`, refuses both install routes with 501 and restarts in place. The old hand-written unit and a source-build drop-in had to go first, which the MIGRATING entry covers for the unit. CI on the PR: every desktop compiles, Linux and Windows included.
 - **Tested (2026-11-15), the hook rollback on .204** from PR #248's CI `.deb` (7.1.0-dev.106): `/bin/false` installed as the pending program, the service started, the hook ran 37 ms after the failed start ("the new program failed to start, the previous one is back"), `.pending` and `.prev` gone, and `Restart=` brought the previous program back five seconds later; the unit carries `ExecStopPost` and no second unit. On the same install: the service user in `audio`, the Yeti listed and picked by name with ALSA's null device and the duplicate gone, and the Network card "Host: 192.168.1.204 (1000 Mbit)" on the Pi's cable.
 - **Verified by:** .204's package updated from its own Firmware card and rolled back from a program made to fail; this Mac updated from its own Firmware card, by URL and by upload; Windows by CI's `smoke-update`, which installs a program through its own upload route and checks it restarts with `.prev` beside it, on each runner that builds a desktop; .156's container saying its host updates it.
@@ -249,7 +249,7 @@ Landed in: [moonbase.md](../explanation/architecture/moonbase.md) (its page inst
 
 #### A security and privacy check of the map ✅
 
-Landed in: [security](../explanation/security.md) (the trust boundary and the `Origin` and `Host` rule, the Devices map, secrets, firmware, what leaves the device); the rule's code in `http::fromBeyondNetwork` ([HttpHead.h](../../src/core/util/HttpHead.h)), used by the app and MoonBase; [MIGRATING](../reference/MIGRATING.md) ("A page from outside the local network is refused"). Verified (2026-11-11) on the S3 bench board, the access point's UI included. Steps 16 and 17 take the map beyond the network and get their own review there.
+Landed in: [security](../explanation/security.md) (the trust boundary and the `Origin` and `Host` rule, the Devices map, secrets, firmware, what leaves the device); the rule's code in `http::fromBeyondNetwork` ([HttpHead.h](../../src/core/util/HttpHead.h)), used by the app and MoonBase; [MIGRATING](../reference/MIGRATING.md) ("A page from outside the local network is refused"). Verified (2026-11-11) on the S3 bench board, the access point's UI included. Steps 15 and 17 take the map beyond the network and get their own review there.
 
 #### MoonDeck and the web installer reviewed against the map ⏳
 
@@ -299,7 +299,7 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 - **What stays theirs:** their own guards (Tasmota's Referer check, ESPHome's native API key), never bypassed; MoonLight talks to them through what each publishes, as the map already does.
 - **Verified by:** each first candidate on the bench, a WLED, an ESPHome and a Tasmota board each doing its part beside a MoonLight board on the map.
 
-#### The map marks a device behind its channel 🧪 (test: a bench board behind, on the desktop's map)
+#### The map marks a device behind its channel ✅ (a bench board behind, on the host's map, 2026-11-17)
 
 Asked by the product owner (2026-11-17).
 
@@ -317,7 +317,7 @@ Asked by the product owner (2026-11-17): the way back from MoonLight, and a benc
     - *What it costs per firmware:* its table and bootloader per flash size, its release asset's name, and its networks written its own way (WLED's `wsec.json`, Tasmota's settings, ESPHome's preferences), then a power-cut round on each chip family, as the way in had.
     - *What it loses:* MoonBase itself, since none of the four has a factory slot, so the way back to MoonLight is the migration image again, through the old firmware's update page.
     - *Order:* WLED first, whose tables exist and whose settings the way in already reads; WLED-MM shares its layout; Tasmota's safeboot layout and ESPHome's later.
-- **The textbook source is each project's own installer.** WLED, WLED-MM, Tasmota and ESPHome each publish an ESP Web Tools installer that knows their builds, versions and partition layouts: [WLED](https://install.wled.me/), [WLED-MM](https://moonmodules.org/WLED-WebInstaller/), [Tasmota](https://tasmota.github.io/install/), [ESPHome](https://web.esphome.io/). Copying their images or manifests into MoonLight's installer would mean following four release schedules.
+- **The textbook source is each project's own installer.** WLED, WLED-MM, Tasmota and ESPHome each publish an ESP Web Tools installer that knows their builds, versions and partition layouts: [WLED](https://install.wled.me/), [WLED-MM](https://moonmodules.org/WLED-WebInstaller/), [Tasmota](https://tasmota.github.io/install/), [ESPHome](https://web.esphome.io/). The WLED installers' sources: [lost-hope's WLED-WebInstaller](https://lost-hope.github.io/WLED-WebInstaller/) and [MoonModules' WLED-WebInstaller](https://github.com/MoonModules/WLED-WebInstaller), WLED-MM's. Copying their images or manifests into MoonLight's installer would mean following four release schedules.
 - **Where it shows, by candidate:**
     - *The web installer:* a short "Other firmware" section linking the four installers, the one place a user with a cable already is. The links move there from [migrating over the air](../reference/migrating-over-the-air.md), which then points to the section.
     - *The map:* a move's confirm, which already says going back needs a cable, links that section, so the way back is one click from where the way in was chosen.
@@ -336,25 +336,22 @@ Asked by the product owner (2026-11-17): the way back from MoonLight, and a benc
 
 ### Act as a group
 
-#### 6. Groups ⏳
+#### 6. Device groups, shared by their members 🧪 (built 2026-11-18: the DeviceGroup module, the map's boxes, the replication in [DeviceGroupSync.h](../../src/core/system/DeviceGroupSync.h); test: two devices editing one group on the bench)
 
-- A group module under Devices: a name, its members picked from the discovered list, and a role pinned to a member where the owner wants one; otherwise each role derives from the lowest live device id ([the message design](#the-message-design)). Membership is stored by the MAC-derived identity from step 4, not by name or address, so a rename or a new lease keeps the group ([device identity](../explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it)).
-- The map draws each group as a box around its members; a member not heard gets a "missing" mark.
-- **Verified by:** two groups on the bench, a member unplugged and shown missing.
+- **The module.** A DeviceGroup under Devices, added and removed as an effect is ([DeviceGroup.h](../../src/core/system/DeviceGroup.h)): its members picked from Discovery's devices and kept by their MAC-derived identity from step 4, so a rename or a new lease keeps them ([device identity](../explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it)); its id the creating device's MAC and the moment it was made, as an RFC 4122 version 1 UUID is. A member unheard for three of its announcements is missing. A role is pinned with the role's first user (step 8's waves, step 9's clock reference); until then each derives from the lowest live device id ([the message design](#the-message-design)).
+- **On the map.** Each row names the groups holding its device; the map draws a labeled box around a group's members, members pulled together by the layout, a missing member faded and marked inside its box; a group a peer defines merges by its id.
+- **Replicated.** Every member holds the definition and any member may edit it: the name a last-writer-wins register, the members a last-writer-wins element set (each member its timestamp and an added or removed flag), so two members added at once on two devices both stay; a deleted group leaves a deleted mark. Published over OSC to the definitions' one address by every member, never forwarded, repeated by Trickle, ordered by a hybrid logical clock that keeps each part's writer: a copy received or renamed keeps the stamp its writer gave it ([the message design](#the-message-design)). Only the members hold the module; every other device sees the group on its map, which merges the peers' rows.
+- **What it costs.** Zero work on the render path; a member 48 bytes; the definitions on one well-known address (239.255.77.79:65510), every device listening, so a device hears a group it was added to; their packets near flat as a group grows (Trickle). A group deleted anywhere leaves a saved marker, the newest eight kept.
+- **Tested (2026-11-18), by the product owner and the agent.** rtpDGroup made on .101 with .221 as a member: .221 created it within seconds, and the Mac's map, no member, drew its box. That test showed a received copy stamping the name as its own; fixed, with a unit test.
+- **Verified by:** two groups on the bench, made on one board and edited on another, both maps drawing the same boxes; a member unplugged and shown missing; a unit test feeding the element set every arrival order.
 
-#### 7. Modules address a group, and the four peer lists go ⏳
+#### 7. A group acts as one ⏳
 
 - OscService, AudioService and NetworkSendDriver pick a group in place of a typed `receivers` list; MidiService's `participant` is decided in the step. Their `receivers` text fields go, with a [MIGRATING](../reference/MIGRATING.md) entry, and OscService's cap of 8 with them. A group reaches its members by multicast where the network carries it, by unicast to each where it does not.
-- Shared controls become group state: last-writer-wins registers, published by the device that wrote them, repeated by Trickle, never forwarded ([the message design](#the-message-design)).
-- Who belongs together is then said in one place, and the map shows it.
-- **Verified by:** shared controls and audio sync across a group, a member added and receiving without touching OSC or AudioService; two boards changing one control at the same moment end on the same value, and a unit test feeds the registers every arrival order.
+- Shared controls and presets become group state, published as step 6 publishes the definition: any member puts its group into a preset or sets a control across it, with no page open, and a member that missed it or rebooted catches up. Reading the members' summaries uses the REST endpoints the page uses, a few at a time.
+- **Verified by:** shared controls and audio sync across a group, a member added and receiving without touching OSC or AudioService; two boards changing one control at the same moment end on the same value; a preset change followed by every member, a member rebooted and caught up, packets dropped on purpose and the group still converging.
 
-#### 8. The group acts without a page open ⏳
-
-- Any member puts its group into a preset or sets a control across it, published as group state over OSC, the state repeated so a member that missed it or rebooted catches up. Reading the members' summaries uses the same REST endpoints the page uses, a few at a time.
-- **Verified by:** a preset change followed by every member, a member rebooted and caught up, packets dropped on purpose and the group still converging.
-
-#### 9. Update a group 🚧 (missing: the whole group in waves; a peer without TLS updated from the map)
+#### 8. Update a group 🚧 (missing: the whole group in waves; a peer without TLS updated from the map)
 
 - From a device's page: update one peer, or the whole group, through each peer's `/api/firmware/url`, or by download and upload for a peer without TLS, the Firmware card's two paths reused.
 - In waves: one device first, then a few at a time, stopping at the first failure, the device doing it last. A swarm finishes in minutes while a bad release stops at one device. Done means the peer is heard again with the new version.
@@ -362,36 +359,36 @@ Asked by the product owner (2026-11-17): the way back from MoonLight, and a benc
 - **In the field (robwomp, Discord 2026-11-13):** a Matrix Portal updated over the air while driving a HUB75 panel direct showed a few jumps and otherwise ran on, "a loose cable, not a whole OTA update": what a wave looks like to the audience.
 - **Built (2026-11-10), at the product owner's ask: one peer from its popup.** An "Update to …" button, pressed twice, posts the release image's address to the peer's `/api/firmware/url`, as its own Firmware card does, and watches `/api/system` until the peer answers on a new version; a peer without TLS (501) is sent to its own Firmware card, a desktop to the release page.
 
-#### 10. Clock sync ⏳
+#### 9. Clock sync ⏳
 
-- Absorbs the backlog card, with two changes: the reference is the clock reference role, not a configured leader; and a member measures its offset by the NTP exchange (four timestamps, request and reply), not a one-way send, since the round trip is what measures the delay. The same exchange then works over any transport, the LAN and step 16's relay alike. Aim: under a millisecond on the LAN.
-- **A change applies at a time, not on arrival**: a preset or control change is stamped "apply at T", a little in the future, in an OSC bundle's timetag, which OscPacket now accepts. Members that receive it at different moments switch together, which is what lets latency, and step 16's internet, stay invisible.
+- Absorbs the backlog card, with two changes: the reference is the clock reference role, not a configured leader; and a member measures its offset by the NTP exchange (four timestamps, request and reply), not a one-way send, since the round trip is what measures the delay. The same exchange then works over any transport, the LAN and step 15's relay alike. Aim: under a millisecond on the LAN.
+- **A change applies at a time, not on arrival**: a preset or control change is stamped "apply at T", a little in the future, in an OSC bundle's timetag, which OscPacket now accepts. Members that receive it at different moments switch together, which is what lets latency, and step 15's internet, stay invisible.
 - With step 7's shared controls, a group now shares both its controls and its time: the base every level of the next phase builds on.
 - **Measured by:** the offset spread across a bench group; stop rule named before the first run.
 - **Verified by:** a vertical line sweeping across boards side by side, the textbook display-sync test (genlock checks on video walls): straight across a seam when the clocks agree, a step when they do not, the step's width over the line's speed being the clock error.
 
 ### One effect across the group
 
-#### 11. One effect streamed: correct for every effect ⏳
+#### 10. One effect streamed: correct for every effect ⏳
 
 - The member holding the render role renders the whole group canvas and sends each member its region over DDP; the group sets up NetworkSendDriver and the members' Network Receive. Every level is correct this way, so it ships first and stays the fallback.
 - Bounded by bandwidth and the LAN: a large canvas or MoonOrbit needs the levels of the next steps.
 - **Verified by:** one effect running across three bench boards as one picture.
 
-#### 12. Group canvas: position, time and shared input (levels 1 and 2) ⏳
+#### 11. Group canvas: position, time and shared input (levels 1 and 2) ⏳
 
 - The group has one virtual size and each member holds its region in it; `elapsed()` reads the synced clock; `BeatPhase` is anchored to the effect's synced start, its rate changes applied at their synced time; `uv` takes the canvas. Every member renders its own region, and no pixels travel.
-- A member lacking the effect (Raymarch on a chip without an FPU) gets it streamed, as step 11 does.
+- A member lacking the effect (Raymarch on a chip without an FPU) gets it streamed, as step 10 does.
 - The level declaration on EffectBase, the group's choice from it, and the split-equals-whole test; level 1 and 2 effects declared, each passing it.
 - **The demo effect: a ball crossing the screens.** An elastic ball in closed form, x a triangle wave over the canvas width, y a parabola repeating each bounce, both functions of synced time: level 1, no state, each board drawing it while it is in its region. Regions placed at the boards' real positions, gaps included, so the ball takes the right time to fly between screens. BouncingBalls loses energy and relaunches, which carries memory; this is its elastic, sideways twin.
 - **Verified by:** the ball crossing three bench boards with no jump at a seam; Plasma, Truchet and AudioSpectrum across them as one picture, the spectrum's bands split over the boards; a speed change mid-run keeping the boards in phase; a board started a minute late in phase from its first frame.
 
-#### 13. Randomness from the group tick (level 3) ⏳
+#### 12. Randomness from the group tick (level 3) ⏳
 
 - A group tick from the synced clock; effects drawing per-frame randomness move from a `Random8` stream to `hashInt(seed, tick, light)`.
 - **Verified by:** the split-equals-whole test for each converted effect; a sparkle effect on boards at different frame rates showing the same sparkles.
 
-#### 14. Lockstep simulation (levels 4 and 5) ⏳
+#### 13. Lockstep simulation (levels 4 and 5) ⏳
 
 - A fixed timestep from the synced clock, in core, which a simulating effect steps by; integer math; the whole canvas simulated on each device.
 - An effect whose memory forgets (Fire's cooling, a fade trail) converges by itself and needs nothing more. One whose memory keeps, and every level 5 one, publishes a state checksum every N steps as group state; a mismatch is repaired by a keyframe from the render role holder, and a late joiner joins by keyframe.
@@ -399,7 +396,7 @@ Asked by the product owner (2026-11-17): the way back from MoonLight, and a benc
 - **Measured by:** how often a bench group diverges over an hour, and the keyframe's cost; stop rule named before the first run.
 - **Verified by:** Game of Life across three boards as one board for an hour, a board rebooted and rejoining by keyframe.
 
-#### 15. Live input across the group (level 6) ⏳
+#### 14. Live input across the group (level 6) ⏳
 
 - A gamepad or touch on one member becomes group state, stamped "apply at T" a little ahead, so every member applies it at the same step: the delay-based lockstep of networked games. Where the delay shows, the effect stays streamed.
 - **Pong across two boards**, a paddle on each and the ball crossing between them. Its attract mode re-rolls each paddle's aiming error per exchange; drawn as a hash of the exchange number, the rally is deterministic (levels 1 and 3), and a gamepad per board makes it level 6.
@@ -407,20 +404,20 @@ Asked by the product owner (2026-11-17): the way back from MoonLight, and a benc
 
 ### Beyond the LAN
 
-#### 16. MoonOrbit: groups over the internet, through MoonCloud (stretch) ⏳
+#### 15. MoonOrbit: groups over the internet, through MoonCloud (stretch) ⏳
 
 Devices in different places, owned by different people, in one group: a show running at several sites, or friends' installations running as one. MoonOrbit is a working name.
 
-- **A relay, not a stream.** Only the clock and the changes travel: the controls, presets and "apply at T" stamps. Each device renders locally, so internet bandwidth stays small and latency hides behind step 10's scheduled changes. Pixels over the internet stay out of scope, so a group across sites runs effects at levels 1 to 6 and step 11's streaming stays within each site.
+- **A relay, not a stream.** Only the clock and the changes travel: the controls, presets and "apply at T" stamps. Each device renders locally, so internet bandwidth stays small and latency hides behind step 9's scheduled changes. Pixels over the internet stay out of scope, so a group across sites runs effects at levels 1 to 6 and step 10's streaming stays within each site.
 - **Outbound only.** A device behind a home router cannot accept a connection, so each member opens one outbound WebSocket to MoonCloud, and MoonCloud relays within the group. On Cloudflare that is one Durable Object per group, beside the existing Worker ([MoonCloud](../explanation/architecture/mooncloud.md)).
 - **Opt-in and private**, as MoonCloud is today: a group is joined by a secret code the owner shares, the relay keeps no history, and the [privacy policy](../legal/privacy-policy.md) gains what the relay sees. Messages could be signed or encrypted with the group secret so the relay cannot read them; decided in the step.
 - **Reach:** ESP32 boards and the desktop, which have TLS; a Teensy joins through an open page until it has TLS.
 - **Measured by:** offset spread and change-to-light delay between two sites; stop rule named before the first run.
 - **Verified by:** a bench board and a board at another address in lockstep, judged on a shared video call; a Pong rally between the two homes, one pad in each, paired with that home's own computer or phone.
 
-#### 17. Remote support over MoonOrbit ⏳
+#### 16. Remote support over MoonOrbit ⏳
 
-A user with a problem shares their device, and a helper sees it and replicates the setup on their own desktop: "share your device in MoonOrbit and I will reproduce it". A support session is a group of two over step 16's relay, the helper reading the user's device as a page reads a peer on the LAN.
+A user with a problem shares their device, and a helper sees it and replicates the setup on their own desktop: "share your device in MoonOrbit and I will reproduce it". A support session is a group of two over step 15's relay, the helper reading the user's device as a page reads a peer on the LAN.
 
 - **The user starts it.** A "share for support" button on the user's device shows a short code, valid for a limited time and ended by the user at any moment. The helper enters it in their own MoonLight, and the user's device appears on the helper's map.
 - **Read-only by default.** The helper reads the summary, the state, the log and the flows through the relay's request/response. A change on the user's device needs the user to allow writing for that session.
@@ -445,7 +442,7 @@ Acting on devices and groups:
 - **Signed releases, every device**: a release signature (minisign or Ed25519, the public key compiled in) checked before any install, board or desktop, as Sparkle and apt check theirs; the SHA-256 proves integrity, the signature would prove origin beyond TLS to GitHub. Asked 2026-11-13, deferred by the product owner.
 - **Hue paired once**, the bridge identity moving from each HueDriver into Devices.
 - **The command half for foreign devices** (`DevicePlugin::command()`): WLED brightness, Hue, Tasmota.
-- **Copy a device's settings to the group**, and a backup of the whole group, on the export step 17 builds.
+- **Copy a device's settings to the group**, and a backup of the whole group, on the export step 16 builds.
 - **The user's preview in a support session**, the preview stream over the relay at a coarse rung, so the helper also sees the lights.
 - **Scheduled group updates** run by a member with no page open.
 - **Non-IP transports**: MQTT-only devices, Zigbee and Thread.
@@ -457,7 +454,7 @@ Effects and games across a group:
 
 ## Cards this plan absorbs
 
-The interop plugins and their command half live in the Backlog above, and the shared clock is step 10.
+The interop plugins and their command half live in the Backlog above, and the shared clock is step 9.
 
 Related cards that stay on [the Project](https://github.com/users/MoonModules/projects/5):
 

@@ -60,6 +60,7 @@ add_executable(mm_tests
     unit/core/unit_DevicesModule_ageout.cpp
     unit/core/unit_DevicesModule_discovery.cpp
     unit/core/unit_DevicesModule_flows.cpp
+    unit/core/unit_DeviceGroup.cpp
     unit/core/unit_DevicesModule_growth.cpp
     unit/core/unit_DevicesModule_hue.cpp
     unit/core/unit_TasksModule.cpp

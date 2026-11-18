@@ -247,3 +247,20 @@ test("the MD5 ESPHome asks for before its update matches RFC 1321's own vectors 
     assert.equal(md5Hex(big), createHash("md5").update(big).digest("hex"));
 });
 
+
+test("a device group is one box however many graphs name it, its members pulled together, a missing member counted", () => {
+    const { graphGroups, groupLinks, groupBox } = load(["graphGroups", "groupLinks", "groupBox"]);
+    const index = new Map([["10.0.0.1", 0], ["10.0.0.2", 1], ["10.0.0.3", 2]]);
+    const kitchen = { id: "aabbccddeeff00000001", name: "Kitchen" };
+    const own = [{ ip: "10.0.0.1", groups: [kitchen] }, { ip: "10.0.0.2", groups: [kitchen], missing: true }];
+    const peers = [{ ip: "10.0.0.3", groups: [kitchen] }, { ip: "10.0.0.1", groups: [kitchen] }];   // a peer naming the same group
+    const groups = graphGroups([own, peers], index);
+    assert.equal(groups.size, 1);
+    const k = groups.get(kitchen.id);
+    assert.equal(k.name, "Kitchen");
+    assert.deepEqual([...k.members].sort(), [0, 1, 2]);
+    assert.deepEqual([...k.missing], [1]);
+    assert.equal(groupLinks(groups).length, 2);              // a star: each member to the first
+    const b = groupBox([{ x: 100, y: 50 }, { x: 300, y: 120 }]);
+    assert.ok(b.x < 100 && b.x + b.w > 300 && b.y < 50 && b.y + b.h > 120);   // every member's dot and label inside
+});

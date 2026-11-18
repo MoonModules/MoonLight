@@ -138,7 +138,7 @@ processes:
     dependsOn: [ci-on-pr]
     page: contributing/principles-and-process.md
     intro: |
-      The product owner pushes, the external review runs on the pull request, and its findings are processed on the branch. On "run pre-merge", the same checks as a commit run over the whole branch, then the judgment no script makes, once per request as at a commit. The gate list is written out before any of it runs, judgment gates included, and every line is reported, since a judgment gate stays silent until someone asks.
+      The product owner pushes, the external review runs on the pull request, and its findings are processed on the branch. On "run pre-merge", `moondeck/check/run_gates.py --process pre-merge` runs the same checks as a commit over the whole branch, its `--list` the gate list, then the judgment no script makes, once per request as at a commit. The gate list is written out before any of it runs, judgment gates included, and every line is reported, since a judgment gate stays silent until someone asks.
     steps:
       - id: reviewer
         section: Review

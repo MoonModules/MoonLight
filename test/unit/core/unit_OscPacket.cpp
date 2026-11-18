@@ -4,6 +4,7 @@
 #include "core/services/OscPacket.h"
 
 #include <cstring>
+#include <string>
 #include <vector>
 
 using namespace mm;
@@ -276,4 +277,26 @@ TEST_CASE("encoding refuses a buffer that cannot hold the whole message") {
     CHECK(osc::encodeFloat(small, sizeof(small), "/mm/fader/1", 1.0f) == 0);
     CHECK(osc::encodeFloat(small, sizeof(small), "no-leading-slash", 1.0f) == 0);
     CHECK(osc::encodeFloat(nullptr, 64, "/a", 1.0f) == 0);
+}
+
+// A Reader cut at every length, the terminator in the last bytes included, refuses the datagram rather than reading past it.
+TEST_CASE("a Reader refuses a message cut at any length, never reading past its end") {
+    uint8_t full[128];
+    osc::Writer w(full, sizeof(full), "/moonlight/devicegroup", ",ssi");
+    w.str("80b54ec63cb40053c6ae");
+    w.str("Kitchen");
+    w.i32(7);
+    const size_t n = w.size();
+    REQUIRE(n > 0);
+    for (size_t len = 0; len < n; len++) {
+        std::vector<uint8_t> cut(full, full + len);   // exactly `len` bytes, so a read past it is one ASan reports
+        osc::Reader r(cut.data(), len, "/moonlight/devicegroup");
+        r.str(); r.str(); r.i32();
+        CHECK_MESSAGE(!r.ok(), len);
+    }
+    osc::Reader whole(full, n, "/moonlight/devicegroup");
+    CHECK(std::string(whole.str()) == "80b54ec63cb40053c6ae");
+    CHECK(std::string(whole.str()) == "Kitchen");
+    CHECK(whole.i32() == 7);
+    CHECK(whole.ok());
 }

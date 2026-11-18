@@ -207,6 +207,7 @@
 #include "core/system/MqttModule.h"
 #include "core/system/Devices.h"
 #include "core/system/DevicesModule.h"
+#include "core/system/DeviceGroup.h"
 #include "core/system/FilesystemModule.h"
 #include "core/util/ModuleFactory.h"
 #include "platform/platform.h"
@@ -405,6 +406,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::MqttModule>("MqttModule", "core/system.md#mqtt");
     mm::ModuleFactory::registerType<mm::Devices>("Devices", "core/devices.md");
     mm::ModuleFactory::registerType<mm::DevicesModule>("DevicesModule", "core/devices.md#discovery");
+    mm::ModuleFactory::registerType<mm::DeviceGroup>("DeviceGroup", "core/devices.md#devicegroup");
     mm::ModuleFactory::registerType<mm::NetworkModule>("NetworkModule", "core/system.md#network");
     mm::ModuleFactory::registerType<mm::EthernetModule>("EthernetModule", "core/system.md#ethernet");
     mm::ModuleFactory::registerType<mm::WiFiModule>("WiFiModule", "core/system.md#wifi");

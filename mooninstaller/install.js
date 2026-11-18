@@ -647,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!url) {
         // No device URL (user skipped the IP prompt, or an eth-only/no-Improv device).
         // On that path no serial config push happened. If a model was picked, say so —
-        // it can be applied later over USB with the installer's apply-only button or from the network map, else just close.
+        // it can be applied later over USB with the installer's apply-only button or from the network map, else close.
         if (device && applyDefaults) {
           showSection("done");
           // No device address → not online; don't claim "Device is online!" (the

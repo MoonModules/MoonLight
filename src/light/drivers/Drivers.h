@@ -602,6 +602,7 @@ public:
         }
         setDynamicBytes(outputBuffer_.bytes());
         wiredLast_ = false;   // a reallocated output holds no frame yet
+        splitBufferFits_ = outputBuffer_.data() != nullptr;   // read before a failed worker gives an identity layer's buffer back, which a retry claims again
 
         // Decided from the alloc OUTCOME, so a board that cannot claim the buffer runs inline.
         const bool shouldSplit = splitWanted && outputBuffer_.data();
@@ -711,6 +712,7 @@ private:
     bool wiredLast_ = false;   ///< the last frame went out as a wiring-order copy, so the output already holds it
     bool encodeStalled_ = false;       // a stall warning is showing, so recovery can clear it
     bool splitWanted_ = false;         // the last prepare wanted the split, so tick1s retries one that is off
+    bool splitBufferFits_ = false;     // the last prepare could claim the split's buffer: a board where it cannot stays inline and the retry rests
     uint8_t splitRetryDelayS_ = 1;     // seconds between attempts, doubling up to kSplitRetryCapS
     uint8_t splitRetryInS_ = 0;        // seconds off since the last attempt
     uint8_t splitEngagedS_ = 0;        // seconds engaged since the last attempt, which resets the delay at the cap
@@ -738,9 +740,9 @@ private:
 
     /// The longest wait between two attempts to re-engage the split, and how long it stays engaged before the next stall retries after 1 s again.
     static constexpr uint8_t kSplitRetryCapS = 64;
-    /// Re-engage a split that is off while its buffer exists, through Drivers' own prepare on a back-off, so one stall costs the second core only until the next attempt.
+    /// Re-engage a split that is off while its buffer fits, through Drivers' own prepare on a back-off, so one stall or one refused worker costs the second core only until the next attempt.
     void retrySplit() MM_NONBLOCKING {
-        if (!splitWanted_ || !outputBuffer_.data()) { splitRetryDelayS_ = 1; splitRetryInS_ = 0; splitEngagedS_ = 0; return; }
+        if (!splitWanted_ || !splitBufferFits_) { splitRetryDelayS_ = 1; splitRetryInS_ = 0; splitEngagedS_ = 0; return; }
         if (renderSplitActive_) {
             splitRetryInS_ = 0;
             if (splitRetryDelayS_ > 1 && ++splitEngagedS_ >= kSplitRetryCapS) { splitRetryDelayS_ = 1; splitEngagedS_ = 0; }
@@ -793,6 +795,8 @@ public:
     uint32_t renderWaitPeakUs() const { return renderWaitPeakUs_; }
     /// Test-only: the frame-boundary wait alone, without the fallback inline tick that follows a timeout; false means it timed out and disengaged.
     bool quiesceEncodeForTest() { return quiesceEncode(); }
+    /// Test-only: stop and join the worker, as quiesce() does after a boundary wait times out.
+    void stopEncodeForTest() { stopEncodeTask(); }
 
 private:
     /// Spawn the core-1 encode task, degrading to inline when it cannot be created; private, so the task never changes while renderSplitActive_ disagrees.

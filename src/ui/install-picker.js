@@ -181,7 +181,7 @@ async function loadReleases({ bypassCache = false, maxAgeMs = CACHE_TTL_MS } = {
 }
 
 // The fetch behind loadReleases. When GitHub does not answer (offline, or 403 at the anonymous 60 an hour) it serves the stale list, else
-// null, and stamps either as fresh, so the next attempt waits a whole cache age.
+// null, and stamps either as fresh, so the next attempt waits a whole cache age; a null stays in memory, so a refresh asks again.
 async function fetchReleases() {
     try {
         const res = await fetch(API_URL);
@@ -195,7 +195,7 @@ async function fetchReleases() {
     let stale = releasesMemo?.data ?? null;
     if (stale === null) try { stale = JSON.parse(safeStorageGet(CACHE_KEY) || "null")?.data ?? null; } catch (_) { /* corrupt: none */ }
     releasesMemo = { ts: Date.now(), data: stale };
-    safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
+    if (stale !== null) safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
     return stale;
 }
 

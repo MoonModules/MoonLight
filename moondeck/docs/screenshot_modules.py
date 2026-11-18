@@ -260,6 +260,8 @@ CORE_MODULES = [
     "MidiService",
     "MoonLiveService",
     "SdCardService",
+    # A group a user made, with its members: captured against a device that holds one.
+    "DeviceGroup",
 ]
 
 # Core modules that are CHILDREN of another module (so they have no top-level nav entry
@@ -279,6 +281,7 @@ CORE_NAV_ROOT = {
     "MoonTalkModule": "MoonCloudModule",
     # Discovery is the fixed Devices child (wired-by-code).
     "DevicesModule": "Devices",
+    "DeviceGroup": "Devices",
     "ImprovProvisioningModule": "NetworkModule",
     # Audio / infrared are user-added Services (children of the Services container); I2cBus is a
     # fixed System child (wired-by-code). They're added/present per-board and never exist in

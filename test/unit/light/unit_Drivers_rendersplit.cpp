@@ -1,7 +1,7 @@
 /// @module Drivers
 /// @also platform
 
-/// Pins the multicore render↔encode split (Step 2a) on the host, where platform::spawnPinnedTask is a real std::thread, so the cross-core handoff invariants run on an actual second thread and TSan/ASan can catch a race or use-after-free on the shared outputBuffer_. The ESP32 core-1 task relies on exactly these invariants; here a MockDriver stands in for the real drivers (I80/Parlio are inert on the host, lanesAvailable()==0). One rule under test: while `multicore` is on, EVERY driver's tick() runs on core 1 against the finished frame; core 0 returns to rendering immediately.
+/// Pins the multicore render↔encode split on the host, where platform::spawnPinnedTask is a real std::thread, so TSan and ASan can catch a race or use-after-free on the shared outputBuffer_. One rule under test: while `multicore` is on, every driver's tick() runs on the worker against the finished frame, and core 0 returns to rendering at once.
 
 #include "doctest.h"
 #include "light/drivers/Drivers.h"
@@ -23,7 +23,7 @@ using namespace std::chrono_literals;
 
 namespace {
 
-// A driver stub that records what it reads from the source buffer each tick. `sawTear` latches if it ever reads the producer's mid-write sentinel (0xEE), the proof the frame boundary held (core 0 never overwrote outputBuffer_ while core 1 was reading it).
+// A driver stub that records what it reads each tick; `sawTear` latches on the producer's mid-write sentinel (0xEE), so a clear flag proves core 0 left outputBuffer_ alone while the worker read it.
 class MockDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer* b) override { src_ = b; }
@@ -37,11 +37,11 @@ public:
     std::atomic<bool> sawTear{false};
 };
 
-// A driver the test can PARK inside its own tick(), standing in for a real 16K-light encode that holds core 1 for tens of ms. The handshake is a condition variable, not a sleep: `entered` fires the moment the worker is inside tick(), and the worker then blocks until the test releases it. So the test drives the race window deterministically instead of hoping a 40 ms sleep is long enough, no timing luck, and no unbounded spin that could hang the suite forever.
+// A driver the test parks inside its own tick(), standing in for a long encode: a condition variable, not a sleep, so the test opens and closes the race window on demand, with no timing luck and no unbounded spin.
 class SlowDriver : public mm::DriverBase {
 public:
     void setSourceBuffer(mm::Buffer*) override {}
-    // DELIBERATELY blocking, despite MM_NONBLOCKING: the mutex and timed wait ARE the test. They hold the use-after-free window open on demand, which is the only way to observe the race this file pins. The annotation is inherited from MoonModule::tick and cannot be dropped without breaking the override, so clang-hotpath will report these lines, that report is correct and expected here.
+    // DELIBERATELY blocking despite MM_NONBLOCKING, inherited from MoonModule::tick: the mutex and the timed wait hold the use-after-free window open, so clang-hotpath reports these lines, correctly.
     void tick() MM_NONBLOCKING override {
         {
             std::unique_lock<std::mutex> lk(m);
@@ -96,7 +96,7 @@ struct Rig {
 // File-static the quiesce-render hook reads (the hook is a non-capturing function pointer). Set to a rig's drivers for the layout-mutation test below; null the rest of the time.
 mm::Drivers* g_hookDrivers = nullptr;
 
-// RAII: install the quiesce-render hook pointing at `d`, and ALWAYS clear both the hook and the file static on scope exit, even if a REQUIRE throws past the test body. Without this a failed assertion would leave the process-global hook installed with g_hookDrivers dangling at a destroyed rig, so the next test's addChild would call quiesceRenderSplit() on freed memory (a cascade crash).
+// RAII: install the quiesce-render hook pointing at `d`, and clear the hook and the file static on every exit, a thrown REQUIRE included, so the global hook outlives no rig it points at.
 struct HookGuard {
     explicit HookGuard(mm::Drivers* d) {
         g_hookDrivers = d;
@@ -107,7 +107,7 @@ struct HookGuard {
 
 }  // namespace
 
-// DIAGNOSTIC (bench flap): a SINGLE enabled layer + one driver + multicore. On the bench renderWait alternated on/off second-to-second. needOutput is false here (one layer, no LUT), so the split is held only by splitWanted forcing outputBuffer_. Tick many frames and assert the split stays STABLY engaged, never flaps off, with no config change between ticks.
+// The bench flap: one layer, one driver, multicore. needOutput is false (one layer, no LUT), so only splitWanted holds the split; many ticks with no config change must keep it engaged.
 TEST_CASE("render-split: a single-layer multicore config stays engaged across many ticks (no flap)") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -128,7 +128,7 @@ TEST_CASE("render-split: a single-layer multicore config stays engaged across ma
     drivers.prepare();
     REQUIRE(drivers.renderSplitActive());   // splitWanted forces the buffer even for one no-LUT layer
 
-    // Tick 30 frames WITHOUT touching config. The split must not disengage on its own. renderSplitActive() is a state flag set/cleared synchronously in prepare()/tick(), not by worker timing, so it can be asserted right after each tick(), no sleep needed (a sleep would only add flake, not synchronization).
+    // 30 ticks with config untouched: renderSplitActive() is set and cleared synchronously in prepare() and tick(), so it is asserted right after each tick, with no sleep.
     for (int i = 0; i < 30; i++) {
         drivers.tick();
         CHECK(drivers.renderSplitActive());   // any false here reproduces the bench flap
@@ -155,7 +155,7 @@ TEST_CASE("render-split: multicore on → every driver ticks on the worker, neve
 
     CHECK(a.ticks.load() >= 1);               // the worker ran BOTH drivers
     CHECK(b.ticks.load() >= 1);
-    CHECK_FALSE(a.sawTear.load());            // never read a mid-write buffer — the boundary held
+    CHECK_FALSE(a.sawTear.load());            // read no mid-write buffer: the boundary held
     CHECK_FALSE(b.sawTear.load());
 
     r.drivers.release();                      // stops + joins the worker (no hang, no leak)
@@ -176,7 +176,7 @@ TEST_CASE("render-split: multicore off → drivers tick inline on the render cor
     r.drivers.release();
 }
 
-// REGRESSION (v3.0.0 "UI refresh freezes the LEDs"): GET /api/types (which the web UI fetches on every page load) builds a throwaway probe of each registered type to read its default control values. A ParallelLedDriver probe runs selectDefaultPeripheral → swapPeripheral in its constructor/defineControls, and swapPeripheral fired MoonModule::notifyQuiesceRender() unconditionally. That global hook resolves to the LIVE Drivers via the static ActiveInstance seat (Drivers::active()), so a DETACHED probe (never in the tree) tore down the running split, and nothing re-engaged it. On a fast board it silently dropped to single-core; on a slower one the LEDs visibly froze until multicore was toggled. The fix: swapPeripheral notifies only when it is about to free a real backend (`peripheral_` non-null). A probe's first swap selects the default peripheral from a null backend, so it never notifies, the live worker is untouched. This pins that a detached ParallelLedDriver swapping its peripheral leaves a live split untouched.
+// Regression (v3.0.0): a detached probe's first swapPeripheral, from a null backend, notifies no quiesce, so GET /api/types building throwaway probes leaves the live split engaged.
 TEST_CASE("render-split: a detached ParallelLedDriver's peripheral swap does not disturb the live split") {
     // RAII: a doctest REQUIRE failure throws, so a bare set-then-reset would leak the global hook into later tests; the guard resets it on every exit path.
     struct HookGuard {
@@ -228,11 +228,7 @@ TEST_CASE("render-split: live disengage stops the worker when the last driver le
     r.drivers.release();
 }
 
-// THE INVARIANT: core quiesces the worker before any structural mutation of a container's children.
-// MoonModule::removeChild() calls quiesce(), a no-op for a module with no worker, overridden by Drivers to wait out the in-flight encode, so a mutation cannot begin while core 1 is inside a child's tick().
-// Violate it and the sequence removeChild → release → deleteTree frees the driver (and its DMA buffers) out from under the worker mid-encode: a use-after-free, LoadProhibited on ESP32.
-//
-// The test deletes the driver at the one instant that is unsafe: while the worker is provably inside its tick(). Under ASan a regression is a heap-use-after-free; without ASan, the ordering assert still catches it (removeChild must not return until the worker is out).
+// Core quiesces the worker before any structural change of a container's children; the driver is deleted while the worker is provably inside its tick(), and removeChild must not return until it is out.
 TEST_CASE("render-split: deleting a driver WHILE core 1 is inside its tick() is safe (no use-after-free)") {
     Rig r(64);
     auto* slow = new SlowDriver();            // heap: so ASan can see a use-after-free if we regress
@@ -247,7 +243,7 @@ TEST_CASE("render-split: deleting a driver WHILE core 1 is inside its tick() is 
     REQUIRE(slow->waitEntered());
     CHECK(slow->isInTick());                  // the worker is mid-encode, right now
 
-    // A releaser lets the parked encode finish shortly AFTER the delete is under way, the real sequence, where the encode completes on its own while core 0 is already mutating the tree. `releasedAt` records WHEN, so the assertion below can prove removeChild() actually waited for it.
+    // A releaser lets the parked encode finish shortly after the delete is under way, the real sequence; `releasedAt` records when, so the assertion below proves removeChild() waited.
     std::atomic<bool> releaseFired{false};
     std::thread releaser([&] {
         std::this_thread::sleep_for(30ms);    // long enough that a non-waiting removeChild returns first
@@ -257,7 +253,7 @@ TEST_CASE("render-split: deleting a driver WHILE core 1 is inside its tick() is 
 
     r.drivers.removeChild(slow);              // core's quiesce() blocks here until the worker is out
 
-    // THE ASSERTION, checked the instant removeChild returns, not after the join, or a non-waiting removeChild would look correct once the worker later finished on its own. With quiesce(), removeChild cannot return until the worker exited, which cannot happen before letGo() fired.
+    // Checked the instant removeChild returns, not after the join, where a non-waiting removeChild would look correct once the worker finished on its own.
     CHECK(releaseFired.load());               // it waited for the encode (fails without quiesce)
     CHECK_FALSE(slow->isInTick());            // and the worker is provably out of tick()
 
@@ -269,7 +265,7 @@ TEST_CASE("render-split: deleting a driver WHILE core 1 is inside its tick() is 
     r.drivers.release();
 }
 
-// The SIBLING-SUBTREE case: mutating a node OUTSIDE the Drivers subtree, here a LAYOUT, while the encode worker runs. The worker ticks the drivers, and a driver walks the whole tree (PreviewDriver::sendFrame → Layouts::placeLights), so freeing a layout mid-walk is a use-after-free EVEN THOUGH the mutated node's parent (Layouts) owns no worker. `this->quiesce()` alone misses it, Layouts::quiesce() is the no-op default. The fix routes MoonModule::quiesceForMutation() through the quiesce-render HOOK, which reaches the render worker wherever it lives. This is the exact crash seen replacing a layout on a running split device (LoadProhibited); the test pins it via the hook.
+// A node outside the Drivers subtree, a layout, removed while the worker runs: a driver walks the whole tree, so quiesceForMutation() reaches the worker through the quiesce-render hook.
 TEST_CASE("render-split: mutating a LAYOUT while core 1 runs is safe via the quiesce-render hook") {
     Rig r(64);
     // A driver whose tick() reads the shared source buffer, enough to keep the worker busy on core 1.
@@ -279,7 +275,7 @@ TEST_CASE("render-split: mutating a LAYOUT while core 1 runs is safe via the qui
     r.drivers.prepare();
     REQUIRE(r.drivers.renderSplitActive());
 
-    // Wire the quiesce-render hook the way main.cpp does (routed through a file static since the hook is a non-capturing function pointer). The RAII guard clears it on every exit path, including a thrown REQUIRE, so a failure here can't dangle the hook into a later test.
+    // The quiesce-render hook wired as main.cpp does, through a file static since the hook is a plain function pointer; the RAII guard clears it on every exit path.
     HookGuard hook(&r.drivers);
 
     r.drivers.tick();                         // notify core 1 → worker enters slow->tick()
@@ -293,7 +289,7 @@ TEST_CASE("render-split: mutating a LAYOUT while core 1 runs is safe via the qui
         slow->letGo();
     });
 
-    // Mutate a node OUTSIDE the Drivers subtree: remove the grid from Layouts. quiesceForMutation() must reach the render worker through the hook and block until it is out, WITHOUT the hook this returns immediately and a later free of `grid` would be a use-after-free (ASan) while the worker is still walking it.
+    // The grid leaves Layouts: quiesceForMutation() must block on the worker through the hook, or a later free of `grid` is a use-after-free while the worker still walks it.
     r.layouts.removeChild(&r.grid);
 
     CHECK(releaseFired.load());               // it waited for the encode (fails without the hook)
@@ -306,7 +302,7 @@ TEST_CASE("render-split: mutating a LAYOUT while core 1 runs is safe via the qui
     // The HookGuard clears the hook + g_hookDrivers on scope exit (including a thrown REQUIRE above).
 }
 
-// The FOURTH mutator: reordering children (the drag-reorder UI → moveChildTo) permutes children_ under the worker's index-based tick loop. No free, so not a use-after-free, but a slot shift mid-loop can tick a child twice or skip one (the data-race class the batch closes). moveChildTo must quiesce like the other three. Same harness: park the worker inside a driver tick, reorder Drivers' children, and prove moveChildTo waited for the worker (fails without the quiesce).
+// Reordering children (moveChildTo, the drag-reorder) shifts slots under the worker's index loop, ticking a child twice or skipping one, so it quiesces as the other three mutators do.
 TEST_CASE("render-split: reordering children (moveChildTo) while core 1 runs waits for the worker") {
     Rig r(64);
     auto* slow = new SlowDriver();
@@ -363,9 +359,7 @@ TEST_CASE("render-split: toggling multicore live engages and disengages the work
     r.drivers.release();
 }
 
-// ROBUSTNESS FLOOR: a wedged core-1 worker must not hang the RENDER loop. The frame boundary waits for the encode, normally bounded by one encode (the `renderWait` KPI measures it). But a worker that never signals done, starved, wedged, a lost notify, would otherwise spin core 0 forever, and a permanent wedge ranks BELOW "degraded": the device must keep running, even poorly. So the boundary times out, DISENGAGES the split, and every driver falls back to ticking inline on core 0, the same single-core path a memory-tight board already takes. Slower, still lit.
-//
-// This times tick()'s boundary specifically. It does NOT go through quiesce() (the structural-mutation hook), which deliberately JOINS the worker on timeout, a blocking join is right there (the caller is about to free the driver) but would be wrong here, on the render path.
+// A wedged worker must not hang the render loop: the boundary times out, drops the split, and every driver ticks inline on core 0; tick()'s boundary, not quiesce(), which joins the worker on timeout.
 TEST_CASE("render-split: a wedged worker degrades to single-core instead of hanging the render loop") {
     Rig r(64);
     auto* slow = new SlowDriver();            // parks inside tick() until we release it
@@ -377,7 +371,7 @@ TEST_CASE("render-split: a wedged worker degrades to single-core instead of hang
     r.drivers.tick();                         // core 1 enters slow->tick() and parks there
     REQUIRE(slow->waitEntered());             // it is provably stuck
 
-    // Release the worker FIRST so the disengage path can't block on it, what is under test is the BOUNDARY giving up, not the teardown. The worker still hasn't signalled done for the frame the boundary is waiting on, so the wait below is a genuine wedge from the boundary's point of view.
+    // The worker is released first so the drop cannot block on it; it still has not signalled done for this frame, so the wait below is a genuine wedge to the boundary.
     const auto t0 = std::chrono::steady_clock::now();
     const bool completed = r.drivers.quiesceEncodeForTest();   // the boundary wait, in isolation
     const auto elapsed = std::chrono::steady_clock::now() - t0;
@@ -392,7 +386,7 @@ TEST_CASE("render-split: a wedged worker degrades to single-core instead of hang
     delete slow;
 }
 
-// A degraded state must be able to END. The stall warning above was set once and never lifted, so a card kept reporting "encode worker stalled" long after the split was healthy again, and even beside a multicore toggle the user had since switched OFF. A status that cannot clear stops describing the device and starts describing its history. Reported from a Linux bench, whose screenshot showed exactly that pair.
+// A degraded state ends: the stall warning lifts once the split is healthy again, so a card describes the device rather than its history (reported from a Linux bench).
 TEST_CASE("render-split: the stall warning clears once the worker is healthy again") {
     Rig r(64);
     auto* slow = new SlowDriver();
@@ -406,7 +400,7 @@ TEST_CASE("render-split: the stall warning clears once the worker is healthy aga
     REQUIRE_FALSE(r.drivers.quiesceEncodeForTest());   // stall: the warning goes up
     REQUIRE(std::strlen(r.drivers.status()) > 0);
 
-    // Recovery. The worker must be STOPPED AND JOINED before the child list is touched: the timed-out quiesce above already cleared renderSplitActive_, so removeChild's own quiesce() returns immediately without waiting, and the still-running worker would be walking childCount() as we mutate it. TSan caught exactly that race in CI. release() joins.
+    // The worker is stopped and joined before the child list changes: the timed-out quiesce cleared renderSplitActive_, so removeChild's quiesce() returns at once (TSan caught that race in CI); release() joins.
     slow->letGo();
     r.drivers.release();
     r.drivers.removeChild(slow);
@@ -430,9 +424,11 @@ public:
     void setSourceBuffer(mm::Buffer* b) override { src_ = b; }
     void prepare() override { prepares++; }   // how often the split's retry reaches the drivers
     int prepares = 0;
+    int ticks = 0;   ///< ticks run, by whichever worker, guarded by m_
     // DELIBERATELY blocking, despite MM_NONBLOCKING: the wait IS the stall this test needs, as SlowDriver's is.
     void tick() MM_NONBLOCKING override {
         std::unique_lock<std::mutex> lk(m_);
+        ticks++;
         if (!armed_) return;
         armed_ = false;
         inTick_ = true;
@@ -444,6 +440,15 @@ public:
     /// True once the worker is inside a stalled tick, so the test opens the stall on demand rather than by timing.
     bool waitEntered() { std::unique_lock<std::mutex> lk(m_); return cv_.wait_for(lk, 5s, [this] { return inTick_; }); }
     void letGo() { { std::scoped_lock<std::mutex> lk(m_); released_ = true; } cv_.notify_all(); }
+    /// True once a tick past `n` has run, polled as arm() is, so the tick needs no notification.
+    bool waitTicksAbove(int n) {
+        for (int i = 0; i < 5000; i++) {
+            if (tickCount() > n) return true;
+            std::this_thread::sleep_for(1ms);
+        }
+        return false;
+    }
+    int tickCount() { std::scoped_lock<std::mutex> lk(m_); return ticks; }
     /// Stall the next tick too, once the stalled one has unwound, polled so the tick needs no second notification.
     void arm() {
         for (int i = 0; i < 5000; i++) {
@@ -515,6 +520,7 @@ TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer ea
         REQUIRE(d.waitEntered());
         REQUIRE_FALSE(r.drivers.quiesceEncodeForTest());   // the boundary gives up and drops the split
         d.letGo();
+        r.drivers.stopEncodeForTest();                 // and the worker goes, as quiesce() stops it after the timeout
         REQUIRE_FALSE(r.drivers.renderSplitActive());
     };
     const auto second = [&] { r.drivers.tick1s(); s.preparePending(); };   // one second: the 1 Hz tick, then the frame boundary
@@ -524,6 +530,9 @@ TEST_CASE("render-split: a stalled split re-engages by itself, waiting longer ea
     second();
     CHECK(r.drivers.renderSplitActive());              // back after 1 s
     CHECK(d.prepares == prepared);                     // Drivers re-engaged alone: the driver kept its peripheral
+    const int before = d.tickCount();
+    r.drivers.tick();
+    CHECK(d.waitTicksAbove(before));                   // a new worker, spawned by the retry, runs the drivers
 
     d.arm();
     stall();

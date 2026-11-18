@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 import _test_metadata as test_meta  # noqa: E402
 import test_runs  # noqa: E402
+sys.path.insert(0, str(ROOT / "moondeck"))
+import _suite_output  # noqa: E402
 
 
 def _host_build_dir() -> Path:
@@ -103,12 +105,16 @@ def main():
     stop = threading.Event()
     follower = threading.Thread(target=test_runs.follow_console, args=(junit, stop, sys.stdout), daemon=True)
     follower.start()
+    output = []
     for line in proc.stdout:
         sys.stdout.write(line)
         sys.stdout.flush()
+        output.append(line)
     code = proc.wait()
     stop.set()
     follower.join()
+    if not filtered:
+        _suite_output.keep(test_exe, "".join(output))   # the KPI reads this run's case count instead of running the suite again
     if junit.exists():
         test_runs.record(test_runs.doctest_runs(test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))[1]))   # each case's last result, with the tree it saw
     sys.exit(code)

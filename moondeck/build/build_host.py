@@ -167,7 +167,7 @@ def main():
 
 
 def build_jobs() -> int:
-    """Compile jobs at once, for every build a script starts: CMAKE_BUILD_PARALLEL_LEVEL when set, every core on CI, which runs nothing beside the build, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and nothing swaps."""
+    """Compile jobs at once, for every build a script starts: CMAKE_BUILD_PARALLEL_LEVEL when set, every core on CI, where the build runs alone, else the cores less two and one job per GB above 4 GB of memory, so MoonLight, the editor and the browser keep their cores and memory stays in RAM."""
     level = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL", "")
     if level.isdigit() and int(level) > 0:
         return int(level)

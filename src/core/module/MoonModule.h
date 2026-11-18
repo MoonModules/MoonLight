@@ -13,7 +13,7 @@
 namespace mm {
 
 /// A module's role, which identifies its type without RTTI and drives the UI's rendering.
-enum class ModuleRole : uint8_t { Generic, Effect, Modifier, Driver, Layout, Layer, Service };
+enum class ModuleRole : uint8_t { Generic, Effect, Modifier, Driver, Layout, Layer, Service, DeviceGroup };
 
 /// Which axes a module works in, so the layer can extrude lower-dimensional output across the rest.
 enum class Dim : uint8_t {
@@ -31,6 +31,7 @@ inline const char* roleName(ModuleRole role) {
         case ModuleRole::Layout:     return "layout";
         case ModuleRole::Layer:      return "layer";
         case ModuleRole::Service:    return "service";
+        case ModuleRole::DeviceGroup: return "devicegroup";
         default:                     return "generic";
     }
 }

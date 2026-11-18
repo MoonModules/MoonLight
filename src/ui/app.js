@@ -4831,6 +4831,42 @@ function refreshPeerGraphs(container) {
     });
 }
 
+// The device groups the graphs name, by id: each its name, its members' node indices, and those missing. A row of any graph, this device's or
+// a peer's, adds its device to each group it names, so a group a peer defines merges with this device's own by its id.
+function graphGroups(graphs, index) {
+    const groups = new Map();
+    for (const g of graphs) {
+        for (const row of g) {
+            const i = index.get(graphKey(row));
+            if (i === undefined) continue;
+            for (const grp of row.groups || []) {
+                if (!grp || !grp.id) continue;
+                const entry = groups.get(grp.id) || groups.set(grp.id, { name: grp.name || "", members: new Set(), missing: new Set() }).get(grp.id);
+                entry.members.add(i);
+                if (row.missing) entry.missing.add(i);
+            }
+        }
+    }
+    return groups;
+}
+
+// The invisible links that pull a group's members together in the force layout, each member to the first: a star, n - 1 links a group.
+function groupLinks(groups) {
+    const out = [];
+    for (const { members } of groups.values()) {
+        const [first, ...rest] = [...members];
+        for (const m of rest) out.push([first, m, "", false]);
+    }
+    return out;
+}
+
+// The box drawn around a group's members: their dots' extent, wide enough for a label cell and tall enough for the label lines beneath.
+function groupBox(points) {
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    return { x: Math.min(...xs) - GRAPH_CELL_W / 2 + 4, y: Math.min(...ys) - 22,
+             w: Math.max(...xs) - Math.min(...xs) + GRAPH_CELL_W - 8, h: Math.max(...ys) - Math.min(...ys) + GRAPH_CELL_H };
+}
+
 function buildListGraph(container, rows, details, opts) {
     const NS = "http://www.w3.org/2000/svg";
     container._graphArgs = { rows, details, opts };   // what a peer round redraws from
@@ -4885,6 +4921,7 @@ function buildListGraph(container, rows, details, opts) {
             }
         }
     }
+    const groups = graphGroups(graphs, index);
     refreshPeerGraphs(container);
     const pos = container._graphPos || (container._graphPos = new Map());
     for (const key of [...pos.keys()]) if (!index.has(key)) pos.delete(key);   // a device gone takes its spot with it
@@ -4892,7 +4929,7 @@ function buildListGraph(container, rows, details, opts) {
     const box = container.querySelector(".graph-box");
     const w = Math.max(2 * GRAPH_CELL_W, box && box.clientWidth ? box.clientWidth - 2 * GRAPH_PAD_X : GRAPH_W);
     const assigned = box ? parseFloat(box.style.height) || 0 : 0;
-    const height = layoutGraph(nodes, links, pos, w, assigned);
+    const height = layoutGraph(nodes, links.concat(groupLinks(groups)), pos, w, assigned);
     const boxH = assigned || height;   // a box shorter than the picture shows it zoomed out to fit
     container._graphDrawn = { w: box ? box.clientWidth : 0, h: assigned };
     if (box && box.dataset.base !== String(pos.frame.natural)) {
@@ -4914,6 +4951,23 @@ function buildListGraph(container, rows, details, opts) {
     fillWledInfo(container, nodes);
     const boxes = nodes.map(node => graphNodeBox(pos.get(node.key), graphNodeLines(node.row, node.key, show)));
     const traffic = graphShown(show, "traffic");
+    for (const [id, grp] of groups) {   // behind the edges and the nodes
+        const b = groupBox([...grp.members].map(i => pos.get(nodes[i].key)));
+        const rect = document.createElementNS(NS, "rect");
+        rect.setAttribute("x", b.x); rect.setAttribute("y", b.y); rect.setAttribute("width", b.w); rect.setAttribute("height", b.h);
+        rect.setAttribute("rx", 8);
+        rect.setAttribute("class", "graph-group" + (grp.missing.size ? " graph-group-missing" : ""));
+        rect.dataset.group = id;
+        const tip = document.createElementNS(NS, "title");
+        tip.textContent = `${grp.name}: ${grp.members.size} member${grp.members.size === 1 ? "" : "s"}${grp.missing.size ? `, ${grp.missing.size} missing` : ""}`;
+        rect.appendChild(tip);
+        svg.appendChild(rect);
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", b.x + 6); label.setAttribute("y", b.y + 12);
+        label.setAttribute("class", "graph-group-label");
+        label.textContent = grp.name;
+        svg.appendChild(label);
+    }
     const labelAt = placeEdgeLabels(links.map(([i, j, label]) => [pos.get(nodes[i].key), pos.get(nodes[j].key), traffic ? graphTrafficLabel(label) : ""]), boxes);
     links.forEach(([i, j, label, broken], li) => {
         const a = pos.get(nodes[i].key), b = pos.get(nodes[j].key);
@@ -4947,6 +5001,7 @@ function buildListGraph(container, rows, details, opts) {
         g.setAttribute("class", "graph-node" + (node.self ? " graph-self" : "") +
                                 (age === "age-stale" ? " graph-faded" : "") +
                                 (behind ? " graph-behind" : "") +
+                                (node.row.missing ? " graph-missing" : "") +
                                 (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
         const kind = graphKind(node.row);
         const dot = document.createElementNS(NS, "circle");
@@ -4971,7 +5026,9 @@ function buildListGraph(container, rows, details, opts) {
         }
         const where = node.row.port ? `${node.row.ip}:${node.row.port}` : node.row.ip;
         const services = Array.isArray(node.row.services) ? node.row.services.join(", ") : "";
-        const summary = [node.row.name, where, kind, node.row.version, behind, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
+        const inGroups = (node.row.groups || []).map(grp => grp.name).filter(Boolean).join(", ");
+        const membership = inGroups ? (node.row.missing ? `missing from ${inGroups}` : `in ${inGroups}`) : "";
+        const summary = [node.row.name, where, kind, node.row.version, behind, membership, node.row.firmware, graphOutputs(node.row), services].filter(Boolean).join(" · ");
         const title = document.createElementNS(NS, "title");
         title.textContent = summary;
         g.appendChild(title);
@@ -5791,7 +5848,7 @@ async function offerImageUpdates(box, base, fw, note) {
     const sys = fw.summary || {};
     const offers = [];
     if (sys.moonbaseMismatch) {
-        const a = moonbaseAsset(releaseByTag(await loadReleases({ maxAgeMs: UPDATE_TTL_MS }), releaseTagOf(fw.version)), sys.chip);
+        const a = moonbaseAsset(releaseOfVersion(await loadReleases({ maxAgeMs: UPDATE_TTL_MS }), fw.version), sys.chip);
         if (a.url) offers.push({ label: "MoonBase", route: "/api/firmware/moonbase-update-url", body: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch",
                                  installing: "Installing MoonBase: the app keeps running…" });
     }
@@ -7735,6 +7792,13 @@ function deviceFirmwareInfo() {
 // The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
 function releaseTagOf(version) {
     return (parse(version)?.prerelease.length || 0) > 0 ? "latest" : `v${version}`;
+}
+
+// The release holding exactly this version, or null: `latest` moves on, so it counts only while its name, its version, is still this one.
+// MoonBase is offered from it alone, since the pair of an app and its own release's MoonBase is the pair that was tested.
+function releaseOfVersion(releases, version) {
+    const rel = releaseByTag(releases, releaseTagOf(version));
+    return rel && (rel.tag_name !== "latest" || rel.name === version) ? rel : null;
 }
 
 // Light the badge for an available update. `tag` is the release the picker should pre-select

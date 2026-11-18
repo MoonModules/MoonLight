@@ -178,6 +178,10 @@
         "ci": {
           "type": "boolean",
           "description": "CI runs this gate on every push, so a merge reads its result from the pull request's checks rather than running it (run_gates.py --process pre-merge)."
+        },
+        "generates": {
+          "type": "string",
+          "description": "The committed file this step writes. run_gates.py runs it before every other gate of a commit, as make builds a target before what reads it, and a merge leaves it out, since a stale file there is a failure to fix, not to regenerate."
         }
       }
     },

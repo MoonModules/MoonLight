@@ -171,13 +171,22 @@ def functions_over(funcs) -> int:
     return len({(f["file"], f["start"]) for f in funcs if findings([f])})
 
 
+# The files `--files` names, measured even before git tracks them: the write-time hook checks a new file the moment it is written.
+NAMED: list = []
+
+
 def owned_files() -> list:
-    """The code files we own, tracked by git and matched by FILE_GLOBS, less the vendored ones."""
+    """The code files we own, tracked by git and matched by FILE_GLOBS, less the vendored ones, with the untracked files `--files` names."""
     # A git that does not answer raises: an empty list would read as a tree with nothing to measure.
     # `:(glob)` makes `**` match zero directories too, so src/main.cpp counts as src/**/*.cpp does in a shell.
-    proc = subprocess.run(["git", "ls-files", *(":(glob)" + g for g in FILE_GLOBS)], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+    globs = [":(glob)" + g for g in FILE_GLOBS]
+    proc = subprocess.run(["git", "ls-files", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+    files = proc.stdout.split()
+    if NAMED:   # an untracked file is owned once named, when FILE_GLOBS match it, as git's own pathspecs decide
+        new = subprocess.run(["git", "ls-files", "--others", "--exclude-standard", "--", *globs], cwd=ROOT, capture_output=True, text=True, timeout=60, check=True)
+        files += [rel for rel in new.stdout.split() if rel in NAMED]
     # The working tree is what is measured, so a tracked file deleted on disk counts for nothing.
-    return [rel for rel in proc.stdout.split() if not rel.startswith(FILE_EXCLUDE) and (ROOT / rel).exists()]
+    return [rel for rel in files if not rel.startswith(FILE_EXCLUDE) and (ROOT / rel).exists()]
 
 
 def clones():
@@ -594,6 +603,8 @@ def main() -> int:
         print(account())
         return 0
 
+    if args.files:   # every spelling of a path, relative, ./-prefixed or absolute, as the rows name it
+        NAMED[:] = [Path(f).resolve().relative_to(ROOT).as_posix() for f in args.files]
     funcs = measure()
     if funcs is None:
         return 2
@@ -619,7 +630,7 @@ def main() -> int:
 
     if partial:
         if args.files:
-            only = [str(Path(f).resolve().relative_to(ROOT)) if Path(f).is_absolute() else f for f in args.files]
+            only = NAMED
         else:
             import check_clang_query
             only = check_clang_query.module_files(args.module)

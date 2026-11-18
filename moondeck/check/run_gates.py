@@ -11,6 +11,8 @@ agent typing the chain by hand:
 
 - **Which gates.** A gate runs when a file it names changed, read with git's own pathspecs (`:(glob)`, `:(exclude,glob)`) against
   HEAD for a commit and against the merge base with main for a merge. A gate naming no files runs on every change.
+- **Generated first.** A step that `generates` a committed file (help.json) runs before every other gate of a commit, so the gates read
+  and hash the file the source says, and its rewrite is left unstaged for the reader; a merge leaves it out.
 - **Once.** A gate that passed is cached under a hash of its inputs: HEAD, its files' diff and its script. A rerun after a fix runs
   only the gates whose inputs moved.
 - **In order, within the budget.** Gates that compile or load every core (`HEAVY`) run one at a time in the order the process lists
@@ -47,7 +49,7 @@ RECORDS = ROOT / "build" / "gates"
 STAGES = ("moonwalk/10-develop.yaml", "moonwalk/13-document-commit.yaml", "moonwalk/14-merge.yaml")
 # Gates that compile or keep every core busy, one at a time in the process's order, so a build lands before the tests that read it.
 HEAVY = ("moondeck/build/", "moondeck/test/test_host.py", "moondeck/scenario/", "moondeck/check/collect_kpi.py",
-         "moondeck/check/check_code.py", "moondeck/test/test_tooling.py --python", "moondeck/docs/build_docs.py")
+         "moondeck/check/check_code.py", "moondeck/check/check_esp32_built.py", "moondeck/test/test_tooling.py --python", "moondeck/docs/build_docs.py")
 TAIL = 40   # output lines a record keeps per gate
 
 sys.path.insert(0, str(ROOT / "moondeck"))
@@ -80,7 +82,8 @@ def gates(process_id: str, procs: dict, globs: tuple = (), seen: frozenset = fro
         if "process" in when and when["process"] in procs and when["process"] not in seen:
             out += gates(when["process"], procs, given, seen | {process_id}, on_ci)
         elif "run" in when and "script" in when["run"]:
-            out.append({"id": gid, "script": when["run"]["script"], "args": when["run"].get("args", ""), "globs": list(given), "ci": on_ci})
+            out.append({"id": gid, "script": when["run"]["script"], "args": when["run"].get("args", ""), "globs": list(given), "ci": on_ci,
+                        "generates": step.get("generates")})
         elif "run" in when and "command" in when["run"]:
             out.append({"id": gid, "judgment": f"{step.get('say', step['id'])} (`{when['run']['command']}`)"})
         else:
@@ -124,7 +127,11 @@ def heavy(gate: dict) -> bool:
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=False).stdout
+    """Git's answer; a failed command stops the run, since an empty answer would read as a diff with nothing in it and skip every gate."""
+    proc = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args[:2])} failed: {proc.stderr.strip()[:200]}")
+    return proc.stdout
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -152,6 +159,8 @@ def select(process_id: str, base: str, use_cache: bool, only: set | None) -> tup
         if "judgment" in g:
             judgment.append(g)
             continue
+        if g.get("generates"):   # run before the selection, by generate(), or left out of a merge
+            continue
         if only and g["id"] not in only and g["id"].split("/")[-1] not in only:
             continue
         if merge and g.get("ci"):
@@ -176,6 +185,25 @@ def select(process_id: str, base: str, use_cache: bool, only: set | None) -> tup
             continue
         run.append(g)
     return run, skipped, judgment
+
+
+def generators(process_id: str, base: str) -> list:
+    """The steps writing a committed file whose sources changed; a merge has none, since a stale file there is a failure to fix."""
+    if process_id == "pre-merge":
+        return []
+    return [g for g in gates(process_id, processes()) if g.get("generates") and changed_files(base, pathspecs(g["globs"]))]
+
+
+def generate(process_id: str, base: str, budget: JobBudget, logdir: Path) -> list:
+    """Each generated file rewritten before any gate reads it or hashes its diff, as make builds a target before what reads it."""
+    made = []
+    for g in generators(process_id, base):
+        g.update(run_gate(g, budget, logdir))
+        if g["result"] == "PASS" and _git("diff", "--name-only", "--", g["generates"]).strip():
+            g["finding"] = f"{g['generates']} rewritten, unstaged"
+        print(_line(g) + (f": {g['finding']}" if g["result"] == "PASS" and g.get("finding") else ""), flush=True)
+        made.append(g)
+    return made
 
 
 def execute(run: list, budget: JobBudget, logdir: Path, every: float = 60.0) -> list:
@@ -204,7 +232,8 @@ def execute(run: list, budget: JobBudget, logdir: Path, every: float = 60.0) -> 
             one(g)
 
     started = time.monotonic()
-    with cf.ThreadPoolExecutor(max_workers=max(2, budget.tokens)) as pool:
+    # One worker per token: a job beyond the tokens would wait in acquire() for a token the lane holding the implicit one never writes back.
+    with cf.ThreadPoolExecutor(max_workers=budget.tokens) as pool:
         futures = [pool.submit(lane, [g for g in run if heavy(g)])] + [pool.submit(one, g) for g in run if not heavy(g)]
         while not all(f.done() for f in futures):
             cf.wait(futures, timeout=every)
@@ -295,13 +324,19 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="say which gates would run and why, and run none")
     args = ap.parse_args()
 
-    base = "HEAD" if args.process != "pre-merge" else (_git("merge-base", "main", "HEAD").strip() or "main")
+    try:
+        base = "HEAD" if args.process != "pre-merge" else _git("merge-base", "main", "HEAD").strip()
+    except RuntimeError as e:   # no local main to compare against: every gate would read as untouched
+        print(f"No base to compare against: {e}", file=sys.stderr)
+        return 2
     only = set(args.only.split(",")) if args.only else None
-    run, skipped, judgment = select(args.process, base, not args.no_cache, only)
-    print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
-    for g in skipped:
-        print(_line(g))
     if args.list:
+        for g in generators(args.process, base):
+            print(f"GEN    {g['id']}: writes {g['generates']} first")
+        run, skipped, judgment = select(args.process, base, not args.no_cache, only)
+        print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
+        for g in skipped:
+            print(_line(g))
         for g in run:
             print(f"RUN    {g['id']}{' (one at a time)' if heavy(g) else ''}: {', '.join(g['trigger'])}")
         return 0
@@ -316,10 +351,19 @@ def main() -> int:
         load = None
     with JobBudget() as budget:
         print(f"Budget: {budget.tokens} jobs, niced.", flush=True)
-        done = execute(run, budget, logdir)
+        made = generate(args.process, base, budget, logdir)   # before the selection, which hashes the generated file's diff
+        run, skipped, judgment = select(args.process, base, not args.no_cache, only)
+        print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
+        for g in skipped:
+            print(_line(g))
+        done = made + execute(run, budget, logdir)
 
     cache = _load(RECORDS / "cache.json", {})
-    cache.update({g["id"]: g["hash"] for g in done if g["result"] == "PASS"})
+    for g in done:
+        if g["result"] == "FAIL":
+            cache.pop(g["id"], None)   # a known failure is retried, whatever passed under the same inputs before
+        elif g.get("hash") and input_hash(g, base) == g["hash"]:   # a file edited while the gate ran makes its pass describe neither version
+            cache[g["id"]] = g["hash"]
     (RECORDS / "cache.json").write_text(json.dumps(cache, indent=1), encoding="utf-8")
     record = {"started": stamp, "process": args.process, "base": base, "load": load, "seconds": round(time.monotonic() - start, 1),
               "gates": [{k: g.get(k) for k in ("id", "script", "args", "trigger", "result", "why", "seconds", "exit", "finding", "rises", "tail", "log")}
@@ -342,4 +386,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except RuntimeError as e:   # git could not answer: no gate result would mean anything
+        print(e, file=sys.stderr)
+        sys.exit(2)

@@ -29,20 +29,38 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 BACKUP_SUFFIXES = ("-E", ".orig", ".bak", ".rej")
 CPP_SUFFIXES = (".cpp", ".h")
+# The hook's 120 s timeout in .claude/settings.json, less the time to print what the finished checks found: one budget every step shares.
+BUDGET_S = 100
+DEADLINE = time.monotonic() + BUDGET_S
+
+
+UNFINISHED: list[str] = []   # the checks the budget ran out on, named in the findings so a file reads as unchecked by them
+
+
+def _run(cmd: list[str], **kw) -> subprocess.CompletedProcess | None:
+    """A check's process within what is left of the shared budget; None when the budget runs out first, the other checks' findings kept."""
+    left = DEADLINE - time.monotonic()
+    try:
+        if left > 1:
+            return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=left, **kw)
+    except subprocess.TimeoutExpired:
+        pass
+    UNFINISHED.append(Path(cmd[2] if cmd[:2] == ["uv", "run"] else cmd[0]).name)
+    return None
 
 
 def prose(path: Path) -> list[str]:
     """The prose rules on the lines this write added, through check_prose.py's `--files`, the rules' one home, which reads them and leaves
     the index alone: the index is the product owner's, and this hook runs beside them."""
-    r = subprocess.run(["uv", "run", str(HERE / "check_prose.py"), "--files", str(path)], capture_output=True, text=True, cwd=REPO,
-                       check=False, timeout=40)
-    lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
+    r = _run(["uv", "run", str(HERE / "check_prose.py"), "--files", str(path)], cwd=REPO)
+    lines = [ln for ln in r.stdout.splitlines() if ln.strip()] if r else []
     return ["Prose rule (coding standards): American spelling, no em-dashes, say what a thing is.", *lines] if lines else []
 
 
@@ -80,10 +98,9 @@ def cpp(path: Path) -> list[str]:
     if not compiler:
         return []
     lang = ["-x", "c++"] if path.suffix == ".h" else []
-    result = subprocess.run([compiler, *flags, "-fsyntax-only", "-Wno-pragma-once-outside-header", *lang, str(path)],
-                            capture_output=True, text=True, cwd=entry.get("directory", REPO), check=False, timeout=40)
-    errors = [ln for ln in result.stderr.splitlines() if " error: " in ln]
-    if result.returncode == 0 or not errors:
+    result = _run([compiler, *flags, "-fsyntax-only", "-Wno-pragma-once-outside-header", *lang, str(path)], cwd=entry.get("directory", REPO))
+    errors = [ln for ln in result.stderr.splitlines() if " error: " in ln] if result else []
+    if not errors:
         return []
     return [f"C++ does not compile ({rel} alone, the host build's flags):", *errors[:12]]
 
@@ -96,9 +113,8 @@ def file_checks(path: Path) -> list[str]:
         for check in ("check_docgen.py", "check_code.py") if path.suffix != ".md" else ("check_docgen.py",):
             if check == "check_code.py" and not rel.startswith(("src/", "test/")):
                 continue
-            r = subprocess.run(["uv", "run", str(HERE / check), "--files", str(path)], capture_output=True, text=True, cwd=REPO,
-                               check=False, timeout=40)
-            if r.stdout.strip():
+            r = _run(["uv", "run", str(HERE / check), "--files", str(path)], cwd=REPO)
+            if r and r.stdout.strip():
                 out += [f"{check} on {rel}:", *[ln for ln in r.stdout.splitlines() if ln.strip()]]
     return out
 
@@ -107,8 +123,8 @@ def python(path: Path) -> list[str]:
     """pyflakes on a Python file: an unused import, a name used but undefined, a redefinition."""
     if path.suffix != ".py":
         return []
-    result = subprocess.run([sys.executable, "-m", "pyflakes", str(path)], capture_output=True, text=True, check=False)
-    lines = [ln.replace(str(REPO) + "/", "") for ln in result.stdout.splitlines() if ln.strip()]
+    result = _run([sys.executable, "-m", "pyflakes", str(path)])
+    lines = [ln.replace(str(REPO) + "/", "") for ln in result.stdout.splitlines() if ln.strip()] if result else []
     return ["Python (pyflakes):", *lines] if lines else []
 
 
@@ -142,6 +158,8 @@ def main() -> int:
             findings += check(path)
         except Exception:   # a check that cannot run stays silent, so the write goes through
             continue
+    if UNFINISHED:
+        findings.append(f"Not finished within the hook's {BUDGET_S} s, so not checked: {', '.join(UNFINISHED)}.")
     if not findings:
         return 0
     print("\n".join(findings), file=sys.stderr)

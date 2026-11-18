@@ -95,6 +95,8 @@ struct ListSource {
     virtual void writeListRow(JsonSink& sink, ListRow row) const = 0;
     /// Append one row as the saved file keeps it, which by default is the summary; a source whose collapsed row shows less saves more here.
     virtual void writeListRowSaved(JsonSink& sink, ListRow row) const { writeListRow(sink, row); }
+    /// How many rows the saved file keeps, which may be more than the list shows: a removed row kept as a marker.
+    virtual ListRow listSavedRowCount() const { return listRowCount(); }
     /// Append one row's detail, which by default repeats the summary.
     virtual void writeListRowDetail(JsonSink& sink, ListRow row) const {
         writeListRow(sink, row);

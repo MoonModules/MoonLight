@@ -105,6 +105,7 @@ public:
             case ModuleRole::Layer:    return typeName;     // no suffix to strip
             // A service names itself by its subcategory, as the light roles do.
             case ModuleRole::Service:  suffix = "Service";  break;
+            case ModuleRole::DeviceGroup: return typeName;   // "DeviceGroup" whole: "Group" alone would name the multicast groups the map draws
         }
         size_t typeLen = std::strlen(typeName);
         size_t suffixLen = std::strlen(suffix);

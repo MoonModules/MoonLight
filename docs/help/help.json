@@ -5327,6 +5327,9 @@
     "addedIps": {
      "line": "Devices that announce nothing, a Tasmota among them, by IP address, comma-separated."
     },
+    "deletedGroups": {
+     "line": "the groups deleted anywhere, \"id:hlc:writer;\" each, the newest eight"
+    },
     "devices": {
      "line": "The discovered devices; a row expands to its details.",
      "fields": {
@@ -5355,6 +5358,51 @@
    "dim": 0,
    "doc": "core/devices.md#discovery",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DevicesModule.h"
+  },
+  "DeviceGroup": {
+   "line": "Devices that act as one, picked from Discovery and kept by their MAC, so a rename or a new address keeps the group.",
+   "summary": "A device group under Devices, added and removed as an effect is; every member holds it and may edit it, and the map draws it as a box around its members.",
+   "guide": [
+    {
+     "title": "Members",
+     "text": "Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements is marked missing, here and on the map."
+    },
+    {
+     "title": "Shared",
+     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/core/DeviceGroup.png",
+   "controls": {
+    "id": {
+     "line": "twelve hex digits of the creating MAC, then eight of the moment, saved hidden"
+    },
+    "groupName": {
+     "line": "the shared name, a last-writer-wins register, saved hidden"
+    },
+    "nameStamp": {
+     "line": "the name's stamp as \"hlc:writer\" in hex, saved hidden"
+    },
+    "members": {
+     "line": "The devices in this group.",
+     "fields": {
+      "device": {
+       "line": "The device, by name and address; it stays the member through a rename or a new address."
+      },
+      "mac": {
+       "line": "Its identity."
+      },
+      "status": {
+       "line": "Present when it was heard within three of its announcements, missing otherwise."
+      }
+     }
+    }
+   },
+   "role": "generic",
+   "dim": 0,
+   "doc": "core/devices.md#devicegroup",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/DeviceGroup.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#devicegroup"
   },
   "NetworkModule": {
    "line": "Brings the device onto the LAN before the HTTP and WebSocket servers start, trying Ethernet, then WiFi, then its own access point.",

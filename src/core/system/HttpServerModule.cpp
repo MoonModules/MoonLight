@@ -1481,7 +1481,7 @@ void HttpServerModule::serveSystem(platform::TcpConnection& conn) {
     sink.flush();
 }
 
-// Who the device is and what it runs, the part of the summary a peer's map shows: how it takes a new version and which of its images are behind the app, its MAC-derived identity, its name, its board, its mode (developer follows `latest`), its WiFi signal (0 off WiFi), its light outputs and its effects.
+// Who the device is and what it runs, the part of the summary a peer's map shows: its update path and images behind the app, its MAC-derived identity, name, board, mode (developer follows `latest`), WiFi signal (0 off WiFi), outputs and effects.
 void HttpServerModule::writeDeviceSummary(JsonSink& sink) {
     sink.appendf("\"update\":\"%s\"", platform::updateModeName(platform::updateMode()));
     writeDeviceFacts(sink);   // the mode and the images behind the app, as this device's row on the map carries them

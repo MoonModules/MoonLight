@@ -20,6 +20,7 @@ not only staying quiet on one that obeys.
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -300,7 +301,6 @@ def _headers():
 
 def _tracked_files():
     """The repo's tracked paths, or None outside a git checkout, where every file on disk counts."""
-    import subprocess
     r = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     return set(r.stdout.split("\n")) if r.returncode == 0 else None
 
@@ -1266,9 +1266,17 @@ def _ratchet(found) -> list:
     return ratchet.risen(base, _counts(found))
 
 
+def _covered(rel: str) -> bool:
+    """Whether the header rules cover this file by its place and kind, tracked or untracked: a generated header is the one git ignores."""
+    if rel.startswith(HEADER_EXEMPT) or not rel.startswith(tuple(r + "/" for r in HEADER_ROOTS)):
+        return False
+    if not any(Path(rel).match(s) for s in HEADER_SUFFIXES):
+        return False
+    return subprocess.run(["git", "check-ignore", "-q", rel], cwd=ROOT, check=False).returncode != 0
+
+
 def file_findings(paths) -> list:
-    """The per-file rules on `paths` alone: a header's documentation rules, a page's hard wraps; the whole-tree rules need the full run."""
-    headers = {rel.as_posix() for rel in _headers()}
+    """The per-file rules on `paths` alone, a file written a moment ago included: a header's documentation rules, a page's hard wraps; the whole-tree rules need the full run."""
     out = []
     for name in paths:
         p = Path(name).resolve()
@@ -1278,7 +1286,7 @@ def file_findings(paths) -> list:
             continue
         if not p.is_file():
             continue
-        if rel in headers:
+        if _covered(rel):
             out.extend(_header_rules(rel, p.read_text(encoding="utf-8")))
         elif rel.startswith("docs/") and rel.endswith(".md") and not rel.startswith("docs/work/"):
             out.extend(_md_hard_wraps(rel.removeprefix("docs/"), p.read_text(encoding="utf-8")))

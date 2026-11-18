@@ -10,11 +10,11 @@ Usage:
 """
 
 import argparse
+import importlib.util
 import json
 import re
 import subprocess
 import sys
-import os
 import time
 from pathlib import Path
 
@@ -25,6 +25,7 @@ ESP32_DIR = ROOT / "esp32"
 sys.path.insert(0, str(ROOT / "moondeck"))
 from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
 from _host import host_target  # noqa: E402
+import _suite_output  # noqa: E402
 
 # Same directory; imported by path so this needs no PYTHONPATH tweak (the pattern the
 # other cross-script imports here use).
@@ -171,7 +172,11 @@ def collect_host():
         # 30s covers on a fast host and does not on a slower one (71s on this Windows bench). A
         # timeout here reports a KPI run as broken when nothing is, so it is sized to catch a hang
         # rather than to police the runtime, which repo-health already tracks as a number.
-        out, rc = run([str(test_exe)], cwd=BUILD_DIR, timeout=600)
+        # The test gate's run of this binary when it kept one, else a run of its own through test_host.py, which keeps it.
+        out = _suite_output.kept(test_exe)
+        if out is None:
+            run(["uv", "run", str(ROOT / "moondeck" / "test" / "test_host.py")], cwd=ROOT, timeout=600)
+            out = _suite_output.kept(test_exe) or ""
         for line in out.splitlines():
             if "test cases:" in line:
                 kpi["tests"] = line.strip()
@@ -186,7 +191,11 @@ def collect_host():
         # The whole scenario suite, which runs every measure step in every file, so it outgrows
         # the default that fits a quick command. A timeout here is reported as a crashed check
         # rather than a slow one, so the budget tracks the suite rather than the other way round.
-        out, rc = run([str(scenarios)], cwd=ROOT, timeout=300)
+        # The scenario gate's run of this binary when it kept one, else a run of its own through run_scenario.py, which keeps it: one order, sorted by path.
+        out = _suite_output.kept(scenarios)
+        if out is None:
+            run(["uv", "run", str(ROOT / "moondeck" / "scenario" / "run_scenario.py")], cwd=ROOT, timeout=300)
+            out = _suite_output.kept(scenarios) or ""
         # One tick per scenario: the slowest MEASURE step (the contract-
         # relevant worst-case timing). The KPI one-liner becomes a
         # 10-number-ish series that maps 1:1 to the scenario list, so a
@@ -384,9 +393,7 @@ def _live_capture(log, seconds=15):
     if not port or not Path(port).exists():
         print(f"  ESP32 KPI: configured port {port} not present, skipping live capture")
         return False
-    try:
-        import serial
-    except ImportError:
+    if importlib.util.find_spec("serial") is None:   # pyserial, which the capture below needs
         return False
     # The board on this port raised to Info so its tick line prints (it rests at Warn), and restored to its own level on exit, the serial-open failure included.
     print(f"  ESP32 KPI: capturing {seconds}s from {port}...")

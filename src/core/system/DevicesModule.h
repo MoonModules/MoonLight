@@ -14,6 +14,8 @@
 #include "core/system/WledPacket.h"       // the presence packet and which copy it is
 #include "core/system/DeviceProbe.h"      // PageProbe: the request that names a device known only by its address
 #include "core/system/DeviceSummary.h"    // writeDeviceFacts: what this device's own row and its summary both carry
+#include "core/system/DeviceGroup.h"       // the groups under Devices, which a row names and whose missing members it marks
+#include "core/system/DeviceGroupSync.h"   // the groups' definitions between devices, on the socket this module owns beside the presence one
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
 #include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
@@ -103,30 +105,7 @@ public:
     }
 
     /// Append one device's detail, which adds its address and how long since it was heard.
-    void writeListRowDetail(JsonSink& sink, ListRow row) const override {
-        if (row >= deviceCount_) { sink.append("{}"); return; }
-        const Device& d = devices_[row];
-        char ip[16];
-        openRow(sink, d, ip);
-        if (d.httpPort != WledPacket::kDefaultHttpPort) sink.appendf(",\"url\":\"http://%s:%u/\"", ip, static_cast<unsigned>(d.httpPort));
-        else sink.appendf(",\"url\":\"http://%s/\"", ip);
-        if (d.self) {
-            sink.append(",\"self\":true");   // always now, so no age is meaningful
-        } else {
-            // Computed here so the UI gets one finished number, and wrap-safe.
-            uint32_t ageSec = (platform::millis() - d.lastSeenMs) / 1000u;
-            sink.appendf(",\"ageSec\":%u", static_cast<unsigned>(ageSec));
-        }
-        writeEdges(sink, d);
-        if (d.self) {
-            writeSelfDetail(sink);
-        } else if (d.version[0]) {
-            sink.append(",\"version\":");   // what another ecosystem's device announced it runs
-            sink.writeJsonString(d.version);
-        }
-        if (!d.self && d.chip[0]) sink.appendf(",\"chip\":\"%s\"", d.chip);
-        sink.append("}");
-    }
+    void writeListRowDetail(JsonSink& sink, ListRow row) const override;
 
     /// The rows are rebuilt from what is heard, so the list is never saved.
     bool persistsList() const override { return false; }
@@ -144,6 +123,8 @@ public:
         MoonModule::defineControls();
         controls_.addSelect("addressing", addressing, kAddressingNames + 1, kDevModeCount);
         controls_.addText("addedIps", addedIps, sizeof(addedIps));
+        controls_.addText("deletedGroups", deletedGroups_, sizeof(deletedGroups_));
+        controls_.setHidden(controls_.count() - 1, true);   // saved, so a group deleted anywhere stays deleted here across a reboot
         /// The discovered devices; a row expands to its details.
         /// @field name The device's name, else its address.
         /// @field ip Its address on the network.
@@ -201,6 +182,24 @@ public:
         return true;
     }
 
+    /// The devices a group member is picked from, those whose MAC a source named, as the option set `key`: each its name and address.
+    void writeMemberOptions(JsonSink& sink, const char* key) const;
+
+    /// The MAC and name of the `index`th device writeMemberOptions offers; false past the end.
+    bool memberOption(uint32_t index, uint8_t mac[6], const char*& name) const;
+
+    /// The name of the device with this MAC, or null when none is listed.
+    const char* nameOfMac(const uint8_t mac[6]) const MM_NONBLOCKING {
+        const Device* d = rowOfMac(mac);
+        return d && d->name[0] ? d->name : nullptr;
+    }
+
+    /// Whether the device with this MAC was heard within three of its announcements, ten seconds apart for a board of ours and a minute for the rest; this device always.
+    bool heardLately(const uint8_t mac[6]) const MM_NONBLOCKING {
+        const Device* d = rowOfMac(mac);
+        return d && (d->self || platform::millis() - d->lastSeenMs <= (ours(d->type) ? 3u * kBroadcastEverySec * 1000u : 3u * 60u * 1000u));
+    }
+
     /// Register a bridge a driver found out of band, updating its row or inserting one.
     void upsertHueBridge(const uint8_t ip[4], const char* name, uint8_t color) {
         Device* d = findByIp(ip);
@@ -243,6 +242,7 @@ public:
         mdnsOpen_ = false;
         probe_.conn.close();
         probe_ = PageProbe{};
+        groupSync_.close();
         deviceCount_ = flowCount_ = serviceCount_ = 0;   // the base frees their blocks
         MoonModule::release();
     }
@@ -270,6 +270,7 @@ public:
 
         browseMdns();
         probeAdded();
+        if (parent()) groupSync_.tick(*parent(), deletedGroups_, sizeof(deletedGroups_));
 
         // Broadcast our own presence every kBroadcastEverySec ticks so peers discover us.
         if (++broadcastTick_ >= kBroadcastEverySec) {
@@ -362,6 +363,8 @@ private:
     uint8_t addedCount_ = 0;
     const char* addedError_ = nullptr;   // why `addedIps` was refused, kept in the status until it is fixed
     PageProbe probe_;   ///< the added-address request in flight
+    DeviceGroupSync groupSync_{*this};   ///< the device groups' definitions on the network
+    char deletedGroups_[400] = "";       ///< the groups deleted anywhere, "id:hlc:writer;" each, the newest eight
     uint32_t probeTick_ = 0;
     /// How often each added address is asked, in ticks, and how many ticks a probe waits for it.
     static constexpr uint32_t kProbeEverySec = 60;
@@ -387,7 +390,7 @@ private:
     }
 
     /// Whether a kind is one of ours, a board MoonLight or MoonBase holds, each marked by its own sentinel.
-    static bool ours(DevType t) { return t == DevType::MoonLight || t == DevType::MoonBase; }
+    static bool ours(DevType t) MM_NONBLOCKING { return t == DevType::MoonLight || t == DevType::MoonBase; }
 
     /// What this row is worth keeping when memory is full.
     static uint8_t worth(const Device& d) {
@@ -493,49 +496,16 @@ private:
     }
 
     /// What this device runs, its mode and its images behind the app, its services and its outputs, so a peer merging this graph shows them on its node.
-    void writeSelfDetail(JsonSink& sink) const {
-        sink.append(",\"version\":");
-        sink.writeJsonString(kVersion);
-        sink.append(",\"firmware\":");
-        sink.writeJsonString(kFirmwareName);
-        writeDeviceFacts(sink);   // the mode and the images behind the app, as the device's summary carries them
-        writeServices(sink);
-        // What drives its lights, which a peer's map shows under this device's name.
-        if (const LightOutput* out = LightOutput::active()) {
-            sink.append(",\"outputs\":[");
-            out->writeOutputs(sink);
-            sink.append("]");
-        }
-    }
+    void writeSelfDetail(JsonSink& sink) const;
 
     /// A row's edges, the adjacency list the map draws: this device's outbound flows from its own row, a peer's inbound flow from the peer's row to this device.
-    void writeEdges(JsonSink& sink, const Device& d) const {
-        bool first = true;
-        for (ListRow i = 0; i < flowCount_; i++) {
-            const Flow& f = flows_[i];
-            if (d.self ? !f.outbound : (f.outbound || !ipEq(f.peer, d.ip))) continue;
-            char to[16];
-            formatDottedQuad(to, d.self ? f.peer : selfIp_);
-            sink.append(first ? ",\"edges\":[" : ",");
-            first = false;
-            sink.appendf("{\"to\":\"%s\",\"label\":\"%s", to, f.protocol);
-            if (f.rate) sink.appendf(" %u%s", static_cast<unsigned>(f.rate), f.unit);   // "46/s"
-            sink.append("\"}");
-        }
-        if (!first) sink.append("]");
-    }
+    void writeEdges(JsonSink& sink, const Device& d) const;
+
+    /// The groups under Devices holding this row's device, each its id and name, and whether it is missing from them: the boxes the map draws.
+    void writeGroups(JsonSink& sink, const Device& d) const;
 
     /// This device's services, each a protocol and its port.
-    void writeServices(JsonSink& sink) const {
-        if (!serviceCount_) return;
-        sink.append(",\"services\":[");
-        for (ListRow i = 0; i < serviceCount_; i++) {
-            const Service& s = services_[i];
-            if (s.port) sink.appendf("%s\"%s %u\"", i ? "," : "", s.protocol, static_cast<unsigned>(s.port));
-            else sink.appendf("%s\"%s\"", i ? "," : "", s.protocol);   // a service with no port, raw Ethernet's
-        }
-        sink.append("]");
-    }
+    void writeServices(JsonSink& sink) const;
 
     /// The row a newcomer replaces: lowest worth first, then heard longest ago; never this device, never one worth more than the newcomer.
     Device* leastWorthKeeping(uint8_t newcomerWorth) {
@@ -830,6 +800,7 @@ private:
         }
         if (d->type != DevType::MoonLight) { d->type = DevType::MoonLight; changed = true; }
         if (!d->self) { d->self = true; changed = true; }
+        if (!hasMac(d->mac)) platform::getMacAddress(d->mac);   // the identity a group keeps this device by
         std::memcpy(selfIp_, ip, 4);
         d->lastSeenMs = platform::millis();
         if (!d->name[0]) {
@@ -872,9 +843,17 @@ private:
     }
 
     /// Whether a source named a MAC: all zero means it did not.
-    static bool hasMac(const uint8_t mac[6]) {
+    static bool hasMac(const uint8_t mac[6]) MM_NONBLOCKING {
         for (int i = 0; i < 6; i++) if (mac[i]) return true;
         return false;
+    }
+
+    /// The device with this MAC, read-only, or null.
+    const Device* rowOfMac(const uint8_t mac[6]) const MM_NONBLOCKING {
+        if (!hasMac(mac)) return nullptr;
+        for (ListRow i = 0; i < deviceCount_; i++)
+            if (std::memcmp(devices_[i].mac, mac, 6) == 0) return &devices_[i];
+        return nullptr;
     }
 
     /// The device with this MAC, or null.

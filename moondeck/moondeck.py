@@ -287,7 +287,7 @@ def _probe_device(ip, port=8080, timeout=0.4, name=""):
     firmware = summary.get("firmware", "") or ""
     return {
         # `mac` is the stable device IDENTITY (per-chip, survives DHCP IP changes); the merge
-        # keys on it. `ip` is just the current location — omit the port when it's HTTP's
+        # keys on it. `ip` is the current location: omit the port when it's HTTP's
         # default (80, the ESP32 devices), keep a non-default port (8080, the host build).
         "mac": summary.get("mac", "") or "",
         "ip": ip if port == 80 else f"{ip}:{port}",
@@ -413,11 +413,19 @@ def discover_devices(subnet="", known=()):
     entries = [d.get("ip") for d in known if d.get("ip")][:6] + ["localhost:8080"]
     with ThreadPoolExecutor(max_workers=len(entries)) as pool:   # asked at once, so offline known devices cost one timeout, not one each
         lists = list(pool.map(_discovery_rows, entries))
+    def in_subnet(ip):
+        return ip.split(":")[0].startswith(subnet + ".")
     for rows in lists:
-        # A row's detail names a port other than 80 inside its url, http://<ip>:8080/ for a host.
+        # A row's detail names a port other than 80 inside its url, http://<ip>:8080/ for a host; a row of another subnet is another scan's.
         found = [(r["ip"], urllib.parse.urlsplit(r.get("url") or "").port or int(r.get("port") or 80), 0.4, r.get("name", ""))
-                 for r in rows if r.get("type") == "MoonLight" and r.get("ip")]
+                 for r in rows if r.get("type") == "MoonLight" and r.get("ip") and in_subnet(r["ip"])]
         if found:
+            # The known devices of this subnet are asked too, so one a freshly restarted device has not heard yet stays listed.
+            listed = {(ip, port) for ip, port, _, _ in found}
+            for d in known:
+                host, _, port = (d.get("ip") or "").partition(":")
+                if host and in_subnet(host) and (host, int(port or 80)) not in listed:
+                    found.append((host, int(port or 80), 0.4, d.get("name", "")))
             targets = found
             break
     if not targets:

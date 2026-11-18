@@ -117,6 +117,11 @@ Row place(uint8_t index) {
     const size_t start = mm::platform::allocatedBytes();
     mm::Scheduler s;
     for (const char* top : {"Layouts", "Effects", "Drivers", "Services"}) s.addModule(mm::createTopLevel(top));
+    if (role == mm::ModuleRole::DeviceGroup) {   // a bare Devices, its Discovery left out so its rows stay out of the group's accounting
+        mm::MoonModule* devices = mm::ModuleFactory::create("Devices");
+        devices->setName("Devices");
+        s.addModule(devices);
+    }
     size_t beforeAdd = mm::platform::allocatedBytes();
     mm::MoonModule* standalone = nullptr;
     if (role == mm::ModuleRole::Generic && !s.topOfType(type)) {
@@ -136,6 +141,7 @@ Row place(uint8_t index) {
         case mm::ModuleRole::Layout:   applyDoc(s, "{\"Layouts\":{" + member + "}}"); break;
         case mm::ModuleRole::Driver:   applyDoc(s, "{\"Drivers\":{" + member + "}}"); break;
         case mm::ModuleRole::Service:  applyDoc(s, "{\"Services\":{" + member + "}}"); break;
+        case mm::ModuleRole::DeviceGroup:    applyDoc(s, "{\"Devices\":{" + member + "}}"); break;
         case mm::ModuleRole::Layer:    applyDoc(s, "{\"Effects\":{" + member + "}}"); break;
         case mm::ModuleRole::Generic:  break;
     }
@@ -156,7 +162,7 @@ Row place(uint8_t index) {
             row.heldAfterDisable = static_cast<long>(mm::platform::allocatedBytes()) - static_cast<long>(beforeAdd) - (byDocument ? static_cast<long>(objectBytes(*m)) : 0L);
         // Removed the way the API's DELETE removes it, a top-level module leaving with its tree; a module the API refuses to remove (PreviewDriver) is out of this check.
         if (byDocument && m->userEditable()) {
-            const char* parent = role == mm::ModuleRole::Layout ? "Layouts" : role == mm::ModuleRole::Driver ? "Drivers" : role == mm::ModuleRole::Service ? "Services" : role == mm::ModuleRole::Layer ? "Effects" : nullptr;
+            const char* parent = role == mm::ModuleRole::Layout ? "Layouts" : role == mm::ModuleRole::Driver ? "Drivers" : role == mm::ModuleRole::Service ? "Services" : role == mm::ModuleRole::DeviceGroup ? "Devices" : role == mm::ModuleRole::Layer ? "Effects" : nullptr;
             const std::string path = parent ? std::string("{\"") + parent + "\":{\"X\":null}}" : "{\"Effects\":{\"Layer\":{\"X\":null}}}";
             applyDoc(s, path);
             mm::platform::setTestNowMs(now); s.tick();

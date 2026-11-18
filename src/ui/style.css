@@ -1217,6 +1217,10 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
 .list-graph .graph-behind circle { stroke: var(--yellow); stroke-width: 2; }   /* its channel offers a newer version */
 .list-graph .graph-behind-mark { fill: var(--yellow); font-size: 11px; }
 .list-graph .graph-unreachable circle { stroke: var(--red); stroke-width: 2; stroke-dasharray: 2 2; }   /* after .graph-behind: not answering outranks behind */
+.list-graph .graph-group { fill: var(--accent-soft); fill-opacity: 0.12; stroke: var(--accent); stroke-opacity: 0.5; stroke-width: 1; }   /* a device group, behind its members */
+.list-graph .graph-group-missing { stroke: var(--yellow); stroke-dasharray: 4 3; }   /* a member is missing */
+.list-graph .graph-group-label { font-size: 10px; fill: var(--accent); font-weight: 600; }
+.list-graph .graph-missing circle { fill-opacity: 0.35; stroke: var(--yellow); stroke-width: 2; stroke-dasharray: 2 2; }   /* a member its group has not heard lately */
 
 /* A node's row in a popup: its detail, and for a MoonLight device its firmware and update. */
 dialog.graph-popup {

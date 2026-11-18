@@ -26,7 +26,7 @@ IDF_SEARCH_PATHS = [
 # line that carries the esp32s31 preview target. Kept here (not in setup_esp_idf.py) so
 # the pre-build drift check below can share the constant; a stale local IDF is
 # the single most common source of an "it built for me last week" ESP32 build
-# failure, so the check runs on every build_esp32 invocation, not just when the
+# failure, so the check runs on every build_esp32 invocation, not only when the
 # user remembers to re-run setup_esp_idf.py. setup_esp_idf.py imports these
 # two constants.
 PINNED_IDF_COMMIT = "051e4c4eb20346e043cdd47bc388fde75ff8af63"
@@ -48,7 +48,7 @@ def check_idf_pin(idf_path: Path) -> None:
 
     Reason: silently building against a drifted IDF produces the classic
     "missing symbol" / "renamed cap macro" errors that look like *our* bug but
-    are actually Espressif renaming an API between snapshots. Failing fast with
+    are Espressif renaming an API between snapshots. Failing fast with
     the exact fix command turns 30-minute debugging into a 30-second
     re-checkout. Skipped when HEAD can't be determined (not a git checkout, or
     git missing), so a skip rather than a false alarm.
@@ -116,7 +116,7 @@ def find_idf_python(idf_path: Path | None = None) -> Path | None:
     Among venvs for the right IDF version (there can be several Python-minor
     variants) the newest wins. Falls back to newest-overall only when the IDF
     version can't be determined or no versioned venv matches; preserving the
-    single-IDF behaviour where mtime is unambiguous anyway.
+    single-IDF behavior where mtime is unambiguous anyway.
     """
     venv_dir = Path.home() / ".espressif" / "python_env"
     if not venv_dir.exists():
@@ -158,7 +158,7 @@ def idf_env(idf_path: Path) -> dict:
     env["IDF_PATH"] = str(idf_path)
     env["ESP_IDF_VERSION"] = idf_version(idf_path)
     # ESP-IDF's Python tooling refuses to run on a non-UTF-8 locale. Windows
-    # defaults to cp1252 (locale "English_Netherlands.1252" etc.), so idf.py
+    # defaults to cp1252 (locale "English_Netherlands.1252", for one), so idf.py
     # bails with "Support for Unicode is required". PYTHONUTF8=1 (PEP 540)
     # forces Python into UTF-8 mode regardless of the system locale, and
     # PYTHONIOENCODING covers the stdin/stdout/stderr streams.

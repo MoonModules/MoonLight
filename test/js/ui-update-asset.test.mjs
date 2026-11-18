@@ -59,7 +59,7 @@ test("a MoonBase behind its app takes the image its app's release carries for th
     const rel = { assets: [{ name: "shared-moonbase-esp32p4.bin", browser_download_url: "https://x/mb.bin", digest: "sha256:cc" }] };
     assert.deepEqual(moonbaseAsset(rel, "ESP32-P4"), { url: "https://x/mb.bin", sha256: "cc" });
     assert.equal(moonbaseAsset(rel, "ESP32-S3").url, null);   // that release carries none for this chip
-    assert.equal(moonbaseAsset(rel, null).url, null);         // a device that names no chip is offered nothing
+    assert.equal(moonbaseAsset(rel, null).url, null);         // a device that names no chip gets no MoonBase offer
 });
 
 test("a release asset is fetched from the installer's mirror, which serves it cross-origin; any other address as given", () => {
@@ -71,7 +71,7 @@ test("a release asset is fetched from the installer's mirror, which serves it cr
 
 test("one release list answers both channels: the newest stable release, and the moving latest by its tag", () => {
     const list = [{ tag_name: "latest", prerelease: true }, { tag_name: "v7.1.0", draft: true }, { tag_name: "v7.0.0" }, { tag_name: "v6.0.0" }];
-    assert.equal(latestStable(list).tag_name, "v7.0.0");   // as GitHub's /releases/latest: neither a prerelease nor a draft
+    assert.equal(latestStable(list).tag_name, "v7.0.0");   // as GitHub's /releases/latest: the newest published, stable one
     assert.equal(releaseByTag(list, "latest").tag_name, "latest");
     assert.equal(releaseByTag(list, "v5.0.0"), null);
     assert.equal(latestStable(null), null);                // an offline device's empty list
@@ -99,7 +99,7 @@ test("a device on a -dev build, or in developer mode, is also offered a newer la
     assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32", mode: 1 }, releases), null);   // expert is no channel of its own
 });
 
-test("a release without the device's own image offers nothing", () => {
+test("a release lacking the device's own image offers no update", () => {
     assert.equal(channelUpdate({ version: "7.0.0", firmware: "esp32s3-n16r8" }, releases), null);
     assert.equal(channelUpdate({ version: "7.0.0", firmware: null }, releases), null);
 });
@@ -111,4 +111,13 @@ test("a chip is a family as the catalog and esptool name it and a key as firmwar
     assert.equal(chipFamilyOf("esp32"), "ESP32");                  // the classic
     assert.equal(chipFamilyOf(firmwareChip("esp32p4rev1-eth")), "ESP32-P4");
     assert.equal(chipFamilyOf(firmwareChip("host-macos-arm64")), "host");   // not an ESP32: as given
+});
+
+test("MoonBase comes from the app's own release: latest counts only while it still holds the app's version", () => {
+    const { releaseOfVersion } = new Function("releaseByTag", "parse",
+        `${fnSource("releaseTagOf")}\n${fnSource("releaseOfVersion")}\nreturn { releaseOfVersion };`)(releaseByTag, parse);
+    const releases = [{ tag_name: "v7.0.0", name: "v7.0.0" }, { tag_name: "latest", name: "7.1.0-dev.5" }];
+    assert.equal(releaseOfVersion(releases, "7.0.0").tag_name, "v7.0.0");
+    assert.equal(releaseOfVersion(releases, "7.1.0-dev.5").tag_name, "latest");
+    assert.equal(releaseOfVersion(releases, "7.1.0-dev.4"), null);   // latest moved on: its MoonBase pairs with another app
 });
