@@ -23,7 +23,7 @@ ESP32_DIR = ROOT / "esp32"
 
 # Shared moondeck.json + logLevel-toggle helpers (one level up, reachable from check/ and run/).
 sys.path.insert(0, str(ROOT / "moondeck"))
-from _moondeck_config import device_ips_for_port, open_serial, raised_log_level, LOG_INFO  # noqa: E402
+from _moondeck_config import device_ips_for_port, saved_state, open_serial, raised_log_level, LOG_INFO  # noqa: E402
 from _host import host_target  # noqa: E402
 import _suite_output  # noqa: E402
 
@@ -376,19 +376,10 @@ def _live_capture(log, seconds=15):
         print("  ESP32 KPI: live capture disabled (--no-live-capture); "
               "using monitor.log if present")
         return False
-    import json
-    cfg = ROOT / "moondeck" / "moondeck.json"
-    if not cfg.exists():
-        return False
-    try:
-        state = json.loads(cfg.read_text(encoding="utf-8"))
-        # The ESP32 tab's port, kept on the active network record.
-        active_name = state.get("active_network")
-        active = next((n for n in (state.get("networks") or [])
-                       if n.get("name") == active_name), None)
-        port = (active or {}).get("port")
-    except Exception:
-        return False
+    # The ESP32 tab's port, on the active network record; an older file's top-level port is carried over by saved_state.
+    state = saved_state()
+    active = next((n for n in state.get("networks") or [] if n.get("name") == state.get("active_network")), None)
+    port = (active or {}).get("port")
     if not port or not Path(port).exists():
         print(f"  ESP32 KPI: configured port {port} not present, skipping live capture")
         return False

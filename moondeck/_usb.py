@@ -14,7 +14,9 @@ stdlib only, so MoonDeck, the flash script and the run scripts import it without
 import re
 import subprocess
 import sys
+import threading
 import time
+from pathlib import Path
 from collections import Counter
 
 # Espressif chips with native USB advertise VID 0x303A. PID 0x1001 is the USB-Serial-JTAG PID the S3, C3, C6, H2 and P4 share, so it names
@@ -56,9 +58,29 @@ def list_serial_ports() -> list[str]:
     return sorted(ports)
 
 
+def read_sysfs_usb_ports(root: str = "/sys/class/tty") -> dict:
+    """Linux: sysfs parsed into {port_path: {vid, pid, product, serial}} for every USB tty, read from files, so no port opens. The tty's `device` link is
+    its USB interface and that link's parent the USB device holding idVendor, idProduct, product and serial; a tty with no such parent
+    (a built-in UART) is left out, and a device that reports no serial reads "" rather than a hub's. `root` is a parameter so a fake tree tests it."""
+    def attr(node: Path, name: str) -> str:
+        try:
+            return (node / name).read_text(errors="replace").strip()
+        except OSError:
+            return ""
+    result: dict = {}
+    for tty in sorted(Path(root).glob("tty*")):
+        node = tty / "device" / ".."
+        vid, pid = attr(node, "idVendor"), attr(node, "idProduct")
+        if vid and pid:
+            result[f"/dev/{tty.name}"] = {"vid": int(vid, 16), "pid": int(pid, 16), "product": attr(node, "product"), "serial": attr(node, "serial")}
+    return result
+
+
 def read_usb_ports() -> dict:
-    """macOS: `ioreg` parsed into {port_path: {vid, pid, product, serial}} for every USB serial call-out device, without opening a port.
-    {} elsewhere or when ioreg is unavailable, and callers degrade to the path alone."""
+    """{port_path: {vid, pid, product, serial}} for every USB serial device, read from the system rather than the port: macOS from `ioreg`, Linux from sysfs.
+    {} elsewhere (Windows lists its COM ports by name alone) or when the source is unavailable, and callers degrade to the path alone."""
+    if sys.platform.startswith("linux"):
+        return read_sysfs_usb_ports()
     if sys.platform != "darwin":
         return {}
     try:
@@ -87,12 +109,9 @@ def read_usb_ports() -> dict:
                     cur[key] = cast(m.group(1) if m.group(1) is not None else m.group(2))
         mc = re.search(r'"IOCalloutDevice" = "([^"]+)"', ln)
         if mc:
-            desc = {"vid": 0, "pid": 0, "product": "", "serial": ""}
-            for _, node in reversed(stack):   # nearest ancestor wins per field
-                for key in desc:
-                    if not desc[key] and node[key]:
-                        desc[key] = node[key]
-            result[mc.group(1)] = desc
+            # The USB device node, the nearest ancestor holding a vendor id, supplies every field: a hub above it has a serial of its own,
+            # which is no key for this device.
+            result[mc.group(1)] = dict(next((node for _, node in reversed(stack) if node["vid"]), {"vid": 0, "pid": 0, "product": "", "serial": ""}))
     return result
 
 
@@ -208,14 +227,16 @@ def port_identities(ports: dict, cache: dict) -> list[dict]:
 # the Live tab's map asks every two seconds.
 IOREG_MAX_AGE_S = 30
 _ioreg = {"listed": None, "at": 0.0, "usb": {}}
+_ioreg_lock = threading.Lock()   # list and refresh as one step, so the newest read is the one kept, a slow older read included
 
 
 def present_ports() -> dict:
     """Every serial port present, {path: its USB descriptor, {} where none is read}: the listed ports and the ones ioreg names."""
-    listed = frozenset(list_serial_ports())
-    if listed != _ioreg["listed"] or time.monotonic() - _ioreg["at"] > IOREG_MAX_AGE_S:
-        _ioreg.update(listed=listed, at=time.monotonic(), usb=read_usb_ports())
-    usb = _ioreg["usb"]
+    with _ioreg_lock:
+        listed = frozenset(list_serial_ports())
+        if listed != _ioreg["listed"] or time.monotonic() - _ioreg["at"] > IOREG_MAX_AGE_S:
+            _ioreg.update(listed=listed, at=time.monotonic(), usb=read_usb_ports())
+        usb = _ioreg["usb"]
     return {path: usb.get(path, {}) for path in listed | set(usb)}
 
 
@@ -237,8 +258,11 @@ def usb_boards(ports: dict, cache: dict) -> list[dict]:
 
 
 def port_for_mac(mac: str, ports: dict, cache: dict) -> str:
-    """The port the board with `mac` sits on right now, "" when no present port is known to hold it. Pure."""
-    return next((i["path"] for i in port_identities(ports, cache) if mac_matches(i["mac"], mac)), "")
+    """The port the board with `mac` sits on right now, "" when no present port is known to hold it; a port whose MAC is exactly `mac` wins
+    over one that only reports it in its EUI-64 form. Pure."""
+    idents = port_identities(ports, cache)
+    want = (mac or "").strip().lower()
+    return next((i["path"] for i in idents if i["mac"].lower() == want), "") or next((i["path"] for i in idents if mac_matches(i["mac"], mac)), "")
 
 
 def port_mac(port: str, ports: dict, cache: dict) -> str:

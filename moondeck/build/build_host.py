@@ -101,6 +101,16 @@ def gcc_pair():
              "Note /usr/bin/g++ on macOS is clang in disguise; it will NOT catch these.")
 
 
+def lower_priority(by: int = 10) -> None:
+    """Run this process `by` steps nicer, where the system has priorities; one already at the lowest stays there, as a caller that niced it
+    (the gate runner's `nice -n 10`) leaves it, since macOS refuses a step past the lowest with EPERM rather than clamping."""
+    if hasattr(os, "nice"):
+        try:
+            os.nice(by)
+        except OSError:
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gcc", action="store_true",
@@ -157,8 +167,7 @@ def main():
     # Build a SPECIFIC target, never the whole "all": the firmware and the ~130 test translation units are separate concerns, so the host binary builds alone and a header edit leaves the test suite out of the compile.
     # `--tests` builds the test binaries instead: mm_tests (test_host.py), mm_scenarios (run_scenario.py) and mm_tempo (the tempo harness's end-to-end test).
     targets = ["mm_tests", "mm_scenarios", "mm_tempo"] if args.tests else ["MoonLight"]
-    if hasattr(os, "nice"):
-        os.nice(10)   # a build yields to MoonLight, the editor and the browser, whoever starts it; the compilers inherit it
+    lower_priority()   # a build yields to MoonLight, the editor and the browser, whoever starts it; the compilers inherit it
     build_cmd = ["cmake", "--build", bdir, "--target", *targets, "--parallel", str(build_jobs())]
     if is_windows:
         build_cmd += ["--config", "Release"]

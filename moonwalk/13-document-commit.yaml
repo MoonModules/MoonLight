@@ -93,7 +93,7 @@ processes:
         detail: |
           Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
 
-          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line the KPI gate wrote, read from the last gate run's log (`build/gates/run-<time>/commit-code__kpi.log`) rather than measured again; a source change after that run reruns the gate. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, with one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
+          The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line the KPI gate wrote, read from the last gate run's log (`build/gates/run-<time>/commit-code__kpi.log`), not measured again; a later source change reruns the gate. A `CACHED` KPI writes no log: use the last passing run's. Without a KPI gate the lines go. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
   - id: commit-docs
     title: The docs checks
     actor: contributor
@@ -137,6 +137,7 @@ processes:
       - id: build-host
         ci: true
         cores: all
+        outputs: ["{host_build}/CMakeCache.txt"]
         say: Build the host firmware, warning-free.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/build/build_host.py } }
@@ -149,7 +150,7 @@ processes:
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { run: { script: moondeck/check/check_code.py } }
         detail: |
-          It runs after build-host and reads the warnings that build saved beside each object, so the tree compiles once per run. A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
+          It runs after build-host and reads the warnings that build saved beside each object, so the tree compiles once per run. CI's findings job runs check_code without that build, so the stack-frame and blocking-call rules, which only compiler warnings show, ratchet in this local run alone, and a pre-merge run, which leaves out `ci: true` gates, does not repeat them. A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
       - id: tests
         ci: true
         say: Test the change on the host.
@@ -157,6 +158,7 @@ processes:
         when: { process: host-tests }
       - id: esp32-fresh
         cores: all
+        outputs: ["build/esp32-esp32s3-n16r8/*.bin"]
         say: Check the S3 firmware is up to date.
         given: [{ changed: [src/**, "!src/platform/host/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-n16r8 --build" } }
@@ -164,6 +166,7 @@ processes:
           It compares the binary with every source it compiles, which catches an edit the binary lacks, and rebuilds a stale one once, then checks again, before the KPI reads its size. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments; the rest wait for the release workflow.
       - id: esp32-fresh-moonbase
         cores: all
+        outputs: ["build/esp32-esp32/*.bin"]
         say: Check the classic firmware and MoonBase are current.
         given: [{ changed: [moonbase/**] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32 --build" } }

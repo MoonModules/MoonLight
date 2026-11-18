@@ -3,6 +3,7 @@
 #include "platform/platform.h"
 
 #include <cstdint>
+#include <cstdlib>
 
 /// A hybrid logical clock and the stamp a replicated value carries, so every device orders edits the same way whatever order they arrive in.
 
@@ -16,8 +17,25 @@ struct Stamp {
     /// Whether this stamp is newer than `o`: the later reading, and the higher writer on a tie, the last-writer-wins order.
     bool newerThan(const Stamp& o) const MM_NONBLOCKING { return hlc != o.hlc ? hlc > o.hlc : writer > o.writer; }
 
-    /// Whether the reading leaves the clock room to grow past it: below 2^63, thousands of years of milliseconds, which no clock reaches and a corrupt or crafted stamp does.
-    bool valid() const MM_NONBLOCKING { return hlc < (uint64_t{1} << 63); }
+    /// The largest valid reading, 2^63 - 1: thousands of years of milliseconds, which no clock reaches and only a corrupt or crafted stamp passes.
+    static constexpr uint64_t kMaxHlc = (uint64_t{1} << 63) - 1;
+
+    /// Whether the reading is one a clock reaches, at most kMaxHlc.
+    bool valid() const MM_NONBLOCKING { return hlc <= kMaxHlc; }
+
+    /// Read a stamp saved as "hlc:writer" in hex, the whole of `text`; false when it is not one or not valid.
+    static bool parse(const char* text, Stamp& out) {
+        char* end = nullptr;
+        const unsigned long long h = std::strtoull(text, &end, 16);
+        if (end == text || *end != ':') return false;
+        const char* w = end + 1;
+        const unsigned long long writer = std::strtoull(w, &end, 16);
+        if (end == w || *end || writer > UINT32_MAX) return false;
+        const Stamp s{static_cast<uint64_t>(h), static_cast<uint32_t>(writer)};
+        if (!s.valid()) return false;
+        out = s;
+        return true;
+    }
 };
 
 /// A hybrid logical clock (Kulkarni et al., *Logical Physical Clocks*, 2014): each reading is newer than every reading the device has seen, so an edit made after hearing another is stamped newer.
@@ -25,6 +43,8 @@ struct Stamp {
 /// @technical
 ///
 /// **Which physical clock.** The device's uptime until clocks are synced across a group, so concurrent edits converge on one value while which one wins is arbitrary; a restored stamp is observed at boot, so the readings keep growing across a restart.
+///
+/// **Where the readings stop.** At Stamp::kMaxHlc, the largest reading every peer accepts: a clock a crafted stamp drove there still stamps edits the peers take, the writer breaking ties among them.
 class Hlc {
 public:
     /// A fresh reading for a local edit by `writer`.
@@ -50,6 +70,7 @@ private:
         else if (top == l) counter = (last_ & kCounter) + 1;
         else if (top == s) counter = (seen & kCounter) + 1;
         last_ = top + counter;   // a counter past 16 bits carries into the milliseconds, so the readings keep growing
+        if (last_ > Stamp::kMaxHlc) last_ = Stamp::kMaxHlc;   // the sum reaches 2^63 at most, well inside a uint64_t
     }
 
     static constexpr uint64_t kCounter = 0xFFFF;

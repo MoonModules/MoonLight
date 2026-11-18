@@ -106,6 +106,7 @@ async function handOver(job) {
         const res = await toMoonBase(job).catch(() => null);
         if (!res) throw new Error(MOONBASE_SILENT_MSG);
         if (!res.ok) throw new Error(`Refused: ${await res.text()}`);   // MoonBase answers in plain text
+        job.accepted = true;
         return false;
     }
     ui.status(viaMoonBase ? "Restarting into MoonBase…" : `Starting the install of ${k.name}…`);
@@ -125,6 +126,7 @@ async function handOver(job) {
         return true;
     }
     if (res && !res.ok) throw new Error(`Refused: ${await errorMessage(res)}`);
+    job.accepted = !!res;   // the device took the URL; a request with no reply may have been lost on the way
     return false;
 }
 
@@ -139,23 +141,26 @@ async function pushFile(job) {
         if (res && !res.ok) throw new Error(`Refused: ${await errorMessage(res)}`);
         if (!await waitForMoonBase(base, 120000)) throw new Error(MOONBASE_SILENT_MSG);
     }
+    await fileToMoonBase(job);
+    return false;
+}
+
+// Push the file to MoonBase, the raw body of its /api/firmware/upload, with progress and behind the cancel; MoonBase restarts into the app once it
+// took the file. A dead socket mid-upload (power cut, WiFi drop) is no verdict: the watch sees where the device lands and hands the file over again.
+async function fileToMoonBase(job) {
     try {
-        await upload(job, "/api/firmware/upload", source.file);
+        await upload(job, "/api/firmware/upload", job.source.file);
+        job.accepted = true;
     } catch (err) {
         // The user's cancel drops the connection, which aborts the write: the device stays waiting in MoonBase.
         if (err.message === "Install canceled.") throw new Error("Install canceled: the device is waiting in MoonBase.");
         if (err.cause?.message.startsWith("error")) throw err;   // MoonBase's own refusal
-        // A dead socket mid-upload (power cut, WiFi drop) is no verdict: the watch sees where the device lands and hands the file over again.
     }
-    return false;
 }
 
-// Hand MoonBase the source in the form its routes read: the URL as the whole plain-text body of /api/firmware/url, where the app takes JSON,
-// and a file as the raw body of /api/firmware/upload. MoonBase restarts into the app on success.
+// Hand MoonBase the URL as the whole plain-text body of its /api/firmware/url, where the app takes JSON; MoonBase restarts into the app on success.
 function toMoonBase({ base, source }) {
-    return fetch(`${base}/api/firmware/${source.file ? "upload" : "url"}`, source.file
-        ? { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: source.file }
-        : { method: "POST", body: source.url });
+    return fetch(`${base}/api/firmware/url`, { method: "POST", body: source.url });
 }
 
 // Upload `blob` to `route` with its progress on `ui`, behind the cancel `ctl`.
@@ -182,8 +187,8 @@ async function afterUpload(job) {
     else ui.done(`Installed ${k.name}.`);
 }
 
-// The app answering this long after an install through MoonBase began counts as done though no ask saw the board away: a restart quicker
-// than the one-second asks leaves no silence to see.
+// The app answering this long after the device took an install through MoonBase counts as done though no ask saw the board away: a restart
+// quicker than the one-second asks leaves no silence to see. A request with no reply has to show work first, since it may have been lost on the way.
 const MOONBASE_GRACE_MS = 20000;
 const RESTING_ASK_EVERY = 3;   // a target's firmware is read every third ask while the device rests before any work shows, every ask after
 
@@ -222,7 +227,8 @@ async function watch(job) {
                 if (retries++ >= 2) throw new Error("The install keeps getting interrupted.");
                 deadline += 180000;
                 ui.status("The install was interrupted, retrying…");
-                await toMoonBase(job).catch(() => null);   // the asks see the outcome
+                if (job.source.file) await fileToMoonBase(job);   // behind the cancel, as the first push
+                else await toMoonBase(job).catch(() => null);   // the asks see the outcome
             } else showPhase(text, !text || text === "idle" ? "Preparing the install…" : text);
             away = sawWork = true;   // MoonBase answering means the old app is gone
             silent = 0;
@@ -233,7 +239,7 @@ async function watch(job) {
         const rest = text === "" || text === "idle";
         // A bare working phase is work too: a chunked download reports only its phases, checking, erasing and writing, then rest.
         if (!rest) { showPhase(text, `Installing ${k.name}…`); sawWork = true; }
-        const ended = sawWork && (rest || (k.reboots && silent > 0)) || (viaMoonBase && rest && Date.now() - started > MOONBASE_GRACE_MS);
+        const ended = sawWork && (rest || (k.reboots && silent > 0)) || (viaMoonBase && job.accepted && rest && Date.now() - started > MOONBASE_GRACE_MS);
         const readTarget = rest && (sawWork || away || ++asks % RESTING_ASK_EVERY === 0);
         if (target ? readTarget && reached(target, await peerFirmware(base)) : ended) {
             ui.done(!target ? `Installed ${k.name}.` : target.version ? `Updated to ${target.version}.` : `Installed ${k.name}: it matches the app.`);

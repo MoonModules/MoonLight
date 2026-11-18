@@ -23,7 +23,7 @@ function load(names, extra = "") {
 const node = (name, extra = {}) => ({ key: name, self: !!extra.self, row: { name, ...extra } });
 
 test("devices without traffic sit in a grid beneath the linked ones, by name, every label inside", () => {
-    const { layoutGraph, GRAPH_W, GRAPH_CELL_H } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes"]);
+    const { layoutGraph, GRAPH_W, GRAPH_CELL_H } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("peer"), node("zeta"), node("alpha"), node("mid")];
     const links = [[0, 1, "DDP", false]];
     const pos = new Map();
@@ -40,7 +40,7 @@ test("devices without traffic sit in a grid beneath the linked ones, by name, ev
 });
 
 test("a device that gains traffic leaves the grid and is placed by force", () => {
-    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes"]);
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("peer")];
     const pos = new Map();
     layoutGraph(nodes, [], pos);
@@ -86,6 +86,59 @@ test("a peer gone from this device's list takes its merged graph off the map", (
     assert.ok(container._peerGraphs.has("10.0.0.2"), "a listed peer's graph stays until refreshed");
 });
 
+test("a list with no device of its own, as MoonDeck's presence rows, drops the peer graphs a list before it gathered, a round in flight too", () => {
+    const { refreshPeerGraphs } = load(["refreshPeerGraphs"], "async function fetchPeerGraph() { return { state: 'ok', rows: [] }; }\nfunction redrawGraph() {}");
+    const stale = new Map([["10.0.0.2", { state: "ok", rows: [{ name: "only the old source saw it", ip: "10.0.0.50" }] }]]);
+    const container = {
+        _graphArgs: { rows: [{ name: "board", ip: "10.0.0.2", type: "MoonLight" }], details: [], opts: { moduleName: "Discovery", ctrlName: "devices" } },
+        _peerGraphs: stale, _peerFetching: true, isConnected: true, offsetParent: {},
+    };
+    refreshPeerGraphs(container);
+    assert.equal(container._peerGraphs, null, "no peer graph outlives its source");
+});
+
+test("a WLED's version is asked again ten minutes on, and a WLED by another name at its address is asked afresh", async (t) => {
+    const realFetch = globalThis.fetch;
+    t.after(() => { globalThis.fetch = realFetch; });
+    const asked = [];
+    const answers = { "10.0.0.5": { ver: "0.15.0", product: "FOSS" } };
+    globalThis.fetch = async (url) => { asked.push(url); return { json: async () => answers["10.0.0.5"] }; };
+    const { fillWledInfo } = load(["fillWledInfo"], "function redrawGraph() {}");
+    const container = {};
+    const wled = (name) => [{ key: "10.0.0.5", row: { type: "WLED", ip: "10.0.0.5", name } }];
+    fillWledInfo(container, wled("Porch"), 0);
+    await new Promise((r) => setImmediate(r));
+    let nodes = wled("Porch");
+    fillWledInfo(container, nodes, 60000);
+    assert.equal(nodes[0].row.version, "0.15.0");
+    assert.equal(asked.length, 1, "within ten minutes the answer stands");
+    answers["10.0.0.5"] = { ver: "0.16.0", product: "FOSS" };
+    nodes = wled("Porch");
+    fillWledInfo(container, nodes, 600001);
+    assert.equal(nodes[0].row.version, "0.15.0", "the last answer shows while it is asked again");
+    await new Promise((r) => setImmediate(r));
+    assert.equal(asked.length, 2);
+    nodes = wled("Porch");
+    fillWledInfo(container, nodes, 600002);
+    assert.equal(nodes[0].row.version, "0.16.0", "an update in place shows");
+    nodes = wled("Garage");
+    fillWledInfo(container, nodes, 600003);
+    assert.equal(nodes[0].row.version, undefined, "another WLED at the address shows none of the old one's");
+    assert.equal(asked.length, 3);
+});
+
+test("a touch on the whole map scrolls the page past it, and is the map's to pan once zoomed in", () => {
+    const { showGraphView } = load(["graphViewBox", "showGraphView"]);
+    const svg = { attrs: {}, style: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+    const container = { _graphFull: { x: 0, y: 0, w: 600, h: 300 } };
+    showGraphView(container, svg);
+    assert.equal(svg.style.touchAction, "");
+    assert.equal(svg.attrs.viewBox, "0 0 600 300");
+    container._graphView = { z: 2 };
+    showGraphView(container, svg);
+    assert.equal(svg.style.touchAction, "none");
+});
+
 test("a node shows each service it offers as an emoji, and a service without one as its protocol", () => {
     const { graphServiceEmoji } = load(["graphServiceEmoji"]);
     assert.equal(graphServiceEmoji("HTTP 80"), "\u{1F310}", "the port is dropped, the emoji found");
@@ -127,7 +180,7 @@ test("an output shows the kind of light it drives: moving heads whatever drives 
 });
 
 test("a hub linked to many devices, as Home Assistant to every board, spreads them so no two cells overlap", () => {
-    const { layoutGraph, GRAPH_W } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes"]);
+    const { layoutGraph, GRAPH_W } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
     const names = ["self", "ha", ...Array.from({ length: 10 }, (_, i) => `board${i}`)];
     const nodes = names.map((n, i) => node(n, { self: i === 0 }));
     const links = names.slice(2).map((_, i) => [1, i + 2, "WLED API 24 req/min", false]).concat([[0, 1, "E1.31", false]]);
@@ -151,7 +204,7 @@ test("a node's IP and version start hidden and show when the viewer turns them o
 });
 
 test("the map lays out at its box's size: a wider box holds more devices a row, a taller one gives the linked ones the room", () => {
-    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes"]);
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
     const make = () => [node("self", { self: true }), node("peer"), ...Array.from({ length: 8 }, (_, i) => node(`idle${i}`))];
     const narrow = new Map(), wide = new Map();
     const hNarrow = layoutGraph(make(), [[0, 1, "DDP", false]], narrow, 480);
@@ -303,4 +356,42 @@ test("two settled nodes newly linked by a group are relaxed together", () => {
     assert.equal(Math.abs(pos.get("a").x - pos.get("b").x), before, "an unchanged graph stays put");
     layoutForce(nodes, [[0, 1, "", false, true]], [0, 1], pos, 400, 800);
     assert.ok(Math.abs(pos.get("a").x - pos.get("b").x) < before, "a new group link pulls them together");
+});
+
+test("a search matches the devices whose name, address, type, version, firmware or group hold every term; the map greys out the rest", () => {
+    const { graphMatches } = load(["graphMatches"]);
+    const nodes = [node("hall-s3", { ip: "192.168.1.101", type: "MoonLight", firmware: "esp32s3-n16r8" }),
+                   node("desk-p4", { ip: "192.168.1.169", type: "MoonLight", firmware: "esp32p4rev1-eth" }),
+                   node("bulb", { ip: "192.168.1.143", type: "Hue" })];
+    const groups = new Map([["g1", { name: "Stage", members: new Set([0, 1]), missing: new Set() }]]);
+    assert.equal(graphMatches(nodes, groups, "  "), null);                          // no search: every device as it is
+    assert.deepEqual([...graphMatches(nodes, groups, "ESP32P4")], [1]);             // case is ignored
+    assert.deepEqual([...graphMatches(nodes, groups, ".143")], [2]);                // an address's last part, as typed
+    assert.deepEqual([...graphMatches(nodes, groups, "hall")], [0]);                // part of a name
+    assert.deepEqual([...graphMatches(nodes, groups, "stage moonlight")], [0, 1]);  // every term, a group's name among the fields
+    assert.equal(graphMatches(nodes, groups, "zebra-unicorn").size, 0);
+});
+
+test("a map whose force area empties and fills again keeps every linked node's spot a number", () => {
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const nodes = [node("self", { self: true }), node("peer"), node("idle")];
+    const pos = new Map();
+    layoutGraph(nodes, [[0, 1, "DDP", false]], pos);
+    layoutGraph([node("idle")], [], pos);                                 // a search keeping only an unlinked device: no force area
+    layoutGraph(nodes, [[0, 1, "DDP", false]], pos);                      // cleared again
+    for (const key of ["self", "peer"]) assert.ok(Number.isFinite(pos.get(key).x) && Number.isFinite(pos.get(key).y), key);
+});
+
+test("a group's box holds only its members: a device linked to a member is laid out outside it", () => {
+    const { layoutGraph, groupBox } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const nodes = [node("self", { self: true }), node("p4"), node("dn2"), node("c3"), node("teensy"), node("wled-audio")];
+    const traffic = [[4, 1, "audio sync", false], [5, 1, "audio sync", false], [0, 1, "DDP", false]];
+    const group = [[1, 2, "", false, true], [1, 3, "", false, true]];   // p4, dn2 and c3 in one group, as groupLinks writes it
+    const pos = new Map();
+    layoutGraph(nodes, traffic.concat(group), pos, 900, 600);
+    const b = groupBox([1, 2, 3].map(i => pos.get(nodes[i].key)));
+    for (const i of [0, 4, 5]) {
+        const p = pos.get(nodes[i].key);
+        assert.ok(p.x < b.x || p.x > b.x + b.w || p.y < b.y || p.y > b.y + b.h, `${nodes[i].key} outside the box`);
+    }
 });

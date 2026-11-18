@@ -85,10 +85,8 @@ public:
     }
 
 
-    /// How many receivers one driver can feed: a wall of tubes, not a subnet scan.
-    static constexpr uint8_t kMaxDestinations = 32;
-    /// Receiver addresses or names, in fan-out order; blank idles.
-    /// @guide A name resolves by mDNS for `.local`, else by DNS; it sends once resolved, keeps its last address while silent, and the status names the ones waiting.
+    /// Receiver addresses, names or a device group's name, in fan-out order; blank idles.
+    /// @guide A name resolves by mDNS for `.local`, else by DNS, keeping its last address while silent. A group's name is its members, a slice each.
     char receivers[64] = {};
     /// Lights per receiver; blank splits evenly, one number to all, a list each.
     char lightsPerReceiver[64] = {};
@@ -210,27 +208,14 @@ public:
         resizeCorrected();       // which waits out a running task only when it reallocates
 
         // Published only once EVERYTHING validates: wrong output is worse than none at all.
-        Receiver dest[kMaxDestinations] = {};
-        uint8_t n = 0;
-        if (mode() == Addressing::Unicast) {
-            const char* err = parseReceiverList(receivers, dest, kMaxDestinations, n);
-            if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
-            startResolverForNames(dest, n);
-            if (n == 0) {
-                // A Warning, not an Error: an unset receiver is unfinished, not faulty.
-                stopSendTask();
-                nDest_ = 0;
-                setStatus("set a receiver", Severity::Warning);
-                return;
-            }
-        } else {
-            n = 1;   // one stream of universes, to the group or to everyone, owning the whole window
-        }
+        Receiver dest[kMaxReceivers] = {};
+        uint8_t n = 1;   // one stream of universes, to the group or to everyone, owning the whole window
+        if (mode() == Addressing::Unicast && !resolveDestinations(dest, n)) return;
 
         // The identical rule, and helper, an LED driver uses to split its window across pins.
         nrOfLightsType winStart = 0, winLen = 0;
         if (sourceBuffer_) windowSlice(sourceBuffer_->count(), winStart, winLen);
-        nrOfLightsType counts[kMaxDestinations] = {};
+        nrOfLightsType counts[kMaxReceivers] = {};
         const char* warn = nullptr;
         const char* err = assignCounts(mode() == Addressing::Unicast ? lightsPerReceiver : "", n, winLen, counts, 0, &warn);
         if (err) { stopSendTask(); nDest_ = 0; setStatus(err, Severity::Error); return; }
@@ -240,6 +225,24 @@ public:
         refreshReceivers();
         if (packetGap > 0) startSendTask();   // a no-op while it runs
         else stopSendTask();
+    }
+
+    /// Parse and resolve the receiver list into `dest`; false when there is none to send to, the driver stopped and the status saying why.
+    bool resolveDestinations(Receiver* dest, uint8_t& n) {
+        resolvedCount_ = 0;
+        const char* err = parseReceiverList(receivers, dest, kMaxReceivers, n);
+        if (!err) {
+            startResolverForNames(receivers, dest, n);
+            receiversLeft_ = resolveReceivers(receivers, dest, n);
+            resolvedCount_ = n;
+            if (n > 0) return true;
+        }
+        stopSendTask();
+        nDest_ = 0;
+        // A Warning, not an Error: an unset receiver is unfinished, not faulty.
+        if (err) setStatus(err, Severity::Error);
+        else setStatus("set a receiver", Severity::Warning);
+        return false;
     }
 
     /// Publish validated destinations as one unit. The send task reads them, so it stops only when they differ, and a rebuild elsewhere leaves a running stream alone.
@@ -381,7 +384,7 @@ private:
     /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame, as nextSequence steps it.
     uint8_t sequence_ = 1;
     /// DDP's per-packet sequence counter for each destination, 1 to 15, 0 before its first packet: each receiver sees its own run unbroken.
-    uint8_t ddpSequence_[kMaxDestinations] = {};
+    uint8_t ddpSequence_[kMaxReceivers] = {};
     /// millis() of the last frame sent: the `fps` rate limiter's reference point.
     uint32_t lastSendTime_ = 0;
     /// micros() of the last tick, and the smoothed time between ticks, the render's frame period.
@@ -390,11 +393,15 @@ private:
     /// E1.31 component id, built once in setup() from the MAC so it is stable per device.
     uint8_t cid_[E131_CID_LENGTH] = {};
     /// Destination receivers, derived in prepare(), outside tick(); a name's address is refreshed each second.
-    Receiver dest_[kMaxDestinations] = {};
+    Receiver dest_[kMaxReceivers] = {};
     /// Each destination's slice of the window, index-aligned with `dest_`.
-    nrOfLightsType destCounts_[kMaxDestinations] = {};
+    nrOfLightsType destCounts_[kMaxReceivers] = {};
     /// How many entries of `dest_` / `destCounts_` are live.
     uint8_t nDest_ = 0;
+    /// How many receivers prepare's resolution found, which a membership edit changes.
+    uint8_t resolvedCount_ = 0;
+    /// Receivers past kMaxReceivers, left out, which the status names.
+    uint8_t receiversLeft_ = 0;
     /// The status line the buffer holds: an unresolved-names warning, or what went out this second.
     char statusBuf_[64] = {};
     /// Frames and packets sent since start, by the tick or the task, which tick1s turns into rates.
@@ -532,24 +539,19 @@ private:
         return protocol == kProtoE131 ? E131_PORT : protocol == kProtoDdp ? ddpPort : ARTNET_PORT;
     }
 
-    /// Copy each named receiver's latest address in from the resolver, keeping the last one while it is busy or failing, then report.
+    /// Resolve the receivers again, each name at its latest address and a device group's members at theirs, then report.
     void refreshReceivers() {
+        const bool unicast = mode() == Addressing::Unicast;
+        if (unicast && !followReceivers()) return;   // the members changed: prepare splits the window anew and reports
         if (nDest_ == 0) return;   // idle or refused: prepare's own status stands
         uint8_t waiting = 0;
-        for (uint8_t d = 0; d < nDest_; d++) {
-            if (!dest_[d].isName()) continue;
-            char name[kMaxHostName + 1];
-            receiverName(receivers, dest_[d], name);
-            uint8_t ip[4];
-            const NameResolver::State st = NameResolver::lookup(name, ip);
-            if (st == NameResolver::State::Busy) return;   // the lookup task held the cache this instant: keep the status as it is
-            // Not while the task sends: an address it reads mid-copy would be half old, half new.
-            const bool sending = sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle;
-            if (!sending && (st == NameResolver::State::Resolved || st == NameResolver::State::Stale)) std::memcpy(dest_[d].ip, ip, 4);
-            if (st == NameResolver::State::Waiting || st == NameResolver::State::Full) waiting++;
-        }
+        for (uint8_t d = 0; unicast && d < nDest_; d++)
+            if (!dest_[d].hasAddress()) waiting++;
         if (waiting) {
             mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u receiver%s not resolved yet", waiting, waiting == 1 ? "" : "s");
+            setStatus(statusBuf_, Severity::Warning);
+        } else if (receiversLeft_) {
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%u receiver%s past %u left out", receiversLeft_, receiversLeft_ == 1 ? "" : "s", kMaxReceivers);
             setStatus(statusBuf_, Severity::Warning);
         } else if (mode() == Addressing::Multicast && NetworkPath::multicastDropped) {
             // A light stream never falls back to broadcast, which would flood every device on the LAN.
@@ -573,6 +575,23 @@ private:
         }
     }
 
+    /// Resolve the receiver list into the running destinations; false when a membership edit changed how many there are, which asks for a prepare.
+    bool followReceivers() {
+        Receiver* now = following_;   // a member, so the second's resolution costs no task a 224-byte frame
+        uint8_t n = nDest_;
+        std::memcpy(now, dest_, sizeof(Receiver) * n);
+        receiversLeft_ = resolveReceivers(receivers, now, n);
+        if (n != resolvedCount_) {
+            if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);
+            return false;
+        }
+        if (n != nDest_) return true;   // refused by a later check in prepare, whose status stands
+        // Not while the task sends: an address it reads mid-copy would be half old, half new.
+        const bool sending = sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle;
+        if (!sending) std::memcpy(dest_, now, sizeof(Receiver) * n);
+        return true;
+    }
+
     /// Size the corrected buffer, off the hot path, which is the no-allocation contract.
     void resizeCorrected() {
         if (!sourceBuffer_) return;
@@ -589,6 +608,7 @@ private:
         if (wasSending) startSendTask();
     }
     uint32_t taskStarts_ = 0;   ///< send-task starts, for taskStartsForTest
+    Receiver following_[kMaxReceivers] = {};   ///< followReceivers' working copy of the destinations, resolved before it replaces them
     char preparedReceivers_[sizeof(receivers)] = {};      ///< the receiver text the running destinations came from
     Addressing preparedMode_ = Addressing::Unicast;   ///< and the addressing
 };

@@ -44,18 +44,15 @@ def test_the_listener_hears_a_packet_and_forgets_a_device_gone_quiet(monkeypatch
 
 
 def test_the_listener_shares_its_port_with_another_listener():
-    port = 65432   # a port of the test's own, so a desktop beside the suite keeps 65506
-    other = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    other.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    if hasattr(socket, "SO_REUSEPORT"):
-        other.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)   # as UdpSocket::bindShared binds the desktop's
-    other.bind(("", port))
-    try:
-        s = _presence.Listener(port)._open()
+    # a port the OS picks, so a desktop beside the suite keeps 65506 and a busy fixed port cannot fail the bind
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as other:
+        other.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            other.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)   # as UdpSocket::bindShared binds the desktop's
+        other.bind(("", 0))
+        s = _presence.Listener(other.getsockname()[1])._open()
         assert s is not None
         s.close()
-    finally:
-        other.close()
 
 
 HEARD_A = {"name": "MM-A", "ip": "192.168.1.5", "type": "MoonLight", "mac": "aa:aa:aa:aa:aa:aa"}
@@ -78,3 +75,34 @@ def test_the_known_devices_are_the_heard_ones_then_the_desktops_list_or_else_the
     assert asked == ["localhost:8080"]                                   # a desktop list answered: no board asked
     lists.pop("localhost:8080")
     assert _presence.known_rows([HEARD_A], read) == [HEARD_A, PEER_B]    # no desktop app: the heard board's list brings its peers
+
+
+def test_a_selected_mac_resolves_to_its_exact_row_before_another_rows_eui64_alias():
+    alias = {"name": "alias", "ip": "192.168.1.7", "type": "MoonLight", "mac": "30:ed:a0:ff:fe:f3"}   # the S31 form of 30:ed:a0:f3:d4:68
+    exact = {"name": "exact", "ip": "192.168.1.8", "type": "MoonLight", "mac": "30:ed:a0:f3:d4:68"}
+    assert _presence.resolve(["30:ed:a0:f3:d4:68"], [alias, exact])["30:ed:a0:f3:d4:68"]["host"] == "192.168.1.8"
+    assert _presence.resolve(["30:ed:a0:f3:d4:68"], [alias])["30:ed:a0:f3:d4:68"]["host"] == "192.168.1.7"   # a USB board's raw MAC still finds an S31
+
+
+def test_the_known_devices_keep_asking_peers_until_every_wanted_mac_resolves():
+    desk_only_a = {"localhost:8080": [DESKTOP], "192.168.1.5": [HEARD_A, PEER_B]}
+    asked = []
+    read = lambda entry: asked.append(entry) or desk_only_a.get(entry, [])   # noqa: E731
+    rows = _presence.known_rows([HEARD_A], read, want=[PEER_B["mac"]])
+    assert PEER_B in rows and asked == ["localhost:8080", "192.168.1.5"]   # the desktop's list lacked it: the heard board's list was asked too
+    asked.clear()
+    _presence.known_rows([HEARD_A], read, want=[DESKTOP["mac"]])
+    assert asked == ["localhost:8080"]   # resolved by the first list: no more asked
+
+
+def test_no_new_peer_is_asked_once_the_discovery_budget_has_passed():
+    asked = []
+    _presence.known_rows([HEARD_A], lambda entry: asked.append(entry) or [], want=["zz:zz:zz:zz:zz:zz"], budget_s=-1)
+    assert asked == []
+
+
+def test_a_discovery_answer_with_no_device_list_is_an_unavailable_peer(monkeypatch):
+    import io
+    for body in (b'{"controls": null}', b'{"controls": [null, 3, {"name": "devices", "value": null}]}', b"[]", b"null"):
+        monkeypatch.setattr(_presence.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(body))
+        assert _presence.discovery_rows("x") == []

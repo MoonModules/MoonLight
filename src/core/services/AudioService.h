@@ -189,7 +189,8 @@ public:
     /// How the analysis travels: multicast, which WLED hears, or unicast.
     /// @guide Unicast to `receivers` reaches a few MoonLight boards faster on WiFi, which retries it.
     uint8_t  addressing = kAddressMulticast;
-    /// The boards a unicast send reaches, addresses or names.
+    /// The boards a unicast send reaches: addresses, names or a device group's name.
+    /// @guide A group's members are found by MAC each second, so a new address follows.
     char     receivers[64] = {};
     /// The packet formats `syncFormat` picks from, in its option order.
     enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatBoth, kFormatCount };
@@ -329,7 +330,7 @@ public:
             syncedWith_ = syncConfig();
             syncSet_ = true;
         }
-        sync_.parseReceivers(receivers);
+        sync_.parseReceivers(unicastReceivers());
     }
     /// A reader's demand turned on or off: count them again at the frame boundary, and switch the notes when that changes whether anything reads them.
     void onDemandChanged() override {
@@ -628,7 +629,7 @@ public:
                          static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);   // the samples the input delivered this second, its real rate
         else
             mm::formatTo(cpuStr_, sizeof(cpuStr_), "paused, nothing reads it, %u Hz%s%s", static_cast<unsigned>(micSamples), *backend ? ", " : "", backend);
-        sync_.refreshReceivers(receivers);
+        sync_.refreshReceivers(unicastReceivers());
 
         // Mic-health diagnosis from the 1 s tallies (see the read path).
         const bool directMicLive = platform::hasI2sMic && inited_ && mode == kLocalMode
@@ -674,6 +675,8 @@ private:
         bool operator==(const SyncConfig&) const = default;
     };
     SyncConfig syncConfig() const { return {mode, addressing, send, syncPort, fnv1a(receivers, std::strlen(receivers))}; }
+    /// The receivers a unicast send reaches, none while the sync multicasts.
+    const char* unicastReceivers() const { return addressing == kAddressUnicast ? receivers : ""; }
     SyncConfig syncedWith_{};
     bool syncSet_ = false;
     uint32_t codecBusGen_ = 0;   ///< the bus generation the codec last attached to, so a moved bus re-attaches it

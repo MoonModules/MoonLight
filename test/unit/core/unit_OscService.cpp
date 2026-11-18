@@ -4,6 +4,7 @@
 /// OSC feedback: its settings are validated without a socket, and every value is sent again every 30 seconds, one per tick.
 
 #include "doctest.h"
+#include "osc_rig.h"
 #include "core/services/OscService.h"
 #include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"
@@ -53,16 +54,10 @@ struct CountingOsc : OscService {
 
 // Regression: a follower that missed one multicast datagram kept the wrong value until that slot changed again, which for a palette was a whole scene.
 TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and gets one per tick") {
-    Scheduler scheduler;
-    auto* control = new ControlModule();
-    control->setName("Control");
-    auto* osc = new CountingOsc();
-    osc->setName("Osc");
-    scheduler.addModule(control);
-    scheduler.addModule(osc);
-    scheduler.setup();
-    REQUIRE(scheduler.setControl("Osc", "feedback", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
-    REQUIRE(scheduler.setControl("Osc", "listen", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
+    osc_rig::OscRig<CountingOsc> rig;
+    ControlModule* control = rig.control;
+    CountingOsc* osc = rig.osc;
+    REQUIRE(rig.scheduler.setControl("Osc", "listen", "{\"value\":true}") == Scheduler::SetControlResult::Ok);
 
     // Attached as the module attaches itself: seeded one value per tick, not in one burst.
     control->addSurface(osc, ControlModule::Seed::Paced);
@@ -82,7 +77,6 @@ TEST_CASE("OSC feedback asks for every surface value again every 30 seconds, and
     for (int i = 0; i < ControlModule::kSurfaceValues + 2; i++) control->tick20ms();
     CHECK(osc->sent == 2 * ControlModule::kSurfaceValues);   // and every value once more
     control->removeSurface(osc);
-    scheduler.release();
 }
 
 // On the StadBeest the eyes never followed the legs: the leader's feedback socket is opened and never bound, and the non-blocking switch lived in bind alone.

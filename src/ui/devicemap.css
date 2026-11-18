@@ -4,11 +4,12 @@
 /* A list drawn as a graph above its rows (listAsGraph): nodes and edges in the theme's own colors. */
 .list-graph {
     display: block;
-    width: 100%;
-    touch-action: none;    /* a pinch and a drag are the map's, as the preview's are */
+    width: 100%;   /* its touch-action follows the zoom (showGraphView) */
 }
 .graph-box { overflow: hidden; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
 .graph-filters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.list-graph .graph-dim { opacity: 0.2; }   /* a device, line or group box the search leaves out */
+.graph-search { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: none; color: var(--fg); min-width: 10em; }
 .graph-filter { font-size: 0.75rem; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: none; color: var(--fg-muted); cursor: pointer; }
 .graph-filter[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); }
 .graph-filter:not(.graph-zoom) + .graph-zoom { margin-left: auto; }   /* the zoom buttons at the bar's right end */
@@ -68,3 +69,8 @@ dialog.graph-popup::backdrop { background: rgba(10, 10, 20, 0.6); }
 }
 @keyframes rp-spin { to { transform: rotate(360deg); } }
 .graph-popup-progress { width: 100%; }   /* an install's bar, under its status line */
+.list-graph .graph-group.graph-link:hover { fill-opacity: 0.2; }   /* a group's box opens its popup */
+.list-graph .graph-group.graph-link:focus { outline: none; }
+.list-graph .graph-group.graph-link:focus-visible { stroke-width: 3; }
+.graph-popup-member { display: flex; flex-direction: column; gap: 0.2rem; }
+.graph-popup-member-status { color: var(--fg-muted); font-size: 0.9em; }

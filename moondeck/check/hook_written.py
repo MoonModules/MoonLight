@@ -130,6 +130,8 @@ def file_checks(paths: list[Path]) -> list[str]:
     out = []
     for check, named in (("check_docgen.py", docgen), ("check_code.py", code)):
         r = _run(["uv", "run", str(HERE / check), "--files", *map(str, named)], cwd=REPO) if named else None
+        if r and r.returncode and r.stderr.strip():   # findings go to stdout; a nonzero exit with stderr text is the check failing, so its files are checked again
+            UNFINISHED.append(f"{check} (failed: {r.stderr.strip().splitlines()[-1][:120]})")
         if r and r.stdout.strip():
             out += [f"{check}:", *[ln for ln in r.stdout.splitlines() if ln.strip()]]
     return out
@@ -153,9 +155,9 @@ def backups(path: Path) -> list[str]:
 
 def _rel(path: Path) -> str:
     try:
-        return str(path.relative_to(REPO))
+        return path.relative_to(REPO).as_posix()   # git's own spelling, whatever the platform
     except ValueError:
-        return str(path)
+        return path.as_posix()
 
 
 def check(paths: list[Path]) -> list[str]:
@@ -194,7 +196,7 @@ def changed(paths: set[str]) -> dict[Path, str]:
     rels = sorted(_rel(Path(p)) for p in paths if Path(p).is_file())
     if not rels:
         return {}
-    listed = subprocess.run(["git", "ls-files", "-z", "--modified", "--others", "--exclude-standard", "--", *rels],
+    listed = subprocess.run(["git", "--literal-pathspecs", "ls-files", "-z", "--modified", "--others", "--exclude-standard", "--", *rels],
                             cwd=REPO, capture_output=True, text=True, check=False).stdout
     seen = _seen()
     out = {}
@@ -224,6 +226,9 @@ def check_batch(batch: set[str]) -> list[str]:
     findings = check(list(versions))
     if len(UNFINISHED) == cut:
         remember(versions)
+    elif fcntl:
+        for p in versions:   # the batch left the queue to be checked: it goes back for the next batch or the next write's hook
+            _queue(str(p))
     return findings
 
 
@@ -261,9 +266,9 @@ def _queue(add: str | None = None, take: bool = True) -> set[str]:
 
 def drain(path: Path) -> list[str]:
     """Queue `path`; the hook that holds the run lock checks the queue in batches until it is empty or the budget is spent."""
+    STATE.mkdir(parents=True, exist_ok=True)   # the versions checked live here on every platform
     if fcntl is None:
         return check_batch({str(path)})
-    STATE.mkdir(parents=True, exist_ok=True)
     _queue(str(path))
     findings = []
     while True:
@@ -271,10 +276,11 @@ def drain(path: Path) -> list[str]:
             if not run.held:
                 return findings   # the hook holding it checks this file in its next batch
             time.sleep(SETTLE_S)
-            while time.monotonic() < DEADLINE and (batch := _queue()):
+            while time.monotonic() < DEADLINE and not UNFINISHED and (batch := _queue()):
                 findings += check_batch(batch)
         # A file queued as the lock was let go found it held and left: this hook takes the lock again for it.
-        if not (left := _queue(take=False)):
+        # An unfinished check leaves its files queued for the next write's hook, which main() names.
+        if UNFINISHED or not (left := _queue(take=False)):
             return findings
         if time.monotonic() >= DEADLINE:
             names = ", ".join(sorted(_rel(Path(p)) for p in left)[:5])
@@ -292,11 +298,12 @@ def main() -> int:
     name = payload.get("file_path", "")
     if not name or payload.get("event") == "unlink" or not name.endswith(GOVERNED):
         return 0
-    if hasattr(os, "nice"):
-        os.nice(10)   # beside the agent's builds and the product owner's editor
+    sys.path.insert(0, str(HERE.parent / "build"))
+    from build_host import lower_priority  # noqa: PLC0415  (one home for yielding the CPU)
+    lower_priority()   # beside the agent's builds and the product owner's editor
     findings = drain(Path(name).resolve())
     if UNFINISHED:
-        findings.append(f"Not finished within the hook's {BUDGET_S} s, so not checked: {', '.join(UNFINISHED)}.")
+        findings.append(f"Not finished (out of the hook's {BUDGET_S} s, or failed), so not checked: {', '.join(UNFINISHED)}.")
     if findings:
         print(json.dumps({"systemMessage": "Write-time checks (moondeck/check/hook_written.py):\n" + "\n".join(findings)}))
     return 0

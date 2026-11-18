@@ -96,6 +96,7 @@ def main():
     # full ~11k-line output buffers internally and only appears at exit.
     # The data folder ctest pins too: from the build tree the default would be the developer's own settings, which a test must leave untouched.
     env = dict(os.environ, MM_DATA_DIR=str(build_dir / "test" / "fs-root"))
+    key = _suite_output.fingerprint(test_exe)   # the binary as this run starts, before anything can rebuild it
     proc = subprocess.Popen(
         cmd, cwd=build_dir, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -117,8 +118,9 @@ def main():
     if junit.exists():
         console, xml = test_runs.split_doctest_output(junit.read_text(encoding="utf-8", errors="replace"))
         test_runs.record(test_runs.doctest_runs(xml))   # each case's last result, with the tree it saw
+    kept = "".join(output) + console   # the console text, with the case count, is in the out file: the KPI reads it instead of running the suite again
     if not filtered:
-        _suite_output.keep(test_exe, "".join(output) + console)   # the console text, with the case count, is in the out file: the KPI reads it instead of running the suite again
+        _suite_output.keep_complete(test_exe, kept, key, "test cases:")
     sys.exit(code)
 
 

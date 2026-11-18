@@ -47,20 +47,21 @@ import urllib.request
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(_ROOT, "moondeck"))
 sys.path.insert(0, os.path.join(_ROOT, "moondeck", "scenario"))
-from _moondeck_config import live_test_devices  # noqa: E402
-from _preview_ws import handshake  # noqa: E402
+from _moondeck_config import live_test_devices, selected_live_tests  # noqa: E402
+from _preview_ws import client_frame, handshake, request_preview  # noqa: E402
 
 
 # --- minimal RFC 6455 client (one connection), its handshake moondeck/scenario/_preview_ws.py's -----------
 
 class _Ws:
-    """One /ws connection to host "ip[:port]". Reads server frames; can send a text frame (the
-    keepalive ping). The device never fragments and stays under 64 KiB (HttpServerModule), so the
+    """One /wsp connection to host "ip[:port]", the standing frame request posted on connect (so on every reconnect too). Reads server
+    frames; can send a text frame (the keepalive ping). The device never fragments and stays under 64 KiB (HttpServerModule), so the
     reader handles only FIN frames with the 7/16-bit length forms."""
 
     def __init__(self, host, timeout_s=5.0):
-        self.sock, rest = handshake(host, "/ws", timeout_s)
+        self.sock, rest = handshake(host, "/wsp", timeout_s)
         self._buf = bytearray(rest)
+        request_preview(self.sock)
 
     def _need(self, n, deadline):
         while len(self._buf) < n:
@@ -91,12 +92,7 @@ class _Ws:
         return opcode, payload
 
     def send_text(self, s):
-        # Client→server frames MUST be masked (RFC 6455). The browser sends "ping" as a text frame.
-        data = s.encode()
-        mask = os.urandom(4)
-        masked = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
-        hdr = bytes([0x81, 0x80 | len(data)]) + mask
-        self.sock.sendall(hdr + masked)
+        self.sock.sendall(client_frame(0x1, s.encode()))
 
     def close(self):
         try:
@@ -232,6 +228,7 @@ def main():
 
     host = args.host_opt or args.host_pos
     hosts = [host] if host else [d["ip"] for d in live_test_devices()]
+    unresolved = 0 if host else len(selected_live_tests()) - len(hosts)   # selected devices no address was found for
     if not hosts:
         print("No devices to probe: give an ip[:port], or tick \"use in live tests\" in a device's popup on the Live tab's map.")
         return 1
@@ -244,7 +241,9 @@ def main():
     # Exit non-zero if any device was not SMOOTH, so the exit code is honest — MoonDeck's Live tab
     # reads it (a CHOPPY/DEAD run shows as failed) and a CLI/CI caller can branch on it. The per-device
     # verdict is always printed regardless, so the line above is the human-readable detail.
-    return 0 if all_smooth else 1
+    if unresolved > 0:
+        print(f"FAIL  {unresolved} selected device(s) were not probed: no address was found for them.")
+    return 0 if all_smooth and unresolved <= 0 else 1
 
 
 if __name__ == "__main__":

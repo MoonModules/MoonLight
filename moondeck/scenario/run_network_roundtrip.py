@@ -200,7 +200,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", help="run only this device host[:port]; default = "
-                                   "every device checked in MoonDeck's Live tab")
+                                   "every device ticked \"use in live tests\" in MoonDeck's map popup")
     ap.add_argument("--repeats", type=int, default=10, help="probes per protocol per device")
     ap.add_argument("--timeout", type=float, default=5.0,
                     help="seconds to wait for the probe color per repeat")

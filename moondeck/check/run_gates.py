@@ -13,8 +13,8 @@ agent typing the chain by hand:
   HEAD for a commit and against the merge base with main for a merge. A gate naming no files runs on every change.
 - **Generated first.** A step that `generates` a committed file (help.json) runs before every other gate of a commit, so the gates read
   and hash the file the source says, and its rewrite is left unstaged for the reader; a merge leaves it out.
-- **Once.** A gate that passed is cached under a hash of its inputs: HEAD, its files' diff and its script. A rerun after a fix runs
-  only the gates whose inputs moved.
+- **Once.** A gate that passed is cached under a hash of its inputs: HEAD, its files' diff, its script with the modules it imports, and the built outputs it checks. A rerun after a fix runs
+  only the gates whose inputs moved; only a pass is cached.
 - **Scheduled by need, as make does.** A gate starts once the gates it `needs` finished, holding the job budget's tokens its `cores`
   names (`_budget.py`, GNU make's jobserver protocol), taken all at once or not at all: a compile takes every core, the KPI too so no
   gate beside it skews a timing, any other gate one. Its count reaches its builds (`CMAKE_BUILD_PARALLEL_LEVEL`) and its test workers.
@@ -32,12 +32,14 @@ agent typing the chain by hand:
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import hashlib
 import json
 import os
 import re
 import shlex
+import shutil
 import statistics
 import subprocess
 import sys
@@ -86,7 +88,7 @@ def gates(process_id: str, procs: dict, globs: tuple = (), seen: frozenset = fro
             out += gates(when["process"], procs, given, seen | {process_id}, on_ci)
         elif "run" in when and "script" in when["run"]:
             out.append({"id": gid, "script": when["run"]["script"], "args": when["run"].get("args", ""), "globs": list(given), "ci": on_ci,
-                        "generates": step.get("generates"), "cores": step.get("cores", 1),
+                        "generates": step.get("generates"), "cores": step.get("cores", 1), "outputs": step.get("outputs", []),
                         "needs": [n if "/" in n else f"{process_id}/{n}" for n in step.get("needs", [])]})
         elif "run" in when and "command" in when["run"]:
             out.append({"id": gid, "judgment": f"{step.get('say', step['id'])} (`{when['run']['command']}`)"})
@@ -117,21 +119,52 @@ def input_hash(gate: dict, base: str) -> str:
         p = ROOT / f
         if p.is_file():
             h.update(f.encode() + p.read_bytes())
-    script = ROOT / gate["script"]
-    h.update(script.read_bytes() if script.is_file() else gate["script"].encode())
-    for helper in sorted(script.parent.glob("_*.py")):   # the helpers a check imports beside it (_findings, _ratchet), whose change moves its result
-        h.update(helper.read_bytes())
+    for module in imported_scripts(ROOT / gate["script"]):   # the script and every module it imports from beside it, whose change moves its result
+        h.update(module.read_bytes() if module.is_file() else str(module).encode())
     h.update(gate["args"].encode())
-    h.update(firmware_state(gate["args"]).encode())
     return h.hexdigest()
 
 
-def firmware_state(args: str) -> str:
-    """Whether the firmware image a gate's `--firmware` names exists: a gate that checks a built output passes for the output it saw, so a deleted image is a changed input."""
-    words = shlex.split(args)
-    if "--firmware" not in words[:-1]:
+def imported_scripts(script: Path) -> list[Path]:
+    """The script and, transitively, the modules it imports that live beside it or in moondeck/ (_findings, _ratchet, check_nonblocking), by path."""
+    found, todo = set(), [script]
+    while todo:
+        path = todo.pop()
+        if path in found:
+            continue
+        found.add(path)
+        if not path.is_file():
+            continue
+        names = []
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, ValueError):
+            continue   # a script that does not parse is hashed by its bytes alone, so its gate runs and fails with its own traceback
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                names.append(node.module)
+        todo += [m for n in names for d in (script.parent, ROOT / "moondeck") if (m := d / (n.split(".")[0] + ".py")).is_file()]
+    return sorted(found)
+
+
+def outputs_state(gate: dict) -> str:
+    """The built outputs a gate's step declares (`outputs:`, globs from the repo root, `{host_build}` for the host's build directory), as they are now.
+
+    A gate that passed for the outputs it saw reruns once one is deleted or replaced, as make rebuilds a target whose file is gone or newer.
+    """
+    if not gate.get("outputs"):
         return ""
-    return str(any((ROOT / "build" / f"esp32-{words[words.index('--firmware') + 1]}").glob("*.bin")))
+    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+    from build_host import host_build_dir  # noqa: PLC0415  (the build directory has one home)
+    files = sorted(f for pattern in gate["outputs"] for f in ROOT.glob(pattern.replace("{host_build}", host_build_dir())) if f.is_file())
+    return ",".join(f"{f.relative_to(ROOT).as_posix()}:{f.stat().st_size}:{f.stat().st_mtime_ns}" for f in files) or "none"
+
+
+def cache_key(gate: dict) -> str:
+    """What a cached pass is compared to: the gate's inputs and the outputs it left, taken after it ran."""
+    return f"{gate['hash']}:{outputs_state(gate)}"
 
 
 def _git(*args: str) -> str:
@@ -152,14 +185,24 @@ def run_gate(gate: dict, budget: JobBudget, logdir: Path, cores: int = 1) -> dic
     start = time.monotonic()
     load = _load_average()
     env = {**budget.env(), "CMAKE_BUILD_PARALLEL_LEVEL": str(cores)}   # build_jobs() reads it, for the builds and the test workers alike
+    nice = ["nice", "-n", "10"] if shutil.which("nice") else []   # the `nice` program: a preexec_fn can deadlock a child forked from a worker thread
     with log.open("w", encoding="utf-8") as out:
-        proc = subprocess.run(["uv", "run", gate["script"], *shlex.split(gate["args"])], cwd=ROOT, env=env,
-                              stdout=out, stderr=subprocess.STDOUT, check=False,
-                              preexec_fn=(lambda: os.nice(10)) if hasattr(os, "nice") else None)
+        proc = subprocess.run([*nice, "uv", "run", gate["script"], *shlex.split(gate["args"])], cwd=ROOT, env=env,
+                              stdout=out, stderr=subprocess.STDOUT, check=False)
     lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
     return {"result": "PASS" if proc.returncode == 0 else "FAIL", "start": round(start - RUN_START, 1), "seconds": round(time.monotonic() - start, 1),
             "cores": cores, "load": load, "compiled": sum(1 for ln in lines if COMPILED.search(ln)), "exit": proc.returncode,
             "finding": _first_finding(lines), "rises": rises(lines), "tail": lines[-TAIL:], "log": str(log.relative_to(ROOT))}
+
+
+def attempt(gate: dict, budget: JobBudget, logdir: Path, cores: int = 1) -> dict:
+    """`run_gate`, a gate that cannot run (no `uv`, an unwritable log) recorded as a FAIL with the reason, so its dependents skip and the run exits nonzero."""
+    start = time.monotonic()
+    try:
+        return run_gate(gate, budget, logdir, cores)
+    except Exception as e:   # OSError from the launch or the log, whatever else a gate's run raises
+        return {"result": "FAIL", "start": round(start - RUN_START, 1), "seconds": round(time.monotonic() - start, 1), "cores": cores, "exit": None,
+                "finding": f"could not run: {type(e).__name__}: {e}"[:160], "tail": []}
 
 
 def _load_average() -> float | None:
@@ -209,7 +252,7 @@ def select(process_id: str, base: str, use_cache: bool, only: set | None) -> tup
             continue
         g["trigger"] = hit[:5] + ([f"and {len(hit) - 5} more"] if len(hit) > 5 else [])
         g["hash"] = input_hash(g, base)
-        if use_cache and cache.get(g["id"]) == g["hash"]:
+        if use_cache and cache.get(g["id"]) == cache_key(g):
             skipped.append({**g, "result": "CACHED", "why": "its inputs are unchanged since it passed"})
             continue
         run.append(g)
@@ -234,7 +277,7 @@ def generate(process_id: str, base: str, budget: JobBudget, logdir: Path, only: 
     """Each generated file rewritten before any gate reads it or hashes its diff, as make builds a target before what reads it."""
     made = []
     for g in generators(process_id, base, only):
-        g.update(run_gate(g, budget, logdir))
+        g.update(attempt(g, budget, logdir))
         if g["result"] == "PASS" and _git("diff", "--name-only", "--", g["generates"]).strip():
             g["finding"] = f"{g['generates']} rewritten, unstaged"
         print(_line(g) + (f": {g['finding']}" if g["result"] == "PASS" and g.get("finding") else ""), flush=True)
@@ -271,15 +314,18 @@ def unmet_needs(gate: dict, done: list) -> list[str]:
     return sorted({g["id"] for g in done if g["result"] != "PASS"} & set(gate["needs"]))
 
 
-def execute(run: list, budget: JobBudget, logdir: Path, history: list[dict] = (), every: float = 60.0) -> list:
-    """Start each gate once its needs finished and its tokens are free, the longest path first; a progress line each `every` seconds."""
+def execute(run: list, budget: JobBudget, logdir: Path, history: list[dict] = (), every: float = 60.0, generated: list = ()) -> list:
+    """Start each gate once its needs finished and its tokens are free, the longest path first; a progress line each `every` seconds.
+
+    `generated` are the generators that ran before: a failed one skips the gates that need it, a passed one releases them.
+    """
     ids, prio = {g["id"] for g in run}, priorities(run, list(history))
     pending = sorted(run, key=lambda g: -prio[g["id"]])   # stable: the process's order among equals
     done, running, cond = [], {}, threading.Condition()
 
     def work(g, n):
         try:
-            g.update(run_gate(g, budget, logdir, n))
+            g.update(attempt(g, budget, logdir, n))
         finally:
             with cond:
                 running.pop(g["id"])
@@ -292,10 +338,10 @@ def execute(run: list, budget: JobBudget, logdir: Path, history: list[dict] = ()
     started = last = time.monotonic()
     with cond:
         while pending or running:
-            while skip := [g for g in pending if unmet_needs(g, done)]:   # down the chain: a skipped gate skips the gates that need it
+            while skip := [g for g in pending if unmet_needs(g, [*generated, *done])]:   # down the chain: a skipped gate skips the gates that need it
                 for g in skip:
                     pending.remove(g)
-                    g.update(result="SKIP", why=f"needs {', '.join(unmet_needs(g, done))}, which did not pass")
+                    g.update(result="SKIP", why=f"needs {', '.join(unmet_needs(g, [*generated, *done]))}, which did not pass")
                     done.append(g)
                     print(_line(g), flush=True)
             passed = {g["id"] for g in done if g["result"] == "PASS"}
@@ -306,9 +352,10 @@ def execute(run: list, budget: JobBudget, logdir: Path, history: list[dict] = ()
                 running[g["id"]] = g
                 threading.Thread(target=work, args=(g, n), daemon=True).start()
             if pending and not running and not any(all(n in passed or n not in ids for n in g["needs"]) for g in pending):
-                for g in pending:   # what is left needs itself, through a loop in the YAML: said, not waited on
-                    g.update(result="SKIP", why="its needs form a loop")
+                for g in pending:   # what is left needs itself, through a loop in the YAML: a configuration error, said and failed rather than waited on
+                    g.update(result="FAIL", seconds=0.0, finding="its needs form a loop")
                     done.append(g)
+                    print(_line(g), flush=True)
                 break
             if not (pending or running):
                 break   # the skips above emptied the run
@@ -401,6 +448,15 @@ def proposals(record: dict, history: list[dict]) -> list[str]:
     return out
 
 
+def update_cache(cache: dict, done: list, base: str) -> None:
+    """Cache each gate that passed, and drop the entry of one that did not."""
+    for g in done:
+        if g["result"] != "PASS":
+            cache.pop(g["id"], None)   # a failure is retried and a skip is unrun, whatever passed under the same inputs before
+        elif g.get("hash") and input_hash(g, base) == g["hash"]:   # a file edited while the gate ran makes its pass describe a version gone already
+            cache[g["id"]] = cache_key(g)
+
+
 def _load(path: Path, default):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -439,6 +495,8 @@ def main() -> int:
         for g in run:
             after = f", after {', '.join(g['needs'])}" if g["needs"] else ""
             print(f"RUN    {g['id']} ({g['cores']} core{'s' * (g['cores'] != 1)}{after}): {', '.join(g['trigger'])}")
+        for g in judgment:
+            print(f"READER {g['id']}: {g['judgment']}")
         return 0
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -454,14 +512,10 @@ def main() -> int:
         print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
         for g in skipped:
             print(_line(g))
-        done = made + execute(run, budget, logdir, past)
+        done = made + execute(run, budget, logdir, past, generated=made)
 
     cache = _load(RECORDS / "cache.json", {})
-    for g in done:
-        if g["result"] == "FAIL":
-            cache.pop(g["id"], None)   # a known failure is retried, whatever passed under the same inputs before
-        elif g.get("hash") and input_hash(g, base) == g["hash"]:   # a file edited while the gate ran makes its pass describe a version gone already
-            cache[g["id"]] = g["hash"]
+    update_cache(cache, done, base)
     (RECORDS / "cache.json").write_text(json.dumps(cache, indent=1), encoding="utf-8")
     record = {"started": stamp, "process": args.process, "base": base, "load": load, "seconds": round(time.monotonic() - start, 1),
               "gates": [{k: g.get(k) for k in ("id", "script", "args", "trigger", "result", "why", "start", "seconds", "cores", "load", "compiled", "exit", "finding",

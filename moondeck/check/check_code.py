@@ -49,7 +49,8 @@ MAX_FRAME = 512
 UI_CONTRACT = {"Layouts", "Effects", "Drivers", "Services"}
 
 # Firmware C++ only: src/ui is JavaScript served to the browser, and the vendor header is upstream's. -ENS adds the nesting depth column.
-LIZARD_ARGS = ["src/", "-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/host/vendor/*", "-ENS"]
+LIZARD_ROOT = ["src/"]   # what lizard walks, unless `--files` names the few to read
+LIZARD_ARGS = ["-l", "cpp", "-x", "src/ui/*", "-x", "src/platform/host/vendor/*", "-ENS"]
 # Every code file we own, which the file-length and duplication rules both read; vendored and generated files are not ours to shrink.
 FILE_GLOBS = ("src/**/*.h", "src/**/*.cpp", "src/**/*.js", "moondeck/**/*.py", "mooninstaller/*.js", "test/**/*.cpp", "test/**/*.py", "test/**/*.mjs")
 FILE_EXCLUDE = ("src/platform/host/vendor/", "src/ui/vendor/", "test/doctest.h")
@@ -129,13 +130,14 @@ def errors_in(rows) -> list:
     return [row for row in rows if row[1] in ERROR_RULES]
 
 
-def measure(extra=None):
+def measure(extra=None, targets=None):
     """Every function lizard measured, as dicts; None when lizard produced nothing, which is a broken run, never a clean one.
+    `targets` are the files to read instead of the whole of src/; file names come back with forward slashes, as every rule keys them.
 
     `--csv` for a real format rather than a column-aligned table, and `-W /dev/null` so no whitelist lizard finds on its own filters the measurement.
     """
     cmd = ["uv", "run", "--with", "lizard", "python3", "-m", "lizard",
-           *LIZARD_ARGS, "--csv", "-W", os.devnull, *(extra or [])]
+           *(targets or LIZARD_ROOT), *LIZARD_ARGS, "--csv", "-W", os.devnull, *(extra or [])]
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300)
     out = []
     for r in csv.reader(io.StringIO(proc.stdout)):
@@ -143,10 +145,10 @@ def measure(extra=None):
         if len(r) < 12:
             continue
         try:
-            out.append({"nloc": int(r[0]), "ccn": int(r[1]), "params": int(r[3]), "file": r[6], "name": r[7], "start": int(r[9]), "nesting": int(r[11])})
+            out.append({"nloc": int(r[0]), "ccn": int(r[1]), "params": int(r[3]), "file": r[6].replace("\\", "/"), "name": r[7], "start": int(r[9]), "nesting": int(r[11])})
         except ValueError:
             continue
-    if not out:
+    if not out and (not targets or proc.returncode != 0):   # named files may hold no function; a whole-tree walk finding none, or lizard failing, is a broken run
         print("lizard produced no parseable output (uv run --with lizard)", file=sys.stderr)
         print(proc.stderr.strip()[:500], file=sys.stderr)
         return None
@@ -175,6 +177,11 @@ def functions_over(funcs) -> int:
 
 # The files `--files` names, measured even before git tracks them: the write-time hook checks a new file the moment it is written.
 NAMED: list = []
+
+
+def scoped_files() -> list:
+    """The owned files a per-file rule reads: the ones `--files` names, else every owned file."""
+    return [rel for rel in owned_files() if not NAMED or rel in NAMED]
 
 
 def owned_files() -> list:
@@ -234,7 +241,7 @@ def clone_rows(report) -> tuple:
 def large_files() -> list:
     """Every owned code file over the line limit, as (file, rule, name, lines) rows like a function's."""
     rows = []
-    for rel in owned_files():
+    for rel in scoped_files():
         lines = sum(1 for _ in open(ROOT / rel, encoding="utf-8", errors="replace"))
         if lines > MAX_FILE_LINES:
             rows.append((rel, "large file", rel.rsplit("/", 1)[-1], lines))
@@ -261,7 +268,7 @@ def boundary_findings(rel: str, lines) -> list:
 def boundary_rows() -> list:
     """Every platform boundary crossing among the files we own."""
     rows = []
-    for rel in owned_files():
+    for rel in scoped_files():
         with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
             rows += boundary_findings(rel, f)
     return rows
@@ -279,7 +286,7 @@ _STRING_WORD_RE = re.compile(r"""(['"`])(\w+)\1""")
 def ui_type_rows(types: set) -> list:
     """Every registered type the browser code names in a string, less the containers the UI is built from."""
     rows = []
-    for rel in owned_files():
+    for rel in scoped_files():
         if not (rel.startswith("src/ui/") and rel.endswith(".js")):
             continue
         with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
@@ -377,7 +384,7 @@ _ALLOC_RE = re.compile(r"\bnew\s*(?:\(\s*std::nothrow\s*\)\s*)?[A-Za-z_][\w:<>]*
 def _line_rows(prefixes: tuple, rule: str, hit) -> list:
     """Every code line under the prefixes that `hit` accepts once its comment is cut, one row per line."""
     rows = []
-    for rel in owned_files():
+    for rel in scoped_files():
         if not rel.startswith(prefixes) or rel.endswith(".js"):
             continue
         with open(ROOT / rel, encoding="utf-8", errors="replace") as f:
@@ -517,9 +524,11 @@ def relative_include_findings(rel: str, lines) -> list:
 def style_rows() -> list:
     """The header, `double`, constant-macro, RTTI and include-path rules over every firmware file we own."""
     texts = {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in owned_files() if _firmware(rel)}
-    tested = tested_names(texts.values())
+    tested = tested_names(texts.values())   # the flags any file tests, so every file is read even when `--files` names one
     rows = []
     for rel, text in texts.items():
+        if NAMED and rel not in NAMED:
+            continue
         lines = text.splitlines()
         rows += (header_findings(rel, text) + double_findings(rel, lines) + define_findings(rel, lines, tested) + rtti_findings(rel, lines)
                  + relative_include_findings(rel, lines))
@@ -607,9 +616,12 @@ def main() -> int:
 
     if args.files:   # every spelling of a path, relative, ./-prefixed or absolute, as the rows name it
         NAMED[:] = [Path(f).resolve().relative_to(ROOT).as_posix() for f in args.files]
-    funcs = measure()
-    if funcs is None:
+    named_src = [f for f in NAMED if f.startswith("src/") and not f.startswith(("src/ui/", "src/platform/host/vendor/")) and (ROOT / f).is_file()]
+    funcs = (measure(targets=named_src) if named_src else []) if args.files else measure()   # the named files alone: lizard reads no more
+    unmeasured = funcs is None
+    if unmeasured and not args.files:
         return 2
+    funcs = funcs or []   # `--files` still reports the rules that read no function, and says the measurement is missing below
     # Clones are found repo-wide, so the module view leaves them to the full run rather than pay for that pass per module.
     partial = args.module or args.files
     report = None if partial else clones()
@@ -617,7 +629,7 @@ def main() -> int:
         return 2
     dup_rows, duplicated = clone_rows(report) if report else ([], None)
     types = registered_types()
-    rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + spread_rows(types)
+    rows = (findings(funcs) + dup_rows + large_files() + boundary_rows() + ui_type_rows(types) + ([] if args.files else spread_rows(types))   # a type's spread is a whole-tree rule
             + raw_alloc_rows() + mutable_static_rows() + style_rows())
     # The hot path is a full rebuild, so the module view leaves it to the full run as it does clones; check_nonblocking --module is its detailed view.
     try:
@@ -643,6 +655,8 @@ def main() -> int:
         if rows or args.module:
             print(f"{args.module or 'Code'}: {len(rows)} finding(s) in {', '.join(only)}")
             print(_table(rows))
+        if unmeasured:
+            return 2   # the findings above stand; the exit says the function rules were not measured
         return 1 if args.files and errors_in(rows) else 0
 
     # The findings in the one shape every check keeps, which the test page shows; a rule this host cannot measure is left out rather than recorded as zero.

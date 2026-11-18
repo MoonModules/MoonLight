@@ -1,6 +1,6 @@
 #include "core/system/DevicesModule.h"
 
-/// The rows as the list and the map read them: a row's detail, its edges, its groups and this device's own facts, kept out of the header by concern.
+/// The rows as the list and the map read them: a row's detail, its edges, its groups and this device's own facts, and a group's members as a receiver list reads them, kept out of the header by concern.
 
 namespace mm {
 
@@ -103,6 +103,33 @@ void DevicesModule::writeGroups(JsonSink& sink, const Device& d) const {
     if (first) return;
     sink.append("]");
     if (!heardLately(d.mac)) sink.append(",\"missing\":true");
+}
+
+const DeviceGroup* DevicesModule::groupNamed(const char* name) const MM_NONBLOCKING {
+    if (!parent() || !name) return nullptr;
+    const size_t len = std::strlen(name);
+    for (uint8_t i = 0; i < parent()->childCount(); i++) {
+        const MoonModule* m = parent()->child(i);
+        if (m->role() != ModuleRole::DeviceGroup) continue;
+        const char* shared = static_cast<const DeviceGroup*>(m)->groupName();
+        if (std::strlen(shared) == len && asciiCaseEqual(shared, name, len)) return static_cast<const DeviceGroup*>(m);
+    }
+    return nullptr;
+}
+
+bool DevicesModule::appendGroupMembers(const char* name, Receiver* out, uint8_t& n, uint8_t cap, uint8_t& left) const MM_NONBLOCKING {
+    const DeviceGroup* group = groupNamed(name);
+    if (!group) return false;
+    group->forEachMember([&](const uint8_t mac[6]) {
+        const Device* d = rowOfMac(mac);
+        if (d && d->self) return;   // this device is the one sending
+        if (n >= cap) { left++; return; }
+        out[n] = Receiver{};
+        out[n].member = true;
+        if (d && heardLately(mac)) std::memcpy(out[n].ip, d->ip, 4);   // an unheard member keeps its place with no address, so a split over the members holds
+        n++;
+    });
+    return true;
 }
 
 void DevicesModule::writeServices(JsonSink& sink) const {

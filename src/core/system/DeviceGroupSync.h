@@ -2,6 +2,8 @@
 
 #include "core/module/MoonModule.h"
 #include "core/system/DeviceGroup.h"   // kIdLen: the width of a group id
+#include "core/system/SharedControls.h"   // what the members share: the values their slots drive, and the look
+#include "core/util/ControlSurface.h"     // the Control module tells this sync what changed here, as it tells a desk
 #include "core/util/Hlc.h"
 #include "core/util/ScratchBuffer.h"
 #include "platform/platform.h"
@@ -9,33 +11,55 @@
 #include <cstddef>
 #include <cstdint>
 
-/// The device groups' definitions between devices: one well-known multicast address every device listens on, so a device hears a group it was added to before it knows the group.
+/// The device groups between devices: their definitions and shared controls on one well-known multicast address every device listens on, so a device hears a group it was added to before it knows the group.
 
 namespace mm {
 
 class DeviceGroup;
 namespace osc { class Reader; }
 
-/// Carries every device group's definition over OSC, creates a group on a member that hears of it, and keeps the groups deleted anywhere deleted everywhere.
+/// Carries every device group's definition and its shared controls over OSC, creates a group on a member that hears of it, and keeps the groups deleted anywhere deleted everywhere.
 ///
 /// @technical
 ///
-/// **One address for every definition.** 239.255.77.79, beside discovery's 239.255.77.77 and OSC feedback's .78, port 65510: a device listens before it knows a group, and a definition is small and repeated rarely, so one address costs a swarm little. A group's own address is for the state its members share (the next step).
+/// **One address for everything a group carries.** 239.255.77.79, beside discovery's 239.255.77.77 and OSC feedback's .78, port 65510: a device listens before it knows a group, and its messages are small, so one address costs a swarm little. Each message names its group, and a device takes only those of a group it holds.
+///
+/// **Membership is the one setting.** Membership alone makes a device follow the group's shared controls: this sync is a surface of the Control module, so a switch, encoder or fader changed here, from the UI, the API or a desk, goes out as what it drives (`Drivers.brightness`), its value and its stamp, to every group held.
+///
+/// **Applied by name** ([SharedControls.h](SharedControls.h)). A member applies the parameter whatever its own slots drive. A value a group set is not sent on, so no loop forms, and only a parameter a slot drives leaves the board.
+///
+/// **A look travels as its name.** An effects preset applied here goes out as a recall, which each member answers by fetching the preset from this device's File Manager route (`/api/file`) and applying it live, once per stamp. A driver or layout preset carries the board's pins and stays.
+///
+/// **Catch-up is anti-entropy.** The shared values and the recall ride the definition's Trickle repeats with their stamps, and a member whose values differ resets its interval (RFC 6206), so a member back from a restart takes the newer values within seconds and its older saved ones cannot win.
+///
+/// **Read every 20 ms.** Shared values and recalls apply on the 20 ms read, so a change reaches the members within a frame or two; a definition or deletion, which may create or remove a module, waits for the once-a-second tick.
 ///
 /// **Who keeps a group.** Its members and the device that made it. A member that hears of a group it lacks creates it, as the API adds a module, so it saves and shows like any other; a device the group's members leave out drops it.
 ///
-/// **Deleted is deleted everywhere.** A group the user deletes leaves a marker, its id and a stamp, saved in Discovery's hidden `deletedGroups`: sent three times, answered to any late copy, and newer than the group's every edit, so it holds against a member that was off. The newest eight markers are kept, the oldest giving way.
+/// **Deleted is deleted everywhere.** A group the user deletes leaves a marker, its id and a stamp, saved in Discovery's hidden `deletedGroups`: sent three times, answered to any late copy, and winning over every edit, so it holds against a member that was off or edited at once. The newest eight markers are kept, an older one giving way to a newer.
 ///
 /// **A marker only grows newer.** An equal or older deletion leaves it as it is, and a group held under a marker goes, retried each second until it has.
 ///
-/// **What it accepts.** A message whose id is not twenty lowercase hex digits, or whose stamp leaves the clock no room to grow, is ignored, and a definition is merged whole or not at all.
-class DeviceGroupSync {
+/// **What it accepts.** A message whose id is not twenty lowercase hex digits, or whose stamp is past the largest valid reading (Stamp::kMaxHlc), is ignored, as is a malformed definition.
+class DeviceGroupSync : public ControlSurface {
 public:
     /// Its buffers belong to `owner`, Discovery, which frees them on release.
-    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), buf_(owner), seen_(owner), tombs_(owner) {}
+    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), pending_(owner), seen_(owner), tombs_(owner) {}
 
-    /// Once a second: read what arrived, notice a group deleted here, send what Trickle says is due, and save the markers when they changed.
+    /// Once a second: notice a group deleted here, read what arrived, definitions and deletions included, send what Trickle says is due, and save the markers when they changed.
     void tick(MoonModule& devices, char* saved, size_t savedCap);
+
+    /// Every 20 ms: apply the shared values and recalls that arrived, setting aside a definition or deletion for the tick, and start a recall's fetch.
+    void receive(MoonModule& devices);
+
+    /// A switch, encoder or fader changed here: what it drives goes to every group held, unless a group set it.
+    void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override;
+
+    /// A look was applied here: its recall goes to every group held.
+    void lookApplied(const char* name) override;
+
+    /// What a group's status adds about the shared controls, or null.
+    const char* sharedNote() const MM_NONBLOCKING { return shared_.note(); }
 
     /// Close the socket and free the buffers.
     void close();
@@ -53,6 +77,10 @@ public:
     /// The OSC address of a deletion marker.
     static constexpr const char* kDeletedAddress = "/moonlight/devicegroup/deleted";
 
+protected:
+    /// Send one datagram to the groups' address, the seam a test captures.
+    virtual void transmit(const uint8_t* data, size_t len);
+
 private:
     struct GroupId { char id[DeviceGroup::kIdLen + 1]; };
     /// A deleted group's marker, and how many more times it goes out.
@@ -68,27 +96,53 @@ private:
     void rename(MoonModule& devices, DeviceGroup& g, const char* to);
     static bool parseTomb(char* entry, Tomb& t);
     void handleDeletion(MoonModule& devices, const uint8_t* pkt, size_t len);
+    /// Mark every group held last second and gone now, unless this sync removed it: a group the user deleted here.
     void noticeDeleted(MoonModule& devices);
+    /// Remove a group held under a marker, retried each second, and remember the groups held for the next noticeDeleted.
+    void holdGroups(MoonModule& devices);
     static Stamp stampNow(MoonModule& devices);
     void sendDue(MoonModule& devices);
     void markDeleted(const char* id, const Stamp& stamp, uint8_t sends);
     /// The index of the group's marker, or -1 when it has none.
     int tombIndex(const char* id) const;
-    /// A slot for a new marker: one more while room and memory allow, else the oldest; null when memory refuses the first.
-    Tomb* tombSlot();
+    /// A slot for a marker stamped `stamp`: one more while room and memory allow, else the oldest when this one is newer; null otherwise.
+    Tomb* tombSlot(const Stamp& stamp);
     void sendDeletion(const Tomb& t);
     void send(const uint8_t* data, size_t len);
-    void loadTombs(const char* saved);
+    /// The markers read from the saved text; false, none held, when memory refuses them.
+    bool loadTombs(const char* saved);
     void saveTombs(char* saved, size_t cap) const;
     static DeviceGroup* groupById(MoonModule& devices, const char* id);
     static void apply(const char* doc);
     void create(MoonModule& devices, const char* id, const char* name);
     void removeLocal(MoonModule& devices, DeviceGroup& g);
 
+    /// What a slot drove and its value when last seen here, so only a change of the same parameter is shared.
+    struct SlotSeen { uint32_t target = 0; int32_t value = 0; };
+    /// Read everything that arrived, the set-aside datagram first, between noticing a group deleted here and holding the groups.
+    void readAll(MoonModule& devices);
+    /// Attach to the Control module once it is up, each slot's parameter read first.
+    void attach();
+    /// Whether the parameter slot `slot` drives changed here, its value read into `value`.
+    bool changedHere(uint8_t slot, const char* target, int32_t& value);
+    /// Send one change of `param` to every group held.
+    void shareValue(const char* param, int32_t value);
+    /// True when the datagram is a shared value or a recall, handled or not.
+    bool handleShared(MoonModule& devices, const uint8_t* pkt, size_t len);
+    /// Send group `g`'s values and recall, as its definition goes.
+    void sendShared(const DeviceGroup& g);
+
     MoonModule& owner_;            ///< Discovery, which saves the markers
+    MoonModule* devices_ = nullptr;   ///< the container the groups live in, met on the first tick
+    SharedControls shared_;
+    static constexpr uint8_t kSlots = 24;   ///< the Control module's switches, encoders and faders
+    SlotSeen slotSeen_[kSlots] = {};
+    bool attached_ = false;
     platform::UdpSocket sock_;
     bool open_ = false, loaded_ = false, tombsChanged_ = false;
     ScratchBuffer<uint8_t> buf_;   ///< one datagram, taken when the socket opens
+    ScratchBuffer<uint8_t> pending_;   ///< a definition or deletion the 20 ms read set aside for the tick
+    size_t pendingLen_ = 0;
     ScratchBuffer<GroupId> seen_;  ///< the group ids held last second, so a group deleted here is noticed
     uint16_t seenCount_ = 0;
     ScratchBuffer<Tomb> tombs_;    ///< the deletion markers

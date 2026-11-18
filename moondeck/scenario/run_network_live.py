@@ -224,6 +224,9 @@ def main() -> int:
         print("note: only one device selected, so running the host→device leg; "
               "the device↔device matrix needs ≥2 boards", flush=True)
 
+    if not any(_is_sender(d.get("deviceName") or d["ip"], d["ip"], args) for d in devices):
+        print(f"FAIL  no selected device matches --host {args.host or '-'} / --device {args.device or '-'}: no round would run")
+        return 2
     boards = [Board(d) for d in devices]
     passed, failed, skipped = 0, 0, 0
     relay_count = 0   # global counter so relay protocols cycle across ALL legs
@@ -235,9 +238,7 @@ def main() -> int:
         time.sleep(args.settle)  # one settle for the buildStates above
 
         for k, sender in enumerate(boards):
-            if args.device and sender.name != args.device:
-                continue
-            if args.host and sender.host != args.host:
+            if not _is_sender(sender.name, sender.host, args):
                 continue
             color = ROUND_COLORS[k % len(ROUND_COLORS)]
             print(f"== round {k + 1}/{len(boards)}: sender {sender.name}, "
@@ -313,6 +314,11 @@ def main() -> int:
 
     print(f"SUMMARY: {passed} passed, {failed} failed, {skipped} skipped", flush=True)
     return 1 if failed else 0
+
+
+def _is_sender(name: str, host: str, args) -> bool:
+    """Whether the device `name` at `host` is a sender the --device and --host filters let run."""
+    return not (args.device and name != args.device) and not (args.host and host != args.host)
 
 
 def _relay_skip_reason(sender: "Board"):

@@ -42,15 +42,13 @@ inline bool alsoBroadcast(Addressing mode, Traffic traffic) {
         || (mode == Addressing::Multicast && traffic == Traffic::Occasional && NetworkPath::multicastDropped);
 }
 
-/// Send one packet where `mode` says through `send(ip)`, skipping a named receiver not resolved yet.
+/// Send one packet where `mode` says through `send(ip)`, skipping a receiver with no address yet: a name not resolved, a group's member not heard.
 template <class Send>
 void sendAddressed(Addressing mode, Traffic traffic, const Receiver* receivers, uint8_t receiverCount, const uint8_t group[4], Send&& send) {
     switch (mode) {
         case Addressing::Unicast:
-            for (uint8_t i = 0; i < receiverCount; i++) {
-                const uint8_t* ip = receivers[i].ip;
-                if (ip[0] || ip[1] || ip[2] || ip[3]) send(ip);
-            }
+            for (uint8_t i = 0; i < receiverCount; i++)
+                if (receivers[i].hasAddress()) send(receivers[i].ip);
             return;
         case Addressing::Broadcast:
             send(kBroadcastAddress);

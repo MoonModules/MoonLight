@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { fnSource } from "./app-source.mjs";
 import { isCompatible, parseFirmwaresFromAssets, chipKey, chipFamilyOf, firmwareChip, releaseAsset, firmwareAssetName, moonbaseAssetName, mirrorUrl, latestStable, releaseByTag }
     from "../../src/ui/install-picker.js";
-import { isNewer, parse } from "../../src/ui/semver.js";
+import { channelUpdate, releaseOfVersion } from "../../src/ui/releases.js";
 
 const { updateAsset, moonbaseAsset } = new Function("releaseAsset", "firmwareAssetName", "moonbaseAssetName", "chipKey",
     `${fnSource("updateAsset")}\n${fnSource("moonbaseAssetKeyFrom")}\n${fnSource("moonbaseAsset")}\nreturn { updateAsset, moonbaseAsset };`)(
@@ -78,9 +78,6 @@ test("one release list answers both channels: the newest stable release, and the
 });
 
 // The one channel rule behind the status bar's badge, a node's popup and its mark on the map.
-const { channelUpdate } = new Function("parse", "isNewer", "latestStable", "releaseByTag", "releaseAsset", "firmwareAssetName",
-    `const MODE_DEVELOPER = 2;\n${fnSource("followsLatest")}\n${fnSource("channelUpdate")}\nreturn { channelUpdate };`)(
-    parse, isNewer, latestStable, releaseByTag, releaseAsset, firmwareAssetName);
 const img = (fw, v) => ({ name: `firmware-${fw}-v${v}.bin`, browser_download_url: `https://x/${v}.bin` });
 const releases = [
     { tag_name: "latest", name: "7.2.0-dev.5", prerelease: true, assets: [img("esp32", "7.2.0-dev.5")] },
@@ -102,7 +99,13 @@ test("a device on a -dev build, or in developer mode, follows latest, an officia
     assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32", mode: 1 }, releases), null);   // expert is no channel of its own
 });
 
-test("a device too old to name its firmware is still behind a newer release on its channel, which its popup installs once it reads the firmware", () => {
+test("a device on a release candidate is on the official channel, offered the release it leads to", () => {
+    const withRc = [...releases, { tag_name: "v7.2.0-rc1", prerelease: true, assets: [img("esp32", "7.2.0-rc1")] }];
+    assert.equal(channelUpdate({ version: "7.1.0-rc2", firmware: "esp32" }, withRc).tag, "v7.1.0");
+    assert.equal(channelUpdate({ version: "7.1.0", firmware: "esp32" }, withRc), null, "a newer release candidate is no official release");
+});
+
+test("a device too old to name its firmware is still behind a newer release on its channel, which its popup notes for the device's own page to install", () => {
     assert.equal(channelUpdate({ version: "7.0.0" }, releases).tag, "v7.1.0");
     assert.equal(channelUpdate({ version: "6.1.0-dev" }, releases).label, "latest (7.2.0-dev.5)");
 });
@@ -121,10 +124,9 @@ test("a chip is a family as the catalog and esptool name it and a key as firmwar
 });
 
 test("MoonBase comes from the app's own release: latest counts only while it still holds the app's version", () => {
-    const { releaseOfVersion } = new Function("releaseByTag", "parse",
-        `${fnSource("releaseTagOf")}\n${fnSource("releaseOfVersion")}\nreturn { releaseOfVersion };`)(releaseByTag, parse);
-    const releases = [{ tag_name: "v7.0.0", name: "v7.0.0" }, { tag_name: "latest", name: "7.1.0-dev.5" }];
+    const releases = [{ tag_name: "v7.0.0", name: "v7.0.0" }, { tag_name: "latest", name: "7.1.0-dev.5" }, { tag_name: "v7.1.0-rc1", name: "v7.1.0-rc1" }];
     assert.equal(releaseOfVersion(releases, "7.0.0").tag_name, "v7.0.0");
+    assert.equal(releaseOfVersion(releases, "7.1.0-rc1").tag_name, "v7.1.0-rc1", "a release candidate ships in its own release, not in latest");
     assert.equal(releaseOfVersion(releases, "7.1.0-dev.5").tag_name, "latest");
     assert.equal(releaseOfVersion(releases, "7.1.0-dev.4"), null);   // latest moved on: its MoonBase pairs with another app
 });

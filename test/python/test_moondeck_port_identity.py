@@ -6,6 +6,7 @@ resolvers; the ioreg read and esptool are the only I/O, and neither runs here. R
 """
 
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,15 +95,23 @@ def test_the_maps_usb_rows_carry_port_chip_mac_and_the_macs_the_board_reports_it
     assert {"name": "USB on usbserial-1", "usb": "/dev/cu.usbserial-1", "type": "USB"} in rows
 
 
-def test_the_present_ports_read_ioreg_again_only_when_the_listed_ports_change(monkeypatch):
-    listed, reads = ["/dev/cu.usbserial-1"], []
+def test_the_present_ports_read_ioreg_again_only_when_the_listed_ports_change_or_the_cache_expires(monkeypatch):
+    listed, reads, clock = ["/dev/cu.usbserial-1"], [], [1000.0]
     monkeypatch.setattr(_usb, "_ioreg", {"listed": None, "at": 0.0, "usb": {}})
+    monkeypatch.setattr(_usb.time, "monotonic", lambda: clock[0])
     monkeypatch.setattr(_usb, "list_serial_ports", lambda: list(listed))
-    monkeypatch.setattr(_usb, "read_usb_ports", lambda: reads.append(1) or {p: CP2102N for p in listed})
-    assert _usb.present_ports() == {"/dev/cu.usbserial-1": CP2102N} and len(reads) == 1
-    assert _usb.present_ports() == {"/dev/cu.usbserial-1": CP2102N} and len(reads) == 1   # the map's next ask: the same ports, no dump
+    monkeypatch.setattr(_usb, "read_usb_ports", lambda: reads.append(1) or dict.fromkeys(listed, CP2102N))
+    assert _usb.present_ports() == {"/dev/cu.usbserial-1": CP2102N}
+    assert len(reads) == 1
+    clock[0] += _usb.IOREG_MAX_AGE_S - 1
+    _usb.present_ports()
+    assert len(reads) == 1   # the map's next ask before expiry: the same ports, no dump
+    clock[0] += 2
+    _usb.present_ports()
+    assert len(reads) == 2   # expired: read again
     listed.append("/dev/cu.usbserial-2")
-    assert set(_usb.present_ports()) == {"/dev/cu.usbserial-1", "/dev/cu.usbserial-2"} and len(reads) == 2
+    assert set(_usb.present_ports()) == {"/dev/cu.usbserial-1", "/dev/cu.usbserial-2"}
+    assert len(reads) == 3   # a changed port list reads at once
 
 
 def test_a_native_usb_board_reports_its_mac_and_an_adapters_serial_is_its_own():
@@ -147,3 +156,65 @@ def test_a_board_identified_once_is_found_by_mac_on_the_next_read():
     cache, path = {}, "/dev/cu.usbserial-20213340"
     _usb.remember_probe(cache, _usb.usb_key(path, CP2102N), {"chip": "esp32-s3", "mac": "bb:bb:bb:bb:bb:bb"})
     assert _usb.port_for_mac("bb:bb:bb:bb:bb:bb", {path: CP2102N}, cache) == path
+
+
+def test_an_exact_mac_wins_over_another_ports_eui64_alias():
+    s31 = {"vid": 0x303A, "pid": 0x1001, "product": "", "serial": "30:ED:A0:F3:D4:68"}
+    other = {"vid": 0x303A, "pid": 0x1001, "product": "", "serial": "30:ED:A0:FF:FE:F3"}
+    ports = {"/dev/cu.usbmodem1": s31, "/dev/cu.usbmodem2": other}   # port 1's alias is port 2's exact MAC
+    assert _usb.port_for_mac("30:ed:a0:ff:fe:f3", ports, {}) == "/dev/cu.usbmodem2"
+    assert _usb.port_for_mac("30:ed:a0:f3:d4:68", ports, {}) == "/dev/cu.usbmodem1"
+
+
+def test_a_bridge_without_a_serial_never_takes_the_hubs_serial_from_ioreg(monkeypatch):
+    class R:
+        stdout = b"""+-o hub  <class IOUSBHostDevice>
+  | "idVendor" = 1507
+  | "idProduct" = 1
+  | "USB Serial Number" = "HUBSERIAL"
+  +-o bridge  <class IOUSBHostDevice>
+    | "idVendor" = 4292
+    | "idProduct" = 60000
+    | "USB Product Name" = "CP2102N"
+    +-o AppleUSBHostLegacyClient
+      +-o IOSerialBSDClient
+        | "IOCalloutDevice" = "/dev/cu.usbserial-x"
+"""
+    monkeypatch.setattr(_usb.sys, "platform", "darwin")
+    monkeypatch.setattr(_usb.subprocess, "run", lambda *a, **k: R())
+    assert _usb.read_usb_ports() == {"/dev/cu.usbserial-x": {"vid": 4292, "pid": 60000, "product": "CP2102N", "serial": ""}}
+
+
+def test_linux_usb_ports_are_read_from_sysfs_by_their_usb_device_not_a_parent(tmp_path):
+    usb = tmp_path / "devices" / "usb1" / "1-1"
+    (usb / "1-1:1.0" / "tty" / "ttyACM0").mkdir(parents=True)
+    for name, value in (("idVendor", "303a"), ("idProduct", "1001"), ("product", "USB JTAG/serial debug unit"), ("serial", "CC:BA:97:0A:F3:F8")):
+        (usb / name).write_text(value + "\n")
+    (tmp_path / "devices" / "usb1" / "serial").write_text("HUBSERIAL\n")
+    tty = tmp_path / "class" / "tty" / "ttyACM0"
+    tty.mkdir(parents=True)
+    (tty / "device").symlink_to(usb / "1-1:1.0")
+    bare = tmp_path / "class" / "tty" / "ttyS0"   # a built-in UART: no USB parent
+    bare.mkdir()
+    (bare / "device").symlink_to(tmp_path / "devices" / "usb1")
+    assert _usb.read_sysfs_usb_ports(str(tmp_path / "class" / "tty")) == {
+        "/dev/ttyACM0": {"vid": 0x303A, "pid": 0x1001, "product": "USB JTAG/serial debug unit", "serial": "CC:BA:97:0A:F3:F8"}}
+
+
+def test_concurrent_port_refreshes_run_one_at_a_time(monkeypatch):
+    import threading
+    monkeypatch.setattr(_usb, "_ioreg", {"listed": None, "at": 0.0, "usb": {}})
+    inside, overlap = [], []
+
+    def listing():
+        inside.append(1)
+        overlap.append(len(inside) > 1)
+        time.sleep(0.05)
+        inside.pop()
+        return []
+    monkeypatch.setattr(_usb, "list_serial_ports", listing)
+    monkeypatch.setattr(_usb, "read_usb_ports", lambda: {})
+    threads = [threading.Thread(target=_usb.present_ports) for _ in range(3)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert not any(overlap)

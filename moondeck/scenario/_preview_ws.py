@@ -49,19 +49,24 @@ def handshake(host: str, path: str, timeout_s: float = 5.0):
     return sock, rest
 
 
+def client_frame(opcode: int, payload: bytes) -> bytes:
+    """One masked client frame (RFC 6455 requires the mask), for a payload under 126 bytes: the preview's requests and the keepalive."""
+    mask = os.urandom(4)
+    return bytes([0x80 | opcode, 0x80 | len(payload)]) + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+
+
+def request_preview(sock) -> None:
+    """Post the standing frame request [0x51][stride][fps] on an open /wsp socket: the pull model streams to a client only after its request."""
+    sock.sendall(client_frame(0x2, bytes([0x51, 1, 25])))
+
+
 class PreviewSocket:
     """One /wsp connection. `host` is the device's HTTP address ("ip[:port]")."""
 
     def __init__(self, host: str, timeout_s: float = 5.0):
         self.sock, rest = handshake(host, "/wsp", timeout_s)
         self._buf = rest
-        # The pull model: a client that asks for nothing receives nothing. Post the standing
-        # frame request ([0x51][stride][fps]) as a masked client frame (RFC 6455 requires it).
-        mask = os.urandom(4)
-        payload = bytes([0x51, 1, 25])
-        frame = bytes([0x82, 0x80 | len(payload)]) + mask + bytes(
-            b ^ mask[i % 4] for i, b in enumerate(payload))
-        self.sock.sendall(frame)
+        request_preview(self.sock)
 
     def close(self):
         try:

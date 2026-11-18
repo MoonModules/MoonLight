@@ -68,6 +68,7 @@ export function openDevicePopup(row, opts) {
     if (row.type === "WLED") dlg.appendChild(buildWledMigrate(row));
     if (row.type === "Tasmota") dlg.appendChild(buildTasmotaMigrate(row));
     if (row.type === "ESPHome") dlg.appendChild(buildEsphomeMigrate(row, home));
+    if (row.mac) dlg.appendChild(buildGroupMembership(row, home));
     hooks(opts).actions(row, dlg, opts);
     document.body.appendChild(dlg);
     // A click on the backdrop closes it, except while a move runs in it: its steps run in the browser, and closing would hide them.
@@ -106,7 +107,7 @@ function linkIp(detail, row, home) {
 async function fetchJsonWithin(url, ms = 4000) { return fetchWithin(url, ms, (r) => r.json()); }
 
 // Where a device's API answers: `home` for the device serving the list, its address for another.
-function peerBase(row, home) {
+export function peerBase(row, home) {
     if (row.self) return home;
     return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
 }
@@ -118,10 +119,22 @@ function updateAsset(rel, dev, version) {
     return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version)) : { url: null, sha256: null };
 }
 
-// The release a device could move to and the asset that installs it, by the same checks the update badge makes for this device.
-async function peerUpdate(dev) {
-    const u = channelUpdate(dev, await loadReleases({ maxAgeMs: UPDATE_TTL_MS }));
+// The release a device could move to from `releases` and the asset that installs it, by the same checks the update badge makes for this device.
+export function peerUpdate(dev, releases) {
+    const u = channelUpdate(dev, releases);
     return u ? { label: u.label, version: u.version, ...updateAsset(u.rel, dev, u.version) } : null;
+}
+
+// What a device reports, in the shape the update rules read: version, firmware (null while unnamed), how it is updated and its mode.
+export function deviceOf(fw) {
+    return { version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update: fw.summary?.update, mode: fw.summary?.mode };
+}
+
+// Why an update `u` with no image is not installed from here: a container's host, a firmware too old to name its image, or the user's own hand.
+export function noImageNote(u, fw) {
+    if (fw.summary?.update === "container") return `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`;
+    if (!fw.firmware || fw.firmware === "unknown") return `${u.label} is available: this device's firmware is too old to name its image, so install it from the device's own page.`;
+    return `${u.label} is available: this device is updated by hand, from the release page.`;
 }
 
 // The Ethernet boards of WLED's table the migration carries over, by WLED's `eth.type`, as kWledEthernet in WledNetworks.h maps them.
@@ -142,7 +155,8 @@ function wledChip(info) {
     return /^esp32[a-z0-9]*$/.test(key) ? key : null;
 }
 
-// The migration image a WLED takes: its chip's, and on a P4 from revision 3 that revision line's, which WLED-MM's chip model names ("ESP32-P4 rev.301").
+// The migration image a WLED takes, and the apps the picker offers it: its chip's, and on a P4 from revision 3 that revision line's, which WLED-MM's
+// chip model names ("ESP32-P4 rev.301").
 function wledFamily(info, chip) {
     const rev = Number(/rev\.(\d+)/.exec(String(info?.e32model || ""))?.[1] || 0);
     return chip === "esp32p4" && rev >= 300 ? "esp32p4rev3" : chip;
@@ -189,9 +203,10 @@ function buildWledMigrate(row) {
         input.accept = ".bin";
         file.append("Migration image, for a release without one ", input);
         box.appendChild(goingBackLink("WLED"));
-        mountMapPicker(box, base, chip, null, file, async (binaryUrl, tag, note) => {
+        const family = wledFamily(info, chip);
+        mountMapPicker(box, base, family, null, file, async (binaryUrl, tag, note) => {
             if (!confirm("Move this WLED device to MoonLight over the network? Going back to WLED needs a USB cable.")) return null;
-            await wledToMoonBase(base, input.files[0] || migrateImageUrl(tag, wledFamily(info, chip)), tag, chip, note);
+            await wledToMoonBase(base, input.files[0] || migrateImageUrl(tag, family), tag, chip, note);
             return moonBaseToMoonLight(base, binaryUrl, note);
         });
     })();
@@ -551,14 +566,16 @@ function buildPeerSummary(row, home) {
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
         const update = fw.summary?.update;
-        const u = await peerUpdate({ version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update, mode: fw.summary?.mode });
-        if (!u) { note.textContent = "Up to date."; await offerImageUpdates(box, base, fw, note); return; }
+        const releases = await loadReleases({ maxAgeMs: UPDATE_TTL_MS });   // null when GitHub does not answer and none are kept
+        const u = releases && peerUpdate(deviceOf(fw), releases);
+        if (!u) {
+            const lead = releases ? "The app is up to date" : "GitHub does not answer, so whether a newer release exists is unknown";
+            note.textContent = `${lead}.`;
+            offerImageUpdates(box, base, fw, note, releases, lead);
+            return;
+        }
         if (!u.url) {
-            note.textContent = update === "container"
-                ? `${u.label} is available: the container's host updates it, by Watchtower or Podman's auto-update.`
-                : !fw.firmware || fw.firmware === "unknown"
-                ? `${u.label} is available: this device's firmware is too old to name its image, so install it from the device's own page.`
-                : `${u.label} is available: this device is updated by hand, from the release page.`;
+            note.textContent = noImageNote(u, fw);
             return;
         }
         note.textContent = `${u.label} is available.`;
@@ -578,18 +595,19 @@ function moonbaseAsset(rel, chip) {
     return chip ? releaseAsset(rel, moonbaseAssetName(moonbaseAssetKeyFrom(chip))) : { url: null, sha256: null };
 }
 
-// With the app current, MoonBase and the WiFi coprocessor are each offered while the device reports them behind it, pressed twice like the app's
-// update. The coprocessor takes the image of the device's own release by itself; MoonBase takes the one the app's release carries for its chip.
-async function offerImageUpdates(box, base, fw, note) {
+// With no app update offered, MoonBase and the WiFi coprocessor are each offered while the device reports them behind its app, pressed twice like the
+// app's update, after `lead`, what the note says of the app. The coprocessor takes the image of the device's own release by itself; MoonBase takes
+// the one the app's release in `releases` carries for its chip.
+function offerImageUpdates(box, base, fw, note, releases, lead) {
     const sys = fw.summary || {};
     const offers = [];
     if (sys.moonbaseMismatch) {
-        const a = moonbaseAsset(releaseOfVersion(await loadReleases({ maxAgeMs: UPDATE_TTL_MS }), fw.version), sys.chip);
+        const a = moonbaseAsset(releaseOfVersion(releases, fw.version), sys.chip);
         if (a.url) offers.push({ label: "MoonBase", kind: "moonbase", source: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch" });
     }
     if (sys.coprocessorMismatch) offers.push({ label: "WiFi coprocessor", kind: "coprocessor", source: { url: "" }, flag: "coprocessorMismatch" });
     if (!offers.length) return;
-    note.textContent = `The app is up to date; ${offers.map(o => o.label).join(" and ")} ${offers.length > 1 ? "are" : "is"} behind it.`;
+    note.textContent = `${lead}; ${offers.map(o => o.label).join(" and ")} ${offers.length > 1 ? "are" : "is"} behind the app.`;
     for (const o of offers) {
         const btn = document.createElement("button");
         btn.className = "graph-popup-update";
@@ -626,4 +644,96 @@ function popupInstall(base, kind, source, target, note, btn) {
         const dlg = note.closest("dialog");
         setTimeout(() => { if (dlg && dlg.open) dlg.close(); }, POPUP_DONE_MS);
     }, { target });
+}
+
+// --- Group membership: join or leave a group the device serving the list holds -------------------------------------------------------
+
+// The device groups a device's state (`GET /api/state`) holds, each its id, shared name, module name and member rows {id, mac}: a holder edits
+// its groups whether or not it is a member itself, so its state, not its own Discovery row, says which. Pure.
+export function heldGroups(state) {
+    const out = [];
+    const walk = (m) => {
+        if (Array.isArray(m)) { m.forEach(walk); return; }   // the state's `modules`, the top-level list
+        if (!m || typeof m !== "object") return;
+        if (m.role === "devicegroup") {   // the module's role, as the UI reads a module rather than naming its type
+            const c = Object.fromEntries((m.controls || []).map(x => [x.name, x.value]));
+            if (c.id) out.push({ id: c.id, name: c.groupName || m.name, module: m.name, members: Array.isArray(c.members) ? c.members : [] });
+        }
+        for (const child of m.children || []) walk(child);
+    };
+    walk(state?.modules);
+    return out;
+}
+
+const sameMac = (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase();
+
+// The groups a node can join or leave from here, each with whether the node with `mac` is a member. Pure.
+export function membershipOffers(groups, mac) {
+    return (groups || []).map(g => ({ ...g, member: g.members.some(r => sameMac(r.mac, mac)) }));
+}
+
+// The row id of the member with `mac` in a held group, or null. Pure.
+export function memberRowId(group, mac) {
+    const row = (group?.members || []).find(r => sameMac(r.mac, mac));
+    return row ? row.id : null;
+}
+
+// Add the node's MAC to the group's members on the holder, or remove its row; an error text, or "" when the holder took the edit.
+async function editMembership(base, grp, mac, join) {
+    const list = `${base}/api/list/${encodeURIComponent(grp.module)}/members`;
+    const send = (url, method, body) => fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body) });
+    try {
+        if (!join) {
+            const id = memberRowId(grp, mac);
+            if (id == null) return "";   // already gone
+            const res = await send(`${list}/${id}`, "DELETE");
+            return res.ok ? "" : `Refused: ${await errorMessage(res)}`;
+        }
+        const added = await send(list, "POST");
+        if (!added.ok) return `Refused: ${await errorMessage(added)}`;
+        const { id } = await added.json();
+        const set = await send(`${list}/${id}`, "PATCH", { field: "mac", value: mac });
+        return set.ok ? "" : `Refused: ${await errorMessage(set)}`;
+    } catch (err) {
+        return `The device did not answer: ${err.message}`;
+    }
+}
+
+// The popup's Groups section: a Join or Leave button per group the device serving the list holds, Leave pressed twice. Shown only when
+// that device holds a group; a member joining or leaving follows within seconds, as the map's next refresh shows.
+function buildGroupMembership(row, home) {
+    const box = document.createElement("div");
+    box.className = "graph-popup-firmware";
+    box.hidden = true;
+    (async () => {
+        const state = await fetchJsonWithin(`${home}/api/state`).catch(() => null);
+        const offers = membershipOffers(heldGroups(state), row.mac);
+        if (!offers.length) return;
+        const head = document.createElement("strong");
+        head.textContent = "Groups";
+        const note = document.createElement("div");
+        note.className = "graph-popup-note";
+        box.append(head);
+        for (const grp of offers) box.appendChild(membershipButton(grp, row, home, note));
+        box.append(note);
+        box.hidden = false;
+    })();
+    return box;
+}
+
+function membershipButton(grp, row, home, note) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "graph-popup-update";
+    btn.textContent = `${grp.member ? "Leave" : "Join"} ${grp.name}`;
+    const run = async () => {
+        btn.disabled = true;
+        note.textContent = grp.member ? `Leaving ${grp.name}…` : `Joining ${grp.name}…`;
+        const err = await editMembership(home, grp, row.mac, !grp.member);
+        note.textContent = err || `${grp.member ? "Left" : "Joined"} ${grp.name}: every member follows within seconds.`;
+        if (err) btn.disabled = false;
+    };
+    if (grp.member) armPressTwice(btn, run, { armedText: `✓ Leave ${grp.name}` });
+    else btn.addEventListener("click", run);
+    return btn;
 }

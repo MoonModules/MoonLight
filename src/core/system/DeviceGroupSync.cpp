@@ -1,31 +1,30 @@
-/// The device groups' definitions on the network: sent when Trickle says, merged on arrival, a group created or dropped as its members change, and deletions kept.
+/// The device groups on the network: definitions and shared controls sent when Trickle says, merged on arrival, a group created or dropped as its members change, and deletions kept.
 #include "core/system/DeviceGroupSync.h"
 
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"   // applyStateDocument: a group created, renamed or dropped as the API does it
-#include "core/system/Devices.h"           // the fleet's clock, which stamps a deletion
+#include "core/system/Devices.h"           // the fleet's clock, which stamps a deletion and a shared change
 #include "core/services/OscPacket.h"
+#include "core/system/ControlModule.h"     // the slots whose changes are shared, and what each drives
 #include "core/system/DeviceGroup.h"
+#include "core/system/HttpServerModule.h"  // servedPort: where a member fetches a look applied here
 #include "core/util/JsonSink.h"
+#include "core/util/fnv.h"
 #include "core/util/format.h"
 
 #include <cinttypes>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 
 namespace mm {
 
 void DeviceGroupSync::tick(MoonModule& devices, char* saved, size_t savedCap) {
-    if (!loaded_) { loadTombs(saved); loaded_ = true; }
-    if (ensureOpen()) {
-        for (int n = 0; n < 16; n++) {   // a bounded drain, as Discovery's
-            const int len = sock_.recvFrom(buf_.data(), buf_.count());
-            if (len <= 0) break;
-            handle(devices, buf_.data(), static_cast<size_t>(len));
-        }
-    }
-    noticeDeleted(devices);   // with the socket closed too, so a deletion is marked and kept until it can go out
+    devices_ = &devices;
+    if (!loaded_) loaded_ = loadTombs(saved);
+    if (!loaded_) return;   // memory refused the saved markers: a merge waits until they hold, tried again next second
+    ensureOpen();
+    readAll(devices);
+    attach();
     if (open_) {
         sendDue(devices);
         for (uint8_t i = 0; i < tombCount_; i++) if (tombs_[i].sendsLeft) { sendDeletion(tombs_[i]); tombs_[i].sendsLeft--; }
@@ -38,9 +37,35 @@ void DeviceGroupSync::tick(MoonModule& devices, char* saved, size_t savedCap) {
     }
 }
 
+void DeviceGroupSync::readAll(MoonModule& devices) {
+    noticeDeleted(devices);   // before what arrived, so a copy of a group deleted here since the last second meets its marker
+    if (pendingLen_) handle(devices, pending_.data(), pendingLen_);   // the definition or deletion the 20 ms read set aside
+    pendingLen_ = 0;
+    for (int n = 0; open_ && n < 16; n++) {   // a bounded drain, as Discovery's
+        const int len = sock_.recvFrom(buf_.data(), buf_.count());
+        if (len <= 0) break;
+        handle(devices, buf_.data(), static_cast<size_t>(len));
+    }
+    holdGroups(devices);   // after what arrived, so a group created by it is held, and noticed when deleted here
+}
+
+void DeviceGroupSync::receive(MoonModule& devices) {
+    if (!loaded_) return;   // the markers first, so a copy of a deleted group meets its marker
+    devices_ = &devices;
+    // Shared values and recalls apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
+    for (int n = 0; open_ && !pendingLen_ && n < 16; n++) {
+        const int len = sock_.recvFrom(buf_.data(), buf_.count());
+        if (len <= 0) break;
+        if (handleShared(devices, buf_.data(), static_cast<size_t>(len))) continue;
+        std::memcpy(pending_.data(), buf_.data(), static_cast<size_t>(len));
+        pendingLen_ = static_cast<size_t>(len);
+    }
+    shared_.tickFetch();   // starts a recall's fetch within 20 ms; JsonFetch's once-a-second poll takes the answer in, so a look follows within about a second
+}
+
 bool DeviceGroupSync::ensureOpen() {
     if (open_) return true;
-    if (!buf_.resize(kDatagram) || !sock_.open()) return false;
+    if (!buf_.resize(kDatagram) || !pending_.resize(kDatagram) || !sock_.open()) return false;
     if (!sock_.bind(kPort)) { sock_.close(); return false; }
     sock_.joinMulticast(kGroup);   // best-effort: a network that drops multicast still carries what each device sends itself
     open_ = true;
@@ -48,9 +73,14 @@ bool DeviceGroupSync::ensureOpen() {
 }
 
 void DeviceGroupSync::close() {
+    if (ControlModule* c = attached_ ? ControlModule::active() : nullptr) c->removeSurface(this);
+    attached_ = false;
+    shared_.clear();
     if (open_) sock_.close();
     open_ = false;
     buf_.resize(0);
+    pending_.resize(0);
+    pendingLen_ = 0;
     seenCount_ = 0;      // release frees the held ids and the markers with the buffers,
     tombCount_ = 0;
     loaded_ = false;     // and the next tick reloads the markers from the saved text
@@ -58,7 +88,114 @@ void DeviceGroupSync::close() {
 
 void DeviceGroupSync::handle(MoonModule& devices, const uint8_t* pkt, size_t len) {
     // One message, one handler: an answer sent from the definition's handler reuses the receive buffer.
-    if (!handleDefinition(devices, pkt, len)) handleDeletion(devices, pkt, len);
+    if (!handleDefinition(devices, pkt, len) && !handleShared(devices, pkt, len)) handleDeletion(devices, pkt, len);
+}
+
+bool DeviceGroupSync::handleShared(MoonModule& devices, const uint8_t* pkt, size_t len) {
+    osc::Reader values(pkt, len, SharedControls::kValuesAddress);
+    osc::Reader look(pkt, len, SharedControls::kLookAddress);
+    osc::Reader& r = values.ok() ? values : look;
+    if (!r.ok()) return false;
+    const char* id = r.str();
+    DeviceGroup* g = r.ok() && DeviceGroup::isId(id) ? groupById(devices, id) : nullptr;
+    if (!g) return true;   // a group this device does not hold
+    Hlc* clock = devices.acceptsRole(ModuleRole::DeviceGroup) ? &static_cast<Devices&>(devices).clock() : nullptr;
+    const uint32_t key = SharedControls::keyOf(id);
+    const bool agrees = values.ok() ? shared_.mergeValues(r, key, clock) : shared_.mergeRecall(r, key, clock);
+    if (!agrees) g->hearInconsistent();   // this device holds newer: Trickle sends it soon
+    return true;
+}
+
+namespace {
+/// The surface control at Control slot `slot`, ordered switches, faders, encoders as ControlModule counts them.
+SurfaceControl kindOfSlot(uint8_t slot) {
+    return slot < ControlModule::kSwitchCount ? SurfaceControl::Switch
+         : slot < ControlModule::kSwitchCount + ControlModule::kFaderCount ? SurfaceControl::Fader : SurfaceControl::Encoder;
+}
+/// Its index within its bank.
+uint8_t indexOfSlot(uint8_t slot) {
+    return slot < ControlModule::kSwitchCount ? slot
+         : slot < ControlModule::kSwitchCount + ControlModule::kFaderCount ? static_cast<uint8_t>(slot - ControlModule::kSwitchCount)
+                                                                            : static_cast<uint8_t>(slot - ControlModule::kSwitchCount - ControlModule::kFaderCount);
+}
+/// Call `fn(id)` for the id of each group held under `devices`.
+template <class Fn>
+void forEachGroupId(const MoonModule& devices, Fn&& fn) {
+    for (uint8_t i = 0; i < devices.childCount(); i++) {
+        const MoonModule* m = devices.child(i);
+        if (m->role() == ModuleRole::DeviceGroup) fn(static_cast<const DeviceGroup*>(m)->groupId());
+    }
+}
+/// The slot of a bank's control.
+uint8_t slotOf(SurfaceControl kind, uint8_t index) {
+    return kind == SurfaceControl::Switch ? index
+         : kind == SurfaceControl::Fader ? static_cast<uint8_t>(ControlModule::kSwitchCount + index)
+                                         : static_cast<uint8_t>(ControlModule::kSwitchCount + ControlModule::kFaderCount + index);
+}
+}  // namespace
+
+void DeviceGroupSync::attach() {
+    static_assert(kSlots == ControlModule::kSlotCount, "a seen record per Control slot");
+    ControlModule* c = ControlModule::active();
+    if (attached_ || !c) return;
+    // Each slot's parameter is seen before any change counts, so what this device holds at boot stays local until a real change: a member back from a restart takes the group's values.
+    for (uint8_t slot = 0; slot < kSlots; slot++) {
+        int32_t value = 0;
+        changedHere(slot, c->targetOf(kindOfSlot(slot), indexOfSlot(slot)), value);
+    }
+    c->addSurface(this, ControlModule::Seed::None);
+    attached_ = true;
+}
+
+bool DeviceGroupSync::changedHere(uint8_t slot, const char* target, int32_t& value) {
+    SlotSeen& seen = slotSeen_[slot];
+    const uint32_t key = target ? fnv1a(target, std::strlen(target)) : 0;
+    char module[24];
+    const char* control = nullptr;
+    const ControlDescriptor* c = SharedControls::shareable(target, module, control);   // only what a member would apply is sent
+    Scheduler* sched = Scheduler::instance();
+    if (!c || !sched || !sched->getControlWide(module, control, value)) { seen = SlotSeen{key, 0}; return false; }
+    const bool moved = seen.target == key && seen.value != value;   // a slot pointed at another parameter re-reads its baseline
+    seen = SlotSeen{key, value};
+    return moved && !shared_.holds(target, value);   // a value a group set is not sent on
+}
+
+void DeviceGroupSync::sendValue(SurfaceControl kind, uint8_t index, uint8_t) {
+    ControlModule* c = ControlModule::active();
+    if (kind == SurfaceControl::Pad || !c || index >= ControlModule::kSwitchCount) return;
+    const char* target = c->targetOf(kind, index);
+    int32_t value = 0;
+    if (changedHere(slotOf(kind, index), target, value)) shareValue(target, value);
+}
+
+void DeviceGroupSync::shareValue(const char* param, int32_t value) {
+    if (!devices_) return;
+    forEachGroupId(*devices_, [&](const char* id) {
+        if (!shared_.setLocal(SharedControls::keyOf(id), param, value, stampNow(*devices_))) return;
+        uint8_t msg[160];   // its own buffer: a merged value's apply moves a slot and reaches here while buf_ still holds the datagram being read
+        uint16_t from = 0;
+        send(msg, shared_.writeValues(msg, sizeof(msg), id, from, param));
+    });
+}
+
+void DeviceGroupSync::lookApplied(const char* name) {
+    if (!devices_) return;
+    uint8_t ip[4] = {};
+    platform::localIPv4(ip);
+    const uint16_t served = HttpServerModule::servedPort();
+    forEachGroupId(*devices_, [&](const char* id) {
+        shared_.recallLocal(SharedControls::keyOf(id), name, ip, served ? served : 80, stampNow(*devices_));
+        uint8_t msg[160];
+        send(msg, shared_.writeRecall(msg, sizeof(msg), id));
+    });
+}
+
+void DeviceGroupSync::sendShared(const DeviceGroup& g) {
+    // One message at least, so a member whose values differ hears the digest even from a device holding none.
+    uint16_t from = 0;
+    do send(buf_.data(), shared_.writeValues(buf_.data(), buf_.count(), g.groupId(), from));
+    while (from < shared_.valueCount());
+    send(buf_.data(), shared_.writeRecall(buf_.data(), buf_.count(), g.groupId()));
 }
 
 bool DeviceGroupSync::handleDefinition(MoonModule& devices, const uint8_t* pkt, size_t len) {
@@ -123,18 +260,18 @@ void DeviceGroupSync::handleDeletion(MoonModule& devices, const uint8_t* pkt, si
     const char* id = r.str();
     const Stamp s{r.i64(), r.i32()};
     if (!r.ok() || !DeviceGroup::isId(id) || !s.valid()) return;
-    DeviceGroup* g = groupById(devices, id);
-    if (g && !s.newerThan(g->newest())) return;   // edited after the deletion: the group stands, and its next copy says so
     markDeleted(id, s, 0);
-    if (g) removeLocal(devices, *g);
+    if (DeviceGroup* g = groupById(devices, id)) removeLocal(devices, *g);   // a deletion wins over every edit, as a marker answers every copy
 }
 
 void DeviceGroupSync::noticeDeleted(MoonModule& devices) {
-    // Every id held last second and gone now, unless this sync removed it: a group the user deleted here.
     for (uint16_t i = 0; i < seenCount_; i++) {
         if (groupById(devices, seen_[i].id) || deleted(seen_[i].id)) continue;
         markDeleted(seen_[i].id, stampNow(devices), 3);
     }
+}
+
+void DeviceGroupSync::holdGroups(MoonModule& devices) {
     // A group held under a marker goes: a removal memory refused is tried again each second until the group is gone.
     for (uint8_t c = devices.childCount(); c > 0; c--) {
         MoonModule* m = devices.child(c - 1);
@@ -159,6 +296,7 @@ void DeviceGroupSync::sendDue(MoonModule& devices) {
         if (!g->sendDue() || !open_) continue;
         for (uint16_t k = 0; k < g->chunkCount(kPerChunk); k++)
             send(buf_.data(), g->writeChunk(buf_.data(), buf_.count(), k, kPerChunk));
+        sendShared(*g);
     }
 }
 
@@ -177,12 +315,12 @@ int DeviceGroupSync::tombIndex(const char* id) const {
     return -1;
 }
 
-DeviceGroupSync::Tomb* DeviceGroupSync::tombSlot() {
+DeviceGroupSync::Tomb* DeviceGroupSync::tombSlot(const Stamp& stamp) {
     if (tombCount_ < kMaxTombs && tombs_.ensure(tombCount_ + 1u)) return &tombs_[tombCount_++];
     if (!tombCount_) return nullptr;   // memory refused the first marker
-    Tomb* oldest = &tombs_[0];   // full, or memory refused one more: the oldest marker gives way
+    Tomb* oldest = &tombs_[0];   // full, or memory refused one more: the oldest marker gives way to a newer one
     for (uint8_t i = 1; i < tombCount_; i++) if (oldest->stamp.newerThan(tombs_[i].stamp)) oldest = &tombs_[i];
-    return oldest;
+    return stamp.newerThan(oldest->stamp) ? oldest : nullptr;
 }
 
 void DeviceGroupSync::markDeleted(const char* id, const Stamp& stamp, uint8_t sends) {
@@ -195,8 +333,8 @@ void DeviceGroupSync::markDeleted(const char* id, const Stamp& stamp, uint8_t se
         tombsChanged_ = true;
         return;
     }
-    Tomb* t = tombSlot();
-    if (!t) return;   // memory refused the first marker: the deletion stays on this device
+    Tomb* t = tombSlot(stamp);
+    if (!t) return;   // older than every marker kept, or memory refused the first: the deletion stays on this device
     mm::formatTo(t->id, sizeof(t->id), "%s", id);
     t->stamp = stamp;
     t->sendsLeft = sends;
@@ -213,10 +351,14 @@ void DeviceGroupSync::sendDeletion(const Tomb& t) {
 }
 
 void DeviceGroupSync::send(const uint8_t* data, size_t len) {
-    if (open_ && len) sock_.sendToAddr(kGroup, kPort, data, len);
+    if (len) transmit(data, len);
 }
 
-void DeviceGroupSync::loadTombs(const char* saved) {
+void DeviceGroupSync::transmit(const uint8_t* data, size_t len) {
+    if (open_) sock_.sendToAddr(kGroup, kPort, data, len);
+}
+
+bool DeviceGroupSync::loadTombs(const char* saved) {
     // "id:hlc:writer;" per marker, in hex.
     tombCount_ = 0;
     for (const char* p = saved; p && *p && tombCount_ < kMaxTombs;) {
@@ -225,20 +367,22 @@ void DeviceGroupSync::loadTombs(const char* saved) {
         const size_t n = end ? static_cast<size_t>(end - p) : std::strlen(p);
         mm::formatTo(entry, sizeof(entry), "%.*s", static_cast<int>(n < sizeof(entry) ? n : sizeof(entry) - 1), p);
         Tomb t{};
-        if (parseTomb(entry, t) && tombs_.ensure(tombCount_ + 1u)) tombs_[tombCount_++] = t;
+        if (parseTomb(entry, t)) {
+            if (!tombs_.ensure(tombCount_ + 1u)) { tombCount_ = 0; return false; }
+            tombs_[tombCount_++] = t;
+        }
         p = end ? end + 1 : nullptr;
     }
+    return true;
 }
 
 bool DeviceGroupSync::parseTomb(char* entry, Tomb& t) {
     char* c1 = std::strchr(entry, ':');
-    char* c2 = c1 ? std::strchr(c1 + 1, ':') : nullptr;
-    if (!c1 || !c2) return false;
+    if (!c1) return false;
     *c1 = 0;
     if (!DeviceGroup::isId(entry)) return false;
     mm::formatTo(t.id, sizeof(t.id), "%s", entry);
-    t.stamp = Stamp{std::strtoull(c1 + 1, nullptr, 16), static_cast<uint32_t>(std::strtoul(c2 + 1, nullptr, 16))};
-    return t.stamp.valid();
+    return Stamp::parse(c1 + 1, t.stamp);
 }
 
 void DeviceGroupSync::saveTombs(char* saved, size_t cap) const {

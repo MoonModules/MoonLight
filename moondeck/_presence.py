@@ -126,8 +126,9 @@ def discovery_rows(entry: str, timeout: float = 1.5) -> list[dict]:
             module = json.loads(resp.read())
     except Exception:
         return []
-    for c in module.get("controls", []) if isinstance(module, dict) else []:
-        if c.get("name") == "devices":
+    controls = module.get("controls") if isinstance(module, dict) else None
+    for c in controls if isinstance(controls, list) else []:
+        if isinstance(c, dict) and c.get("name") == "devices":
             values, detail = c.get("value") or [], c.get("detail") or []
             return [{**v, **(detail[i] if i < len(detail) and isinstance(detail[i], dict) else {})}
                     for i, v in enumerate(values) if isinstance(v, dict)]
@@ -143,29 +144,35 @@ def heard_from_moondeck(timeout: float = 1.0) -> list[dict]:
         return []
 
 
-def known_rows(heard: list[dict], lists=discovery_rows) -> list[dict]:
-    """The devices known right now: the `heard` presence rows, then the Discovery list of the desktop app and of the first heard MoonLight
-    that serves one, which bring their peers; each MAC once, the freshest first. `lists` reads one device's list."""
+def known_rows(heard: list[dict], lists=discovery_rows, want: list[str] = (), budget_s: float = 6.0) -> list[dict]:
+    """The devices known right now: the `heard` presence rows, then the Discovery lists of the desktop app and of each heard MoonLight, which
+    bring their peers; each MAC once, the first source's row kept. `lists` reads one device's list. The sources are asked in turn until the
+    MACs of `want` all resolve, or, with none wanted, until one list is not empty, and no new source is asked once `budget_s` has passed."""
     rows = list(heard)
-    peers = lists(DESKTOP)
-    for row in heard:
-        if peers:
-            break
-        if row.get("type") == "MoonLight" and row.get("ip") and row["ip"] != "127.0.0.1":
-            peers = lists(address(row))
     seen = {r["mac"].lower() for r in rows if r.get("mac")}
-    for r in peers:
-        if r.get("mac") and r["mac"].lower() not in seen:
-            seen.add(r["mac"].lower())
-            rows.append(r)
+    sources = [DESKTOP] + [address(r) for r in heard if r.get("type") == "MoonLight" and r.get("ip") and r["ip"] != "127.0.0.1"]
+    deadline = time.monotonic() + budget_s
+    for entry in sources:
+        if (want and len(resolve(list(want), rows)) == len(want)) or time.monotonic() > deadline:
+            break
+        peers = lists(entry)
+        for r in peers:
+            if r.get("mac") and r["mac"].lower() not in seen:
+                seen.add(r["mac"].lower())
+                rows.append(r)
+        if peers and not want:
+            break
     return rows
 
 
 def resolve(macs: list[str], rows: list[dict]) -> dict[str, dict]:
-    """Each MAC of `macs` that a MoonLight row of `rows` carries, mapped to {mac, name, host}, `host` the address it answers on."""
+    """Each MAC of `macs` that a MoonLight row of `rows` carries, mapped to {mac, name, host}, `host` the address it answers on. A row whose
+    MAC is exactly the MAC wins, and a row reporting the MAC's EUI-64 form (a USB board's raw MAC, usb.device_macs) matches next."""
     found = {}
+    movers = [r for r in rows if r.get("type") == "MoonLight" and r.get("ip")]
     for mac in macs:
-        row = next((r for r in rows if r.get("type") == "MoonLight" and r.get("ip") and mac_matches(mac, r.get("mac", ""))), None)
+        row = (next((r for r in movers if (r.get("mac") or "").lower() == (mac or "").strip().lower()), None)
+               or next((r for r in movers if mac_matches(mac, r.get("mac", ""))), None))
         if row:
             found[mac] = {"mac": mac, "name": row.get("name") or row["ip"], "host": address(row)}
     return found

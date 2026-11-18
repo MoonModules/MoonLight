@@ -41,6 +41,7 @@ processes:
       - id: build-tests
         say: Build the unit tests and the scenario runner.
         cores: all
+        outputs: ["{host_build}/CMakeCache.txt", "{host_build}/test/mm_tests", "{host_build}/test/mm_scenarios", "{host_build}/test/Release/mm_*.exe"]
         when: { run: { script: moondeck/build/build_host.py, args: "--tests" } }
       - id: test
         say: Run the unit tests.

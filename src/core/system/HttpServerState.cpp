@@ -546,9 +546,9 @@ void HttpServerModule::writeKnownReceivers(JsonSink& sink, const char* text) {
 void HttpServerModule::writeKnownReceiverEntries(JsonSink& sink, const char* text) {
     const DevicesModule* devices = DevicesModule::active();
     if (!devices || !text) return;
-    Receiver receivers[32];
+    Receiver receivers[kMaxReceivers];
     uint8_t n = 0;
-    if (parseReceiverList(text, receivers, 32, n)) return;
+    if (parseReceiverList(text, receivers, kMaxReceivers, n)) return;
     bool any = false;
     for (uint8_t i = 0; i < n; i++) {
         char name[kMaxHostName + 1], dotted[16];

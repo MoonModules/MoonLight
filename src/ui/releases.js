@@ -7,9 +7,14 @@ import { isNewer, parse } from "./semver.js";
 
 export const UPDATE_TTL_MS = 60 * 60 * 1000;   // 1 h: the age of release list the update badge settles for
 
-// The release a version ships in: its tag for a stable version, the moving `latest` for a prerelease.
+// Whether a version is a -dev build, what the moving `latest` carries (compute_version.py); a release candidate is a release of its own.
+function isDevBuild(version) {
+    return parse(version)?.prerelease[0] === "dev";
+}
+
+// The release a version ships in: the moving `latest` for a -dev build, its own tag for a release or a release candidate.
 export function releaseTagOf(version) {
-    return (parse(version)?.prerelease.length || 0) > 0 ? "latest" : `v${version}`;
+    return isDevBuild(version) ? "latest" : `v${version}`;
 }
 
 // The release holding exactly this version, or null: `latest` moves on, so it counts only while its name, its version, is still this one.
@@ -35,7 +40,7 @@ const MODE_DEVELOPER = 2;
 
 // Whether a device follows the moving `latest` build: one running a -dev build, or one its reader put in developer mode.
 function followsLatest(dev) {
-    return (parse(dev.version)?.prerelease.length || 0) > 0 || dev.mode === MODE_DEVELOPER;
+    return isDevBuild(dev.version) || dev.mode === MODE_DEVELOPER;
 }
 
 // The update a device's channel offers from `releases`, or null. A device on a -dev build or in developer mode follows `latest`, and is

@@ -38,12 +38,26 @@ def fingerprint(exe: Path, inputs=()) -> str:
     return _hash(exe, inputs)
 
 
+def unchanged(exe: Path, inputs, key: str | None) -> bool:
+    """Whether `exe` and `inputs` still hash to `key`, taken before a run: a definition edited while the run went is one a scenario did not read, so the run is not kept."""
+    try:
+        return key is not None and _hash(exe, inputs) == key
+    except OSError:
+        return False
+
+
 def keep(exe: Path, output: str, key: str | None = None) -> None:
     """Keep a whole run's output of `exe` under `key`, the binary's own hash by default. Best effort: the reader runs the suite itself when the output is not kept."""
     try:
         _record(exe).write_text(json.dumps({"sha256": key or _hash(exe), "output": output}), encoding="utf-8")
     except OSError as e:
         print(f"Output of {exe.name} not kept: {e}", file=sys.stderr)
+
+
+def keep_complete(exe: Path, output: str, key: str, summary: str) -> None:
+    """Keep a whole run's output when it reached its `summary` line and `exe` still hashes to `key`: a run that died early, or a binary rebuilt meanwhile, is no result for a reader to take."""
+    if summary in output and unchanged(exe, (), key):
+        keep(exe, output, key)
 
 
 def kept(exe: Path, inputs=()) -> str | None:

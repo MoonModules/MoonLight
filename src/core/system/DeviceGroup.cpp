@@ -13,7 +13,6 @@
 
 #include <cinttypes>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 
 namespace mm {
@@ -34,13 +33,10 @@ void formatStamp(char* out, size_t cap, const Stamp& s) {
     mm::formatTo(out, cap, "%" PRIx64 ":%" PRIx32, s.hlc, s.writer);
 }
 
-/// A stamp saved as "hlc:writer", the oldest one when it is not valid, so any copy's stamp beats it.
+/// A stamp saved as "hlc:writer", the oldest one when it is not one, so any copy's stamp beats it.
 Stamp parseStamp(const char* text) {
     Stamp s;
-    char* end = nullptr;
-    s.hlc = std::strtoull(text, &end, 16);
-    if (end && *end == ':') s.writer = static_cast<uint32_t>(std::strtoul(end + 1, nullptr, 16));
-    return s.valid() ? s : Stamp{};
+    return Stamp::parse(text, s) ? s : Stamp{};
 }
 
 /// Mark `m` changed and ask for the debounced save, for a change no API request saves: a merged definition.
@@ -125,17 +121,26 @@ void DeviceGroup::tick1s() MM_NONBLOCKING {
     MoonModule::tick1s();
 }
 
-void DeviceGroup::refreshStatus() MM_NONBLOCKING {
-    const DevicesModule* discovery = DevicesModule::active();
-    ListRow members = 0, missing = 0;
+ListRow DeviceGroup::countMembers(const DevicesModule* discovery, ListRow& missing) const MM_NONBLOCKING {
+    ListRow members = 0;
+    missing = 0;
     for (ListRow i = 0; i < count_; i++) {
         if (members_[i].removed || isZeroMac(members_[i].mac)) continue;
         members++;
         if (!(discovery && discovery->heardLately(members_[i].mac))) missing++;
     }
-    if (missing) mm::formatTo(status_, sizeof(status_), "%u members, %u missing", static_cast<unsigned>(members), static_cast<unsigned>(missing));
-    else mm::formatTo(status_, sizeof(status_), "%u members", static_cast<unsigned>(members));
-    setStatus(status_, missing ? Severity::Warning : Severity::Status);
+    return members;
+}
+
+void DeviceGroup::refreshStatus() MM_NONBLOCKING {
+    const DevicesModule* discovery = DevicesModule::active();
+    ListRow missing = 0;
+    const ListRow members = countMembers(discovery, missing);
+    const char* note = discovery ? discovery->sharedNote() : nullptr;   // the shared controls past their bound, or a look not fetched
+    char missingText[16] = "";
+    if (missing) mm::formatTo(missingText, sizeof(missingText), ", %u missing", static_cast<unsigned>(missing));
+    mm::formatTo(status_, sizeof(status_), "%u members%s%s%s", static_cast<unsigned>(members), missingText, note ? ", " : "", note ? note : "");
+    setStatus(status_, missing || note ? Severity::Warning : Severity::Status);
 }
 
 void DeviceGroup::onModuleRenamed(const char* from, const char* to) {
@@ -240,18 +245,30 @@ bool DeviceGroup::setListRowField(uint32_t id, const char* field, const char* va
     Member* m = find(id);
     uint8_t mac[6] = {};
     const char* name = nullptr;
-    if (!m || !pickedDevice(field, valueJson, mac, name)) return false;
+    if (!m || m->removed || !pickedDevice(field, valueJson, mac, name)) return false;   // a removal marker is no row the editor shows
     if (hasMember(mac)) { setStatus("that device is a member already", Severity::Warning); return false; }
-    if (Member* old = findMac(mac); old && old != m) {   // a removed member picked again: its marker gives way to this row
-        const ListRow at = static_cast<ListRow>(old - members_.data());
-        const uint32_t keep = m->id;
+    const Stamp now = stampNow();
+    Member* marker = findMac(mac);   // the picked device's removal marker, when it was a member once
+    if (!isZeroMac(m->mac)) {   // a member replaced is a member removed: its marker stays, so a copy still holding it leaves it removed
+        if (!marker) {
+            if (!grow()) return false;
+            m = find(id);   // growing may move the members
+            marker = &members_[count_++];
+            *marker = Member{};
+            marker->id = nextId_++;
+        }
+        std::memcpy(marker->mac, m->mac, 6);
+        std::memcpy(marker->name, m->name, sizeof(marker->name));
+        marker->removed = true;
+        marker->stamp = now;
+    } else if (marker) {   // a removed member picked into an empty row: its marker gives way to this row
+        const ListRow at = static_cast<ListRow>(marker - members_.data());
         for (ListRow j = at; j + 1u < count_; j++) members_[j] = members_[j + 1u];
         count_--;
-        m = find(keep);
+        m = find(id);
     }
     std::memcpy(m->mac, mac, 6);
-    m->removed = false;
-    m->stamp = stampNow();
+    m->stamp = now;
     mm::formatTo(m->name, sizeof(m->name), "%s", name ? name : "");
     edited();
     return true;
@@ -327,12 +344,6 @@ ListRow DeviceGroup::membersFrom(ListRow from, uint16_t per) const {
     return n;
 }
 
-Stamp DeviceGroup::newest() const {
-    Stamp n = nameStamp_;
-    for (ListRow i = 0; i < count_; i++) if (members_[i].stamp.newerThan(n)) n = members_[i].stamp;
-    return n;
-}
-
 size_t DeviceGroup::writeChunk(uint8_t* out, size_t cap, uint16_t chunk, uint16_t per) const {
     // id, name, the name's stamp, the whole definition's digest, then per member: MAC, stamp, removed, name.
     char tags[8 + 5 * 32] = ",sshii";
@@ -366,7 +377,7 @@ void DeviceGroup::writeMember(osc::Writer& w, const Member& m) {
 
 bool DeviceGroup::merge(osc::Reader& r, const char*& wantName) {
     wantName = nullptr;
-    if (!wellFormed(r)) return false;   // merged whole or not at all, as OscPacket's parse refuses a malformed message
+    if (!wellFormed(r)) return false;   // a malformed message is ignored whole; each well-formed part merges on its own, as a set's elements do
     // The caller read the id; the name and its stamp come next, then the sender's digest, then the members.
     bool changed = mergeName(r, wantName);
     const uint32_t senderDigest = r.i32();
@@ -379,7 +390,7 @@ bool DeviceGroup::merge(osc::Reader& r, const char*& wantName) {
     if (changed) saveSoon(*this);
     // Trickle: a copy that agrees counts toward silence; one that differs, before or after the merge, brings the interval back to 1 s.
     if (senderDigest == digest() && !changed) { if (heard_ < 255) heard_++; }
-    else if (interval_ > 1) startInterval(1);   // RFC 6206 4.2 step 6: an inconsistency resets an interval above Imin
+    else hearInconsistent();
     return changed;
 }
 
@@ -465,6 +476,10 @@ DeviceGroup::Member* DeviceGroup::find(uint32_t id) {
 DeviceGroup::Member* DeviceGroup::findMac(const uint8_t mac[6]) {
     for (ListRow i = 0; i < count_; i++) if (std::memcmp(members_[i].mac, mac, 6) == 0) return &members_[i];
     return nullptr;
+}
+
+void DeviceGroup::hearInconsistent() {
+    if (interval_ > 1) startInterval(1);   // RFC 6206 4.2 step 6: an inconsistency resets an interval above Imin
 }
 
 void DeviceGroup::edited() {

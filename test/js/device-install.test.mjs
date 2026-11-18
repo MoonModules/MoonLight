@@ -6,6 +6,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 import { installFirmware } from "../../src/ui/deviceinstall.js";
+import { pollUntil } from "../../src/ui/uikit.js";
 import { INSTALLER_URL } from "../../src/ui/releases.js";
 
 const BASE = "http://10.0.0.7";
@@ -27,7 +28,7 @@ function virtualClock() {
         now: () => now,
         async run(promise) {
             let settled = false;
-            promise.finally(() => { settled = true; });
+            promise.then(() => { settled = true; }, () => { settled = true; });   // the caller handles a rejection from the promise returned
             while (!settled) {
                 await new Promise((r) => setImmediate(r));
                 if (settled) break;
@@ -61,6 +62,21 @@ function device(answer) {
 
 // The flow installing release 1.1.0 from a URL, reported on recorder `r`'s UI.
 const installUpdate = (r) => installFirmware(BASE, "app", { url: "https://x/firmware.bin" }, r.ui, { target: { version: "1.1.0" } });
+
+// An XMLHttpRequest stand-in whose upload answers 200, `send(xhr, body)` recording it and reporting its progress.
+function fakeUpload(send) {
+    globalThis.XMLHttpRequest = class {
+        constructor() { this.upload = { on: {}, addEventListener: (t, f) => { this.upload.on[t] = f; } }; this.on = {}; }
+        open(_method, route) { this.route = route; }
+        setRequestHeader() {}
+        addEventListener(t, f) { this.on[t] = f; }
+        abort() {}
+        send(body) {
+            send(this, body);
+            queueMicrotask(() => { this.status = 200; this.on.load(); });
+        }
+    };
+}
 
 // A UI that records every call the flow makes on it.
 function recorder() {
@@ -111,22 +127,11 @@ test("only exactly the version asked for ends an install: MoonBase's own version
 test("a board without TLS answers 501, so the browser downloads the image from the installer's mirror and uploads it with progress", async () => {
     const clock = virtualClock();
     const uploads = [];
-    globalThis.XMLHttpRequest = class {
-        constructor() { this.upload = { on: {}, addEventListener: (t, f) => { this.upload.on[t] = f; } }; this.on = {}; }
-        open(_method, route) { this.route = route; }
-        setRequestHeader() {}
-        addEventListener(t, f) { this.on[t] = f; }
-        abort() {}
-        send(body) {
-            uploads.push({ route: this.route, size: body.size });
-            queueMicrotask(() => {
-                this.upload.on.progress({ lengthComputable: true, loaded: 3, total: 6 });
-                this.upload.on.progress({ lengthComputable: true, loaded: 6, total: 6 });
-                this.status = 200;
-                this.on.load();
-            });
-        }
-    };
+    fakeUpload((xhr, body) => {
+        uploads.push({ route: xhr.route, size: body.size });
+        xhr.upload.on.progress({ lengthComputable: true, loaded: 3, total: 6 });
+        xhr.upload.on.progress({ lengthComputable: true, loaded: 6, total: 6 });
+    });
     let restarted = false, rootAsks = 0;
     const log = device((path) => {
         if (path === "/api/firmware/url") return reply(501, { error: "this device cannot fetch a URL: upload the image" });
@@ -167,7 +172,7 @@ test("an install that reaches no result within five minutes fails rather than wa
     await clock.run(installUpdate(r));
     assert.equal(r.of("fail").length, 1);
     assert.match(r.of("fail")[0][0], /five minutes/);
-    assert.ok(clock.now() >= 300000, `failed at ${clock.now()} ms`);
+    assert.ok(clock.now() >= 300000 && clock.now() <= 301000, `failed at ${clock.now()} ms, within the last one-second ask past five minutes`);
 });
 
 test("without a target, a MoonBase install ends when the device's status is back at rest after work was seen, not at the rest before it", async () => {
@@ -268,4 +273,40 @@ test("a move's last step that MoonBase refuses fails with MoonBase's plain-text 
     const r = recorder();
     await clock.run(installFirmware(BASE, "app", { url: "http://x/firmware.bin" }, r.ui, { inMoonBase: true }));
     assert.deepEqual(r.of("fail"), [["Refused: error: url must start with https://"]]);
+});
+
+test("an app install through MoonBase whose request got no reply ends only once the device is seen at work, not on twenty seconds of rest", async () => {
+    const clock = virtualClock();
+    device((path) => {
+        if (path === "/api/firmware/url") return null;   // the request was lost on the way
+        if (path === "/api/modules/Firmware") return reply(200, { status: "" });   // the old app, untouched
+        return reply(200, { version: "1.0.0" });
+    });
+    const r = recorder();
+    await clock.run(installFirmware(BASE, "app", { url: "https://example.org/fw.bin" }, r.ui, { viaMoonBase: true }));
+    assert.deepEqual(r.of("done"), [], "an untouched app is no install");
+    assert.match(r.of("fail")[0]?.[0] || "", /five minutes/);
+});
+
+test("a file MoonBase lost to a power cut goes again as the first push did, with progress and behind the cancel", async () => {
+    const clock = virtualClock();
+    const uploads = [];
+    fakeUpload((xhr, body) => {
+        uploads.push(xhr.route);
+        xhr.upload.on.progress({ lengthComputable: true, loaded: body.size, total: body.size });
+    });
+    boardInMoonBase([null, "idle", "app"]);   // away, then MoonBase idle: the write was cut off
+    const r = recorder();
+    await clock.run(installFirmware(BASE, "app", { file: new Blob(["IMAGE"]) }, r.ui, { inMoonBase: true }));
+    assert.deepEqual(uploads, [`${BASE}/api/firmware/upload`, `${BASE}/api/firmware/upload`], "both pushes are uploads with progress");
+    assert.equal(r.of("setUpload").filter(([ctl]) => ctl instanceof AbortController).length, 2, "each push can be canceled");
+    assert.deepEqual(r.of("done"), [["Installed the app."]]);
+});
+
+test("a poll asks for the last time at its deadline, and stops there", async () => {
+    const clock = virtualClock();
+    const asked = [];
+    const got = await clock.run(pollUntil(async () => { asked.push(clock.now()); return Date.now() > 10000 ? "late" : null; }, () => true, 10000, 3000));
+    assert.equal(got, null, "no answer from past the deadline counts");
+    assert.deepEqual(asked, [3000, 6000, 9000, 10000]);
 });

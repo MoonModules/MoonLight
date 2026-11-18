@@ -27,6 +27,15 @@ def test_moondecks_static_route_serves_its_own_folders_and_nothing_above_them():
     assert moondeck.static_file("/no-such-file.js") is None
 
 
+def _imports(source):
+    """The relative modules a module's static imports name: `import x from "./a.js"` and the side-effect form `import "./a.js"`."""
+    return re.findall(r'^import (?:[^;]*? from )?"\./([\w.-]+)";', source, re.M)
+
+
+def test_the_module_walk_follows_side_effect_imports():
+    assert _imports('import { a } from "./a.js";\nimport "./b.js";\nimport "/ui/c.js";\nconst x = 1;') == ["a.js", "b.js"]
+
+
 def _reached(entry):
     """Every module `entry` reaches by relative imports, transitively, itself included."""
     seen, todo = set(), [entry]
@@ -35,13 +44,13 @@ def _reached(entry):
         if name in seen:
             continue
         seen.add(name)
-        todo += re.findall(r'^import [^;]*? from "\./([\w.-]+)";', (ROOT / "src" / "ui" / name).read_text(), re.M)
+        todo += _imports((ROOT / "src" / "ui" / name).read_text())
     return seen
 
 
 def test_every_module_the_map_and_its_popup_import_is_served_beside_them():
     # A browser loads them from /ui/ and resolves their imports there, so each module they reach must be a served path.
-    for entry, expected in (("devicemap.js", {"help.js"}), ("devicepopup.js", {"deviceinstall.js", "devicemap.js", "install-picker.js", "releases.js", "semver.js", "uikit.js"})):
+    for entry, expected in (("devicemap.js", {"help.js"}), ("devicegroup.js", {"devicepopup.js", "deviceinstall.js", "install-picker.js", "releases.js", "uikit.js"}), ("devicepopup.js", {"deviceinstall.js", "devicemap.js", "install-picker.js", "releases.js", "semver.js", "uikit.js"})):
         reached = _reached(entry)
         assert expected <= reached, entry   # the walk reads the imports it should
         assert all(moondeck.shared_ui_file(f"/ui/{name}") for name in reached), sorted(n for n in reached if not moondeck.shared_ui_file(f"/ui/{n}"))

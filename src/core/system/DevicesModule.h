@@ -17,7 +17,7 @@
 #include "core/system/DeviceGroup.h"       // the groups under Devices, which a row names and whose missing members it marks
 #include "core/system/DeviceGroupSync.h"   // the groups' definitions between devices, on the socket this module owns beside the presence one
 #include "core/util/Addressing.h"         // sendAddressed, and the network's multicast evidence
-#include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board resolves from this list, and a status names it
+#include "core/util/NameResolver.h"       // setNameSource: an address setting naming a board or a group resolves from this list, and a status names it
 #include "core/util/build_info.h"         // kVersion, kFirmwareName: this device's own row carries what it runs
 #include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
 #include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
@@ -37,14 +37,6 @@ namespace mm {
 /// The Discovery card under Devices, listening once the network is up; the list is rebuilt within seconds of boot.
 ///
 /// @guide
-///
-/// ## The map
-///
-/// This device is the ringed center; lines are traffic, quiet devices sit beneath. Nodes show lights, address, version and services. Scroll zooms, drag pans, ⌖ resets; the bar shows IP and version or hides traffic. Click or Enter opens details and Identify, a blink of its lights. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html).
-///
-/// ## The emoji
-///
-/// Lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.
 ///
 /// ## As many devices as memory holds
 ///
@@ -126,6 +118,7 @@ public:
         controls_.addText("deletedGroups", deletedGroups_, sizeof(deletedGroups_));
         controls_.setHidden(controls_.count() - 1, true);   // saved, so a group deleted anywhere stays deleted here across a reboot
         /// The discovered devices; a row expands to its details.
+        /// @guide The map: this device is the ringed center, lines are traffic, quiet devices sit beneath. Scroll zooms, drag pans, ⌖ resets; the bar searches, greying out the rest, and shows IP, version and traffic. A node opens its details and Identify, a group's box its update. Everyone on the network sees it: [security](https://moonmodules.org/MoonLight/explanation/security.html). Emoji for lights: 💡 LEDs, 🔆 PWM lights, 🔲 a HUB75 panel, 📺 a screen, 🧱 a ColorLight card, 🏮 Hue, 📡 sent over the network, 🎥 a video stream, 🎯 moving heads; 🛟 MoonBase holds the board. Services and traffic: 🌐 the web page, 🎛️ OSC, 🎹 RTP-MIDI, 🔊 audio sync, 🎭 Art-Net, 🎚️ E1.31, 📦 DDP, 🐙 the WLED API, which Home Assistant polls.
         /// @field name The device's name, else its address.
         /// @field ip Its address on the network.
         /// @field url Its own page, opened in a new tab.
@@ -223,7 +216,7 @@ public:
     /// Offer this list as the source address settings resolve board names from.
     void setup() override {
         MoonModule::setup();
-        NameResolver::setNameSource(&resolveBoard, &boardNameAt);
+        NameResolver::setNameSource(&resolveBoard, &boardNameAt, &groupMembersOf);
         setStatus(statusBuf_);
         parseAdded();   // a saved list is restored without a change hook
     }
@@ -246,6 +239,15 @@ public:
         deviceCount_ = flowCount_ = serviceCount_ = 0;   // the base frees their blocks
         MoonModule::release();
     }
+
+    /// Read the groups' messages, so a shared control changed on a member applies here within a frame or two.
+    void tick20ms() MM_NONBLOCKING override {
+        MoonModule::tick20ms();
+        if (parent()) groupSync_.receive(*parent());
+    }
+
+    /// What a group's status adds about the shared controls, or null.
+    const char* sharedNote() const MM_NONBLOCKING { return groupSync_.sharedNote(); }
 
     /// Drain inbound packets, announce ourselves on a slow cadence, and age out the silent.
     void tick1s() MM_NONBLOCKING override {
@@ -895,6 +897,18 @@ private:
         const DevicesModule* devices = active();
         return devices && devices->addressOf(name, ip);
     }
+
+    /// A receiver list's group name as its members, through whichever instance is active: NameResolver::GroupSource.
+    static bool groupMembersOf(const char* name, Receiver* out, uint8_t& n, uint8_t cap, uint8_t& left) MM_NONBLOCKING {
+        const DevicesModule* devices = active();
+        return devices && devices->appendGroupMembers(name, out, n, cap, left);
+    }
+
+    /// The device group under Devices whose shared name is `name`, letter case aside as a host name's is, or null.
+    const DeviceGroup* groupNamed(const char* name) const MM_NONBLOCKING;
+
+    /// The members of the group named `name` as receivers, each at its row's address while heard lately: NameResolver::GroupSource.
+    bool appendGroupMembers(const char* name, Receiver* out, uint8_t& n, uint8_t cap, uint8_t& left) const MM_NONBLOCKING;
 
     /// Drop whatever has gone unheard past its window, compacting in place.
     void ageOut(const uint8_t local[4]) {

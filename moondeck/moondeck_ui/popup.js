@@ -45,7 +45,7 @@ export function moondeckActions(row, dlg) {
     const builds = fetch("/api/local-builds").then(r => r.json()).then(j => j.builds || []).catch(() => []);
     const parts = [];
     if (row.usb) parts.push(usbActions(row, note, dlg, builds));
-    if (row.type === "MoonLight" && row.mac) parts.push(liveTestToggle(row));
+    if (row.type === "MoonLight" && row.mac) parts.push(liveTestToggle(row, note));
     if (row.type === "MoonLight" && row.ip && !row.port) parts.push(networkInstall(row, note, builds, dlg));
     if (!parts.length) return;
     box.append(el("strong", "", "MoonDeck"), ...parts, note);
@@ -109,14 +109,23 @@ function usbActions(row, note, dlg, builds) {
 }
 
 // Whether the live tests run against this device, stored by its MAC in moondeck.json.
-function liveTestToggle(row) {
+function liveTestToggle(row, note) {
     const label = el("label", "moondeck-popup-actions");
     const box = el("input");
     box.type = "checkbox";
     box.disabled = true;
     const mac = row.mac.toLowerCase();
     fetch("/api/state").then(r => r.json()).then(s => { box.checked = (s.liveTests || []).includes(mac); box.disabled = false; }).catch(() => {});
-    box.addEventListener("change", () => post("/api/live-tests", { mac, selected: box.checked }));
+    box.addEventListener("change", async () => {
+        const want = box.checked;
+        box.disabled = true;   // one save at a time
+        const res = await post("/api/live-tests", { mac, selected: want });
+        if (res.error) {   // the save did not reach MoonDeck: the box shows the last confirmed value again
+            box.checked = !want;
+            note.textContent = "The live-test selection was not saved.";
+        }
+        box.disabled = false;
+    });
     label.title = "The Live tab's tests run against every device selected here, found by its MAC when they start";
     label.append(box, el("span", "", "Use in live tests"));
     return label;

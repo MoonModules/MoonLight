@@ -121,7 +121,7 @@ _HELP_LINE_RULE = "help line missing"
 _TAG_GROUP_RULE = "tag emoji on one module"
 # A declaration's comment is its `///`, which the help, the docs and the IDE hover read; a `//` above it reaches none of them, so a note there is either the declaration's doc or a line of the body.
 _NOTE_ON_DECL_RULE = "// on a declaration"
-MAX_MORE_WORDS = 40      # a control's longer help, its `@guide` section titled with the control
+MAX_MORE_WORDS = 120     # a control's longer help, its `@guide` section titled with the control: room for a control that is a whole view, as Discovery's map with its legend
 MAX_GUIDE_WORDS = 60     # any other `@guide` section
 MAX_HELP_WORDS = 250     # the summary, the guide and every control's longer help together
 # A paragraph spread over several lines: one topic is one paragraph and one line, cut to fit the cap rather than split. Staged as the line cap is, a new rule over comments written before it.

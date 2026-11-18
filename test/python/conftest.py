@@ -1,11 +1,11 @@
-"""Every test imports MoonDeck, its build scripts, the checks and the docs build by module name, and keeps the checks' findings out of the repository's own findings folder, which a real run of a check fills."""
+"""Every test imports MoonDeck, its build, check, diagnosis and scenario scripts and the docs build by module name, and keeps the checks' findings out of the repository's own findings folder, which a real run of a check fills."""
 
 import sys
 from pathlib import Path
 
 import pytest
 
-for folder in ("", "build", "check", "docs", "report"):
+for folder in ("", "build", "check", "diag", "docs", "report", "scenario"):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "moondeck" / folder))
 
 

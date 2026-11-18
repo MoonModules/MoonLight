@@ -10,6 +10,7 @@ import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./
 import { encodeGif } from "./gif.js";
 import { mountDeviceMap } from "./devicemap.js";
 import { openDevicePopup } from "./devicepopup.js";
+import { openGroupPopup } from "./devicegroup.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
 import { UPDATE_TTL_MS, channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
 import { installFirmware, INSTALL_KINDS, MOONBASE_SILENT_MSG, moonbaseStatus, waitForMoonBase } from "./deviceinstall.js";
@@ -1577,10 +1578,13 @@ function showUpdateOverlay() {
         msg.textContent = on ? "Writing to flash\u2026" : base;
         bar.classList.toggle("fw-stalled", on);
     };
+    // The page behind is inert while the overlay owns the install, so no key reaches a second Install; a dismissed failure gives it back.
+    const behind = [...document.body.children].filter(el => !el.inert);
+    for (const el of behind) el.inert = true;
     const dismiss = document.createElement("button");
     dismiss.textContent = "close";
     dismiss.style.display = "none";
-    dismiss.addEventListener("click", () => { clearInterval(watch); ov.remove(); });
+    dismiss.addEventListener("click", () => { clearInterval(watch); for (const el of behind) el.inert = false; ov.remove(); });
     const cancel = document.createElement("button");
     cancel.textContent = "cancel install";
     let uploadCtl = null;   // the in-flight file upload's AbortController, set by the flow
@@ -2234,7 +2238,8 @@ function createCard(mod, depth) {
                     a.remove();
                     return;
                 }
-                if (await confirmed()) install({ url: binaryUrl, sha256: entry?.sha256 });
+                // Answered once the flow ended, so the picker stays locked meanwhile; the overlay says how it went.
+                if (await confirmed()) return install({ url: binaryUrl, sha256: entry?.sha256 }).then(() => "");
             },
         });
 
@@ -4114,6 +4119,7 @@ function buildListPads(container, rows, opts) {
 // renderer, the list's row age, the update badge's rule and release list, and the panel's room for the picture.
 const MAP_HOOKS = {
     openNode: (row, opts) => openDevicePopup(row, opts),
+    openGroup: (group, opts) => openGroupPopup(group, opts),
     detail: (panel, fields, opts) => fillListDetail(panel, fields, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName)),
     rowAge: (row) => rowAgeClass(row),
     update: (row, releases) => channelUpdate(row, releases),

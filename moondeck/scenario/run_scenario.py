@@ -276,10 +276,23 @@ def _run_one(path: Path, update_contract: bool, update_reason: str | None, updat
     return 0
 
 
+def _unchanged(key: str, paths) -> bool:
+    """Whether the runner and definitions still fingerprint as `key`: a definition edited while the run went is one some scenario did not read, so that run is not kept."""
+    try:
+        return _suite_output.fingerprint(RUNNER, paths) == key
+    except OSError:
+        return False
+
+
 def _run_many(paths, args, whole: bool = False) -> int:
     """Run every scenario and print the same pass/fail/skip summary mm_scenarios prints; a `whole` run keeps its output for the KPI."""
     codes, results, output = [], [], []
-    key = _suite_output.fingerprint(RUNNER, paths) if whole else None   # the definitions as this run reads them, before it can rewrite any
+    key = None   # the definitions as this run reads them, before it can rewrite any; None keeps no output
+    if whole:
+        try:
+            key = _suite_output.fingerprint(RUNNER, paths)
+        except OSError as e:   # an unreadable runner or definition only costs the kept output: the scenarios still run
+            print(f"Output of {RUNNER.name} will not be kept: {e}", file=sys.stderr)
     for p in paths:
         started = time.time()
         code = _run_one(p, args.update_contract, args.reason, args.update_observed, output)
@@ -291,7 +304,7 @@ def _run_many(paths, args, whole: bool = False) -> int:
     failed = sum(1 for c in codes if c not in (0, SKIPPED))
     summary = f"=== {len(codes)} scenario(s), {len(codes) - failed - skipped} passed, {failed} failed, {skipped} skipped ==="
     print(summary)
-    if whole:
+    if whole and key is not None and not failed and _unchanged(key, paths):   # a failed scenario's measurements are no ticks the KPI may reuse
         _suite_output.keep(RUNNER, "".join(output) + summary + "\n", key)   # the KPI reads this run's ticks instead of running every scenario again
     return 1 if failed else 0
 

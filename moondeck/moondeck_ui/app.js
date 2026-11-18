@@ -596,7 +596,13 @@ async function runScript(script, btn) {
     // the address it answers on now. A selected device that no presence packet or Discovery list names is reported, not run.
     if (script.tab === "live" && script.needs_device) {
         let sel = { devices: [], missing: [] };
-        try { sel = await (await fetch("/api/live-tests")).json(); } catch { /* MoonDeck answers its own page; an empty selection then */ }
+        try {
+            sel = await (await fetch("/api/live-tests")).json();
+        } catch (err) {
+            switchPane("log");
+            appendLog(`\n--- The live-test selection could not be loaded (${err}), so nothing was run. ---\n`);
+            return;
+        }
         if (sel.missing.length) {
             switchPane("log");
             appendLog(`\n--- Not found on the network, skipped: ${sel.missing.join(", ")} ---\n`);
@@ -622,7 +628,7 @@ async function runScriptOnce(script, btn, extraParams) {
     if (script.needs_uiclip) params.uiclip = state.uiclip || "";
     if (script.needs_uiproject) params.uiproject = state.uiproject || "";
     if (script.needs_module) params.module = state.module;
-    if (script.pass_device_model && !params.device_model) params.device_model = state.provisionDeviceModel || "";
+    if (script.pass_device_model && !("device_model" in params)) params.device_model = state.provisionDeviceModel || "";
     for (const flag of (script.flags || [])) {
         const stateKey = `flag_${script.id}_${flag.id}`;
         params[`flag_${flag.id}`] = stateKey in state ? state[stateKey] : flag.default;
@@ -639,7 +645,12 @@ async function runScriptOnce(script, btn, extraParams) {
     const dot = document.querySelector(`.status-dot[data-id="${script.id}"]`);
     if (dot) { dot.className = "status-dot running"; }
 
+    // The card's button and dot belong to the newest run: an older run finishing after a newer start leaves them alone.
+    const previous = btn._run;
+    const run = btn._run = {};
     function resetBtn(exitCode) {
+        if (btn._run !== run) return;
+        btn._run = null;
         btn.classList.remove("running");
         btn.textContent = "Run";
         if (dot) {
@@ -655,7 +666,8 @@ async function runScriptOnce(script, btn, extraParams) {
         }).then(r => r.json()).then(result => {
             if (result.error) {
                 appendLog("Error: " + result.error + "\n");
-                resetBtn(1);
+                if (previous) btn._run = previous;   // a rejected start leaves the run still active as it was
+                else resetBtn(1);
                 resolve(false);
                 return;
             }
@@ -1060,7 +1072,12 @@ function setupNetworkBar() {
         state.active_network = name;
         state.active_network_user_pinned = true;
         await saveState();
-        state = await (await fetch("/api/state")).json();
+        // Only the subnet the server gave the new network is taken from the reload: replacing the whole state would undo a selection made
+        // while the reload was pending.
+        const fresh = await (await fetch("/api/state")).json();
+        const mine = state.networks.find(n => n.name === name);
+        const given = (fresh.networks || []).find(n => n.name === name);
+        if (mine && given) mine.subnet = given.subnet;
         renderNetworkBar();
         refreshPorts();
     });

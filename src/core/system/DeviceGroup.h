@@ -8,10 +8,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>   // std::memcmp: a member row still waiting for its device
 
 namespace mm {
 
 namespace osc { class Writer; class Reader; }
+class DevicesModule;
 namespace json { struct JsonDoc; struct JsonNode; }
 
 /// Devices that act as one, picked from Discovery and kept by their MAC, so a rename or a new address keeps the group.
@@ -30,6 +32,14 @@ namespace json { struct JsonDoc; struct JsonNode; }
 /// The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.
 ///
 /// A device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again.
+///
+/// ## Shared controls
+///
+/// Membership alone makes a device follow the group's controls. A switch, encoder or fader changed on one member sets what it drives on every member; an effects preset applied on one is applied on the others. Members restarting take the group's values. A slot holds a byte, so a wider control is shared as its slot sees it.
+///
+/// ## Reaching the members
+///
+/// Type the group's name in the `receivers` of OSC, audio sync or Network Send, a word of letters, digits, `-`, `_` or `.`, and each member is reached by unicast at its current address, this device left out. A member gone missing is skipped until it is heard again.
 ///
 /// @technical
 ///
@@ -93,7 +103,7 @@ public:
     /// Remove one member by its row id: a removal stamped and shared.
     bool deleteListRow(uint32_t id) override;
 
-    /// Set a member's device, by its index in the offered devices or by its MAC.
+    /// Set a member's device, by its index in the offered devices or by its MAC; a device it replaces is a removal, stamped and shared.
     bool setListRowField(uint32_t id, const char* field, const char* valueJson) override;
 
     /// Rebuild the members from the saved list, their stamps observed so later edits are newer; a list that does not parse or fit leaves the members as they were.
@@ -122,14 +132,21 @@ public:
     /// Whether the device with this MAC is a member.
     bool hasMember(const uint8_t mac[6]) const MM_NONBLOCKING;
 
+    /// Call `fn(mac)` for each member holding a device, removed ones aside, in the order the rows hold them.
+    template <class Fn>
+    void forEachMember(Fn&& fn) const MM_NONBLOCKING {
+        for (ListRow i = 0; i < count_; i++)
+            if (!members_[i].removed && std::memcmp(members_[i].mac, kNoDevice, 6) != 0) fn(members_[i].mac);
+    }
+
     /// Whether this device made the group: its id starts with this device's MAC.
     bool madeHere() const;
 
     /// An order-independent digest of the definition: equal on two devices exactly when they hold the same one.
     uint32_t digest() const;
 
-    /// The newest stamp in the definition, which a deletion must beat.
-    Stamp newest() const;
+    /// A copy that differs from this one was heard: Trickle's interval goes back to its shortest, so this device sends soon (RFC 6206 4.2 step 6).
+    void hearInconsistent();
 
     /// Whether Trickle says to send the definition now; cleared by the call.
     bool sendDue() { const bool due = sendDue_; sendDue_ = false; return due; }
@@ -140,7 +157,7 @@ public:
     /// Write chunk `chunk` of the definition, `per` members, the name and the whole definition's digest in each.
     size_t writeChunk(uint8_t* out, size_t cap, uint16_t chunk, uint16_t per) const;
 
-    /// Merge one received chunk, its id read by the caller, whole or not at all; true when it changed the definition, which is then saved. `wantName` names a newer name the module should take.
+    /// Merge one received chunk, its id read by the caller; a malformed one is ignored whole, and a member memory refuses waits for the next copy. True when it changed the definition, which is saved; `wantName` names a newer name to take.
     bool merge(osc::Reader& r, const char*& wantName);
 
     /// The OSC address the definition travels on.
@@ -150,6 +167,9 @@ public:
     Stamp stampNow();
 
 private:
+    /// The MAC of a member row still waiting for its device.
+    static constexpr uint8_t kNoDevice[6] = {};
+
     /// One member: its row id, its identity, the name it last had, and the stamp of its last addition or removal.
     struct Member {
         uint32_t id = 0;        ///< the handle the editor addresses the row by
@@ -175,8 +195,10 @@ private:
     void startInterval(uint8_t seconds);
     /// The fleet's clock, in the Devices container, or null outside one.
     Hlc* clock();
-    /// Count the members and the missing among them for the status.
+    /// Count the members and the missing among them for the status, with what the shared controls add.
     void refreshStatus() MM_NONBLOCKING;
+    /// The members with a device, the unheard among them counted in `missing`.
+    ListRow countMembers(const DevicesModule* discovery, ListRow& missing) const MM_NONBLOCKING;
     /// How many members with a device the chunk starting at `from` carries, at most `per`.
     ListRow membersFrom(ListRow from, uint16_t per) const;
     /// One member's part of a chunk: MAC, stamp, removed, name.
@@ -197,7 +219,7 @@ private:
     char     groupName_[24] = "";   ///< the shared name, a last-writer-wins register, saved hidden
     Stamp    nameStamp_{};   ///< when and by whom the shared name was last set
     char     nameHlc_[40] = "";   ///< the name's stamp as "hlc:writer" in hex, saved hidden
-    char     status_[40] = "";    ///< "3 members, 1 missing"
+    char     status_[80] = "";    ///< "3 members, 1 missing, shared controls full"
     uint8_t  statusTick_ = 0;     ///< ticks toward the next status
     uint8_t  interval_ = 1, sendAt_ = 1, elapsed_ = 0, heard_ = 0;   ///< Trickle: the interval in seconds, its send moment, seconds into it, consistent copies heard
     bool     sendDue_ = false;    ///< the send moment came with no consistent copy heard

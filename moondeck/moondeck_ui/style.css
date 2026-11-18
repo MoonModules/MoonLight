@@ -458,6 +458,6 @@ dialog.graph-popup .control-label { flex: 0 0 clamp(100px, 25%, 160px); min-widt
 dialog.graph-popup .control-row select, dialog.graph-popup .control-row input[type="text"] {
     flex: 1; background: #1a1a2e; border: 1px solid var(--border); color: var(--fg); padding: 4px 8px; border-radius: 4px; font-size: 13px;
 }
-dialog.graph-popup .control-row button.action-btn { background: var(--accent); border: none; color: white; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
+dialog.graph-popup .control-row button.action-btn { background: var(--accent); border: none; color: #1a1a2e; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
 dialog.graph-popup .control-row button.action-btn:hover:not(:disabled) { filter: brightness(1.15); }
 dialog.graph-popup .control-row button.action-btn:disabled { opacity: 0.45; cursor: default; }

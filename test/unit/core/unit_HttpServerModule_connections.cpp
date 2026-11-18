@@ -127,15 +127,19 @@ TEST_CASE("HttpServer: a checkout's UI folder serves its script modules and impo
     const UiFolder folder(dirName.c_str());
     http.setup();
 
-    const auto statusOf = [&](const char* path) {
+    const auto replyTo = [&](const char* path) {
         mm::platform::TcpConnection client;
         REQUIRE(connectAndAccept(http, client, kTestPort));
         const std::string reply = getUntilClosed(http, client, path);
         client.close();
-        return reply.substr(0, 12);
+        return reply;
     };
+    const auto statusOf = [&](const char* path) { return replyTo(path).substr(0, 12); };
     CHECK(statusOf("/panel.js") == "HTTP/1.1 200");
-    CHECK(statusOf("/devicemap.css") == "HTTP/1.1 200");
+    const std::string sheet = replyTo("/devicemap.css");
+    CHECK(sheet.substr(0, 12) == "HTTP/1.1 200");
+    CHECK(sheet.find("Content-Type: text/css") != std::string::npos);
+    CHECK(sheet.find(".list-graph {}") != std::string::npos);
     CHECK(statusOf("/ui_embedded.h") == "HTTP/1.1 404");
 #ifndef _WIN32
     // On Windows a colon names a drive or a data stream, a way out of the folder, so a name holding one is refused. A file here can carry one, which shows the refusal.

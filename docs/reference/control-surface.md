@@ -198,6 +198,7 @@ A pad's light listens on `/mm/padstate/N`: dark when the pad is empty, dim when 
 With `feedback` on, a control that changes anywhere (the web UI, a preset recall, an audio-reactive effect) is mirrored back to the surface. That keeps a client honest and moves a motorized fader.
 
 - `addressing` picks where it goes: `unicast` to each of `receivers`, or to whoever last wrote when `receivers` is empty, or `multicast` to `group`.
+- `receivers` takes a device group's name beside addresses and names: each member, this device left out, at its current address, on the OSC port it listens on. Members of a group already share their controls and looks with no OSC set up; this is for a show controller feeding every board in a room.
 - The default `group`, `239.255.77.78`, sits beside discovery's own group, so multicast works with nothing to fill in. A second rig on the same network picks another.
 - `feedbackPort` is where the client LISTENS, which is not the port the device listens on (Open Stage Control calls its own `osc-port`).
 

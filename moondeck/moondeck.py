@@ -79,6 +79,7 @@ sys.path.insert(0, str(SCRIPTS_DIR / "build"))
 from build_esp32 import APP_BIN, FIRMWARES as ESP32_BUILDS, build_dir_for  # noqa: E402
 # The presence MoonLight devices announce, heard for the Live tab's map while MoonDeck runs.
 sys.path.insert(0, str(SCRIPTS_DIR))
+import _moondeck_config  # noqa: E402
 import _presence  # noqa: E402
 import _usb  # noqa: E402
 PRESENCE = _presence.Listener()
@@ -276,37 +277,11 @@ def _get_local_subnet():
 # ---------------------------------------------------------------------------
 
 def load_state():
-    """MoonDeck's state from moondeck.json, an older file's shape carried over by _migrate_state; a fresh state when there is none."""
+    """MoonDeck's state from moondeck.json, an older file's shape carried over by _moondeck_config.migrate_state; a fresh state when there is none."""
     if STATE_FILE.exists():
         with open(STATE_FILE) as f:
-            return _migrate_state(json.load(f))
+            return _moondeck_config.migrate_state(json.load(f))
     return {"networks": [], "active_network": "", "tab": "repo"}
-
-
-# The keys of an older moondeck.json that load drops: the device registry a subnet scan filled, and what only that scan and its table read.
-_DROPPED_KEYS = ("devices", "env", "onlineOnly", "_scanned_subnet", "_found_count")
-
-
-def _migrate_state(state: dict) -> dict:
-    """An older moondeck.json in the shape MoonDeck reads, in place; a file in that shape passes through unchanged.
-
-    Each network keeps its name, subnet, WiFi credentials and port. Its device list goes: a device ticked `selected` becomes a MAC in
-    `liveTests`, and one whose adapter serial an Identify recorded (`usbSerial`, `probedChip`) an entry in `usbMacs`. A file from before
-    networks, its devices and port at the top level, becomes one network named Home holding that port.
-    """
-    if "networks" not in state and ("devices" in state or "port" in state):
-        state["networks"] = [{"name": "Home", "subnet": "", "wifi": {"ssid": "", "password": ""}, "port": state.pop("port", "")}]
-        state["active_network"] = "Home"
-    devices = (state.get("devices") or []) + [d for n in state.get("networks") or [] for d in n.pop("devices", None) or []]
-    for d in devices:
-        mac = (d.get("mac") or "").strip().lower()
-        if mac and d.get("selected") and mac not in state.setdefault("liveTests", []):
-            state["liveTests"].append(mac)
-        if mac and d.get("usbSerial"):
-            _usb.remember_probe(state.setdefault("usbMacs", {}), d["usbSerial"], {"mac": mac, "chip": d.get("probedChip", "")})
-    for key in _DROPPED_KEYS:
-        state.pop(key, None)
-    return state
 
 
 _MAC = re.compile(r"([0-9a-f]{2}:){5}[0-9a-f]{2}")   # a MAC as the map's rows carry it
@@ -568,7 +543,13 @@ def describe_serial_ports() -> list[dict]:
 def identify_ports(paths: list[str]) -> dict:
     """Probe each present port of `paths` with esptool, which resets its board, and remember each MAC learned by its adapter's serial."""
     present = _usb.present_ports()
-    probed = {p: _usb.probe_port_chip(p) for p in paths if p in present}   # never an arbitrary client string reaching esptool's --port
+    probed = {}
+    for p in paths:
+        if p not in present:   # only a present port reaches esptool's --port, not an arbitrary client string
+            continue
+        info = _usb.probe_port_chip(p)
+        if _usb.read_usb_ports().get(p, {}) == present[p]:   # the adapter that was probed is the one the key names
+            probed[p] = info
 
     def remember(state):
         cache = state.setdefault("usbMacs", {})
@@ -581,7 +562,7 @@ def identify_ports(paths: list[str]) -> dict:
 def live_tests(state: dict) -> dict:
     """The live tests' devices, selected by MAC: {devices: [{mac, name, host}] at the address each answers on now, missing: [mac]}."""
     macs = state.get("liveTests") or []
-    found = _presence.resolve(macs, _presence.known_rows(PRESENCE.rows())) if macs else {}
+    found = _presence.resolve(macs, _presence.known_rows(PRESENCE.rows(), want=macs)) if macs else {}
     return {"devices": [found[m] for m in macs if m in found], "missing": [m for m in macs if m not in found]}
 
 
@@ -592,7 +573,10 @@ def local_builds() -> list[dict]:
     for fw in sorted(ESP32_BUILDS):
         image = build_dir_for(fw) / APP_BIN
         if image.is_file():
-            st = image.stat()
+            try:
+                st = image.stat()
+            except OSError:   # a rebuild removed it since is_file
+                continue
             out.append({"firmware": fw, "chip": _usb.firmware_to_chip(fw), "size": st.st_size, "age": int(now - st.st_mtime)})
     return out
 
@@ -742,11 +726,13 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
             # (unless the user has pinned a different one — see
             # _auto_select_network). Persist the selection back so the next
             # load is stable when the host's subnet hasn't changed.
-            state = load_state()
-            before = state.get("active_network")
-            _auto_select_network(state, _get_local_subnet())
-            if state.get("active_network") != before:
-                save_state(state)
+            subnet = _get_local_subnet()   # slow, so before the lock
+            with _state_write_lock:   # a POST's write lands before this read or after this save, one at a time
+                state = load_state()
+                before = state.get("active_network")
+                _auto_select_network(state, subnet)
+                if state.get("active_network") != before:
+                    save_state(state)
             self._send_json(state)
 
         elif self.path == "/api/running":
@@ -816,7 +802,11 @@ class MoonDeckHandler(http.server.BaseHTTPRequestHandler):
 
     def _send_file(self, path, content_type, data=None):
         """One file, whole, with its type, revalidated on every load as every file MoonDeck serves is."""
-        data = path.read_bytes() if data is None else data
+        try:
+            data = path.read_bytes() if data is None else data
+        except OSError:   # a file a rebuild removed since the request named it
+            self.send_error(404)
+            return
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))

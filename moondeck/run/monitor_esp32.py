@@ -114,7 +114,7 @@ def main():
 
     # Only the board on this port, and restored however the monitor ends: MoonDeck's Stop sends SIGTERM, whose default skips the restore.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
-    with raised_log_level(device_ips_for_port(args.port), LOG_INFO, background=True):
+    with raised_log_level(lambda: device_ips_for_port(args.port), LOG_INFO, background=True):   # resolved in the raiser's thread, so the monitor starts at once
         with open(LOG_FILE, "w") as log:
             try:
                 while True:

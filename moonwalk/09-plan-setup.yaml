@@ -90,9 +90,15 @@ processes:
       - id: linux
         say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh; ccache --max-size 20G" } }
+        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
         detail: |
-          GCC 12 or Clang 15 from your distribution, and uv from astral's installer; ccache sized for every target, as on macOS.
+          GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
+      - id: linux-cache
+        say: Size ccache for every target.
+        given: [{ input: platform, equals: Linux }]
+        when: { run: { command: "ccache --max-size 20G" } }
+        detail: |
+          Its own step, so a failed install reports its own status; the same size as on macOS.
       - id: windows
         say: Install CMake and the Visual Studio Build Tools.
         given: [{ input: platform, equals: Windows }]

@@ -31,8 +31,8 @@ export const fwSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // and the Devices map share.
 export async function pollUntil(read, done, ms, everyMs = 3000) {
     const deadline = Date.now() + ms;
-    while (Date.now() < deadline) {
-        await fwSleep(everyMs);
+    for (let left = ms; left > 0; left = deadline - Date.now()) {
+        await fwSleep(Math.min(everyMs, left));   // the last ask at the deadline, not a wait past it
         const got = await read();
         if (got && done(got)) return got;
     }

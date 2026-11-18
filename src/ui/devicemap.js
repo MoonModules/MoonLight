@@ -10,6 +10,7 @@ import { peerFirmware } from "./deviceinstall.js";
 // The hooks a page passes; each has a default that does as little as it can, so a page passing none still shows the map.
 const NO_HOOKS = {
     openNode() {},                          // (row, opts): a node was clicked or opened from the keyboard
+    openGroup() {},                         // ({id, name, rows}, opts): a group's box was clicked or opened from the keyboard
     rowAge: () => "",                       // (row): the age class its row reads as, "age-fresh" and kin
     update: () => null,                     // (row, releases): the update its channel offers, {label}, or null
     releases: () => null,                   // (): the release list, or a promise of it
@@ -31,6 +32,7 @@ const GRAPH_PAD_X = 12;
 const GRAPH_SHOW = [["ip", "IP", false], ["version", "version", false], ["traffic", "traffic", true]];   // what a viewer shows or hides, and its default; a node's lights and services, its emoji, always show
 const GRAPH_SHOW_KEY = "MoonLight.graph.show.v2";   // v2: address and version start hidden
 const GRAPH_ZOOM_MAX = 8;   // the closest the map zooms in, eight times
+const GRAPH_WLED_ASK_MS = 60000, GRAPH_WLED_INFO_MS = 600000;   // a WLED asked again a minute after no answer, ten minutes after one, as an update in place moves its version
 const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its four label lines inside the cell
 const GRAPH_LABEL_DY = 20, GRAPH_LINE_H = { "graph-label": 12, "graph-sublabel": 11, "graph-services": 13 };   // a node's first baseline below its dot, and each line's height
 const GRAPH_CHAR_W = { "graph-label": 6.2, "graph-sublabel": 5, "graph-services": 13, "graph-edge-label": 5.4 };   // a character's width, about, at each line's font size
@@ -71,17 +73,45 @@ function layoutGraph(nodes, links, pos, w = GRAPH_W, minH = 0) {
     if (force.length > 1) areaH += Math.max(0, minH - natural);   // a taller box gives the linked nodes the room
     // A resized picture carries its nodes with it, in proportion, so it grows rather than reshuffles.
     const was = pos.frame;
-    if (was && (was.w !== w || was.areaH !== areaH)) {
+    if (was && was.w > 0 && was.areaH > 0 && areaH > 0 && (was.w !== w || was.areaH !== areaH)) {   // only a frame with a force area scales
         for (const p of pos.values()) if (!p.idle) { p.x *= w / was.w; p.y *= areaH / was.areaH; }
     }
     pos.frame = { w, areaH, natural };
     layoutForce(nodes, links, force, pos, areaH, w);
     separateNodes(nodes, force, pos, areaH, w);
+    keepOutOfGroups(nodes, links, force, pos, areaH, w);
     idle.forEach((i, at) => {
         pos.set(nodes[i].key, { x: cellW * (at % cols) + cellW / 2,
                                 y: areaH + GRAPH_CELL_H * Math.floor(at / cols) + GRAPH_CELL_DOT, idle: true });
     });
     return Math.max(areaH + gridH, minH);
+}
+
+// A group's box holds its members only: a linked node that is no member and sits inside a box, its cell overlapping it, is pushed out
+// across the box's nearest side, a few passes, since a push can land it in another box. The groups are read from their links (groupLinks),
+// each a star from its first member, and the box is the one drawn (groupBox).
+function keepOutOfGroups(nodes, links, force, pos, areaH, w = GRAPH_W) {
+    const groups = new Map();
+    for (const [i, j, , , isGroup] of links) if (isGroup) (groups.get(i) || groups.set(i, new Set([i])).get(i)).add(j);
+    for (let pass = 0; pass < 8 && groups.size; pass++) {
+        let moved = false;
+        for (const members of groups.values()) {
+            const b = groupBox([...members].map(i => pos.get(nodes[i].key)));
+            const x0 = b.x - GRAPH_CELL_W / 2, x1 = b.x + b.w + GRAPH_CELL_W / 2, y0 = b.y - GRAPH_CELL_DOT, y1 = b.y + b.h + GRAPH_CELL_DOT;
+            for (const i of force) {
+                const p = pos.get(nodes[i].key);
+                if (members.has(i) || p.x <= x0 || p.x >= x1 || p.y <= y0 || p.y >= y1) continue;
+                // The nearest side the picture's edge leaves room beyond, so a box against an edge sends the node out another way.
+                const inside = (q) => q.x > x0 && q.x < x1 && q.y > y0 && q.y < y1;
+                const tries = [[x0 - p.x, 0], [x1 - p.x, 0], [0, y0 - p.y], [0, y1 - p.y]].sort((a, c) => Math.abs(a[0] + a[1]) - Math.abs(c[0] + c[1]))
+                    .map(([dx, dy]) => { const q = { x: p.x + dx, y: p.y + dy }; graphInside(q, areaH, w); return q; });
+                const to = tries.find(q => !inside(q)) || tries[0];
+                p.x = to.x; p.y = to.y;
+                moved = true;
+            }
+        }
+        if (!moved) return;
+    }
 }
 
 // A linked node kept within the force area, its labels inside the picture.
@@ -264,12 +294,15 @@ export function mountDeviceMap(container, rows, details, opts) {
 
 function refreshPeerGraphs(container) {
     const a = container._graphArgs;
-    if (!a || !a.opts || container._peerFetching) return;
-    if (Date.now() - (container._peerAt || 0) < PEER_REFRESH_MS) return;
-    if (!container.isConnected || container.offsetParent === null) return;   // asked only while the map shows
+    if (!a || !a.opts) return;
     const own = a.rows.map((r, i) => Object.assign({}, r, a.details[i] || {}));
     const self = own.find(r => r.self);
-    if (!self) return;
+    // A list with no device of its own, as MoonDeck's presence rows, has no peers: the graphs a list before it gathered go, and a round
+    // still in flight fills the map dropped with them.
+    if (!self) { container._peerGraphs = null; return; }
+    if (container._peerFetching) return;
+    if (Date.now() - (container._peerAt || 0) < PEER_REFRESH_MS) return;
+    if (!container.isConnected || container.offsetParent === null) return;   // asked only while the map shows
     const queue = own.filter(r => !r.self && r.type === self.type && r.url);
     const peers = container._peerGraphs || (container._peerGraphs = new Map());
     // A peer gone from this device's list takes its graph, and what only it saw, off the map.
@@ -321,6 +354,17 @@ function graphGroups(graphs, index) {
     return groups;
 }
 
+// The devices a search matches, by index: every space-separated term, ignoring case, appears in a node's name, address, type, version,
+// firmware, board or one of its groups' names; null for an empty search, which matches the whole map. The map greys out the rest. Pure.
+export function graphMatches(nodes, groups, query) {
+    const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+    if (!terms.length) return null;
+    const groupNames = (i) => [...groups.values()].filter(grp => grp.members.has(i)).map(grp => grp.name);
+    const text = (node, i) => [node.row.name, node.row.ip, node.row.type, node.row.version, node.row.firmware, node.row.board, ...groupNames(i)]
+        .filter(Boolean).join(" ").toLowerCase();
+    return new Set(nodes.map((node, i) => i).filter(i => terms.every(t => text(nodes[i], i).includes(t))));
+}
+
 // The invisible links that pull a group's members together in the force layout, each member to the first: a star, n - 1 links a group.
 function groupLinks(groups) {
     const out = [];
@@ -346,7 +390,7 @@ function buildListGraph(container, rows, details, opts) {
         return { row, key: graphKey(row), self: !!row.self };
     });
     const index = new Map(nodes.map((node, i) => [node.key, i]));
-    const peers = container._peerGraphs || new Map();
+    const peers = (nodes.some(n => n.self) && container._peerGraphs) || new Map();   // a list with no device of its own has no peers
     // A device a peer sees and this one does not joins the map, and a peer's own row adds what it runs and offers to its node.
     for (const [, pg] of peers) {
         for (const row of pg.rows) {
@@ -396,6 +440,8 @@ function buildListGraph(container, rows, details, opts) {
     refreshPeerGraphs(container);
     const pos = container._graphPos || (container._graphPos = new Map());
     for (const key of [...pos.keys()]) if (!index.has(key)) pos.delete(key);   // a device gone takes its spot with it
+    const match = graphMatches(nodes, groups, container._graphQuery || "");   // null: no search, every device shows as it is
+    const dim = (i) => match !== null && !match.has(i);
     // Drawn in real pixels at its box's size: a wider or taller box gives the nodes more room, the text staying its size.
     const box = container.querySelector(".graph-box");
     const w = Math.max(2 * GRAPH_CELL_W, box && box.clientWidth ? box.clientWidth - 2 * GRAPH_PAD_X : GRAPH_W);
@@ -411,7 +457,7 @@ function buildListGraph(container, rows, details, opts) {
     svg.setAttribute("class", "list-graph");
     const full = { x: -GRAPH_PAD_X, y: 0, w: w + 2 * GRAPH_PAD_X, h: height };
     container._graphFull = full;
-    svg.setAttribute("viewBox", graphViewBox(full, container._graphView || {}).join(" "));
+    showGraphView(container, svg);
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     svg.style.height = `${boxH}px`;
     wireGraphZoom(container, svg);
@@ -426,15 +472,27 @@ function buildListGraph(container, rows, details, opts) {
         const rect = document.createElementNS(NS, "rect");
         rect.setAttribute("x", b.x); rect.setAttribute("y", b.y); rect.setAttribute("width", b.w); rect.setAttribute("height", b.h);
         rect.setAttribute("rx", 8);
-        rect.setAttribute("class", "graph-group" + (grp.missing.size ? " graph-group-missing" : ""));
+        rect.setAttribute("class", "graph-group" + (grp.missing.size ? " graph-group-missing" : "") +
+                                   ([...grp.members].every(dim) ? " graph-dim" : ""));
         rect.dataset.group = id;
+        const open = () => hooks(opts).openGroup({ id, name: grp.name, rows: [...grp.members].map(i => nodes[i].row) }, opts);
+        rect.classList.add("graph-link");
+        rect.setAttribute("tabindex", "0");
+        rect.setAttribute("role", "button");
+        rect.setAttribute("aria-label", `${grp.name || "group"}: update`);
+        rect.addEventListener("click", open);
+        rect.addEventListener("keydown", (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            open();
+        });
         const tip = document.createElementNS(NS, "title");
         tip.textContent = `${grp.name}: ${grp.members.size} member${grp.members.size === 1 ? "" : "s"}${grp.missing.size ? `, ${grp.missing.size} missing` : ""}`;
         rect.appendChild(tip);
         svg.appendChild(rect);
         const label = document.createElementNS(NS, "text");
         label.setAttribute("x", b.x + 6); label.setAttribute("y", b.y + 12);
-        label.setAttribute("class", "graph-group-label");
+        label.setAttribute("class", "graph-group-label" + ([...grp.members].every(dim) ? " graph-dim" : ""));
         label.textContent = grp.name;
         svg.appendChild(label);
     }
@@ -444,7 +502,7 @@ function buildListGraph(container, rows, details, opts) {
         const line = document.createElementNS(NS, "line");
         line.setAttribute("x1", a.x); line.setAttribute("y1", a.y);
         line.setAttribute("x2", b.x); line.setAttribute("y2", b.y);
-        line.setAttribute("class", "graph-edge" + (broken ? " graph-edge-broken" : ""));
+        line.setAttribute("class", "graph-edge" + (broken ? " graph-edge-broken" : "") + (dim(i) || dim(j) ? " graph-dim" : ""));
         if (broken) {
             const why = document.createElementNS(NS, "title");
             why.textContent = "sent, but the receiver reports nothing arriving";
@@ -454,7 +512,7 @@ function buildListGraph(container, rows, details, opts) {
         if (labelAt[li]) {
             const t = document.createElementNS(NS, "text");
             t.setAttribute("x", labelAt[li].x); t.setAttribute("y", labelAt[li].y);
-            t.setAttribute("class", "graph-edge-label");
+            t.setAttribute("class", "graph-edge-label" + (dim(i) || dim(j) ? " graph-dim" : ""));
             t.textContent = graphTrafficLabel(label);
             const whole = document.createElementNS(NS, "title");   // the protocol by name, on hover
             whole.textContent = label;
@@ -473,7 +531,8 @@ function buildListGraph(container, rows, details, opts) {
                                 (age === "age-stale" ? " graph-faded" : "") +
                                 (behind ? " graph-behind" : "") +
                                 (node.row.missing ? " graph-missing" : "") +
-                                (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : ""));
+                                (peers.get(node.key)?.state === "silent" ? " graph-unreachable" : "") +
+                                (dim(index.get(node.key)) ? " graph-dim" : ""));
         const kind = graphKind(node.row);
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y); dot.setAttribute("r", node.self ? 9 : 7);
@@ -562,10 +621,18 @@ function graphZoom(full, view, factor, fx = 0.5, fy = 0.5) {
     return { z, cx: nx + nw / 2, cy: ny + nh / 2 };
 }
 
-// Zoom and pan as a map does, and as the preview does: the scroll wheel or a pinch zooms at the pointer,
+// Show the part of the picture the view names. Zoomed in, a touch on the map is the map's to pan; at the whole picture it is the page's, so a
+// swipe scrolls past the map and a pinch zooms the page.
+function showGraphView(container, svg) {
+    const view = container._graphView || {};
+    svg.setAttribute("viewBox", graphViewBox(container._graphFull, view).join(" "));
+    svg.style.touchAction = (view.z || 1) > 1 ? "none" : "";
+}
+
+// Zoom and pan as a map does, and as the preview does: the scroll wheel or a trackpad pinch zooms at the pointer,
 // a drag on the background pans and a double-click on it fits the whole picture again.
 function wireGraphZoom(container, svg) {
-    const apply = () => svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView || {}).join(" "));
+    const apply = () => showGraphView(container, svg);
     const fraction = (e) => {
         const ctm = svg.getScreenCTM();
         if (!ctm) return [0.5, 0.5];
@@ -616,18 +683,20 @@ function graphShown(show, what) {
 }
 
 // A WLED's version and flavor for its node, read from its /json/info, which WLED serves cross-origin; its presence packet carries only its address and name.
-// WLED-MM answers product "MoonModules", WLED "FOSS". Asked once, and again a minute after a WLED that did not answer, as the device asks its added addresses.
+// WLED-MM answers product "MoonModules", WLED "FOSS". Asked again a minute after a WLED that did not answer and ten minutes after one that did, the
+// last answer shown meanwhile; a WLED by another name at the address is another device, asked afresh.
 function fillWledInfo(container, nodes, now = Date.now()) {
     const known = container._wledInfo || (container._wledInfo = new Map());
     for (const node of nodes) {
         if (node.row.type !== "WLED" || !node.row.ip) continue;
-        const k = known.get(node.key);
-        if (k && k.ver) { node.row = Object.assign({}, node.row, { version: k.ver, flavor: k.flavor }); continue; }
-        if (k && now - k.at < 60000) continue;   // asked within the minute
-        known.set(node.key, { at: now });
+        const name = node.row.name;
+        const k = known.get(node.key)?.name === name ? known.get(node.key) : null;
+        if (k && k.ver) node.row = Object.assign({}, node.row, { version: k.ver, flavor: k.flavor });
+        if (k && now - k.at < (k.ver ? GRAPH_WLED_INFO_MS : GRAPH_WLED_ASK_MS)) continue;
+        known.set(node.key, { ...k, at: now, name });
         fetch(`http://${node.row.ip}/json/info`).then(r => r.json()).then(info => {
             if (!info || !info.ver) return;
-            known.set(node.key, { at: now, ver: String(info.ver), flavor: info.product === "MoonModules" ? "WLED-MM" : "WLED" });
+            known.set(node.key, { at: now, name, ver: String(info.ver), flavor: info.product === "MoonModules" ? "WLED-MM" : "WLED" });
             redrawGraph(container);
         }).catch(() => { /* no answer: asked again in a minute */ });
     }
@@ -638,6 +707,21 @@ function graphShowLoad() {
     try { return JSON.parse(localStorage.getItem(GRAPH_SHOW_KEY) || "{}") || {}; } catch (_) { return {}; }
 }
 
+// A search field above the map: typing greys out the devices that do not match (graphMatches), redrawn as each key lands; Escape clears it.
+// The search lasts while the page is open, since a filter left on from an earlier visit would grey out devices with no reason in sight.
+function buildGraphSearch(container) {
+    const input = document.createElement("input");
+    input.type = "search";
+    input.className = "graph-search";
+    input.placeholder = "Search devices";
+    input.setAttribute("aria-label", "Search the map's devices by name, address, type, version, firmware or group; the rest grey out");
+    input.value = container._graphQuery || "";
+    const apply = () => { container._graphQuery = input.value; redrawGraph(container); };
+    input.addEventListener("input", apply);
+    input.addEventListener("keydown", (e) => { if (e.key === "Escape" && input.value) { input.value = ""; apply(); } });
+    return input;
+}
+
 // A row of toggles above the map, one per thing a node or a line can show; a toggle redraws the map at once.
 function buildGraphFilters(container) {
     const bar = document.createElement("div");
@@ -645,6 +729,7 @@ function buildGraphFilters(container) {
     bar.setAttribute("role", "group");
     bar.setAttribute("aria-label", "What the map shows");
     const show = graphShowLoad();
+    bar.appendChild(buildGraphSearch(container));
     for (const [what, label] of GRAPH_SHOW) {
         const btn = document.createElement("button");
         btn.type = "button";
@@ -672,7 +757,7 @@ function buildGraphFilters(container) {
         const svg = container.querySelector("svg.list-graph");
         if (!svg || !container._graphFull) return;
         container._graphView = {};
-        svg.setAttribute("viewBox", graphViewBox(container._graphFull, container._graphView).join(" "));
+        showGraphView(container, svg);
     });
     bar.appendChild(fit);
     container._graphShow = show;

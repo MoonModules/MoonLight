@@ -491,6 +491,34 @@ TEST_CASE("ControlModule keeps one active preset per captured role") {
     CHECK(d.rowNamed("look").find("\"activeRoles\":[\"effects\"]") != std::string::npos);
 }
 
+namespace {
+/// A surface that records the looks it is told of, as a device group's sync is.
+struct LookListener : mm::ControlSurface {
+    std::vector<std::string> looks;
+    void sendValue(mm::SurfaceControl, uint8_t, uint8_t) override {}
+    void lookApplied(const char* name) override { looks.emplace_back(name); }
+};
+}  // namespace
+
+// A driver or layout preset carries the board's pins and geometry, so only a look is passed on, as only a look reaches Home Assistant.
+TEST_CASE("an applied effects preset is told to the surfaces as a look, and a driver preset is not") {
+    Device d;
+    d.add(d.layers, "Layer");
+    d.setSource("Drivers");
+    d.setText("name", "geometry");
+    d.press("save");
+    d.setSource("Effects");
+    d.setText("name", "look");
+    d.press("save");
+    LookListener listener;
+    d.control->addSurface(&listener, mm::ControlModule::Seed::None);
+    d.apply("geometry");
+    CHECK(listener.looks.empty());
+    d.apply("look");
+    CHECK(listener.looks == std::vector<std::string>{"look"});
+    d.control->removeSurface(&listener);
+}
+
 // Each role is held independently, so applying a look replaces the look and leaves the geometry alone. With one role per preset this is the whole supersede rule.
 TEST_CASE("ControlModule replaces only the role a preset carries") {
     Device d;

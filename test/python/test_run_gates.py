@@ -79,13 +79,27 @@ def test_a_failed_need_skips_its_dependents_and_theirs(monkeypatch):
     monkeypatch.delenv("MAKEFLAGS", raising=False)
     run = [{"id": "p/build", "needs": [], "cores": 1, "fails": True}, {"id": "p/test", "needs": ["p/build"], "cores": 1},
            {"id": "p/kpi", "needs": ["p/test"], "cores": 1}, {"id": "p/other", "needs": ["q/untriggered"], "cores": 1}]
-    import time
-    t = time.monotonic()
     _, done = _schedule(monkeypatch, run)
-    assert time.monotonic() - t < 5                                                  # it leaves once the skips empty the run, not after its 60 s progress line
     assert done["p/test"]["result"] == "SKIP" and "p/build" in done["p/test"]["why"]
     assert done["p/kpi"]["result"] == "SKIP"
     assert done["p/other"]["result"] == "PASS"                                       # a need the change does not trigger is met
+
+
+def test_the_scheduler_leaves_once_the_skips_empty_the_run_instead_of_waiting_for_its_progress_line(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    import threading
+    waits = []
+
+    class Cond(threading.Condition):
+        def wait(self, timeout=None):
+            if timeout is not None:   # the scheduler's own timed wait; the budget's untimed one is another's
+                waits.append(timeout)
+            return super().wait(timeout)
+
+    monkeypatch.setattr(run_gates.threading, "Condition", Cond)
+    run = [{"id": "p/build", "needs": [], "cores": 1, "fails": True}, {"id": "p/test", "needs": ["p/build"], "cores": 1}]
+    _schedule(monkeypatch, run)
+    assert len(waits) == 1                                                           # one wait for the build; none after the final skip
 
 
 def test_the_longest_path_to_the_end_starts_first():
@@ -218,10 +232,111 @@ def test_a_filtered_run_writes_only_the_generated_files_a_kept_gate_depends_on(m
     assert run_gates.generators("commit", "HEAD", {"help"}) == [gen]           # named itself
 
 
-def test_a_gate_checking_a_firmware_image_is_rerun_once_the_image_is_gone(tmp_path, monkeypatch):
+def test_a_gate_is_rerun_once_an_output_its_step_declares_is_deleted_or_replaced(tmp_path, monkeypatch):
     monkeypatch.setattr(run_gates, "ROOT", tmp_path)
-    (tmp_path / "build" / "esp32-esp32s3-n16r8").mkdir(parents=True)
-    assert run_gates.firmware_state("--firmware esp32s3-n16r8 --build") == "False"
-    (tmp_path / "build" / "esp32-esp32s3-n16r8" / "MoonLight.bin").write_bytes(b"x")
-    assert run_gates.firmware_state("--firmware esp32s3-n16r8 --build") == "True"
-    assert run_gates.firmware_state("--no-jit") == ""                           # a gate naming no firmware keeps its key
+    gate = {"outputs": ["build/esp32-s3/*.bin"], "args": ""}
+    out = tmp_path / "build" / "esp32-s3"
+    out.mkdir(parents=True)
+    empty = run_gates.outputs_state(gate)
+    (out / "MoonLight.bin").write_bytes(b"x")
+    (out / "bootloader.bin").write_bytes(b"y")
+    built = run_gates.outputs_state(gate)
+    assert built != empty
+    (out / "MoonLight.bin").unlink()                                            # another image stays, the app is gone
+    assert run_gates.outputs_state(gate) != built
+    (out / "MoonLight.bin").write_bytes(b"x")
+    os.utime(out / "MoonLight.bin", ns=(1, 1))                                  # an older copy of the same size
+    assert run_gates.outputs_state(gate) != built
+    assert run_gates.outputs_state({"outputs": []}) == ""                       # a step declaring none keeps its key
+
+
+def test_the_host_builds_cmake_cache_is_a_declared_output_of_the_build_steps(tmp_path, monkeypatch):
+    gates = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
+    assert gates["commit-code/build-host"]["outputs"] == ["{host_build}/CMakeCache.txt"]
+    assert gates["commit-code/esp32-fresh"]["outputs"] == ["build/esp32-esp32s3-n16r8/*.bin"]
+    monkeypatch.setattr(run_gates, "ROOT", tmp_path)
+    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+    import build_host
+    cache = tmp_path / build_host.host_build_dir() / "CMakeCache.txt"
+    cache.parent.mkdir(parents=True)
+    cache.write_text("x")
+    built = run_gates.outputs_state(gates["commit-code/build-host"])
+    cache.unlink()
+    assert run_gates.outputs_state(gates["commit-code/build-host"]) != built
+
+
+def test_a_gate_script_is_keyed_with_every_module_it_imports_from_beside_it(tmp_path, monkeypatch):
+    check = ROOT / "moondeck" / "check"
+    modules = {p.name for p in run_gates.imported_scripts(check / "check_code.py")}
+    assert {"check_code.py", "check_nonblocking.py", "_findings.py", "_ratchet.py"} <= modules
+    (tmp_path / "gate.py").write_text("import helper\nimport os\n")
+    (tmp_path / "helper.py").write_text("def f(): from deep import g\n")
+    (tmp_path / "deep.py").write_text("g = 1\n")
+    assert [p.name for p in run_gates.imported_scripts(tmp_path / "gate.py")] == ["deep.py", "gate.py", "helper.py"]
+
+
+def test_a_gate_whose_process_cannot_start_is_a_failure_that_skips_its_dependents(tmp_path, monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    monkeypatch.setattr(run_gates, "ROOT", tmp_path)
+    monkeypatch.setattr(run_gates.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("uv")))
+    monkeypatch.setattr(run_gates, "_line", lambda g: g["id"])
+    run = [{"id": "p/build", "script": "b.py", "args": "", "needs": [], "cores": 1},
+           {"id": "p/test", "script": "t.py", "args": "", "needs": ["p/build"], "cores": 1}]
+    with JobBudget(2, scheduler=True) as budget:
+        done = {g["id"]: g for g in run_gates.execute(run, budget, tmp_path, [], every=60)}
+        assert budget.try_acquire(2)                                             # its tokens came back
+    assert done["p/build"]["result"] == "FAIL" and "FileNotFoundError" in done["p/build"]["finding"]
+    assert done["p/test"]["result"] == "SKIP"
+
+
+def test_a_gate_is_started_through_the_nice_program_not_a_preexec_callback_a_thread_could_deadlock_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_gates, "ROOT", tmp_path)
+    seen = {}
+    import subprocess
+    monkeypatch.setattr(run_gates.shutil, "which", lambda name: "/usr/bin/nice")
+    monkeypatch.setattr(run_gates.subprocess, "run", lambda cmd, **k: seen.update(cmd=cmd, kw=k) or subprocess.CompletedProcess(cmd, 0))
+    with JobBudget(1, scheduler=True) as budget:
+        run_gates.run_gate({"id": "p/g", "script": "g.py", "args": "--x 1"}, budget, tmp_path)
+    assert seen["cmd"][:3] == ["nice", "-n", "10"] and "preexec_fn" not in seen["kw"]
+
+
+def test_needs_that_form_a_loop_fail_the_run_rather_than_skip_quietly(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    run = [{"id": "p/a", "needs": ["p/b"], "cores": 1}, {"id": "p/b", "needs": ["p/a"], "cores": 1}]
+    _, done = _schedule(monkeypatch, run)
+    assert done["p/a"]["result"] == "FAIL" and done["p/b"]["result"] == "FAIL"
+    assert "loop" in done["p/a"]["finding"]
+
+
+def test_a_failed_generator_skips_the_gates_that_need_it_and_a_passed_one_releases_them(monkeypatch):
+    monkeypatch.delenv("MAKEFLAGS", raising=False)
+    run = [{"id": "p/docs", "needs": ["p/help"], "cores": 1}, {"id": "p/js", "needs": [], "cores": 1}]
+    monkeypatch.setattr(run_gates, "run_gate", lambda g, b, d, c=1: {"result": "PASS", "seconds": 0.0})
+    monkeypatch.setattr(run_gates, "_line", lambda g: g["id"])
+    for result, expected in (("FAIL", "SKIP"), ("PASS", "PASS")):
+        with JobBudget(2, scheduler=True) as budget:
+            done = {g["id"]: g for g in run_gates.execute([dict(g) for g in run], budget, Path("."), [], every=60,
+                                                          generated=[{"id": "p/help", "result": result}])}
+        assert done["p/docs"]["result"] == expected and done["p/js"]["result"] == "PASS"
+
+
+def test_only_a_pass_is_cached_and_a_skipped_gate_loses_its_entry(monkeypatch):
+    monkeypatch.setattr(run_gates, "input_hash", lambda g, base: g["hash"])
+    monkeypatch.setattr(run_gates, "outputs_state", lambda g: "")
+    done = [{"id": "p/build", "result": "FAIL", "hash": "1"}, {"id": "p/code", "result": "SKIP", "hash": "2"}, {"id": "p/js", "result": "PASS", "hash": "3"}]
+    cache = {"p/build": "old:", "p/code": "2:"}
+    run_gates.update_cache(cache, done, "HEAD")
+    assert cache == {"p/js": "3:"}
+
+
+def test_the_list_names_the_judgment_gates_for_the_reader(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["run_gates.py", "--list", "--process", "pre-merge"])
+    assert run_gates.main() == 0
+    out = capsys.readouterr().out
+    assert "READER pre-merge/reviewer" in out
+
+
+def test_a_check_script_that_does_not_parse_still_hashes_so_its_gate_runs_and_fails(tmp_path):
+    broken = tmp_path / "check_broken.py"
+    broken.write_text("def oops(:\n", encoding="utf-8")
+    assert run_gates.imported_scripts(broken) == [broken]   # the run goes on, and the gate reports its own SyntaxError

@@ -4,6 +4,7 @@
 
 #include "doctest.h"
 #include "discovery_rows.h"
+#include "group_bench.h"
 #include "core/system/Devices.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/DeviceGroup.h"
@@ -21,37 +22,13 @@ using namespace mm;
 
 namespace {
 
-struct ClockGuard { ~ClockGuard() { platform::setTestNowMs(0); } };
-struct AddressGuard { ~AddressGuard() { platform::setTestEthIPv4(nullptr); } };
+using group_bench::AddressGuard;
+using group_bench::ClockGuard;
+using group_bench::hearWithMac;
 
-/// A MoonLight presence packet from `ip` named `name`, carrying its MAC as MoonLight's tail does.
-void hearWithMac(DevicesModule& dev, const uint8_t ip[4], const char* name, const uint8_t mac[6]) {
-    uint8_t pkt[64] = {};
-    WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
-    WledPacket::stampMarker(pkt, WledPacket::kMmMarker);
-    const size_t len = WledPacket::stampTail(pkt, 80, mac);
-    dev.injectPacketForTest(pkt, len, ip);
-}
-
-/// Devices with Discovery and one group under it, Discovery live so the group reads it.
-struct Bench {
-    ClockGuard clock;
-    AddressGuard address;
-    Devices devices;
-    DevicesModule* discovery = new DevicesModule;
-    DeviceGroup* group = new DeviceGroup;
-    Bench() {
-        const uint8_t self[4] = {192, 168, 1, 2};
-        platform::setTestEthIPv4(self);
-        platform::setTestNowMs(1000);
-        devices.addChild(discovery);
-        devices.addChild(group);
-        group->setName("Kitchen");
-        discovery->setup();
-        discovery->applyState();   // claims the seat a group reads Discovery through
-        group->setup();
-    }
-    ~Bench() { discovery->release(); }
+/// The bench with the group "Kitchen", and a member's row and the offered devices read back.
+struct Bench : group_bench::Bench {
+    Bench() : group_bench::Bench("Kitchen") {}
     std::string member(ListRow row) const { JsonSink s; group->writeListRow(s, row); return s.data(); }
     std::string options() const { JsonSink s; group->writeListOptionSets(s); return s.data(); }
 };
@@ -280,6 +257,35 @@ TEST_CASE("DeviceGroup: a removal outlives a late copy that still holds the memb
     CHECK(a.group->listSavedRowCount() == 1);   // the marker is saved, so a reboot keeps it
 }
 
+TEST_CASE("DeviceGroup: a member replaced in its row stays removed though a copy still holds it") {
+    ClockGuard clock;
+    Copy a;
+    Copy b(a.group->groupId());
+    a.add("10:00:00:00:00:01");
+    a.sendTo(b);
+    platform::setTestNowMs(5000);
+    REQUIRE(a.group->setListRowField(1, "mac", "{\"value\":\"10:00:00:00:00:02\"}"));   // the row's device changed in place
+    const uint8_t m1[6] = {0x10, 0, 0, 0, 0, 1}, m2[6] = {0x10, 0, 0, 0, 0, 2};
+    CHECK_FALSE(b.sendTo(a));   // B's older copy leaves the replaced member removed
+    CHECK_FALSE(a.group->hasMember(m1));
+    CHECK(a.group->hasMember(m2));
+    CHECK(a.group->listRowCount() == 1);
+    CHECK(a.group->listSavedRowCount() == 2);   // the replaced member's marker is saved
+    CHECK_FALSE(a.group->setListRowField(2, "mac", "{\"value\":\"10:00:00:00:00:03\"}"));   // a marker is no row to edit
+    a.sendTo(b);
+    CHECK_FALSE(b.group->hasMember(m1));
+    CHECK(b.group->hasMember(m2));
+    CHECK(a.group->digest() == b.group->digest());
+    platform::setTestNowMs(6000);
+    REQUIRE(a.group->setListRowField(1, "mac", "{\"value\":\"10:00:00:00:00:01\"}"));   // and back: the marker swaps sides
+    CHECK(a.group->hasMember(m1));
+    CHECK_FALSE(a.group->hasMember(m2));
+    CHECK(a.group->listSavedRowCount() == 2);
+    a.sendTo(b);
+    CHECK(b.group->hasMember(m1));
+    CHECK_FALSE(b.group->hasMember(m2));
+}
+
 TEST_CASE("DeviceGroup: a rename on one device is the name on the other, the newer stamp winning") {
     ClockGuard clock;
     Copy a;
@@ -393,6 +399,29 @@ TEST_CASE("Hlc: a reading with no room above it is ignored, so the clock never w
     const Stamp prev = c.now(1);
     c.observe(UINT64_MAX);   // a corrupt or crafted stamp
     CHECK(c.now(1).newerThan(prev));
+}
+
+TEST_CASE("Hlc: a clock driven to the top by a crafted stamp still stamps edits every peer accepts") {
+    ClockGuard clock;
+    platform::setTestNowMs(1000);
+    Hlc c;
+    c.observe(Stamp::kMaxHlc);   // valid, and as high as a reading goes
+    CHECK(c.now(1).valid());
+    CHECK(c.now(1).valid());
+    CHECK(c.now(1).hlc == Stamp::kMaxHlc);
+}
+
+TEST_CASE("Stamp: a saved stamp reads whole, and anything else is no stamp") {
+    Stamp s;
+    CHECK(Stamp::parse("1388:2a", s));
+    CHECK(s.hlc == 0x1388);
+    CHECK(s.writer == 0x2a);
+    CHECK_FALSE(Stamp::parse(":1", s));             // no reading
+    CHECK_FALSE(Stamp::parse("1388", s));           // no writer
+    CHECK_FALSE(Stamp::parse("1388:", s));
+    CHECK_FALSE(Stamp::parse("1388:2a junk", s));
+    CHECK_FALSE(Stamp::parse("1388:100000000", s));   // a writer wider than 32 bits
+    CHECK_FALSE(Stamp::parse("8000000000000000:1", s));   // past the largest valid reading
 }
 
 TEST_CASE("DeviceGroup: a chunk cut short anywhere changes nothing, and the whole chunk merges") {
@@ -603,6 +632,7 @@ TEST_CASE("DeviceGroupSync: a marker only grows newer, and a changed one is save
     t.hearDeletion(kOtherId, uint64_t{5000} << 16);
     t.hearDeletion(kOtherId, uint64_t{4000} << 16);   // an older deletion of the same group
     t.devices->clearDirty();
+    g_saves = 0;
     t.tick();
     char want[64];
     std::snprintf(want, sizeof(want), "%s:%" PRIx64 ":", kOtherId, uint64_t{5000} << 16);
@@ -630,4 +660,57 @@ TEST_CASE("DeviceGroupSync: a deletion memory refuses a marker for leaves no mar
     t.hearDeletion(kOtherId, uint64_t{5000} << 16);
     platform::setTestAllocRefusedFrom(0);
     CHECK_FALSE(t.sync->deleted(kOtherId));
+    t.tick();
+    CHECK(std::string(t.saved).empty());
+    CHECK(g_saves == 0);
+}
+
+TEST_CASE("DeviceGroupSync: saved markers memory refuses load the next second, and no second runs before them") {
+    Tree t;
+    struct AllocGuard { ~AllocGuard() { platform::setTestAllocRefusedFrom(0); } } alloc;
+    t.sync->close();   // a release: the next second reads the markers from the saved text
+    std::snprintf(t.saved, sizeof(t.saved), "%s:%" PRIx64 ":1;", kOtherId, uint64_t{5000} << 16);
+    platform::setTestAllocRefusedFrom(16);
+    t.tick();
+    CHECK_FALSE(t.sync->deleted(kOtherId));
+    platform::setTestAllocRefusedFrom(0);
+    t.tick();
+    CHECK(t.sync->deleted(kOtherId));
+}
+
+TEST_CASE("DeviceGroupSync: a saved marker whose stamp does not read is no marker") {
+    Tree t;
+    t.sync->close();
+    const char* const kReadable = "00112233445566778899";
+    std::snprintf(t.saved, sizeof(t.saved), "%s::1;%s:1388:1;", kOtherId, kReadable);
+    t.tick();
+    CHECK_FALSE(t.sync->deleted(kOtherId));
+    CHECK(t.sync->deleted(kReadable));
+}
+
+TEST_CASE("DeviceGroupSync: a deletion wins over an edit stamped after it, so no device keeps the group") {
+    Tree t;
+    platform::setTestNowMs(60000);   // the edit, later than the deletion below
+    Copy origin;
+    origin.add(selfMac(true).c_str());
+    t.hear(origin);
+    const std::string id = origin.group->groupId();
+    REQUIRE(t.byId(id.c_str()));
+    t.hearDeletion(id.c_str(), uint64_t{1000} << 16);
+    CHECK_FALSE(t.byId(id.c_str()));
+    CHECK(t.sync->deleted(id.c_str()));
+}
+
+TEST_CASE("DeviceGroupSync: the newest eight markers are kept: an older one arriving leaves them, a newer one replaces the oldest") {
+    Tree t;
+    char ids[10][21];
+    for (int i = 0; i < 10; i++) std::snprintf(ids[i], sizeof(ids[i]), "0123456789abcdef01%02x", i);
+    for (int i = 0; i < 8; i++) t.hearDeletion(ids[i], uint64_t(100 + i) << 16);
+    t.hearDeletion(ids[8], uint64_t{99} << 16);   // older than every marker kept
+    CHECK_FALSE(t.sync->deleted(ids[8]));
+    CHECK(t.sync->deleted(ids[0]));
+    t.hearDeletion(ids[9], uint64_t{108} << 16);
+    CHECK(t.sync->deleted(ids[9]));
+    CHECK_FALSE(t.sync->deleted(ids[0]));
+    for (int i = 1; i < 8; i++) CHECK(t.sync->deleted(ids[i]));
 }

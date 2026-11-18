@@ -68,8 +68,8 @@
                         <button type="button" id="refresh-ports" title="Refresh"><span class="refresh-glyph">&#x21bb;</span></button>
                         <!-- Probes each ESP32-capable port with esptool to read chip + MAC. RESETS
                              each probed board, so it's opt-in, never automatic; each MAC is cached by
-                             its USB adapter's serial in moondeck.json, so it's a one-time cost. -->
-                        <button type="button" id="identify-ports" title="Identify unlabeled ports (probes the chip — resets the board)">Identify</button>
+                             its USB adapter's serial in moondeck.json. -->
+                        <button type="button" id="identify-ports" title="Identify: probes every ESP32-capable port with esptool and resets every board it probes, labeled or not">Identify</button>
                         <!-- Passive plug/unplug watcher: polls the port list and narrates what
                              was added/removed with its 3-level identity. Read-only (USB descriptor
                              + cache) — never probes/resets a board; click Identify to confirm an

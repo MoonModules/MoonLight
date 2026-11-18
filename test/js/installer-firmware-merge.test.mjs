@@ -124,6 +124,11 @@ test("a board whose variant is known is offered that variant's firmwares only, t
     const p4 = { targetChip: "esp32p4", ownFirmwareKey: "esp32p4rev1-eth" };
     assert.ok(offersFirmware(p4, "esp32p4rev1-eth-wifi"), "the same board with its radio compiled in");
     assert.ok(!offersFirmware(p4, "esp32p4rev3-eth"), "another chip revision");
+    const rev3 = { targetChip: "esp32p4rev3", ownFirmwareKey: null };   // a WLED-MM P4 its chip model names revision 3
+    assert.ok(offersFirmware(rev3, "esp32p4rev3-eth") && offersFirmware(rev3, "esp32p4rev3-eth-wifi"));
+    assert.ok(!offersFirmware(rev3, "esp32p4rev1-eth"), "a revision-1 app does not boot on revision 3");
+    assert.ok(offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev1-eth") && offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev3-eth"),
+              "a P4 of unknown revision is offered both lines");
     const wled = { targetChip: "esp32s3", ownFirmwareKey: null };   // a WLED board moving over: no MoonLight variant yet, the Device row narrows
     assert.ok(offersFirmware(wled, "esp32s3-n16r8") && offersFirmware(wled, "esp32s3-zero"));
     assert.ok(!offersFirmware(wled, "esp32-eth"), "another chip");
