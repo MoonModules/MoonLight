@@ -5,7 +5,7 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
-import { installFirmware } from "../../src/ui/deviceinstall.js";
+import { installFirmware, hasMoonBase, firmwareImages, restartIntoMoonBase, MOONBASE_SILENT_MSG } from "../../src/ui/deviceinstall.js";
 import { pollUntil } from "../../src/ui/uikit.js";
 import { INSTALLER_URL } from "../../src/ui/releases.js";
 
@@ -82,7 +82,7 @@ function fakeUpload(send) {
 function recorder() {
     const calls = [];
     const ui = {};
-    for (const m of ["status", "busy", "progress", "fail", "done", "setUpload"]) ui[m] = (...args) => calls.push([m, ...args]);
+    for (const m of ["status", "busy", "progress", "fail", "done", "setCancel"]) ui[m] = (...args) => calls.push([m, ...args]);
     return { ui, calls, of: (m) => calls.filter(c => c[0] === m).map(c => c.slice(1)) };
 }
 
@@ -147,7 +147,7 @@ test("a board without TLS answers 501, so the browser downloads the image from t
     assert.ok(log.some(q => q.url.startsWith(INSTALLER_URL) && q.url.endsWith("firmware-esp32-d0-v1.1.0.bin")), "the image comes from the mirror");
     assert.deepEqual(uploads, [{ route: `${BASE}/api/firmware/upload`, size: 6 }]);
     assert.deepEqual(r.of("progress"), [[3, 6], [6, 6]]);
-    assert.ok(r.of("setUpload").some(([ctl]) => ctl instanceof AbortController), "the transfer can be canceled");
+    assert.ok(r.of("setCancel").some(([fn]) => typeof fn === "function"), "the transfer can be canceled");
     assert.deepEqual(r.of("done"), [["Updated to 1.1.0."]]);
 });
 
@@ -299,7 +299,7 @@ test("a file MoonBase lost to a power cut goes again as the first push did, with
     const r = recorder();
     await clock.run(installFirmware(BASE, "app", { file: new Blob(["IMAGE"]) }, r.ui, { inMoonBase: true }));
     assert.deepEqual(uploads, [`${BASE}/api/firmware/upload`, `${BASE}/api/firmware/upload`], "both pushes are uploads with progress");
-    assert.equal(r.of("setUpload").filter(([ctl]) => ctl instanceof AbortController).length, 2, "each push can be canceled");
+    assert.equal(r.of("setCancel").filter(([fn]) => typeof fn === "function").length, 2, "each push can be canceled");
     assert.deepEqual(r.of("done"), [["Installed the app."]]);
 });
 
@@ -309,4 +309,53 @@ test("a poll asks for the last time at its deadline, and stops there", async () 
     const got = await clock.run(pollUntil(async () => { asked.push(clock.now()); return Date.now() > 10000 ? "late" : null; }, () => true, 10000, 3000));
     assert.equal(got, null, "no answer from past the deadline counts");
     assert.deepEqual(asked, [3000, 6000, 9000, 10000]);
+});
+
+test("the app's own URL install offers no cancel once started, since only MoonBase serves the cancel route", async () => {
+    const clock = virtualClock();
+    let asks = 0;
+    const phases = ["flashing: 100 of 400 bytes", null, ""];
+    device((path) => {
+        if (path === "/api/firmware/url") return reply(202, { ok: true });
+        if (path === "/api/modules/Firmware") { const p = phases[Math.min(asks++, phases.length - 1)]; return p === null ? null : reply(200, { status: p }); }
+        if (path === "/api/system") return reply(200, { version: asks >= phases.length ? "1.1.0" : "1.0.0" });
+        return null;
+    });
+    const r = recorder();
+    await clock.run(installUpdate(r));
+    assert.deepEqual(r.of("setCancel"), [[null]], "the UI hears that no cancel applies");
+    assert.deepEqual(r.of("done"), [["Updated to 1.1.0."]]);
+});
+
+test("a URL install MoonBase runs is canceled through MoonBase's own route on the device it runs on", async () => {
+    const clock = virtualClock();
+    const log = boardInMoonBase(["downloading: 100 of 400 bytes", "app"]);
+    const r = recorder();
+    await clock.run(installFirmware(BASE, "app", { url: "https://x/firmware.bin" }, r.ui, { inMoonBase: true }));
+    const cancels = r.of("setCancel").filter(([fn]) => typeof fn === "function");
+    assert.ok(cancels.length > 0, "MoonBase holding the install offers its cancel");
+    await cancels[0][0]();
+    assert.ok(log.some(q => q.url === `${BASE}/api/firmware/cancel` && q.method === "POST"));
+    assert.deepEqual(r.of("setCancel").at(-1), [null], "the app back, nothing is left to cancel");
+});
+
+test("a device writes its app from MoonBase exactly when its Firmware module offers a MoonBase image, the one test the card and MoonDeck share", () => {
+    const fw = (options) => ({ controls: [{ name: "image", options }] });
+    assert.equal(hasMoonBase(fw(["App", "MoonBase"])), true);
+    assert.equal(hasMoonBase(fw(["App", "WiFi coproc"])), false);
+    assert.equal(hasMoonBase({ controls: [] }), false, "one image publishes no image control");
+    assert.equal(hasMoonBase(null), false, "a device that did not answer");
+    assert.deepEqual(firmwareImages({ controls: [] }), ["App"]);
+});
+
+test("a restart into MoonBase fails with the app's refusal, or when MoonBase does not answer in two minutes", async () => {
+    let clock = virtualClock();
+    device((path) => (path === "/api/firmware/moonbase" ? reply(409, { error: "an install is running" }) : null));
+    await assert.rejects(clock.run(restartIntoMoonBase(BASE)), { message: "Refused: an install is running" });
+    clock = virtualClock();
+    device((path) => (path === "/api/firmware/moonbase" ? reply(200, { ok: true }) : null));
+    await assert.rejects(clock.run(restartIntoMoonBase(BASE)), { message: MOONBASE_SILENT_MSG });
+    clock = virtualClock();
+    device((path) => (path === "/api/firmware/moonbase" ? reply(200, { ok: true }) : path === "/moonbase" ? reply(200, "idle") : null));
+    await clock.run(restartIntoMoonBase(BASE));
 });

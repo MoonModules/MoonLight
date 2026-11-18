@@ -152,7 +152,6 @@ processes:
         detail: |
           It runs after build-host and reads the warnings that build saved beside each object, so the tree compiles once per run. CI's findings job runs check_code without that build, so the stack-frame and blocking-call rules, which only compiler warnings show, ratchet in this local run alone, and a pre-merge run, which leaves out `ci: true` gates, does not repeat them. A counter that rose is brought back in the change that raised it, the move per rule in the check's own output. A file it finds at 1000 lines is split in two by concern, as [the coding standards](contributing/coding-standards.md#growing-the-codebase) say, rather than trimmed under the line.
       - id: tests
-        ci: true
         say: Test the change on the host.
         given: [{ changed: [src/**, test/**, "!test/js/**", "!test/python/**"] }]
         when: { process: host-tests }

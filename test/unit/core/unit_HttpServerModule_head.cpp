@@ -35,6 +35,22 @@ struct PeerRef {
 };
 }  // namespace
 
+// The app and MoonBase answer a preflight from one home, each naming the methods it serves.
+TEST_CASE("a CORS preflight answers 204 with the methods given, any origin, cached an hour") {
+    char out[256];
+    const size_t n = mm::http::preflightResponse(out, sizeof(out), "GET, POST, OPTIONS");
+    REQUIRE(n == std::strlen(out));
+    const std::string reply(out, n);
+    CHECK(reply.rfind("HTTP/1.1 204 No Content\r\n", 0) == 0);
+    CHECK(reply.find("Access-Control-Allow-Origin: *\r\n") != std::string::npos);
+    CHECK(reply.find("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n") != std::string::npos);
+    CHECK(reply.find("Access-Control-Max-Age: 3600\r\n") != std::string::npos);
+    CHECK(reply.size() >= 4);
+    CHECK(reply.compare(reply.size() - 4, 4, "\r\n\r\n") == 0);
+    char small[16];
+    CHECK(mm::http::preflightResponse(small, sizeof(small), "GET") == 0);   // too small: a length of zero, sent as no bytes
+}
+
 TEST_CASE("HTTP header names match case-insensitively, so any client's Content-Length counts") {
     // RFC 9112 makes field names case-insensitive; a case-sensitive finder reads a lowercase `content-length:` as no length and commits an empty file with a 200.
     const char* req = "POST /api/file?path=/x HTTP/1.1\r\ncontent-length: 831\r\n\r\nbody";

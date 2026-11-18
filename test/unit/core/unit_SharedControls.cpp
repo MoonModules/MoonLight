@@ -337,12 +337,12 @@ TEST_CASE("a message past the per-message bound merges only the bound") {
     CHECK(shared.valueCount() == SharedControls::kPerMessage);
 }
 
-TEST_CASE("a full table keeps the newest values, so two members holding the same newest set agree and stop asking for repeats") {
+TEST_CASE("a full group keeps its newest values, so two members holding the same newest set agree and stop asking for repeats") {
     Member m;
     SharedControls a(*m.devices), b(*m.devices);
     const uint64_t t0 = uint64_t{5000} << 16;
     // A holds the oldest full table, B the same values one newer: both end on B's newest set.
-    for (int i = 0; i < SharedControls::kMaxValues; i++) {
+    for (int i = 0; i < SharedControls::kMaxPerGroup; i++) {
         char param[24];
         std::snprintf(param, sizeof(param), "Lamp.p%d", i);
         CHECK(a.setLocal(SharedControls::keyOf("g"), param, i, Stamp{t0 + i, 7}));
@@ -360,6 +360,57 @@ TEST_CASE("a full table keeps the newest values, so two members holding the same
     CHECK(a.digest(SharedControls::keyOf("g")) == b.digest(SharedControls::keyOf("g")));
     REQUIRE(a.note() != nullptr);
     CHECK(std::string(a.note()) == "shared controls full");
-    CHECK(a.holds("Lamp.p48", 48));   // the newest is held, so it stays out of the outgoing changes
+    CHECK(a.holds("Lamp.p32", 32));   // the newest is held, so it stays out of the outgoing changes
     CHECK_FALSE(a.holds("Lamp.p0", 0));
+}
+
+TEST_CASE("each group keeps its own share of the table, so a device in two groups holds the same values as a member of one") {
+    Member m;
+    SharedControls both(*m.devices), one(*m.devices);
+    const uint32_t g1 = SharedControls::keyOf("g1"), g2 = SharedControls::keyOf("g2");
+    const uint64_t t0 = uint64_t{5000} << 16;
+    for (int i = 0; i < SharedControls::kMaxPerGroup; i++) {
+        char param[24];
+        std::snprintf(param, sizeof(param), "Lamp.p%d", i);
+        both.setLocal(g1, param, i, Stamp{t0 + i, 7});
+        one.setLocal(g1, param, i, Stamp{t0 + i, 7});
+    }
+    for (int i = 0; i <= SharedControls::kMaxPerGroup; i++) {   // the second group fills and evicts within itself, later than every value of the first
+        char param[24];
+        std::snprintf(param, sizeof(param), "Lamp.q%d", i);
+        both.setLocal(g2, param, i, Stamp{t0 + 1000 + i, 7});
+    }
+    CHECK(both.digest(g1) == one.digest(g1));
+}
+
+TEST_CASE("a group that leaves this device takes its values and recall with it, so nine groups made and dropped leave room to recall a look") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        for (int i = 0; i < 9; i++) {
+            platform::setTestNowMs(2000 + 1000 * i);   // each group its own moment
+            auto* g = new DeviceGroup;
+            m.devices->addChild(g);
+            g->setName("Passing");
+            g->setup();
+            sync.tick(*m.devices, m.saved, sizeof(m.saved));
+            const auto look = lookMessage(g->groupId(), "warm", static_cast<uint64_t>(50000 + 1000 * i) << 16);   // a recall and a value of its own
+            const auto value = valuesMessage(g->groupId(), "Lamp.speed", 5, static_cast<uint64_t>(50000 + 1000 * i) << 16);
+            sync.handle(*m.devices, look.data(), look.size());
+            sync.handle(*m.devices, value.data(), value.size());
+            m.devices->removeChild(g);   // deleted here
+            g->release();
+            Scheduler::deleteTree(g);
+            sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        }
+        sync.sent.clear();
+        sync.lookApplied("look");
+        const auto looks = sync.to(SharedControls::kLookAddress);
+        REQUIRE(looks.size() == 1);   // the Stage group's recall still has its place
+        osc::Reader r(looks[0].data(), looks[0].size(), SharedControls::kLookAddress);
+        CHECK(std::string(r.str()) == m.id());
+        CHECK(sync.sharedNote() == nullptr);
+        sync.close();
+    }
 }

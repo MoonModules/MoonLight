@@ -13,7 +13,7 @@ import { openDevicePopup } from "./devicepopup.js";
 import { openGroupPopup } from "./devicegroup.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
 import { UPDATE_TTL_MS, channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
-import { installFirmware, INSTALL_KINDS, MOONBASE_SILENT_MSG, moonbaseStatus, waitForMoonBase } from "./deviceinstall.js";
+import { installFirmware, INSTALL_KINDS, moonbaseStatus, firmwareImages, hasMoonBase, restartIntoMoonBase } from "./deviceinstall.js";
 import { isNewer } from "./semver.js";
 import { collectFiles, restoreBundle } from "./migrate.js";
 import { moduleHelp, controlHelp, walkLinks, ROLE_EMOJI, DIM_EMOJI, SCRIPTED_EMOJI, COMPILED_EMOJI, EMOJI_LABEL,
@@ -1438,21 +1438,8 @@ function scrollableStrip(strip, key) {
 // back: same IP throughout (same MAC, same DHCP lease). The whole cycle runs behind one
 // full-screen overlay, shown BEFORE the reboot so there is no dead gap. GET /moonbase is the
 // identity probe: MoonBase answers it with its live install status; the app 404s it: so "404 again
-// after an install ran" means the new firmware is up.
-//
-// The marker is the `image` control, which the module publishes only where there are two images to
-// choose between. It was the `moonbase` control until that one was folded into the generic set as
-// `version`, which left this testing for a name nothing emits: the card silently lost its tab
-// strip AND its way into MoonBase, on a device that has one.
-function deviceHasMoonBase(mod) {
-    return firmwareImages(mod).includes("MoonBase");
-}
-
-// The images the Firmware card's tabs offer, in the device's order: the options of its `image` control, or the app alone.
-function firmwareImages(mod) {
-    const c = (mod.controls || []).find(c => c.name === "image");
-    return c && Array.isArray(c.options) ? c.options : ["App"];
-}
+// after an install ran" means the new firmware is up. Whether a device has MoonBase, and the images its
+// card's tabs offer, are deviceinstall.js's hasMoonBase and firmwareImages.
 
 // Ask a question in the app's own chrome rather than the browser's.
 //
@@ -1585,16 +1572,17 @@ function showUpdateOverlay() {
     dismiss.textContent = "close";
     dismiss.style.display = "none";
     dismiss.addEventListener("click", () => { clearInterval(watch); for (const el of behind) el.inert = false; ov.remove(); });
+    // Cancel shows while the flow names a cancel that applies (setCancel), and a line says when none does once the install started.
     const cancel = document.createElement("button");
     cancel.textContent = "cancel install";
-    let uploadCtl = null;   // the in-flight file upload's AbortController, set by the flow
-    cancel.addEventListener("click", () => {
-        // A URL install hears POST /cancel; a file upload cancels by dropping its connection
-        // (MoonBase's single-connection server is busy receiving it), so abort the fetch.
-        if (uploadCtl) uploadCtl.abort();
-        fetch("/api/firmware/cancel", { method: "POST" }).catch(() => {});
-    });
-    box.append(h, msg, bar, cancel, dismiss);
+    cancel.style.display = "none";
+    const uncancelable = document.createElement("p");
+    uncancelable.className = "fw-overlay-msg";
+    uncancelable.textContent = "Once started, this install cannot be canceled.";
+    uncancelable.style.display = "none";
+    let cancelNow = null;
+    cancel.addEventListener("click", () => cancelNow?.());
+    box.append(h, msg, bar, cancel, uncancelable, dismiss);
     ov.appendChild(box);
     document.body.appendChild(ov);
     return {
@@ -1607,7 +1595,7 @@ function showUpdateOverlay() {
             bar.value = r;
             if (r !== read) { read = r; total = t; lastMove = Date.now(); if (stalled) show(false); }
         },
-        fail(text) { clearInterval(watch); base = text; show(false); bar.remove(); cancel.remove(); dismiss.style.display = ""; },
+        fail(text) { clearInterval(watch); base = text; show(false); bar.remove(); cancel.remove(); uncancelable.remove(); dismiss.style.display = ""; },
         done(text) { clearInterval(watch); base = text; show(false); fwSleep(1200).then(() => location.reload()); },
         watchStalls() {
             watch = setInterval(() => {
@@ -1615,7 +1603,11 @@ function showUpdateOverlay() {
                 if (on !== stalled) show(on);
             }, 500);
         },
-        setUpload(ctl) { uploadCtl = ctl; },
+        setCancel(fn) {
+            cancelNow = fn;
+            cancel.style.display = fn ? "" : "none";
+            uncancelable.style.display = fn ? "none" : "";
+        },
     };
 }
 
@@ -2088,7 +2080,7 @@ function createCard(mod, depth) {
             const c = (mod.controls || []).find(x => x.name === name);
             return c ? c.value : null;
         };
-        const hasMoonBase = deviceHasMoonBase(mod);
+        const viaMoonBase = hasMoonBase(mod);
         // Each tab is named by the device; the name says which image the rows describe.
         const KIND_OF = { App: "app", MoonBase: "moonbase", "WiFi coproc": "coprocessor" };
         const images = firmwareImages(mod);
@@ -2124,7 +2116,7 @@ function createCard(mod, depth) {
         }
 
         // Every install on this card, behind the overlay; the app of a board with MoonBase is written from there.
-        const install = (source) => installFirmware("", kind, source, showUpdateOverlay(), { viaMoonBase: hasMoonBase });
+        const install = (source) => installFirmware("", kind, source, showUpdateOverlay(), { viaMoonBase });
         // A MoonBase install asks first: while it is written, the device has no recovery image.
         const confirmed = async () => kind !== "moonbase" || askMoonBaseInstall();
 
@@ -2245,7 +2237,7 @@ function createCard(mod, depth) {
 
         // BELOW everything, because it belongs to neither image: rebooting into MoonBase is not
         // an install, it is how a user reaches the recovery image to work there by hand.
-        if (hasMoonBase) {
+        if (viaMoonBase) {
             const mbRow = document.createElement("div");
             mbRow.className = "control-row fw-upload-row";
             const mbBtn = document.createElement("button");
@@ -2255,9 +2247,7 @@ function createCard(mod, depth) {
             mbBtn.addEventListener("click", async () => {
                 const ui = showUpdateOverlay();
                 ui.status("Restarting into MoonBase…");
-                try { await fetch("/api/firmware/moonbase", { method: "POST" }); } catch (_) {}
-                if (await waitForMoonBase("", 120000)) { location.reload(); return; }
-                ui.fail(MOONBASE_SILENT_MSG);
+                try { await restartIntoMoonBase(""); location.reload(); } catch (err) { ui.fail(err.message); }
             });
             mbRow.appendChild(mbBtn);
             controlsBox.appendChild(mbRow);

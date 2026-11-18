@@ -6,9 +6,9 @@
 
 import { installPicker, loadReleases, releaseAsset, firmwareAssetName, moonbaseAssetName, migrateAssetName, chipKey } from "./install-picker.js";
 import { graphOutputs } from "./devicemap.js";
-import { fmtBytes, fmtTime, fwSleep, pollUntil, errorMessage, armPressTwice, fetchWithin } from "./uikit.js";
+import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, fetchWithin } from "./uikit.js";
 import { UPDATE_TTL_MS, channelUpdate, releaseOfVersion, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
-import { installFirmware, peerFirmware, waitForRestart } from "./deviceinstall.js";
+import { installFirmware, peerFirmware, waitForRestart, waitForMoonBase } from "./deviceinstall.js";
 
 // The hooks a page passes, each with a default: the detail as plain rows and the page's own origin as home, so a page passing only the
 // map's hooks still shows the whole popup.
@@ -293,7 +293,7 @@ async function wledToMoonBase(base, source, tag, chip, note) {
     // WLED answers with no CORS header, so the image would never leave; WLED reports no progress of its own either, so this upload has no bar.
     try { await fetch(`${base}/update`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
     note.textContent = "WLED restarts into MoonBase…";
-    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
+    if (await waitForMoonBase(base, 90000)) return;
     throw new Error("still WLED after a minute and a half: WLED refused the upload. A newer WLED checks the release name until Skip validation is ticked on its update page; an update lock or password refuses it too");
 }
 
@@ -391,7 +391,7 @@ async function esphomeToMoonBase(relay, ip, base, source, tag, chip, note) {
         method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: image }).catch(() => null);
     if (!res) throw new Error("this device did not answer the relay");
     if (!res.ok) throw new Error(`ESPHome refused the image: ${await errorMessage(res)}`);
-    if (await waitForSystem(base, (sys) => sys.moonbase, 90000)) return;
+    if (await waitForMoonBase(base, 90000)) return;
     throw new Error("ESPHome took the image but no MoonBase answered within a minute and a half");
 }
 
@@ -430,7 +430,7 @@ async function tasmotaApiOpen(base) {
 
 // The two steps Tasmota's own update page runs: `/u4?u4=fct` restarts it into safeboot, then the image goes to `/u2`, field `u2`. Safeboot takes an upload only
 // after a `fct` it answered itself marked one as coming, and each upload clears the mark, so `fct` goes again before every upload, as Tasmota's page repeats it.
-// Tasmota sends no CORS header, so the page reads none of its answers: it watches the board drop off and come back, and confirms by MoonBase answering on /api/system.
+// Tasmota sends no CORS header, so the page reads none of its answers: it watches the board drop off and come back, and confirms by MoonBase answering.
 async function tasmotaToMoonBase(base, source, tag, chip, note) {
     const image = await migrationImage(source, tag, chip, note);
     note.textContent = "Restarting Tasmota into its safeboot…";
@@ -443,7 +443,7 @@ async function tasmotaToMoonBase(base, source, tag, chip, note) {
         const form = new FormData();
         form.append("u2", image, "shared-migrate.bin");
         try { await fetch(`${base}/u2?fsz=${image.size}`, { method: "POST", body: form, mode: "no-cors" }); } catch (_) { /* a restart cuts the reply */ }
-        if (await waitForSystem(base, (sys) => sys.moonbase, 60000)) return;
+        if (await waitForMoonBase(base, 60000)) return;
     }
     throw new Error("still Tasmota after two uploads: its safeboot did not take the image, or SetOption128 is not 1 in its Console");
 }
@@ -455,11 +455,6 @@ async function moonBaseToMoonLight(base, binaryUrl, note) {
     await noteInstall(base, "app", { url: binaryUrl }, note, (text, ok) => { note.textContent = ""; if (!ok) failure = text; }, { inMoonBase: true });
     if (failure) throw new Error(failure);
     return (await fetchJsonWithin(`${base}/api/system`)) || {};   // the flow saw the app answer: a summary lost to a blip still reads as done
-}
-
-// The board's /api/system every three seconds until `done` holds for it or `ms` pass; the answer, or null.
-async function waitForSystem(base, done, ms) {
-    return pollUntil(() => fetchJsonWithin(`${base}/api/system`, 2500), done, ms, 3000);
 }
 
 // A device model's defaults onto the new MoonLight as one state document, the one the web installer sends over serial; WiFi and Ethernet
@@ -582,7 +577,7 @@ function buildPeerSummary(row, home) {
         const btn = document.createElement("button");
         btn.className = "graph-popup-update";
         btn.textContent = `Update to ${u.label}`;
-        armPressTwice(btn, () => popupInstall(base, "app", { url: u.url, sha256: u.sha256 }, { version: u.version }, note, btn),
+        armPressTwice(btn, () => popupInstall(base, "app", { url: u.url, sha256: u.sha256 }, { target: { version: u.version } }, note, btn),
                       { armedText: "✓ " + btn.textContent });
         box.appendChild(btn);
     })();
@@ -612,7 +607,7 @@ function offerImageUpdates(box, base, fw, note, releases, lead) {
         const btn = document.createElement("button");
         btn.className = "graph-popup-update";
         btn.textContent = `Update ${o.label}`;
-        armPressTwice(btn, () => popupInstall(base, o.kind, o.source, { flag: o.flag }, note, btn), { armedText: "✓ " + btn.textContent });
+        armPressTwice(btn, () => popupInstall(base, o.kind, o.source, { target: { flag: o.flag } }, note, btn), { armedText: "✓ " + btn.textContent });
         box.appendChild(btn);
     }
 }
@@ -635,15 +630,16 @@ function noteInstall(base, kind, source, note, end, opts) {
     }, opts);
 }
 
-// A popup's install: a success closes the popup once its line was read, and a failure frees the button again.
-function popupInstall(base, kind, source, target, note, btn) {
+// A popup's install, `opts` the flow's (installFirmware): a success closes the popup once its line was read, and a failure frees the button again.
+// MoonDeck's popup section runs its local build through it too.
+export function popupInstall(base, kind, source, opts, note, btn) {
     btn.disabled = true;
     return noteInstall(base, kind, source, note, (text, ok) => {
         note.textContent = text;
         if (!ok) { btn.disabled = false; return; }
         const dlg = note.closest("dialog");
         setTimeout(() => { if (dlg && dlg.open) dlg.close(); }, POPUP_DONE_MS);
-    }, { target });
+    }, opts);
 }
 
 // --- Group membership: join or leave a group the device serving the list holds -------------------------------------------------------

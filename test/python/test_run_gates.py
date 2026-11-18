@@ -27,9 +27,11 @@ def test_a_process_a_step_names_inherits_that_steps_trigger():
     assert gates["host-tests/test"]["globs"] == gates["commit-code/build-host"]["globs"]   # the tests run when the code changed
 
 
-def test_an_excluding_glob_is_an_excluding_pathspec():
-    assert run_gates.pathspecs(["src/**", "!test/js/**"]) == [":(glob)src/**", ":(exclude,glob)test/js/**"]
-    assert run_gates.pathspecs([]) == ["."]
+def test_a_gates_globs_are_matched_by_the_matcher_moondecks_map_uses():
+    assert run_gates.matches("src/a.h", ["src/**", "!test/js/**"]) and not run_gates.matches("test/js/a.js", ["test/**", "!test/js/**"])
+    assert run_gates.matches("anything", ["**"]) and not run_gates.matches("anything", [])
+    import walk_status
+    assert run_gates.matches is walk_status.matches                             # one matcher for the gates and the map
 
 
 def test_each_gate_declares_what_it_needs_and_the_cores_it_holds():
@@ -191,7 +193,8 @@ def test_a_generated_file_is_written_before_the_gates_and_left_out_of_a_merge():
 
 def test_a_merge_leaves_out_the_gates_ci_runs_and_runs_a_command_once():
     commit = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
-    assert commit["commit-docs/docgen"]["ci"] and commit["host-tests/test"]["ci"]   # a process a ci step names is ci too
+    assert commit["commit-docs/docgen"]["ci"] and commit["host-tests/test"]["ci"]   # CI runs the unit tests
+    assert not commit["host-tests/scenarios"]["ci"]                                 # no workflow runs the scenarios: the merge does
     assert not commit["commit-docs/docs"]["ci"] and not commit["commit-code/esp32-fresh"]["ci"]
     run, skipped, _ = run_gates.select("pre-merge", "HEAD", False, None)
     why = {g["id"]: g.get("why", "") for g in skipped}
@@ -222,7 +225,7 @@ def test_a_filtered_run_writes_only_the_generated_files_a_kept_gate_depends_on(m
     kpi = {"id": "commit-code/kpi", "script": "k.py", "args": "", "globs": ["src/**"], "needs": []}
     monkeypatch.setattr(run_gates, "processes", lambda: {})
     monkeypatch.setattr(run_gates, "gates", lambda *_: [gen, docs, js, docgen, kpi])
-    monkeypatch.setattr(run_gates, "changed_files", lambda base, specs: ["src/core/a.h"] if ":(glob)src/**" in specs else [])
+    monkeypatch.setattr(run_gates, "changed_files", lambda base, globs: ["src/core/a.h"] if "src/**" in globs else [])
     monkeypatch.setattr(run_gates, "reads", lambda gate, path: gate is docs)
     assert run_gates.generators("commit", "HEAD") == [gen]                     # unfiltered: as before
     assert run_gates.generators("commit", "HEAD", {"js"}) == []                # `--only js` leaves help.json alone
@@ -331,6 +334,7 @@ def test_only_a_pass_is_cached_and_a_skipped_gate_loses_its_entry(monkeypatch):
 
 def test_the_list_names_the_judgment_gates_for_the_reader(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["run_gates.py", "--list", "--process", "pre-merge"])
+    monkeypatch.setattr(run_gates, "merge_base", lambda: "HEAD")   # whatever refs the clone running the test holds
     assert run_gates.main() == 0
     out = capsys.readouterr().out
     assert "READER pre-merge/reviewer" in out
@@ -340,3 +344,43 @@ def test_a_check_script_that_does_not_parse_still_hashes_so_its_gate_runs_and_fa
     broken = tmp_path / "check_broken.py"
     broken.write_text("def oops(:\n", encoding="utf-8")
     assert run_gates.imported_scripts(broken) == [broken]   # the run goes on, and the gate reports its own SyntaxError
+
+
+def test_a_merge_diffs_from_the_pull_requests_base_and_falls_back_to_the_local_main(monkeypatch):
+    asked = []
+    def git(*args):
+        asked.append(args[1])
+        if args[1] == "origin/main":
+            raise RuntimeError("git merge-base failed: Not a valid object name origin/main")
+        return "abc123\n"
+    monkeypatch.setattr(run_gates, "_git", git)
+    assert run_gates.merge_base() == "abc123" and asked == ["origin/main", "main"]
+
+
+def test_a_condition_no_script_can_evaluate_is_listed_for_the_reader_and_a_bare_string_does_not_crash():
+    procs = {"p": {"steps": [
+        {"id": "a", "given": [{"input": "family", "equals": "Picture"}], "when": {"run": {"script": "a.py"}}},
+        {"id": "b", "given": ["a bare condition"], "when": {"run": {"script": "b.py"}}},
+        {"id": "c", "given": [{"changed": ["src/**"]}], "when": {"run": {"script": "c.py"}}}]}}
+    got = {g["id"]: g for g in run_gates.gates("p", procs)}
+    assert "condition for the reader" in got["p/a"]["judgment"] and "script" not in got["p/a"]   # listed, not run
+    assert "a bare condition" in got["p/b"]["judgment"]
+    assert got["p/c"]["globs"] == ["src/**"]
+
+
+def test_a_plain_run_writes_the_gate_list_out_before_any_gate_runs(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(run_gates, "RECORDS", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["run_gates.py"])
+    gate = {"id": "p/js", "script": "j.py", "args": "", "needs": [], "cores": 1, "trigger": ["src/a.js"]}
+    monkeypatch.setattr(run_gates, "generate", lambda *a: [])
+    monkeypatch.setattr(run_gates, "select", lambda *a: ([gate], [], [{"id": "p/read", "judgment": "Read the diff."}]))
+
+    def stop(*a, **k):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(run_gates, "execute", stop)
+    try:
+        run_gates.main()
+    except KeyboardInterrupt:
+        pass
+    out = capsys.readouterr().out
+    assert "RUN    p/js" in out and "READER p/read: Read the diff." in out   # printed with the gates still to run

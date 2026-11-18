@@ -1010,6 +1010,16 @@
   "number": null
  },
  {
+  "title": "Measure MoonFlock, Flock and Raymarch on the C3 before keeping them compiled out",
+  "area": "Effects",
+  "module": "",
+  "kind": "Investigation",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=310113018",
+  "number": null
+ },
+ {
   "title": "Moving-head effects from MoonLight, including two of troyhack's (2026-09-04)",
   "area": "Effects",
   "module": "",

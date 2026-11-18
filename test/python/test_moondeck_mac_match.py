@@ -36,10 +36,10 @@ def test_unrelated_macs_do_not_match():
 
 def test_derivation_is_directional_efuse_to_device():
     # The efuse side is what esptool or the USB serial reads; the device holds the derived one.
-    # Matching is computed forward (efuse -> EUI-64-trunc). The already-derived MAC in the
-    # efuse slot has no efuse to reconstruct, so it only matches itself exactly, pinning
-    # that the match does not over-accept.
+    # Matching is computed forward (efuse -> EUI-64-trunc), so an already-derived MAC in the efuse
+    # slot matches itself and its own forward derivation, and only derives forward, as the efuse MAC cannot be rebuilt from the EUI-64 form.
     assert _mac_matches("30:ED:A0:FF:FE:F3", "30:ED:A0:FF:FE:F3")   # exact still fine
+    assert _mac_matches("30:ED:A0:FF:FE:F3", "30:ED:A0:FF:FE:FF")   # the forward derivation of the slot's own bytes
     assert not _mac_matches("30:ED:A0:FF:FE:F3", "30:ED:A0:F3:D4:68")  # can't go backward
 
 

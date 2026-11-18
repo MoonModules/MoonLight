@@ -37,13 +37,17 @@ namespace json { struct JsonDoc; struct JsonNode; }
 ///
 /// Membership alone makes a device follow the group's controls. A switch, encoder or fader changed on one member sets what it drives on every member; an effects preset applied on one is applied on the others. Members restarting take the group's values. A slot holds a byte, so a wider control is shared as its slot sees it.
 ///
+/// ## Updating the members
+///
+/// Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The first failure stops the waves.
+///
 /// ## Reaching the members
 ///
-/// Type the group's name in the `receivers` of OSC, audio sync or Network Send, a word of letters, digits, `-`, `_` or `.`, and each member is reached by unicast at its current address, this device left out. A member gone missing is skipped until it is heard again.
+/// Type the group's name, one word, in the `receivers` of OSC, audio sync or Network Send to reach each member by unicast, this device left out. A missing member is skipped until heard again.
 ///
 /// @technical
 ///
-/// **Identity.** A member is its MAC, the identity every network name derives from, so a rename or a new lease keeps it; its name is kept beside it for a member Discovery has dropped. The group is its id, the creating device's MAC and the moment it was made, as an RFC 4122 version 1 UUID is.
+/// **Identity.** A member is its MAC, the identity every network name derives from, so a rename or a new lease keeps it; its name is kept beside it for a member Discovery has dropped. The group is its id: the creating device's MAC and the fleet clock's millisecond at its making, which grows across a restart, the next one taken when a sibling or a deletion marker holds it.
 ///
 /// **Replicated, leaderless.** The shared name is a last-writer-wins register and the members a last-writer-wins element set (Shapiro et al., 2011): each member carries its stamp (Hlc.h) and a removed flag, so two members added at once both stay and a removal outlives a late copy.
 ///
@@ -179,8 +183,10 @@ private:
         char     name[24] = {}; ///< the name Discovery last gave it
     };
 
-    /// A new group's id: this device's MAC and the moment, the next moment when a sibling holds it.
+    /// A new group's id: this device's MAC and the fleet clock's moment, the next moment when the id is taken.
     void makeId();
+    /// Whether a sibling holds this id or a deletion marker names it.
+    bool idTaken() const;
     /// The member with this row id, or null.
     Member* find(uint32_t id);
     /// The member with this MAC, removed ones included, or null.

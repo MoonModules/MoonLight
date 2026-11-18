@@ -12,10 +12,20 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>    // std::snprintf: the preflight answer written with its methods
 #include <cstdlib>
 #include <cstring>
 
 namespace mm::http {
+
+/// The answer to a CORS preflight (the Fetch standard): 204 with the Access-Control-Allow-* headers for `methods`, cached for an hour; its length, 0 when it does not fit `cap`.
+inline size_t preflightResponse(char* out, size_t cap, const char* methods) {
+    const int n = std::snprintf(out, cap,
+                                "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: %s\r\n"
+                                "Access-Control-Allow-Headers: Content-Type\r\nAccess-Control-Max-Age: 3600\r\nConnection: close\r\n\r\n",
+                                methods);
+    return n > 0 && static_cast<size_t>(n) < cap ? static_cast<size_t>(n) : 0;
+}
 
 /// The interim response a client that sent `Expect: 100-continue` waits for before its body (RFC 9110 § 10.1.1).
 inline constexpr char kContinue[] = "HTTP/1.1 100 Continue\r\n\r\n";

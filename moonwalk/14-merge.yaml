@@ -144,7 +144,7 @@ processes:
         section: Review
         say: Have the Reviewer read the branch.
         actor: agent
-        when: { run: { command: "git diff main...HEAD" } }
+        when: { run: { command: "git diff origin/main...HEAD" } }
         detail: |
           The Reviewer reads before the checks run.
 
@@ -166,7 +166,7 @@ processes:
         actor: contributor
         when: { process: commit }
         detail: |
-          The commit gates CI does not run, each marked `ci: true` where it does: the strict docs build, the backlog against the Project, the ESP32 firmware's freshness and Improv with a board attached. The runner skips Improv, whose `--port <port>` needs a value: pick the port and run its MoonDeck card. The host build without the MoonLive backend and the KPI are local gates that run when their triggers match. Their triggers read `git diff --name-only main...`, so they catch what a green series of commits hides.
+          The commit gates CI does not run, each marked `ci: true` where it does: the strict docs build, the backlog against the Project, the ESP32 firmware's freshness and Improv with a board attached. The runner skips Improv, whose `--port <port>` needs a value: pick the port and run its MoonDeck card. The host build without the MoonLive backend and the KPI are local gates that run when their triggers match. Their triggers read `git diff --name-only origin/main...`, so they catch what a green series of commits hides.
       - id: gcc
         say: Build with GCC when CI asks.
         actor: contributor

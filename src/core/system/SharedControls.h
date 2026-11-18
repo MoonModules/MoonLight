@@ -26,17 +26,17 @@ namespace osc { class Reader; }
 ///
 /// **Groups do not bridge.** A parameter two groups both drive is held per group, and a value one group set stays in that group, so a change crosses from one group to the other only when this device's own slot moves it.
 ///
-/// **Bounded, newest kept.** kMaxValues values across the groups: a full table drops its oldest-stamped value for a newer one, so every member converges on the same newest values, and `note` says the table is full. kMaxRecalls recalls, one per group.
+/// **Bounded per group, newest kept.** Each group holds at most kMaxPerGroup values, and a full group drops its own oldest-stamped value for a newer one, so the members of one group hold the same newest values whatever other groups each is in; `note` says when a group is full. At most kMaxGroups groups, each with one recall; a group that leaves this device takes its values and recall with it.
 class SharedControls {
 public:
-    /// The most shared values held, across every group: the 24 slots of one device and those of members that drive other parameters.
-    static constexpr uint8_t kMaxValues = 48;
+    /// The most values one group holds: the 24 slots of one device and those of members that drive other parameters.
+    static constexpr uint8_t kMaxPerGroup = 32;
+    /// The most groups whose values and recall are held.
+    static constexpr uint8_t kMaxGroups = 8;
     /// The longest parameter name, "Module.control", a Control slot's target.
     static constexpr uint8_t kParamLen = ControlModule::kTargetLen;
     /// The longest look name, a preset's name.
     static constexpr uint8_t kNameLen = ControlModule::kMaxNameLen;
-    /// The most recalls held, one per group.
-    static constexpr uint8_t kMaxRecalls = 8;
     /// Values a message carries, about 1 KB.
     static constexpr uint8_t kPerMessage = 16;
     /// The OSC address of the shared values.
@@ -61,7 +61,7 @@ public:
     /// An order-independent digest of group `group`'s values: equal on two devices exactly when they hold the same ones.
     uint32_t digest(uint32_t group) const;
     /// How many values are held, across the groups.
-    uint8_t valueCount() const { return valueCount_; }
+    uint16_t valueCount() const { return valueCount_; }
 
     /// Record a look applied here, served at `ip`:`port`, stamped `s`.
     void recallLocal(uint32_t group, const char* name, const uint8_t ip[4], uint16_t port, const Stamp& s);
@@ -80,6 +80,18 @@ public:
 
     /// Drop every value and recall, as the buffers go on release.
     void clear();
+
+    /// Drop the values and recall of each group `held(key)` answers false for: a group that left this device.
+    template <class Held>
+    void retain(Held&& held) {
+        uint16_t w = 0;
+        for (uint16_t i = 0; i < valueCount_; i++) if (held(values_[i].group)) values_[w++] = values_[i];
+        valueCount_ = w;
+        uint8_t r = 0;
+        for (uint8_t i = 0; i < recallCount_; i++) if (held(recalls_[i].group)) recalls_[r++] = recalls_[i];
+        recallCount_ = r;
+        refreshFull();
+    }
 
 private:
     /// One shared value.
@@ -100,8 +112,12 @@ private:
     };
 
     Value* find(uint32_t group, const char* param);
-    /// The value with the oldest stamp, or null when none is held.
-    Value* oldest();
+    /// Group `group`'s value with the oldest stamp, and how many values it holds; null when none.
+    Value* oldest(uint32_t group, uint16_t& count);
+    /// How many groups hold values.
+    uint8_t groupCount() const;
+    /// Whether a group holds its bound of values, which `note` reports.
+    void refreshFull();
     /// A place for `param`: a new one while room allows, else the oldest-stamped value's when `s` is newer; null otherwise.
     Value* add(uint32_t group, const char* param, const Stamp& s);
     Recall* recallOf(uint32_t group);
@@ -117,7 +133,8 @@ private:
 
     ScratchBuffer<Value> values_;
     ScratchBuffer<Recall> recalls_;
-    uint8_t valueCount_ = 0, recallCount_ = 0;
+    uint16_t valueCount_ = 0;
+    uint8_t recallCount_ = 0;
     bool full_ = false;
     int fetchHandle_ = 0, applyHandle_ = 0;   ///< the document on its way, then its apply
     char fetchName_[kNameLen] = "";           ///< its name when the fetch began, which a newer recall may replace meanwhile

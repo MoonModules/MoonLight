@@ -286,6 +286,12 @@ void DeviceGroupSync::holdGroups(MoonModule& devices) {
         n++;
     }
     seenCount_ = n;
+    // A group that left this device, deleted here or anywhere, or this device removed from it, takes its shared values and recall with it.
+    shared_.retain([&](uint32_t key) {
+        bool held = false;
+        forEachGroupId(devices, [&](const char* id) { held = held || SharedControls::keyOf(id) == key; });
+        return held;
+    });
 }
 
 void DeviceGroupSync::sendDue(MoonModule& devices) {

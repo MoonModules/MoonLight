@@ -180,6 +180,12 @@ Fireworks fill any grid: the shells burst at `burstHeight`, a share of the grid'
 
 An audio effect's hit is now a drum's: `onset` fires on the kick, the snare or a hat from their own detectors, once a drum, where it fired on any rise across the spectrum, and the level-against-its-average beat test is gone. Moving Head rolls its gobo on a hit, MoonInvaders marches on the kick, Radial Spectrum flashes the sectors of the range that was hit, and MoonLive's `audioBeat()` reads the same hit. Paint Brush follows troyhacks's original again: up to 16 strokes, one a band, where it drew 255, scattered by the bass, anti-aliased by default, at his rates and fade, with `minLength` on the endpoints' span from 0 to 31; a new `glide` sweeps the strokes smoothly instead, and a new `surge` stretches them on each drum hit; a saved `numLines`, `oscillatorOffset`, `fadeRate` or `minLength` above its new range is clamped into it. GEQ, GEQ 3D, Spectrum and Freq Saws gain AudioSpectrum's `bands` select and show the third octaves by default, the sixteen bands on a frame synced in the WLED format: set `bands` to `16` for the old bars. GEQ 3D shows all the bars the source has across the full width, where it showed sixteen, and its side faces show brighter through the new `sideFill`: set `numBands` to 16 for the old count. The sprite effects driven by sound slow with the music's level, so a quiet moment pauses them, where any sound over the floor kept them at the bands' speed.
 
+### ESP32-S31 boards read their flash over four lines
+
+**Action: *install over USB* once, on an `esp32s31` device.**
+
+The S31 image reads code from flash over four data lines (QIO) where v7.0.0 used two (DIO), which halved what the cache fetched per clock: 13 fps against 500 on the bench CoreBoard. An update over the air replaces only the app, and ESP-IDF refuses an app whose flash mode differs from the bootloader's (`ESP_ERR_OTA_SPI_MODE_MISMATCH`), so install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), as for the S3 boards below.
+
 ### ESP32-P4 boards read their flash over four lines
 
 **Action: *install over USB* once, on every ESP32-P4 device (`esp32p4rev1-eth`, `esp32p4rev1-eth-wifi`, `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi`).**
@@ -248,12 +254,6 @@ Migration happens in the browser's Restore, so a module whose type a release ren
 
 `ringAuto` now sizes the ring by the lead the wire needs, 3-row buffers, where it took every byte of internal RAM above 64 KB. On a 3,840-light S3 that is 21 small buffers instead of 28 large ones, a ring of 37 KB where it took about 112 KB. Turn `ringAuto` off to set `ringRows` and `ringBufs` by hand as before.
 The ring refuses to run when its refill would read PSRAM, since a flash save can cut PSRAM off in the middle of a refill and crash the board. With `ringSnapshot` off it reads the live frame, which a board with PSRAM keeps there, so the card shows `ring refused: … turn ringSnapshot on`.
-
-### ESP32-S31 boards read their flash over four lines
-
-**Action: *install over USB* once, on an `esp32s31` device.**
-
-The S31 image reads code from flash over four data lines (QIO) where v7.0.0 used two (DIO), which halved what the cache fetched per clock: 13 fps against 500 on the bench CoreBoard. An update over the air replaces only the app, and ESP-IDF refuses an app whose flash mode differs from the bootloader's (`ESP_ERR_OTA_SPI_MODE_MISMATCH`), so install once over USB from the [installer page](https://moonmodules.org/MoonLight/install/), as for the S3 boards below.
 
 ### ESP32-S3 boards read their flash over four lines
 

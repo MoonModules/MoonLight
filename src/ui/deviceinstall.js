@@ -41,6 +41,25 @@ export async function waitForMoonBase(base, ms) {
     return !!(await pollUntil(async () => (await moonbaseStatus(base)) !== null, (up) => up, ms, 2000));
 }
 
+// The images a device's Firmware module installs, in its order: the options of its `image` control, which it publishes only where there are
+// two images to choose between, or the app alone. `fw` is the module as /api/modules/Firmware or the state serves it.
+export function firmwareImages(fw) {
+    const c = (fw?.controls || []).find(c => c.name === "image");
+    return c && Array.isArray(c.options) ? c.options : ["App"];
+}
+
+// Whether the device writes its app from MoonBase: its one app slot runs the app, so MoonBase, the factory image, installs it and restarts back.
+export function hasMoonBase(fw) {
+    return firmwareImages(fw).includes("MoonBase");
+}
+
+// Restart the app at `base` into MoonBase and wait for MoonBase to answer; a refusal or silence is the error.
+export async function restartIntoMoonBase(base) {
+    const res = await fetch(`${base}/api/firmware/moonbase`, { method: "POST" }).catch(() => null);   // the restart can cut the reply off
+    if (res && !res.ok) throw new Error(`Refused: ${await errorMessage(res)}`);
+    if (!await waitForMoonBase(base, 120000)) throw new Error(MOONBASE_SILENT_MSG);
+}
+
 // How a restart goes: "back" once the device dropped off and answers again, "up" when it answered throughout for `upMs`, null when it is away
 // past `ms`. Only whether it answers counts, an opaque reply included, so a device that sends no CORS header (Tasmota) is followed as well.
 // A fixed wait reloaded a Teensy still copying its image onto the browser's connection-refused page.
@@ -85,8 +104,10 @@ function reached(target, fw) {
 // MoonBase already, as a move from another firmware leaves it, so the source goes to MoonBase straight away. `opts.target`: what the device
 // reports once it runs the install, {version} or {flag} (see reached), which then alone counts as done.
 //
-// `ui` takes status(text), busy(text) for a wait of unknown length, progress(read, total), fail(text) and done(text); setUpload(abortController),
-// the cancel of a browser transfer, and watchStalls(), which the upload arms, are used where the UI has them.
+// `ui` takes status(text), busy(text) for a wait of unknown length, progress(read, total), fail(text) and done(text); setCancel(fn), the cancel
+// that applies now, null once the install cannot be canceled, and watchStalls(), which the upload arms, are used where the UI has them.
+// Two installs cancel: a browser transfer, by dropping its connection, and a URL install MoonBase runs, which hears /api/firmware/cancel;
+// the app, its WiFi coprocessor and its MoonBase write run to their end once started.
 export async function installFirmware(base, kind, source, ui, opts = {}) {
     const inMoonBase = kind === "app" && !!opts.inMoonBase;
     const job = { base, k: INSTALL_KINDS[kind], source, ui, target: opts.target, inMoonBase, viaMoonBase: inMoonBase || (kind === "app" && !!opts.viaMoonBase) };
@@ -98,6 +119,9 @@ export async function installFirmware(base, kind, source, ui, opts = {}) {
     }
 }
 
+// The cancel of a URL install MoonBase runs while it serves: its own route, which the app does not serve.
+const cancelInMoonBase = (base) => () => fetch(`${base}/api/firmware/cancel`, { method: "POST" }).catch(() => {});
+
 // Hand the device the URL; true when the browser pushed the image itself, as for a board lacking TLS, which answers 501 on the app's URL route.
 async function handOver(job) {
     const { base, k, source, ui, viaMoonBase } = job;
@@ -107,6 +131,7 @@ async function handOver(job) {
         if (!res) throw new Error(MOONBASE_SILENT_MSG);
         if (!res.ok) throw new Error(`Refused: ${await res.text()}`);   // MoonBase answers in plain text
         job.accepted = true;
+        ui.setCancel?.(cancelInMoonBase(base));
         return false;
     }
     ui.status(viaMoonBase ? "Restarting into MoonBase…" : `Starting the install of ${k.name}…`);
@@ -118,14 +143,15 @@ async function handOver(job) {
     if (res && res.status === 501 && k === INSTALL_KINDS.app && source.url) {
         // A release asset comes from the installer's Pages copy, since GitHub's own refuses a cross-origin read; one controller cancels both transfers.
         const ctl = new AbortController();
-        ui.setUpload?.(ctl);
+        ui.setCancel?.(() => ctl.abort());
         ui.status("Downloading the image…");
         const blob = await downloadImage(source.url, ctl.signal)
-            .catch((err) => { ui.setUpload?.(null); throw new Error(ctl.signal.aborted ? "Install canceled." : `Download failed: ${err.message}`); });
+            .catch((err) => { ui.setCancel?.(null); throw new Error(ctl.signal.aborted ? "Install canceled." : `Download failed: ${err.message}`); });
         await upload(job, k.uploadRoute, blob, ctl);
         return true;
     }
     if (res && !res.ok) throw new Error(`Refused: ${await errorMessage(res)}`);
+    if (!viaMoonBase) ui.setCancel?.(null);   // the device runs the install itself from here; through MoonBase, the watch arms its cancel
     job.accepted = !!res;   // the device took the URL; a request with no reply may have been lost on the way
     return false;
 }
@@ -137,9 +163,7 @@ async function pushFile(job) {
     if (!viaMoonBase) { await upload(job, k.uploadRoute, source.file); return true; }
     if (!job.inMoonBase) {
         ui.status("Restarting into MoonBase…");
-        const res = await fetch(`${base}/api/firmware/moonbase`, { method: "POST" }).catch(() => null);   // the restart can cut the reply off
-        if (res && !res.ok) throw new Error(`Refused: ${await errorMessage(res)}`);
-        if (!await waitForMoonBase(base, 120000)) throw new Error(MOONBASE_SILENT_MSG);
+        await restartIntoMoonBase(base);
     }
     await fileToMoonBase(job);
     return false;
@@ -165,14 +189,14 @@ function toMoonBase({ base, source }) {
 
 // Upload `blob` to `route` with its progress on `ui`, behind the cancel `ctl`.
 async function upload({ base, ui }, route, blob, ctl = new AbortController()) {
-    ui.setUpload?.(ctl);
+    ui.setCancel?.(() => ctl.abort());
     ui.status(`Installing ${fmtBytes(blob.size)}…`);
     try {
         await uploadWithProgress(`${base}${route}`, blob, ui, ctl.signal);
     } catch (err) {
         throw new Error(ctl.signal.aborted ? "Install canceled." : `Install failed: ${err.message}`, { cause: err });
     } finally {
-        ui.setUpload?.(null);
+        ui.setCancel?.(null);   // the device writes what it took
     }
 }
 
@@ -230,11 +254,13 @@ async function watch(job) {
                 if (job.source.file) await fileToMoonBase(job);   // behind the cancel, as the first push
                 else await toMoonBase(job).catch(() => null);   // the asks see the outcome
             } else showPhase(text, !text || text === "idle" ? "Preparing the install…" : text);
+            if (!job.source.file) ui.setCancel?.(cancelInMoonBase(base));   // MoonBase answering runs the URL install it can stop
             away = sawWork = true;   // MoonBase answering means the old app is gone
             silent = 0;
             continue;
         }
         const text = p.app;
+        if (viaMoonBase) ui.setCancel?.(null);   // the app answers again: MoonBase is done
         if (text.startsWith("error")) throw new Error(text);
         const rest = text === "" || text === "idle";
         // A bare working phase is work too: a chunked download reports only its phases, checking, erasing and writing, then rest.

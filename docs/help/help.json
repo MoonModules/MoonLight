@@ -5370,8 +5370,12 @@
      "text": "Membership alone makes a device follow the group's controls. A switch, encoder or fader changed on one member sets what it drives on every member; an effects preset applied on one is applied on the others. Members restarting take the group's values. A slot holds a byte, so a wider control is shared as its slot sees it."
     },
     {
+     "title": "Updating the members",
+     "text": "Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The first failure stops the waves."
+    },
+    {
      "title": "Reaching the members",
-     "text": "Type the group's name in the `receivers` of OSC, audio sync or Network Send, a word of letters, digits, `-`, `_` or `.`, and each member is reached by unicast at its current address, this device left out. A member gone missing is skipped until it is heard again."
+     "text": "Type the group's name, one word, in the `receivers` of OSC, audio sync or Network Send to reach each member by unicast, this device left out. A missing member is skipped until heard again."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/DeviceGroup.png",

@@ -29,11 +29,12 @@ inline void hearWithMac(mm::DevicesModule& dev, const uint8_t ip[4], const char*
 
 /// Devices with Discovery and the group `name` under it, this device at 192.168.1.2, Discovery live so the group reads it.
 struct Bench {
-    ClockGuard clock;
-    AddressGuard address;
-    mm::Devices devices;
-    mm::DevicesModule* discovery = new mm::DevicesModule;
-    mm::DeviceGroup* group = new mm::DeviceGroup;
+    ClockGuard clock;          ///< the real clock back when the test ends
+    AddressGuard address;      ///< the real address back when the test ends
+    mm::Devices devices;       ///< the container Discovery and the group sit in
+    mm::DevicesModule* discovery = new mm::DevicesModule;   ///< Discovery, which the group reads its members through
+    mm::DeviceGroup* group = new mm::DeviceGroup;           ///< the group under test
+    /// Set up Devices with Discovery and the group `name`, this device at 192.168.1.2.
     explicit Bench(const char* name) {
         const uint8_t self[4] = {192, 168, 1, 2};
         mm::platform::setTestEthIPv4(self);
@@ -45,8 +46,11 @@ struct Bench {
         discovery->applyState();   // claims the seat a group reads Discovery through
         group->setup();
     }
+    /// Release Discovery, which the container's modules depend on.
     ~Bench() { discovery->release(); }
+    /// One bench per test: its modules belong to it.
     Bench(const Bench&) = delete;
+    /// One bench per test: its modules belong to it.
     Bench& operator=(const Bench&) = delete;
 
     /// Add the device with this MAC to the group, as the API's MAC field does.

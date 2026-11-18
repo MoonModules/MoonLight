@@ -100,17 +100,24 @@ void DeviceGroup::setup() {
 void DeviceGroup::makeId() {
     uint8_t mac[6];
     platform::getMacAddress(mac);
-    uint32_t moment = platform::millis();
-    // A sibling made at the same millisecond of another boot would share the id: the next moment is taken instead.
-    for (bool clash = true; clash; moment++) {
+    // The fleet's clock, which grows across a restart as it takes in the stamps restored and heard, rather than the uptime, which starts over.
+    auto moment = static_cast<uint32_t>(stampNow().hlc >> 16);
+    // An id a sibling holds or a deletion marker names is taken, so the next moment is used instead.
+    for (bool taken = true; taken; moment++) {
         mm::formatTo(id_, sizeof(id_), "%02x%02x%02x%02x%02x%02x%08lx", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
                      static_cast<unsigned long>(moment));
-        clash = false;
-        for (uint8_t i = 0; parent() && i < parent()->childCount(); i++) {
-            const MoonModule* m = parent()->child(i);
-            if (m != this && m->role() == ModuleRole::DeviceGroup && std::strcmp(static_cast<const DeviceGroup*>(m)->groupId(), id_) == 0) clash = true;
-        }
+        taken = idTaken();
     }
+}
+
+bool DeviceGroup::idTaken() const {
+    const DevicesModule* discovery = DevicesModule::active();
+    if (discovery && discovery->groupDeleted(id_)) return true;
+    for (uint8_t i = 0; parent() && i < parent()->childCount(); i++) {
+        const MoonModule* m = parent()->child(i);
+        if (m != this && m->role() == ModuleRole::DeviceGroup && std::strcmp(static_cast<const DeviceGroup*>(m)->groupId(), id_) == 0) return true;
+    }
+    return false;
 }
 
 void DeviceGroup::tick1s() MM_NONBLOCKING {

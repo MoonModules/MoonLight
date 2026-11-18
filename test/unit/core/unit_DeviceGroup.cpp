@@ -54,6 +54,29 @@ TEST_CASE("DeviceGroup: a new group takes an id from this device's MAC once, and
     CHECK(id == b.group->groupId());
 }
 
+// After a restart the uptime starts over, so a group made then could take the id of one deleted before it, and its own marker would remove it.
+TEST_CASE("DeviceGroup: a new group takes no id a deletion marker names, its moment the fleet clock's") {
+    Bench b;
+    platform::setTestNowMs(2000);
+    uint8_t mac[6];
+    platform::getMacAddress(mac);
+    char id[DeviceGroup::kIdLen + 1];
+    std::snprintf(id, sizeof(id), "%02x%02x%02x%02x%02x%02x%08lx", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], 2000ul);
+    b.discovery->defineControls();
+    for (uint8_t i = 0; i < b.discovery->controls().count(); i++)   // Discovery's saved markers name the id a group made now would take
+        if (std::strcmp(b.discovery->controls()[i].name, "deletedGroups") == 0) std::snprintf(static_cast<char*>(b.discovery->controls()[i].ptr), 400, "%s:1:1;", id);
+    b.discovery->tick1s();   // the markers load
+    REQUIRE(b.discovery->groupDeleted(id));
+    auto* hall = new DeviceGroup;
+    b.devices.addChild(hall);
+    hall->setName("Hall");
+    hall->setup();
+    const std::string taken = hall->groupId();
+    CHECK(taken != id);
+    CHECK(taken.substr(0, 12) == std::string(id).substr(0, 12));   // still this device's MAC
+    CHECK(taken.substr(12) == "000007d1");   // the next millisecond
+}
+
 TEST_CASE("DeviceGroup: Devices accepts a group as a child, and a group is a group") {
     Devices devices;
     DeviceGroup g;

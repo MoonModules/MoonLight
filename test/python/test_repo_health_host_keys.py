@@ -11,14 +11,11 @@ non-`esp32*` key survives both the merge and the ghost-row prune. What was missi
 add, is the half that was wrong: the spelling of the key at the point it is written.
 """
 
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "moondeck"))
-sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 
-import _host  # noqa: E402
+import _host
 
 
 def test_the_key_names_the_host_and_never_lumps_two_together(monkeypatch):

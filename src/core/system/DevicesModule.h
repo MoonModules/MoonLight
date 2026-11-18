@@ -246,6 +246,9 @@ public:
         if (parent()) groupSync_.receive(*parent());
     }
 
+    /// Whether a deletion marker names the group with this id, so a new group takes another.
+    bool groupDeleted(const char* id) const { return groupSync_.deleted(id); }
+
     /// What a group's status adds about the shared controls, or null.
     const char* sharedNote() const MM_NONBLOCKING { return groupSync_.sharedNote(); }
 

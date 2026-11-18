@@ -83,25 +83,53 @@ uint32_t SharedControls::keyOf(const char* groupId) {
 // ---- Values ---------------------------------------------------------------------------------
 
 SharedControls::Value* SharedControls::find(uint32_t group, const char* param) {
-    for (uint8_t i = 0; i < valueCount_; i++)
+    for (uint16_t i = 0; i < valueCount_; i++)
         if (values_[i].group == group && std::strcmp(values_[i].param, param) == 0) return &values_[i];
     return nullptr;
 }
 
-SharedControls::Value* SharedControls::oldest() {
-    Value* o = valueCount_ ? &values_[0] : nullptr;
-    for (uint8_t i = 1; i < valueCount_; i++) if (o->stamp.newerThan(values_[i].stamp)) o = &values_[i];
+SharedControls::Value* SharedControls::oldest(uint32_t group, uint16_t& count) {
+    Value* o = nullptr;
+    count = 0;
+    for (uint16_t i = 0; i < valueCount_; i++) {
+        if (values_[i].group != group) continue;
+        count++;
+        if (!o || o->stamp.newerThan(values_[i].stamp)) o = &values_[i];
+    }
     return o;
 }
 
+uint8_t SharedControls::groupCount() const {
+    uint8_t n = 0;
+    for (uint16_t i = 0; i < valueCount_; i++) {
+        uint16_t j = 0;
+        while (j < i && values_[j].group != values_[i].group) j++;
+        if (j == i) n++;   // the first value of its group
+    }
+    return n;
+}
+
+void SharedControls::refreshFull() {
+    full_ = false;
+    for (uint16_t i = 0; i < valueCount_ && !full_; i++) {
+        uint16_t count = 0;
+        oldest(values_[i].group, count);
+        full_ = count >= kMaxPerGroup;
+    }
+}
+
 SharedControls::Value* SharedControls::add(uint32_t group, const char* param, const Stamp& s) {
+    uint16_t count = 0;
+    Value* o = oldest(group, count);
     Value* slot = nullptr;
-    if (valueCount_ < kMaxValues && values_.ensure(valueCount_ + 1u)) slot = &values_[valueCount_++];
-    else {
-        // Full: the oldest-stamped value gives way to a newer one, so every member keeps the same newest values.
+    if (count >= kMaxPerGroup) {
+        // The group is full: its own oldest-stamped value gives way to a newer one, so the group's members keep the same newest values.
         full_ = true;
-        Value* o = oldest();
-        if (o && s.newerThan(o->stamp)) slot = o;
+        if (s.newerThan(o->stamp)) slot = o;
+    } else if (!count && groupCount() >= kMaxGroups) {
+        full_ = true;   // one group more than the table holds: its values stay unheld, and the status says so
+    } else if (values_.ensure(valueCount_ + 1u)) {
+        slot = &values_[valueCount_++];
     }
     if (!slot) return nullptr;
     Value& v = *slot;
@@ -122,7 +150,7 @@ bool SharedControls::setLocal(uint32_t group, const char* param, int32_t value, 
 }
 
 bool SharedControls::holds(const char* param, int32_t value) const {
-    for (uint8_t i = 0; i < valueCount_; i++)
+    for (uint16_t i = 0; i < valueCount_; i++)
         if (values_[i].value == value && std::strcmp(values_[i].param, param) == 0) return true;
     return false;
 }
@@ -130,7 +158,7 @@ bool SharedControls::holds(const char* param, int32_t value) const {
 uint32_t SharedControls::digest(uint32_t group) const {
     // XOR of each value's hash, so two devices holding them in another order agree.
     uint32_t d = 0;
-    for (uint8_t i = 0; i < valueCount_; i++) {
+    for (uint16_t i = 0; i < valueCount_; i++) {
         const Value& v = values_[i];
         if (v.group != group) continue;
         const uint32_t stampBits = static_cast<uint32_t>(v.stamp.hlc) ^ static_cast<uint32_t>(v.stamp.hlc >> 32) ^ v.stamp.writer;
@@ -142,11 +170,11 @@ uint32_t SharedControls::digest(uint32_t group) const {
 size_t SharedControls::writeValues(uint8_t* out, size_t cap, const char* groupId, uint16_t& from, const char* param) const {
     // The group's id and the sender's digest, then per value: its name, its value, its stamp.
     const uint32_t group = keyOf(groupId);
-    uint8_t picked[kPerMessage];
+    uint16_t picked[kPerMessage];
     uint8_t n = 0;
     for (; from < valueCount_ && n < kPerMessage; from++) {
         const Value& v = values_[from];
-        if (v.group == group && (!param || std::strcmp(v.param, param) == 0)) picked[n++] = static_cast<uint8_t>(from);
+        if (v.group == group && (!param || std::strcmp(v.param, param) == 0)) picked[n++] = from;
     }
     char tags[4 + 4 * kPerMessage] = ",si";
     for (uint8_t k = 0; k < n; k++) std::strcat(tags, "sihi");
@@ -206,7 +234,7 @@ void SharedControls::apply(const char* param, int32_t value) {
 SharedControls::Recall* SharedControls::recallOf(uint32_t group) {
     for (uint8_t i = 0; i < recallCount_; i++)
         if (recalls_[i].group == group) return &recalls_[i];
-    if (recallCount_ >= kMaxRecalls || !recalls_.ensure(recallCount_ + 1u)) return nullptr;
+    if (recallCount_ >= kMaxGroups || !recalls_.ensure(recallCount_ + 1u)) return nullptr;
     Recall& r = recalls_[recallCount_++];
     r = Recall{};
     r.group = group;

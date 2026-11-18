@@ -727,16 +727,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
 }
 
 void HttpServerModule::sendPreflightResponse(platform::TcpConnection& conn) {
-    // 204 No Content with the Access-Control-Allow-* headers; Max-Age caches the preflight for an hour.
-    const char* response =
-        "HTTP/1.1 204 No Content\r\n"
-        "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n"
-        "Access-Control-Max-Age: 3600\r\n"
-        "Connection: close\r\n"
-        "\r\n";
-    conn.write(reinterpret_cast<const uint8_t*>(response), std::strlen(response));
+    char response[256];
+    const size_t n = http::preflightResponse(response, sizeof(response), "GET, POST, PATCH, DELETE, OPTIONS");
+    conn.write(reinterpret_cast<const uint8_t*>(response), n);
 }
 
 // The reason phrase for each status this server answers (RFC 9110 section 15); a code not listed reads "Error", which a client ignores.
@@ -2216,7 +2209,7 @@ void HttpServerModule::handleFirmwareUrl(platform::TcpConnection& conn, const ch
         sendError(conn, 500, g_otaStatus[0] ? g_otaStatus : "ota start failed");   // the platform's own reason when it wrote one
         return;
     }
-    // 202 Accepted: task running; UI polls FirmwareUpdate.update_status.
+    // 202 Accepted: the install runs in a task, and the page follows it on the Firmware card's status (/api/modules/Firmware) until the device restarts.
     sendResponse(conn, 202, "application/json", "{\"ok\":true}");
 }
 

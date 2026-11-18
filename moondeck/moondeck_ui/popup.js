@@ -3,8 +3,8 @@
 // (moondeck/_usb.py), the output in the Log pane as a card's run shows it. A MoonLight device is selected for the live tests, by
 // MAC, and takes its firmware's local build over the network.
 
-import { installFirmware, peerFirmware } from "/ui/deviceinstall.js";
-import { POPUP_DONE_MS } from "/ui/devicepopup.js";
+import { peerFirmware, hasMoonBase } from "/ui/deviceinstall.js";
+import { popupInstall } from "/ui/devicepopup.js";
 
 const NATIVE_USB = "esp32 (native-usb)";   // a native-USB board whose descriptor names no chip (moondeck/_usb.py)
 
@@ -46,7 +46,7 @@ export function moondeckActions(row, dlg) {
     const parts = [];
     if (row.usb) parts.push(usbActions(row, note, dlg, builds));
     if (row.type === "MoonLight" && row.mac) parts.push(liveTestToggle(row, note));
-    if (row.type === "MoonLight" && row.ip && !row.port) parts.push(networkInstall(row, note, builds, dlg));
+    if (row.type === "MoonLight" && row.ip && !row.port) parts.push(networkInstall(row, note, builds));
     if (!parts.length) return;
     box.append(el("strong", "", "MoonDeck"), ...parts, note);
     dlg.appendChild(box);
@@ -131,10 +131,10 @@ function liveTestToggle(row, note) {
     return label;
 }
 
-// Install local build: the board's firmware's local build, which MoonDeck serves as a file, through the shared install flow the Firmware card
-// and the popup's updates run (src/ui/deviceinstall.js): an upload with its bar, through MoonBase where the board writes its app from it. A host
-// updates from its own Firmware card, so only a board's row offers it.
-function networkInstall(row, note, builds, dlg) {
+// Install local build: the board's firmware's local build, which MoonDeck serves as a file, as the popup's own updates install (popupInstall):
+// an upload with its bar, through MoonBase where the board writes its app from it. A host updates from its own Firmware card, so only a board's
+// row offers it.
+function networkInstall(row, note, builds) {
     const btn = button("Install local build", "");
     btn.hidden = true;
     builds.then(list => {
@@ -149,19 +149,8 @@ function networkInstall(row, note, builds, dlg) {
         note.textContent = "Reading the local build…";
         const file = await fetch(`/api/local-build/${encodeURIComponent(row.firmware)}`).then(r => (r.ok ? r.blob() : null)).catch(() => null);
         if (!file) { note.textContent = `No local ${row.firmware} build: run Build on the ESP32 tab.`; btn.disabled = false; return; }
-        // The board's Firmware card offers a MoonBase tab when its app is written from MoonBase, the card's own test (app.js deviceHasMoonBase).
         const fw = await fetch(`${base}/api/modules/Firmware`).then(r => r.json()).catch(() => null);
-        const viaMoonBase = !!(fw && (fw.controls || []).find(c => c.name === "image")?.options?.includes("MoonBase"));
-        const bar = el("progress", "graph-popup-progress");
-        note.insertAdjacentElement("afterend", bar);
-        const end = (text) => { bar.remove(); note.textContent = text; };
-        await installFirmware(base, "app", { file }, {
-            status: (text) => { note.textContent = text; },
-            busy: (text) => { note.textContent = text; bar.removeAttribute("value"); },
-            progress: (read, total) => { bar.max = total; bar.value = read; },
-            fail: (text) => { end(text); btn.disabled = false; },
-            done: (text) => { end(`${text} The local build runs.`); setTimeout(() => { if (dlg.open) dlg.close(); }, POPUP_DONE_MS); },
-        }, { viaMoonBase });
+        await popupInstall(base, "app", { file }, { viaMoonBase: hasMoonBase(fw) }, note, btn);
     });
     return btn;
 }

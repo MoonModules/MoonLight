@@ -847,10 +847,8 @@ void serveOne(int sock) {
 
     // A CORS preflight, answered as the app answers it (HttpServerModule::sendPreflightResponse), so a page served elsewhere on this network, MoonDeck's, can install here.
     if (std::strncmp(head, "OPTIONS ", 8) == 0) {
-        static constexpr char kPreflight[] =
-            "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-            "Access-Control-Allow-Headers: Content-Type\r\nAccess-Control-Max-Age: 3600\r\nConnection: close\r\n\r\n";
-        sendAll(sock, kPreflight, sizeof(kPreflight) - 1);
+        char preflight[256];
+        sendAll(sock, preflight, mm::http::preflightResponse(preflight, sizeof(preflight), "GET, POST, OPTIONS"));
         ::close(sock);
         return;
     }

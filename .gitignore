@@ -75,9 +75,6 @@ Testing/
 
 # MoonDeck state
 moondeck/moondeck.json
-# Flash-event breadcrumb dropped by flash_esp32.py and consumed by MoonDeck
-# on the next device refresh to link last_port → device.
-moondeck/.last_flash.json
 
 # Generated files. These change on every build (a git hash, a build date, a minified blob), so
 # tracking them would put a diff of their own volatility in every commit.

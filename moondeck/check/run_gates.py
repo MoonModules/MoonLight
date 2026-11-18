@@ -9,15 +9,15 @@ The trigger table is the YAML: each gate of `moonwalk/13-document-commit.yaml` a
 and the script it runs, and a step naming a `process` brings that process's gates in. This runner reads that table instead of an
 agent typing the chain by hand:
 
-- **Which gates.** A gate runs when a file it names changed, read with git's own pathspecs (`:(glob)`, `:(exclude,glob)`) against
-  HEAD for a commit and against the merge base with main for a merge. A gate naming no files runs on every change.
+- **Which gates.** A gate runs when a file it names changed, matched by `walk_status.matches` (the matcher MoonDeck's map uses) against
+  HEAD for a commit and against the merge base with origin/main (else main) for a merge. A gate naming no files runs on every change.
 - **Generated first.** A step that `generates` a committed file (help.json) runs before every other gate of a commit, so the gates read
   and hash the file the source says, and its rewrite is left unstaged for the reader; a merge leaves it out.
 - **Once.** A gate that passed is cached under a hash of its inputs: HEAD, its files' diff, its script with the modules it imports, and the built outputs it checks. A rerun after a fix runs
   only the gates whose inputs moved; only a pass is cached.
 - **Scheduled by need, as make does.** A gate starts once the gates it `needs` finished, holding the job budget's tokens its `cores`
-  names (`_budget.py`, GNU make's jobserver protocol), taken all at once or not at all: a compile takes every core, the KPI too so no
-  gate beside it skews a timing, any other gate one. Its count reaches its builds (`CMAKE_BUILD_PARALLEL_LEVEL`) and its test workers.
+  names (`_budget.py`, GNU make's jobserver protocol), taken all at once or not at all: a compile takes every core, the Python suite and the KPI too (the KPI so no
+  gate beside it skews a timing), a step naming no `cores` one. Its count reaches its builds (`CMAKE_BUILD_PARALLEL_LEVEL`) and its test workers.
   The ready gate on the longest path to the end goes first, each gate's time read from the earlier records, as critical-path list
   scheduling does; a gate that does not fit holds back the ones behind it, so a compile is never starved. All of it at low priority.
 - **Reported.** One line per gate, PASS, FAIL, CACHED or SKIP with the reason, and a line each minute naming what runs. A step that is
@@ -58,7 +58,9 @@ COMPILED = re.compile(r"Building (?:CXX|C|ASM) object")   # the line make and ni
 RUN_START = time.monotonic()   # a gate's start is recorded from here, so the record shows which gates ran beside each other
 
 sys.path.insert(0, str(ROOT / "moondeck"))
+sys.path.insert(0, str(ROOT / "moondeck" / "docs"))
 from _budget import JobBudget  # noqa: E402
+from walk_status import matches  # noqa: E402
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -73,21 +75,24 @@ def processes() -> dict:
     return out
 
 
-def gates(process_id: str, procs: dict, globs: tuple = (), seen: frozenset = frozenset(), ci: bool = False) -> list[dict]:
+def gates(process_id: str, procs: dict, globs: tuple = (), seen: frozenset = frozenset()) -> list[dict]:
     """The steps of `process_id` and the processes it names, in order: a script gate with its globs, else a step for the reader.
 
-    A process a step names inherits that step's globs and its `ci` mark, as `tests` hands its trigger to the host-tests process.
+    A process a step names inherits that step's globs, as `tests` hands its trigger to the host-tests process; each step carries its own `ci` mark.
     """
     out = []
     for step in procs[process_id]["steps"]:
-        given = tuple(g for c in step.get("given") or [] for g in c.get("changed", [])) or globs
-        on_ci = ci or bool(step.get("ci"))
+        conditions = step.get("given") or []
+        given = tuple(g for c in conditions if isinstance(c, dict) for g in c.get("changed", [])) or globs
         when = step.get("when") or {}
         gid = f"{process_id}/{step['id']}"
-        if "process" in when and when["process"] in procs and when["process"] not in seen:
-            out += gates(when["process"], procs, given, seen | {process_id}, on_ci)
+        unread = [c for c in conditions if not (isinstance(c, dict) and set(c) == {"changed"})]   # an input or a bare string: no script can evaluate it
+        if unread and ("process" in when or "run" in when):
+            out.append({"id": gid, "judgment": f"{step.get('say', step['id'])} (when {', '.join(map(str, unread))}: a condition for the reader)"})
+        elif "process" in when and when["process"] in procs and when["process"] not in seen:
+            out += gates(when["process"], procs, given, seen | {process_id})
         elif "run" in when and "script" in when["run"]:
-            out.append({"id": gid, "script": when["run"]["script"], "args": when["run"].get("args", ""), "globs": list(given), "ci": on_ci,
+            out.append({"id": gid, "script": when["run"]["script"], "args": when["run"].get("args", ""), "globs": list(given), "ci": bool(step.get("ci")),
                         "generates": step.get("generates"), "cores": step.get("cores", 1), "outputs": step.get("outputs", []),
                         "needs": [n if "/" in n else f"{process_id}/{n}" for n in step.get("needs", [])]})
         elif "run" in when and "command" in when["run"]:
@@ -97,28 +102,23 @@ def gates(process_id: str, procs: dict, globs: tuple = (), seen: frozenset = fro
     return out
 
 
-def pathspecs(globs: list) -> list[str]:
-    """A gate's globs as git pathspecs: `!pattern` excludes."""
-    return [f":(exclude,glob){g[1:]}" if g.startswith("!") else f":(glob){g}" for g in globs] or ["."]
+def changed_files(base: str, globs: list[str]) -> list[str]:
+    """The files under `globs` that differ from `base`, the working tree and the index included, and the untracked ones.
 
-
-def changed_files(base: str, specs: list[str]) -> list[str]:
-    """The files under `specs` that differ from `base`, the working tree and the index included, and the untracked ones."""
-    diff = _git("diff", "--name-only", "-z", base, "--", *specs)
-    new = _git("ls-files", "-z", "--others", "--exclude-standard", "--", *specs)
-    return sorted(set(filter(None, diff.split("\0"))) | set(filter(None, new.split("\0"))))
+    The globs are matched by `walk_status.matches`, the one matcher MoonDeck's map reads too: no globs names every file.
+    """
+    diff = _git("diff", "--name-only", "-z", base)
+    new = _git("ls-files", "-z", "--others", "--exclude-standard")
+    return sorted(f for f in set(filter(None, diff.split("\0"))) | set(filter(None, new.split("\0"))) if not globs or matches(f, globs))
 
 
 def input_hash(gate: dict, base: str) -> str:
-    """What a gate's pass depends on: HEAD, its files' diff against `base`, their untracked contents, its script and its arguments."""
-    specs = pathspecs(gate["globs"])
+    """What a gate's pass depends on: HEAD, the contents of its files that differ from `base` (a deleted one by its name), its script and its arguments."""
     h = hashlib.sha256()
     h.update(_git("rev-parse", "HEAD").encode())
-    h.update(_git("diff", base, "--", *specs).encode())
-    for f in filter(None, _git("ls-files", "-z", "--others", "--exclude-standard", "--", *specs).split("\0")):
+    for f in changed_files(base, gate["globs"]):
         p = ROOT / f
-        if p.is_file():
-            h.update(f.encode() + p.read_bytes())
+        h.update(f.encode() + (p.read_bytes() if p.is_file() else b"\0deleted"))
     for module in imported_scripts(ROOT / gate["script"]):   # the script and every module it imports from beside it, whose change moves its result
         h.update(module.read_bytes() if module.is_file() else str(module).encode())
     h.update(gate["args"].encode())
@@ -175,6 +175,16 @@ def _git(*args: str) -> str:
     return proc.stdout
 
 
+
+def merge_base() -> str:
+    """Where a merge's diff starts: the pull request's base, `origin/main`, else the local `main`, which a clone may hold stale or lack."""
+    for ref in ("origin/main", "main"):
+        try:
+            return _git("merge-base", ref, "HEAD").strip()
+        except RuntimeError:
+            continue
+    raise RuntimeError("git merge-base found neither origin/main nor main")
+
 # ---------------------------------------------------------------------------------------------------------------------------------
 # A run
 
@@ -218,8 +228,8 @@ def _picked(gate: dict, only: set | None) -> bool:
 
 
 def reads(gate: dict, path: str) -> bool:
-    """Whether the file at `path` is one of the files the gate's globs name, as git's own pathspecs decide."""
-    return path in _git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *pathspecs(gate["globs"])).split("\0")
+    """Whether the file at `path` is one of the files the gate's globs name."""
+    return not gate["globs"] or matches(path, gate["globs"])
 
 
 def select(process_id: str, base: str, use_cache: bool, only: set | None) -> tuple[list, list, list]:
@@ -246,7 +256,7 @@ def select(process_id: str, base: str, use_cache: bool, only: set | None) -> tup
         if "<" in g["args"]:
             skipped.append({**g, "result": "SKIP", "why": f"needs a value the reader gives ({g['args']})"})
             continue
-        hit = changed_files(base, pathspecs(g["globs"])) if g["globs"] else ["(every change)"]
+        hit = changed_files(base, g["globs"]) if g["globs"] else ["(every change)"]
         if not hit:
             skipped.append({**g, "result": "SKIP", "why": "no file it reads changed"})
             continue
@@ -269,7 +279,7 @@ def generators(process_id: str, base: str, only: set | None = None) -> list:
         return []
     every = gates(process_id, processes())
     wanted = [g for g in every if "judgment" not in g and not g.get("generates") and _picked(g, only)]
-    return [g for g in every if g.get("generates") and changed_files(base, pathspecs(g["globs"]))
+    return [g for g in every if g.get("generates") and changed_files(base, g["globs"])
             and (not only or _picked(g, only) or any(g["id"] in w["needs"] or reads(w, g["generates"]) for w in wanted))]
 
 
@@ -471,6 +481,18 @@ def history(limit: int = 20) -> list[dict]:
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 
+def announce(process_id: str, base: str, run: list, skipped: list, judgment: list) -> None:
+    """The gate list written out whole before any gate runs: the counts, each skip with its reason, each gate to run, each step for the reader."""
+    print(f"Gates of {process_id} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
+    for g in skipped:
+        print(_line(g))
+    for g in run:
+        after = f", after {', '.join(g['needs'])}" if g["needs"] else ""
+        print(f"RUN    {g['id']} ({g['cores']} core{'s' * (g['cores'] != 1)}{after}): {', '.join(g['trigger'])}")
+    for g in judgment:
+        print(f"READER {g['id']}: {g['judgment']}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--process", default="commit", help="the MoonWalk process whose gates run: commit (default) or pre-merge")
@@ -480,8 +502,8 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        base = "HEAD" if args.process != "pre-merge" else _git("merge-base", "main", "HEAD").strip()
-    except RuntimeError as e:   # no local main to compare against: every gate would read as untouched
+        base = "HEAD" if args.process != "pre-merge" else merge_base()
+    except RuntimeError as e:   # no main to compare against: every gate would read as untouched
         print(f"No base to compare against: {e}", file=sys.stderr)
         return 2
     only = set(args.only.split(",")) if args.only else None
@@ -489,14 +511,7 @@ def main() -> int:
         for g in generators(args.process, base, only):
             print(f"GEN    {g['id']}: writes {g['generates']} first")
         run, skipped, judgment = select(args.process, base, not args.no_cache, only)
-        print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
-        for g in skipped:
-            print(_line(g))
-        for g in run:
-            after = f", after {', '.join(g['needs'])}" if g["needs"] else ""
-            print(f"RUN    {g['id']} ({g['cores']} core{'s' * (g['cores'] != 1)}{after}): {', '.join(g['trigger'])}")
-        for g in judgment:
-            print(f"READER {g['id']}: {g['judgment']}")
+        announce(args.process, base, run, skipped, judgment)
         return 0
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -509,9 +524,7 @@ def main() -> int:
         print(f"Budget: {budget.tokens} jobs, niced.", flush=True)
         made = generate(args.process, base, budget, logdir, only)   # before the selection, which hashes the generated file's diff
         run, skipped, judgment = select(args.process, base, not args.no_cache, only)
-        print(f"Gates of {args.process} against {base[:12]}: {len(run)} to run, {len(skipped)} skipped, {len(judgment)} for the reader.")
-        for g in skipped:
-            print(_line(g))
+        announce(args.process, base, run, skipped, judgment)
         done = made + execute(run, budget, logdir, past, generated=made)
 
     cache = _load(RECORDS / "cache.json", {})
