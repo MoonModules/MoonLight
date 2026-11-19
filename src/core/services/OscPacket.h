@@ -269,6 +269,15 @@ public:
     void i32(uint32_t v) { word(v); }
     /// A 64-bit integer argument, high word first.
     void i64(uint64_t v) { word(static_cast<uint32_t>(v >> 32)); word(static_cast<uint32_t>(v)); }
+    /// A blob argument: its length, then its bytes padded to four (OSC 1.0).
+    void blob(const uint8_t* data, size_t n) {
+        word(static_cast<uint32_t>(n));
+        const size_t padded = pad4(n);
+        if (!room(padded)) return;
+        std::memset(out_ + len_, 0, padded);
+        std::memcpy(out_ + len_, data, n);
+        len_ += padded;
+    }
     /// The message's length, or 0 when it overflowed its buffer.
     size_t size() const { return ok_ ? len_ : 0; }
 
@@ -317,6 +326,17 @@ public:
         if (!take('h') || !fits(8)) return 0;
         const uint64_t hi = word();
         return (hi << 32) | word();
+    }
+    /// The next argument as a blob, its bytes in the datagram and its length into `n`; null when it is none.
+    const uint8_t* blob(size_t& n) {
+        n = 0;
+        if (!take('b') || !fits(4)) return nullptr;
+        const int32_t len = static_cast<int32_t>(word());
+        if (len < 0 || !fits(pad4(static_cast<size_t>(len)))) { ok_ = false; return nullptr; }
+        const uint8_t* data = p_;
+        p_ += pad4(static_cast<size_t>(len));
+        n = static_cast<size_t>(len);
+        return data;
     }
 
 private:

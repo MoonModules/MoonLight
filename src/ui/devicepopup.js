@@ -262,7 +262,7 @@ async function mountMapPicker(box, base, chip, ranFirmware, extra, move, blocker
     box.appendChild(mount);
     const picker = await installPicker.init({
         container: mount, targetChip: chip, ownFirmwareKey: ranFirmware || null,
-        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, blocker,
+        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, extrasNeedRelease: true, blocker,
         onInstall: async (_firmware, _manifestUrl, binaryUrl, _entry, label, tag) => {
             const dlg = box.closest("dialog");
             if (dlg) dlg.dataset.busy = "1";   // the move runs in the browser: openDevicePopup keeps the popup open meanwhile
@@ -663,9 +663,10 @@ export function heldGroups(state) {
 
 const sameMac = (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase();
 
-// The groups a node can join or leave from here, each with whether the node with `mac` is a member. Pure.
-export function membershipOffers(groups, mac) {
-    return (groups || []).map(g => ({ ...g, member: g.members.some(r => sameMac(r.mac, mac)) }));
+// The groups a node can join or leave from here, each with whether the node with `mac` is a member: one of ours joins (MoonLight, or
+// MoonBase between two images, DevicesModule's own rule, since only MoonLight runs a group's sync), and any member leaves. Pure.
+export function membershipOffers(groups, mac, type) {
+    return (groups || []).map(g => ({ ...g, member: g.members.some(r => sameMac(r.mac, mac)) })).filter(g => g.member || type === "MoonLight" || type === "MoonBase");
 }
 
 // The row id of the member with `mac` in a held group, or null. Pure.
@@ -703,7 +704,7 @@ function buildGroupMembership(row, home) {
     box.hidden = true;
     (async () => {
         const state = await fetchJsonWithin(`${home}/api/state`).catch(() => null);
-        const offers = membershipOffers(heldGroups(state), row.mac);
+        const offers = membershipOffers(heldGroups(state), row.mac, row.type);
         if (!offers.length) return;
         const head = document.createElement("strong");
         head.textContent = "Groups";

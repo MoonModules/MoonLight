@@ -28,11 +28,11 @@ namespace osc { class Reader; }
 ///
 /// **Applied by name** ([SharedControls.h](SharedControls.h)). A member applies the parameter whatever its own slots drive. A value a group set is not sent on, so no loop forms, and only a parameter a slot drives leaves the board.
 ///
-/// **A look travels as its name.** An effects preset applied here goes out as a recall, which each member answers by fetching the preset from this device's File Manager route (`/api/file`) and applying it live, once per stamp. A driver or layout preset carries the board's pins and stays.
+/// **A look travels whole.** An effects preset applied here goes out as its document, in chunks every member takes from the multicast and repairs on request ([SharedControls.h](SharedControls.h)), applying it at the change's time. A driver or layout preset carries the board's pins and stays.
 ///
-/// **Catch-up is anti-entropy.** The shared values and the recall ride the definition's Trickle repeats with their stamps, and a member whose values differ resets its interval (RFC 6206), so a member back from a restart takes the newer values within seconds and its older saved ones cannot win.
+/// **Catch-up is anti-entropy.** The shared values and the look's advertisement ride the definition's Trickle repeats with their stamps, and a member whose values differ resets its interval (RFC 6206), so a member back from a restart takes the newer values within seconds and its older saved ones cannot win.
 ///
-/// **Read every 20 ms.** Shared values and recalls apply on the 20 ms read, so a change reaches the members within a frame or two; a definition or deletion, which may create or remove a module, waits for the once-a-second tick.
+/// **Read every 20 ms.** Shared values and look chunks apply on the 20 ms read, so a change reaches the members within a frame or two; a definition or deletion, which may create or remove a module, waits for the once-a-second tick.
 ///
 /// **Who keeps a group.** Its members and the device that made it. A member that hears of a group it lacks creates it, as the API adds a module, so it saves and shows like any other; a device the group's members leave out drops it.
 ///
@@ -50,18 +50,18 @@ namespace osc { class Reader; }
 class DeviceGroupSync : public ControlSurface {
 public:
     /// Its buffers belong to `owner`, Discovery, which frees them on release.
-    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), pending_(owner), held_(owner), seen_(owner), tombs_(owner) {}
+    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), out_(owner), pending_(owner), held_(owner), seen_(owner), tombs_(owner) {}
 
     /// Once a second: notice a group deleted here, read what arrived, definitions and deletions included, send what Trickle says is due, and save the markers when they changed.
     void tick(MoonModule& devices, char* saved, size_t savedCap);
 
-    /// Every 20 ms: apply the shared values and recalls that arrived, setting aside a definition or deletion for the tick, and start a recall's fetch.
+    /// Every 20 ms: apply the shared values and look chunks that arrived, setting aside a definition or deletion for the tick, apply a whole look at its time, and send the chunks due.
     void receive(MoonModule& devices);
 
     /// A switch, encoder or fader changed here: what it drives goes to every group held, unless a group set it.
     void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override;
 
-    /// A look was applied here: its recall goes to every group held.
+    /// A look was applied here: its document goes to every group held, in chunks.
     void lookApplied(const char* name) override;
 
     /// What a group's status adds about the shared controls, or null.
@@ -145,10 +145,12 @@ private:
     bool changedHere(uint8_t slot, const char* target, int32_t& value);
     /// Send one change of `param` to every group held.
     void shareValue(const char* param, int32_t value);
-    /// True when the datagram is a shared value or a recall, handled or not.
+    /// True when the datagram is a shared value or part of a look, handled or not.
     bool handleShared(MoonModule& devices, const uint8_t* pkt, size_t len);
-    /// Send group `g`'s values and recall, as its definition goes.
+    /// Send group `g`'s values and look advertisement, as its definition goes.
     void sendShared(const DeviceGroup& g);
+    /// Send the chunks and requests each group's look has due, a few per read.
+    void sendLookChunks(MoonModule& devices);
 
     MoonModule& owner_;            ///< Discovery, which saves the markers
     MoonModule* devices_ = nullptr;   ///< the container the groups live in, met on the first tick
@@ -159,6 +161,7 @@ private:
     platform::UdpSocket sock_;
     bool open_ = false, loaded_ = false, tombsChanged_ = false;
     ScratchBuffer<uint8_t> buf_;   ///< one datagram, taken when the socket opens
+    ScratchBuffer<uint8_t> out_;   ///< one datagram to send, a look's chunk or request, taken on the first
     ScratchBuffer<uint8_t> pending_;   ///< a definition or deletion the 20 ms read set aside for the tick
     /// A change that arrived ahead of its time.
     struct Held { int64_t atUs; uint16_t len; uint8_t msg[160]; };

@@ -159,6 +159,7 @@ add_executable(mm_tests
     unit/light/unit_HdmiDriver.cpp
     unit/light/unit_LayoutPicture.cpp
     unit/light/unit_HlsDriver.cpp
+    unit/light/unit_RtspDriver.cpp
     unit/light/unit_RtpH264.cpp
     unit/light/unit_RtspSession.cpp
     unit/light/unit_PanelCardDriver.cpp

@@ -20,7 +20,7 @@ const { loadReleases, latestStable } = await import("../../src/ui/install-picker
 const latest = { tag_name: "latest", name: "7.1.0-dev.153", prerelease: true, draft: false };
 const stable = { tag_name: "v7.0.0", name: "7.0.0", prerelease: false, draft: false };
 
-test("a page whose feed never answered has no list, and waits before asking again", async () => {
+test("a page whose feed stayed silent has no list, and waits before asking again", async () => {
     assert.equal(await loadReleases(), null);
     assert.equal(await loadReleases(), null);
     assert.equal(log.asked.length, 1);
@@ -57,4 +57,18 @@ test("a feed that stops answering leaves the list already shown", async () => {
     serve(undefined);
     const releases = await loadReleases({ revalidate: true });
     assert.equal(releases?.[0].name, "7.1.0-dev.154");
+});
+
+test("a call while a request is on its way gets that request's answer, so a cold page's second caller sees the list", async () => {
+    const next = { tag_name: "v7.1.0", name: "7.1.0", prerelease: false, draft: false };
+    let answer;
+    globalThis.fetch = async () => {
+        await new Promise((resolve) => { answer = resolve; });
+        return { ok: true, headers: new Map([["last-modified", "Thu, 19 Nov 2026 20:00:00 GMT"]]), json: async () => [next, stable] };
+    };
+    const first = loadReleases({ revalidate: true });
+    const second = loadReleases();   // asked while the first is on its way
+    answer();
+    assert.equal((await first)[0].tag_name, "v7.1.0");
+    assert.equal((await second)[0].tag_name, "v7.1.0");
 });

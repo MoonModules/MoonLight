@@ -831,7 +831,9 @@ jobs:
           PRE=$(gh release list --limit 50 --exclude-drafts \
                 --json tagName,isPrerelease \
                 | jq -r '.[] | select(.isPrerelease) | .tagName' | head -5)
-          KEEP=$(printf '%s\n%s\n' "$STABLE" "$PRE" | sort -u)
+          # The moving `latest` always, whatever release candidates came after it: the developer channel reads it from the feed.
+          LATEST=$(gh release view latest --json tagName --jq .tagName 2>/dev/null || true)
+          KEEP=$(printf '%s\n%s\n%s\n' "$STABLE" "$PRE" "$LATEST" | sed '/^$/d' | sort -u)
           echo "Releases to keep on Pages:"
           echo "$KEEP" | sed 's/^/  /'
 

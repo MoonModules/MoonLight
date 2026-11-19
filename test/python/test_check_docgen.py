@@ -641,6 +641,22 @@ def test_the_line_length_cap_warns_even_in_a_header():
     assert any(check_docgen._blocks(k, w) for k, w in other), other
 
 
+def test_a_controls_guide_line_is_held_by_its_word_cap_not_the_line_cap():
+    """A control's `@guide` line is its longer help, allowed up to MAX_MORE_WORDS words, Discovery's map
+    legend among them, which no line under MAX_COMMENT_LINE_CHARS holds. Held to both, a guide inside its
+    word cap warned by construction; its own cap governs it, and an ordinary line keeps the line cap."""
+    import check_docgen
+    guide = "/// @guide " + "word " * 80   # 80 words, inside the guide's word cap, past the line cap
+    assert len(guide) > check_docgen.MAX_COMMENT_LINE_CHARS
+    src = "class C {\npublic:\n    /// The map.\n    " + guide + "\n    int map;\n};\n"
+    whys = [w for _, w in check_docgen._header_rules("src/core/x.h", src)]
+    assert not any("doc line" in w for w in whys), whys
+    plain = "/// " + "word " * 80
+    src = "class C {\npublic:\n    " + plain + "\n    int map;\n};\n"
+    whys = [w for _, w in check_docgen._header_rules("src/core/x.h", src)]
+    assert any("doc line" in w for w in whys), whys
+
+
 def test_a_local_struct_in_an_allman_function_is_not_a_member():
     """A free function's body is tracked by the brace that opens it, wherever that brace sits.
     With the brace on its own line the signature and the body open on different lines, so a

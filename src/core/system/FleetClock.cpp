@@ -61,9 +61,14 @@ bool FleetClock::runsClock(uint32_t id) const MM_NONBLOCKING {
 
 uint8_t FleetClock::slotFor(uint32_t id, uint32_t nowMs) const {
     for (uint8_t i = 0; i < kHeard; i++) if (heardId_[i].load(std::memory_order_relaxed) == id) return i;
-    for (uint8_t i = 0; i < kHeard; i++)
-        if (!heardId_[i].load(std::memory_order_relaxed) || nowMs - heardMs_[i].load(std::memory_order_relaxed) > kHereStaleMs) return i;
-    return kHeard;   // a fleet past kHeard clock devices: the newest wait for a slot to go stale
+    uint8_t highest = 0;
+    for (uint8_t i = 0; i < kHeard; i++) {
+        const uint32_t held = heardId_[i].load(std::memory_order_relaxed);
+        if (!held || nowMs - heardMs_[i].load(std::memory_order_relaxed) > kHereStaleMs) return i;
+        if (held > heardId_[highest].load(std::memory_order_relaxed)) highest = i;
+    }
+    // A fleet past kHeard clock devices keeps the lowest ids, the ones the reference is chosen from, so every member picks the same one.
+    return id < heardId_[highest].load(std::memory_order_relaxed) ? highest : kHeard;
 }
 
 void FleetClock::heard(uint32_t id, int64_t fleetUs, int64_t arrivedUs) {
@@ -72,7 +77,7 @@ void FleetClock::heard(uint32_t id, int64_t fleetUs, int64_t arrivedUs) {
     const uint32_t now = platform::millis();
     const uint8_t slot = slotFor(id, now);
     if (slot == kHeard) return;
-    heardId_[slot].store(0, std::memory_order_release);   // emptied first, so a reader never pairs the old id with the new time
+    heardId_[slot].store(0, std::memory_order_release);   // emptied first, so a reader pairs each id only with its own time
     heardMs_[slot].store(now, std::memory_order_release);
     heardId_[slot].store(id, std::memory_order_release);
 }
@@ -192,6 +197,7 @@ void FleetClock::takeReply(osc::Reader& r, const uint8_t srcIp[4], int64_t arriv
 
 void FleetClock::reply(const uint8_t srcIp[4], uint16_t srcPort, int64_t t1, int64_t arrivedUs) {
     const ClockDiscipline d = published();
+    if (!d.synced()) return;   // a device answers with the fleet's time only once it holds it, as it beacons
     uint8_t msg[64];
     osc::Writer w(msg, sizeof(msg), kReplyAddress, ",hhh");
     w.i64(static_cast<uint64_t>(t1));

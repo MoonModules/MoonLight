@@ -64,6 +64,12 @@ class ControlModule : public MoonModule, public ListSource {
 public:
     /// Where the preset files live, one per preset: @xref{why-files}.
     static constexpr const char* kPresetDir = "/.config/presets";
+    /// Preset `name`'s document whole, on the heap (caller frees), or null when absent: what a look pushes to its group.
+    static char* readPreset(const char* name) {
+        char path[128];
+        pathFor(name, path, sizeof(path));
+        return readFile(path);
+    }
     /// A preset file's pad, a root `$` key so the engine reads it as the file's own rather than a module.
     static constexpr const char* kSlotKey = "$slot";
     /// The surface is a fixed grid, so a pad has a POSITION rather than a place in a list:

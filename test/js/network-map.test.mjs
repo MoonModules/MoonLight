@@ -396,11 +396,11 @@ test("a group's box holds only its members: a device linked to a member is laid 
     }
 });
 
-test("two groups with no member in common never overlap; groups sharing a member overlap, as an Euler diagram draws it", () => {
+test("two groups with no member in common sit apart; groups sharing a member overlap, as an Euler diagram draws it", () => {
     const { keepOutOfGroups, groupBox, GRAPH_W } = load(["keepOutOfGroups", "separateGroups", "groupBox", "graphInside"]);
     const nodes = ["self", "a1", "b1", "b2"].map(n => node(n, { self: n === "self" }));
     const links = [[0, 1, "", false, true], [2, 3, "", false, true]];   // group A: self, a1; group B: b1, b2
-    // B's row just below A's: no dot of either inside the other's box, yet B's box top crosses A's bottom.
+    // B's row right below A's: no dot of either inside the other's box, yet B's box top crosses A's bottom.
     const pos = new Map([["self", { x: 200, y: 100 }], ["a1", { x: 330, y: 100 }], ["b1", { x: 250, y: 172 }], ["b2", { x: 300, y: 172 }]]);
     keepOutOfGroups(nodes, links, [0, 1, 2, 3], pos, 600, GRAPH_W);
     const box = (keys) => groupBox(keys.map(k => pos.get(k)));

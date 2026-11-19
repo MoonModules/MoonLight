@@ -84,20 +84,7 @@ public:
         }
         if (!layer_) return;
 
-        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
-        srcWidth_  = picture_.width();
-        srcHeight_ = picture_.height();
-        scale_     = scale ? scale : autoScale();
-        uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
-        uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
-        // Chroma is sampled in 2x2 blocks, so the hardware encoder takes even dimensions only.
-        if ((scaledW & 1u) || (scaledH & 1u)) {
-            scale_  = static_cast<uint8_t>(scale_ * 2);
-            scaledW *= 2;
-            scaledH *= 2;
-        }
-        width_  = static_cast<lengthType>(scaledW);
-        height_ = static_cast<lengthType>(scaledH);
+        if (!sizeFrame()) return;   // its status names why
 
         const size_t pixels = static_cast<size_t>(width_) * height_;
         if (!rgb_.resize(pixels * 3)) {
@@ -300,15 +287,38 @@ private:
         return static_cast<uint16_t>(kbit < 500 ? 500 : (kbit > 8000 ? 8000 : kbit));
     }
 
+    /// The picture of the window and the frame it is drawn into, scaled to clear the encoder's minimum and even; false, its status set, when the window stays below the minimum at the largest scale.
+    bool sizeFrame() {
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        srcWidth_  = picture_.width();
+        srcHeight_ = picture_.height();
+        scale_     = scale ? scale : autoScale();
+        uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
+        uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
+        evenFrame(scale_, scaledW, scaledH);
+        if (scaledW < kMinWidth || scaledH < kMinHeight) {   // a narrow window, past the largest scale
+            std::snprintf(statusBuf_, sizeof(statusBuf_), "a %ux%u window at scale %u is below the encoder's %ux%u: widen the window",
+                          static_cast<unsigned>(srcWidth_), static_cast<unsigned>(srcHeight_), static_cast<unsigned>(scale_),
+                          static_cast<unsigned>(kMinWidth), static_cast<unsigned>(kMinHeight));
+            setStatus(statusBuf_, Severity::Error);
+            return false;
+        }
+        width_  = static_cast<lengthType>(scaledW);
+        height_ = static_cast<lengthType>(scaledH);
+        return true;
+    }
+
     /// The smallest scale clearing the encoder's minimum frame, so a small wall still encodes.
     uint8_t autoScale() const {
         uint8_t s = 1;
-        while (s < kMaxScale && (srcWidth_ * s < 128 || srcHeight_ * s < 96)) s = static_cast<uint8_t>(s + 1);
+        while (s < kMaxScale && (static_cast<uint32_t>(srcWidth_) * s < kMinWidth || static_cast<uint32_t>(srcHeight_) * s < kMinHeight)) s = static_cast<uint8_t>(s + 1);
         return s;
     }
 
     /// The largest block one light is drawn as, which bounds the encoded frame.
     static constexpr uint8_t kMaxScale = 16;
+    /// The smallest frame the encoder takes, which autoScale reaches for.
+    static constexpr uint32_t kMinWidth = 128, kMinHeight = 96;
 
 public:
     /// Frame-rate ceiling, which is also the keyframe interval.

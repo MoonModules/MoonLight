@@ -9,7 +9,6 @@
 #include "core/services/OscPacket.h"
 #include "core/system/ControlModule.h"     // the slots whose changes are shared, and what each drives
 #include "core/system/DeviceGroup.h"
-#include "core/system/HttpServerModule.h"  // servedPort: where a member fetches a look applied here
 #include "core/util/JsonSink.h"
 #include "core/util/fnv.h"
 #include "core/util/format.h"
@@ -54,7 +53,7 @@ void DeviceGroupSync::readAll(MoonModule& devices) {
 void DeviceGroupSync::receive(MoonModule& devices) {
     if (!loaded_) return;   // the markers first, so a copy of a deleted group meets its marker
     devices_ = &devices;
-    // Shared values and recalls apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
+    // Shared values and look chunks apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
     applyDue(devices);
     for (int n = 0; open_ && !pendingLen_ && n < 16; n++) {
         const int len = sock_.recvFrom(buf_.data(), buf_.count());
@@ -63,8 +62,10 @@ void DeviceGroupSync::receive(MoonModule& devices) {
         std::memcpy(pending_.data(), buf_.data(), static_cast<size_t>(len));
         pendingLen_ = static_cast<size_t>(len);
     }
-    shared_.tickFetch();   // starts a recall's fetch within 20 ms; JsonFetch's once-a-second poll takes the answer in, so a look follows within about a second
+    shared_.tickLooks(FleetTime::nowUs(), FleetTime::synced(), kMaxHoldUs);
+    sendLookChunks(devices);
 }
+
 
 bool DeviceGroupSync::ensureOpen() {
     if (open_) return true;
@@ -82,6 +83,7 @@ void DeviceGroupSync::close() {
     if (open_) sock_.close();
     open_ = false;
     buf_.resize(0);
+    out_.resize(0);
     pending_.resize(0);
     pendingLen_ = 0;
     held_.resize(0);
@@ -136,18 +138,17 @@ void DeviceGroupSync::sendTimed(const uint8_t* data, size_t len) {
 }
 
 bool DeviceGroupSync::handleShared(MoonModule& devices, const uint8_t* pkt, size_t len) {
-    osc::Reader values(pkt, len, SharedControls::kValuesAddress);
-    osc::Reader look(pkt, len, SharedControls::kLookAddress);
-    osc::Reader& r = values.ok() ? values : look;
-    if (!r.ok()) return false;
-    const char* id = r.str();
-    DeviceGroup* g = r.ok() && DeviceGroup::isId(id) ? groupById(devices, id) : nullptr;
-    if (!g) return true;   // a group this device does not hold
-    Hlc* clock = devices.acceptsRole(ModuleRole::DeviceGroup) ? &static_cast<Devices&>(devices).clock() : nullptr;
-    const uint32_t key = SharedControls::keyOf(id);
-    const bool agrees = values.ok() ? shared_.mergeValues(r, key, clock) : shared_.mergeRecall(r, key, clock);
-    if (!agrees) g->hearInconsistent();   // this device holds newer: Trickle sends it soon
-    return true;
+    for (uint8_t kind = 0; kind < SharedControls::kKinds; kind++) {
+        osc::Reader r(pkt, len, SharedControls::kAddresses[kind]);
+        if (!r.ok()) continue;
+        const char* id = r.str();
+        DeviceGroup* g = r.ok() && DeviceGroup::isId(id) ? groupById(devices, id) : nullptr;
+        if (!g) return true;   // a group this device does not hold
+        Hlc* clock = devices.acceptsRole(ModuleRole::DeviceGroup) ? &static_cast<Devices&>(devices).clock() : nullptr;
+        if (!shared_.merge(kind, r, SharedControls::keyOf(id), clock)) g->hearInconsistent();   // this device holds newer: Trickle sends it soon
+        return true;
+    }
+    return false;
 }
 
 namespace {
@@ -224,13 +225,27 @@ void DeviceGroupSync::shareValue(const char* param, int32_t value) {
 
 void DeviceGroupSync::lookApplied(const char* name) {
     if (!devices_) return;
-    uint8_t ip[4] = {};
-    platform::localIPv4(ip);
-    const uint16_t served = HttpServerModule::servedPort();
+    const int64_t atUs = FleetTime::synced() ? FleetTime::nowUs() + kApplyLeadUs : 0;   // the members switch together, as a shared value does
+    char* doc = ControlModule::readPreset(name);   // read once, each group holding its own copy
+    const size_t size = doc ? std::strlen(doc) + 1 : 0;
     forEachGroupId(*devices_, [&](const char* id) {
-        shared_.recallLocal(SharedControls::keyOf(id), name, ip, served ? served : 80, stampNow(*devices_));
-        uint8_t msg[160];
-        sendTimed(msg, shared_.writeRecall(msg, sizeof(msg), id));
+        char* copy = size ? static_cast<char*>(platform::alloc(size)) : nullptr;
+        if (copy) std::memcpy(copy, doc, size);
+        shared_.lookLocal(SharedControls::keyOf(id), name, copy, stampNow(*devices_), atUs);
+    });
+    platform::free(doc);
+    sendLookChunks(*devices_);   // the first chunks now, the rest on the next reads
+}
+
+void DeviceGroupSync::sendLookChunks(MoonModule& devices) {
+    if (out_.count() < kDatagram && !out_.resize(kDatagram)) return;   // taken with the socket, or here when a look is applied first
+    const uint32_t now = platform::millis();
+    forEachGroupId(devices, [&](const char* id) {
+        for (uint8_t n = 0; n < SharedControls::kChunksPerRead; n++) {
+            const size_t len = shared_.writeDue(out_.data(), out_.count(), id, now);   // its own buffer: buf_ may hold the datagram being read
+            if (!len) break;
+            send(out_.data(), len);
+        }
     });
 }
 
@@ -239,7 +254,7 @@ void DeviceGroupSync::sendShared(const DeviceGroup& g) {
     uint16_t from = 0;
     do send(buf_.data(), shared_.writeValues(buf_.data(), buf_.count(), g.groupId(), from));
     while (from < shared_.valueCount());
-    send(buf_.data(), shared_.writeRecall(buf_.data(), buf_.count(), g.groupId()));
+    send(buf_.data(), shared_.writeLook(buf_.data(), buf_.count(), g.groupId()));
 }
 
 bool DeviceGroupSync::handleDefinition(MoonModule& devices, const uint8_t* pkt, size_t len) {
@@ -330,7 +345,7 @@ void DeviceGroupSync::holdGroups(MoonModule& devices) {
         n++;
     }
     seenCount_ = n;
-    // A group that left this device, deleted here or anywhere, or this device removed from it, takes its shared values and recall with it.
+    // A group that left this device, deleted here or anywhere, or this device removed from it, takes its shared values and look with it.
     shared_.retain([&](uint32_t key) {
         bool held = false;
         forEachGroupId(devices, [&](const char* id) { held = held || SharedControls::keyOf(id) == key; });

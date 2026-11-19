@@ -39,6 +39,18 @@ void setUp(mm::HlsDriver& driver, mm::Buffer& source, Wall& wall, mm::nrOfLights
     mm::platform::setTestNowMs(1);
 }
 
+// The arguments the encoder was started with for a `w` by `h` wall at `scale`.
+std::string preparedArgs(int w, int h, uint8_t scale) {
+    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
+    mm::Buffer source;
+    mm::HlsDriver driver;
+    Wall wall(w, h);
+    setUp(driver, source, wall, static_cast<mm::nrOfLightsType>(w * h));
+    driver.scale = scale;
+    driver.prepare();
+    return mm::platform::encoderTestArgs();
+}
+
 // The one frame the encoder seam recorded, or null.
 const uint8_t* encodedFrame() { return mm::platform::encoderTestFrameCount() == 1 ? mm::platform::encoderTestFrameData(0) : nullptr; }
 
@@ -372,15 +384,12 @@ TEST_CASE("HlsDriver refuses a scaled frame too large for the encoder, never wra
 
 // The same guard must not refuse a frame that genuinely fits: 640x480 at scale 3 is 1920x1440, exactly the encoder's width limit and inside its height limit.
 TEST_CASE("HlsDriver accepts a scaled frame that exactly meets the encoder's limit") {
-    EncSeamGuard seam{mm::platform::EncoderTestMode::Record};
-    mm::Buffer source;
-    mm::HlsDriver driver;
-    Wall wall(640, 480);
-    setUp(driver, source, wall, 640 * 480);
-    driver.scale = 3;
-    driver.prepare();
+    CHECK(preparedArgs(640, 480, 3).find("-s 1920x1440") != std::string::npos);
+}
 
-    CHECK(std::string(mm::platform::encoderTestArgs()).find("-s 1920x1440") != std::string::npos);
+// The host's libx264 encodes 4:2:0 too, so an odd window doubles its scale there as on a hardware encoder, rather than reaching ffmpeg as an odd size.
+TEST_CASE("HlsDriver doubles an odd scaled frame to even dimensions on every encoder") {
+    CHECK(preparedArgs(3, 3, 1).find("-s 6x6") != std::string::npos);
 }
 
 // A long stall resyncs the schedule instead of bursting: the frame sent at the resync is the new schedule's frame 0, so the next is due a full period later, not a millisecond later as a duplicate.

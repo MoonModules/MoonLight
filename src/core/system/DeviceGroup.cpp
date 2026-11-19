@@ -57,7 +57,7 @@ bool pickedDevice(const char* field, const char* valueJson, uint8_t mac[6], cons
     if (std::strcmp(field, "mac") != 0) return false;
     char text[24] = "";
     json::parseString(valueJson, "value", text, sizeof(text));
-    if (!mdns::parseMac(text, mac) || isZeroMac(mac)) return false;
+    if (!mdns::parseMac(text, mac) || isZeroMac(mac) || (discovery && !discovery->joinable(mac))) return false;
     name = discovery ? discovery->nameOfMac(mac) : nullptr;
     return true;
 }

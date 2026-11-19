@@ -62,6 +62,7 @@
     "flashBaud": 460800,
     "image": "assets/deviceModels/esp32-lolin-d32.jpg",
     "url": "https://www.wemos.cc/en/latest/d32/d32.html",
+    "description": "WiFi at 8 dBm: the on-board regulator sags at full power and resets some boards.",
     "supported": [
       "LEDs",
       "WiFi"
@@ -76,7 +77,15 @@
       "Drivers": {
         "$patch": "replace",
         "RmtLed": {
-          "type": "RmtLedDriver"
+          "type": "RmtLedDriver",
+          "pins": "16"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
+          "txPowerSetting": 8
         }
       }
     }

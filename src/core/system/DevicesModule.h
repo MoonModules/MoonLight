@@ -61,6 +61,8 @@ namespace mm {
 ///
 /// **One device, one row: the MAC is its identity**, named by MoonLight's and MoonBase's packet or an ESPHome or WLED mDNS record, the address standing in until then; a board moving to Ethernet keeps its row, and a rename keeps it whole.
 ///
+/// **A new address of its own flushes the list**, as an interface's neighbor table is flushed when its address changes: every row learned on the old network goes but this device's and the group addresses', and the new network's devices are heard again within a presence interval.
+///
 /// **An added address gets its MAC from ARP.** Its row takes the MAC this device's address table (ARP, `platform::arpLookup`) holds after the probe's connection, so a Tasmota or any device known only by its address gets the same identity.
 ///
 /// **Ports and addresses.** MoonLight's and MoonBase's packet appends the page's port and the board's base MAC. A link-local address (169.254.0.0/16) gets no row: no peer reaches it, and a board's second interface would list the board twice.
@@ -184,11 +186,17 @@ public:
         return true;
     }
 
-    /// The devices a group member is picked from, those whose MAC a source named, as the option set `key`: each its name and address.
+    /// The devices a group member is picked from, each its name and address as the option set `key`: ours only, as joinable() and the popup rule.
     void writeMemberOptions(JsonSink& sink, const char* key) const;
 
     /// The MAC and name of the `index`th device writeMemberOptions offers; false past the end.
     bool memberOption(uint32_t index, uint8_t mac[6], const char*& name) const;
+
+    /// Whether the device with this MAC may join a group: a MoonLight board, or MoonBase, a board between two MoonLight images, or one not listed yet.
+    bool joinable(const uint8_t mac[6]) const MM_NONBLOCKING {
+        const Device* d = rowOfMac(mac);
+        return !d || ours(d->type);
+    }
 
     /// The name of the device with this MAC, or null when none is listed.
     const char* nameOfMac(const uint8_t mac[6]) const MM_NONBLOCKING {
@@ -827,6 +835,7 @@ private:
     /// Keep our own row at the current address, re-sorting only on a real change.
     void upsertSelf(const uint8_t ip[4]) {
         bool changed = false;
+        if ((selfIp_[0] || selfIp_[1] || selfIp_[2] || selfIp_[3]) && !ipEq(selfIp_, ip)) changed = flushNeighbors();
         uint8_t mac[6];
         platform::getMacAddress(mac);   // the identity a group keeps this device by
         // The row holding this device's MAC moves to a new address, so one row stays this device and a group lists it once.
@@ -844,8 +853,9 @@ private:
         if (!hasMac(d->mac)) std::memcpy(d->mac, mac, 6);
         std::memcpy(selfIp_, ip, 4);
         d->lastSeenMs = platform::millis();
-        if (!d->name[0]) {
-            const char* n = (selfName_ && selfName_[0]) ? selfName_ : "this device";
+        // The device's name as it is now, so a rename shows on the next tick.
+        const char* n = (selfName_ && selfName_[0]) ? selfName_ : "this device";
+        if (std::strncmp(d->name, n, sizeof(d->name) - 1) != 0) {
             mm::formatTo(d->name, sizeof(d->name), "%s", n);
             changed = true;
         }
@@ -854,6 +864,9 @@ private:
             refreshStatus();
         }
     }
+
+    /// Drop every row but this device's and the group addresses', as a neighbor table is flushed when its interface's address changes; true when any went.
+    bool flushNeighbors();
 
     /// Whether a row is a board heard this session under the first `len` characters of `name`.
     static bool heardAs(const Device& d, const char* name, size_t len) MM_NONBLOCKING {
@@ -868,20 +881,7 @@ private:
     }
 
     /// The row a sighting from `ip` naming `mac` belongs to, null for a newcomer: the row holding the MAC, else the one at the address.
-    Device* rowFor(const uint8_t ip[4], const uint8_t mac[6], bool& changed) {
-        Device* byIp = findByIp(ip);
-        if (!hasMac(mac)) return byIp;
-        if (Device* byMac = findByMac(mac)) {
-            if (byMac == byIp) return byMac;
-            if (byIp) { dropRow(byIp); byMac = findByMac(mac); }   // the address's old row: this device's own before it named its MAC, or a device gone from it
-            std::memcpy(byMac->ip, ip, 4);
-            changed = true;
-            return byMac;
-        }
-        if (byIp && hasMac(byIp->mac)) { dropRow(byIp); changed = true; return nullptr; }
-        if (byIp) { std::memcpy(byIp->mac, mac, 6); changed = true; }
-        return byIp;
-    }
+    Device* rowFor(const uint8_t ip[4], const uint8_t mac[6], bool& changed);
 
     /// Whether a source named a MAC: all zero means it did not.
     static bool hasMac(const uint8_t mac[6]) MM_NONBLOCKING {

@@ -3795,7 +3795,8 @@
    "tags": "🖥️",
    "dim": 0,
    "doc": "light/drivers.md#rtsp",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/RtspDriver.h"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/RtspDriver.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#rtspdriver"
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",

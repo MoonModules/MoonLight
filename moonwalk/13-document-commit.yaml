@@ -48,17 +48,10 @@ processes:
         when: { manual: "Per finished step of a plan while it is written, so the review at commit reads only the last step; beside the first gate run, on about ten files across areas or on request." }
         detail: |
           The Reviewer uses no local core, so `run_gates.py` runs while it reads; its findings and the run's then go in one batch and one rerun, which the cache keeps to the gates whose inputs moved. A review reads a frozen diff, so a file restaged while it reads is read again. Its findings are processed as [Process a review finding](moonwalk.md#review-finding) says.
-      - id: specs
-        ci: true
+      - id: every
         section: Every change
-        say: Check the specs.
-        when: { run: { script: moondeck/check/check_specs.py } }
-      - id: prose
-        ci: true
-        say: Check the prose of the added lines.
-        when: { run: { script: moondeck/check/check_prose.py } }
-        detail: |
-          It also writes its report to the tree, a record the commit carries.
+        say: Run the checks every change takes.
+        when: { process: commit-every }
       - id: docs
         section: By what the change touches
         say: Run the docs checks.
@@ -94,6 +87,26 @@ processes:
           Only "commit now" commits, and it covers the diff the product owner reviewed: any later edit voids it.
 
           The message opens with an imperative title of at most 72 characters and a 1 to 3 sentence end-user summary with no file lists. Then the performance line and the account line the KPI gate wrote, read from the last gate run's log (`build/gates/run-<time>/commit-code__kpi.log`), not measured again; a later source change reruns the gate. A `CACHED` KPI writes no log: use the last passing run's. Without a KPI gate the lines go. Then bullets under **Core**, **Light domain**, **UI**, **Scripts/MoonDeck**, **Tests**, **Docs/CI** and **Reviews**, one Reviews bullet per finding: flagged, then done, accepted or deferred, and why. No hard wraps.
+  - id: commit-every
+    title: The checks every change takes
+    actor: contributor
+    goal: The changed files, the specs and the prose of the added lines pass.
+    steps:
+      - id: hook
+        say: Check every changed file, and its rises.
+        when: { run: { script: moondeck/check/hook_written.py, args: "--diff" } }
+        detail: |
+          First and in about half a minute, beside the builds: the prose, compile, pyflakes and backup checks on the whole diff, afresh, and each ratchet rule lizard and jscpd measure, a function past a limit, a file past its lines, a block copied over the changed lines, compared with HEAD over the touched files. A rise shows here, before the builds and the full code check report it minutes later.
+      - id: specs
+        ci: true
+        say: Check the specs.
+        when: { run: { script: moondeck/check/check_specs.py } }
+      - id: prose
+        ci: true
+        say: Check the prose of the added lines.
+        when: { run: { script: moondeck/check/check_prose.py } }
+        detail: |
+          It also writes its report to the tree, a record the commit carries.
   - id: commit-docs
     title: The docs checks
     actor: contributor

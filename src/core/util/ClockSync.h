@@ -7,7 +7,7 @@
 
 namespace mm {
 
-/// The fleet clock's arithmetic: NTP's on-wire exchange, its clock filter and a discipline that never runs the clock backwards, each a pure function of the times it is given.
+/// The fleet clock's arithmetic: NTP's on-wire exchange, its clock filter and a discipline that keeps the clock running forwards, each a pure function of the times it is given.
 ///
 /// @technical
 ///
@@ -23,7 +23,7 @@ namespace mm {
 ///
 /// ## Slew, or step
 ///
-/// A correction under kStepUs is slewed at kSlewPpm, so the fleet clock runs at most 0.05 % fast or slow and never backwards under an effect; a larger one, and the first, is stepped, as NTP steps past 128 ms.
+/// A correction under kStepUs is slewed at kSlewPpm, so the fleet clock runs at most 0.05 % fast or slow and always forwards under an effect; a larger one, and the first, is stepped, as NTP steps past 128 ms.
 
 /// One exchange's result: the reference's clock minus the asker's, and the round trip, in microseconds.
 struct ClockSample {
@@ -134,19 +134,21 @@ private:
     bool synced_ = false;
 };
 
-/// One published copy of the fleet clock's discipline, its count odd while it is written: each 64-bit value as two 32-bit halves, since a 32-bit core has no lock-free 64-bit atomic and the count already keeps the halves together.
+/// One published copy of the fleet clock's discipline, its count odd while it is written: each 64-bit value as two 32-bit halves, since a 32-bit core has no lock-free 64-bit atomic.
+///
+/// Every access is sequentially consistent, so the count's two reads bracket the halves' with no fence, which GCC's thread sanitizer refuses.
 struct FleetTimeSlot {
     std::atomic<uint32_t> seq{0};
     std::atomic<uint32_t> half[6] = {};   ///< base, baseAt and remaining, low half first
     std::atomic<bool> synced{false};
     /// Store `v` as value `i`'s two halves.
     void put(int i, int64_t v) MM_NONBLOCKING {
-        half[2 * i].store(static_cast<uint32_t>(static_cast<uint64_t>(v)), std::memory_order_relaxed);
-        half[2 * i + 1].store(static_cast<uint32_t>(static_cast<uint64_t>(v) >> 32), std::memory_order_relaxed);
+        half[2 * i].store(static_cast<uint32_t>(static_cast<uint64_t>(v)));
+        half[2 * i + 1].store(static_cast<uint32_t>(static_cast<uint64_t>(v) >> 32));
     }
     /// Value `i`, from its two halves.
     int64_t get(int i) const MM_NONBLOCKING {
-        return static_cast<int64_t>((static_cast<uint64_t>(half[2 * i + 1].load(std::memory_order_relaxed)) << 32) | half[2 * i].load(std::memory_order_relaxed));
+        return static_cast<int64_t>((static_cast<uint64_t>(half[2 * i + 1].load()) << 32) | half[2 * i].load());
     }
 };
 
@@ -156,7 +158,7 @@ struct FleetTimePublished {
     std::atomic<uint8_t> active{0};
 };
 
-/// Fleet time for any task: the local clock plus the discipline the fleet clock's task publishes, read without a lock.
+/// Fleet time for any task: the local clock plus the discipline the fleet clock's task publishes, read lock-free.
 ///
 /// Two slots: the writer fills the one readers are not on, each slot's count odd while it is written, then points readers at it, so a reader that preempts the writer mid-write still reads a whole discipline.
 class FleetTime {
@@ -164,25 +166,24 @@ public:
     /// Publish `d`, from the one task that steers it.
     static void publish(const ClockDiscipline& d) MM_NONBLOCKING {
         const ClockDiscipline::State s = d.state();
-        FleetTimeSlot& w = published_.slots[published_.active.load(std::memory_order_relaxed) ^ 1];
-        w.seq.fetch_add(1, std::memory_order_acq_rel);
+        FleetTimeSlot& w = published_.slots[published_.active.load() ^ 1];
+        w.seq.fetch_add(1);
         w.put(0, s.baseUs);
         w.put(1, s.baseAtUs);
         w.put(2, s.remainingUs);
-        w.synced.store(s.synced, std::memory_order_relaxed);
-        w.seq.fetch_add(1, std::memory_order_release);
-        published_.active.store(static_cast<uint8_t>(&w - published_.slots), std::memory_order_release);
+        w.synced.store(s.synced);
+        w.seq.fetch_add(1);
+        published_.active.store(static_cast<uint8_t>(&w - published_.slots));
     }
 
     /// The published discipline.
     static ClockDiscipline current() MM_NONBLOCKING {
         for (;;) {
-            const FleetTimeSlot& r = published_.slots[published_.active.load(std::memory_order_acquire)];
-            const uint32_t before = r.seq.load(std::memory_order_acquire);
+            const FleetTimeSlot& r = published_.slots[published_.active.load()];
+            const uint32_t before = r.seq.load();
             if (before & 1) continue;   // only when two publishes ran during this read
-            const ClockDiscipline::State s{r.get(0), r.get(1), r.get(2), r.synced.load(std::memory_order_relaxed)};
-            std::atomic_thread_fence(std::memory_order_acquire);
-            if (r.seq.load(std::memory_order_relaxed) == before) return ClockDiscipline::from(s);
+            const ClockDiscipline::State s{r.get(0), r.get(1), r.get(2), r.synced.load()};
+            if (r.seq.load() == before) return ClockDiscipline::from(s);
         }
     }
 

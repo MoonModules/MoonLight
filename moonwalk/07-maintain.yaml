@@ -20,7 +20,7 @@ processes:
         say: Open Firmware.
         when: { open: { module: FirmwareUpdateModule } }
         detail: |
-          It shows the version, the build and its partition, and says when a newer release exists. A stable release always wins; only a device on a `-dev` build, or in developer mode, is offered `latest`. On a board with MoonBase, its **image** selector picks the app or MoonBase itself.
+          It shows the version, the build and its partition, and says when a newer release exists. A device on a `-dev` build, or in developer mode, is offered `latest`, unless the newest stable release is newer, as right after a release; every other device is offered a newer stable release. On a board with MoonBase, its **image** selector picks the app or MoonBase itself.
       - id: install
         say: Install the release the card offers.
         when: { manual: "Pick the release, then press Install." }

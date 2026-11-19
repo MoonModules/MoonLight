@@ -108,6 +108,7 @@ function makeState() {
         // re-renders triggered by release-list reloads.
         installRowExtras: null,
         extrasAfterInstall: false,
+        extrasNeedRelease: false,   // the extras install only with a release picked, so the status view leaves them out
         moonbaseOnly: false,
         targetChip: null,      // another device's chip ("esp32s3"), or its revision line ("esp32p4rev3"), which a device's map installs onto: firmwares and devices of it only
         releases: [],          // normalized release records from the API
@@ -161,6 +162,7 @@ let releasesAskedAt = 0;   // when the feed was last asked, answered or not
 // Returns the release list, newest first, or null while none has loaded: the one list the picker, the update badge and the network map read.
 // `revalidate` asks the server past the HTTP cache's ten minutes, for a view the user opened to see what is new.
 async function loadReleases({ revalidate = false } = {}) {
+    if (releasesInFlight) return releasesInFlight;   // a request on its way answers every caller, a cold page's second one included
     if (!revalidate && releasesAskedAt && Date.now() - releasesAskedAt < RELEASES_MAX_AGE_MS) return releasesMemo?.data ?? null;
     releasesInFlight ??= fetchReleases(revalidate).finally(() => { releasesInFlight = null; });
     return releasesInFlight;
@@ -459,12 +461,13 @@ function renderSkeleton(state) {
         </div>`;
 }
 
-// The Releases row saying why no release can be picked, with the caller's other ways to install (a URL, a file) kept below it.
+// The Releases row saying why no release can be picked, with the caller's other ways to install (a URL, a file) kept below it, unless the
+// caller's extras need a release to install with, as the map's move does.
 function renderStatus(state, text) {
     state.container.innerHTML =
         `<div class="control-row"><span class="control-label">Releases</span><span class="rp-status"></span></div>`;
     state.container.querySelector(".rp-status").textContent = text;
-    if (state.installRowExtras) state.container.appendChild(state.installRowExtras);
+    if (state.installRowExtras && !state.extrasNeedRelease) state.container.appendChild(state.installRowExtras);
 }
 
 function render(state) {
@@ -925,6 +928,9 @@ export const installPicker = {
      *   uses this for the "Erase chip first" checkbox; on-device OTA omits
      *   it. The picker re-attaches the SAME node on every render(), so
      *   listeners the caller wired on the element keep firing.
+     * @param {boolean} [opts.extrasNeedRelease] - the extras install only
+     *   with a release picked, so a release list that does not load shows
+     *   its status without them (the map's move).
      * @param {string} [opts.targetChip] - another device's chip ("esp32s3") or revision line ("esp32p4rev3"), for a device's
      *   map installing onto it: the firmware and device lists hold that chip's only.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection
@@ -945,7 +951,7 @@ export const installPicker = {
      */
     async init({ container, ownFirmwareKey, onInstall, onDetect = null,
                  enableDevicePicker = true, installRowExtras = null, blocker = null,
-                 moonbaseOnly = false, extrasAfterInstall = false,
+                 moonbaseOnly = false, extrasAfterInstall = false, extrasNeedRelease = false,
                  deviceSupport = null, extraFirmwaresByTag = null, targetChip = null, downloadKey = null }) {
         const state = makeState();
         state.container = container;
@@ -955,6 +961,7 @@ export const installPicker = {
         state.enableDevicePicker = enableDevicePicker;
         state.installRowExtras = installRowExtras;
         state.extrasAfterInstall = extrasAfterInstall;
+        state.extrasNeedRelease = extrasNeedRelease;
         // Offer the MOONBASE image instead of the app firmwares: one per chip, unversioned, and
         // installed into the factory slot. The on-device card sets this from its image selector.
         state.moonbaseOnly = moonbaseOnly;

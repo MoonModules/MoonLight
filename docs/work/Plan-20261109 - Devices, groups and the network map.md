@@ -85,6 +85,28 @@ Landed in: the waves, the popup and its skipped members in [DeviceGroup.h](../..
 - **Tested (2026-11-19), by the agent.** The desktop, .122 (classic) and .115 (C3) on one reference, MM-dn2-2, within seconds of booting. First measurement over WiFi, 60 exchanges each: a spread of 5.1 ms with ±4.1 ms measurement error, the boards' best round trips 4 to 8 ms, so neither the sync nor the measurement resolves below a few milliseconds there. Next: the boards' WiFi power save, then TSF.
 - **Verified by:** a vertical line sweeping across boards side by side, the textbook display-sync test (genlock checks on video walls): straight across a seam when the clocks agree, a step when they do not, the step's width over the line's speed being the clock error.
 - **The bench for it (product owner, 2026-11-19):** nine ESP32 boards on WiFi, each driving one 16x16 panel, laid out 3x3. LinesEffect, axis x, on every board: each sweeps its own panel on fleet time, so in step the nine lines move together and a board behind shows its line trailing. One line across the whole 3x3 is step 11's group canvas.
+- **Notes from the 3x3 bench (2026-11-19).** All nine moved from WLED-MM 0.14 over the network and run one build in group SuperSync, on SS-0-0's clock within ±4.5 ms; on/off and brightness reach every member.
+    - *Frame-rate independent is not yet in step.* A stateful effect that scales its steps by the frame time runs at one speed at any frame rate, but boards at different rates sample different moments, so their pictures drift apart. In step across boards means a frame that is a function of fleet time (level 1), randomness hashed from the group tick (step 12), or a fixed timestep on fleet time (step 13).
+    - *Layouts belong to the group as one canvas, not as copies.* The shared part is one layout of the whole wall, nine 16x16 panels each a contiguous run; each member's driver window (start, count) picks its tile, which is step 11's region. Until then each board's own Grid is set by hand (serpentine).
+    - *A preset recall trailed, and a pull does not scale.* Each member fetched the preset from the maker over HTTP at the same moment, a thundering herd on one ESP32: fetches hung past ESP-IDF's per-operation timeout, and a hung one blocked that board's every later recall. A spread, a retry and a deadline made nine boards follow, but the maker still answers N requests, and a look lands after T. Replaced by the push below.
+- **A look is pushed to the group, one mechanism for every size (product owner, 2026-11-19).** Trickle-based object dissemination, Deluge's design (Hui and Culler, 2004), NORM's NACK repair (RFC 5740), on the group's own multicast address:
+    - *The maker pushes.* A look applied here becomes an object, its name, stamp, size and digest, in numbered chunks of 1 KB with the fleet time it applies at; the maker multicasts every chunk, a few per 20 ms read. A small preset is one chunk.
+    - *Members advertise what they hold.* The Trickle repeats carry each member's look stamp, size, digest and the chunks it has, the anti-entropy the values already use.
+    - *A missing chunk is asked for.* A member short of chunks multicasts the ones it lacks (a NACK); any member holding them answers at its own offset, and one that hears them sent first stays quiet.
+    - *Applied at T.* Complete and its digest matching, the look applies at its fleet time, so every member switches together as a shared value does; one that completes later applies on completion.
+    - *Guaranteed:* every member that is up ends with the whole look, and one that was off catches up from any peer when it returns.
+    - *Subtraction:* the HTTP pull goes, its fetch, JsonFetch's use here, and the spread, retry and deadline.
+    - **Verified by:** unit tests for one chunk, many chunks, a lost chunk repaired, a late member, a digest mismatch refused; the 3x3 bench switching presets on every panel at once.
+    - *Any file, not only a look.* The object is a document of up to 32 KB, so the same push carries a MoonLive script to every member: the object names a file to write rather than a document to apply, and the members' modules running that script pick it up as a file change does. Next, after the look.
+- **Four kinds of group: two choices, independent (product owner, 2026-11-19).** Whether the members' layouts are identical, and whether each shows the whole picture (mirrored) or its part of one picture (canvas).
+
+    | | Mirrored: each member shows the whole picture | Canvas: each member shows its part of one picture |
+    |--|--|--|
+    | **Identical layouts** | the 3x3 bench today: the fleet clock, the shared controls and the look | **the 3x3 wall's goal**: one picture over nine equal tiles, each member's region a cell of a regular grid |
+    | **Different layouts** | each member draws the whole effect at its own size and shape | regions of any size and position in one canvas, gaps included (step 11's ball crossing the screens) |
+
+    Every kind needs the fleet clock and, for stateful effects, levels 3 to 5. Canvas adds the shared canvas and each member's region and window; identical tiles make that the regular case, the first canvas to build.
+    - *A group needs one firmware generation.* Release boards ignore the timed bundles, so a mixed group follows only on its newer members (MIGRATING, timed group changes).
 
 ### One effect across the group
 

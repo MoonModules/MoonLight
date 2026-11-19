@@ -14,7 +14,7 @@ MoonBase then installs MoonLight from the release.
 
 | From | Chip | Status |
 |---|---|---|
-| WLED | ESP32 classic with 4, 8 or 16 MB of flash | tested on WLED 0.15.0's 4 MB build, a power cut at every step included; the WiFi comes along |
+| WLED | ESP32 classic with 4, 8 or 16 MB of flash | tested on WLED 0.15.0's 4 MB build, a power cut at every step included, and on nine LOLIN D32s running WLED-MM 0.14.0; the WiFi comes along |
 | WLED | ESP32-C3 with 4 MB of flash | tested on WLED 0.15.0, other versions should work; the WiFi comes along |
 | WLED | ESP32-S3 with 4, 8, 16 or 32 MB of flash | tested on WLED 0.15.0's 16 MB build, moving to `esp32s3-n16r8`; MoonBase lands in the second app slot where the layout has no MoonBase slot, and MoonLight's first network update takes it back; the WiFi and WLED's TX power limit come along |
 | WLED-MM | ESP32-P4 with 16 MB of flash, on Ethernet | tested on WLED-MM 14.5.1-dev on revision 1.3, moving to `esp32p4rev1-eth`; MoonBase comes up on the board's own Ethernet wiring, the Waveshare P4 boards' |
@@ -46,6 +46,23 @@ So a device that cannot move keeps working as it was:
 Two moments need care: the image rewrites the bootloader, for under half a second, and then the partition table, for about 50 milliseconds.
 A power cut in exactly one of those windows leaves the device needing a USB cable to recover, which on a bulb means opening it.
 A power cut at any other moment comes back on its own: the image starts over, or MoonBase takes over.
+
+## A board that resets on its first boot
+
+The first boot after the move is the hardest one for the board's power supply.
+The ESP32 keeps its radio's calibration and redoes it in full when the radio software changes ([RF calibration](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/RF_calibration.html)), and MoonBase runs a newer one than WLED, Tasmota or ESPHome.
+That full calibration draws the largest current peak the chip ever draws.
+On a cheap board whose 3.3 V regulator sags, the peak resets the chip before the calibration is saved, so every boot tries again: the device stays off the network, and its serial log repeats `POWERON_RESET` right after the radio starts.
+The old firmware ran because its calibration was saved long ago.
+
+One boot that gets through is enough: the calibration is saved, and later boots redo only a small part of it.
+Three aids get a weak board through, the first that works being enough:
+
+- **A capacitor**, 470 to 1000 µF, across the board's 3V3 and GND pins, as close to them as the wires allow. It covers the peak.
+- **A bench supply**, 3.3 V with a current limit of about 1 A, into the 3V3 pin with USB unplugged, for that one boot. It bypasses the regulator, so it gets through a board the capacitor does not. Back on its own supply afterwards, the board runs.
+- **A lower transmit power**, 8 dBm in the WiFi card, for a running board that still resets on WiFi bursts or once its lights are bright. The [device catalog](https://github.com/MoonModules/MoonLight/blob/main/mooninstaller/deviceModels.json) sets it for boards known to need it, such as the LOLIN D32. It takes effect once MoonLight runs, after the first boot.
+
+A board that resets this way after MoonLight runs starts in [safe mode](troubleshooting.md#the-device-rebooted-on-its-own), its lights held dark, and needs a restart from its page once its power is solid.
 
 Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only. Each firmware's own web installer writes it back from Chrome or Edge, linked under [Going back to another firmware](https://moonmodules.org/MoonLight/install/#other-firmware) on the installer page.
 

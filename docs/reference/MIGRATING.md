@@ -39,9 +39,9 @@ Every MoonLight device keeps a fleet clock, asking the lowest device that runs i
 
 ### A device group's change applies at a time
 
-**Action: *update* the members of a group to this release together; until then a member on older firmware follows a change within seconds rather than at once.**
+**Action: *update* the members of a group to this release together; until then a member on older firmware follows a shared control within seconds rather than at once, and a look not at all.**
 
-A shared control or look changed on a member goes out as an OSC bundle stamped with the fleet time it applies at, 100 ms ahead, so the members switch together. A member on older firmware ignores the bundle and takes the change from the group's next repeat.
+A shared control changed on a member goes out as an OSC bundle stamped with the fleet time it applies at, 100 ms ahead, so the other members switch together; the member where it changed applies it at once and leads them by those 100 ms. A look goes out as its preset document in chunks carrying the same time, which every member takes from the multicast and repairs on request, rather than as a name each member fetched over HTTP. A member on older firmware ignores the bundle and takes the control from the group's next repeat, and does not take a look.
 
 ### A group member is set by `mac` from the API
 

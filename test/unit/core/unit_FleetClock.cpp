@@ -73,6 +73,7 @@ TEST_CASE("FleetClock: a member's exchange with the reference brings it onto the
     member.peers(50, {{30, 30}});
     ref.peers(30, {{50, 50}});
     REQUIRE(ref.referenceId() == 0);
+    ref.own.claim();   // the reference holds the fleet's time, which it answers with
     ref.local = 9000000;   // the reference booted earlier: 9 s on its clock when the member's reads 1 s
     member.local = 1000000;
     member.ask(member.local);
@@ -89,6 +90,25 @@ TEST_CASE("FleetClock: a member's exchange with the reference brings it onto the
     REQUIRE(member.own.synced());
     CHECK(member.own.fleetAt(member.local) == ref.local + 2000);   // the reply's 2 ms back, on the reference's clock
     CHECK(std::strcmp(member.note(), "clock: peer, ±2.0 ms") == 0);
+}
+
+TEST_CASE("FleetClock: a device not yet holding the fleet's time stays silent on a request, so a member steps only onto the fleet's time") {
+    TestClock member, ref;
+    member.peers(50, {{30, 30}});
+    ref.peers(30, {{50, 50}});
+    member.local = 1000000;
+    member.ask(member.local);
+    REQUIRE(member.sent.size() == 1);
+    ref.handle(member.sent[0].data.data(), member.sent[0].data.size(), kMemberIp, FleetClock::kPort, 2000);
+    CHECK(ref.sent.empty());
+}
+
+TEST_CASE("FleetClock: a fleet past the heard table keeps the lowest ids, so a low device joining late still becomes the reference") {
+    TestClock member;
+    for (uint32_t id = 100; id < 140; id++) member.hear(id);   // more devices than the table holds
+    member.hear(5);
+    member.choose(200, {{120, 120}, {5, 5}});
+    CHECK(member.referenceId() == 5);
 }
 
 TEST_CASE("FleetClock: a reply to no request, from another device or with another t1 changes nothing") {

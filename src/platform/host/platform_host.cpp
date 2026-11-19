@@ -343,6 +343,8 @@ uint32_t micros() MM_NONBLOCKING {
 }
 
 uint64_t uptimeUs() MM_NONBLOCKING {
+    // The test override moves this clock too, so fleet time follows virtual time as millis() does.
+    if (const uint32_t override_ = testNowMs.load(std::memory_order_relaxed)) return uint64_t{override_} * 1000u;
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime).count());
 }
 #ifdef MM_SUPPRESS_FUNCTION_EFFECTS

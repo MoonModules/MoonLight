@@ -126,7 +126,7 @@ TEST_CASE("LayoutPicture crops a raster-ordered face to its window too, and a wi
     auto pictured = std::make_unique<Pictured>();
     mm::LayoutPicture& picture = pictured->picture;
     auto f = panelsFace(1, 4, 2, false);   // lights 0 to 3 on row 0, 4 to 7 on row 1
-    REQUIRE(picture.place(f->layer, 4, 2, 4, 0));   // from light 4 to the end: row 1
+    REQUIRE(picture.place(f->layer, 4, 2, 4, 4));   // lights 4 to 7: row 1
     CHECK(picture.width() == 4);
     CHECK(picture.height() == 1);
     CHECK(picture.lightAt(0) == 4);
@@ -138,6 +138,10 @@ TEST_CASE("LayoutPicture crops a raster-ordered face to its window too, and a wi
     CHECK(picture.lightAt(4) == 4);
     CHECK(picture.lightAt(5) == mm::Layer::kNoDriver);
     REQUIRE(picture.place(f->layer, 4, 2, 100, 0));   // past the last light
+    CHECK(picture.width() == 1);
+    CHECK(picture.height() == 1);
+    CHECK(picture.lightAt(0) == mm::Layer::kNoDriver);
+    REQUIRE(picture.place(f->layer, 4, 2, 4, 0));   // a window of no lights, start 4 and count 1 on four buffered lights: dark, not the rest of the face
     CHECK(picture.width() == 1);
     CHECK(picture.height() == 1);
     CHECK(picture.lightAt(0) == mm::Layer::kNoDriver);
@@ -188,6 +192,21 @@ TEST_CASE("LayoutPicture without room for a needed table says so, keeps the rast
     for (size_t p = 0; p < 8; p++) CHECK(r.pictured->picture.lightAt(p) == p);
     CHECK_FALSE(r.pictured->picture.placed());
     CHECK(std::string_view(r.pictured->picture.note()) == ", no memory to place the lights by the layout");
+}
+
+TEST_CASE("LayoutPicture without room for a window's table shows one dark pixel, keeping to the window") {
+    if (!tableOutweighsFrame()) return;
+    auto face = panelsFace(1, 4, 2, true);
+    auto pictured = std::make_unique<Pictured>();
+    bool placed = true;
+    {
+        mm::RefuseAbove refuse(24);
+        placed = pictured->picture.place(face->layer, 4, 2, 4, 4);
+    }
+    CHECK_FALSE(placed);
+    CHECK(pictured->picture.width() == 1);
+    CHECK(pictured->picture.height() == 1);
+    CHECK(pictured->picture.lightAt(0) == mm::Layer::kNoDriver);
 }
 
 TEST_CASE("LayoutPicture places by the layout again, with an empty note, once room returns") {

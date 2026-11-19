@@ -8,6 +8,14 @@
 
 namespace mm {
 
+/// A frame for a 4:2:0 encoder, its chroma sampled in 2x2 blocks: an odd width or height doubles the scale, so both come out even, as every such encoder, hardware or libx264, takes.
+inline void evenFrame(uint8_t& scale, uint32_t& w, uint32_t& h) {
+    if (!(w & 1u) && !(h & 1u)) return;
+    scale = static_cast<uint8_t>(scale * 2);
+    w *= 2;
+    h *= 2;
+}
+
 /// The layout as a picture, for a driver that shows it on a screen or in a stream: which light each pixel of the physical front face shows.
 ///
 /// A table of its own beside the layer's mapping, which serves the logical box after the modifiers; a screen shows the physical layout.
@@ -18,9 +26,10 @@ public:
     /// Declared as a member of the driver it serves, which owns the table's memory.
     explicit LayoutPicture(MoonModule& owner) : table_(owner) {}
 
-    /// Follow `layer`'s layout over a `w` by `h` face: no table where its order is the raster, else each pixel's light; false when the table finds no memory. A window, `count` lights from `from` (0: all), crops the face to where they sit.
+    /// Follow `layer`'s layout over a `w` by `h` face, each pixel's light; false when memory refuses its table. A window, `count` lights from `from`, crops it to where they sit: both 0 the whole face, no lights one dark pixel.
     bool place(const Layer& layer, lengthType w, lengthType h, nrOfLightsType from = 0, nrOfLightsType count = 0) {
         placed_ = true;
+        dark_ = false;
         w_ = w;
         h_ = h;
         Layouts* layouts = layer.layouts();
@@ -28,7 +37,11 @@ public:
         const bool whole = from == 0 && count == 0;
         // No table where the order is the raster and every pixel is a light index this board can hold.
         if (whole && (!layouts || (cells <= static_cast<size_t>(Layer::kNoDriver) && layer.isNaturalOrder()))) { table_.resize(0); return true; }
-        if (!table_.resize(cells)) return placed_ = false;   // a refused resize leaves the table empty: the raster order
+        if (!table_.resize(cells)) {
+            // A refused resize leaves the table empty: the raster order for the whole face, one dark pixel for a window, which the raster cannot keep.
+            if (!whole) { w_ = h_ = 1; dark_ = true; }
+            return placed_ = false;
+        }
         fill(layer, layouts != nullptr, cells);
         if (!whole) crop(from, count);
         return true;
@@ -46,7 +59,7 @@ public:
     const char* note() const MM_NONBLOCKING { return placed_ ? "" : ", no memory to place the lights by the layout"; }
 
     /// The light pixel `p` shows, or Layer::kNoDriver where none does.
-    nrOfLightsType lightAt(size_t p) const MM_NONBLOCKING { return table_ ? table_[p] : static_cast<nrOfLightsType>(p); }
+    nrOfLightsType lightAt(size_t p) const MM_NONBLOCKING { return table_ ? table_[p] : dark_ ? Layer::kNoDriver : static_cast<nrOfLightsType>(p); }
 
     /// Draw the placed face into `dst` as `scale` by `scale` blocks, each pixel's light converted once by `correct`; black where none reaches.
     template <class Correct>
@@ -73,7 +86,7 @@ private:
 
     /// Keep the box around the window's lights and dark every other light in it, moving the rows up in place; one dark pixel where the window has no light on the face.
     void crop(nrOfLightsType from, nrOfLightsType count) {
-        const uint64_t end = count ? static_cast<uint64_t>(from) + count : static_cast<uint64_t>(Layer::kNoDriver);
+        const uint64_t end = static_cast<uint64_t>(from) + count;
         const auto inWindow = [&](nrOfLightsType i) { return i != Layer::kNoDriver && i >= from && i < end; };
         const Box b = boxOf(inWindow);
         if (b.x0 > b.x1 || b.y0 > b.y1) { w_ = h_ = 1; table_[0] = Layer::kNoDriver; return; }
@@ -108,6 +121,7 @@ private:
 
     ScratchBuffer<nrOfLightsType> table_;   ///< each pixel's light, or none where the layout's order is the raster
     bool placed_ = true;                    ///< whether the last place() had room for its table
+    bool dark_ = false;                     ///< a window refused its table: one dark pixel rather than lights outside it
     lengthType w_ = 0, h_ = 0;              ///< the face the last place() followed
 };
 

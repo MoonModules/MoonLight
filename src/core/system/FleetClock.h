@@ -106,7 +106,7 @@ private:
     void choose(uint32_t id, uint32_t ip, const char* name) MM_NONBLOCKING;
     /// Whether device `id` said it runs the clock within kHereStaleMs.
     bool runsClock(uint32_t id) const MM_NONBLOCKING;
-    /// The slot that keeps device `id`: its own, else an empty or stale one, else kHeard.
+    /// The slot that keeps device `id`: its own, else an empty or stale one, else the highest id's when `id` is lower, else kHeard.
     uint8_t slotFor(uint32_t id, uint32_t nowMs) const;
     void heard(uint32_t id, int64_t fleetUs, int64_t arrivedUs);
     void beacon();

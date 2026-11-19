@@ -107,9 +107,9 @@ TEST_CASE("every built image identifies as what it is") {
         const char* verdict = moonBaseRejection(info, info.chip);
         if (project == "MoonLight-moonbase") CHECK(verdict == nullptr);
         else CHECK(verdict == std::string("not a MoonBase image"));
-        // A MoonBase built from this tree's version carries this tree's handoff record where the app reads it; an older build in the tree predates the record.
-        const std::string version(info.version);   // `<version>+<build id>`: the version alone says which tree built it
-        if (project == "MoonLight-moonbase" && version.substr(0, version.find('+')) == mm::kVersion) {
+        // A MoonBase built from this tree carries this tree's handoff record where the app reads it; an older build left in the tree predates the record.
+        const std::string version(info.version);   // `<version>+<build id>`: the build id says which commit built it, where a version spans several
+        if (project == "MoonLight-moonbase" && version == std::string(mm::kVersion) + "+" + mm::kBuildId) {
             REQUIRE(head.size() >= kHandoffBytes);
             CHECK(handoffVersion(head.data(), head.size()) == kHandoffVersion);
         }

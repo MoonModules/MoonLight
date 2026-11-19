@@ -323,3 +323,32 @@ TEST_CASE("a bundle carries one message and the fleet time it applies at, and a 
     CHECK_FALSE(mm::osc::parse(bundle, n, m));   // a controller's parse still refuses a bundle
     CHECK(mm::osc::writeBundle(bundle, 20, 1, msg, w.size()) == 0);   // no room
 }
+
+TEST_CASE("OscPacket: a blob is written as its length and its bytes padded to four, and read back whole") {
+    uint8_t buf[64];
+    const uint8_t data[5] = {1, 2, 3, 4, 5};
+    osc::Writer w(buf, sizeof(buf), "/b", ",bi");
+    w.blob(data, sizeof(data));
+    w.i32(42);
+    REQUIRE(w.size() == 4 + 4 + 4 + 8 + 4);   // address, tags, the length, five bytes padded to eight, the integer
+    osc::Reader r(buf, w.size(), "/b");
+    size_t n = 0;
+    const uint8_t* got = r.blob(n);
+    REQUIRE(got != nullptr);
+    CHECK(n == 5);
+    CHECK(std::memcmp(got, data, 5) == 0);
+    CHECK(r.i32() == 42u);
+    CHECK(r.ok());
+}
+
+TEST_CASE("OscPacket: a blob longer than the datagram is refused") {
+    uint8_t buf[64];
+    const uint8_t data[8] = {};
+    osc::Writer w(buf, sizeof(buf), "/b", ",b");
+    w.blob(data, sizeof(data));
+    const size_t len = w.size() - 4;   // cut short
+    osc::Reader r(buf, len, "/b");
+    size_t n = 0;
+    CHECK(r.blob(n) == nullptr);
+    CHECK_FALSE(r.ok());
+}

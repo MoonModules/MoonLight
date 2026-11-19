@@ -35,10 +35,10 @@ def repo(tmp_path, monkeypatch):
     return work.resolve()
 
 
-def test_the_watcher_watches_each_top_folder_holding_a_governed_file_and_each_such_file_at_the_root():
-    watched = hook.watch_paths()
-    assert str(ROOT / "src") in watched and str(ROOT / "moonwalk") in watched and str(ROOT / "CLAUDE.md") in watched
-    assert str(ROOT / "build") not in watched                     # script output, outside every check
+def test_after_a_tool_call_every_governed_file_differing_from_the_index_is_a_candidate_whatever_wrote_it(repo):
+    (repo / "fresh.md").write_text("# Probe\n", encoding="utf-8")   # as a shell script writes it, no editor tool involved
+    (repo / "fresh.pyc").write_bytes(b"\0")                         # no check governs it
+    assert hook.changed_now() == {str(repo / "fresh.md")}
 
 
 def test_a_file_equal_to_the_index_is_left_unchecked_and_a_new_one_once_per_version(repo):
@@ -62,7 +62,7 @@ def test_a_sweeps_files_are_checked_as_one_batch_by_the_hook_holding_the_run_loc
     monkeypatch.setattr(hook, "check_batch", lambda paths: batches.append(sorted(paths)) or [f"{len(paths)} checked"])
     for name in ("a.md", "b.md"):
         hook._queue(str(tmp_path / name))                        # queued by the hooks that found the run lock held
-    assert hook.drain(tmp_path / "c.md") == ["3 checked"] and len(batches) == 1
+    assert hook.drain({str(tmp_path / "c.md")}) == ["3 checked"] and len(batches) == 1
 
 
 @needs_flock
@@ -71,16 +71,16 @@ def test_a_hook_finding_the_run_lock_held_queues_its_file_and_leaves(tmp_path, m
     monkeypatch.setattr(hook, "check", lambda paths: ["checked here"])
     monkeypatch.setattr(hook, "DEADLINE", time.monotonic() + 100)
     with hook._Lock("run.lock", wait=False):
-        assert hook.drain(tmp_path / "x.md") == []
+        assert hook.drain({str(tmp_path / "x.md")}) == []
     assert hook._queue(take=False) == {str(tmp_path / "x.md")}  # left for the holder's next batch
 
 
-def test_findings_reach_the_agent_as_the_systemMessage_and_a_deleted_or_ungoverned_file_is_ignored(monkeypatch, capsys):
-    monkeypatch.setattr(hook, "drain", lambda path: [f"finding in {path.name}"])
+def test_findings_reach_the_agent_as_the_systemMessage_and_a_call_that_changed_nothing_is_silent(monkeypatch, capsys):
+    monkeypatch.setattr(hook, "drain", lambda paths: [f"finding in {Path(p).name}" for p in sorted(paths)])
     monkeypatch.setattr(hook.os, "nice", lambda n: 0)               # the dispatch under test, not the test runner's priority
-    for payload, says in (({"hook_event_name": "FileChanged", "file_path": str(ROOT / "README.md"), "event": "change"}, "finding in README.md"),
-                          ({"hook_event_name": "FileChanged", "file_path": str(ROOT / "README.md"), "event": "unlink"}, None),
-                          ({"hook_event_name": "FileChanged", "file_path": str(ROOT / "x.pyc"), "event": "add"}, None)):
+    payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash"}
+    for changed, says in (({str(ROOT / "README.md")}, "finding in README.md"), (set(), None)):
+        monkeypatch.setattr(hook, "changed_now", lambda c=changed: c)
         monkeypatch.setattr(sys, "stdin", type("In", (), {"read": lambda self, p=payload: json.dumps(p)})())
         assert hook.main() == 0
         out = capsys.readouterr().out

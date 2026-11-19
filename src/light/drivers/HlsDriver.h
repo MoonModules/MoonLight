@@ -95,14 +95,7 @@ public:
         // Widened BEFORE multiplying: both operands are sane while their product need not be.
         uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
         uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
-        // Chroma is sampled in 2x2 blocks, so a hardware encoder takes even dimensions only.
-        if constexpr (!platform::hasEncoderChoice) {
-            if ((scaledW & 1u) || (scaledH & 1u)) {
-                scale_  = static_cast<uint8_t>(scale_ * 2);
-                scaledW *= 2;
-                scaledH *= 2;
-            }
-        }
+        evenFrame(scale_, scaledW, scaledH);
         if (scaledW > kMaxEncodeWidth || scaledH > kMaxEncodeHeight) {
             std::snprintf(statusBuf_, sizeof(statusBuf_),
                           "%ux%u at scale %u exceeds the encoder's %ux%u",

@@ -94,6 +94,17 @@ TEST_CASE("DeviceGroup: a member is picked from Discovery's devices and kept by 
     CHECK(b.member(0).find("\"status\":\"present\"") != std::string::npos);
 }
 
+TEST_CASE("DeviceGroup: only one of ours, MoonLight or MoonBase, is offered or taken as a member, since only MoonLight runs the sync") {
+    Bench b;
+    hearWithMac(*b.discovery, kIpA, "WLED0-0", kMacA, /*marker=*/0);   // a WLED, its MAC named
+    CHECK(b.options().find("WLED0-0") == std::string::npos);
+    uint32_t row = 0;
+    REQUIRE(b.group->addListRow(row));
+    CHECK_FALSE(b.group->setListRowField(row, "device", "{\"value\":0}"));   // no device at the first index to pick
+    CHECK_FALSE(b.group->hasMember(kMacA));
+    CHECK_FALSE(b.group->setListRowField(row, "mac", "{\"value\":\"08:b6:1f:6f:bd:3c\"}"));   // an API caller naming the WLED's MAC is refused too
+}
+
 TEST_CASE("DeviceGroup: a member keeps its place through a rename and a new address") {
     Bench b;
     hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
