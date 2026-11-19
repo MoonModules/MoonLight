@@ -875,6 +875,17 @@ jobs:
             echo "Staged binaries + relative manifests into releases/$T"
           done
 
+          # The release feed the device UI, MoonDeck and the installer read (install-picker.js): the releases kept above, newest first, in
+          # GitHub's release shape trimmed to the fields they use. Pages serves it to any origin with a max-age, so the browsers' HTTP caches
+          # pace the checks and no page spends GitHub's 60 anonymous API requests an hour.
+          mkdir -p pages/install
+          for T in $KEEP; do gh api "repos/$GITHUB_REPOSITORY/releases/tags/$T"; done \
+            | jq -s 'sort_by(.published_at) | reverse
+                     | map({tag_name, name, prerelease, draft, published_at, created_at, html_url,
+                            assets: [.assets[] | {name, browser_download_url, digest}]})' \
+            > pages/install/releases.json
+          echo "Staged the release feed: $(jq length pages/install/releases.json) releases"
+
       # The install page and the picker modules at the root; each release's binaries and manifests live under releases/<tag>/.
       - name: Stage GitHub Pages site
         run: uv run moondeck/ci/release_stage.py pages-site

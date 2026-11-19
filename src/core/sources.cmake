@@ -18,6 +18,7 @@ set(MM_CORE_SOURCES
     system/DevicesModule.cpp
     system/DeviceGroup.cpp
     system/DeviceGroupSync.cpp
+    system/FleetClock.cpp
     system/SharedControls.cpp
     system/HttpServerWled.cpp
     system/FilesystemModule.cpp

@@ -5,8 +5,6 @@
 import { releaseAsset, firmwareAssetName, latestStable, releaseByTag, chipKey, mirrorUrl } from "./install-picker.js";
 import { isNewer, parse } from "./semver.js";
 
-export const UPDATE_TTL_MS = 60 * 60 * 1000;   // 1 h: the age of release list the update badge settles for
-
 // Whether a version is a -dev build, what the moving `latest` carries (compute_version.py); a release candidate is a release of its own.
 function isDevBuild(version) {
     return parse(version)?.prerelease[0] === "dev";

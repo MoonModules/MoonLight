@@ -31,6 +31,30 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The devices keep one fleet clock, on UDP 65511
+
+**Action: allow UDP 65511 and the multicast group 239.255.77.80 where a firewall sits between devices.**
+
+Every MoonLight device keeps a fleet clock, asking the lowest device that runs it for its time on UDP port 65511 and saying it runs the clock to 239.255.77.80 every sixteen seconds. Effects animate on it, so the same effect on two devices shows the same moment; when a device first syncs, its animations jump once to the fleet's time. A group's status names the device it follows (`clock: MM-C3, ±4.7 ms`). Only devices on this release or later run it, and only they are asked.
+
+### A device group's change applies at a time
+
+**Action: *update* the members of a group to this release together; until then a member on older firmware follows a change within seconds rather than at once.**
+
+A shared control or look changed on a member goes out as an OSC bundle stamped with the fleet time it applies at, 100 ms ahead, so the members switch together. A member on older firmware ignores the bundle and takes the change from the group's next repeat.
+
+### A group member is set by `mac` from the API
+
+**Action: *update* a script that sets a member by MAC through the `device` field: send it as `mac`.**
+
+`PATCH /api/list/<group>/members/<row>` with `field: "device"` takes the picker's index, a number, and refuses a quoted value, where a MAC sent there was read as an index from its leading digits and added another device. A MAC goes in `field: "mac"`.
+
+### MoonBase matches the app by handoff version
+
+**Action: *nothing*, or install MoonBase once.**
+
+The app reports MoonBase behind only when it speaks another handoff version, the number of the contract between the two images, rather than whenever their versions differ. A MoonBase installed before this release carries no handoff version, so the warning and the map's ⬆ stay until the MoonBase from this release or a later one is installed from the Firmware card's MoonBase tab; after that, a new release leaves it quiet unless the contract changed.
+
 ### A `receivers` field takes a device group's name, and holds up to 32
 
 **Action: *nothing*.**

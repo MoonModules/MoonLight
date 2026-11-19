@@ -10,6 +10,7 @@
 #include "core/system/DeviceGroup.h"
 #include "core/system/DeviceGroupSync.h"
 #include "core/system/Devices.h"
+#include "core/util/ClockSync.h"
 #include "core/util/JsonFetch.h"
 #include "platform/platform.h"
 
@@ -411,6 +412,68 @@ TEST_CASE("a group that leaves this device takes its values and recall with it, 
         osc::Reader r(looks[0].data(), looks[0].size(), SharedControls::kLookAddress);
         CHECK(std::string(r.str()) == m.id());
         CHECK(sync.sharedNote() == nullptr);
+        sync.close();
+    }
+}
+
+namespace {
+/// Puts this process on a fleet clock `aheadUs` ahead of its own, for a case, and back to its own clock after.
+struct OnFleetClock {
+    explicit OnFleetClock(int64_t aheadUs = 0) { set(aheadUs); }
+    void set(int64_t aheadUs) {
+        ClockDiscipline d;
+        d.steer(static_cast<int64_t>(platform::uptimeUs()), aheadUs);
+        FleetTime::publish(d);
+    }
+    ~OnFleetClock() { FleetTime::reset(); }
+};
+}  // namespace
+
+TEST_CASE("a change made here on the fleet clock goes out as a bundle applying 100 ms ahead; without the clock, plain") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        OnFleetClock fleet;
+        sync.sent.clear();
+        REQUIRE(m.scheduler.setControl("Control", "fader1", "{\"value\":77}") == Scheduler::SetControlResult::Ok);
+        REQUIRE(sync.sent.size() == 1);
+        uint64_t tag = 0;
+        const uint8_t* inner = nullptr;
+        size_t innerLen = 0;
+        REQUIRE(osc::readBundle(sync.sent[0].data(), sync.sent[0].size(), tag, inner, innerLen));
+        const int64_t lead = osc::usOfTimetag(tag) - FleetTime::nowUs();
+        CHECK(lead > 50000);
+        CHECK(lead <= DeviceGroupSync::kApplyLeadUs);
+        CHECK(readValues(std::vector<uint8_t>(inner, inner + innerLen)).value == 77);
+        sync.close();
+    }
+}
+
+TEST_CASE("a timed change waits for its moment on a member on the fleet clock; one stamped too far ahead, or reaching a member without the clock, applies on arrival") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));   // the markers loaded, so the 20 ms read runs
+        const auto p = valuesMessage(m.id(), "Lamp.speed", 42, uint64_t{5000} << 16);
+        uint8_t bundle[300];
+        OnFleetClock fleet;
+        const size_t n = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 500000), p.data(), p.size());   // half a second ahead
+        sync.handle(*m.devices, bundle, n);
+        sync.receive(*m.devices);
+        CHECK(m.lamp->speed != 42);   // held
+        fleet.set(2000000);           // the fleet clock moves past its moment
+        sync.receive(*m.devices);
+        CHECK(m.lamp->speed == 42);
+        const auto far = valuesMessage(m.id(), "Lamp.speed", 44, uint64_t{5500} << 16);
+        const size_t f = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 10000000), far.data(), far.size());   // past the furthest hold
+        sync.handle(*m.devices, bundle, f);
+        CHECK(m.lamp->speed == 44);
+        FleetTime::reset();           // off the fleet clock: on arrival, whatever the timetag says
+        const auto q = valuesMessage(m.id(), "Lamp.speed", 43, uint64_t{6000} << 16);
+        const size_t k = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 10000000), q.data(), q.size());
+        sync.handle(*m.devices, bundle, k);
+        CHECK(m.lamp->speed == 43);
         sync.close();
     }
 }

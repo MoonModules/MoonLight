@@ -104,6 +104,35 @@ With step 15's scheduling the critical path becomes the test build, then the lon
 
 **Actions**: step 15 extended (the cheap, often-failing checks first; the scenarios gate isolated as the measurement it now is); step 3's next part unchanged (docgen and complexity per file in the hook); step 25 (check_code names each new clone pair against the committed list).
 
+## After-action review: the fourth commit round (2026-11-19)
+
+A day's work, about 70 files and 2,200 insertions, took five gate runs from 12:33 to 14:22. Run 1 stopped when the Reviewer, beside the gates, found two fleet-clock defects; run 2 failed three ratchets written during the day (code +24, prose +39, docgen 3 errors); the fixes in rounds 3 to 5 moved code inputs each time, and one refactor surfaced an order-dependent test (a process-wide `FleetTime` no case reset). The write-time hook had not run since 08:35 (`build/hook/checked.json` untouched), most likely because the session continued from a summary and its watcher was not registered again (a hypothesis); nothing reported its silence, and the agent read the silence as a clean tree. The last run passed every gate but the code ratchet at +2, both named in the commit.
+
+## The plan against the textbook (2026-11-19)
+
+The textbook shape is layered, each layer catching its class of defect at its cheapest moment: **shift left and fail fast** (Humble and Farley's commit stage: [under five minutes, never ten](https://www.oreilly.com/library/view/continuous-delivery-reliable/9780321670250/ch07.xhtml)), an **inner loop** of seconds on the file written and an **outer loop** of CI on the whole tree, every stage checking **only what changed** ([pre-commit](https://pre-commit.com/) on the staged files, [Nx affected](https://nx.dev/docs/features/ci-features/affected)), fed by **small batches** ([Google: about 100 lines a change](https://google.github.io/eng-practices/review/developer/small-cls.html); [DORA](https://dora.dev/guides/dora-metrics-four-keys/)). Agentic development adds that the agent needs a verification signal at every step ([Anthropic's best practices](https://code.claude.com/docs/en/best-practices)), that a guardrail must prove it is alive, since an agent cannot notice a missing check, and that the agent's memory and rule changes stay visible to the human.
+
+| Layer | When | What runs | Catches |
+|--|--|--|--|
+| Inner loop | every edit, seconds | the per-file checks on the file written (docgen, code, prose, compile) | budgets, complexity, wording, as written |
+| Step loop | per finished plan step, minutes | the affected tests, and the Reviewer on that step's diff | design and logic defects while the step is fresh |
+| Commit stage | once, under ten minutes | the per-file checks over the whole diff first, then the affected builds and tests | what slipped, in seconds rather than minutes |
+| Outer loop | merge, on CI | everything, whole tree | cross-cutting and platform breakage |
+
+| Practice | Textbook | MoonLight has | Gap | Refinement, and what it removes |
+|--|--|--|--|--|
+| Per-file checks at commit | pre-commit and [lefthook](https://lefthook.dev/usage/commands/run) run their hooks on the staged files | `hook_written.py` at write time; the gate runs whole-tree checks | the gate trusts the hook ran; on 2026-11-19 it had not | `run_gates.py` runs the hook's `check()` over every changed file as its first gate, before any build; removes step 20's bypass proposal and the by-hand hook runs |
+| A guardrail that proves it is alive | a [dead man's switch](https://healthchecks.io/docs/monitoring_cron_jobs/): alert when the heartbeat stops | the hook writes `build/hook/checked.json` | nothing reads it, so a silent watcher reads as a clean tree | the runner's first line: "hook last ran at <time>; N of M changed files unchecked" |
+| Editor-time feedback | on-save checks; Claude Code's [FileChanged](https://code.claude.com/docs/en/hooks) fires whatever wrote the file | step 16 | whether a resumed session re-registers the watcher is untraced | trace it once (`claude --debug hooks` on a resumed session); the first row holds either way |
+| Ratchet per file and rule | [Spotless `ratchetFrom`](https://github.com/diffplug/spotless/blob/main/plugin-gradle/README.md), [Betterer](https://phenomnomnominal.github.io/betterer/docs/introduction), [Notion's per-file counts](https://www.notion.com/blog/how-we-evolved-our-code-notions-ratcheting-system-using-custom-eslint-rules) | totals per rule in `code.json` and `docgen.json` | a rise written at 10:00 shows at 13:00 as a whole-tree total | step 4's open half: counts per file and rule, the gate checks each changed file's row, the total a sum; removes the whole-tree lizard and docgen runs per commit |
+| Cheap checks first | the commit stage's compile, unit tests and analysis in minutes | longest-path scheduling; step 15's cheap-first open | every failure of four rounds came from docgen, check_code or the docs build, 6 to 8 minutes in | the per-file gate above is the fail-fast stage; removes the open part of step 15 |
+| Review of a small change, early | Google reviews one self-contained change and measures [response time](https://google.github.io/eng-practices/review/reviewer/speed.html) | step 8: the Reviewer per finished step | on 2026-11-19 it read the whole day at the end | step 11's reviewed ref, and `--list` printing the unreviewed diff's size |
+| Small batches | DORA; the repo's own 400 lines and ten files for a contribution (`14-merge.yaml`) | one combined commit per cycle, the product owner's call | evidence: the rounds took 30, 38, over 60 and 110 minutes | none proposed; the numbers are for the product owner to weigh |
+| Test isolation | [pytest-randomly](https://adamj.eu/tech/2018/01/08/pytest-randomly-history/): a leaky test rarely survives a shuffled order | `test_main.cpp` resets each process-wide state by hand | each new static needs its reset; the missing one surfaced in a commit round | CI's sanitizer lane runs doctest `--order-by=rand` and prints the seed |
+| Measure the gates | DORA's lead time, change fail rate, rework | step 1: a record per run | no number per round | a round record: lead time, runs per round, time to first failure, fail rate per gate, hook coverage; removes the hand-timed reviews above |
+
+**The five refinements with the most saving per effort**, from the research: (1) the hook's checks as the runner's first gate over the diff, an hour; (2) the heartbeat line, minutes; (3) counts per file and rule, a day; (4) the round record, half a day; (5) random test order in CI's sanitizer lane, minutes.
+
 ## End states
 
 | | End state | Gains | Loses |

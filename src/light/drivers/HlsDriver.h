@@ -16,7 +16,7 @@ namespace mm {
 /// Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.
 /// @card HlsDriver.png
 ///
-/// Open the `url` the card shows. Where @ref NdiDriver feeds production tools, this feeds anything that plays video.
+/// Open the `url` the card shows.
 ///
 /// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.
 ///
@@ -78,7 +78,7 @@ public:
     /// Which controls need a fresh encode, the encoder fixing its rate at spawn.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "targetFps") == 0 || std::strcmp(name, "scale") == 0 ||
-               std::strcmp(name, "encoder") == 0 || isCorrectionControl(name);
+               std::strcmp(name, "encoder") == 0 || isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Derive the scaled geometry, make the segment directory, and start the encoder.
@@ -86,8 +86,9 @@ public:
         release();
         if (!layer_) return;
 
-        srcWidth_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        srcHeight_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        srcWidth_  = picture_.width();
+        srcHeight_ = picture_.height();
         // An explicit scale is honored except below a hardware encoder's own minimum frame.
         const uint8_t floorScale = platform::hasEncoderChoice ? 1 : autoScale();
         scale_     = scale ? (scale > floorScale ? scale : floorScale) : autoScale();
@@ -121,7 +122,6 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
-        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         // Only where the encoder writes segments to disk rather than keeping them in RAM.
         if constexpr (platform::hasFsSegments) {

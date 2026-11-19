@@ -35,8 +35,6 @@ public:
     /// The most bits, about 1.2 kHz: a slower pulse flickers on camera and to a moving eye.
     static constexpr uint8_t kMaxBits = 16;
 
-    /// It outputs a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// The pins, the resolution and the rate it gives.
     void defineDriverControls() override {

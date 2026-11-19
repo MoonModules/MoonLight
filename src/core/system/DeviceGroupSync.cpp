@@ -1,6 +1,8 @@
 /// The device groups on the network: definitions and shared controls sent when Trickle says, merged on arrival, a group created or dropped as its members change, and deletions kept.
 #include "core/system/DeviceGroupSync.h"
 
+#include "core/util/ClockSync.h"   // FleetTime: when a timed change applies
+
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"   // applyStateDocument: a group created, renamed or dropped as the API does it
 #include "core/system/Devices.h"           // the fleet's clock, which stamps a deletion and a shared change
@@ -53,10 +55,11 @@ void DeviceGroupSync::receive(MoonModule& devices) {
     if (!loaded_) return;   // the markers first, so a copy of a deleted group meets its marker
     devices_ = &devices;
     // Shared values and recalls apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
+    applyDue(devices);
     for (int n = 0; open_ && !pendingLen_ && n < 16; n++) {
         const int len = sock_.recvFrom(buf_.data(), buf_.count());
         if (len <= 0) break;
-        if (handleShared(devices, buf_.data(), static_cast<size_t>(len))) continue;
+        if (receiveShared(devices, buf_.data(), static_cast<size_t>(len))) continue;
         std::memcpy(pending_.data(), buf_.data(), static_cast<size_t>(len));
         pendingLen_ = static_cast<size_t>(len);
     }
@@ -65,7 +68,7 @@ void DeviceGroupSync::receive(MoonModule& devices) {
 
 bool DeviceGroupSync::ensureOpen() {
     if (open_) return true;
-    if (!buf_.resize(kDatagram) || !pending_.resize(kDatagram) || !sock_.open()) return false;
+    if (!buf_.resize(kDatagram) || !pending_.resize(kDatagram) || !held_.resize(kHeld) || !sock_.open()) return false;
     if (!sock_.bind(kPort)) { sock_.close(); return false; }
     sock_.joinMulticast(kGroup);   // best-effort: a network that drops multicast still carries what each device sends itself
     open_ = true;
@@ -81,6 +84,8 @@ void DeviceGroupSync::close() {
     buf_.resize(0);
     pending_.resize(0);
     pendingLen_ = 0;
+    held_.resize(0);
+    heldCount_ = 0;
     seenCount_ = 0;      // release frees the held ids and the markers with the buffers,
     tombCount_ = 0;
     loaded_ = false;     // and the next tick reloads the markers from the saved text
@@ -88,7 +93,46 @@ void DeviceGroupSync::close() {
 
 void DeviceGroupSync::handle(MoonModule& devices, const uint8_t* pkt, size_t len) {
     // One message, one handler: an answer sent from the definition's handler reuses the receive buffer.
-    if (!handleDefinition(devices, pkt, len) && !handleShared(devices, pkt, len)) handleDeletion(devices, pkt, len);
+    if (!handleDefinition(devices, pkt, len) && !receiveShared(devices, pkt, len)) handleDeletion(devices, pkt, len);
+}
+
+bool DeviceGroupSync::receiveShared(MoonModule& devices, const uint8_t* pkt, size_t len) {
+    uint64_t tag = 0;
+    const uint8_t* msg = nullptr;
+    size_t msgLen = 0;
+    if (!osc::readBundle(pkt, len, tag, msg, msgLen)) return handleShared(devices, pkt, len);
+    const int64_t at = osc::usOfTimetag(tag);
+    // Held only on the fleet clock and only while there is room: otherwise now, as before the clock existed.
+    const int64_t now = FleetTime::nowUs();
+    if (FleetTime::synced() && at > now && at - now <= kMaxHoldUs && heldCount_ < held_.count() && msgLen <= sizeof(Held::msg)) {
+        Held& h = held_[heldCount_++];
+        h.atUs = at;
+        h.len = static_cast<uint16_t>(msgLen);
+        std::memcpy(h.msg, msg, msgLen);
+        return true;
+    }
+    handleShared(devices, msg, msgLen);
+    return true;   // a bundle is a timed shared change, handled or not
+}
+
+void DeviceGroupSync::applyDue(MoonModule& devices) {
+    if (!heldCount_) return;
+    const int64_t now = FleetTime::nowUs();
+    for (uint8_t i = 0; i < heldCount_;) {
+        if (held_[i].atUs > now) { i++; continue; }
+        Held due = held_[i];
+        held_[i] = held_[--heldCount_];   // the order among changes of one moment is their stamps', which the merge reads
+        handleShared(devices, due.msg, due.len);
+    }
+}
+
+void DeviceGroupSync::sendTimed(const uint8_t* data, size_t len) {
+    if (!len) return;
+    if (!FleetTime::synced()) { send(data, len); return; }
+    uint8_t bundle[192];
+    const size_t n = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + kApplyLeadUs), data, len);
+    if (n) send(bundle, n);
+    else send(data, len);   // too long for a timed change: plain, applied on arrival
 }
 
 bool DeviceGroupSync::handleShared(MoonModule& devices, const uint8_t* pkt, size_t len) {
@@ -174,7 +218,7 @@ void DeviceGroupSync::shareValue(const char* param, int32_t value) {
         if (!shared_.setLocal(SharedControls::keyOf(id), param, value, stampNow(*devices_))) return;
         uint8_t msg[160];   // its own buffer: a merged value's apply moves a slot and reaches here while buf_ still holds the datagram being read
         uint16_t from = 0;
-        send(msg, shared_.writeValues(msg, sizeof(msg), id, from, param));
+        sendTimed(msg, shared_.writeValues(msg, sizeof(msg), id, from, param));
     });
 }
 
@@ -186,7 +230,7 @@ void DeviceGroupSync::lookApplied(const char* name) {
     forEachGroupId(*devices_, [&](const char* id) {
         shared_.recallLocal(SharedControls::keyOf(id), name, ip, served ? served : 80, stampNow(*devices_));
         uint8_t msg[160];
-        send(msg, shared_.writeRecall(msg, sizeof(msg), id));
+        sendTimed(msg, shared_.writeRecall(msg, sizeof(msg), id));
     });
 }
 

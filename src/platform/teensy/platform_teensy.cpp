@@ -41,6 +41,15 @@ namespace mm::platform {
 
 uint32_t millis() MM_NONBLOCKING { return ::millis(); }
 uint32_t micros() MM_NONBLOCKING { return ::micros(); }
+/// The 32-bit counter widened by counting its wraps, read far more often than once per 71 minutes, every frame by the layer; one thread, so no lock.
+uint64_t uptimeUs() MM_NONBLOCKING {
+    static uint32_t last = 0;
+    static uint64_t high = 0;
+    const uint32_t now = ::micros();
+    if (now < last) high += uint64_t{1} << 32;
+    last = now;
+    return high | now;
+}
 uintptr_t currentThreadId() MM_NONBLOCKING { return 1; }   // one thread, and the id is never zero
 uint32_t cycleCount() { return ARM_DWT_CYCCNT; }
 uint8_t currentCore() { return 0; }

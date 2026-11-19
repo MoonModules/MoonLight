@@ -6,9 +6,10 @@
 ///
 /// ## Why the layout is redefined here
 ///
-/// The layout is a fixed on-disk format the bootloader parses: magic, chip id, then the app descriptor carrying the project name and version.
-/// Those are the same bytes whether they arrive on a device or in a test.
-/// Defining it here rather than including `esp_app_format.h` is what lets the vetting run in a host test, which matters because the code it guards erases a device's only recovery image.
+/// The layout is a fixed on-disk format the bootloader parses: magic, chip id, then the app descriptor carrying the project name and version, the same bytes on a device and in a test.
+///
+/// Defining it here rather than including `esp_app_format.h` lets the vetting run in a host test, which matters because the code it guards erases a device's only recovery image.
+///
 /// `unit_FirmwareImage` pins the layout against real binaries built by the ESP32 toolchain.
 ///
 /// ## The three ways an image can be wrong
@@ -23,19 +24,36 @@
 ///
 /// ## Two names, because a device refuses a name it does not know
 ///
-/// An image carries its ESP-IDF project name in its descriptor, and every install path checks it before a byte is written.
-/// A device accepts only the names compiled into it, so a build that ships under a new name is refused by everything in the field.
+/// An image carries its ESP-IDF project name in its descriptor, and every install path checks it before a byte is written, so a build shipping under a new name is refused by everything in the field.
+///
 /// The name therefore changes in two releases: v6.0.0 knows both and ships under the old one, and the release after it ships under the new one.
-/// `kAppImageNames` and `kMoonBaseImageNames` hold the pair, first the name a build carries today.
-/// The old name stays accepted, so a device can go back to v6.0.0 and the app slot keeps refusing an old recovery image.
+///
+/// `kAppImageNames` and `kMoonBaseImageNames` hold the pair, first the name a build carries; the old name stays accepted, so a device can go back to v6.0.0 and the app slot keeps refusing an old recovery image.
 ///
 /// One gap stays open, and MIGRATING names it: a device updated over the air from v5 keeps its v5 recovery image, which knows only the old recovery name.
-/// Offered the new recovery image as an app, that one does not recognize it and writes it over the app, so only a cable recovers the device.
-/// It closes per device once its recovery image is reinstalled.
+///
+/// Offered the new recovery image as an app, that one writes it over the app, so only a cable recovers the device; the gap closes per device once its recovery image is reinstalled.
+///
+/// ## The handoff version
+///
+/// The app and MoonBase hand a device to each other through one contract: the install URL staged in NVS under the names below, the config files MoonBase reads its networks, wiring and name from, and the access point both open.
+///
+/// The contract also holds the HTTP routes the app's pages call on MoonBase: `/moonbase`, `/api/system`, `/api/firmware/upload`, `/api/firmware/url` and `/api/firmware/cancel`.
+///
+/// `kHandoffVersion` numbers it, as the Linux boot protocol's version numbers the contract between a kernel and its bootloader: a release that leaves the contract alone keeps the number.
+///
+/// So a MoonBase of an older release, or a local build's newer app, still match; a change to either side raises the number, and the app reports MoonBase behind until the matching one is installed.
+///
+/// `unit_MoonBaseContract` pins the contract beside the number, read from both images' sources, so a change to it fails until the number is raised with it.
+///
+/// MoonBase carries its number in a record ESP-IDF places right after the app descriptor (`.rodata_custom_desc`), so the app reads it from the recovery slot as it lies.
+///
+/// An image lacking the record reads as 0, which matches no contract.
 ///
 /// ## A download that goes silent
 ///
 /// ESP-IDF's OTA read reports a timeout as "still in progress", so a connection that stops delivering bytes without closing keeps an install waiting for good.
+///
 /// Both install loops, the app's and MoonBase's, therefore abort once no byte has arrived for `kDownloadStallMs`.
 
 #include <cstddef>
@@ -80,7 +98,7 @@ struct ImageInfo {
     char   version[32] = {};      ///< the app version string the descriptor carries
 };
 
-/// Read what `buf` claims to be, never past `len`, so a truncated or hostile stream reports what it can.
+/// Read what `buf` claims to be, within `len`, so a truncated or hostile stream reports what it can: @xref{why-the-layout-is-redefined-here}.
 inline ImageInfo identify(const uint8_t* buf, size_t len) {
     ImageInfo out;
     if (!buf || len == 0) return out;
@@ -106,6 +124,32 @@ inline ImageInfo identify(const uint8_t* buf, size_t len) {
 inline constexpr const char* kAppImageNames[]      = {"MoonLight", "projectMM"};
 /// The same pair for the recovery image, which an app slot must never receive.
 inline constexpr const char* kMoonBaseImageNames[] = {"MoonLight-moonbase", "projectMM-moonbase"};
+
+/// The version of the contract between the app and MoonBase: @xref{the-handoff-version}.
+inline constexpr uint32_t kHandoffVersion = 1;
+/// Where the app stages an install for MoonBase: the NVS namespace, the URL to install, and MoonBase's count of the installs that URL started, which a new URL resets.
+inline constexpr const char* kHandoffNvsNamespace = "moonbase";
+inline constexpr const char* kHandoffUrlKey       = "url";
+inline constexpr const char* kHandoffTriesKey     = "tries";
+/// Marks the handoff record, so only a record reads as a version, not the bytes after an older image's descriptor: "MMHO" read little-endian.
+inline constexpr uint32_t kHandoffMagic = 0x4F484D4D;
+/// The record MoonBase carries in `.rodata_custom_desc`.
+struct HandoffRecord {
+    uint32_t magic;     ///< kHandoffMagic
+    uint32_t version;   ///< the kHandoffVersion it was built with
+};
+/// Offset of the handoff record: the descriptor's own offset plus the 256 bytes of `esp_app_desc_t`.
+constexpr size_t kHandoffOffset = kDescOffset + 256;
+/// Enough bytes to read the handoff record.
+constexpr size_t kHandoffBytes = kHandoffOffset + sizeof(HandoffRecord);
+
+/// The handoff version an image carries, from its first `len` bytes in `buf`; 0 when it carries no record or `buf` stops short of it.
+inline uint32_t handoffVersion(const uint8_t* buf, size_t len) {
+    if (!buf || len < kHandoffBytes) return 0;
+    HandoffRecord rec;
+    std::memcpy(&rec, buf + kHandoffOffset, sizeof(rec));
+    return rec.magic == kHandoffMagic ? rec.version : 0;
+}
 
 /// What an install from a URL says when the device cannot connect to the server, the usual case being an offline device, whose browser can still download the file.
 inline constexpr const char* kNoInternetHint = "error: the device cannot reach the internet, download the image and install it from a file";
@@ -157,7 +201,7 @@ inline const char* imageRejection(const ImageInfo& info, ChipId chip, IsKind isK
     return nullptr;
 }
 
-/// The reason this is not a MoonBase image for `chip`, or null when it is.
+/// The reason this is not a MoonBase image for `chip`, or null when it is: @xref{the-three-ways-an-image-can-be-wrong}.
 inline const char* moonBaseRejection(const ImageInfo& info, ChipId chip) {
     return imageRejection(info, chip, [](const char* p) { return isMoonBaseImage(p); }, "not a MoonBase image");
 }

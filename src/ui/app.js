@@ -12,7 +12,7 @@ import { mountDeviceMap } from "./devicemap.js";
 import { openDevicePopup } from "./devicepopup.js";
 import { openGroupPopup } from "./devicegroup.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
-import { UPDATE_TTL_MS, channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
+import { channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
 import { installFirmware, INSTALL_KINDS, moonbaseStatus, firmwareImages, hasMoonBase, restartIntoMoonBase } from "./deviceinstall.js";
 import { isNewer } from "./semver.js";
 import { collectFiles, restoreBundle } from "./migrate.js";
@@ -4113,7 +4113,7 @@ const MAP_HOOKS = {
     detail: (panel, fields, opts) => fillListDetail(panel, fields, listFieldHelp(opts && opts.moduleName, opts && opts.ctrlName)),
     rowAge: (row) => rowAgeClass(row),
     update: (row, releases) => channelUpdate(row, releases),
-    releases: () => loadReleases({ maxAgeMs: UPDATE_TTL_MS }),
+    releases: () => loadReleases(),
     fit(box, natural) { if (natural !== undefined) markExpandable(box, natural); panelRefit(); },
 };
 
@@ -5885,8 +5885,8 @@ function updateStatusBar() {
         else rebootBtn.title = "Reboot device";
     }
 
-    // Cache-first update check: instant from the localStorage cache, background-fetches only
-    // when stale (>1 h). Fire-and-forget: best-effort, never blocks the status-bar render.
+    // The update check, answered by the browser's HTTP cache between the release feed's ten-minute checks. Fire-and-forget: best-effort,
+    // keeps the status-bar render free to run.
     checkFirmwareUpdate(false);
 }
 
@@ -5896,17 +5896,15 @@ function updateStatusBar() {
 // Browser-side "a newer firmware is out" check, modelled on ESP32-sveltekit's
 // UpdateIndicator (the upstream firmware lineage): our own code. The device fetches
 // nothing; the browser compares the running version (FirmwareUpdateModule.version, pure
-// semver) against GitHub releases and, when newer AND a compatible .bin exists, shows the
+// semver) against the release feed and, when newer AND a compatible .bin exists, shows the
 // status-bar badge. Two channels:
-//   - STABLE: a device compares against the newest stable release (the /latest endpoint
-//     excludes prereleases). Applies to every device.
+//   - STABLE: a device compares against the newest stable release. Applies to every device.
 //   - DEV (latest): a device already on a prerelease build (-dev.<N>) ALSO compares against
 //     the moving `latest` release, so a stale latest build is nudged to the newest latest.
-//     The `latest` release's tag is "latest" (not a semver), so its version is read from the
-//     per-firmware manifest (manifest-<firmware>.json carries "version", e.g. 2.1.0-dev.7).
-// A stable update wins over a dev update. Cached in localStorage (1 h TTL) so it doesn't
-// slow page load; a fresh check is forced when the Firmware card opens. Best-effort: any
-// failure hides the badge, never throws.
+//     The `latest` release's tag is "latest" (not a semver), so its version is its name.
+// A stable update wins over a dev update. The browser's HTTP cache answers between the
+// feed's ten-minute checks; a fresh check is forced when the Firmware card opens.
+// Best-effort: any failure hides the badge and returns.
 
 const PICKER_RELEASE_KEY = "MoonLight.picker.releaseTag"; // install-picker restores from this on init
 
@@ -6003,7 +6001,7 @@ function showUpdateBadge(badge, tag, label, byHand) {
     badge.hidden = false;
 }
 
-// Light the badge for a MoonBase that does not match the app, which an app update leaves behind on either channel: the matching one ships in the app's own release.
+// Light the badge for a MoonBase that does not match the app, which an app update that changes the handoff leaves behind: the matching one ships in the app's own release.
 function showMoonBaseBadge(badge, dev) {
     setText(badge, "⬆");
     badge.title = `MoonBase ${dev.moonbase} does not match the app ${dev.version}. Open Firmware to install the matching one`;
@@ -6014,7 +6012,7 @@ function showMoonBaseBadge(badge, dev) {
     badge.hidden = false;
 }
 
-// Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` bypasses the cache (used when the Firmware card opens).
+// Show/hide the badge, and return the app update it found as {tag, label}, or null. `force` asks past the HTTP cache (used when the Firmware card opens).
 // An app update comes first, a stable one before a -dev device's latest; with the app current, a MoonBase that does not match it.
 async function checkFirmwareUpdate(force) {
     const badge = document.getElementById("fw-update-badge");
@@ -6023,7 +6021,7 @@ async function checkFirmwareUpdate(force) {
     if (!dev) { badge.hidden = true; return null; }
 
     const byHand = !!dev.update && dev.update !== "self";
-    const u = channelUpdate(dev, await loadReleases({ bypassCache: force, maxAgeMs: UPDATE_TTL_MS }));
+    const u = channelUpdate(dev, await loadReleases({ revalidate: force }));
     if (u) { showUpdateBadge(badge, u.tag, u.label, byHand); return { tag: u.tag, label: u.label }; }
     if (dev.moonbase) { showMoonBaseBadge(badge, dev); return null; }
     badge.hidden = true;

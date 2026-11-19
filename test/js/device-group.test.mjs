@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { GROUP_WAVE_SIZE, planWaves, runWaves, memberState } from "../../src/ui/devicegroup.js";
+import { GROUP_WAVE_SIZE, planWaves, runWaves, memberState, behindNote } from "../../src/ui/devicegroup.js";
 import { heldGroups, membershipOffers, memberRowId } from "../../src/ui/devicepopup.js";
 
 const member = (name, extra = {}) => ({ name, url: `https://example.org/${name}.bin`, ...extra });
@@ -99,4 +99,10 @@ test("a node is offered to join each group its device's state holds, member of i
     assert.deepEqual(membershipOffers(heldGroups(null), "aa:bb:cc:dd:ee:ff"), []);   // a device holding no group offers an empty list
     assert.equal(memberRowId(held[0], "30:ed:a0:e1:5c:e9"), 3);   // leaving finds the row by its MAC, whatever its case
     assert.equal(memberRowId(held[1], "30:ed:a0:e1:5c:e9"), null);
+});
+
+test("the popup's note counts the members behind down as each install ends well, to every member up to date", () => {
+    assert.equal(behindNote(3, 5), "3 of 5 members are behind.");
+    assert.equal(behindNote(1, 5), "1 of 5 members is behind.");
+    assert.equal(behindNote(0, 5), "Every member is up to date.");
 });

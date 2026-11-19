@@ -23,7 +23,7 @@ function load(names, extra = "") {
 const node = (name, extra = {}) => ({ key: name, self: !!extra.self, row: { name, ...extra } });
 
 test("devices without traffic sit in a grid beneath the linked ones, by name, every label inside", () => {
-    const { layoutGraph, GRAPH_W, GRAPH_CELL_H } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph, GRAPH_W, GRAPH_CELL_H } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("peer"), node("zeta"), node("alpha"), node("mid")];
     const links = [[0, 1, "DDP", false]];
     const pos = new Map();
@@ -40,7 +40,7 @@ test("devices without traffic sit in a grid beneath the linked ones, by name, ev
 });
 
 test("a device that gains traffic leaves the grid and is placed by force", () => {
-    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("peer")];
     const pos = new Map();
     layoutGraph(nodes, [], pos);
@@ -180,7 +180,7 @@ test("an output shows the kind of light it drives: moving heads whatever drives 
 });
 
 test("a hub linked to many devices, as Home Assistant to every board, spreads them so no two cells overlap", () => {
-    const { layoutGraph, GRAPH_W } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph, GRAPH_W } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const names = ["self", "ha", ...Array.from({ length: 10 }, (_, i) => `board${i}`)];
     const nodes = names.map((n, i) => node(n, { self: i === 0 }));
     const links = names.slice(2).map((_, i) => [1, i + 2, "WLED API 24 req/min", false]).concat([[0, 1, "E1.31", false]]);
@@ -204,7 +204,7 @@ test("a node's IP and version start hidden and show when the viewer turns them o
 });
 
 test("the map lays out at its box's size: a wider box holds more devices a row, a taller one gives the linked ones the room", () => {
-    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const make = () => [node("self", { self: true }), node("peer"), ...Array.from({ length: 8 }, (_, i) => node(`idle${i}`))];
     const narrow = new Map(), wide = new Map();
     const hNarrow = layoutGraph(make(), [[0, 1, "DDP", false]], narrow, 480);
@@ -373,7 +373,7 @@ test("a search matches the devices whose name, address, type, version, firmware 
 });
 
 test("a map whose force area empties and fills again keeps every linked node's spot a number", () => {
-    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("peer"), node("idle")];
     const pos = new Map();
     layoutGraph(nodes, [[0, 1, "DDP", false]], pos);
@@ -383,7 +383,7 @@ test("a map whose force area empties and fills again keeps every linked node's s
 });
 
 test("a group's box holds only its members: a device linked to a member is laid out outside it", () => {
-    const { layoutGraph, groupBox } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "groupBox"]);
+    const { layoutGraph, groupBox } = load(["graphHash", "layoutGraph", "layoutForce", "graphInside", "separateNodes", "keepOutOfGroups", "separateGroups", "groupBox"]);
     const nodes = [node("self", { self: true }), node("p4"), node("dn2"), node("c3"), node("teensy"), node("wled-audio")];
     const traffic = [[4, 1, "audio sync", false], [5, 1, "audio sync", false], [0, 1, "DDP", false]];
     const group = [[1, 2, "", false, true], [1, 3, "", false, true]];   // p4, dn2 and c3 in one group, as groupLinks writes it
@@ -394,4 +394,24 @@ test("a group's box holds only its members: a device linked to a member is laid 
         const p = pos.get(nodes[i].key);
         assert.ok(p.x < b.x || p.x > b.x + b.w || p.y < b.y || p.y > b.y + b.h, `${nodes[i].key} outside the box`);
     }
+});
+
+test("two groups with no member in common never overlap; groups sharing a member overlap, as an Euler diagram draws it", () => {
+    const { keepOutOfGroups, groupBox, GRAPH_W } = load(["keepOutOfGroups", "separateGroups", "groupBox", "graphInside"]);
+    const nodes = ["self", "a1", "b1", "b2"].map(n => node(n, { self: n === "self" }));
+    const links = [[0, 1, "", false, true], [2, 3, "", false, true]];   // group A: self, a1; group B: b1, b2
+    // B's row just below A's: no dot of either inside the other's box, yet B's box top crosses A's bottom.
+    const pos = new Map([["self", { x: 200, y: 100 }], ["a1", { x: 330, y: 100 }], ["b1", { x: 250, y: 172 }], ["b2", { x: 300, y: 172 }]]);
+    keepOutOfGroups(nodes, links, [0, 1, 2, 3], pos, 600, GRAPH_W);
+    const box = (keys) => groupBox(keys.map(k => pos.get(k)));
+    const A = box(["self", "a1"]), B = box(["b1", "b2"]);
+    const apart = A.x + A.w <= B.x || B.x + B.w <= A.x || A.y + A.h <= B.y || B.y + B.h <= A.y;
+    assert.ok(apart, `boxes apart: A ${JSON.stringify(A)} B ${JSON.stringify(B)}`);
+    assert.deepEqual(pos.get("self"), { x: 200, y: 100 }, "the group holding this device stays put");
+
+    const shared = new Map([["self", { x: 200, y: 100 }], ["a1", { x: 330, y: 100 }], ["b1", { x: 380, y: 220 }]]);   // b1 outside A's box, B's box over A's through a1
+    const sharedLinks = [[0, 1, "", false, true], [1, 2, "", false, true]];   // a1 in both groups
+    const before = JSON.stringify([...shared]);
+    keepOutOfGroups(nodes.slice(0, 2).concat([node("b1")]), sharedLinks, [0, 1, 2], shared, 600, GRAPH_W);
+    assert.equal(JSON.stringify([...shared]), before, "a shared member leaves both boxes where they are");
 });

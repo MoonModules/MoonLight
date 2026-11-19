@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
+#include "core/system/FleetClock.h"   // the fleet clock, kept on the lowest live device's
 #include "core/util/Hlc.h"   // the fleet's clock, which stamps every edit of a device group
 
 namespace mm {
@@ -20,8 +21,26 @@ public:
     /// The hybrid logical clock this device stamps its group edits with, one for every group, so each reading is newer than any it has seen.
     Hlc& clock() { return clock_; }
 
+    /// The fleet clock, which Discovery offers the live peers each second.
+    FleetClock& fleetClock() { return fleetClock_; }
+    /// The same, read-only, for a status.
+    const FleetClock& fleetClock() const { return fleetClock_; }
+
+    /// Start the fleet clock's task, which opens its socket once the network is up.
+    void prepare() override {
+        MoonModule::prepare();
+        fleetClock_.start();
+    }
+
+    /// Stop the fleet clock's task and close its socket.
+    void release() override {
+        fleetClock_.close();
+        MoonModule::release();
+    }
+
 private:
     Hlc clock_;
+    FleetClock fleetClock_;
 };
 
 } // namespace mm

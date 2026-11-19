@@ -2,9 +2,10 @@
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
+#include "core/util/ClockSync.h"   // FleetTime: the fleet clock, back to the local clock per case
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case and subcase rerun starts on the real clock, on the HDMI stand-in so no case drives a screen, and with multicast joins that skip the host's network so no LAN sender reaches a case.
+// Every test case and subcase rerun starts on the real clock and its own local time, on the HDMI stand-in so no case drives a screen, and with multicast joins that skip the host's network so no LAN sender reaches a case.
 struct FreshFixturesPerTest : doctest::IReporter {
     explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
     static void reset() {
@@ -12,6 +13,7 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::platform::setTestClockStep(0);
         mm::platform::hdmiTestClear();
         mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
+        mm::FleetTime::reset();   // the process-wide fleet time, which a case's Devices tree may have claimed
     }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }

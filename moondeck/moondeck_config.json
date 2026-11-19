@@ -387,6 +387,15 @@
       "needs_device": true
     },
     {
+      "id": "measure_fleet_clock",
+      "tab": "live",
+      "group": "scenario",
+      "label": "Fleet Clock",
+      "help": "measure_fleet_clock",
+      "script": "diag/measure_fleet_clock.py",
+      "needs_device": false
+    },
+    {
       "id": "ui_clip",
       "tab": "live",
       "group": "video",

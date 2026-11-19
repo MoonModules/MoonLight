@@ -41,10 +41,16 @@ namespace osc { class Reader; }
 /// **A marker only grows newer.** An equal or older deletion leaves it as it is, and a group held under a marker goes, retried each second until it has.
 ///
 /// **What it accepts.** A message whose id is not twenty lowercase hex digits, or whose stamp is past the largest valid reading (Stamp::kMaxHlc), is ignored, as is a malformed definition.
+///
+/// ## Applied at a time
+///
+/// A change made here goes out as an OSC bundle whose timetag is the fleet time kApplyLeadUs ahead; a member on the fleet clock holds it until then, so members that hear it at different moments switch together.
+///
+/// A member off the fleet clock applies it on arrival, and so does one whose change is stamped further ahead than kMaxHoldUs. The device where the change is made applies it at once, so it leads the members by the lead. The Trickle repeats go out plain, as state to converge on.
 class DeviceGroupSync : public ControlSurface {
 public:
     /// Its buffers belong to `owner`, Discovery, which frees them on release.
-    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), pending_(owner), seen_(owner), tombs_(owner) {}
+    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), pending_(owner), held_(owner), seen_(owner), tombs_(owner) {}
 
     /// Once a second: notice a group deleted here, read what arrived, definitions and deletions included, send what Trickle says is due, and save the markers when they changed.
     void tick(MoonModule& devices, char* saved, size_t savedCap);
@@ -76,6 +82,12 @@ public:
     static constexpr uint16_t kPort = 65510;
     /// The OSC address of a deletion marker.
     static constexpr const char* kDeletedAddress = "/moonlight/devicegroup/deleted";
+    /// How far ahead a change made here applies on the members, in microseconds of fleet time: @xref{applied-at-a-time}.
+    static constexpr int64_t kApplyLeadUs = 100000;
+    /// The furthest ahead a change is held, ten leads; one stamped later, from a sender on another time or a crafted datagram, applies on arrival.
+    static constexpr int64_t kMaxHoldUs = 10 * kApplyLeadUs;
+    /// How many timed changes a member holds at once; one more applies on arrival.
+    static constexpr uint8_t kHeld = 8;
 
 protected:
     /// Send one datagram to the groups' address, the seam a test captures.
@@ -109,6 +121,12 @@ private:
     Tomb* tombSlot(const Stamp& stamp);
     void sendDeletion(const Tomb& t);
     void send(const uint8_t* data, size_t len);
+    /// Send a change made here as a bundle applying kApplyLeadUs ahead on the fleet clock, or plain while this device has no fleet time.
+    void sendTimed(const uint8_t* data, size_t len);
+    /// Handle a received datagram that may be a timed change: hold it until its time, else hand it on.
+    bool receiveShared(MoonModule& devices, const uint8_t* pkt, size_t len);
+    /// Apply the held changes whose time has come.
+    void applyDue(MoonModule& devices);
     /// The markers read from the saved text; false, none held, when memory refuses them.
     bool loadTombs(const char* saved);
     void saveTombs(char* saved, size_t cap) const;
@@ -142,6 +160,10 @@ private:
     bool open_ = false, loaded_ = false, tombsChanged_ = false;
     ScratchBuffer<uint8_t> buf_;   ///< one datagram, taken when the socket opens
     ScratchBuffer<uint8_t> pending_;   ///< a definition or deletion the 20 ms read set aside for the tick
+    /// A change that arrived ahead of its time.
+    struct Held { int64_t atUs; uint16_t len; uint8_t msg[160]; };
+    ScratchBuffer<Held> held_;     ///< the changes waiting for their time, taken when the socket opens
+    uint8_t heldCount_ = 0;
     size_t pendingLen_ = 0;
     ScratchBuffer<GroupId> seen_;  ///< the group ids held last second, so a group deleted here is noticed
     uint16_t seenCount_ = 0;

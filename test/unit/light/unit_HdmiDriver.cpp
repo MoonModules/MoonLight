@@ -119,6 +119,24 @@ struct NoRoomWall {
 }  // namespace
 
 // A chained panel wall's lights run panel by panel; the screen shows them where the layout puts them, as one picture.
+TEST_CASE("HdmiDriver shows only its window of the lights, framed to where they sit, so two screens each show their half of one canvas") {
+    Bench b;
+    CHECK(b.driver.hasWindowControls());
+    uint8_t* p = b.source.data() + 5 * 3;   // light 5: the second of the wall's lower row
+    p[0] = 10; p[1] = 20; p[2] = 30;
+    b.driver.setWindow(4, 4);   // the lower row
+    b.driver.prepare();
+    mm::platform::setTestNowMs(1000);
+    b.driver.tick();
+    REQUIRE(mm::platform::hdmiTestFrameCount() == 1);
+    CHECK(mm::platform::hdmiTestFrameWidth() == 4);
+    CHECK(mm::platform::hdmiTestFrameHeight() == 1);
+    const uint8_t* f = mm::platform::hdmiTestFrameData();
+    REQUIRE(f != nullptr);
+    CHECK(f[1 * 3 + 0] == 10);
+    CHECK(f[1 * 3 + 2] == 30);
+}
+
 TEST_CASE("HdmiDriver places each light where the layout puts it, so a wall of chained panels shows as one picture") {
     auto w = panelWall(2, 2, 2, false);   // two 2x2 panels side by side: a 4x2 picture
     CHECK(w->pixelOf(4) == 2);   // panel 1's first light: x 2 of the top row, not the screen's fifth pixel

@@ -178,6 +178,8 @@ uint32_t micros() MM_NONBLOCKING {
     return static_cast<uint32_t>(esp_timer_get_time());
 }
 
+uint64_t uptimeUs() MM_NONBLOCKING { return static_cast<uint64_t>(esp_timer_get_time()); }
+
 void* alloc(size_t bytes) {
 #ifdef CONFIG_SPIRAM
     // Try PSRAM first, fall back to internal RAM

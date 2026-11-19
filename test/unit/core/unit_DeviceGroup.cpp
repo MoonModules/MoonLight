@@ -115,6 +115,18 @@ TEST_CASE("DeviceGroup: a member unheard for three announcements is missing, and
     CHECK(row.find("\"missing\":true") != std::string::npos);
 }
 
+TEST_CASE("DeviceGroup: a member heard running MoonBase is missing, since it follows no group, and present again once its app runs") {
+    Bench b;
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
+    pickFirst(*b.group);
+    CHECK(b.member(0).find("\"status\":\"present\"") != std::string::npos);
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA, WledPacket::kMbMarker);   // restarted into MoonBase: heard, but not as MoonLight
+    CHECK(b.member(0).find("\"status\":\"missing\"") != std::string::npos);
+    CHECK(discovery_rows::rowAt(*b.discovery, "192.168.1.20", /*detail=*/true).find("\"missing\":true") != std::string::npos);
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);   // its app back
+    CHECK(b.member(0).find("\"status\":\"present\"") != std::string::npos);
+}
+
 TEST_CASE("DeviceGroup: a device is a member once, and a MAC from the API joins as the picker's index does") {
     Bench b;
     hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
@@ -126,6 +138,15 @@ TEST_CASE("DeviceGroup: a device is a member once, and a MAC from the API joins 
     CHECK(b.group->setListRowField(second, "mac", "{\"value\":\"10:20:30:40:50:60\"}"));
     CHECK(b.group->hasMember(macB));
     CHECK_FALSE(b.group->setListRowField(second, "mac", "{\"value\":\"not a mac\"}"));
+    // The picker's field takes its index only: a MAC sent to it is refused rather than read as its leading digits, "00:4b:…" as the first device.
+    const uint8_t macC[6] = {0x0c, 0x0c, 0x0c, 0x0c, 0x0c, 0x0c};
+    const uint8_t ipC[4] = {192, 168, 1, 30};
+    hearWithMac(*b.discovery, ipC, "MM-C", macC);   // a device on offer, no member yet
+    uint32_t third = 0;
+    REQUIRE(b.group->addListRow(third));
+    for (const char* sent : {"{\"value\":\"00:4b:12:bd:8e:14\"}", "{\"value\":\"01:4b:12:bd:8e:14\"}", "{\"value\":\"02:4b:12:bd:8e:14\"}", "{\"value\":\"1\"}"})
+        CHECK_FALSE(b.group->setListRowField(third, "device", sent));
+    CHECK_FALSE(b.group->hasMember(macC));
 }
 
 TEST_CASE("DeviceGroup: the members survive a save and a restore, the name kept for a member Discovery dropped") {
@@ -190,7 +211,7 @@ TEST_CASE("DeviceGroup: this device keeps one row through a new address, so a gr
     platform::getMacAddress(self);
     CHECK(discovery_rows::rowAt(dev, "192.168.1.2").empty());
     CHECK_FALSE(discovery_rows::rowAt(dev, "192.168.1.9").empty());
-    CHECK(dev.heardLately(self));
+    CHECK(dev.present(self));
     dev.release();
 }
 

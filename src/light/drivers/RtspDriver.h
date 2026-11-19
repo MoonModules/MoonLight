@@ -72,7 +72,7 @@ public:
     /// Which controls need a fresh encode, the encoder fixing its rate at spawn.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "targetFps") == 0 || std::strcmp(name, "scale") == 0 ||
-               isCorrectionControl(name);
+               isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Derive the scaled geometry, start the encoder, and listen for a client.
@@ -84,8 +84,9 @@ public:
         }
         if (!layer_) return;
 
-        srcWidth_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        srcHeight_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        srcWidth_  = picture_.width();
+        srcHeight_ = picture_.height();
         scale_     = scale ? scale : autoScale();
         uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
         uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
@@ -104,7 +105,6 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
-        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         platform::EncoderConfig cfg{};
         cfg.width       = static_cast<uint16_t>(width_);

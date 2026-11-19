@@ -7,7 +7,7 @@
 import { installPicker, loadReleases, releaseAsset, firmwareAssetName, moonbaseAssetName, migrateAssetName, chipKey } from "./install-picker.js";
 import { graphOutputs } from "./devicemap.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, fetchWithin } from "./uikit.js";
-import { UPDATE_TTL_MS, channelUpdate, releaseOfVersion, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
+import { channelUpdate, releaseOfVersion, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
 import { installFirmware, peerFirmware, waitForRestart, waitForMoonBase } from "./deviceinstall.js";
 
 // The hooks a page passes, each with a default: the detail as plain rows and the page's own origin as home, so a page passing only the
@@ -561,10 +561,10 @@ function buildPeerSummary(row, home) {
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
         const update = fw.summary?.update;
-        const releases = await loadReleases({ maxAgeMs: UPDATE_TTL_MS });   // null when GitHub does not answer and none are kept
+        const releases = await loadReleases();   // null while the release feed has not loaded
         const u = releases && peerUpdate(deviceOf(fw), releases);
         if (!u) {
-            const lead = releases ? "The app is up to date" : "GitHub does not answer, so whether a newer release exists is unknown";
+            const lead = releases ? "The app is up to date" : "The release list does not load, so whether a newer release exists is unknown";
             note.textContent = `${lead}.`;
             offerImageUpdates(box, base, fw, note, releases, lead);
             return;

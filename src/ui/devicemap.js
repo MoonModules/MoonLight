@@ -17,7 +17,6 @@ const NO_HOOKS = {
     fit() {},                               // (box, naturalHeight): the picture's natural height moved, or (box) its box was rebuilt
 };
 const hooks = (opts) => ({ ...NO_HOOKS, ...(opts && opts.hooks) });
-const GRAPH_RELEASES_EVERY_MS = 60 * 60 * 1000;   // how often the map asks for the release list again
 
 // A list drawn as a graph (ListSource::listAsGraph): each row a node, keyed by `ip` or else `name`,
 // colored by `type`, ringed when `self`, faded by its detail's age, and linked by an `edges` array of
@@ -33,6 +32,7 @@ const GRAPH_SHOW = [["ip", "IP", false], ["version", "version", false], ["traffi
 const GRAPH_SHOW_KEY = "MoonLight.graph.show.v2";   // v2: address and version start hidden
 const GRAPH_ZOOM_MAX = 8;   // the closest the map zooms in, eight times
 const GRAPH_WLED_ASK_MS = 60000, GRAPH_WLED_INFO_MS = 600000;   // a WLED asked again a minute after no answer, ten minutes after one, as an update in place moves its version
+const GRAPH_GROUP_GAP = 12;   // the least room between two group boxes that share no member
 const GRAPH_CELL_DOT = 14;   // a grid node's dot from its cell's top, which leaves its four label lines inside the cell
 const GRAPH_LABEL_DY = 20, GRAPH_LINE_H = { "graph-label": 12, "graph-sublabel": 11, "graph-services": 13 };   // a node's first baseline below its dot, and each line's height
 const GRAPH_CHAR_W = { "graph-label": 6.2, "graph-sublabel": 5, "graph-services": 13, "graph-edge-label": 5.4 };   // a character's width, about, at each line's font size
@@ -110,8 +110,35 @@ function keepOutOfGroups(nodes, links, force, pos, areaH, w = GRAPH_W) {
                 moved = true;
             }
         }
+        if (separateGroups(nodes, [...groups.values()], pos, areaH, w)) moved = true;
         if (!moved) return;
     }
+}
+
+// Rectangle overlap removal for the boxes, as separateNodes does for the cells: two groups with no member in common end at least
+// GRAPH_GROUP_GAP apart, the group that moves going whole along the axis the boxes overlap least, the one holding this device staying put,
+// else the larger. Groups sharing a member keep their overlap, which is how an Euler diagram draws a shared member. True when one moved.
+function separateGroups(nodes, groups, pos, areaH, w = GRAPH_W) {
+    let moved = false;
+    const holdsSelf = (g) => [...g].some(i => nodes[i].self);
+    const box = (g) => groupBox([...g].map(i => pos.get(nodes[i].key)));
+    for (let a = 0; a < groups.length; a++) {
+        for (let c = a + 1; c < groups.length; c++) {
+            if ([...groups[a]].some(i => groups[c].has(i))) continue;
+            const ba = box(groups[a]), bc = box(groups[c]);
+            const ox = Math.min(ba.x + ba.w, bc.x + bc.w) - Math.max(ba.x, bc.x) + GRAPH_GROUP_GAP;
+            const oy = Math.min(ba.y + ba.h, bc.y + bc.h) - Math.max(ba.y, bc.y) + GRAPH_GROUP_GAP;
+            if (ox <= 0 || oy <= 0) continue;
+            const aMoves = holdsSelf(groups[c]) || (!holdsSelf(groups[a]) && groups[a].size <= groups[c].size);
+            const [mover, bm, bo] = aMoves ? [groups[a], ba, bc] : [groups[c], bc, ba];
+            const away = (m0, mLen, o0, oLen) => ((m0 + mLen / 2) >= (o0 + oLen / 2) ? 1 : -1);
+            const dx = ox <= oy ? ox * away(bm.x, bm.w, bo.x, bo.w) : 0;
+            const dy = ox <= oy ? 0 : oy * away(bm.y, bm.h, bo.y, bo.h);
+            for (const i of mover) { const p = pos.get(nodes[i].key); p.x += dx; p.y += dy; graphInside(p, areaH, w); }
+            moved = true;
+        }
+    }
+    return moved;
 }
 
 // A linked node kept within the force area, its labels inside the picture.
@@ -248,12 +275,15 @@ function nodeBehind(row, releases, update) {
             row.coprocessorMismatch ? "WiFi coprocessor behind the app" : ""].filter(Boolean).join(", ");
 }
 
-// The release list the map marks nodes behind their channel by, loaded at most once an hour and drawn into when it arrives; null until then.
+// The release list the map marks nodes behind their channel by, asked on every draw, which the browser's HTTP cache answers between the
+// feed's checks; a list that changed draws the map again. Null until one has loaded.
 function graphReleases(container, h) {
-    const now = Date.now();
-    if (!container._releasesAt || now - container._releasesAt > GRAPH_RELEASES_EVERY_MS) {
-        container._releasesAt = now;
-        Promise.resolve(h.releases()).then(list => { container._releases = list; if (list) redrawGraph(container); });
+    if (!container._releasesAsking) {
+        container._releasesAsking = true;
+        Promise.resolve(h.releases()).then(list => {
+            container._releasesAsking = false;
+            if (list && list !== container._releases) { container._releases = list; redrawGraph(container); }
+        });
     }
     return container._releases || null;
 }

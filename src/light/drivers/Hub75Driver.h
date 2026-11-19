@@ -57,6 +57,9 @@ public:
     /// Bind the rendered frame this driver corrects from.
     void setSourceBuffer(Buffer* buf) override { sourceBuffer_ = buf; }
 
+    /// No window: the panels open at the layer's full size and take its lights in one pass.
+    bool hasWindowControls() const override { return false; }
+
     /// Publish the output's wiring, the peripheral select, then the output's own controls.
     void defineDriverControls() override {
         buildBackendOptions();

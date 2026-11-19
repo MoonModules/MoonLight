@@ -341,6 +341,10 @@ uint32_t micros() MM_NONBLOCKING {
         std::chrono::duration_cast<std::chrono::microseconds>(now - startTime).count()
     );
 }
+
+uint64_t uptimeUs() MM_NONBLOCKING {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startTime).count());
+}
 #ifdef MM_SUPPRESS_FUNCTION_EFFECTS
 #pragma clang diagnostic pop
 #endif
@@ -2293,7 +2297,10 @@ LookupStep resolveNameStep(const char*, uint8_t*) { return LookupStep::Failed; }
 // No partitions on host: there is no recovery image and nothing to boot into, unless a host test gives it one to read.
 static const char* testMoonBaseVersion_ = nullptr;
 static const char* testMoonBaseBuilt_ = nullptr;
-void setTestMoonBase(const char* version, const char* built) { testMoonBaseVersion_ = version; testMoonBaseBuilt_ = built; }
+static uint32_t testMoonBaseHandoff_ = 0;
+void setTestMoonBase(const char* version, const char* built, uint32_t handoff) {
+    testMoonBaseVersion_ = version; testMoonBaseBuilt_ = built; testMoonBaseHandoff_ = handoff;
+}
 bool otaHasMoonBase() { return testMoonBaseVersion_ != nullptr; }
 bool otaBootMoonBase() { return false; }
 bool otaRunningMoonBase() { return false; }
@@ -2307,6 +2314,7 @@ bool otaMoonBaseBuild(char* out, size_t len) {
     std::snprintf(out, len, "%s", testMoonBaseBuilt_);
     return out[0] != 0;
 }
+uint32_t otaMoonBaseHandoff() { return testMoonBaseVersion_ ? testMoonBaseHandoff_ : 0; }
 bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 // No image to install into off-device, of any target.
 bool otaFetchUrl(OtaTarget, const char*, char* statusBuf, size_t statusBufLen,

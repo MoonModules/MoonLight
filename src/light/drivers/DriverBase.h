@@ -7,6 +7,7 @@
 #include "light/layers/Buffer.h"
 #include "light/layers/Layer.h"
 #include "light/drivers/Correction.h"
+#include "light/drivers/LayoutPicture.h"   // a screen or stream driver's picture, cropped to the window
 #include "light/drivers/LedPeripheral.h"         // LedHwBlock: the peripheral-block claim guard's vocabulary
 #include "light/drivers/FixtureProfilesModule.h"   // the shared fixture-profile library a driver references by id
 #include "platform/platform.h"
@@ -49,8 +50,8 @@ public:
 
     /// Whether this driver exposes the correction controls, which a raw-RGB sink opts out of.
     virtual bool hasCorrectionControls() const { return true; }
-    /// Whether this driver reads a slice of the shared buffer, so its card shows start and count.
-    virtual bool hasWindowControls() const { return false; }
+    /// Whether this driver reads a slice of the shared buffer, so its card shows start and count: every driver that lights something.
+    virtual bool hasWindowControls() const { return drivesLights(); }
     /// Whether this driver lights something, which every output does and the preview, a picture of the output, does not.
     virtual bool drivesLights() const { return true; }
     /// Frames it sent last second where it counts them itself, a network output whose sends can fall behind the render; none means it sends every rendered frame.
@@ -64,6 +65,16 @@ public:
     int32_t windowCount() const { return count_; }
     /// Set the window directly, which takes effect on the next parse as a control edit does.
     void setWindow(int32_t start, int32_t count) { start_ = start; count_ = count; }
+    /// Place `picture` on `layer`'s physical front face, cropped to this driver's window of the `buffer`'s lights, else the whole face; false when its table finds no memory.
+    bool placeWindowed(LayoutPicture& picture, const Layer& layer, const Buffer* buffer) const {
+        const lengthType w = layer.physicalWidth() > 0 ? layer.physicalWidth() : 1;
+        const lengthType h = layer.physicalHeight() > 0 ? layer.physicalHeight() : 1;
+        const nrOfLightsType total = buffer ? buffer->count() : static_cast<nrOfLightsType>(static_cast<size_t>(w) * h);
+        nrOfLightsType from = 0, len = 0;
+        windowSlice(total, from, len);
+        const bool narrowed = from > 0 || len < total;
+        return picture.place(layer, w, h, narrowed ? from : 0, narrowed ? len : 0);
+    }
     /// How many lights this driver sends from a buffer of `bufN`: its window, clamped to the buffer.
     nrOfLightsType windowLength(nrOfLightsType bufN) const {
         nrOfLightsType outStart = 0, outLen = 0;
@@ -363,10 +374,10 @@ private:
 
 protected:
 
-    /// The first light of the shared buffer this driver reads.
+    /// The first light shown.
     int32_t start_ = 0;   // 32 bits, as is count: a wall with PSRAM holds more than 65535 lights
-    /// How many lights it reads from `start`; 0 reads them all.
-    /// @guide So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`.
+    /// How many, from `start`; 0 for the rest.
+    /// @guide A status LED takes `start 0, count 1`, the strip `start 1`.
     int32_t count_ = 0;
 
     /// Whether `name` is one of the window controls, for a driver's own prepare test.

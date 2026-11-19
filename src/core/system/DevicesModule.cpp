@@ -102,7 +102,7 @@ void DevicesModule::writeGroups(JsonSink& sink, const Device& d) const {
     }
     if (first) return;
     sink.append("]");
-    if (!heardLately(d.mac)) sink.append(",\"missing\":true");
+    if (!present(d.mac)) sink.append(",\"missing\":true");
 }
 
 const DeviceGroup* DevicesModule::groupNamed(const char* name) const MM_NONBLOCKING {
@@ -126,7 +126,7 @@ bool DevicesModule::appendGroupMembers(const char* name, Receiver* out, uint8_t&
         if (n >= cap) { left++; return; }
         out[n] = Receiver{};
         out[n].member = true;
-        if (d && heardLately(mac)) std::memcpy(out[n].ip, d->ip, 4);   // an unheard member keeps its place with no address, so a split over the members holds
+        if (d && present(mac)) std::memcpy(out[n].ip, d->ip, 4);   // a member not present keeps its place with no address, so a split over the members holds
         n++;
     });
     return true;

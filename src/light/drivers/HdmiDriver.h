@@ -50,6 +50,7 @@ public:
     /// Point the driver at the shared source buffer.
     void setSourceBuffer(Buffer* buf) override { sourceBuffer_ = buf; }
 
+
     /// Bind the display mode, fit or stretch, and the frame-rate ceiling.
     void defineDriverControls() override {
         const platform::HdmiMode* modes = nullptr;
@@ -75,14 +76,12 @@ public:
 
     /// A mode change rebuilds the output; a geometry change resizes the frame.
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "mode") == 0 || isCorrectionControl(name);
+        return std::strcmp(name, "mode") == 0 || isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Start the output in the chosen mode and size the staging buffers for the current geometry; a re-prepare in the same mode keeps the output running, since every tree sweep reaches here and a monitor takes seconds to lock onto a restarted signal.
     void prepare() override {
         if (!layer_) { release(); return; }
-        width_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        height_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
         if (open_ && openMode_ != mode) { platform::hdmiClose(); open_ = false; }   // the output alone; the staging is resized below
         if (!open_) {
             if (!platform::hdmiOpen(mode)) {
@@ -93,6 +92,10 @@ public:
             openMode_ = mode;
             activeKnown_ = false;   // a new output reports its display's mode afresh
         }
+        // The window's lights, framed to where they sit, decide the frame's size, else the whole face.
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        width_ = picture_.width();
+        height_ = picture_.height();
         if (!rgb_.resize(static_cast<size_t>(width_) * height_ * 3)) {
             release();
             setStatus("out of memory for the HDMI frame", Severity::Error);
@@ -102,7 +105,6 @@ public:
             release();
             return;
         }
-        picture_.place(*layer_, width_, height_);   // a refused table keeps the raster order, and the status says why
         formatLiveLine();
         writeStatus();
     }

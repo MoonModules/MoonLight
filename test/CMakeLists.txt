@@ -60,6 +60,8 @@ add_executable(mm_tests
     unit/core/unit_DevicesModule_ageout.cpp
     unit/core/unit_DevicesModule_discovery.cpp
     unit/core/unit_DevicesModule_flows.cpp
+    unit/core/unit_ClockSync.cpp
+    unit/core/unit_FleetClock.cpp
     unit/core/unit_DeviceGroup.cpp
     unit/core/unit_DevicesModule_growth.cpp
     unit/core/unit_DevicesModule_hue.cpp
@@ -242,6 +244,7 @@ add_executable(mm_tests
     unit/light/unit_Drivers_rendersplit.cpp
     unit/light/unit_FixtureProfilesModule.cpp
     unit/light/unit_DriverBase_fixture_persistence.cpp
+    unit/light/unit_DriverBase_window.cpp
     unit/light/unit_HueDriver.cpp
     unit/light/unit_Palette.cpp
     unit/light/unit_WaveEffect.cpp

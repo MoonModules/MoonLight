@@ -3453,11 +3453,11 @@
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HueDriver.png",
    "controls": {
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "bridgeIp": {
      "line": "The bridge's LAN IP, entered in the UI (4 octets)."
@@ -3510,11 +3510,11 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "protocol": {
      "line": "The wire protocol: Art-Net, E1.31 or DDP; the port follows.",
@@ -3595,6 +3595,13 @@
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/PreviewDriver.png",
    "controls": {
+    "start": {
+     "line": "The first light shown."
+    },
+    "count": {
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
+    },
     "targetFps": {
      "line": "The rate the preview aims for: lower for detail, raise for smoothness.",
      "tests": [
@@ -3618,11 +3625,11 @@
    "guide": [
     {
      "title": "The NDI runtime",
-     "text": "You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime)."
+     "text": "You install it yourself; until then the driver says so and runs on. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime)."
     },
     {
      "title": "Receivers",
-     "text": "To see the output you need a receiver. NDI Video Monitor, part of NDI Tools, is the simplest; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank."
+     "text": "NDI Video Monitor, part of NDI Tools, is the simplest receiver; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank."
     },
     {
      "title": "Status line",
@@ -3647,6 +3654,13 @@
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
     },
+    "start": {
+     "line": "The first light shown."
+    },
+    "count": {
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
+    },
     "sourceName": {
      "line": "The name a receiver lists; blank uses the device's own."
     },
@@ -3663,7 +3677,7 @@
   },
   "HlsDriver": {
    "line": "Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.",
-   "summary": "Open the `url` the card shows. Where [Ndi](https://moonmodules.org/MoonLight/moonmodules/light/drivers.html#ndi) feeds production tools, this feeds anything that plays video.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.",
+   "summary": "Open the `url` the card shows.\n\nEach light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.",
    "attribution": "[Delphium](https://moonmodules.org/MoonLight/reference/attributions.html#delphium), [HLS](https://moonmodules.org/MoonLight/reference/attributions.html#hls), [FFmpeg](https://moonmodules.org/MoonLight/reference/attributions.html#ffmpeg)",
    "guide": [
     {
@@ -3692,6 +3706,13 @@
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "start": {
+     "line": "The first light shown."
+    },
+    "count": {
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "targetFps": {
      "line": "Encode-rate ceiling, and the bandwidth knob: bitrate follows.",
@@ -3752,6 +3773,13 @@
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
     },
+    "start": {
+     "line": "The first light shown."
+    },
+    "count": {
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
+    },
     "targetFps": {
      "line": "Frame-rate ceiling, which is also the keyframe interval.",
      "more": "The rate is a ceiling: a heavy effect that renders at 8 fps streams at 8 fps. Each module's tick time in the UI says which effect spends it."
@@ -3800,6 +3828,13 @@
     },
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
+    },
+    "start": {
+     "line": "The first light shown."
+    },
+    "count": {
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "mode": {
      "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.",
@@ -3866,11 +3901,11 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "format": {
      "line": "The card's wire format."
@@ -3972,11 +4007,11 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "pins": {
      "line": "Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles."
@@ -4036,11 +4071,11 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "pins": {
      "line": "One GPIO per output channel, in the fixture's channel order."
@@ -4088,11 +4123,11 @@
      "line": "The profile name an older config saved, read once and then emptied."
     },
     "start": {
-     "line": "The first light of the shared buffer this driver reads."
+     "line": "The first light shown."
     },
     "count": {
-     "line": "How many lights it reads from `start`; 0 reads them all.",
-     "more": "So drivers share one buffer: a status LED takes `start 0, count 1` and the strip `start 1`."
+     "line": "How many, from `start`; 0 for the rest.",
+     "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "pins": {
      "line": "Data GPIO list: `18,17,16` or ranges like `20-23`. Empty idles."
@@ -5058,7 +5093,7 @@
    "guide": [
     {
      "title": "The images",
-     "text": "Each image has its own tab: the app, MoonBase where present, the WiFi coproc on a P4 with WiFi. A Restart in MoonBase button sits on the card.\n\nWhen MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it."
+     "text": "Each image has its own tab: the app, MoonBase where present, the WiFi coproc on a P4 with WiFi. A Restart in MoonBase button sits on the card.\n\nA MoonBase that does not match the app gets a dot on its tab, a warning there and `⬆ MoonBase` in the top bar; installing the matching one there clears them."
     },
     {
      "title": "The WiFi coproc",
@@ -5359,11 +5394,11 @@
    "guide": [
     {
      "title": "Members",
-     "text": "Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements is marked missing, here and on the map."
+     "text": "Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements, or in MoonBase, is marked missing, here and on the map."
     },
     {
      "title": "Shared",
-     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.\n\nA device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again."
+     "text": "The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it."
     },
     {
      "title": "Shared controls",
@@ -5371,7 +5406,7 @@
     },
     {
      "title": "Updating the members",
-     "text": "Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The first failure stops the waves."
+     "text": "Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The popup counts down and closes when all are done; the first failure stops the waves and stays with its reason."
     },
     {
      "title": "Reaching the members",
@@ -5399,7 +5434,7 @@
        "line": "Its identity."
       },
       "status": {
-       "line": "Present when it was heard within three of its announcements, missing otherwise."
+       "line": "Present when it was heard running MoonLight within three of its announcements, missing otherwise, a board in MoonBase among them."
       }
      }
     }

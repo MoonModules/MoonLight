@@ -109,8 +109,6 @@ public:
     /// @guide The pause lets a receiver keep up, @xref{paced-packets-sent-from-a-task|sent from a task}. A frame fills at most 80% of its period, so a high fps or a large grid shrinks the gap.
     uint16_t packetGap = 500;
 
-    /// It sends a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// Bind the protocol, the DDP port, the destinations, the universe offset and the rate cap.
     void defineDriverControls() override {

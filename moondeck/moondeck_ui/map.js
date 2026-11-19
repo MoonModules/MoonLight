@@ -9,7 +9,7 @@
 import { mountDeviceMap, fetchPeerGraph } from "/ui/devicemap.js";
 import { openDevicePopup } from "/ui/devicepopup.js";
 import { openGroupPopup } from "/ui/devicegroup.js";
-import { UPDATE_TTL_MS, channelUpdate } from "/ui/releases.js";
+import { channelUpdate } from "/ui/releases.js";
 import { loadReleases } from "/ui/install-picker.js";
 import { moondeckActions } from "./popup.js";
 
@@ -34,7 +34,7 @@ const opts = {
         openGroup: (group, mapOpts) => openGroupPopup(group, mapOpts),
         home: () => listHome ?? location.origin,
         update: (row, releases) => channelUpdate(row, releases),
-        releases: () => loadReleases({ maxAgeMs: UPDATE_TTL_MS }),
+        releases: () => loadReleases(),
         fit: fitBox,
         actions: moondeckActions,
     },

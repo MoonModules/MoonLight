@@ -2,6 +2,7 @@
 
 #include "light/util/FixtureChannels.h"   // motion-channel offsets an effect writes through
 #include "light/layers/Buffer.h"
+#include "core/util/ClockSync.h"   // FleetTime: the fleet clock effects animate against
 #include "light/layouts/Layouts.h"
 #include "light/effects/EffectBase.h"
 #include "light/layers/MappingLUT.h"
@@ -148,9 +149,10 @@ public:
     /// Apply the frame's fade, then tick each enabled effect into the layer's buffer.
     void tick() MM_NONBLOCKING override {
         // Gated per child here because the layer iterates its own children, not through the Scheduler.
-        elapsed_ = platform::millis();
-        // Advance on every frame: a frozen clock spends a whole idle gap at once and wipes the trail.
-        const uint32_t frameScale = fadeTime_.advance(elapsed_);
+        const uint32_t local = platform::millis();
+        elapsed_ = static_cast<uint32_t>(local + FleetTime::offsetUs() / 1000);   // fleet time: devices side by side show one moment
+        // The fade on the local clock, which only moves forward: a frozen clock spends a whole idle gap at once and wipes the trail.
+        const uint32_t frameScale = fadeTime_.advance(local);
         fadeDue_ = fadeDue_ + frameScale < 2 * particles::FrameTime::kOne ? fadeDue_ + frameScale : 2 * particles::FrameTime::kOne;   // bounded: the carry, not this, holds how much
         // Once a reference frame has elapsed, as Echo's pass: each fade rounds every pixel down by up to a unit, so run every frame of a fast render the rounding alone erases a trail.
         if (fadeBy_ > 0) fadeCarry_ += static_cast<uint32_t>(fadeBy_) * frameScale;
@@ -285,7 +287,7 @@ public:
     lengthType depth() const { return depth_; }
     /// Bytes per light: 3 for RGB, 4 for RGBW, more when fixtures carry motion channels.
     uint8_t channelsPerLight() const { return channelsPerLight_; }
-    /// Milliseconds at the start of this frame, the clock every effect animates against.
+    /// Milliseconds of fleet time at the start of this frame, the clock every effect animates against, the same on every device of the network.
     uint32_t elapsed() const { return elapsed_; }
 
     /// Ask for a fade of `amt`/255 per reference frame, collected as the gentlest across effects; every amount is a rate, so a blank buffer is draw::fill.

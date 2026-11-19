@@ -179,8 +179,6 @@ public:
     /// Strands per physical data pin: 1 direct, or the '595's width through the expander.
     uint8_t outputsPerPin() const { return pinExpanderMode() ? kPinExpanderOutputs : uint8_t(1); }
 
-    /// It outputs a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// Bind the controls: the invariant block, the peripheral selector, then that backend's own.
     void defineDriverControls() override {
