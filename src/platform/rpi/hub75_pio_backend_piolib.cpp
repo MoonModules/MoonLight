@@ -100,7 +100,7 @@ class PiolibBackend : public PioBackend {
         programLength_ = config.programLength;
         programLoaded_ = true;
 
-        // The configuration reports nothing (hub75_pio_c_api.h, Silent configuration): a state machine that did not start shows as the first submit failing or blocking.
+        // The configuration is silent (hub75_pio_c_api.h, Silent configuration): a state machine that did not start shows as the first submit failing or blocking.
         const hub75_pio_sm_params smParams = {offset_, config.wrapTarget, config.wrap,
                                               config.clkdivInt, config.clkdivFrac, kBlankWideWord};
         hub75_pio_init_sm(pio_, sm_, &smParams);

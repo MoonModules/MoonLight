@@ -310,7 +310,7 @@ TEST_CASE("Hub75PioEngine: the shutdown hands the backend one blank, as deep as 
     CHECK(mm::platform::stubBackendLastBlankBytes() == start.config.xferBufCount * start.config.xferBufSize);
     CHECK(mm::platform::stubBackendLastBlankBytes() == 4 * 2048 * 4);
     run.engine.shutdown();
-    CHECK(mm::platform::stubBackendBlanks() == 1);   // a second shutdown blanks nothing more
+    CHECK(mm::platform::stubBackendBlanks() == 1);   // still 1: a second shutdown adds no blank
 }
 
 TEST_CASE("Hub75PioEngine: a backend that will not open or start refuses the open, and the engine stays stopped") {
@@ -394,7 +394,7 @@ TEST_CASE("Hub75PioEngine: a failed encode keeps the last good frame submitting,
     std::fill(frame.begin(), frame.end(), 0);
     run.engine.publishRgb(frame.data());   // an all-black frame, whose encode fails
     std::this_thread::sleep_for(std::chrono::milliseconds(50));   // the refresh thread takes it within a frame time of 0.2 ms
-    CHECK(run.engine.framesEncoded() == encoded);   // the failed encode counted nothing
+    CHECK(run.engine.framesEncoded() == encoded);   // the failed encode leaves the count as it was
     std::vector<uint32_t> last(2048);
     REQUIRE(mm::platform::stubBackendCopyLastFrame(last.data(), last.size()) == 2048);
     CHECK(last[1024] == 0x00F00200u);   // the red pixel is still on show
@@ -415,7 +415,7 @@ TEST_CASE("Hub75PioEngine: the frame records tell a repeated frame from a new on
     REQUIRE(n >= 3);
     for (size_t i = 1; i < n; i++) {
         CHECK(ids[i].index == ids[i - 1].index + 1);       // oldest first, one after another
-        CHECK(ids[i].checksum == ids[i - 1].checksum);     // nothing published: the same frame again
+        CHECK(ids[i].checksum == ids[i - 1].checksum);     // with the publish skipped: the same frame again
         CHECK(ids[i].words == 2048);
     }
     const uint64_t black = ids[0].checksum;
@@ -462,7 +462,7 @@ TEST_CASE("Hub75PioEngine: an engine opened directly, with no test mode, is refu
     CHECK(error == "the real PIO is not opened from a test binary");
     CHECK_FALSE(engine.isRunning());
     CHECK(mm::platform::pioBackendRealOpens() == opens);
-    mm::platform::setTestHub75PioReal(true);   // with the gate open the refusal is the build's: no piolib here, so nothing real is made
+    mm::platform::setTestHub75PioReal(true);   // with the gate open the refusal is the build's: piolib is absent here, so the real backend stays out of reach
     CHECK_FALSE(engine.open(pioSmall(), error));
     CHECK(error == "needs a Raspberry Pi build with piolib");
 }

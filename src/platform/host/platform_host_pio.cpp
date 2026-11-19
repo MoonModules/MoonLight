@@ -21,7 +21,7 @@
 ///
 /// The rule holds because of two behaviors in core. `Drivers::prepare` joins the encode worker before its children prepare, and a parent prepares before its children, so no push runs while a child's output closes or opens.
 ///
-/// And the Hub75Driver re-prepares the whole tree on a control change, because it keeps the default `PrepareScope::Tree`; a driver scoped to itself would re-prepare without that join. A driver that swaps outputs quiesces the render first.
+/// And the Hub75Driver re-prepares the whole tree on a control change, because it keeps the default `PrepareScope::Tree`; a driver scoped to itself would re-prepare alone, outside that join. A driver that swaps outputs quiesces the render first.
 
 #include "platform/Hub75Pio.h"
 
@@ -66,14 +66,14 @@ uint32_t realAttempts_ = 0;     // opens outside a test mode that were asked for
 bool testOpenFails_ = false;    // whether a test mode refuses the open
 
 #ifdef MM_HUB75_PIO_HAS_ENGINE
-// The engine, one per process, never destroyed: a refresh thread stuck in the kernel would be left reading it at exit. A normal exit still blanks the panels, through the driver's release.
+// The engine, one per process, lives until the process ends: a refresh thread stuck in the kernel may still be reading it at exit. A normal exit still blanks the panels, through the driver's release.
 Hub75PioEngine& engine_ = *new Hub75PioEngine;
 // The real-backend gate lives where every real open converges (hub75_pio_backend.h), so the seam only asks it.
 bool realAllowed() { return pioBackendRealAllowed(); }
 void setRealAllowed(bool allowed) { setPioBackendRealAllowed(allowed); }
 uint32_t realOpensNow() { return pioBackendRealOpens(); }
 #else
-// A build without the engine (MSVC): the same calls land on an engine that never opens, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
+// A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
 struct NoEngine {
     bool open(const Hub75PioOptions&, std::string& error, bool) {
         error = "this build has no PIO engine";
@@ -99,7 +99,7 @@ NoEngine& engine_ = *new NoEngine;
 constexpr uint64_t kHub75StallMs = 0;
 constexpr int kHub75JoinDeadlineMs = 0;
 void stubBackendReset() {}
-bool noEngineRealAllowed_ = true;   // no real backend exists here, so the gate has nothing to guard; it answers for the seam's early refusal
+bool noEngineRealAllowed_ = true;   // no real backend exists here, so the gate is moot; it answers for the seam's early refusal
 bool realAllowed() { return noEngineRealAllowed_; }
 void setRealAllowed(bool allowed) { noEngineRealAllowed_ = allowed; }
 uint32_t realOpensNow() { return 0; }
@@ -208,7 +208,7 @@ bool hub75PioAvailable() {
 #endif
 }
 
-// Why the real backend is not opened here, or null when it may be: the test binary's gate, a build without piolib, or a kernel that stalls a PIO reopen (hub75PioRefusal, the one home of that check).
+// Why the real backend is not opened here, or null when it may be: the test binary's gate, a build that omits piolib, or a kernel that stalls a PIO reopen (hub75PioRefusal, the one home of that check).
 static const char* realOpenRefusal() {
     if (!realAllowed()) return "the real PIO is not opened from a test binary";
 #ifndef MM_HUB75_PIO_HAVE_PIOLIB
@@ -232,7 +232,7 @@ bool hub75PioOpen(const Hub75PioOptions& o) {
     // The real branch: the engine on the stub backend in Stub mode, on piolib otherwise.
     const bool stub = mode_ == Hub75PioMode::Stub;
     if (!stub) {
-        // A refusal is the reason, not a warning: the PIO output has no fallback. A test binary is refused before piolib or /dev/pio0 is looked at, so a case never takes the live panels of the machine it runs on.
+        // A refusal is the reason, not a warning: the PIO output has no fallback. A test binary is refused before piolib or /dev/pio0 is looked at, so a case stays clear of the live panels of the machine it runs on.
         realAttempts_++;
         if (const char* why = realOpenRefusal()) return fail(why);
     }
@@ -284,7 +284,7 @@ uint32_t hub75PioSubmitErrors() MM_NONBLOCKING {
 void hub75PioClose() {
     if (realOpen_.load() || rec_.width() != 0) closes_++;
     realOpen_.store(false, std::memory_order_release);   // before the shutdown, so no push reaches an engine that is stopping
-    // Blank-first; harmless on an engine that is not open. A refresh thread that never returns leaves its reason here.
+    // Blank-first; harmless on an engine that is not open. A refresh thread stuck in a submit leaves its reason here.
     if (engine_.shutdown()) closeError_.clear();
     else closeError_ = engine_.shutdownError();
     rec_.close();

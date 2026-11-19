@@ -121,7 +121,7 @@ void hub75_pio_init_sm(void* handle, int sm,
      * pulls one word per pixel clock explicitly. */
     sm_config_set_out_shift(&config, true, false, 0);
     /* TX FIFO join; the sources give 8 words a direction and do not say what
-     * the joined FIFO holds, so nothing here assumes more than 8. */
+     * the joined FIFO holds, so the code here assumes 8 at most. */
     sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_TX);
     sm_config_set_clkdiv_int_frac(&config, params->clkdiv_int,
                                   params->clkdiv_frac);

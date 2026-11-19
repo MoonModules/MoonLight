@@ -124,7 +124,7 @@ void forEveryLaneColor(Check check) {
     }
 }
 
-/// Every submit from now on hangs, and the refresh thread has entered one: it never returns until a test clears the fault.
+/// Every submit from now on hangs, and the refresh thread has entered one: it returns once a test clears the fault.
 inline void hangSubmits() {
     mm::platform::StubFaults faults;
     faults.hangSubmits = true;

@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins what the PIO seam's recorder refuses, on every host, with or without the engine: the option rules are plain C++ in hub75_pio_options.cpp, built everywhere, so a build that has no engine (MSVC) refuses the same walls with the same reasons as one that has.
+/// Pins what the PIO seam's recorder refuses, on every host, whether the engine is built in or left out: the option rules are plain C++ in hub75_pio_options.cpp, built everywhere, so a build that has no engine (MSVC) refuses the same walls with the same reasons as one that has.
 
 #include "doctest.h"
 #include "platform/Hub75Pio.h"

@@ -153,7 +153,7 @@ TEST_CASE("Hub75PioCApi: a claim takes any free state machine, and passes a fail
     CHECK(shim_hub75_pio_claim_sm(pio) == 2);
     lib.unusedSm = -EBUSY;
     CHECK(shim_hub75_pio_claim_sm(pio) == -EBUSY);
-    CHECK(callsOf("claim ").empty());   // no preference to try: the SM claim call is never made
+    CHECK(callsOf("claim ").empty());   // no preference to try: the SM claim call is skipped
 }
 
 TEST_CASE("Hub75PioCApi: a ring that fails to configure is not remembered, one that configures is") {
@@ -164,7 +164,7 @@ TEST_CASE("Hub75PioCApi: a ring that fails to configure is not remembered, one t
     lib.unusedSm = 1;
     lib.calls.clear();
     CHECK(shim_hub75_pio_claim_sm(pio) == 1);
-    CHECK(callsOf("claim ").empty());   // nothing remembered: the failed configure of SM 3 left no preference
+    CHECK(callsOf("claim ").empty());   // a clean slate: the failed configure of SM 3 left no preference
 
     lib.xferConfigRc = 0;
     CHECK(shim_hub75_pio_config_xfer(pio, 2, 8192, 4) == 0);   // SM 2's DMA is this process's now

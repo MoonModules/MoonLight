@@ -2,7 +2,7 @@
 
 /// A minimal C wrapper over the piolib calls the HUB75 PIO engine uses, so the C++ backend (hub75_pio_backend_piolib.cpp) reaches piolib through hub75_pio_c_api.c, compiled as C (@xref{why-a-c-wrapper|why a C wrapper}).
 ///
-/// The PIO instance is an opaque `void*` handle and the state machine an `int`. A call that can fail returns 0, a count or an offset on success and a negative errno-style code on failure, which the backend turns into a message with its strerror text; a call that cannot report failure returns nothing.
+/// The PIO instance is an opaque `void*` handle and the state machine an `int`. A call that can fail returns 0, a count or an offset on success and a negative errno-style code on failure, which the backend turns into a message with its strerror text; a call that cannot report failure returns void.
 ///
 /// Beyond the calls: @xref{idle-pins|the pins' idle state}, @xref{the-c-and-c-boundary|the C and C++ boundary}, @xref{building-piolib|building piolib}, @xref{fifo-depth|FIFO depth} and @xref{pins-the-kernel-may-own|the pins the kernel may own}.
 ///
@@ -16,7 +16,7 @@
 ///
 /// ## The C and C++ boundary
 ///
-/// No exception crosses it, since the C side throws none and calls nothing that does. Errors cross as return codes, never as errno, which a later call could overwrite.
+/// No exception crosses it, since the C side and everything it calls throw none. Errors cross as return codes rather than errno, which a later call could overwrite.
 ///
 /// The handle is owned by the C file for the life of the process (see hub75_pio_release), and the C++ side only borrows it. Every pointer passed in is valid for the call alone, except the program instructions, which the caller keeps until it removes the program.
 ///
@@ -30,7 +30,7 @@
 ///
 /// ## Silent configuration
 ///
-/// The piolib calls hub75_pio_init_sm() makes (pin values, directions, mux, state machine init, clock divider) discard their ioctl results, so a refused configuration is silent and the function returns nothing. The first transfer is where a state machine that never started shows, as a submit that fails or blocks.
+/// The piolib calls hub75_pio_init_sm() makes (pin values, directions, mux, state machine init, clock divider) discard their ioctl results, so a refused configuration is silent and the function returns void. The first transfer is where a state machine that failed to start shows, as a submit that fails or blocks.
 ///
 /// ## Pins the kernel may own
 ///
@@ -58,7 +58,7 @@ void* hub75_pio_open(int* err);
 /// Claims a state machine and returns its number, or a negative errno-style code; the one this process held before when it is free, so its DMA claim is reused, else any free one.
 int hub75_pio_claim_sm(void* pio);
 
-/// Loads a program (instructions, length in words, .pio_version 0); returns the load offset, or -ENOSPC when the load is refused, which piolib's error flag reports without an errno, for no instruction memory free.
+/// Loads a program (instructions, length in words, .pio_version 0); returns the load offset, or -ENOSPC when the load is refused for lack of free instruction memory, which piolib reports by its error flag alone.
 int hub75_pio_add_program(void* pio, const uint16_t* instructions, int length);
 
 /// Configures the DMA transfer ring for one SM (buf_size a multiple of 4, buf_count <= 4); returns 0 or a negative errno-style code: -EBUSY when another client holds the DMA, -EINVAL for a size the kernel refuses.
@@ -75,7 +75,7 @@ struct hub75_pio_sm_params {
     uint32_t idle_wide_word;  ///< the wide word the pins hold from the moment PIO takes them
 };
 
-/// Initializes the SM for hub75_wide (GPIO 2..27 out, side-set on 17, shift right, no autopull, TX join, divider, wrap) at the offset, leaving it disabled; reports nothing (@xref{silent-configuration|silent configuration}).
+/// Initializes the SM for hub75_wide (GPIO 2..27 out, side-set on 17, shift right, no autopull, TX join, divider, wrap) at the offset, leaving it disabled; silent (@xref{silent-configuration|silent configuration}).
 void hub75_pio_init_sm(void* pio, int sm, const struct hub75_pio_sm_params* params);
 
 /// Clears the SM's FIFOs.

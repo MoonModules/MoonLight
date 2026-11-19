@@ -125,7 +125,7 @@ void Hub75PioEngine::dropBackend() {
 
 bool Hub75PioEngine::shutdown() {
     if (!running_ && !backend_ && threadsJoined()) return true;
-    // Both threads first: the blank goes out only when nothing else submits, and nothing reads a buffer once it is freed.
+    // Both threads first: the blank goes out only as the sole submitter, and every reader of a buffer is gone before it is freed.
     if (!stopThreads()) return false;
     if (backend_) {
         // Blank-first: the backend submits the ring-deep blank, waits for the FIFO to drain, then disables the SM, leaving the panel dark; the seam's close returns void, so a failure is counted, not printed.
@@ -147,14 +147,14 @@ void Hub75PioEngine::refreshLoop() {
     while (!stop_.load()) {
         // Take the newest encoded frame if the encode thread published one since the last take, else submit the current frame again.
         encoded_.take();
-        submitEnteredMs_.store(hub75NowMs());   // a submit that never returns shows as a stall, not as a frozen rate
+        submitEnteredMs_.store(hub75NowMs());   // a hung submit shows as a stall, not as a frozen rate
         const int rc = backend_->submitFrame(encoded_.current(), static_cast<uint32_t>(frameSlots_ * kBytesPerPixelClock));
         submitEnteredMs_.store(0);
         if (rc == 0) {
             framesSubmitted_++;
             window.count(fps_);
         } else {
-            // Count the failure, let the window see the miss so the rate falls to 0, pause and retry: the ioctl's error (-EINTR, -EIO, or -ETIMEDOUT on 6.12) lands here, and a submit that never returns is the shutdown deadline's case.
+            // Count the failure, let the window see the miss so the rate falls to 0, pause and retry: the ioctl's error (-EINTR, -EIO, or -ETIMEDOUT on 6.12) lands here, and a hung submit is the shutdown deadline's case.
             submitErrors_++;
             window.count(fps_, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(5));

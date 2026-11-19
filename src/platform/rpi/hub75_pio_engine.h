@@ -28,13 +28,13 @@
 ///
 /// The render thread publishes RGB and returns at once: publishRgb is one memcpy, one atomic exchange and two atomic counts, so it is safe from MoonLight's MM_NONBLOCKING tick.
 ///
-/// The encode thread owns the encode: it takes the freshest RGB frame, encodes it into the back buffer and publishes it. The refresh thread owns the submit: it takes the newest encoded frame, if one was published since its last take, and submits the frame it holds. The buffer being submitted is never written, and an encode never delays a submit.
+/// The encode thread owns the encode: it takes the freshest RGB frame, encodes it into the back buffer and publishes it. The refresh thread owns the submit: it takes the newest encoded frame, if one was published since its last take, and submits the frame it holds. The buffer being submitted is read-only, and a submit runs at its own pace, whatever the encode is doing.
 ///
 /// If the producer is slower than the display, the refresh thread re-submits the current frame, so the panel keeps refreshing at the pixel-clock rate regardless. If the producer is faster, a publish overwrites the RGB frame still waiting and leaves the one being encoded intact, so the panel shows the newest frame.
 ///
 /// A frame whose encode fails is dropped and the last good frame keeps submitting. The brightness is read once a frame.
 ///
-/// The refresh thread stamps the time it enters each submit. A submit in flight longer than the stall time, two rate windows or four frames' wire time, whichever is longer, reads as `stalled()`, and `fps()` answers 0 meanwhile: a submit that never returns counts no frame, and the rate must not freeze at its last value.
+/// The refresh thread stamps the time it enters each submit. A submit in flight longer than the stall time, two rate windows or four frames' wire time, whichever is longer, reads as `stalled()`, and `fps()` answers 0 meanwhile: a hung submit counts no frame, and the rate must fall to 0 rather than freeze at its last value.
 ///
 /// ## Shutdown
 ///
@@ -82,7 +82,7 @@ class Hub75PioEngine final : public Hub75EngineBase<Hub75PioOptions> {
         if (refreshThread_.joinable()) refreshThread_.detach();
     }
 
-    /// Blank-first shutdown (@xref{shutdown|shutdown}): joins both threads, blanks ring-deep, drains the FIFO, disables the SM and frees everything; true when finished, false when the refresh thread never returned. Idempotent.
+    /// Blank-first shutdown (@xref{shutdown|shutdown}): joins both threads, blanks ring-deep, drains the FIFO, disables the SM and frees everything; true when finished, false when the refresh thread stayed stuck past the deadline. Idempotent.
     bool shutdown();
 
     /// Brightness for subsequently encoded frames (0..255), as lit time; it takes effect on the next encode and leaves the frame on display as it is.

@@ -2,7 +2,7 @@
 
 /// Pins the PIO seam the RP1 state machine sits behind, in each of its modes. Record stands in for the panels, so what a driver hands over is checked on every host; Stub runs the real engine on the stub backend through the seam's real branch, so the push, the rate and the close are checked end to end with no Pi; the bench Pi then only has to show the wire.
 ///
-/// The refusal paths branch on the piolib build: a build with piolib linked refuses through the kernel check, a build without it through the missing library. Availability is host-gated separately: with piolib, a Pi 5 is offered the backend and a Pi 4 is not.
+/// The refusal paths branch on the piolib build: a build with piolib linked refuses through the kernel check, any other build through the missing library. Availability is host-gated separately: with piolib, a Pi 5 is offered the backend and a Pi 4 is not.
 
 #include "doctest.h"
 #include "hub75_engine_bench.h"
@@ -149,7 +149,7 @@ TEST_CASE("Hub75Pio: an open outside a test mode is refused in the test binary b
 #ifndef MM_HUB75_PIO_HAVE_PIOLIB
 TEST_CASE("Hub75Pio: without piolib an open outside a test mode fails naming the library") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
-    mm::platform::setTestHub75PioReal(true);   // the host's own refusal is the case; no piolib, so nothing real is reached
+    mm::platform::setTestHub75PioReal(true);   // the host's own refusal is the case; piolib is absent, so the real backend stays out of reach
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
     CHECK(std::string(mm::platform::hub75PioLastError()) == "needs a Raspberry Pi build with piolib");
@@ -293,7 +293,7 @@ TEST_CASE("Hub75Pio: the newest of several pushes is the one shown, whole, until
 TEST_CASE("Hub75Pio: the seam counts its opens and its closes, an open that closes another included") {
     mm::PioPortGuard guard;
     CHECK(mm::platform::hub75PioTestPort().opens == 0);
-    mm::platform::hub75PioClose();   // nothing open: no close to count
+    mm::platform::hub75PioClose();   // the panels are closed: no close to count
     CHECK(mm::platform::hub75PioTestPort().closes == 0);
     REQUIRE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioOpen(benchWall()));   // closes the first
@@ -362,7 +362,7 @@ TEST_CASE("Hub75PioStub: a push after the close never reaches the engine") {
     REQUIRE(mm::platform::hub75PioTestPort().frames == 1);
     mm::platform::hub75PioClose();
     mm::platform::hub75PioPush(frame.data());
-    CHECK(mm::platform::hub75PioTestPort().frames == 0);   // neither the engine's count nor the recorder's moved
+    CHECK(mm::platform::hub75PioTestPort().frames == 0);   // the engine's count and the recorder's both held still
     CHECK(mm::platform::hub75PioFps() == 0);
     CHECK_FALSE(mm::platform::hub75PioTestPort().engineHoldsPanels);
 }

@@ -11,7 +11,7 @@
 ///
 /// ## What counts as a Pi
 ///
-/// A string that starts `raspberrypi,5` or `brcm,bcm2712` is a Pi 5, including the compute module and the Pi 500. Any other string that starts `raspberrypi,` or `brcm,bcm27` or `brcm,bcm28` is an earlier Pi. A host that has no such file, or a board that names neither, is `Other`: macOS, Windows, a PC, or a Linux board that is not a Pi.
+/// A string that starts `raspberrypi,5` or `brcm,bcm2712` is a Pi 5, including the compute module and the Pi 500. Any other string that starts `raspberrypi,` or `brcm,bcm27` or `brcm,bcm28` is an earlier Pi. A host that has no such file, or a board with any other string, is `Other`: macOS, Windows, a PC, or a Linux board that is not a Pi.
 ///
 /// ## The two sources
 ///

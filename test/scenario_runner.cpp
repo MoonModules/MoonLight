@@ -117,8 +117,8 @@ static void printModuleMemory(mm::MoonModule* mod, int indent) {
 #include <string>
 #include <map>
 #include <filesystem>
-#include "platform/Hub75Pio.h"   // setTestHub75PioReal: a scenario never opens the real PIO
-#include "platform/machine.h"     // setTestMachineRest: a scenario never depends on the board
+#include "platform/Hub75Pio.h"   // setTestHub75PioReal: a scenario stays off the real PIO
+#include "platform/machine.h"     // setTestMachineRest: a scenario runs the same on every board
 #include <vector>
 
 // Minimal JSON value, enough for scenario files (flat objects, arrays of objects)

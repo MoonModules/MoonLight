@@ -32,7 +32,7 @@ bool hub75PioAvailable();
 /// Why this host cannot clock the panels through a Pi 5's PIO, or null when it can: no `/dev/pio0`, or a kernel that stalls a PIO reopen. Read once.
 const char* hub75PioRefusal();
 
-/// Open the panels, closing any already open; false leaves none open and hub75PioLastError() says why. Open, close, push, correction and fps share one task, and a push never overlaps a close, which frees what a push copies into.
+/// Open the panels, closing any already open; false leaves none open and hub75PioLastError() says why. Open, close, push, correction and fps share one task, which serializes a push and a close: a close frees what a push copies into.
 bool hub75PioOpen(const Hub75PioOptions& o);
 
 /// Why the last open failed, or null when it did not.
@@ -41,7 +41,7 @@ const char* hub75PioLastError();
 /// What degrades a running panel, or null: a pixel clock above the highest the bench ran (`kPioBenchedPixelClockHz`), where the DMA feed falls behind the wire.
 const char* hub75PioWarning();
 
-/// Why the last close did not finish, or null when it did: the refresh thread never returned from a submit, so the panel holds its last word and the PIO stays held until the process exits.
+/// Why the last close did not finish, or null when it did: the refresh thread stayed stuck in a submit, so the panel holds its last word and the PIO stays held until the process exits.
 const char* hub75PioCloseError();
 
 /// The canvas the panels form, 0 with none open.
@@ -70,8 +70,8 @@ void hub75PioClose();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Who holds the PIO seam on a host.
 enum class Hub75PioMode : uint8_t {
-    Off,      ///< the host decides: with piolib the real engine on a Pi 5's PIO, without it a refusal naming the library
-    Record,   ///< a recorder stands in for the panels: an open keeps its options and a push keeps its frame, and nothing encodes
+    Off,      ///< the host decides: with piolib the real engine on a Pi 5's PIO, otherwise a refusal naming the library
+    Record,   ///< a recorder stands in for the panels: an open keeps its options and a push keeps its frame, and the encoder stays idle
     Stub,     ///< the real engine runs on the stub backend through the seam's real branch, so a push is encoded and submitted as on a Pi, with no hardware
 };
 /// Hold the seam in `mode`. Each call closes the seam and resets what hub75PioTestPort() holds, the levers below and the stub backend's faults, queue model and records.

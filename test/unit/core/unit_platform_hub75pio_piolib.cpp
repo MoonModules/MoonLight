@@ -1,6 +1,6 @@
 /// @module platform
 
-/// Pins the piolib backend's own logic on any host, through a scripted stand-in for the C shim (hub75_pio_c_api.h): the order of its calls, what it says when each one fails, and what it leaves held. The backend's source is included here and the shim's functions are defined below, so nothing of piolib or a Pi is needed. A build with piolib has the real shim linked and leaves these cases out.
+/// Pins the piolib backend's own logic on any host, through a scripted stand-in for the C shim (hub75_pio_c_api.h): the order of its calls, what it says when each one fails, and what it leaves held. The backend's source is included here and the shim's functions are defined below, so the cases run on the stand-in alone. A build with piolib has the real shim linked and leaves these cases out.
 ///
 /// What this cannot show: that the real shim and piolib behave as the stand-in is scripted to. The open and claim errors, the DMA ring, the SM's start, a signal in a submit, a 6.12 timeout and a wedged SM are the Pi's to prove (the bench, U7).
 
@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -171,7 +172,7 @@ TEST_CASE("Hub75PioPiolib: a claim that fails says why and gives the instance ba
     shim.claimRc = -EBUSY;
     CHECK_FALSE(b.backend->open(b.error));
     CHECK(contains(b.error, "cannot claim a PIO state machine"));
-    CHECK(contains(b.error, "Resource busy"));
+    CHECK(contains(b.error, std::strerror(EBUSY)));
     CHECK(shim.calls == std::vector<std::string>{"open", "claim", "release_none"});
 }
 
@@ -281,7 +282,7 @@ TEST_CASE("Hub75PioPiolib: a close without a blank still disables the SM, remove
     shim.calls.clear();
     b.backend->close();
     CHECK(shim.calls == std::vector<std::string>{"disable", "remove_program", "release"});
-    b.backend->close();   // a second close has nothing left to release
+    b.backend->close();   // a second close finds everything released already
     CHECK(shim.calls.size() == 3);
 }
 

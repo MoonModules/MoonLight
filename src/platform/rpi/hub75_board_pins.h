@@ -20,7 +20,7 @@
 ///
 /// And I2S on GPIO 18 to 21 (OE is 18; an I2S microphone is what an audio-reactive install adds) and PWM on GPIO 12, 13, 18 and 19 when a PWM overlay is loaded.
 ///
-/// Those drivers lose their pins when the panels open, and a driver that muxes them again later corrupts the picture. Turn them off for the header in /boot/firmware/config.txt before wiring a panel: `dtparam=i2c_arm=off`, `dtparam=spi=off`, `enable_uart=0`, no `dtoverlay=w1-gpio`, no `dtparam=i2s=on` and no PWM overlay (`dtoverlay=pwm` or its variants). Nothing here checks them.
+/// Those drivers lose their pins when the panels open, and a driver that muxes them again later corrupts the picture. Turn them off for the header in /boot/firmware/config.txt before wiring a panel: `dtparam=i2c_arm=off`, `dtparam=spi=off`, `enable_uart=0`, no `dtoverlay=w1-gpio`, no `dtparam=i2s=on` and no PWM overlay (`dtoverlay=pwm` or its variants). The code assumes them; check them yourself.
 ///
 /// ## Shared signals
 ///

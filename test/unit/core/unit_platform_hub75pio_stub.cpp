@@ -2,7 +2,7 @@
 
 /// Pins the stub PIO backend the engine tests stand on: its fault hooks, its records, and the two queue models that pace a submit, the blocking one of a 6.12 kernel and the ring of a kernel that queues. The stub is driven directly here, with no engine, so a timing case reads the backend's own wait.
 ///
-/// The timing cases use a slow pixel clock, so a 2,048-word frame takes 20 ms on the wire at 100 kHz and 200 ms at 10 kHz. A lower bound, a wait that lasted at least a frame, is one the stub guarantees, since a sleep never ends early, and those cases use 100 kHz.
+/// The timing cases use a slow pixel clock, so a 2,048-word frame takes 20 ms on the wire at 100 kHz and 200 ms at 10 kHz. A lower bound, a wait that lasted at least a frame, is one the stub guarantees, since a sleep lasts at least its duration, and those cases use 100 kHz.
 ///
 /// An upper bound, no wait at all, depends on the host keeping up, so those cases use 10 kHz and leave a margin of a whole frame, 200 ms, to a loaded sanitizer runner.
 
@@ -300,7 +300,7 @@ TEST_CASE("Hub75PioStub: a safe stop leaves no real chunk in flight") {
     std::vector<uint32_t> frame(1024, 0x10);
     for (int i = 0; i < 4; i++) CHECK(s.backend->submitFrame(frame.data(), 4096) == 0);
     std::vector<uint32_t> blank(1024, 0);
-    CHECK(s.backend->blankAndStop(blank.data(), 4096, s.error));   // without the fault the stop drains first
+    CHECK(s.backend->blankAndStop(blank.data(), 4096, s.error));   // fault-free, the stop drains first
     CHECK(mm::platform::stubBackendRealChunksInFlightAtStop() == 0);
 }
 

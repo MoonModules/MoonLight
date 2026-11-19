@@ -8,7 +8,7 @@
 ///
 /// ## Records
 ///
-/// The stub keeps the last start configuration with a copy of its program, the count and byte size of the blank frames, and an identity for each submitted frame: a checksum and its first and last words. The identities sit in a ring of the last `kStubFrameIdRing` frames, so a test can tell which published frame a submit carried without holding every frame.
+/// The stub keeps the last start configuration with a copy of its program, the count and byte size of the blank frames, and an identity for each submitted frame: a checksum and its first and last words. The identities sit in a ring of the last `kStubFrameIdRing` frames, so a test can tell which published frame a submit carried while holding only that ring.
 ///
 /// ## Faults
 ///
@@ -16,7 +16,7 @@
 ///
 /// A failed submit returns -EIO, or the code a test sets: the codes a failed ioctl hands back through piolib (-EINTR, -EIO, -EFAULT, -EINVAL, -ETIMEDOUT, -EREMOTEIO).
 ///
-/// `fifoEmptyEarly` makes the blank stop the way the piolib backend's FIFO poll can: as soon as the blank is queued, without waiting for the chunks still in flight, recording how many chunks of real frames were then still in flight. A blank that does not cover the whole ring leaves some, and the SM stops on whatever word of one it shifted last.
+/// `fifoEmptyEarly` makes the blank stop the way the piolib backend's FIFO poll can: as soon as the blank is queued, recording how many chunks of real frames were then still in flight. A blank that does not cover the whole ring leaves some, and the SM stops on whatever word of one it shifted last.
 ///
 /// ## Limits
 ///
@@ -90,7 +90,7 @@ StubStartRecord stubBackendLastStart();
 /// Submits attempted after the blank stopped the stub and before the next start, which a refresh thread still alive at the blank would make.
 uint32_t stubBackendSubmitsAfterBlank();
 
-/// Frame submits made by a thread that did not block SIGTERM, which the engine's refresh thread never does (blockStopSignals); the blank, sent from the shutdown's thread, is not counted.
+/// Frame submits made by a thread with SIGTERM deliverable, a set the engine's refresh thread stays out of (blockStopSignals); the blank, sent from the shutdown's thread, is not counted.
 uint32_t stubBackendSubmitsWithStopOpen();
 
 /// How many chunks of real frames were still in flight when the last blank stopped the stub: 0 when the stop was safe, since only the blank's own chunks were left.

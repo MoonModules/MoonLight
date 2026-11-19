@@ -1,5 +1,5 @@
 {
-  "commit": "fda0318b",
+  "commit": "72096ae0",
   "flash": {
     "esp32s3-n16r8": 2582192,
     "esp32": 2364624,
@@ -845,7 +845,7 @@
     "light": 36396,
     "platform": 30069,
     "ui": 15291,
-    "test": 94943,
+    "test": 94944,
     "moondeck": 36413
   },
   "comments": {

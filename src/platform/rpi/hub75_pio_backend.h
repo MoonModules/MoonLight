@@ -24,7 +24,7 @@
 ///
 /// On either kernel a failed submit returns a negative errno-style code, such as -EINTR, -EIO, -EINVAL, -ETIMEDOUT or -EREMOTEIO, which the engine counts and retries after a pause; the pinned piolib returns every code.
 ///
-/// Neither kernel's return proves the pins are dark, which is why the shutdown blank is as deep as the whole ring. The FIFO holds at most 8 words per direction; what the joined TX FIFO holds is not stated by the sources.
+/// A return from either kernel leaves the pins' state open, which is why the shutdown blank is as deep as the whole ring. The FIFO holds at most 8 words per direction; what the joined TX FIFO holds is not stated by the sources.
 ///
 /// PIO IRQ delivery to userspace is new in piolib and absent from some kernels (rpi-6.12.y has no IRQ path), so the engine does not depend on IRQs.
 ///
@@ -40,7 +40,7 @@
 ///
 /// ## Real-backend gate
 ///
-/// A test must never take the PIO of the Pi it runs on. The gate sits where every open of the real backend converges, createPioBackend(false), so no path around the seam, such as an engine opened directly, can reach /dev/pio0 while the gate is closed. The seam refuses earlier, with a readable reason, and the test binary's main counts the real backends created and fails the run if any was.
+/// A test must stay clear of the PIO of the Pi it runs on. The gate sits where every open of the real backend converges, createPioBackend(false), so no path around the seam, such as an engine opened directly, can reach /dev/pio0 while the gate is closed. The seam refuses earlier, with a readable reason, and the test binary's main counts the real backends created and fails the run if any was.
 ///
 /// ## Blank-first shutdown
 ///

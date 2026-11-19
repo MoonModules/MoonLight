@@ -383,7 +383,7 @@ TEST_CASE("Hub75PioBuffer: every frame the engine submits comes from a thread th
 
 #if defined(__unix__) || defined(__APPLE__)
 TEST_CASE("Hub75PioBuffer: the stop signals are blocked on the thread that calls blockStopSignals, and on no other") {
-    // The refresh thread calls it as it starts, so a service stop lands on another thread and never inside a transfer.
+    // The refresh thread calls it as it starts, so a service stop lands on another thread, outside every transfer.
     const auto blocked = [](int signal) {
         sigset_t now;
         pthread_sigmask(SIG_BLOCK, nullptr, &now);
@@ -403,7 +403,7 @@ TEST_CASE("Hub75PioBuffer: the stop signals are blocked on the thread that calls
     CHECK(onThread[1]);
     CHECK(onThread[2]);
     CHECK_FALSE(otherThreadSigusr);
-    CHECK_FALSE(blocked(SIGTERM));   // this thread, which never called it, still takes a stop
+    CHECK_FALSE(blocked(SIGTERM));   // this thread skipped the call, so it still takes a stop
 }
 #endif
 
@@ -411,7 +411,7 @@ TEST_CASE("Hub75PioBuffer: the triple buffer's writer never holds the slot the r
     mm::platform::TripleBuffer<uint32_t> t;
     t.reset(4);
     CHECK(t.size() == 4);
-    CHECK_FALSE(t.take());   // nothing published yet: nothing taken, the reader keeps its zeros
+    CHECK_FALSE(t.take());   // before any publish: take returns false, the reader keeps its zeros
     CHECK(t.current()[0] == 0);
     CHECK(t.writeSlot() != t.current());
 
@@ -419,16 +419,16 @@ TEST_CASE("Hub75PioBuffer: the triple buffer's writer never holds the slot the r
     t.writeSlot()[0] = 11;
     const uint32_t* handed = t.writeSlot();
     t.publishWritten();
-    CHECK(t.writeSlot() != handed);   // the writer never keeps writing the slot it handed over
+    CHECK(t.writeSlot() != handed);   // the writer moves on from the slot it handed over
     CHECK(t.writeSlot() != t.current());
     CHECK(t.take());
     CHECK(t.current() == handed);
     CHECK(t.current()[0] == 11);
     CHECK(t.writeSlot() != t.current());
-    CHECK_FALSE(t.take());            // nothing fresh since: the reader keeps its frame
+    CHECK_FALSE(t.take());            // the same frame as the last take: the reader keeps its frame
     CHECK(t.current()[0] == 11);
 
-    // Three publishes before a take: the third is the one delivered, and the reader's slot is never the writer's.
+    // Three publishes before a take: the third is the one delivered, and the reader's slot always differs from the writer's.
     for (uint32_t v : {21u, 22u, 23u}) {
         t.writeSlot()[0] = v;
         const uint32_t* before = t.writeSlot();
@@ -441,7 +441,7 @@ TEST_CASE("Hub75PioBuffer: the triple buffer's writer never holds the slot the r
     CHECK(t.writeSlot() != t.current());
     CHECK(t.published() == 4);
 
-    // Interleaved, for many rounds: the slot the reader holds is never the one the writer fills.
+    // Interleaved, for many rounds: the slot the reader holds always differs from the one the writer fills.
     for (uint32_t round = 0; round < 50; round++) {
         t.writeSlot()[0] = 100 + round;
         t.publishWritten();

@@ -16,11 +16,11 @@
 ///
 /// The render thread publishes an RGB frame and returns at once. The encode thread takes the newest RGB frame, encodes it into the encoded buffer it owns and publishes that buffer as the newest encoded frame. The refresh thread takes the newest encoded frame, if there is one, and submits the frame it holds, again and again, so the panel keeps refreshing at the pixel clock whatever the render rate.
 ///
-/// An encode therefore never delays a submit, and a submit never waits for an encode. The encode thread owns `framesEncoded` and `lastEncodeUs`, the refresh thread owns `framesSubmitted`, `submitErrors` and the rate window, and the brightness is read once per frame, so every lane of a frame is lit alike.
+/// The encode and the submit therefore each run at their own pace. The encode thread owns `framesEncoded` and `lastEncodeUs`, the refresh thread owns `framesSubmitted`, `submitErrors` and the rate window, and the brightness is read once per frame, so every lane of a frame is lit alike.
 ///
 /// A frame whose encode fails is dropped and the last good frame keeps submitting: a stale picture beats a torn one.
 ///
-/// The refresh thread blocks the stop signals (SIGINT, SIGTERM, SIGHUP) as it starts, so a service stop never lands inside a transfer and costs a frame its progress; the main thread takes the signal and ends the run.
+/// The refresh thread blocks the stop signals (SIGINT, SIGTERM, SIGHUP) as it starts, so a service stop lands outside every transfer and each frame keeps its progress; the main thread takes the signal and ends the run.
 ///
 /// ## Shutdown
 ///
@@ -28,7 +28,7 @@
 ///
 /// When the deadline passes the engine reports it, keeps every buffer and the backend, since the stuck thread still reads them, and refuses a new open until a later shutdown finds the thread gone.
 ///
-/// publishRgb counts itself in flight, and shutdown waits for the count to reach zero before it frees the RGB slots, so a publish never writes into freed memory.
+/// publishRgb counts itself in flight, and shutdown waits for the count to reach zero before it frees the RGB slots, so every publish writes into live memory.
 ///
 /// ## Option rules
 ///
@@ -135,7 +135,7 @@ class TripleBuffer {
         published_++;
     }
 
-    /// Copies one frame of size() elements into the producer's slot and hands it over; nothing when the slots are released.
+    /// Copies one frame of size() elements into the producer's slot and hands it over; a no-op when the slots are released.
     void publish(const Elem* frame) MM_NONBLOCKING {
         const size_t count = size();
         if (count == 0) return;
@@ -187,7 +187,7 @@ class RefreshWindow {
     std::chrono::steady_clock::time_point windowStart_ = std::chrono::steady_clock::now();
 };
 
-/// Blocks SIGINT, SIGTERM and SIGHUP on the calling thread, so a stop never lands in a transfer: an interrupted submit returns -EINTR with its progress lost. Nothing without POSIX signals.
+/// Blocks SIGINT, SIGTERM and SIGHUP on the calling thread, so a stop lands outside every transfer: an interrupted submit returns -EINTR with its progress lost. A no-op where POSIX signals are absent.
 inline void blockStopSignals() {
 #if defined(__unix__) || defined(__APPLE__)
     sigset_t stops;
@@ -199,7 +199,7 @@ inline void blockStopSignals() {
 #endif
 }
 
-/// Milliseconds on the steady clock, never 0, so 0 can mean "none". The clock read is a vDSO call that neither blocks nor allocates, which the function-effects analyzer cannot know.
+/// Milliseconds on the steady clock, plus 1 so the value starts at 1 and 0 can mean "none". The clock read is a vDSO call, nonblocking and allocation-free, which the function-effects analyzer cannot know.
 inline uint64_t hub75NowMs() MM_NONBLOCKING {
 #if defined(__clang__) && defined(__has_warning)
 #  if __has_warning("-Wfunction-effects")
@@ -244,13 +244,13 @@ class Hub75EngineBase {
 
     /// Whether open() succeeded and the engine has not been shut down.
     bool isRunning() const { return running_.load(); }
-    /// Publishes one RGB frame of width()*height()*3 bytes, allocation-free, superseding one still waiting; ignored while not running, and never writes freed memory (@xref{shutdown|shutdown}).
+    /// Publishes one RGB frame of width()*height()*3 bytes, allocation-free, superseding one still waiting; ignored while stopped, and writes only live memory (@xref{shutdown|shutdown}).
     void publishRgb(const uint8_t* rgb) MM_NONBLOCKING {
         publishing_.fetch_add(1);
         if (running_.load() && rgb != nullptr) rgb_.publish(rgb);
         publishing_.fetch_sub(1);
     }
-    /// Measured refresh in Hz, from the submit counter over a ~1 s window; 0 after shutdown, and while a submit has been in flight longer than the stall time, since a submit that never returns counts no frame.
+    /// Measured refresh in Hz, from the submit counter over a ~1 s window; 0 after shutdown, and while a submit has been in flight longer than the stall time, since a hung submit counts no frame.
     uint16_t fps() const MM_NONBLOCKING { return stalled() ? 0 : fps_.load(); }
     /// Whether the refresh thread has been inside one submit for longer than the stall time: the PIO is not draining, and the panel holds its last word (@xref{shutdown|shutdown}).
     bool stalled() const MM_NONBLOCKING {
@@ -284,9 +284,9 @@ class Hub75EngineBase {
         return rgb_.heapBytes() + encoded_.heapBytes() + blank_.capacity() * sizeof(uint32_t) +
                (slots_[0].capacity() + slots_[1].capacity() + slots_[2].capacity()) * sizeof(uint16_t);
     }
-    /// Whether neither thread is alive: false while the engine runs and while shutdown found the refresh thread stuck.
+    /// Whether both threads have ended: false while the engine runs and while shutdown found the refresh thread stuck.
     bool threadsJoined() const { return !encodeThread_.joinable() && !refreshThread_.joinable(); }
-    /// Whether the last shutdown gave up on a refresh thread that never returned; the engine then holds its buffers and refuses an open.
+    /// Whether the last shutdown gave up on a refresh thread stuck in a submit; the engine then holds its buffers and refuses an open.
     bool wedged() const { return wedged_.load(); }
     /// Why the last shutdown did not finish, empty when it did.
     const std::string& shutdownError() const { return shutdownError_; }
@@ -330,7 +330,7 @@ class Hub75EngineBase {
     /// The refresh thread's body: submits the newest encoded frame until stop_ is set.
     virtual void refreshLoop() = 0;
 
-    /// Stops publishing and joins the encode thread, then the refresh thread within the deadline; false when it never returned, leaving it joinable. A stop that finds it still stuck returns at once, so only the first pays the deadline.
+    /// Stops publishing and joins the encode thread, then the refresh thread within the deadline; false when it stayed stuck, leaving it joinable. A stop that finds it still stuck returns at once, so only the first pays the deadline.
     bool stopThreads() {
         running_.store(false);
         stop_.store(true);
@@ -355,7 +355,7 @@ class Hub75EngineBase {
         return true;
     }
 
-    /// Frees every frame buffer and zeroes the readouts, after a publish in flight has finished (seq_cst atomics, the default, make that handshake sound); the threads are joined, so nothing reads them.
+    /// Frees every frame buffer and zeroes the readouts, after a publish in flight has finished (seq_cst atomics, the default, make that handshake sound); the threads are joined, so the buffers are idle.
     void releaseBuffers() {
         while (publishing_.load() != 0) std::this_thread::yield();
         rgb_.release();
@@ -435,7 +435,7 @@ class Hub75EngineBase {
         return false;
     }
 
-    /// The encode thread's body: takes the newest RGB frame, encodes it and publishes the result; a failed encode publishes nothing.
+    /// The encode thread's body: takes the newest RGB frame, encodes it and publishes the result; a failed encode skips the publish.
     void encodeLoop() {
         while (!stop_.load()) {
             if (!encodePaused_.load() && rgb_.take()) {
