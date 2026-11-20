@@ -1,10 +1,16 @@
 /// The test binary's main, and what every test case shares: the suite-wide fixtures live here, not in any one module's tests.
 
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest.h"
+
+#include <cstdint>
+#include <cstdio>
+
+#include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on
+#include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case and subcase rerun starts on the real clock, on the HDMI stand-in so no case drives a screen, and with multicast joins that skip the host's network so no LAN sender reaches a case.
+// Every test case and subcase rerun starts on the real clock, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
 struct FreshFixturesPerTest : doctest::IReporter {
     explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
     static void reset() {
@@ -12,6 +18,8 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::platform::setTestClockStep(0);
         mm::platform::hdmiTestClear();
         mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
+        mm::platform::setTestMachineRest(mm::platform::Machine::Other);
+        mm::platform::setTestHub75PioGateOpen(false);
     }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }
@@ -27,3 +35,17 @@ struct FreshFixturesPerTest : doctest::IReporter {
     void test_case_skipped(const doctest::TestCaseData&) override {}
 };
 REGISTER_LISTENER("fresh fixtures per test", 1, FreshFixturesPerTest);
+
+// The suite's main: safe defaults, the run, then the proof that no case opened the real PIO. The check follows run(), so a JUnit report is always written whole, and the exit status carries the failure.
+int main(int argc, char** argv) {
+    FreshFixturesPerTest::reset();
+    doctest::Context context(argc, argv);
+    int result = context.run();
+    if (context.shouldExit()) return result;   // a query such as --list-test-cases
+    if (const uint32_t opens = mm::platform::hub75PioTestRealOpens()) {
+        // A case that made the real backend got past the closed gate (hub75_pio_backend.h, Real-backend gate).
+        std::fprintf(stderr, "FAIL: %u case(s) opened the real PIO backend (/dev/pio0)\n", static_cast<unsigned>(opens));
+        result = 1;
+    }
+    return result;
+}

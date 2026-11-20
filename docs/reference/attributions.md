@@ -47,7 +47,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Hendrik Schreiber and Meinard Müller / Schreiber and Müller](https://ismir2018.ismir.net/doc/pdfs/220_Paper.pdf) | 🧑 | The crowdsourced revision of GiantSteps Tempo's annotations (2018), and Acc1 and Acc2 as tempo studies use them. |
 | [HLS](https://www.rfc-editor.org/rfc/rfc8216) | 📜 | HTTP Live Streaming, RFC 8216: video as a playlist of short segments. |
 | Hugo Elias | 🧑 | The water surface algorithm. |
-| [hzeller](https://github.com/hzeller) | 🧑 | Henner Zeller: the HUB75 lineage on the Pi. |
+| [hzeller / rpi-rgb-led-matrix](https://github.com/hzeller) | 🧑 | Henner Zeller: the HUB75 lineage on the Pi. His [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) gave the Pi header board's pin facts, the `regular` mapping and the 40-pin wiring table; concepts only, no code adapted. |
 | [IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter) File:VU_Meter.jpg | 📜 | VU meter ballistics, to the millisecond. |
 | [Improv Wi-Fi](https://github.com/improv-wifi) | 📜 | The open serial provisioning standard the web installer uses. |
 | [Iñigo Quilez](https://iquilezles.org/) | 🧑 | Distance functions and their operators, smooth minimum, cosine palettes. |
@@ -74,10 +74,13 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [OctoWS2811](https://www.pjrc.com/teensy/td_libs_OctoWS2811.html) | 🧰 | Paul Stoffregen's parallel WS2812 library for the Teensy, timer-driven DMA. |
 | [Olimex](https://www.olimex.com) | 🏢 | The ESP32-P4-PC, and its board demo whose HDMI bring-up the output follows. |
 | [Philips Hue](https://developers.meethue.com) | 🏢 | The smart-light bridge and its local REST API. |
+| [pico-examples](https://github.com/raspberrypi/pico-examples) | 🧰 | Raspberry Pi's Pico SDK examples, BSD-3-Clause, Copyright (c) 2020 Raspberry Pi (Trading) Ltd. Its `pio/hub75` program shaped the [Pi 5 PIO engine](../moonmodules/light/drivers.md#hub75): a side-set clock, a joined TX FIFO and a state machine for the bus; no code adapted. |
+| [pimoroni-pico](https://github.com/pimoroni/pimoroni-pico) | 🧰 | Pimoroni's Pico libraries, whose `drivers/hub75` program the PIO engine's structure also follows. The repository is MIT, Copyright (c) 2021 Pimoroni Ltd., and the program file carries the Raspberry Pi BSD-3-Clause header; no code adapted. |
 | [Piper](https://github.com/OHF-Voice/piper1-gpl) | 🧰 | OHF-Voice's offline text-to-speech that narrates the documentation clips, the voice you hear, with voice models from rhasspy. GPL, and used as a tool rather than linked: MoonTube calls it to render an audio track. |
 | [Polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system) File:Examples_of_Polar_Coordinates.svg | 🧮 | A point as an angle and a radius. |
 | [Pong](https://en.wikipedia.org/wiki/Pong) File:Signed_Pong_Cabinet.jpg | 🎨 | Atari's 1972 arcade game. |
 | [Quindor / QuinLED](https://quinled.info) | 🧑🏢 | The devices much of this runs on. |
+| [Raspberry Pi Linux kernel](https://github.com/raspberrypi/linux) | 🧰 | The RP1 PIO driver's ioctl interface (`include/uapi/misc/rp1_pio_if.h`, `GPL-2.0 + WITH Linux-syscall-note`, Copyright Raspberry Pi Ltd.), whose structs and ioctl numbers the Pi 5 HUB75 backend redeclares, and the register bit positions of `include/linux/pio_rp1.h`. |
 | [raster-fonts](https://github.com/idispatch/raster-fonts) | 🧰 | The public bitmap console fonts the text effects draw with. |
 | [rhasspy](https://huggingface.co/rhasspy/piper-voices) | 🧰 | The piper-voices models Piper speaks with. |
 | [Robert Bridson / Curl noise](https://www.cs.ubc.ca/~rbridson/docs/bridson-siggraph2007-curlnoise.pdf) | 🧑🧮 | Curl noise, SIGGRAPH 2007. |

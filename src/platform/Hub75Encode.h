@@ -9,7 +9,7 @@ namespace mm {
 
 /// HUB75 encode: the frame the driver hands a port, as bit planes of 16-bit bus words, one word per pixel clock (a slot). A pure data transform on the bus contract (platform/Hub75Bus.h); the HUB75 counterpart of light/drivers/ParallelSlots.h.
 ///
-/// It lives in platform/ beside the bus contract it builds (Hub75Bus.h), since the platform layer sits below light/, which calls down into it (docs/explanation/architecture/mooncore.md#platform-abstraction). Its one caller is Hub75BusOutput::show in light/.
+/// It lives in platform/ beside the bus contract it builds (Hub75Bus.h), since the platform layer sits below light/, which calls down into it (docs/explanation/architecture/mooncore.md#platform-abstraction). Its callers are Hub75BusOutput::show in light/ and the Pi 5 PIO engine's encodeLane (platform/rpi/hub75_pio_engine.cpp).
 ///
 /// @attribution mrcodetastic, hzeller, ESPHome
 ///

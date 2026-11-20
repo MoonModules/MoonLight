@@ -19,7 +19,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | | |
 |---|---|
 | **Program** | `/var/lib/moonlight/bin/MoonLight`, copied from `/usr/lib/moonlight/MoonLight` on every install |
-| **User** | `moonlight`, an unprivileged system user in the `video` group for HDMI out and the `audio` group for the sound cards |
+| **User** | `moonlight`, an unprivileged system user in the `video` group for HDMI out, the `audio` group for the sound cards and, on a Pi 5, the group that owns `/dev/pio0` for the HUB75 PIO output |
 | **Rights** | Writes its own folder alone and holds one capability, `CAP_NET_RAW`, for the raw Ethernet frames a ColorLight card takes |
 | **Config** | `/var/lib/moonlight/MoonLight/.config/` |
 | **Logs** | `journalctl -u moonlight` |
