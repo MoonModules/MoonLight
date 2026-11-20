@@ -79,7 +79,7 @@ RUN apt-get update \
  && program=$(find /rootfs/usr -type f -name MoonLight | head -1) \
  && test -n "$program" \
  && mv "$program" /MoonLight \
- # The package's copyright file, which carries piolib's BSD license on arm64. A release from before the file existed has none, and then the image has none.
+ # The package's copyright file. A release from before the file existed has none, and then the image has none.
  && mkdir -p /doc \
  && { cp /rootfs/usr/share/doc/moonlight/copyright /doc/copyright || echo "this release's package has no copyright file"; } \
  # Every shared object the binary resolves to, gathered by asking the loader rather than by
@@ -120,7 +120,7 @@ COPY --from=fetch /MoonLight /usr/bin/MoonLight
 # Without this the container starts and dies immediately on "libcurl.so.4: cannot open shared
 # object file"; the release runs each image before it publishes one.
 COPY --from=fetch /deps/ /usr/lib/
-# The package's copyright file, which carries piolib's BSD license on arm64: the notice travels with the binary.
+# The package's copyright file travels with the binary.
 COPY --from=fetch /doc/ /usr/share/doc/moonlight/
 
 # WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The host

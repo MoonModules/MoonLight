@@ -131,10 +131,6 @@ void delayMs(uint32_t ms);
 void delayUs(uint32_t us);
 /// Total free heap, internal plus PSRAM where the target has it.
 size_t freeHeap();
-/// The memory the machine can give a new allocation now, in bytes, so a large allocation checks before it commits: MemAvailable from /proc/meminfo on Linux, 0 where the host cannot say, which sets no limit. Host only.
-uint64_t availableMemory();
-/// MemAvailable in bytes from one /proc/meminfo line of `length` bytes at `line`, its newline optional, 0 when it is another line or holds no number; what availableMemory() reads the file through, a line at a time. Pure. Host only.
-uint64_t availableMemoryFromMeminfoLine(const char* line, size_t length);
 /// Free internal RAM, which is what the stack, HTTP and WiFi reserve is checked against.
 size_t freeInternalHeap();
 /// Largest contiguous block of any memory type, PSRAM included.

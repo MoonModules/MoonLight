@@ -21,15 +21,15 @@ struct Hub75PioOptions {
     uint8_t  parallel     = 3;           ///< lanes, 1 to 3, one strip each
     uint8_t  scanRate     = 32;          ///< the panel's own scan rate: 8, 16 or 32
     uint8_t  bitDepth     = 6;           ///< bit planes per frame, 2 to 8, default 6
-    uint32_t pixelClockHz = 10'000'000;  ///< the HUB75 pixel clock; tops out at 40 MHz
+    uint32_t pixelClockHz = 10'000'000;  ///< the HUB75 pixel clock, at least 50 kHz, topping out at 40 MHz
     uint8_t  latchBlankWords = 0;        ///< extra dark words before each latch, 0 to 8, for a panel that ghosts
     bool     clockFallingEdge = false;   ///< the panel's shift registers sample on the falling clock edge rather than the rising one
 };
 
-/// Whether this host can open panels: piolib linked and a PIO the kernel serves, or a test mode holding the seam.
+/// Whether this host can open panels: the rp1 backend built in and a PIO the kernel serves, or a test mode holding the seam.
 bool hub75PioAvailable();
 
-/// Why this host cannot clock the panels through a Pi 5's PIO, or null when it can: no `/dev/pio0`, or a kernel that stalls a PIO reopen. Read once.
+/// Why this host cannot clock the panels through a Pi 5's PIO, or null when it can: no `/dev/pio0`, or a kernel that stalls a PIO reopen (6.18.39 to 6.18.59). Read once.
 const char* hub75PioRefusal();
 
 /// Open the panels, closing any already open; false leaves none open and hub75PioLastError() says why. Open, close, push, correction and fps share one task, which serializes a push and a close: a close frees what a push copies into.
@@ -70,7 +70,7 @@ void hub75PioClose();
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
 /// Who holds the PIO seam on a host.
 enum class Hub75PioMode : uint8_t {
-    Off,      ///< the host decides: with piolib the real engine on a Pi 5's PIO, otherwise a refusal naming the library
+    Off,      ///< the host decides: where the build has the rp1 backend the real engine on a Pi 5's PIO, otherwise a refusal naming the build
     Record,   ///< a recorder stands in for the panels: an open keeps its options and a push keeps its frame, and the encoder stays idle
     Stub,     ///< the real engine runs on the stub backend through the seam's real branch, so a push is encoded and submitted as on a Pi, with no hardware
 };
@@ -84,10 +84,8 @@ void setTestHub75PioStalled(bool stalled);
 void setTestHub75PioSubmitErrors(uint32_t count);
 /// How long a submit may be in flight before the engine reads as stalled, in milliseconds, while Stub mode holds the seam.
 void setTestHub75PioStallMs(uint64_t ms);
-/// Opens or closes the seam's gate outside a test mode: true in a program, false in the test binary before every case. An open gate is no permission for the real backend, since `MM_TEST_REAL_PIO=1` decides (hub75_pio_backend.h, Real-backend gate).
+/// Opens or closes the seam's gate outside a test mode: true in a program, false in the test binary before every case (hub75_pio_backend.h, Real-backend gate).
 void setTestHub75PioGateOpen(bool open);
-/// Whether the run opted in to the real backend, `MM_TEST_REAL_PIO=1` exactly: the test binary's main then lets a run that opened it pass.
-bool hub75PioTestRealOptedIn();
 /// Opens outside a test mode that were asked for since the program started, whether the seam allowed them or not.
 uint32_t hub75PioTestRealAttempts();
 /// Opens that reached the real backend since the program started: 0 in a test run, which a listener checks at its end.

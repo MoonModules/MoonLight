@@ -4,7 +4,23 @@
 
 #include "platform/rpi/hub75_pio_options.h"
 
+#include <algorithm>
+
+#include "platform/rpi/hub75_pio_backend.h"   // kBytesPerPixelClock
+
 namespace mm::platform {
+
+uint64_t hub75PioBufferBytes(const Hub75PioOptions& o) {
+    const uint64_t lanes = o.parallel;
+    const uint64_t width = static_cast<uint64_t>(o.cols) * o.panelsPerLane;
+    const uint64_t height = o.rows;
+    const uint64_t frameSlots = hub75LaneGeometry(o, static_cast<int>(width), static_cast<int>(height), 255).frameSlots();
+    const uint64_t rgb = 3 * width * height * lanes * 3;                    // the RGB triple buffer
+    const uint64_t laneSlots = lanes * frameSlots * sizeof(uint16_t);       // each lane's slot stream
+    const uint64_t encoded = 3 * frameSlots * sizeof(uint32_t);             // the encoded triple buffer
+    const uint64_t ringBuffer = std::min<uint64_t>(kPioXferBufSize, frameSlots * kBytesPerPixelClock);
+    return rgb + laneSlots + encoded + kPioXferBufCount * ringBuffer;       // the blank, as deep as the DMA ring
+}
 
 namespace {
 
@@ -13,14 +29,27 @@ bool laneGeometryInvalid(const Hub75PioOptions& o) {
     return !hub75LaneGeometry(o, o.cols * o.panelsPerLane, o.rows, 255).valid();
 }
 
+// The floor rule's figure: the least pixel clock, which keeps a 64 KiB chunk inside the 6.12 kernel's 1 s wait.
+std::string pixelClockFloorDetail(const Hub75PioOptions&) {
+    return " (it must be at least " + std::to_string(kPioMinPixelClockHz) + " Hz, which keeps a 64 KiB chunk inside the 6.12 kernel's 1 s wait)";
+}
+
+// The ceiling rule's figures: what the wall needs and the limit, in MB, the need rounded up.
+std::string bufferCeilingDetail(const Hub75PioOptions& o) {
+    constexpr uint64_t kMegabyte = 1024 * 1024;
+    return " (this wall's buffers need " + std::to_string((hub75PioBufferBytes(o) + kMegabyte - 1) / kMegabyte) + " MB, the limit is " +
+           std::to_string(kPioMaxBufferBytes / kMegabyte) + " MB)";
+}
+
 // The options the engine refuses beyond the rules both engines share, in the order they are checked.
 constexpr OptionRule<Hub75PioOptions> kPioRules[] = {
     {[](const Hub75PioOptions& o) { return o.latchBlankWords > 8; }, "latchBlankWords must be 0..8"},
-    {[](const Hub75PioOptions& o) { return o.pixelClockHz == 0; }, "pixelClockHz must be non-zero"},
+    {[](const Hub75PioOptions& o) { return o.pixelClockHz < kPioMinPixelClockHz; }, "pixelClockHz is under the engine's floor", pixelClockFloorDetail},
     {[](const Hub75PioOptions& o) { return o.cols * o.panelsPerLane > 65535; },
      "the panels form a canvas wider than 65,535"},
     {laneGeometryInvalid,
      "invalid lane geometry: height must be a multiple of the scan rate with an even rows-per-scan (e.g. 64-high at 1/32, 32-high at 1/16)"},
+    {[](const Hub75PioOptions& o) { return pioBufferBytesExceedCeiling(hub75PioBufferBytes(o)); }, "the wall's buffers exceed the engine's memory limit", bufferCeilingDetail},
 };
 
 }  // namespace

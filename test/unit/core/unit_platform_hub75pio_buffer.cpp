@@ -19,6 +19,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <set>
 #include <string>
 #include <thread>
@@ -50,8 +51,6 @@ mm::platform::Hub75PioOptions benchWall() {
     o.parallel = 3;
     return o;
 }
-
-constexpr uint64_t kMegabyte = 1024 * 1024;
 
 std::vector<uint8_t> uniform(size_t bytes, uint8_t value) { return std::vector<uint8_t>(bytes, value); }
 
@@ -367,38 +366,24 @@ TEST_CASE("Hub75PioBuffer: a failed open frees what it allocated") {
     CHECK(engine.heapBytes() == 0);
 }
 
-TEST_CASE("Hub75PioBuffer: a wall whose buffers exceed the memory available is refused, naming both figures in MB, and no buffer allocated") {
+TEST_CASE("Hub75PioBuffer: the options' buffer total is what the engine allocates, and the ceiling is over 100 times the 256 x 192 wall's") {
     mm::platform::stubBackendReset();
     mm::platform::Hub75PioEngine engine;
     std::string error;
     REQUIRE(engine.open(benchWall(), error, true));
-    const uint64_t need = engine.heapBytes();   // what this wall's buffers take
+    const uint64_t total = mm::platform::hub75PioBufferBytes(benchWall());
+    CHECK(engine.heapBytes() == total);   // the estimate and the allocation agree
     REQUIRE(engine.shutdown());
-    REQUIRE(need > kMegabyte);
-    engine.setAvailableMemory(kMegabyte);       // 1 MB available
-    mm::platform::stubBackendReset();
-    CHECK_FALSE(engine.open(benchWall(), error, true));
-    CHECK(error == "the wall's buffers need " + std::to_string((need + kMegabyte - 1) / kMegabyte) + " MB and 1 MB is available");
-    CHECK(engine.heapBytes() == 0);
-    CHECK(engine.refreshHz() == 0);        // the sized wall's counters are reset
-    CHECK_FALSE(engine.isRunning());
-    CHECK(engine.framesEncoded() == 0);   // no thread ran
-    CHECK(mm::platform::stubBackendLastStart().starts == 0);   // refused before the backend started
-}
-
-TEST_CASE("Hub75PioBuffer: a wall opens when its buffers fit the memory available to the byte, and is refused one byte short") {
-    mm::platform::stubBackendReset();
-    mm::platform::Hub75PioEngine engine;
-    std::string error;
+    REQUIRE(engine.open(mm::test::pioSmall(), error, true));
+    CHECK(engine.heapBytes() == mm::platform::hub75PioBufferBytes(mm::test::pioSmall()));   // and for a frame under 64 KiB, where the blank is one frame deep a buffer
+    REQUIRE(engine.shutdown());
     REQUIRE(engine.open(benchWall(), error, true));
-    const uint64_t need = engine.heapBytes();
-    REQUIRE(engine.shutdown());
-    engine.setAvailableMemory(need - 1);
-    CHECK_FALSE(engine.open(benchWall(), error, true));
-    CHECK(engine.heapBytes() == 0);
-    engine.setAvailableMemory(need);   // the same wall now fits: a refusal leaves the engine ready for the next open
-    CHECK(engine.open(benchWall(), error, true));
-    CHECK(engine.heapBytes() == need);   // the estimate and the allocation agree
+    CHECK(total == 1589248);   // the 256 x 192 wall at the default 6 bits
+    mm::platform::Hub75PioOptions deep = benchWall();
+    deep.bitDepth = 8;
+    const uint64_t deepTotal = mm::platform::hub75PioBufferBytes(deep);
+    CHECK(deepTotal == 1884160);   // and at 8 bits
+    CHECK(mm::platform::kPioMaxBufferBytes / deepTotal >= 100);   // the ceiling's margin over the wall the bench runs
     CHECK(engine.shutdown());
     CHECK(engine.heapBytes() == 0);
     mm::platform::stubBackendReset();
@@ -408,14 +393,45 @@ TEST_CASE("Hub75PioBuffer: an allocation that runs out of memory frees the parti
     mm::platform::stubBackendReset();
     mm::platform::Hub75PioEngine engine;
     std::string error;
-    engine.failAllocations(true);   // the memory check passes, then the allocation throws once the buffers are sized
+    engine.failAllocations(true);   // the allocation throws once the buffers are sized
     CHECK_FALSE(engine.open(mm::test::pioSmall(), error, true));
     CHECK(error.find("ran out of memory allocating the wall's buffers") != std::string::npos);
+    const uint64_t need = mm::platform::hub75PioBufferBytes(mm::test::pioSmall());
+    CHECK(error.find("(" + std::to_string((need + 1024 * 1024 - 1) / (1024 * 1024)) + " MB)") != std::string::npos);   // the need in MB, rounded up
     CHECK(engine.heapBytes() == 0);
     CHECK_FALSE(engine.isRunning());
     engine.failAllocations(false);
     CHECK(engine.open(mm::test::pioSmall(), error, true));   // the engine opens once memory is back
     CHECK(engine.shutdown());
+    mm::platform::stubBackendReset();
+}
+
+TEST_CASE("Hub75PioBuffer: destroying a wedged engine joins its stuck refresh thread with no deadline, and finishes once the hang is released") {
+    mm::platform::stubBackendReset();
+    auto engine = std::make_unique<mm::platform::Hub75PioEngine>();
+    // Declared after the engine, so it goes first: a failed check below ends the case with the hang set, and the engine's destructor would then join the stuck thread for good.
+    struct ReleaseHang {
+        ~ReleaseHang() { mm::platform::stubBackendSetFaults({}); }
+    } releaseHang;
+    std::string error;
+    engine->setJoinDeadlineMs(100);   // the floor, before the open sizes the wall
+    REQUIRE(engine->open(slowSmall(), error, true));
+    REQUIRE(mm::test::waitFirstSubmit(*engine));
+    mm::test::hangSubmits();   // the refresh thread is inside the hung submit
+    CHECK_FALSE(engine->shutdown());
+    REQUIRE(engine->wedged());
+    std::atomic<bool> destroyed{false};
+    std::thread destroyer([&] {
+        engine.reset();   // the destructor's shutdown finds the thread stuck again, then joins it
+        destroyed.store(true);
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    CHECK_FALSE(destroyed.load());   // joined, not detached: the engine is still waiting on the thread, and its buffers are alive for it
+    mm::platform::stubBackendSetFaults({});   // the kernel lets the submit go
+    CHECK(mm::test::waitUntil([&] { return destroyed.load(); }));
+    destroyer.join();
+    CHECK(mm::platform::stubBackendSubmitsAfterStop() == 1);   // the released thread found the backend stopped, and its one attempt was refused
+    CHECK(mm::platform::stubBackendCloses() == 1);             // the destructor's second shutdown closed the backend
     mm::platform::stubBackendReset();
 }
 
@@ -632,36 +648,40 @@ TEST_CASE("Hub75PioBuffer: a refresh thread that fails to start refuses the open
 }
 
 TEST_CASE("Hub75PioBuffer: at a slow pixel clock the join deadline follows the wire time, so a healthy shutdown is not reported stuck") {
-    // 20 kHz: a word takes 50 us, the 2,048-word frame 102 ms and the 8,192-word ring 410 ms on the wire, so the blocking blank's submit alone outlasts the 100 ms floor set here; a deadline that stayed at its floor would report the healthy thread stuck.
+    // 50 kHz, the clock floor: the 2,048-word frame takes 41 ms and the 8,192-word ring 164 ms on the wire, so the blocking blank's submit outlasts the 100 ms floor set here, and a deadline held at that floor would report a healthy thread stuck.
     mm::platform::Hub75PioOptions o = mm::test::pioSmall();
-    o.pixelClockHz = 20000;
+    o.pixelClockHz = mm::platform::kPioMinPixelClockHz;
     mm::platform::stubBackendReset();
     mm::platform::Hub75PioEngine engine;
     mm::test::HangRelease release(engine);   // a deadline that fails here leaves the engine wedged: the thread is let go and joined before the engine dies
     engine.setJoinDeadlineMs(100);   // the floor, before the open sizes the wall
     std::string error;
     REQUIRE(engine.open(o, error, true));
-    const uint64_t wireMs = mm::platform::pioShutdownWireMs(engine.frameSlots(), 4 * 2048, 2000, 0);
-    CHECK(wireMs == 1536);   // (102.4 + 409.6 ms) doubled for the feed lag and half again
+    const uint64_t wireMs = mm::platform::pioShutdownWireMs(engine.frameSlots(), 4 * 2048, 800, 0);
+    CHECK(wireMs == 615);   // (41 + 164 ms) doubled for the feed lag and half again
     CHECK(engine.joinDeadlineMs() == static_cast<int>(wireMs));
     REQUIRE(mm::test::waitFirstSubmit(engine));
-    CHECK(engine.shutdown());   // the blank's submit takes 410 ms against the 100 ms floor
+    CHECK(engine.shutdown());   // the blank's submit takes 164 ms against the 100 ms floor
     CHECK_FALSE(engine.wedged());
     CHECK(mm::platform::stubBackendBlanks() == 1);
     CHECK(mm::platform::stubBackendLastStopDrained());
     mm::platform::stubBackendReset();
 }
 
-TEST_CASE("Hub75PioBuffer: a clock slow enough raises the join deadline above the 3 s floor") {
-    // 10 kHz: (205 + 819 ms) doubled for the feed lag and half again is 3,072 ms, past the floor.
+TEST_CASE("Hub75PioBuffer: a wall whose wire time is long enough raises the join deadline above the 3 s floor") {
+    // 8 planes on a 128-wide lane at the 50 kHz floor: a 16,384-slot frame (328 ms) and the 65,536-word ring (1.3 s), doubled for the feed lag and half again, are 4.9 s, past the floor.
     mm::platform::Hub75PioOptions o = mm::test::pioSmall();
-    o.pixelClockHz = 10000;
+    o.pixelClockHz = mm::platform::kPioMinPixelClockHz;
+    o.bitDepth = 8;
+    o.panelsPerLane = 2;
     mm::platform::stubBackendReset();
     mm::platform::Hub75PioEngine engine;
     mm::test::HangRelease release(engine);   // as above
     std::string error;
     REQUIRE(engine.open(o, error, true));
-    CHECK(engine.joinDeadlineMs() == 3072);
+    const uint64_t wireMs = mm::platform::pioShutdownWireMs(engine.frameSlots(), 4 * 16384, 800, 0);
+    CHECK(wireMs > 3000);
+    CHECK(engine.joinDeadlineMs() == static_cast<int>(wireMs));
     CHECK(engine.shutdown());
     mm::platform::stubBackendReset();
 }
@@ -698,7 +718,7 @@ TEST_CASE("Hub75PioBuffer: a publish racing the shutdown never writes into a fre
 }
 
 TEST_CASE("Hub75PioBuffer: an early FIFO-empty poll after the blank still finds the pins dark, since the blank covers the DMA ring") {
-    // B2-01: the stub stops as soon as the blank is queued, as the piolib backend's poll can, and records how many real chunks were still in flight. A blank shorter than the ring leaves some, whatever the frame's size.
+    // The stub stops as soon as the blank is queued, as the rp1 backend's poll can, and records how many real chunks were still in flight. A blank shorter than the ring leaves some, whatever the frame's size.
     mm::platform::Hub75PioOptions deep = slowSmall();
     deep.bitDepth = 8;   // two chunks a frame, the first ending inside the frame
     mm::platform::Hub75PioOptions lanes = slowSmall();

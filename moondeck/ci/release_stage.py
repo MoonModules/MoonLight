@@ -78,7 +78,7 @@ COPY --from=fetch /rootfs/usr/lib/moonlight/MoonLight /usr/bin/MoonLight
 # container dies at startup on "libcurl.so.4: cannot open shared object file", which the
 # run before publishing now catches.
 COPY --from=fetch /deps/ /usr/lib/
-# The package's copyright file, which carries piolib's BSD license on arm64: the notice travels with the binary.
+# The package's copyright file travels with the binary.
 COPY --from=fetch /doc/copyright /usr/share/doc/moonlight/copyright
 ENV XDG_DATA_HOME=/data
 VOLUME /data

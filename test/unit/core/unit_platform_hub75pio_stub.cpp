@@ -271,7 +271,7 @@ TEST_CASE("Hub75PioStub: the faults refuse the open, the start and the next subm
     faults.submitError = -EINTR;   // a test sets the code a signal would leave
     mm::platform::stubBackendSetFaults(faults);
     CHECK(backend->submitFrame(frame.data(), 64) == -EINTR);
-    faults.submitError = -ETIMEDOUT;   // what a 6.12 kernel's 1 s wait hands back through the patched piolib
+    faults.submitError = -ETIMEDOUT;   // what a 6.12 kernel's 1 s wait hands back
     mm::platform::stubBackendSetFaults(faults);
     CHECK(backend->submitFrame(frame.data(), 64) == -ETIMEDOUT);
     mm::platform::stubBackendReset();
@@ -351,7 +351,7 @@ TEST_CASE("Hub75PioStub: a submit before the start fails, and the reset puts eve
     mm::platform::stubBackendReset();
     std::unique_ptr<mm::platform::PioBackend> backend(mm::platform::createStubBackend());
     std::vector<uint32_t> frame(16, 1);
-    CHECK(backend->submitFrame(frame.data(), 64) == -ENODEV);   // the piolib backend answers the same before its start
+    CHECK(backend->submitFrame(frame.data(), 64) == -ENODEV);   // the rp1 backend answers the same before its start
     Started s(kFrameBytes, 4);
     CHECK(s.submit() == 0);
     mm::platform::stubBackendReset();
@@ -420,7 +420,7 @@ TEST_CASE("Hub75PioStub: a safe stop leaves no real chunk in flight") {
     CHECK(mm::platform::stubBackendRealChunksInFlightAtStop() == 0);
 }
 
-TEST_CASE("Hub75PioStub: a start before the open is refused, as the piolib backend refuses it") {
+TEST_CASE("Hub75PioStub: a start before the open is refused, as the rp1 backend refuses it") {
     mm::platform::stubBackendReset();
     std::unique_ptr<mm::platform::PioBackend> backend(mm::platform::createStubBackend());
     std::string error;

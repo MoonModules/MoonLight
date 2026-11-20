@@ -42,7 +42,7 @@
 ///
 /// The deadline is `kHub75JoinDeadlineMs` (3 s) at least. A slow pixel clock raises it: it is the wire time of the frame the thread may be inside plus the ring-deep blank, doubled for the feed lag and given half again as a margin (`pioShutdownWireMs`), so a healthy submit at a low clock is not read as stuck.
 ///
-/// At the slowest divider (65535, about 610 Hz) the figure is minutes, about 400 s for a 16,512-slot frame by arithmetic, as long as the blank takes on the wire.
+/// At the pixel clock floor (`kPioMinPixelClockHz`, 50 kHz) the figure is about 5 s for a 16,512-slot frame, by the same arithmetic.
 ///
 /// The refresh thread submits the blank itself as it leaves its loop, as deep as the whole DMA ring (`xferBufCount` buffers of `xferBufSize` bytes), so on a kernel whose submit returns once queued the blank returns only after every real chunk has gone out. It skips the blank when its last frame submit failed, and the stop then waits for none.
 ///
@@ -62,9 +62,13 @@
 ///
 /// When the feed runs behind, the state machine stalls on an empty FIFO inside the frame, and a stall lengthens the word it stops on, lit or dark, which shifts plane weights.
 ///
+/// ## Destruction
+///
+/// The destructor joins a refresh thread that shutdown found stuck, with no deadline, since that thread reads the buffers and the backend, and the PIO stays held until it returns. A test releases its hang before the engine goes, and a submit stuck in a 6.18 kernel stays there, so the join waits as long as the kernel does. A second shutdown then stops and closes the backend and frees the buffers.
+///
 /// ## Stub backend
 ///
-/// `useStubBackend` of open() is the engine test's dry run: production passes false, and a build that lacks piolib fails open() with that reason.
+/// `useStubBackend` of open() is the engine test's dry run: production passes false, and a build outside Linux aarch64 fails open() with that reason.
 
 #pragma once
 
@@ -88,10 +92,12 @@ class Hub75PioEngine final : public Hub75EngineBase<Hub75PioOptions> {
   public:
     /// An engine that is not running.
     Hub75PioEngine() = default;
-    /// Shuts the engine down, so a destroyed engine is stopped; an engine whose refresh thread is stuck detaches it.
+    /// Shuts the engine down, joins a refresh thread stuck in a submit with no deadline and no detach, then shuts down again (@xref{destruction|destruction}); the one production engine lives as long as the process.
     ~Hub75PioEngine() {
-        shutdown();
-        if (refreshThread_.joinable()) refreshThread_.detach();
+        if (!shutdown() && refreshThread_.joinable()) {
+            refreshThread_.join();
+            shutdown();   // the one teardown again, now that the thread is gone: the stop retry, the close and the buffers
+        }
     }
 
     /// Joins the encode thread, then the refresh thread within a deadline, stops the backend and frees the buffers; false while that thread is stuck, buffers kept (@xref{shutdown|shutdown}); `shutdownError()` holds a failed stop or note. Idempotent.

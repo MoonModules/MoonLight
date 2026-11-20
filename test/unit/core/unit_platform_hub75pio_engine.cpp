@@ -4,7 +4,7 @@
 ///
 /// The double buffer's cases land beside these with the double buffer: no torn frame, the newest frame wins, the submit cadence holds while an encode runs, the refresh thread blanks as it leaves its loop and the closing thread stops the backend after it, and a failed encode keeps the last frame, each under both stub queue models.
 ///
-/// One case opens the real PIO, where piolib is built and the run set MM_TEST_REAL_PIO=1; on a host the seam refuses, that case skips even then.
+/// The real PIO stays out of reach: the closed gate refuses an engine opened directly, on every build.
 
 #include "doctest.h"
 #include "platform/Hub75Pio.h"
@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -41,30 +42,6 @@ uint32_t repacked(const mm::platform::RepackTables& tables, const uint16_t (&slo
     mm::platform::repackSlots(ptrs, lanes, 1, tables, &wide);
     return wide;
 }
-
-// MM_TEST_REAL_PIO set to `value` for the scope, or cleared for null, and put back to the run's own value after: the case reads the rule whatever the shell holds.
-class RealPioEnv {
-  public:
-    explicit RealPioEnv(const char* value) {
-        if (const char* now = std::getenv(kName)) {
-            had_ = true;
-            saved_ = now;
-        }
-        apply(value);
-    }
-    ~RealPioEnv() { apply(had_ ? saved_.c_str() : nullptr); }
-    RealPioEnv(const RealPioEnv&) = delete;
-    RealPioEnv& operator=(const RealPioEnv&) = delete;
-
-  private:
-    static constexpr const char* kName = "MM_TEST_REAL_PIO";
-    static void apply(const char* value) {
-        if (value) setenv(kName, value, 1);
-        else unsetenv(kName);
-    }
-    bool had_ = false;
-    std::string saved_;
-};
 
 }  // namespace
 
@@ -403,7 +380,7 @@ TEST_CASE("Hub75PioEngine: submits that fail are counted and show no frame, and 
 }
 
 TEST_CASE("Hub75PioEngine: a submit that times out, as the 6.12 kernel's does, is counted and shows no frame, and the engine recovers") {
-    checkFailingSubmitsRecover(-ETIMEDOUT);   // the code the patched piolib returns where stock piolib exits
+    checkFailingSubmitsRecover(-ETIMEDOUT);   // what a 6.12 kernel's 1 s wait returns
 }
 
 TEST_CASE("Hub75PioEngine: a blank that fails to submit is counted once, and the shutdown still finishes with the pins dark") {
@@ -565,106 +542,42 @@ TEST_CASE("Hub75PioEngine: on the ring model the engine submits, and the shutdow
     mm::platform::stubBackendReset();
 }
 
-TEST_CASE("Hub75PioEngine: an engine opened directly, with no test mode, reaches the real PIO only when MM_TEST_REAL_PIO=1 opts the run in") {
-    // The seam refuses early with its own reason; a path around it, such as this one, meets the same rule in createPioBackend, so no case reaches piolib or /dev/pio0 unless the run opts in.
-    RealPioEnv notOptedIn(nullptr);
+// The gate as the program leaves it before the test binary's main closes it: a program's gate is open.
+const bool gateOpenAtStartup = mm::platform::pioBackendGateOpen();
+
+TEST_CASE("Hub75PioEngine: the real-backend gate starts open, as a program's does, and the test binary closes it") {
+    CHECK(gateOpenAtStartup);
+}
+
+TEST_CASE("Hub75PioEngine: an engine opened directly, with no test mode, is refused by the closed gate on every build") {
+    // The seam refuses early with its own reason; a path around it, such as this one, meets the closed gate in createPioBackend, so no case reaches /dev/pio0.
     const uint32_t opens = mm::platform::hub75PioTestRealOpens();
+    const uint32_t refusals = mm::platform::pioBackendGateRefusals();
+    REQUIRE_FALSE(mm::platform::pioBackendGateOpen());   // the test binary closed it before this case
     mm::platform::Hub75PioEngine engine;
     std::string error;
-    CHECK_FALSE(engine.open(pioSmall(), error));   // the real backend, as production asks for it, with the gate closed
-    CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);   // the refusal says how to opt in
+    CHECK_FALSE(engine.open(pioSmall(), error));   // the real backend, as production asks for it
+    CHECK(error == mm::platform::kPioTestRefusal);
     CHECK_FALSE(engine.isRunning());
     CHECK(mm::platform::hub75PioTestRealOpens() == opens);
-    mm::platform::setTestHub75PioGateOpen(true);   // the gate reopened is not the opt-in: the run's environment decides, on every build
-    CHECK_FALSE(engine.open(pioSmall(), error));
-    CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);
-    CHECK_FALSE(engine.isRunning());
-    CHECK(mm::platform::hub75PioTestRealOpens() == opens);
+    CHECK(mm::platform::pioBackendGateRefusals() == refusals + 1);   // the closed gate refused it, on every build
 }
 
-TEST_CASE("Hub75PioEngine: only MM_TEST_REAL_PIO=1 opts the run in, and no other value does, 0 included") {
-    // The rule reads the variable's value, not whether it is set: a run that says 0 has asked for no PIO.
-    mm::platform::setTestHub75PioGateOpen(true);
-    const uint32_t opens = mm::platform::hub75PioTestRealOpens();
-    for (const char* value : {"0", "", "true", "yes", "2", "1 ", " 1", "01", "off"}) {
-        CAPTURE(std::string(value));
-        RealPioEnv env(value);
-        CHECK_FALSE(mm::platform::hub75PioTestRealOptedIn());
-        mm::platform::Hub75PioEngine engine;
-        std::string error;
-        CHECK_FALSE(engine.open(pioSmall(), error));
-        CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);   // refused by the test rule, whatever the build
-        CHECK(mm::platform::hub75PioTestRealOpens() == opens);
-    }
-    RealPioEnv exactly("1");
-    CHECK(mm::platform::hub75PioTestRealOptedIn());
-}
-
-TEST_CASE("Hub75PioEngine: the real-backend gate refuses a closed gate always, a reopened one unless the run opted in, and never a program's gate") {
-    using mm::platform::PioBackendGate;
-    using mm::platform::pioBackendGateRefuses;
-    CHECK(pioBackendGateRefuses(PioBackendGate::Closed, false));
-    CHECK(pioBackendGateRefuses(PioBackendGate::Closed, true));
-    CHECK(pioBackendGateRefuses(PioBackendGate::Reopened, false));
-    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Reopened, true));
-    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Program, false));
-    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Program, true));
-}
-
-#ifndef MM_HUB75_PIO_HAVE_PIOLIB
-TEST_CASE("Hub75PioEngine: an engine opened directly in a run that opted in, where the build has no piolib, names the library") {
-    RealPioEnv optedIn("1");   // safe here: this build links no piolib, so the real backend stays out of reach
-    mm::platform::setTestHub75PioGateOpen(true);
-    mm::platform::Hub75PioEngine engine;
-    std::string error;
-    CHECK_FALSE(engine.open(pioSmall(), error));
-    CHECK(error == "needs a Raspberry Pi build with piolib");
-    CHECK_FALSE(engine.isRunning());
-}
-#else
-namespace {
-
-// Holds an engine and the reopened gate for the scope, then shuts down and closes the gate; a wedged engine is leaked, as the seam leaks its own, since a thread in the kernel reads its buffers.
-struct RealPioScope {
-    mm::platform::Hub75PioEngine* held = new mm::platform::Hub75PioEngine;
-    mm::platform::Hub75PioEngine& engine = *held;
-    RealPioScope() { mm::platform::setTestHub75PioGateOpen(true); }
-    ~RealPioScope() {
-        const bool clean = mm::test::waitUntil([&] { return engine.shutdown(); }) && !engine.wedged();
-        if (clean) delete held;   // otherwise the engine stays allocated for the life of the process
-        mm::platform::setTestHub75PioGateOpen(false);
-    }
-    RealPioScope(const RealPioScope&) = delete;
-    RealPioScope& operator=(const RealPioScope&) = delete;
-};
-
-}  // namespace
-
-// Opens the real PIO and runs only where piolib is built and the run set MM_TEST_REAL_PIO=1; on a host the seam refuses, an opted-in run skips this case too. Stop MoonLight's service first, since /dev/pio0 is single-claim.
-TEST_CASE("Hub75PioEngine: on a Pi, in a run that opted in, the real PIO opens, submits frames and closes dark, and the engine opens again") {
-    if (!mm::platform::hub75PioTestRealOptedIn()) {
-        MESSAGE("skipped: the run did not set MM_TEST_REAL_PIO=1");
-        return;
-    }
-    if (const char* why = mm::platform::hub75PioRefusal()) {
-        MESSAGE("skipped: the seam refuses PIO on this host (", std::string(why), "), and a direct open bypasses that refusal");
-        return;
-    }
-    RealPioScope scope;
-    mm::platform::Hub75PioEngine& engine = scope.engine;
-    const uint32_t opens = mm::platform::hub75PioTestRealOpens();
-    for (int cycle = 0; cycle < 2; cycle++) {
-        CAPTURE(cycle);
-        std::string error;
-        REQUIRE_MESSAGE(engine.open(pioSmall(), error), error);
-        CHECK(std::string(engine.backendName()).find("piolib") != std::string::npos);
-        CHECK(mm::test::waitUntil([&] { return engine.framesSubmitted() >= 100; }, 2000));   // a 2,048-word frame is 0.2 ms on the wire at 10 MHz
-        CHECK(engine.shutdown());
-        CHECK(engine.shutdownError().empty());                   // the stop darkened the panel and reported cleanly
-        CHECK(std::string(engine.backendName()) == "(none)");    // and the backend was closed
-        CHECK_FALSE(engine.isRunning());
-        CHECK_FALSE(engine.wedged());
-    }
-    CHECK(mm::platform::hub75PioTestRealOpens() == opens + 2);   // each cycle opened the real backend
-}
+TEST_CASE("Hub75PioEngine: the real-backend gate is open or closed, a closed gate hands out no real backend, and the stub backend is never behind it") {
+    const bool wasOpen = mm::platform::pioBackendGateOpen();
+    const uint32_t opens = mm::platform::pioBackendRealOpens();
+    mm::platform::setPioBackendGateOpen(false);
+    CHECK(mm::platform::createPioBackend(false) == nullptr);
+    CHECK(std::string(mm::platform::pioBackendRefusal()) == mm::platform::kPioTestRefusal);
+    std::unique_ptr<mm::platform::PioBackend> stub(mm::platform::createPioBackend(true));
+    CHECK(stub != nullptr);   // the stub opens whatever the gate says
+    CHECK(mm::platform::pioBackendRealOpens() == opens);
+    mm::platform::setPioBackendGateOpen(true);
+    CHECK(mm::platform::pioBackendGateOpen());
+#ifndef MM_HUB75_PIO_HAVE_RP1
+    CHECK(mm::platform::createPioBackend(false) == nullptr);   // an open gate in a build with no rp1 backend: the build says why
+    CHECK(std::string(mm::platform::pioBackendRefusal()) == mm::platform::kPioNoBackendRefusal);
+    CHECK(mm::platform::pioBackendRealOpens() == opens);
 #endif
+    mm::platform::setPioBackendGateOpen(wasOpen);
+}

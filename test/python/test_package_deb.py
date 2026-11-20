@@ -17,7 +17,7 @@ def staged(tmp_path, monkeypatch):
     binary.write_text("program")
     monkeypatch.setattr(pd, "DIST_DIR", tmp_path / "dist")
     monkeypatch.setattr(pd.shutil, "which", lambda name: "/usr/bin/dpkg-deb")
-    monkeypatch.setattr(pd, "linux_arch", lambda: ("amd64", "x64", "Linux x64"))   # the layout is the same on every host; the arm64 copyright reads piolib's license, a submodule file
+    monkeypatch.setattr(pd, "linux_arch", lambda: ("amd64", "x64", "Linux x64"))   # the layout is the same on every host
     seen = {}
 
     def pack(cmd, *args, **kwargs):

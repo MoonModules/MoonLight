@@ -2,7 +2,7 @@
 
 /// The seam between the PIO engine and RP1 PIO: the `PioBackend` interface the engine talks through, and the RP1 clock and per-pixel-clock constants the refresh rate derives from.
 ///
-/// Two implementations exist: PiolibBackend (hub75_pio_backend_piolib.cpp) is the real one, using Raspberry Pi's piolib (BSD-3-Clause) over /dev/pio0, built only when piolib is found (see the root CMakeLists.txt).
+/// Rp1Backend (hub75_pio_backend_rp1.cpp) is the real implementation: it issues /dev/pio0's own ioctls through a device seam, and a Linux aarch64 build creates it (see the root CMakeLists.txt).
 ///
 /// StubBackend (hub75_pio_backend_stub.cpp) has no hardware: submitFrame() takes the time the frame would take on the wire, or only the wait for a free buffer, so the refresh thread, the swap handshake and the engine run, and can be tested, on a machine with no Pi attached; it is always built.
 ///
@@ -12,29 +12,35 @@
 ///
 /// ## Submit semantics
 ///
-/// submitFrame() is piolib's pio_sm_xfer_data(): it copies the buffer into kernel DMA bounce buffers (at most `xferBufCount` of `xferBufSize` bytes) and submits the DMA. What a return means depends on the kernel line, read from the driver source and the released packages (2026-11-18 and 19).
+/// submitFrame() is one PIO_IOC_SM_XFER_DATA32 call for the whole frame: `data_bytes` is 32 bits and the driver cuts any length into ring buffers of `xferBufSize` bytes, `xferBufCount` of them (drivers/misc/rp1-pio.c, D12:757-758, 803 and D18:1628-1629, 1670).
 ///
-/// On rpi-6.6.y, rpi-6.12.y, rpi-6.19.y, rpi-7.0.y and rpi-6.18.y up to 6.18.34 a submit returns when every chunk has been delivered to the SM's TX FIFO, and each wait times out after 1 s with -ETIMEDOUT. The 1 s is per wait, so a frame larger than the ring takes up to 2 s, and the waits ignore signals.
+/// The sources are rp1-pio.c on rpi-6.12.y (D12, dcc3a57b), on rpi-6.18.y at the head (D18, adb94754, with PR #7771 merged 2026-11-19 09:25 UTC) and as released (D18p, tag stable_20261103, 6.18.60), and drivers/firmware/rp1-fw.c on rpi-6.12.y (F12, dcc3a57b) and rpi-6.18.y at the head (F18, adb94754). A line cited as `D12:762` is that line of D12.
 ///
-/// A timeout leaves the ring out of step on those kernels, from the driver source and not run: descriptors stay queued, the semaphore keeps its count, and the engine's retry copies into buffers still queued, until a new pio_sm_config_xfer resets them.
+/// On 6.12 a submit returns when every chunk has been delivered to the TX FIFO. The ring indices reset at each call, each wait is `down_timeout` of 1 s, and a wait that expires answers -ETIMEDOUT (D12:745-817); every wait in the file is uninterruptible, so a signal leaves it running.
 ///
-/// The pinned piolib (third_party/rpi-utils, whose `rp1_ioctl` returns every code) hands -ETIMEDOUT to the caller. Stock piolib from commit bb3e2622 (2026-11-13) calls pio_panic() there and ends the process, and every earlier or packaged libpio0 returns -1 for any failure.
+/// A free-buffer wait that expires on 6.12 only logs "DMA bounce timed out" and falls through, so a call can take 2 s, and it can return 0 with the frame cut short (D12:762-767). The clock floor (`kPioMinPixelClockHz`) keeps one chunk under that 1 s. A bad user pointer is not detected there (D12:775-777).
 ///
-/// From 6.18.39 (commit ee9c2a40) and on rpi-7.1.y and later a submit returns once the last chunk is queued, and blocks only while all `xferBufCount` buffers are busy, with no timeout. A frame is therefore not delivered on return.
+/// As released, 6.18 returns once the last chunk is queued, and waits with `down_interruptible` and no timeout only while all `xferBufCount` buffers are busy (D18p:1435-1492). A frame is therefore not delivered on return, and a state machine that stops draining blocks a later submit for good.
 ///
-/// That wait is interruptible. On 6.18.39 to 6.18.52 a signal ends it and the call returns 0 with the rest of the frame unsent. From 6.18.53 the call returns -EINTR when the handler lacks SA_RESTART and resumes where it has it. The refresh thread blocks SIGINT, SIGTERM and SIGHUP.
+/// At the 6.18 head a submit also holds the channel's mutex for the whole call, so a second `XFER_DATA*` or a `CONFIG_XFER*` on the same state machine and direction waits on it, interruptibly (D18:1324-1325, 1832-1873). Released kernels take no lock there, and two submitters share the ring.
+///
+/// On 6.18.39 to 6.18.52 a signal ends the wait and the call returns 0 with the frame unsent. From 6.18.53 it ends with -ERESTARTSYS and the driver writes the argument back with `data` advanced and `data_bytes` reduced (D18:1532-1537, 2243-2246); user space sees -EINTR when the handler lacks SA_RESTART, so every submit builds a fresh argument.
 ///
 /// A submit blocks for good when the state machine stops draining, or when a DMA channel will not stop (raspberrypi/linux issue #7642, 6.18.48 to 6.18.52). The join deadline reports it (hub75_pio_engine.h, Shutdown), and the thread stays in the kernel until the kernel lets it go or the process exits.
 ///
-/// A failed submit returns a negative errno-style code, which the engine counts and retries after a pause: -EIO, -EINVAL and -EREMOTEIO anywhere, -ETIMEDOUT where a submit waits for delivery, -EINTR from 6.18.53. Against a packaged libpio0 every code reads -1.
+/// A failed submit returns the negative errno, which the engine counts and retries after a pause: -EINVAL for a size, direction, length or channel the driver refuses (D12:893-903; D18:1841-1862), -EFAULT for a bad pointer on 6.18, -EIO for a refused descriptor (D12:785-788), -ETIMEDOUT on 6.12 and -EINTR from 6.18.53.
 ///
-/// A return leaves the pins' state open, so the blank is as deep as the whole ring. The FIFO holds at most 8 words per direction, and the sources leave the joined TX depth unstated. rpi-6.12.y has no PIO IRQ path, so the engine does not use IRQs.
+/// A return leaves the pins' state open, so the blank is as deep as the whole ring. The FIFO holds at most 8 words per direction, and the sources leave the joined TX depth unstated. The stub models both kinds: the blocking model returns after the frame's wire time, the ring model once queued.
 ///
-/// The stub models both kinds: the blocking model returns after the frame's wire time, the ring model once queued.
+/// ## Control calls
+///
+/// The control calls run while a transfer blocks, which the stop relies on (@xref{stop|stop}). The ioctl entry takes no lock (D12:1157-1191; D18:2207-2248), each control call is one firmware message under one global mutex with a 1 s timeout and -ETIMEDOUT (F12:44, 75-101; F18:44, 75-108), and a blocked transfer holds none of that (D12:897-901; D18p:1661-1665).
+///
+/// The firmware's own refusals pass through unchanged as the call's errno (F18:98-105).
 ///
 /// ## Start
 ///
-/// start() loads the program, configures the SM (pins, shift, FIFO join, clock divider), configures the DMA transfer ring, clears the FIFOs and enables the SM.
+/// start() configures the DMA transfer ring (CONFIG_XFER32), loads the program, sets the pins to the idle word, their directions and the PIO function, initializes the SM (shift, FIFO join, clock divider), clears the FIFOs and enables it, and fails naming the first step the kernel refuses.
 ///
 /// The `PioStartConfig` carries `programInstructions` and `programLength` from the pioasm-generated hub75.pio.h (the rising- or falling-edge variant, as chosen by the engine), and `wrapTarget` and `wrap`, the program's wrap bounds.
 ///
@@ -44,17 +50,15 @@
 ///
 /// A test must stay clear of the PIO of the Pi it runs on. The gate sits where every open of the real backend converges, createPioBackend(false), so no path around the seam, such as an engine opened directly, can reach /dev/pio0 from a test binary. The seam refuses earlier, with a readable reason.
 ///
-/// The test binary's main counts the real backends created and fails the run if any was, unless the run opted in with `MM_TEST_REAL_PIO=1`, which makes those opens deliberate (it then prints a note).
-///
-/// The test binary closes the gate before every case, and a case may reopen it. The real backend then opens only when the environment holds `MM_TEST_REAL_PIO=1`, the one switch that lets a test binary reach /dev/pio0. CI and ordinary runs stay clear of the PIO on every build, a Pi 5 included, and a run on a Pi 5 with the PIO free sets it deliberately. The refusal text names the variable.
+/// The gate is open or closed: a program's gate is open, and the test binary closes it before every case. A case reopens it only to test a refusal that comes before any backend, and the test binary's main counts the real backends created and fails the run if any was, so no run reaches /dev/pio0 unnoticed.
 ///
 /// ## Stop
 ///
 /// The refresh thread submits the blank itself as it leaves its loop (submitBlank), as deep as the whole DMA ring, so on a kernel that queues its submit returns only after every real chunk has gone out. It skips the blank when its last frame submit failed. The join deadline then covers the one call that can block for good.
 ///
-/// The closing thread makes no submit: on 6.18.39 and later a submit blocks with no timeout when the SM stops draining, and a second submitter shares the ring and the semaphore with no lock.
+/// The closing thread makes no submit: on 6.18.39 and later a submit blocks with no timeout when the SM stops draining, a second submitter shares the ring and the semaphore on released kernels, and at the 6.18 head it waits on the channel mutex that a stuck submit holds.
 ///
-/// stop() is firmware-message calls only, each bounded at 1 s by the kernel (read on 6.12 and 6.18): it disables the SM, sets the OUT pins to `kBlankWideWord` with the call start() uses, clears the FIFOs and removes the program. It runs from the closing thread while the refresh thread may be inside the kernel.
+/// stop() is firmware-message calls only, each bounded at 1 s by the kernel (F12:83-86; F18:90-93): it disables the SM, sets the OUT pins to `kBlankWideWord` with the call start() uses, clears the FIFOs and removes the program. It runs from the closing thread while the refresh thread may be inside the kernel.
 ///
 /// With `drain` set, because the refresh thread came back and its blank went out, stop() first waits out the blank's wire time (the ring's words over the pixel clock, doubled for the feed lag), then polls the TX FIFO for empty within 100 ms. On 6.18.39 and later an empty FIFO right after the submit leaves a ring of blank chunks queued.
 ///
@@ -64,11 +68,11 @@
 ///
 /// The dark word stays on the pins after stop(). Measured on 6.18.60, 2026-11-19: with the SM disabled, setting the dark word turned OE high; set pins and clear FIFOs each returned in under 0.04 ms while another thread was held in a submit. The disable was issued before that thread was held, so a disable with a thread already blocked in a submit is not measured. 6.12 is unchecked.
 ///
-/// A step that fails leaves the others running and puts its failure in `error`. The shim reports the disable and the pins, whose piolib calls return void (hub75_pio_c_api.h, Silent calls); the FIFO clear and the program removal are not checked. stop() returns whether the panel is dark: the disable and the pin write both succeeded, in this stop or an earlier one.
+/// A step that fails leaves the others running and puts its failure in `error`. The backend reports the disable and the pins from their ioctl results; the FIFO clear and the program removal are not checked. stop() returns whether the panel is dark: the disable and the pin write both succeeded, in this stop or an earlier one.
 ///
 /// A stop that returned false repeats the disable, the pins and the FIFO clear on the next call, with a wait of zero, until both have succeeded once, so a wedged engine's later shutdown retries it. A stop after a true finds the SM stopped already, and a submit after any stop answers -ENODEV. A FIFO that did not drain is a note on a dark panel.
 ///
-/// The stop relies on non-DMA ioctls staying independent of a blocked transfer (true on 6.6, 6.12, 6.18 and 7.x; PR #7771, open, would add a lock per DMA channel that only configure, transfer and release take), on the 1 s message timeout, and on the firmware setting pins of a disabled SM.
+/// The stop relies on non-DMA ioctls staying independent of a blocked transfer (@xref{control-calls|control calls}; true on 6.12 and 6.18, where PR #7771, merged 2026-11-19, put a lock on each DMA channel that only configure, transfer and close take: D18:1324, 1853, 2143), on the 1 s message timeout, and on the firmware setting pins of a disabled SM.
 
 #pragma once
 
@@ -78,7 +82,7 @@
 
 namespace mm::platform {
 
-/// RP1 PIO system clock in Hz: clk_sys "typically runs at 200MHz" (RP1 peripherals datasheet) and piolib's rp1_clock_get_hz(clk_sys) returns 200 MHz; the pixel clock and refresh rate derive from it.
+/// RP1 PIO system clock in Hz: clk_sys "typically runs at 200MHz" (RP1 peripherals datasheet); the pixel clock and refresh rate derive from it.
 constexpr uint32_t kRp1PioClockHz = 200'000'000;
 
 /// The highest pixel clock the bench ran: above it the seam warns, since the DMA feed took about 1.8 times a frame's wire time at 20 MHz and the picture was not checked past it (hub75_pio_engine.h, Feed).
@@ -168,7 +172,7 @@ class PioBackend {
     /// Opens the PIO device and claims one state machine; fills `error` and returns false on failure.
     virtual bool open(std::string& error) = 0;
 
-    /// Loads the program, configures the SM and the DMA transfer ring, and enables the SM; fills `error` and returns false on failure (@xref{start|start}).
+    /// Configures the DMA transfer ring, loads the program, initializes the SM and enables it; fills `error` and returns false on failure (@xref{start|start}).
     virtual bool start(const PioStartConfig& config, std::string& error) = 0;
 
     /// Submits one whole frame for DMA into the SM's TX FIFO; returns 0, or a negative errno-style code on failure; what a return means depends on the kernel (@xref{submit-semantics|submit semantics}).
@@ -187,49 +191,40 @@ class PioBackend {
     virtual const char* name() const = 0;
 };
 
-/// What the piolib backend says when `pio_open(0)` fails with the positive errno `err`, `node` being /dev/pio0 as stat() reads it, or null. Pure text, so a host test reads it.
-std::string pioOpenFailure(int err, const PioNode* node);
+/// What the backend says when opening /dev/pio0 fails with the positive errno `err`, `node` being /dev/pio0 as stat() reads it, or null. Pure text, so a host test reads it.
+std::string pioRp1OpenFailure(int err, const PioNode* node);
 
-/// What the piolib backend says when claiming a state machine returns the negative errno `rc`.
+/// What the backend says when claiming a state machine returns the negative errno `rc`.
 std::string pioClaimFailure(int rc);
 
-/// What the piolib backend says when configuring the DMA ring returns the negative errno `rc`: -EBUSY means another client holds the DMA.
+/// What the backend says when configuring the DMA ring returns the negative errno `rc`: -EBUSY means another client holds the DMA.
 std::string pioXferConfigFailure(int rc, uint32_t bufSize, uint32_t bufCount);
 
-/// What the piolib backend says when loading the program returns the negative errno `rc`.
+/// What the backend says when loading the program returns the negative errno `rc`.
 std::string pioProgramFailure(int rc, int programLength);
 
-/// Returns the stub backend when `preferStub` is set, else the piolib backend, or null when the build has none or a test binary leaves MM_TEST_REAL_PIO=1 unset (@xref{real-backend-gate|the real-backend gate}); the caller owns it.
+/// Returns the stub backend when `preferStub` is set, else the rp1 backend, or null when the build has none or the gate is closed (@xref{real-backend-gate|the real-backend gate}); the caller owns it.
 PioBackend* createPioBackend(bool preferStub);
 
-/// The refusal a test binary gives for the real backend: it opens when the run holds `MM_TEST_REAL_PIO=1`.
-inline constexpr const char* kPioTestRefusal = "the real PIO is opened from a test binary only when MM_TEST_REAL_PIO=1 is set";
+/// The refusal for a build with no rp1 backend, anything but Linux aarch64.
+inline constexpr const char* kPioNoBackendRefusal = "needs a Raspberry Pi 5 build (Linux aarch64)";
 
-/// Why createPioBackend(false) returned null: a test binary leaves MM_TEST_REAL_PIO=1 unset, or this build has no piolib.
+/// The refusal a closed gate gives for the real backend, which is the test binary's gate in every case.
+inline constexpr const char* kPioTestRefusal = "a test binary keeps the real PIO closed";
+
+/// Why createPioBackend(false) returned null: the gate is closed, or this build has no rp1 backend (anything but Linux aarch64).
 const char* pioBackendRefusal();
 
-/// Where the real-backend gate stands: a program's gate is open for good, the test binary closes it before every case, and a case may reopen it.
-enum class PioBackendGate : uint8_t { Program, Closed, Reopened };
-
-/// Whether the real backend is refused at `gate` in a run that did or did not opt in (`optedIn`): a closed gate always refuses, a reopened one unless the run opted in, and a program's gate always admits it.
-constexpr bool pioBackendGateRefuses(PioBackendGate gate, bool optedIn) {
-    return gate == PioBackendGate::Closed || (gate == PioBackendGate::Reopened && !optedIn);
-}
-
-/// Whether the gate is open: true in a program, false in the test binary before every case. An open gate is no permission for the real backend: the run's environment decides (`pioBackendRealOptedIn`).
+/// Whether the gate is open: true in a program, false in the test binary before every case; the real backend is created only through an open gate.
 bool pioBackendGateOpen();
-/// Closes the gate (`open` false), or reopens it for a case that tests the real-backend rule; the real backend then opens only in a run with `MM_TEST_REAL_PIO=1`.
+/// Closes the gate (`open` false), or opens it again for a case that tests a refusal coming before any backend.
 void setPioBackendGateOpen(bool open);
-/// Whether the run opted in to the real backend: `MM_TEST_REAL_PIO` is set to exactly `1`, and any other value, `0` included, is not an opt-in. Read from the environment at each call.
-bool pioBackendRealOptedIn();
+/// The real backends the closed gate refused since the program started, counted on every build, so a test sees the gate act where no real backend exists.
+uint32_t pioBackendGateRefusals();
 /// The real backends created since the program started: 0 in a test run, which the test binary's main checks at its end.
 uint32_t pioBackendRealOpens();
 
-/// Creates the stub backend, always linked in so the engine tests run it on any host; production selects the piolib backend.
+/// Creates the stub backend, always linked in so the engine tests run it on any host; production selects the rp1 backend.
 PioBackend* createStubBackend();
-#ifdef MM_HUB75_PIO_HAVE_PIOLIB
-/// Creates the piolib backend.
-PioBackend* createPiolibBackend();
-#endif
 
 }  // namespace mm::platform

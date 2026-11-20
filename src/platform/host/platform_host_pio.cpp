@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-/// The Raspberry Pi 5 platform layer behind the PIO seam (platform.h), on every host: a recorder and the real engine on its stub backend for the tests, and the engine on piolib where piolib is linked.
+/// The Raspberry Pi 5 platform layer behind the PIO seam (platform.h), on every host: a recorder and the real engine on its stub backend for the tests, and the engine on the rp1 backend where the build has it (Linux aarch64).
 ///
-/// A build that lacks piolib refuses every open outside a test mode with that reason, so a PIO output says why its panels stay dark. A build with piolib opens the engine, which drives the panels from its own encode and refresh threads.
+/// A build that lacks the rp1 backend refuses every open outside a test mode with that reason, so a PIO output says why its panels stay dark. A build with it opens the engine, which drives the panels from its own encode and refresh threads.
 ///
 /// @technical
 ///
 /// ## Availability
 ///
-/// A test mode offers the backend on every host, and a test hook forces it either way; otherwise the host decides: piolib linked AND a PIO the kernel serves, the same refusal the open checks (/dev/pio0 present, no stall kernel).
+/// A test mode offers the backend on every host, and a test hook forces it either way; otherwise the host decides: the rp1 backend built in AND a PIO the kernel serves, the same refusal the open checks (/dev/pio0 present, no stall kernel).
 ///
-/// A Pi 4 with piolib linked is not offered the output, so the fallback picks only an output that can open.
+/// A Pi 4 running a build with the rp1 backend is not offered the output, so the fallback picks only an output that can open.
 ///
 /// ## Test modes
 ///
@@ -71,7 +71,6 @@ Hub75PioEngine& engine_ = *new Hub75PioEngine;
 // The real-backend gate lives where every real open converges (hub75_pio_backend.h), so the seam only asks it.
 bool gateOpen() { return pioBackendGateOpen(); }
 void setGateOpen(bool open) { setPioBackendGateOpen(open); }
-bool realOptedIn() { return pioBackendRealOptedIn(); }
 uint32_t realOpensNow() { return pioBackendRealOpens(); }
 #else
 // A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
@@ -103,7 +102,6 @@ void stubBackendReset() {}
 bool noEngineGateOpen_ = true;   // no real backend exists here, so the gate is moot; it answers for the seam's early refusal
 bool gateOpen() { return noEngineGateOpen_; }
 void setGateOpen(bool open) { noEngineGateOpen_ = open; }
-bool realOptedIn() { return false; }   // no real backend exists here to opt in to
 uint32_t realOpensNow() { return 0; }
 #endif
 std::atomic<bool> realOpen_{false};   // whether the engine, rather than the recorder, holds the panels
@@ -136,7 +134,7 @@ struct KernelVersion {
     }
 };
 
-// The kernels whose RP1 PIO driver stalls the next PIO open: 6.18.39 dropped the wait a teardown with DMA in flight relied on, and 6.18.60, the next package after 6.18.50, runs it again.
+// The kernels whose RP1 PIO driver stalls the next PIO open: 6.18.39 dropped the wait a teardown with DMA in flight relied on, 6.18.60 runs it again; measured with an IRQ thread holding the file, so what a close(fd) releases is a bench question.
 constexpr KernelVersion kPioStallFrom{6, 18, 39};
 constexpr KernelVersion kPioStallUntil{6, 18, 60};
 
@@ -203,18 +201,18 @@ bool hub75PioAvailable() {
     // A test mode offers the backend on every host, and a test hook forces it either way; otherwise the host decides (@xref{availability}).
     if (mode_ != Hub75PioMode::Off) return true;
     if (testAvailable_ >= 0) return testAvailable_ != 0;
-#ifdef MM_HUB75_PIO_HAVE_PIOLIB
+#ifdef MM_HUB75_PIO_HAVE_RP1
     return hub75PioRefusal() == nullptr;
 #else
     return false;
 #endif
 }
 
-// Why the real backend is not opened here, or null when it may be: the test binary's closed gate, a build that omits piolib, or a kernel that stalls a PIO reopen (hub75PioRefusal). A reopened gate leaves the decision to createPioBackend.
+// Why the real backend is not opened here, or null when it may be: the test binary's closed gate, a build outside Linux aarch64, or a kernel that stalls a PIO reopen (hub75PioRefusal). A reopened gate leaves the decision to createPioBackend.
 static const char* realOpenRefusal() {
     if (!gateOpen()) return kPioTestRefusal;
-#ifndef MM_HUB75_PIO_HAVE_PIOLIB
-    return "needs a Raspberry Pi build with piolib";
+#ifndef MM_HUB75_PIO_HAVE_RP1
+    return kPioNoBackendRefusal;
 #else
     return hub75PioRefusal();
 #endif
@@ -231,10 +229,10 @@ bool hub75PioOpen(const Hub75PioOptions& o) {
         openTook(o);
         return true;
     }
-    // The real branch: the engine on the stub backend in Stub mode, on piolib otherwise.
+    // The real branch: the engine on the stub backend in Stub mode, on the rp1 backend otherwise.
     const bool stub = mode_ == Hub75PioMode::Stub;
     if (!stub) {
-        // A refusal is the reason, not a warning: the PIO output has no fallback. A test binary is refused before piolib or /dev/pio0 is looked at, so a case stays clear of the live panels of the machine it runs on.
+        // A refusal is the reason, not a warning: the PIO output has no fallback. A test binary is refused before /dev/pio0 is looked at, so a case stays clear of the live panels of the machine it runs on.
         realAttempts_++;
         if (const char* why = realOpenRefusal()) return fail(why);
     }
@@ -317,8 +315,6 @@ void setTestHub75Pio(Hub75PioMode mode) {
 void setTestHub75PioFps(uint16_t hz) { testFps_ = hz; }
 
 void setTestHub75PioGateOpen(bool open) { setGateOpen(open); }
-
-bool hub75PioTestRealOptedIn() { return realOptedIn(); }
 
 uint32_t hub75PioTestRealAttempts() { return realAttempts_; }
 

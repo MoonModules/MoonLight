@@ -42,8 +42,6 @@ BUILD_DIR_LINUX = ROOT / "build" / "linux"
 DIST_DIR = ROOT / "dist"
 # The .deb's service, rollback and maintainer scripts, each a file of its own.
 LINUX_DIR = ROOT / "moondeck" / "ci" / "linux"
-# piolib's license (BSD-3-Clause): the arm64 program carries piolib, built from this submodule, so every arm64 form of the program reproduces the notice.
-PIOLIB_LICENSE = ROOT / "third_party" / "rpi-utils" / "LICENCE"
 
 
 def read_version() -> str:
@@ -134,9 +132,9 @@ def package_linux(binary: Path, version: str) -> Path:
     out = DIST_DIR / f"MoonLight-linux-{tar_label}-v{version}.tar.gz"
     readme = DIST_DIR / "_README.txt"
     readme.write_text(readme_text(version, readme_label), encoding="utf-8")
-    # The same notice the .deb carries, beside the program: the arm64 one holds piolib's BSD license, which a binary must travel with.
+    # The same notice the .deb carries, beside the program.
     notice = DIST_DIR / "_COPYRIGHT"
-    notice.write_text(copyright_text(deb_arch), encoding="utf-8")
+    notice.write_text(copyright_text(), encoding="utf-8")
     try:
         with tarfile.open(out, "w:gz") as tar:
             tar.add(binary, arcname="MoonLight")
@@ -146,25 +144,16 @@ def package_linux(binary: Path, version: str) -> Path:
         readme.unlink(missing_ok=True)
         notice.unlink(missing_ok=True)
     print(f"package_host: wrote {out}")
-    if deb_arch == "arm64":
-        # The bare firmware image below has no document of its own, so its notice is a release asset beside it (release.yml attaches it).
-        asset = DIST_DIR / f"COPYRIGHT-linux-arm64-v{version}.txt"
-        asset.write_text(copyright_text(deb_arch), encoding="utf-8")
-        print(f"package_host: wrote {asset}")
     stage_program(binary, version, f"host-linux-{tar_label}")
     package_deb(binary, version)
     return out
 
 
-def copyright_text(arch: str) -> str:
+def copyright_text() -> str:
     """The copyright file every Linux package carries, in Debian's machine-readable format: the .deb's /usr/share/doc/moonlight/copyright, and
-    the same text as the tarball's COPYRIGHT, the release's COPYRIGHT-linux-arm64 asset and the container image's copy.
-
-    The arm64 program is linked with piolib (Raspberry Pi Ltd), whose BSD-3-Clause license asks a binary redistribution to reproduce its notice
-    and conditions in the documentation or other materials: the license text, verbatim from the submodule, is the second stanza, so it travels
-    with every arm64 form of the program. A blank line in it is a lone dot, which is how the format writes one.
+    the same text as the tarball's COPYRIGHT and the container image's copy.
     """
-    text = (
+    return (
         "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n"
         "Upstream-Name: MoonLight\n"
         "Source: https://github.com/MoonModules/MoonLight\n"
@@ -175,15 +164,6 @@ def copyright_text(arch: str) -> str:
         " The full text of the GNU General Public License version 3 is in the LICENSE file of the\n"
         " source repository (https://github.com/MoonModules/MoonLight), and on Debian systems in\n"
         " /usr/share/common-licenses/GPL-3.\n")
-    if arch == "arm64":
-        body = "\n".join(" " + line if line.strip() else " ." for line in PIOLIB_LICENSE.read_text(encoding="utf-8").strip().splitlines())
-        text += (
-            "\n"
-            "Files: third_party/rpi-utils/piolib/*\n"
-            "Copyright: 2023-2026, Raspberry Pi Ltd.\n"
-            "License: BSD-3-Clause\n"
-            f"{body}\n")
-    return text
 
 
 def package_deb(binary: Path, version: str) -> Path | None:
@@ -242,10 +222,10 @@ def package_deb(binary: Path, version: str) -> Path | None:
     if fav.exists():
         shutil.copy2(fav, icons / "moonlight.png")
 
-    # Debian policy wants a copyright file in every package. On arm64 it carries piolib's license too (copyright_text); no Depends, since piolib is linked in.
+    # Debian policy wants a copyright file in every package.
     doc = stage / "usr" / "share" / "doc" / "moonlight"
     doc.mkdir(parents=True)
-    (doc / "copyright").write_text(copyright_text(deb_arch), encoding="utf-8")
+    (doc / "copyright").write_text(copyright_text(), encoding="utf-8")
 
     (stage / "DEBIAN" / "control").write_text(
         "Package: moonlight\n"

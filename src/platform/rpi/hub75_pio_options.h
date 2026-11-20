@@ -6,7 +6,15 @@
 ///
 /// ## Option rules
 ///
-/// A check is a table of rows, each a predicate over the options and the reason it gives; the first row that holds refuses. The five rows every Pi engine shares (lanes, panels, rows and columns, scan rate, depth) are `kHub75CommonRules`, and an engine adds its own rows after them.
+/// A check is a table of rows, each a predicate over the options and the reason it gives, with an optional detail that adds the figures; the first row that holds refuses. The five rows every Pi engine shares (lanes, panels, rows and columns, scan rate, depth) are `kHub75CommonRules`, and an engine adds its own rows after them.
+///
+/// ## Limits
+///
+/// The rules hold the PIO engine's two stated limits, one constant each, and both figures are proposals to the maintainer.
+///
+/// `kPioMinPixelClockHz` is 50 kHz. One word takes one pixel clock (the program spends 5 PIO cycles on it), so a 64 KiB chunk of 16,384 words takes the 6.12 kernel's 1 s wait at 16.4 kHz, and below that a transfer can return 0 with the frame cut short. 50 kHz keeps three times the margin.
+///
+/// `kPioMaxBufferBytes` is 256 MiB, the one home of the memory limit. The smallest Pi 5 has 2 GB, and the figure is about 140 times the 1,884,160 bytes (1.80 MiB) a 256 x 192 wall at 8 bits takes.
 
 #pragma once
 
@@ -31,6 +39,7 @@ template <typename Options>
 struct OptionRule {
     bool (*refuses)(const Options&);   ///< true when the options break this rule
     const char* reason;                ///< what the product owner reads when it does
+    std::string (*detail)(const Options&) = nullptr;   ///< the figures that follow the reason, when the rule has any
 };
 
 /// The first rule of `rules` that `o` breaks fills `error` with its reason and returns false; true when none does.
@@ -39,6 +48,7 @@ bool hub75OptionsPass(const Options& o, const OptionRule<Options> (&rules)[N], s
     for (const OptionRule<Options>& rule : rules) {
         if (!rule.refuses(o)) continue;
         error = rule.reason;
+        if (rule.detail != nullptr) error += rule.detail(o);
         return false;
     }
     return true;
@@ -66,6 +76,22 @@ Hub75Geometry hub75LaneGeometry(const Options& o, int width, int height, uint8_t
     geo.brightness = brightness;
     return geo;
 }
+
+/// The lowest pixel clock the engine takes, 50 kHz, so a 64 KiB chunk fits the 6.12 kernel's 1 s wait with margin (@xref{limits|limits}).
+constexpr uint32_t kPioMinPixelClockHz = 50'000;
+
+/// The most bytes the wall's buffers may total, 256 MiB, the one home of the memory limit (@xref{limits|limits}).
+constexpr uint64_t kPioMaxBufferBytes = 256ull * 1024 * 1024;
+
+/// The DMA bounce buffer size the engine asks for at most, 64 KiB, and how many it asks for, the kernel's limit of 4.
+constexpr uint32_t kPioXferBufSize = 65536;
+constexpr uint32_t kPioXferBufCount = 4;   ///< the kernel's limit of DMA bounce buffers
+
+/// Whether `bytes` of buffers pass the ceiling: exactly the ceiling is allowed.
+constexpr bool pioBufferBytesExceedCeiling(uint64_t bytes) { return bytes > kPioMaxBufferBytes; }
+
+/// The bytes the wall's buffers total for `o`: the RGB and encoded triple buffers, each lane's slots and the ring-deep blank; the engine allocates this much, and the ceiling rule reads it. Valid for options that pass the geometry rule.
+uint64_t hub75PioBufferBytes(const Hub75PioOptions& o);
 
 /// Whether `o` is a wall the engine can drive (panel counts, scan rate, depth, clock, per-lane geometry), else false with the reason in `error`; open() and the test recorder both refuse on it.
 bool hub75PioCheckOptions(const Hub75PioOptions& o, std::string& error);

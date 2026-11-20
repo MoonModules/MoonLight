@@ -2,7 +2,7 @@
 
 /// Pins the PIO seam the RP1 state machine sits behind, in each of its modes. Record stands in for the panels, so what a driver hands over is checked on every host; Stub runs the real engine on the stub backend through the seam's real branch, so the push, the rate and the close are checked end to end with no Pi; the bench Pi then only has to show the wire.
 ///
-/// The refusal paths branch on the piolib build: a build with piolib linked refuses through the kernel check, any other build through the missing library. Availability is host-gated separately: with piolib, a Pi 5 is offered the backend and a Pi 4 is not.
+/// The refusal paths branch on the rp1 build: a build with the rp1 backend refuses through the kernel check, any other build through the missing backend. Availability is host-gated separately: with the rp1 backend, a Pi 5 is offered it and a Pi 4 is not.
 
 #include "doctest.h"
 #include "hub75_engine_bench.h"
@@ -142,30 +142,36 @@ TEST_CASE("Hub75Pio: the recorder's rate is 0 until a test sets it, holds while 
     CHECK(mm::platform::hub75PioFps() == 0);
 }
 
-TEST_CASE("Hub75Pio: an open outside a test mode is refused in the test binary before piolib or /dev/pio0 is reached") {
+TEST_CASE("Hub75Pio: an open outside a test mode is refused in the test binary before /dev/pio0 is reached") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
     const uint32_t attempts = mm::platform::hub75PioTestRealAttempts();
-    mm::PioHost pi5("6.18.60+rpt-rpi-2712", true);   // a host that would serve the PIO, where piolib is linked
+    mm::PioHost pi5("6.18.60+rpt-rpi-2712", true);   // a host that would serve the PIO, where the rp1 backend is built
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
-    CHECK(std::string(mm::platform::hub75PioLastError()).find("MM_TEST_REAL_PIO=1") != std::string::npos);   // the refusal says how to opt in
+    CHECK(std::string(mm::platform::hub75PioLastError()) == mm::platform::kPioTestRefusal);   // the closed gate says why
     CHECK(mm::platform::hub75PioTestRealAttempts() == attempts + 1);   // asked for, and stopped at the gate
     CHECK(mm::platform::hub75PioTestRealOpens() == 0);                 // none reached the backend
     CHECK(mm::platform::hub75PioWidth() == 0);
 }
 
-#ifndef MM_HUB75_PIO_HAVE_PIOLIB
-TEST_CASE("Hub75Pio: without piolib an open outside a test mode fails naming the library") {
+#ifndef MM_HUB75_PIO_HAVE_RP1
+TEST_CASE("Hub75Pio: without the rp1 backend an open outside a test mode fails naming the build") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
-    mm::platform::setTestHub75PioGateOpen(true);   // the host's own refusal is the case; piolib is absent, so the real backend stays out of reach
+    mm::platform::setTestHub75PioGateOpen(true);   // the host's own refusal is the case; the rp1 backend is absent, so the real backend stays out of reach
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
-    CHECK(std::string(mm::platform::hub75PioLastError()) == "needs a Raspberry Pi build with piolib");
+    CHECK(std::string(mm::platform::hub75PioLastError()) == mm::platform::kPioNoBackendRefusal);
     CHECK(mm::platform::hub75PioWidth() == 0);
+}
+
+TEST_CASE("Hub75Pio: without the rp1 backend a Pi 5 is not offered the output, whatever the host says") {
+    mm::platform::setTestHub75Pio(Hub75PioMode::Off);
+    mm::PioHost pi5("6.18.60+rpt-rpi-2712", true);   // a host that would serve the PIO if the build could drive it
+    CHECK_FALSE(mm::platform::hub75PioAvailable());
 }
 #endif
 
-#ifdef MM_HUB75_PIO_HAVE_PIOLIB
+#ifdef MM_HUB75_PIO_HAVE_RP1
 TEST_CASE("Hub75Pio: a stalling kernel refuses the open outright, since the PIO output has no fallback") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
     mm::platform::setTestHub75PioGateOpen(true);   // the kernel check refuses before any backend is reached
@@ -185,7 +191,7 @@ TEST_CASE("Hub75Pio: without /dev/pio0 the open is refused, whatever the kernel"
     CHECK(std::string(mm::platform::hub75PioLastError()) == "no /dev/pio0 on this system");
 }
 
-TEST_CASE("Hub75Pio: with piolib, the host gates availability: a Pi 5 is offered the backend, a Pi 4 and a stall kernel are not") {
+TEST_CASE("Hub75Pio: with the rp1 backend, the host gates availability: a Pi 5 is offered the backend, a Pi 4 and a stall kernel are not") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
     {
         mm::PioHost pi5("6.18.60+rpt-rpi-2712", true);   // a Pi 5 PIO serves on
@@ -211,8 +217,8 @@ TEST_CASE("Hub75Pio: every test mode offers the backend on every host, and Off l
         mm::PioPortGuard stub(Hub75PioMode::Stub);
         CHECK(mm::platform::hub75PioAvailable());
     }
-#ifndef MM_HUB75_PIO_HAVE_PIOLIB
-    CHECK_FALSE(mm::platform::hub75PioAvailable());   // off, the host decides: no piolib, not offered
+#ifndef MM_HUB75_PIO_HAVE_RP1
+    CHECK_FALSE(mm::platform::hub75PioAvailable());   // off, the host decides: no rp1 backend, not offered
 #endif
 }
 
@@ -226,8 +232,8 @@ TEST_CASE("Hub75Pio: the test hook forces availability either way, and the host 
         mm::PioAvailable on(1);
         CHECK(mm::platform::hub75PioAvailable());
     }
-#ifndef MM_HUB75_PIO_HAVE_PIOLIB
-    CHECK_FALSE(mm::platform::hub75PioAvailable());   // after the guards the host decides again: no piolib, not offered
+#ifndef MM_HUB75_PIO_HAVE_RP1
+    CHECK_FALSE(mm::platform::hub75PioAvailable());   // after the guards the host decides again: no rp1 backend, not offered
 #endif
 }
 

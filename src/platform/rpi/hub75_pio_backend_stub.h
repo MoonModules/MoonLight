@@ -14,7 +14,7 @@
 ///
 /// `StubFaults` makes the open, the start, the stop, the next submits or the blank fail, or makes a submit hang until the fault is cleared. A hang stands in for the wait of a kernel from 6.18.39, whose submit has no timeout, and it holds in both queue models.
 ///
-/// A failed submit returns -EIO, or the code a test sets: the codes a failed ioctl hands back through piolib (-EINTR, -EIO, -EFAULT, -EINVAL, -ETIMEDOUT, -EREMOTEIO).
+/// A failed submit returns -EIO, or the code a test sets: the codes a failed ioctl hands back (-EINTR, -EIO, -EFAULT, -EINVAL, -ETIMEDOUT).
 ///
 /// `drainTimesOut` makes a stop with `drain` return true with a note in `error`, as a FIFO that stays full does on the real backend, which the disable darkens all the same.
 ///
@@ -55,7 +55,7 @@ struct StubFaults {
     bool failBlank = false;        ///< a blank submit fails with `submitError`, and the frames' submits succeed
     bool failStop = false;         ///< a stop fails with an error and leaves the pins as they were, as a disable or a pin write the kernel refuses does; every stop fails while it is set, retries included
     bool fifoEmptyEarly = false;   ///< a stop with `drain` skips the wait for the queue, as an early FIFO-empty poll does
-    bool drainTimesOut = false;    ///< a stop with `drain` notes that the FIFO did not drain, as piolib's does, and still darkens the pins
+    bool drainTimesOut = false;    ///< a stop with `drain` notes that the FIFO did not drain, as the real backend's does, and still darkens the pins
     uint32_t copyMicros = 0;       ///< microseconds a submit takes to copy the frame out of the caller's buffer, reading half before and half after, as a slow kernel copy does
 };
 
@@ -113,6 +113,9 @@ uint32_t stubBackendSubmitsFromThread(std::thread::id thread);
 
 /// The stops that stopped a started stub since the last reset: one per start, whatever later stops and retries follow.
 uint32_t stubBackendStops();
+
+/// The closes of an opened stub since the last reset.
+uint32_t stubBackendCloses();
 
 /// Whether the last of those stops had `drain` set: true after a clean shutdown, false after one that skipped the wait, as on a missed join deadline; false before any.
 bool stubBackendLastStopDrained();

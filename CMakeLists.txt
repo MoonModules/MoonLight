@@ -55,9 +55,8 @@ else()
     # has no FPU, so an accidental float->double promotion is a silent softfloat call in the
     # render path, and it enforces the integer-math rule the coding standards ask for.
     # (GCC/Clang only; the MSVC branch above uses /W4 /WX, which has no direct equivalents.)
-    # -Wnon-virtual-dtor is C++ only: the Pi 5 PIO shim is a C file (hub75_pio_c_api.c), and GCC warns about the flag for C.
     add_compile_options(-Wall -Wextra -Werror
-                        -Wshadow $<$<COMPILE_LANGUAGE:CXX>:-Wnon-virtual-dtor> -Wdouble-promotion
+                        -Wshadow -Wnon-virtual-dtor -Wdouble-promotion
                         -Wimplicit-fallthrough -Wnull-dereference)
 
     # GCC decides seven warnings from what its optimizer inlined, so whether one fires depends on the build type: GCC 16.1 in Release
@@ -278,73 +277,25 @@ endif()
 # The Raspberry Pi 5 PIO output: MoonLight's own engine (src/platform/rpi) behind the PIO seam (platform_host_pio.cpp).
 #
 # The engine needs GCC or Clang: it uses [[gnu::always_inline]] and POSIX threads and signals. MSVC builds the seam alone, which keeps the
-# recorder and the refusal ("needs a Raspberry Pi build with piolib") and nothing else, so a Windows build offers the PIO card to the tests
+# recorder and the refusal ("needs a Raspberry Pi 5 build (Linux aarch64)") and nothing else, so a Windows build offers the PIO card to the tests
 # and never to a panel. MM_HUB75_PIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
 if(NOT MSVC)
     target_sources(mm_platform PRIVATE
         src/platform/rpi/hub75_pio_engine.cpp
         src/platform/rpi/hub75_pio_repack.cpp
         src/platform/rpi/hub75_pio_backend.cpp
+        src/platform/rpi/hub75_pio_backend_rp1.cpp
         src/platform/rpi/hub75_pio_backend_stub.cpp)
     target_compile_definitions(mm_platform PUBLIC MM_HUB75_PIO_HAS_ENGINE)
+    # The rp1 backend speaks /dev/pio0's ioctls itself, so it needs no library: its logic builds on every host (the tests run it against a fake kernel),
+    # the real device wherever the platform has the Linux headers, and createPioBackend picks it on Linux aarch64, the one place the RP1 PIO exists.
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_sources(mm_platform PRIVATE src/platform/rpi/hub75_pio_rp1_device.cpp)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+            target_compile_definitions(mm_platform PUBLIC MM_HUB75_PIO_HAVE_RP1)
+        endif()
+    endif()
     set(MM_HUB75_PIO_ENGINE ON)   # test/ reads this, as it reads MM_CORE_HEADER_CHECK
-endif()
-
-# piolib, Raspberry Pi's user-space PIO library, which the real backend drives: the submodule third_party/rpi-utils (a fork of
-# raspberrypi/utils pinned at one commit, BSD-3-Clause, the notice goes into the .deb). Built here as a static library of three
-# sources and linked into the program, so nothing needs installing and the package needs no Depends. Its own CMakeLists is not used:
-# it adds its examples and installs into the package, and sets warning flags our -Werror set would override.
-#
-# On Linux aarch64 only: the RP1 PIO exists on a Pi 5, and the backend reads <grp.h>, <pwd.h> and <sys/stat.h>. Elsewhere, and on an
-# aarch64 build without the submodule checked out, the program builds without the real backend, which is the stub path:
-# MM_HUB75_PIO_HAVE_PIOLIB stays undefined and the PIO output refuses with its reason.
-#
-# OPTIONAL for a contributor, REQUIRED for a release, as libcurl is above: a published arm64 package that lost piolib would offer a HUB75
-# PIO output that only ever refuses. MM_REQUIRE_PIOLIB makes the missing submodule a configure error, the arm64 release job sets it, and
-# packaging on aarch64 Linux (MM_PACKAGING, which package_host.py exports and nothing else sets) implies it. Set as a cache variable or as an
-# environment variable of the same name.
-option(MM_REQUIRE_PIOLIB "Fail the configure when third_party/rpi-utils (piolib) is missing on Linux aarch64" OFF)
-set(MM_PIOLIB_DIR ${CMAKE_SOURCE_DIR}/third_party/rpi-utils/piolib)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-    if(DEFINED ENV{MM_PACKAGING} OR "$ENV{MM_REQUIRE_PIOLIB}")   # the environment too, since package_host.py configures CMake itself
-        set(MM_REQUIRE_PIOLIB ON)
-    endif()
-    if(EXISTS ${MM_PIOLIB_DIR}/piolib.c)
-        enable_language(C)   # piolib and the shim in front of it are C; piolib.h is not C++
-        find_package(Threads REQUIRED)
-        add_library(mm_piolib STATIC
-            ${MM_PIOLIB_DIR}/piolib.c
-            ${MM_PIOLIB_DIR}/library_piochips.c
-            ${MM_PIOLIB_DIR}/pio_rp1.c)
-        # LIBRARY_BUILD: the chips come from library_piochips.c, not from a linker section that collects them.
-        # PARAM_ASSERTIONS_DISABLE_ALL, PUBLIC because the headers expand the assertions in the shim too: piolib's range assertions are
-        # written for the Pico's 30 pins, and one of them refuses the 28 pins the HUB75 program drives (a pin base plus a pin count
-        # of 28 or more). They are off by default and a Debug build would not turn them on, but this keeps them off on purpose.
-        target_compile_definitions(mm_piolib PRIVATE LIBRARY_BUILD=1 PUBLIC PARAM_ASSERTIONS_DISABLE_ALL=1)
-        # SYSTEM: the shim includes these headers under our own warning set.
-        target_include_directories(mm_piolib SYSTEM PUBLIC ${MM_PIOLIB_DIR}/include)
-        target_link_libraries(mm_piolib PUBLIC Threads::Threads)
-        # Third-party code, not ours to make warning-clean: -w silences all of it, so -Werror has nothing to turn fatal.
-        target_compile_options(mm_piolib PRIVATE -w)
-        # Position independent, so the archive links into a position-independent executable whatever the compiler's default is.
-        set_target_properties(mm_piolib PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        target_sources(mm_platform PRIVATE
-            src/platform/rpi/hub75_pio_backend_piolib.cpp
-            src/platform/rpi/hub75_pio_c_api.c)
-        target_compile_definitions(mm_platform PUBLIC MM_HUB75_PIO_HAVE_PIOLIB)
-        target_link_libraries(mm_platform PRIVATE mm_piolib)
-        message(STATUS "piolib: built from ${MM_PIOLIB_DIR}, PIO backend enabled")
-    elseif(MM_REQUIRE_PIOLIB)
-        message(FATAL_ERROR
-            "piolib not found at ${MM_PIOLIB_DIR} (MM_REQUIRE_PIOLIB). A published arm64 build without it would offer a HUB75 PIO output "
-            "that only refuses. The folder is the git submodule third_party/rpi-utils: git submodule update --init third_party/rpi-utils "
-            "(in CI, actions/checkout with submodules: true).")
-    else()
-        message(STATUS "piolib: third_party/rpi-utils not checked out, PIO backend disabled "
-                       "(git submodule update --init third_party/rpi-utils to enable)")
-    endif()
-else()
-    message(STATUS "piolib: not built (Linux aarch64 only), PIO backend disabled")
 endif()
 
 target_link_libraries(mm_platform PUBLIC mm_core)

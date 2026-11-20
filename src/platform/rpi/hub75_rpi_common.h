@@ -10,7 +10,7 @@
 ///
 /// open() is one sequence in the base, and each engine supplies the steps as protected virtuals (a template method): check the options, size the wall, allocate, encode the black RGB frame so the first submit has a frame, start the backend, then start the two threads. A failed step leaves the engine stopped, its reason in `error` and its buffers freed; a failed thread start ends in shutdown.
 ///
-/// The allocation follows "if it fits, it sits": the engine sums the bytes the wall's buffers need (`bufferBytes`) and refuses when they exceed the memory the platform reports available, with a reason naming both figures in MB. The rules set no ceiling of their own. Where the platform cannot report the memory, a `std::bad_alloc` from the allocation frees what was taken and refuses with a reason.
+/// The option rules hold the wall's ceiling: a wall whose buffers (`bufferBytes`) total more than the limit is refused before anything is allocated (hub75_pio_options.h). A `std::bad_alloc` from the allocation, on a machine that is busy, frees what was taken and refuses with a reason naming the need in MB.
 ///
 /// The base is a template over `Options` because the two engines take different option structs, which the base stores and passes. The hooks run at open, once per lane (encodeLane) and once per frame (repack), and the per-word and per-row loops stay inside them.
 ///
@@ -72,7 +72,6 @@
 #include "platform/rpi/hub75_board_pins.h"   // kHub75Lanes: the board's lane count
 #include "platform/rpi/hub75_pio_options.h"   // the option rules, hub75LaneGeometry
 #include "platform/nonblocking.h"   // MM_NONBLOCKING: the triple buffer's publish is tick-safe
-#include "platform/platform.h"   // availableMemory: what the open's allocation checks against
 
 // hub75Encode writes little-endian slot words and the repack reads them back as uint16_t: ARM (Pi) and x86 Linux are little-endian, a big-endian host fails to compile rather than byte-swap the bus.
 static_assert(std::endian::native == std::endian::little, "hub75 repack assumes a little-endian host");
@@ -315,8 +314,6 @@ class Hub75EngineBase {
     void delayEncodes(uint32_t us) { encodeDelayUs_.store(us); }
     /// A test hook: while paused, the encode thread takes no frame.
     void pauseEncodes(bool paused) { encodePaused_.store(paused); }
-    /// A test hook: the bytes the open finds available, in place of the platform's reading; 0 reads the platform again, and it holds across opens until set again.
-    void setAvailableMemory(uint64_t bytes) { availableMemory_.store(bytes); }
     /// A test hook: while set, the open's refresh thread fails to start, as on a machine that cannot make a thread; it holds across opens until cleared.
     void failRefreshThreadStart(bool fails) { refreshStartFails_.store(fails); }
     /// A test hook: while set, the open's encode thread fails to start, as on a machine that cannot make a thread; it holds across opens until cleared.
@@ -449,18 +446,10 @@ class Hub75EngineBase {
     std::atomic<uint64_t> lastEncodeUs_{0};      // the encode thread writes it
 
   private:
-    /// Allocates the wall's buffers when they fit the memory available now; a wall that exceeds the memory, or an allocation that throws std::bad_alloc, frees what was taken, fills `error` with the figures and returns false.
+    /// Allocates the wall's buffers; an allocation that throws std::bad_alloc frees what was taken, fills `error` with the need and returns false.
     bool allocateWall(std::string& error) {
-        const uint64_t need = bufferBytes();
-        const uint64_t injected = availableMemory_.load();
-        const uint64_t have = injected != 0 ? injected : platform::availableMemory();
         constexpr uint64_t kMegabyte = 1024 * 1024;
-        const std::string needMb = std::to_string((need + kMegabyte - 1) / kMegabyte) + " MB";   // rounded up and the figure available rounded down, so a refusal always reads the need above the figure available
-        if (have != 0 && need > have) {
-            error = "the wall's buffers need " + needMb + " and " + std::to_string(have / kMegabyte) + " MB is available";
-            releaseBuffers();   // zeroes the slot count and the rate, so refreshHz() reads 0
-            return false;
-        }
+        const std::string needMb = std::to_string((bufferBytes() + kMegabyte - 1) / kMegabyte) + " MB";
         try {
             allocate();
             if (allocationFails_.load()) throw std::bad_alloc();
@@ -540,7 +529,6 @@ class Hub75EngineBase {
     std::atomic<int> encodeFaults_{0};      // the frames the failEncodes hook still fails
     std::atomic<uint32_t> encodeDelayUs_{0};
     std::atomic<bool> encodePaused_{false};
-    std::atomic<uint64_t> availableMemory_{0};   // the bytes the setAvailableMemory hook injects, 0 for the platform's reading
     std::atomic<bool> refreshStartFails_{false};   // whether the failRefreshThreadStart hook fails the refresh thread's start
     std::atomic<bool> encodeStartFails_{false};   // whether the failEncodeThreadStart hook fails the encode thread's start
     std::atomic<bool> allocationFails_{false};   // whether the failAllocations hook ends the allocation in std::bad_alloc

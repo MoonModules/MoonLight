@@ -78,8 +78,7 @@
 ; ---------------------------------------------------------------------------
 ; 5 cycles per pixel clock: pull (1) + out [1] (2) + nop [1] (2).
 ; Pixel clock = PIO clock / (5 * clkdiv). The RP1 PIO clock is clk_sys,
-; typically 200 MHz (RP1 peripherals datasheet; piolib's
-; rp1_clock_get_hz() returns 200 MHz for clk_sys). At clkdiv 4 the pixel
+; typically 200 MHz (RP1 peripherals datasheet). At clkdiv 4 the pixel
 ; clock is 10 MHz: 40 ns data setup (CLK low) and 40 ns CLK high per pixel.
 ;
 ; The latch (STB) rides the last column's word of each row, as the

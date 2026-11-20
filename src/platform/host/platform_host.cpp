@@ -146,8 +146,6 @@
 #include <filesystem>
 #include <map>
 #include <string>
-#include <charconv>
-#include <string_view>
 #ifndef _WIN32
 #include <dlfcn.h>   // dlopen/dlsym: the NDI runtime is resolved on demand, never linked
 #endif
@@ -481,42 +479,6 @@ uint32_t allocatedCount() { return g_allocCount.load(std::memory_order_relaxed);
 
 size_t freeHeap() {
     return 0; // Not meaningful on host (0 = unlimited)
-}
-
-// The number a /proc/meminfo line carries after its key, 0 where the line holds none.
-static uint64_t kilobytesIn(std::string_view value) {
-    value.remove_prefix(std::min(value.find_first_not_of(" \t"), value.size()));
-    uint64_t kilobytes = 0;
-    std::from_chars(value.data(), value.data() + value.size(), kilobytes);   // a line with no digits leaves the 0
-    return kilobytes;
-}
-
-uint64_t availableMemoryFromMeminfoLine(const char* line, size_t length) {
-    if (line == nullptr) return 0;
-    constexpr std::string_view key = "MemAvailable:";
-    std::string_view text(line, length);
-    if (!text.starts_with(key)) return 0;
-    return kilobytesIn(text.substr(key.size())) * 1024;   // /proc/meminfo counts in kB
-}
-
-uint64_t availableMemory() {
-#ifdef __linux__
-    // One line at a time into a small buffer, so the frame stays well under the 512-byte rule; a /proc/meminfo line is under 60 bytes.
-    FILE* f = std::fopen("/proc/meminfo", "r");
-    if (f == nullptr) return 0;
-    char line[128];
-    uint64_t bytes = 0;
-    bool continuation = false;   // the chunk read is the tail of a line longer than the buffer, whose key it does not open
-    while (bytes == 0 && std::fgets(line, sizeof(line), f) != nullptr) {
-        const size_t length = std::strlen(line);
-        if (!continuation) bytes = availableMemoryFromMeminfoLine(line, length);
-        continuation = length > 0 && line[length - 1] != '\n';
-    }
-    std::fclose(f);
-    return bytes;
-#else
-    return 0;   // the check steps aside
-#endif
 }
 
 static std::atomic<size_t> testFreeInternal{0};

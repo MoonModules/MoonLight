@@ -23,7 +23,7 @@
 #include "platform/Hub75Encode.h"   // hub75Encode: the in-tree encoder
 #include "platform/rpi/hub75_pio_pins.h"
 
-// The pioasm-generated program data: this file defines PICO_NO_HARDWARE, so the header provides the instruction arrays and wrap defines only, and no piolib types are needed here.
+// The pioasm-generated program data: this file defines PICO_NO_HARDWARE, so the header provides the instruction arrays and wrap defines only, and no pioasm types are needed here.
 #define PICO_NO_HARDWARE 1
 #include "platform/rpi/hub75.pio.h"
 #undef PICO_NO_HARDWARE
@@ -33,14 +33,6 @@ static_assert(std::size(hub75_wide_program_instructions) == std::size(hub75_wide
               "the rising and falling programs are the same length");
 
 namespace mm::platform {
-
-namespace {
-
-// Kernel DMA bounce-buffer sizing: at most 4 buffers of 64 KiB (@xref{bounce-buffers|Technical → Bounce buffers}).
-constexpr uint32_t kXferBufSize = 65536;
-constexpr uint32_t kXferBufCount = 4;
-
-}  // namespace
 
 bool Hub75PioEngine::admit(const Hub75PioOptions& o, std::string& error) {
     return hub75PioCheckOptions(o, error);
@@ -63,9 +55,9 @@ void Hub75PioEngine::sizeTheWall() {
     clkdivFrac_ = divider.fracPart;
     pixelClockActualHz_ = divider.actualHz;
 
-    // The DMA ring the backend sets up: at most 4 bounce buffers, each at most 64 KiB and no bigger than a frame.
-    xferBufSize_ = std::min(kXferBufSize, static_cast<uint32_t>(frameSlots_ * kBytesPerPixelClock));
-    xferBufCount_ = kXferBufCount;
+    // The DMA ring the backend sets up: at most 4 bounce buffers, each at most 64 KiB and no bigger than a frame (@xref{bounce-buffers|Technical → Bounce buffers}).
+    xferBufSize_ = std::min(kPioXferBufSize, static_cast<uint32_t>(frameSlots_ * kBytesPerPixelClock));
+    xferBufCount_ = kPioXferBufCount;
 
     // A submit that takes longer than a few frames' wire time is a stall; the floor is two rate windows, for a frame too short to matter.
     const uint64_t wireMs = pixelClockActualHz_ ? static_cast<uint64_t>(frameSlots_) * 1000 / pixelClockActualHz_ : 0;
@@ -79,13 +71,7 @@ void Hub75PioEngine::sizeTheWall() {
     buildRepackTables(tables_);
 }
 
-uint64_t Hub75PioEngine::bufferBytes() const {
-    const uint64_t rgb = 3 * static_cast<uint64_t>(virtWidth_) * virtHeight_ * 3;                          // the RGB triple buffer
-    const uint64_t laneSlots = static_cast<uint64_t>(lanes_) * frameSlots_ * sizeof(uint16_t);              // each lane's slot stream
-    const uint64_t encoded = 3 * static_cast<uint64_t>(frameSlots_) * sizeof(uint32_t);                    // the encoded triple buffer
-    const uint64_t blank = static_cast<uint64_t>(xferBufCount_) * xferBufSize_;                            // the blank, as deep as the DMA ring
-    return rgb + laneSlots + encoded + blank;
-}
+uint64_t Hub75PioEngine::bufferBytes() const { return hub75PioBufferBytes(options_); }
 
 void Hub75PioEngine::allocate() {
     rgb_.reset(static_cast<size_t>(virtWidth_) * virtHeight_ * 3);
@@ -99,7 +85,7 @@ void Hub75PioEngine::allocate() {
 bool Hub75PioEngine::startBackend(bool useStubBackend, std::string& error) {
     backend_.reset(createPioBackend(useStubBackend));
     if (!backend_) {
-        error = pioBackendRefusal();   // no piolib in this build, or the real backend is not allowed
+        error = pioBackendRefusal();   // no rp1 backend in this build, or the real backend is not allowed
         return false;
     }
     if (!backend_->open(error)) {
@@ -137,7 +123,7 @@ void Hub75PioEngine::reportStop(bool joined, bool stopped, const std::string& sa
 }
 
 bool Hub75PioEngine::shutdown() {
-    if (!running_ && threadsJoined()) return true;   // a fresh engine, or one already shut down
+    if (!running_ && threadsJoined() && !backend_) return true;   // a fresh engine, or one already shut down: a backend still held has its stop and close to run
     // The refresh thread blanks as it leaves its loop, so the join deadline covers the only call that can block for good; this thread makes no submit.
     const bool alreadyWedged = wedged();
     const bool joined = stopThreads();

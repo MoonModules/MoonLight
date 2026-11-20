@@ -32,8 +32,6 @@ on:
       # manual dispatch because only moondeck/ci changed).
       - 'moondeck/ci/**'
       - 'android/**'
-      # piolib's submodule: a new pin changes the arm64 program.
-      - 'third_party/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'
@@ -55,7 +53,6 @@ on:
       - 'test/**'
       - 'moondeck/ci/**'
       - 'android/**'
-      - 'third_party/**'
       - 'CMakeLists.txt'
       - 'library.json'
       - '.github/workflows/release.yml'
@@ -423,8 +420,6 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-          # third_party/rpi-utils: piolib's source, which CMake builds into the program here and nowhere else. Nothing is fetched at configure time.
-          submodules: true
       - uses: astral-sh/setup-uv@v3
       # libcurl is the ONE outbound HTTPS client, and CMake treats it as optional so a
       # contributor's machine still builds without it. That optionality is wrong for a PUBLISHED
@@ -451,11 +446,9 @@ jobs:
       - uses: ./.github/actions/ccache
         with:
           key: linux-arm64
-      # MM_REQUIRE_PIOLIB: a checkout without the submodule fails the configure, rather than shipping a package whose HUB75 PIO output only refuses.
       - name: Build + package Linux arm64
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          MM_REQUIRE_PIOLIB: "ON"
         run: uv run moondeck/ci/package_host.py --version "$VERSION"
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
@@ -702,7 +695,6 @@ jobs:
             dist/MoonLight-*.dmg
             dist/MoonLight-*-setup.exe
             dist/moonlight_*.deb
-            dist/COPYRIGHT-linux-arm64-v*.txt
             dist/MoonLight-android-*.apk
 
   # Publish the container image to the GitHub Container Registry, one per release.

@@ -9,7 +9,7 @@ if [ "$1" = configure ]; then
     # Audio input reads the sound cards through ALSA, which the audio group opens; a PipeWire or Pulse server is named by a drop-in (installing-on-linux.md).
     if getent group audio >/dev/null; then usermod -a -G audio moonlight; fi
     # A Pi 5's PIO output opens /dev/pio0, which its own group owns (gpio on Raspberry Pi OS): the group is read from the node, not assumed, and a
-    # machine without the node, or one whose node belongs to root, is left alone (the udev rule in piolib's README gives the node a group).
+    # machine without the node, or one whose node belongs to root, is left alone (a udev rule gives the node its group).
     if [ -e /dev/pio0 ]; then
         pio_group=$(stat -c %G /dev/pio0 2>/dev/null || true)
         if [ -n "$pio_group" ] && [ "$pio_group" != root ] && [ "$pio_group" != UNKNOWN ] && getent group "$pio_group" >/dev/null; then

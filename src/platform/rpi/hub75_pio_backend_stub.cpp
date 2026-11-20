@@ -52,6 +52,7 @@ struct StubState {
     std::map<std::thread::id, uint32_t> submitThreads;   // the submits (frames and blanks) each thread made
     bool pinsDark = false;              // a stop has set the pins to the dark word, until the next start
     uint32_t stops = 0;                 // stops that stopped a started stub, since the last reset
+    uint32_t closes = 0;                // closes of an opened stub, since the last reset
     bool lastStopDrained = false;       // whether the last of them had `drain` set
     StubFaults faults;
     StubQueueModel model = StubQueueModel::Blocking;
@@ -177,6 +178,10 @@ class StubBackend : public PioBackend {
     }
 
     void close() override {
+        if (opened_) {
+            std::lock_guard<std::mutex> lock(stateMu_);
+            state_.closes++;
+        }
         started_ = false;
         dark_ = true;
         opened_ = false;
@@ -298,7 +303,7 @@ class StubBackend : public PioBackend {
         }
     }
 
-    // A submit after a stop: counted, and answered as the piolib backend answers before its start.
+    // A submit after a stop: counted, and answered as the rp1 backend answers before its start.
     int refuseAfterStop() {
         std::lock_guard<std::mutex> lock(stateMu_);
         if (state_.stopped) state_.submitsAfterStop++;
@@ -420,6 +425,11 @@ uint32_t stubBackendStops() {
     return state_.stops;
 }
 
+uint32_t stubBackendCloses() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.closes;
+}
+
 bool stubBackendLastStopDrained() {
     std::lock_guard<std::mutex> lock(stateMu_);
     return state_.lastStopDrained;
@@ -468,6 +478,7 @@ void stubBackendReset() {
     state_.submitThreads.clear();
     state_.pinsDark = false;
     state_.stops = 0;
+    state_.closes = 0;
     state_.lastStopDrained = false;
     state_.faults = StubFaults{};
     state_.model = StubQueueModel::Blocking;
