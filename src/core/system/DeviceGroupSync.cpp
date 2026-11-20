@@ -10,6 +10,7 @@
 #include "core/system/ControlModule.h"     // the slots whose changes are shared, and what each drives
 #include "core/system/DeviceGroup.h"
 #include "core/util/JsonSink.h"
+#include "core/util/Mdns.h"   // parseMac: a member's place names it by MAC
 #include "core/util/fnv.h"
 #include "core/util/format.h"
 
@@ -30,6 +31,8 @@ void DeviceGroupSync::tick(MoonModule& devices, char* saved, size_t savedCap) {
         sendDue(devices);
         for (uint8_t i = 0; i < tombCount_; i++) if (tombs_[i].sendsLeft) { sendDeletion(tombs_[i]); tombs_[i].sendsLeft--; }
     }
+    sendPlace(devices);
+    deriveWall(devices);
     if (tombsChanged_) {
         saveTombs(saved, savedCap);
         tombsChanged_ = false;
@@ -53,12 +56,12 @@ void DeviceGroupSync::readAll(MoonModule& devices) {
 void DeviceGroupSync::receive(MoonModule& devices) {
     if (!loaded_) return;   // the markers first, so a copy of a deleted group meets its marker
     devices_ = &devices;
-    // Shared values and look chunks apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
+    // Shared values, look chunks and places apply now; a definition or deletion, which may create or remove a module, waits for the once-a-second tick, and the read stops until it has.
     applyDue(devices);
     for (int n = 0; open_ && !pendingLen_ && n < 16; n++) {
         const int len = sock_.recvFrom(buf_.data(), buf_.count());
         if (len <= 0) break;
-        if (receiveShared(devices, buf_.data(), static_cast<size_t>(len))) continue;
+        if (takeNow(devices, buf_.data(), static_cast<size_t>(len))) continue;
         std::memcpy(pending_.data(), buf_.data(), static_cast<size_t>(len));
         pendingLen_ = static_cast<size_t>(len);
     }
@@ -90,12 +93,101 @@ void DeviceGroupSync::close() {
     heldCount_ = 0;
     seenCount_ = 0;      // release frees the held ids and the markers with the buffers,
     tombCount_ = 0;
+    placeCount_ = 0;
+    sentPlace_ = {};
     loaded_ = false;     // and the next tick reloads the markers from the saved text
 }
 
 void DeviceGroupSync::handle(MoonModule& devices, const uint8_t* pkt, size_t len) {
     // One message, one handler: an answer sent from the definition's handler reuses the receive buffer.
-    if (!handleDefinition(devices, pkt, len) && !receiveShared(devices, pkt, len)) handleDeletion(devices, pkt, len);
+    if (!handleDefinition(devices, pkt, len) && !receiveShared(devices, pkt, len) && !handlePlace(devices, pkt, len))
+        handleDeletion(devices, pkt, len);
+}
+
+// ---- A wall of several devices: each placed member's rectangle, and the bounding box they make --------------
+
+bool DeviceGroupSync::isMember(MoonModule& devices, const uint8_t mac[6]) {
+    for (uint8_t c = 0; c < devices.childCount(); c++) {
+        MoonModule* m = devices.child(c);
+        if (m->role() == ModuleRole::DeviceGroup && static_cast<DeviceGroup*>(m)->hasMember(mac)) return true;
+    }
+    return false;
+}
+
+bool DeviceGroupSync::takeNow(MoonModule& devices, const uint8_t* pkt, size_t len) {
+    return receiveShared(devices, pkt, len) || handlePlace(devices, pkt, len);
+}
+
+bool DeviceGroupSync::handlePlace(MoonModule& devices, const uint8_t* pkt, size_t len) {
+    osc::Reader r(pkt, len, kPlaceAddress);
+    if (!r.ok()) return false;
+    const char* hex = r.str();
+    WallPlace p;
+    p.x = static_cast<int16_t>(r.i32());
+    p.y = static_cast<int16_t>(r.i32());
+    p.z = static_cast<int16_t>(r.i32());
+    p.w = static_cast<uint16_t>(r.i32());
+    p.h = static_cast<uint16_t>(r.i32());
+    p.d = static_cast<uint16_t>(r.i32());
+    uint8_t mac[6], self[6];
+    platform::getMacAddress(self);
+    // Only another member's place is kept, so a stranger's cannot grow the table or the wall, and this device's own echo takes no slot.
+    if (r.ok() && hex && mdns::parseMac(hex, mac) && std::memcmp(mac, self, 6) != 0 && isMember(devices, mac)) storePlace(mac, p);
+    return true;
+}
+
+void DeviceGroupSync::storePlace(const uint8_t mac[6], const WallPlace& p) {
+    int at = -1;
+    for (uint8_t i = 0; i < placeCount_; i++) if (std::memcmp(places_[i].mac, mac, 6) == 0) at = i;
+    if (!p.placed()) {   // the member left the wall
+        if (at >= 0) places_[at] = places_[--placeCount_];
+        return;
+    }
+    if (at < 0) {
+        if (placeCount_ >= kMaxPlaces || !places_.ensure(placeCount_ + 1u)) return;   // full: the wall holds the places it has
+        at = placeCount_++;
+        std::memcpy(places_[at].mac, mac, 6);
+    }
+    places_[at].place = p;
+    places_[at].atMs = platform::millis();
+}
+
+void DeviceGroupSync::sendPlace(MoonModule& devices) {
+    if (!devices.acceptsRole(ModuleRole::DeviceGroup)) return;
+    const WallPlace& mine = static_cast<Devices&>(devices).place();
+    placeTicks_++;
+    const bool changed = !(mine == sentPlace_);
+    if (!changed && (!mine.placed() || placeTicks_ < kPlaceEverySec)) return;
+    uint8_t mac[6];
+    platform::getMacAddress(mac);
+    char hex[13];
+    mm::formatTo(hex, sizeof(hex), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    uint8_t msg[96];   // its own: the address, the type tags, the MAC and six numbers, 84 bytes padded as OSC pads them
+    osc::Writer w(msg, sizeof(msg), kPlaceAddress, ",siiiiii");
+    w.str(hex);
+    w.i32(static_cast<uint32_t>(static_cast<int32_t>(mine.x)));
+    w.i32(static_cast<uint32_t>(static_cast<int32_t>(mine.y)));
+    w.i32(static_cast<uint32_t>(static_cast<int32_t>(mine.z)));
+    w.i32(mine.w);
+    w.i32(mine.h);
+    w.i32(mine.d);
+    send(msg, w.size());   // an unplaced one too, once, so the members drop this device from their walls
+    sentPlace_ = mine;
+    placeTicks_ = 0;
+}
+
+void DeviceGroupSync::deriveWall(MoonModule& devices) {
+    if (!devices.acceptsRole(ModuleRole::DeviceGroup)) return;
+    auto& d = static_cast<Devices&>(devices);
+    const uint32_t now = platform::millis();
+    for (uint8_t i = 0; i < placeCount_;) {   // a member unheard past the hold, or removed from every group held here, leaves the wall
+        if (now - places_[i].atMs > kPlaceHoldMs || !isMember(devices, places_[i].mac)) places_[i] = places_[--placeCount_];
+        else i++;
+    }
+    WallPlace wall = d.place();
+    if (wall.placed())
+        for (uint8_t i = 0; i < placeCount_; i++) wall = wall.united(places_[i].place);
+    d.setWall(wall);
 }
 
 bool DeviceGroupSync::receiveShared(MoonModule& devices, const uint8_t* pkt, size_t len) {
@@ -383,7 +475,7 @@ int DeviceGroupSync::tombIndex(const char* id) const {
 DeviceGroupSync::Tomb* DeviceGroupSync::tombSlot(const Stamp& stamp) {
     if (tombCount_ < kMaxTombs && tombs_.ensure(tombCount_ + 1u)) return &tombs_[tombCount_++];
     if (!tombCount_) return nullptr;   // memory refused the first marker
-    Tomb* oldest = &tombs_[0];   // full, or memory refused one more: the oldest marker gives way to a newer one
+    Tomb* oldest = tombs_.data();   // full, or memory refused one more: the oldest marker gives way to a newer one
     for (uint8_t i = 1; i < tombCount_; i++) if (oldest->stamp.newerThan(tombs_[i].stamp)) oldest = &tombs_[i];
     return stamp.newerThan(oldest->stamp) ? oldest : nullptr;
 }

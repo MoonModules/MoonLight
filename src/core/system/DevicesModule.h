@@ -204,11 +204,11 @@ public:
         return d && d->name[0] ? d->name : nullptr;
     }
 
-    /// Whether this MAC is present as a group member: heard within three announcements (ten seconds apart for a board of ours, a minute for the rest) running MoonLight, not MoonBase; this device always.
+    /// Whether this MAC is present as a group member: heard running MoonLight, the one firmware that runs the sync, within three of its announcements; this device always.
     bool present(const uint8_t mac[6]) const MM_NONBLOCKING {
         const Device* d = rowOfMac(mac);
         if (d && d->self) return true;
-        return d && d->type != DevType::MoonBase && platform::millis() - d->lastSeenMs <= (ours(d->type) ? 3u * kBroadcastEverySec * 1000u : 3u * 60u * 1000u);
+        return d && d->type == DevType::MoonLight && platform::millis() - d->lastSeenMs <= 3u * kBroadcastEverySec * 1000u;
     }
 
     /// Register a bridge a driver found out of band, updating its row or inserting one.

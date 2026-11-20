@@ -311,8 +311,8 @@ bool encoderStart(const EncoderConfig& cfg) {
     if (!mutex_) mutex_ = xSemaphoreCreateMutex();
     if (!mutex_) return false;
 
-    // The hardware encoder's own limits (esp_h264_types.h): below 80 or above 1920x2032 it will refuse, so decline here with a status rather than fail obscurely mid-stream.
-    if (cfg.width < 80 || cfg.height < 80 || cfg.width > 1920 || cfg.height > 2032) return false;
+    // The hardware encoder's own limits, which it would refuse mid-stream, so decline here with a status rather than fail obscurely.
+    if (cfg.width < kEncoderMinSide || cfg.height < kEncoderMinSide || cfg.width > kEncoderMaxWidth || cfg.height > kEncoderMaxHeight) return false;
     // 4:2:0 chroma needs even dimensions.
     if ((cfg.width & 1) || (cfg.height & 1)) return false;
 

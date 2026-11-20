@@ -296,10 +296,13 @@ private:
         uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
         uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
         evenFrame(scale_, scaledW, scaledH);
-        if (scaledW < kMinWidth || scaledH < kMinHeight) {   // a narrow window, past the largest scale
-            std::snprintf(statusBuf_, sizeof(statusBuf_), "a %ux%u window at scale %u is below the encoder's %ux%u: widen the window",
-                          static_cast<unsigned>(srcWidth_), static_cast<unsigned>(srcHeight_), static_cast<unsigned>(scale_),
-                          static_cast<unsigned>(kMinWidth), static_cast<unsigned>(kMinHeight));
+        if (scaledW < kMinSide || scaledH < kMinSide) {   // a narrow window past the largest scale, or a table refused its memory and left one dark pixel
+            if (picture_.placed())
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "a %ux%u window at scale %u is below the encoder's %ux%u: widen the window",
+                              static_cast<unsigned>(srcWidth_), static_cast<unsigned>(srcHeight_), static_cast<unsigned>(scale_),
+                              static_cast<unsigned>(kMinSide), static_cast<unsigned>(kMinSide));
+            else
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "no memory to place the window's lights by the layout");
             setStatus(statusBuf_, Severity::Error);
             return false;
         }
@@ -311,14 +314,14 @@ private:
     /// The smallest scale clearing the encoder's minimum frame, so a small wall still encodes.
     uint8_t autoScale() const {
         uint8_t s = 1;
-        while (s < kMaxScale && (static_cast<uint32_t>(srcWidth_) * s < kMinWidth || static_cast<uint32_t>(srcHeight_) * s < kMinHeight)) s = static_cast<uint8_t>(s + 1);
+        while (s < kMaxScale && (static_cast<uint32_t>(srcWidth_) * s < kMinSide || static_cast<uint32_t>(srcHeight_) * s < kMinSide)) s = static_cast<uint8_t>(s + 1);
         return s;
     }
 
     /// The largest block one light is drawn as, which bounds the encoded frame.
     static constexpr uint8_t kMaxScale = 16;
-    /// The smallest frame the encoder takes, which autoScale reaches for.
-    static constexpr uint32_t kMinWidth = 128, kMinHeight = 96;
+    /// The smallest side the encoder takes, which autoScale reaches for.
+    static constexpr uint32_t kMinSide = platform::kEncoderMinSide;
 
 public:
     /// Frame-rate ceiling, which is also the keyframe interval.

@@ -138,6 +138,18 @@ TEST_CASE("DeviceGroup: a member heard running MoonBase is missing, since it fol
     CHECK(b.member(0).find("\"status\":\"present\"") != std::string::npos);
 }
 
+TEST_CASE("DeviceGroup: a member reflashed to WLED is missing, since only MoonLight runs the sync, and present again once MoonLight is back") {
+    Bench b;
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
+    pickFirst(*b.group);
+    platform::setTestNowMs(1000 + 31000);   // MoonLight's marked announcements stopped for three intervals, so an unmarked one takes over
+    hearWithMac(*b.discovery, kIpA, "WLED-A", kMacA, /*marker=*/0);   // the same board, now announcing as a WLED
+    CHECK(b.member(0).find("\"status\":\"missing\"") != std::string::npos);
+    CHECK(b.group->hasMember(kMacA));   // its row stays, so MoonLight's next announcement restores it
+    hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
+    CHECK(b.member(0).find("\"status\":\"present\"") != std::string::npos);
+}
+
 TEST_CASE("DeviceGroup: a device is a member once, and a MAC from the API joins as the picker's index does") {
     Bench b;
     hearWithMac(*b.discovery, kIpA, "MM-A", kMacA);
@@ -239,11 +251,23 @@ TEST_CASE("DeviceGroup: a deleted member leaves the group") {
 
 #include "core/services/OscPacket.h"
 #include "core/system/DeviceGroupSync.h"
+#include "core/util/Mdns.h"   // parseMac: a place message read back as a member reads it
+
+#include <vector>
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "module_types.h"
 
 namespace {
+
+/// This device's MAC as a member row takes it.
+std::string selfMac() {
+    uint8_t self[6];
+    platform::getMacAddress(self);
+    char mac[18];
+    std::snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", self[0], self[1], self[2], self[3], self[4], self[5]);
+    return mac;
+}
 
 /// One device's copy of a group: its own Devices container, so its own clock.
 struct Copy {
@@ -418,11 +442,7 @@ TEST_CASE("DeviceGroupSync: a device a group names creates it, and a deletion ma
 
         Copy origin;
         const std::string kId = origin.group->groupId();
-        uint8_t self[6];
-        platform::getMacAddress(self);
-        char mac[18];
-        std::snprintf(mac, sizeof(mac), "%02x:%02x:%02x:%02x:%02x:%02x", self[0], self[1], self[2], self[3], self[4], self[5]);
-        origin.add(mac);   // this device is a member
+        origin.add(selfMac().c_str());   // this device is a member
         uint8_t buf[1472];
         size_t len = origin.group->writeChunk(buf, sizeof(buf), 0, 16);
         sync.handle(*devices, buf, len);
@@ -446,6 +466,166 @@ TEST_CASE("DeviceGroupSync: a device a group names creates it, and a deletion ma
     }
     s.release();
 }
+
+namespace {
+/// A place message from the device with MAC `hex`: its corner and size, all zero when it left the wall.
+size_t placeMessage(uint8_t* buf, size_t cap, const char* hex, const WallPlace& p) {
+    osc::Writer msg(buf, cap, DeviceGroupSync::kPlaceAddress, ",siiiiii");
+    msg.str(hex);
+    msg.i32(static_cast<uint32_t>(static_cast<int32_t>(p.x)));
+    msg.i32(static_cast<uint32_t>(static_cast<int32_t>(p.y)));
+    msg.i32(static_cast<uint32_t>(static_cast<int32_t>(p.z)));
+    msg.i32(p.w);
+    msg.i32(p.h);
+    msg.i32(p.d);
+    return msg.size();
+}
+
+/// Devices under a scheduler at 1 s, released last, so a test's sync, declared after it, ends first as the module's own member does.
+struct WallBench {
+    ClockGuard clock;
+    Scheduler s;
+    Devices* devices = nullptr;
+    char saved[256] = "";
+    uint8_t buf[1472] = {};
+    WallBench() {
+        platform::setTestNowMs(1000);
+        registerModuleTypes();
+        devices = static_cast<Devices*>(ModuleFactory::create("Devices"));
+        devices->setName("Devices");
+        s.addModule(devices);
+        s.setup();
+    }
+    ~WallBench() { s.release(); }
+    WallBench(const WallBench&) = delete;
+    WallBench& operator=(const WallBench&) = delete;
+    /// The group of this device and the member 10:20:30:40:50:60, as its arriving definition makes it.
+    void join(DeviceGroupSync& sync) {
+        Copy origin;
+        origin.add(selfMac().c_str());
+        origin.add("10:20:30:40:50:60");
+        sync.handle(*devices, buf, origin.group->writeChunk(buf, sizeof(buf), 0, 16));
+    }
+    /// The place the device `hex` sent.
+    void hear(DeviceGroupSync& sync, const char* hex, const WallPlace& p) {
+        sync.handle(*devices, buf, placeMessage(buf, sizeof(buf), hex, p));
+    }
+    /// One second of the sync.
+    void tick(DeviceGroupSync& sync) { sync.tick(*devices, saved, sizeof(saved)); }
+};
+}  // namespace
+
+TEST_CASE("DeviceGroupSync: the wall is the box around this device and its members' places, a stranger's left out and a member leaving taken out") {
+    WallBench b;
+    DeviceGroupSync sync(*b.devices);
+    b.join(sync);
+    REQUIRE(b.devices->childCount() == 1);
+    b.devices->setPlace(WallPlace{0, 0, 0, 16, 16, 1});
+    b.hear(sync, "102030405060", WallPlace{32, 16, 0, 16, 16, 1});
+    b.hear(sync, "aabbccddeeff", WallPlace{200, 200, 0, 16, 16, 1});   // no member of this group
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{0, 0, 0, 48, 32, 1});
+
+    b.hear(sync, "102030405060", WallPlace{});   // the member left the wall
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{0, 0, 0, 16, 16, 1});
+
+    b.devices->setPlace(WallPlace{});   // SuperSync off here: no wall, whatever the members hold
+    b.hear(sync, "102030405060", WallPlace{32, 16, 0, 16, 16, 1});
+    b.tick(sync);
+    CHECK_FALSE(b.devices->wall().placed());
+}
+
+TEST_CASE("DeviceGroupSync: the 20 ms read takes a place at once, so a shared change behind it is not held to the next second, and a definition waits") {
+    WallBench b;
+    DeviceGroupSync sync(*b.devices);
+    b.join(sync);
+    b.devices->setPlace(WallPlace{0, 0, 0, 16, 16, 1});
+    CHECK(sync.takeNow(*b.devices, b.buf, placeMessage(b.buf, sizeof(b.buf), "102030405060", WallPlace{16, 0, 0, 16, 16, 1})));
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{0, 0, 0, 32, 16, 1});
+    Copy other;
+    other.add("10:20:30:40:50:60");
+    CHECK_FALSE(sync.takeNow(*b.devices, b.buf, other.group->writeChunk(b.buf, sizeof(b.buf), 0, 16)));   // a definition may create a module
+}
+
+TEST_CASE("DeviceGroupSync: this device's own place echoed back takes no slot") {
+    WallBench b;
+    DeviceGroupSync sync(*b.devices);
+    b.join(sync);
+    b.devices->setPlace(WallPlace{0, 0, 0, 16, 16, 1});
+    b.hear(sync, selfMac().c_str(), WallPlace{200, 200, 0, 16, 16, 1});   // a stale echo of itself, far away
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{0, 0, 0, 16, 16, 1});
+}
+
+TEST_CASE("DeviceGroupSync: a member stacked behind this device deepens the wall, as one beside it widens it") {
+    WallBench b;
+    DeviceGroupSync sync(*b.devices);
+    b.join(sync);
+    b.devices->setPlace(WallPlace{0, 0, 0, 16, 16, 16});
+    b.hear(sync, "102030405060", WallPlace{0, 0, 16, 16, 16, 16});
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{0, 0, 0, 16, 16, 32});
+}
+
+TEST_CASE("DeviceGroupSync: a member's place is kept a minute unheard, so a board restarting keeps its part of the wall") {
+    WallBench b;
+    DeviceGroupSync sync(*b.devices);
+    b.join(sync);
+    b.devices->setPlace(WallPlace{16, 16, 0, 16, 16, 1});   // positions need not start at the corner: the wall's box starts where its devices do
+    b.hear(sync, "102030405060", WallPlace{32, 16, 0, 16, 16, 1});
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{16, 16, 0, 32, 16, 1});
+    platform::setTestNowMs(1000 + 50000);   // restarting, unheard for 50 s
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{16, 16, 0, 32, 16, 1});
+    platform::setTestNowMs(1000 + 70000);   // gone past the minute
+    b.tick(sync);
+    CHECK(b.devices->wall() == WallPlace{16, 16, 0, 16, 16, 1});
+}
+
+TEST_CASE("DeviceGroupSync: a placed device sends its place at once on a change, and its leaving once") {
+    WallBench b;
+    struct Recording : DeviceGroupSync {
+        using DeviceGroupSync::DeviceGroupSync;
+        int places = 0;
+        std::vector<uint8_t> last;
+    protected:
+        void transmit(const uint8_t* data, size_t len) override {
+            if (!osc::Reader(data, len, DeviceGroupSync::kPlaceAddress).ok()) return;
+            places++;
+            last.assign(data, data + len);
+        }
+    } sync(*b.devices);
+    b.tick(sync);
+    CHECK(sync.places == 0);   // unplaced from the start: no place to send
+    b.devices->setPlace(WallPlace{-16, 32, 4, 16, 8, 2});
+    b.tick(sync);
+    CHECK(sync.places == 1);   // the change, at once
+    osc::Reader r(sync.last.data(), sync.last.size(), DeviceGroupSync::kPlaceAddress);   // as a member reads it
+    uint8_t self[6], read[6];
+    platform::getMacAddress(self);
+    const char* hex = r.str();
+    REQUIRE(hex != nullptr);
+    REQUIRE(mdns::parseMac(hex, read));
+    CHECK(std::memcmp(self, read, 6) == 0);
+    CHECK(static_cast<int32_t>(r.i32()) == -16);
+    CHECK(static_cast<int32_t>(r.i32()) == 32);
+    CHECK(static_cast<int32_t>(r.i32()) == 4);
+    CHECK(r.i32() == 16u);
+    CHECK(r.i32() == 8u);
+    CHECK(r.i32() == 2u);
+    CHECK(r.ok());
+    b.tick(sync);
+    CHECK(sync.places == 1);   // unchanged: the repeat waits its interval
+    b.devices->setPlace(WallPlace{});
+    b.tick(sync);
+    CHECK(sync.places == 2);   // the leaving, once
+    for (int i = 0; i < 2 * DeviceGroupSync::kPlaceEverySec; i++) b.tick(sync);
+    CHECK(sync.places == 2);   // unplaced: no repeats
+}
+
 
 TEST_CASE("Hlc: a reading with no room above it is ignored, so the clock never wraps") {
     ClockGuard clock;

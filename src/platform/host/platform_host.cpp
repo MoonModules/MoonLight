@@ -962,7 +962,9 @@ static void eachInterface(F f) {
     ::freeifaddrs(list);
 }
 #endif
+static std::mutex deviceIpMutex_;   ///< guards deviceIp()'s cache and deviceIf_, since the scheduler and the fleet clock's worker both ask
 static char deviceIf_[32] = {};   ///< the interface that holds deviceIp()'s address, empty where none does
+thread_local char deviceIfSeen_[sizeof(deviceIf_)] = {};   ///< this thread's copy of deviceIf_, taken with its deviceIp() snapshot
 /// Name in deviceIf_ the interface holding `addr`, whose link the Network card describes; empty where none does.
 static void findDeviceIf(const in_addr& addr) {
     deviceIf_[0] = 0;
@@ -1018,16 +1020,21 @@ const char* deviceIp() {
     // Kept for a second, since the wired link reads it every tick, and a laptop that moves networks shows its new address within one; naming the interface runs only when the address changed.
     static char ip[INET_ADDRSTRLEN] = {};
     static uint32_t resolvedAt = 0;
+    thread_local char copy[INET_ADDRSTRLEN];   // each thread's own snapshot, which only that thread's next call rewrites
+    const std::lock_guard<std::mutex> lock(deviceIpMutex_);
     const uint32_t now = millis();
-    if (resolvedAt && now - resolvedAt < 1000) return ip;
-    resolvedAt = now ? now : 1;
-    char was[INET_ADDRSTRLEN];
-    std::memcpy(was, ip, sizeof(was));
-    in_addr local{};
-    if (hostAddress(local)) inet_ntop(AF_INET, &local, ip, sizeof(ip));
-    else ip[0] = 0;
-    if (std::strcmp(was, ip) != 0) findDeviceIf(local);   // cleared with the address, since no interface holds none
-    return ip;
+    if (!resolvedAt || now - resolvedAt >= 1000) {
+        resolvedAt = now ? now : 1;
+        char was[INET_ADDRSTRLEN];
+        std::memcpy(was, ip, sizeof(was));
+        in_addr local{};
+        if (hostAddress(local)) inet_ntop(AF_INET, &local, ip, sizeof(ip));
+        else ip[0] = 0;
+        if (std::strcmp(was, ip) != 0) findDeviceIf(local);   // cleared with the address, since no interface holds none
+    }
+    std::memcpy(copy, ip, sizeof(copy));
+    std::memcpy(deviceIfSeen_, deviceIf_, sizeof(deviceIfSeen_));
+    return copy;
 }
 
 const char* sdkVersion() {
@@ -1992,7 +1999,7 @@ bool ethRawL2Claimed() MM_NONBLOCKING { return ethRawClaims_ > 0; }
 #ifdef _WIN32
 namespace {
 /// The link state and speed for the bound adapter, matched through the interface table: @xref{the-interface-table-not-the-address-list|why not the address list}.
-bool winAdapterLink(uint16_t& mbps) {
+bool adapterLink(uint16_t& mbps) {
     mbps = 0;
     if (!boundGuid_[0]) return false;
     MIB_IF_TABLE2* table = nullptr;
@@ -2012,26 +2019,9 @@ bool winAdapterLink(uint16_t& mbps) {
     ::FreeMibTable(table);
     return up;
 }
+/// The host route's rate, which Windows states nowhere here.
+uint16_t routeLinkMbps() MM_NONBLOCKING { return 0; }
 }  // namespace
-
-/// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
-static WiredLink wiredLink() MM_NONBLOCKING {
-    if (testEthFaked()) return WiredLink::Faked;
-    if (hostLinkUp()) return WiredLink::Host;
-    uint16_t m = 0;
-    return winAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
-}
-bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
-bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
-const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Host ? "Host" : "Ethernet"; }
-uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
-    uint16_t m = 0;
-    switch (wiredLink()) {
-        case WiredLink::Faked:   return ethTestLinkSpeed_;
-        case WiredLink::Adapter: return winAdapterLink(m) ? m : 0;
-        default: return 0;   // the host's route, whose rate Windows states nowhere here
-    }
-}
 #else
 namespace {
 /// The carrier state and speed for a named interface, the one place either question is asked of the system.
@@ -2087,19 +2077,34 @@ bool posixIfLink(const char* ifname, uint16_t& mbps) MM_NONBLOCKING {
 }
 
 /// The link state and speed for the interface the raw sender bound to, or nothing when none is.
-bool posixAdapterLink(uint16_t& mbps) MM_NONBLOCKING {
+bool adapterLink(uint16_t& mbps) MM_NONBLOCKING {
     mbps = 0;
     if (!ethRawIfName_[0]) return false;   // capture mode, or a bind that failed
     return posixIfLink(ethRawIfName_, mbps);
 }
+
+/// The route interface's rate, which WiFi leaves unstated, named by the deviceIp() that wiredLink() read on this thread.
+uint16_t routeLinkMbps() MM_NONBLOCKING {
+    uint16_t m = 0;
+#ifdef MM_SUPPRESS_FUNCTION_EFFECTS
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfunction-effects"   // a thread_local in the executable is a fixed offset from the thread pointer, which takes no lock and no allocation
+#endif
+    posixIfLink(deviceIfSeen_, m);
+#ifdef MM_SUPPRESS_FUNCTION_EFFECTS
+#pragma clang diagnostic pop
+#endif
+    return m;
+}
 }  // namespace
+#endif
 
 /// What carries the wired link, the one answer the link state, its name and its rate follow: a cabled interface a test fakes, the host's own route, or the adapter the raw sender bound where no route exists beside it.
 static WiredLink wiredLink() MM_NONBLOCKING {
     if (testEthFaked()) return WiredLink::Faked;
     if (hostLinkUp()) return WiredLink::Host;
     uint16_t m = 0;
-    return posixAdapterLink(m) ? WiredLink::Adapter : WiredLink::None;
+    return adapterLink(m) ? WiredLink::Adapter : WiredLink::None;
 }
 bool ethLinkUp() MM_NONBLOCKING { return wiredLink() != WiredLink::None; }
 bool ethConnected() MM_NONBLOCKING { return ethLinkUp(); }
@@ -2107,13 +2112,12 @@ const char* wiredLinkName() MM_NONBLOCKING { return wiredLink() == WiredLink::Ho
 uint16_t ethLinkSpeedMbps() MM_NONBLOCKING {
     uint16_t m = 0;
     switch (wiredLink()) {
-        case WiredLink::Host:    posixIfLink(deviceIf_, m); return m;      // the route interface's rate, which WiFi leaves unstated
-        case WiredLink::Adapter: posixAdapterLink(m); return m;          // bound and up: the OS's answer, 0 included
+        case WiredLink::Host:    return routeLinkMbps();
+        case WiredLink::Adapter: return adapterLink(m) ? m : 0;   // bound and up: the OS's answer, 0 included
         case WiredLink::Faked:   return ethTestLinkSpeed_;
         default: return 0;   // a rate the OS states is the one shown, since inventing one is worse than admitting it is unknown
     }
 }
-#endif
 
 size_t ethTestFrameCount() { return ethTestCount_; }
 size_t ethTestFrameLength(size_t i) { return i < kEthTestMaxFrames ? ethTestLens_[i] : 0; }
@@ -2534,13 +2538,13 @@ int UdpSocket::waitReadable(UdpSocket* const* sockets, int count, uint32_t timeo
 // Test override for multicast membership: a test can neither take the host's network away nor keep its traffic out otherwise.
 static std::atomic<TestJoin> testJoin{TestJoin::Network};
 void setTestJoin(TestJoin mode) { testJoin.store(mode, std::memory_order_relaxed); }
-static uint8_t testLastLeft[4] = {};
-const uint8_t* testLastLeftGroup() { return testLastLeft; }
+static std::atomic<uint32_t> testLastLeft{0};   // the four octets in one word, since every socket's leave writes it, from whichever thread owns the socket
+void testLastLeftGroup(uint8_t out[4]) { const uint32_t g = testLastLeft.load(std::memory_order_relaxed); std::memcpy(out, &g, 4); }
 
 // Join a multicast group so the bound socket receives its datagrams; letting the stack pick the interface is what a single-homed device wants.
 bool UdpSocket::membership(const uint8_t group[4], bool join) {
     if (fd_ < 0) return false;
-    if (!join) std::memcpy(testLastLeft, group, 4);
+    if (!join) { uint32_t g; std::memcpy(&g, group, 4); testLastLeft.store(g, std::memory_order_relaxed); }
     const TestJoin mode = testJoin.load(std::memory_order_relaxed);
     if (mode == TestJoin::Fail) return false;
     if (mode == TestJoin::Succeed) return true;

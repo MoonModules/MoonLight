@@ -28,6 +28,8 @@ namespace osc { class Reader; class Writer; }
 ///
 /// A pin, a network setting, a service or a system module stays as it is, and a message merges at most kPerMessage values. Every value is held all the same, so the members' digests agree.
 ///
+/// A look is checked whole once its chunks arrive: a document naming a module outside that rule, or a driver of the Drivers card, is held and left unapplied, and `note` says so.
+///
 /// **Groups do not bridge.** A parameter two groups both drive is held per group, and a value one group set stays in that group, so a change crosses from one group to the other only when this device's own slot moves it.
 ///
 /// **Bounded per group, newest kept.** Each group holds at most kMaxPerGroup values, and a full group drops its own oldest-stamped value for a newer one, so the members of one group hold the same newest values whatever other groups each is in; `note` says when a group is full. At most kMaxGroups groups, each with one look; a group that leaves this device takes its values and look with it.

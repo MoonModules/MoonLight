@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Measure how closely the devices' fleet clocks agree.
 
-Every MoonLight device answers the fleet clock's request (`/moonlight/clock`, UDP 65511) with its fleet time, whoever asks. This script asks
+Every MoonLight device holding the fleet's time answers the fleet clock's request (`/moonlight/clock`, UDP 65511) with it, whoever asks. This script asks
 the devices in rounds from this computer, every device once per round, back to back, so the devices of one round are compared at nearly
 one instant and this computer's clock, and its drift against the fleet, cancel out. Each device is compared with the first in the round
 where their two round trips add up least, NTP's clock filter for a pair; its error bound is half those two round trips. The verdict takes
 the widest spread every device's bound allows.
 
-Read-only: it sends requests and changes nothing on any device. A device that does not answer runs no fleet clock (older firmware).
+Read-only: it sends requests and leaves every device as it was. A silent device holds no fleet time yet, lost the packets, or runs firmware
+older than the fleet clock.
 """
 
 import argparse
@@ -109,7 +110,7 @@ def main() -> int:
         time.sleep(args.gap)
     live = [i for i in range(len(devices)) if answered[i]]
     for i, (name, ip) in enumerate(devices):
-        print(f"  {name:24} {ip:16} " + (f"answered {answered[i]}/{args.count}" if answered[i] else "no fleet clock (no answer)"))
+        print(f"  {name:24} {ip:16} " + (f"answered {answered[i]}/{args.count}" if answered[i] else "no answer (a clock not synced yet, lost packets, or firmware without one)"))
     if len(live) < 2:
         print("Fewer than two devices answered: nothing to compare.")
         return 1
@@ -122,6 +123,9 @@ def main() -> int:
         if pairs:
             both, diff = min(pairs)
             compared[i] = (diff, both / 2)
+    if len(compared) < 2:   # devices that each answered, but only in rounds the first one missed
+        print("No two devices answered in one round: nothing to compare.")
+        return 1
     print(f"\nEach device's fleet time against {devices[first][0]}'s, with its error bound (half the two round trips):")
     for i, (diff, bound) in compared.items():
         print(f"  {devices[i][0]:24} {diff / 1000:+8.2f} ms  ±{bound / 1000:.2f} ms")

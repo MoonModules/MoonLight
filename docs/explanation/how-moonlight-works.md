@@ -171,6 +171,7 @@ The rest the module declares about itself:
 | 🎯 | it aims moving heads |
 | 👾 | pixel art: the games and sprites |
 | 🧬 | a simulation: the picture emerges from cells evolving off their own last frame, rather than being drawn |
+| 🧩 | SuperSync: on a wall of several devices, each draws its own part of one picture |
 
 And a last group, shown together at the end of the row, saying which **power functions** the effect is built on. These are the kernels of [the shared library](../moonmodules/light/power-functions.md), so they group effects by what they are made of, and by what that makes them look like:
 

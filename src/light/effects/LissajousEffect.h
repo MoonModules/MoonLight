@@ -15,12 +15,16 @@ namespace mm {
 /// @technical
 ///
 /// The phase stays wide and only the final oscillator argument narrows to a byte. That one truncation closes the figure, so keeping it exact keeps the shape exact.
+///
+/// The curve spans the whole picture and each point converts to the device's own grid, so the devices of a wall trace one figure.
 class LissajousEffect : public EffectBase {
 public:
     /// Catalog tags: WLED lineage.
-    const char* tags() const override { return "🐙"; }
+    const char* tags() const override { return "🐙🧩"; }
     /// The curve is traced across a plane.
     Dim dimensions() const override { return Dim::D2; }
+    /// Each point is a function of the time, placed in the whole picture, so each device of a wall draws its part of one figure.
+    Footprint footprint() const MM_NONBLOCKING override { return Footprint::Region; }
 
     /// The x-axis sweep frequency, which sets the curve's lobe count.
     uint8_t xFrequency = 64;
@@ -38,10 +42,10 @@ public:
 
     /// Sweep both oscillators across the samples, painting each onto the grid.
     void tick() MM_NONBLOCKING override {
-        const int w = width();
-        const int h = height();
-
         const draw::Canvas cv = canvas();
+        const int w = cv.extent().x;
+        const int h = cv.extent().y;
+        const Palette& pal = *Palettes::active();
 
         // The Layer scales this rate by the elapsed frame, so the tail holds its length.
         layer()->fadeToBlackBy(fadeRate);
@@ -61,8 +65,7 @@ public:
             const int ly = (h < 2) ? 0 : (((2 * sy) * (2 * (h - 1))) / 511 + 1) / 2;
 
             const uint8_t colorIndex = static_cast<uint8_t>(ms / 100 + i);
-            draw::pixel(cv, {static_cast<lengthType>(lx), static_cast<lengthType>(ly), 0},
-                        colorFromPalette(*Palettes::active(), colorIndex, 255));
+            draw::pixel(cv, cv.local(static_cast<lengthType>(lx), static_cast<lengthType>(ly)), colorFromPalette(pal, colorIndex, 255));
         }
     }
 

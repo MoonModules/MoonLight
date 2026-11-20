@@ -1,8 +1,7 @@
 /// @module oscillators
 /// @also math16
 
-/// The oscillator bank: the animated quantities of a generative field, advanced once per frame and read per pixel.
-/// These pin what an effect author relies on: that a value stays inside the range they asked for, that two oscillators sharing a rate hold their relationship for as long as the device runs, that changing a rate mid-run does not jump the picture, and that the bank costs one pass per frame rather than one per read.
+/// The oscillator bank, advanced once per frame and read per pixel: a value stays in its range, two oscillators sharing a rate keep their relationship, a rate change agrees on every device, and one pass a frame.
 
 #include "doctest.h"
 #include "core/util/oscillators.h"
@@ -11,9 +10,7 @@ using namespace mm;
 
 namespace {
 
-/// Run a bank forward to `untilMs` on the device clock, in `dtMs` steps, the way a render loop does.
-/// `from` is where the clock already stands, so successive calls continue rather than restarting.
-/// The first advance of a fresh bank only establishes the time base (BeatPhase's first-tick guard), and calling this again from 0 would establish it a second time.
+/// Run a bank forward to `untilMs` in `dtMs` steps from `from`, the way a render loop does.
 template <uint8_t N>
 uint32_t run(OscillatorBank<N>& bank, uint32_t untilMs, uint32_t dtMs, uint32_t from = 0) {
     if (from == 0) bank.advanceTo(0);
@@ -72,25 +69,20 @@ TEST_CASE("a rate of zero holds the picture still") {
     CHECK(bank.value(0) == 32768);                  // a sine at phase zero sits at its midpoint
 }
 
-TEST_CASE("changing the rate continues from where the phase stands, without jumping") {
-    // Live reconfiguration: turning a speed control must not make the picture leap.
-    OscillatorBank<1> bank;
-    bank.set(0, {.rate = 30, .low = 0, .high = 65535, .phaseOffset = 0, .wave = Wave::Saw});
+TEST_CASE("changing the rate puts the phase where the fleet time and the new rate place it, as on a device starting after the change") {
+    // Live reconfiguration across a wall: a board that restarts after a speed change draws what the others draw.
+    OscillatorBank<1> running, late;
+    running.set(0, {.rate = 30, .low = 0, .high = 65535, .phaseOffset = 0, .wave = Wave::Saw});
     uint32_t t = 0;
-    for (uint32_t f = 0; f < 50; f++) { bank.advanceTo(t); t += 16; }
-    const uint16_t before = bank.unitValue(0);
-    CHECK(before > 0);                               // it is genuinely mid-cycle, not at the start
+    for (uint32_t f = 0; f < 50; f++) { running.advanceTo(t); t += 16; }
 
-    Oscillator faster = bank.get(0);
+    Oscillator faster = running.get(0);
     faster.rate = 240;
-    bank.set(0, faster);
-    bank.advanceTo(t);                                 // the very next frame, one 16 ms step
-    const uint16_t after = bank.unitValue(0);
-
-    // One frame at the new rate moves the phase by a frame's worth, not to a new place entirely.
-    const int32_t step = static_cast<int32_t>(after) - static_cast<int32_t>(before);
-    CHECK(step >= 0);
-    CHECK(step < 6000);                              // 16 ms at 240 BPM is ~4.3% of a cycle
+    running.set(0, faster);
+    running.advanceTo(t);
+    late.set(0, faster);
+    late.advanceTo(t);   // its first frame, after the change
+    CHECK(running.unitValue(0) == late.unitValue(0));
 }
 
 TEST_CASE("the four waveforms have the shapes their names promise") {

@@ -12,9 +12,27 @@
     {
      "title": "The status line",
      "text": "It reports the total light count and the physical bounding box. A dense grid's count equals its box volume, so a smaller count signals a sparse layout."
+    },
+    {
+     "title": "A wall of several devices",
+     "text": "In expert mode, turn on `superSync` and set `positionX`, `positionY` and `positionZ`, in lights, to place this device in a wall: its groups' devices with SuperSync on make one wall, the box around them all.\n\nA 🧩 effect draws its part of the wall's picture, others their own lights; a restarting board keeps its place a minute."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/Layouts.png",
+   "controls": {
+    "superSync": {
+     "line": "Whether this device draws its part of its groups' wall: a-wall-of-several-devices."
+    },
+    "positionX": {
+     "line": "This device's corner in the wall along x, in lights, which every layer and group reads."
+    },
+    "positionY": {
+     "line": "The same along y."
+    },
+    "positionZ": {
+     "line": "The same along z, for devices stacked in depth."
+    }
+   },
    "role": "generic",
    "tags": "💫",
    "dim": 0,
@@ -1035,7 +1053,7 @@
     }
    },
    "role": "effect",
-   "tags": "🐙",
+   "tags": "🐙🧩",
    "dim": 2,
    "doc": "light/effects.md#bouncingballs",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BouncingBallsEffect.h",
@@ -1466,7 +1484,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫",
+   "tags": "💫🧩",
    "dim": 3,
    "doc": "light/effects.md#lines",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/LinesEffect.h"
@@ -1488,7 +1506,7 @@
     }
    },
    "role": "effect",
-   "tags": "🐙",
+   "tags": "🐙🧩",
    "dim": 2,
    "doc": "light/effects.md#lissajous",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/LissajousEffect.h",
@@ -1736,7 +1754,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫🦅",
+   "tags": "💫🦅🧩",
    "dim": 3,
    "doc": "light/effects.md#plasma",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PlasmaEffect.h",
@@ -1899,7 +1917,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫🦅",
+   "tags": "💫🦅🧩",
    "dim": 3,
    "doc": "light/effects.md#ripples",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RipplesEffect.h"
@@ -2912,7 +2930,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫🖌️",
+   "tags": "💫🧩🖌️",
    "dim": 2,
    "doc": "light/effects.md#truchet",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TruchetEffect.h"
@@ -2974,7 +2992,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫🖌️",
+   "tags": "💫🧩🖌️",
    "dim": 2,
    "doc": "light/effects.md#raymarch",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/RaymarchEffect.h"
@@ -2989,7 +3007,7 @@
     }
    },
    "role": "effect",
-   "tags": "💫",
+   "tags": "💫🧩",
    "dim": 3,
    "doc": "light/effects.md#spheremove",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SphereMoveEffect.h",

@@ -290,6 +290,11 @@ public:
     /// Milliseconds of fleet time at the start of this frame, the clock every effect animates against, the same on every device of the network.
     uint32_t elapsed() const { return elapsed_; }
 
+    /// Where this device's lights sit in the wall, from its Layouts, zero where it is the whole picture.
+    Coord3D origin() const { return layouts_ ? layouts_->origin() : Coord3D{0, 0, 0}; }
+    /// The wall's extents, from the Layouts, zero where this device is the whole picture.
+    Coord3D whole() const { return layouts_ ? layouts_->whole() : Coord3D{0, 0, 0}; }
+
     /// Ask for a fade of `amt`/255 per reference frame, collected as the gentlest across effects; every amount is a rate, so a blank buffer is draw::fill.
     void fadeToBlackBy(uint8_t amt) { fadeBy_ = fadeBy_ ? (amt < fadeBy_ ? amt : fadeBy_) : amt; }
 
@@ -610,7 +615,12 @@ inline nrOfLightsType EffectBase::nrOfLights() const { return layer()->buffer().
 inline uint32_t EffectBase::elapsed() const { return layer()->elapsed(); }
 inline draw::Canvas EffectBase::canvas() {
     Layer* l = layer();
-    return draw::Canvas::of(l->buffer(), l->width(), l->height(), l->depth());
+    draw::Canvas cv = draw::Canvas::of(l->buffer(), l->width(), l->height(), l->depth());
+    if (footprint() == Footprint::Region) {   // a mirrored effect draws its own lights as their own whole, wherever the device sits
+        cv.origin = l->origin();
+        cv.whole = l->whole();
+    }
+    return cv;
 }
 
 } // namespace mm

@@ -230,6 +230,7 @@ add_executable(mm_tests
     unit/light/unit_Circle.cpp
     unit/light/unit_Particles.cpp
     unit/light/unit_Shader.cpp
+    unit/light/unit_GroupCanvas.cpp
     unit/light/unit_PolarLut.cpp
     unit/light/unit_PolarLut_equivalence.cpp
     unit/light/unit_AuroraEffect.cpp

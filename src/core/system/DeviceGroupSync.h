@@ -6,6 +6,7 @@
 #include "core/util/ControlSurface.h"     // the Control module tells this sync what changed here, as it tells a desk
 #include "core/util/Hlc.h"
 #include "core/util/ScratchBuffer.h"
+#include "core/util/WallPlace.h"   // the members' places in a wall
 #include "platform/platform.h"
 
 #include <cstddef>
@@ -50,13 +51,15 @@ namespace osc { class Reader; }
 class DeviceGroupSync : public ControlSurface {
 public:
     /// Its buffers belong to `owner`, Discovery, which frees them on release.
-    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), out_(owner), pending_(owner), held_(owner), seen_(owner), tombs_(owner) {}
+    explicit DeviceGroupSync(MoonModule& owner) : owner_(owner), shared_(owner), buf_(owner), out_(owner), pending_(owner), held_(owner), seen_(owner), tombs_(owner), places_(owner) {}
 
     /// Once a second: notice a group deleted here, read what arrived, definitions and deletions included, send what Trickle says is due, and save the markers when they changed.
     void tick(MoonModule& devices, char* saved, size_t savedCap);
 
-    /// Every 20 ms: apply the shared values and look chunks that arrived, setting aside a definition or deletion for the tick, apply a whole look at its time, and send the chunks due.
+    /// Every 20 ms: apply the shared values, look chunks and places that arrived, setting aside a definition or deletion for the tick, apply a whole look at its time, and send the chunks due.
     void receive(MoonModule& devices);
+    /// Whether the 20 ms read applies datagram `pkt` now: a shared value, a look chunk or a place, none of which creates a module.
+    bool takeNow(MoonModule& devices, const uint8_t* pkt, size_t len);
 
     /// A switch, encoder or fader changed here: what it drives goes to every group held, unless a group set it.
     void sendValue(SurfaceControl kind, uint8_t index, uint8_t value) override;
@@ -82,6 +85,12 @@ public:
     static constexpr uint16_t kPort = 65510;
     /// The OSC address of a deletion marker.
     static constexpr const char* kDeletedAddress = "/moonlight/devicegroup/deleted";
+    /// The address a device's place in a wall travels on: its MAC, then its corner and its size in three axes.
+    static constexpr const char* kPlaceAddress = "/moonlight/devicegroup/place";
+    /// How often a placed device repeats its place, in seconds; a change goes out at once.
+    static constexpr uint8_t kPlaceEverySec = 5;
+    /// How long a member's place is kept unheard, so a board restarting keeps its part of the wall and one switched off leaves it.
+    static constexpr uint32_t kPlaceHoldMs = 60000;
     /// How far ahead a change made here applies on the members, in microseconds of fleet time: @xref{applied-at-a-time}.
     static constexpr int64_t kApplyLeadUs = 100000;
     /// The furthest ahead a change is held, ten leads; one stamped later, from a sender on another time or a crafted datagram, applies on arrival.
@@ -172,6 +181,24 @@ private:
     uint16_t seenCount_ = 0;
     ScratchBuffer<Tomb> tombs_;    ///< the deletion markers
     uint8_t tombCount_ = 0;
+    /// A member's place as it last sent it.
+    struct Heard { uint8_t mac[6]; WallPlace place; uint32_t atMs; };
+    ScratchBuffer<Heard> places_;  ///< the members' places, kept only for members of a group held here
+    uint8_t placeCount_ = 0;
+    WallPlace sentPlace_;          ///< this device's place as it last went out
+    uint8_t placeTicks_ = 0;       ///< seconds since it last went out
+    static constexpr uint8_t kMaxPlaces = 64;   ///< places held at most, the members of every group a wall spans
+
+    /// Take a member's place, or forget it when it sent none; false for another message.
+    bool handlePlace(MoonModule& devices, const uint8_t* pkt, size_t len);
+    /// Keep a member's place, or forget it when it is unplaced.
+    void storePlace(const uint8_t mac[6], const WallPlace& p);
+    /// Send this device's place on a change, and every kPlaceEverySec while it holds one.
+    void sendPlace(MoonModule& devices);
+    /// The wall this device's groups make, from its own place and its members' heard ones, set on Devices.
+    void deriveWall(MoonModule& devices);
+    /// Whether a group held here has this MAC as a member.
+    static bool isMember(MoonModule& devices, const uint8_t mac[6]);
     static constexpr size_t kDatagram = 1472;   ///< an Ethernet frame's UDP payload
     static constexpr uint16_t kPerChunk = 16;   ///< members a message carries, about 1 KB
     static constexpr uint8_t kMaxTombs = 8;

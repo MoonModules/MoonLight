@@ -71,8 +71,8 @@ void setTestBindFails(bool fail);
 enum class TestJoin : uint8_t { Network, Succeed, Fail };
 /// Set how multicast joins behave; the test binary starts every case on Succeed.
 void setTestJoin(TestJoin mode);
-/// The group a socket left last, as a host test reads it.
-const uint8_t* testLastLeftGroup();
+/// The group a socket left last, as a host test reads it, copied into `out`.
+void testLastLeftGroup(uint8_t out[4]);
 /// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the host's unreported figure.
 void setTestFreeInternalHeap(size_t bytes);
 /// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the host's none.
@@ -301,7 +301,7 @@ void setTestWifiRadioReady(bool ready);
 /// Start the link to the radio chip on its own task where it is still unstarted, so its firmware can be read and updated over Ethernet; false where there is no such chip or the task cannot start.
 bool coprocessorConnect();
 
-/// This host's LAN IPv4 as a dotted string, or empty; on ESP32 the device IP belongs to NetworkModule.
+/// This host's LAN IPv4 as a dotted string, or empty, valid until the calling thread's next call; on ESP32 the device IP belongs to NetworkModule.
 const char* deviceIp();
 
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
@@ -643,6 +643,9 @@ struct EncoderConfig {
     const char* encoderName;   ///< a host ffmpeg encoder; ignored where the platform has only one
     const char* outDir;        ///< absolute directory for the playlist and segments
 };
+
+/// The frames every platform's encoder takes, the ESP32's H.264 block being the strictest (esp_h264_types.h): 80x80 to 1920x2032.
+constexpr uint16_t kEncoderMinSide = 80, kEncoderMaxWidth = 1920, kEncoderMaxHeight = 2032;
 
 /// Start encoding to `cfg`, replacing any encoder already running.
 bool encoderStart(const EncoderConfig& cfg);

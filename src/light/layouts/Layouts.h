@@ -2,6 +2,8 @@
 
 #include "light/layouts/LayoutBase.h"  // LayoutBase and CoordCallback, which children are cast to
 #include "core/module/MoonModule.h"
+#include "core/module/Scheduler.h"  // topOfType: the Devices container, found once
+#include "core/system/Devices.h"    // this device's place in a wall, and the wall its groups make
 #include "light/util/light_types.h" // lengthType, nrOfLightsType
 
 #include <cstdio> // std::snprintf for the status line
@@ -25,6 +27,12 @@ namespace mm {
 ///
 /// It reports the total light count and the physical bounding box. A dense grid's count equals its box volume, so a smaller count signals a sparse layout.
 ///
+/// ## A wall of several devices
+///
+/// In expert mode, turn on `superSync` and set `positionX`, `positionY` and `positionZ`, in lights, to place this device in a wall: its groups' devices with SuperSync on make one wall, the box around them all.
+///
+/// A 🧩 effect draws its part of the wall's picture, others their own lights; a restarting board keeps its place a minute.
+///
 /// @technical
 ///
 /// ## The container owns coordinate iteration
@@ -40,6 +48,55 @@ public:
     const char* tags() const override { return "💫"; }
     /// The child role this container accepts, which is layouts alone.
     const char* acceptsChildRoles() const override { return "layout"; }
+
+    /// Whether this device draws its part of its groups' wall: @xref{a-wall-of-several-devices}.
+    bool superSync = false;
+    /// This device's corner in the wall along x, in lights, which every layer and group reads.
+    lengthType positionX = 0;
+    /// The same along y.
+    lengthType positionY = 0;
+    /// The same along z, for devices stacked in depth.
+    lengthType positionZ = 0;
+
+    /// SuperSync and the device's place in the wall, read live, so a change shows within a second and the lights' mapping stays as built.
+    void defineControls() override {
+        controls_.addControl("superSync", superSync);
+        controls_.setAdvanced(controls_.count() - 1);   // a wall of devices is an expert's setup
+        controls_.addControl("positionX", positionX, 0, 3840);
+        controls_.addControl("positionY", positionY, 0, 2160);
+        controls_.addControl("positionZ", positionZ, 0, 2160);
+        for (uint8_t i = controls_.count() - 3; i < controls_.count(); i++) {
+            controls_.setNumberField(i);
+            controls_.setAdvanced(i);
+            controls_.setHidden(i, !superSync);   // defineControls reruns on a change, so the position shows once SuperSync is on
+        }
+        MoonModule::defineControls();   // the layouts' own controls
+    }
+
+    /// Use `devices` for this device's place and its groups' wall, a test's; prepare finds the device's own otherwise.
+    void useDevices(Devices* devices) { devices_ = devices; }
+
+    /// Publish this device's place and take the wall its groups make, once a second as the group sync derives it.
+    void tick1s() MM_NONBLOCKING override {
+        MoonModule::tick1s();
+        if (!devices_) return;
+        devices_->setPlace(superSync ? WallPlace{positionX, positionY, positionZ, static_cast<uint16_t>(own_.x),
+                                                 static_cast<uint16_t>(own_.y), static_cast<uint16_t>(own_.z)}
+                                     : WallPlace{});
+        wall_ = superSync ? devices_->wall() : WallPlace{};
+    }
+
+    /// This device's corner in the wall, from the wall's own corner, zero outside a wall.
+    Coord3D origin() const {
+        if (!wall_.placed()) return {0, 0, 0};
+        return {static_cast<lengthType>(positionX - wall_.x), static_cast<lengthType>(positionY - wall_.y),
+                static_cast<lengthType>(positionZ - wall_.z)};
+    }
+    /// The wall's extents, all zero outside a wall.
+    Coord3D whole() const {
+        if (!wall_.placed()) return {0, 0, 0};
+        return {static_cast<lengthType>(wall_.w), static_cast<lengthType>(wall_.h), static_cast<lengthType>(wall_.d)};
+    }
 
     /// The lights safe mode places, since a layout too large for memory crashes the device at every boot.
     static constexpr nrOfLightsType kSafeModeLights = 1024;
@@ -78,6 +135,7 @@ public:
 
     /// Report the light count and the physical bounding box on the status line, recomputed on a rebuild rather than per tick, an empty setup flagging a warning: @xref{the-status-line}.
     void prepare() override {
+        findDevices();
         const nrOfLightsType lights = totalLightCount();
         // One placeLights pass for the bounding box: max coordinate + 1 per axis.
         struct Extent { lengthType x, y, z; bool any; } e{0, 0, 0, false};
@@ -92,6 +150,7 @@ public:
         const lengthType w = e.any ? e.x + 1 : 0;
         const lengthType h = e.any ? e.y + 1 : 0;
         const lengthType d = e.any ? e.z + 1 : 0;
+        own_ = {w, h, d};   // this device's size in a wall
         std::snprintf(statusBuf_, sizeof(statusBuf_), "%u lights · %u×%u×%u%s",
                       static_cast<unsigned>(lights),
                       static_cast<unsigned>(w), static_cast<unsigned>(h), static_cast<unsigned>(d),
@@ -100,8 +159,17 @@ public:
     }
 
 private:
+    /// The top-level Devices container, found once unless a test injected one, as Effects finds its Layouts.
+    void findDevices() {
+        if (devices_) return;
+        if (Scheduler* s = Scheduler::instance()) devices_ = static_cast<Devices*>(s->topOfType("Devices"));
+    }
+
     /// Backing store for the status line, which `setStatus` borrows rather than copies.
     char statusBuf_[64] = {};   ///< the widest line, a 10-digit count, three 5-digit sides and the safe-mode mark, is 59
+    Coord3D own_{0, 0, 0};             ///< this device's own box, from the last prepare
+    Devices* devices_ = nullptr;       ///< where this device's place goes and its groups' wall comes from
+    WallPlace wall_;                   ///< the wall as last derived, unplaced outside one
 };
 
 } // namespace mm

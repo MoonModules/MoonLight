@@ -231,6 +231,7 @@ export const EMOJI_LABEL = {
     "\u{1F3AF}": "aims moving heads",
     "\u{1F47E}": "pixel art: games and sprites",
     "\u{1F9EC}": "a simulation: cells evolving off their own last frame",
+    "\u{1F9E9}": "SuperSync: on a wall of several devices, each draws its own part of one picture",
     "\u{1F4F9}": "motion-tracking aware",
     // the power functions, shown together at the end of a row
     "\u{1F58C}\uFE0F": "power function: a shader, every pixel computed from its position",

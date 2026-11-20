@@ -11,9 +11,11 @@ namespace mm {
 class LinesEffect : public EffectBase {
 public:
     /// Catalog tags for the visual catalog.
-    const char* tags() const override { return "💫"; }
+    const char* tags() const override { return "💫🧩"; }
     /// All three planes need all three axes.
     Dim dimensions() const override { return Dim::D3; }
+    /// A plane's place is a function of time alone, so each device draws where the wall's planes cross its own lights.
+    Footprint footprint() const MM_NONBLOCKING override { return Footprint::Region; }
 
     /// The sweep's axis choices, in option order.
     enum Axis : uint8_t { kAxisAll, kAxisX, kAxisY, kAxisZ, kAxisCount };
@@ -87,43 +89,34 @@ public:
             (static_cast<uint64_t>(elapsed() % period) * 65535u) / period
         );
 
-        auto setRGB = [&](lengthType x, lengthType y, lengthType z,
-                          uint8_t r, uint8_t g, uint8_t b) {
-            size_t off = (static_cast<size_t>(z) * h * w
-                         + static_cast<size_t>(y) * w + x) * cpl;
+        auto setRGB = [&](lengthType x, lengthType y, lengthType z, uint8_t r, uint8_t g, uint8_t b) {
+            const size_t off = (static_cast<size_t>(z) * h * w + static_cast<size_t>(y) * w + x) * cpl;
             if (cpl >= 1) buf[off + 0] = r;
             if (cpl >= 2) buf[off + 1] = g;
             if (cpl >= 3) buf[off + 2] = b;
         };
 
+        // Each plane sweeps the whole picture along its axis, and a device of a wall draws where it crosses its own lights.
+        const draw::Canvas cv = canvas();
+        const Coord3D whole = cv.extent();
         // Bucketed so the sweep reaches the last index, where the textbook form falls one short.
-        auto sweepIndex = [&](lengthType n) {
-            return static_cast<lengthType>(static_cast<uint32_t>(beat) * n / 65536u);
-        };
+        const auto sweepIndex = [&](lengthType n) { return static_cast<lengthType>(static_cast<uint32_t>(beat) * static_cast<uint32_t>(n) / 65536u); };
+        const Coord3D at = cv.local({sweepIndex(whole.x), sweepIndex(whole.y), sweepIndex(whole.z)});
 
         // Red sweeps along x, left to right.
-        if (w > 1 && (axis == kAxisAll || axis == kAxisX)) {
-            const lengthType x = sweepIndex(w);
+        if (whole.x > 1 && (axis == kAxisAll || axis == kAxisX) && at.x >= 0 && at.x < w)
             for (lengthType z = 0; z < d; z++)
-                for (lengthType y = 0; y < h; y++)
-                    setRGB(x, y, z, 255, 0, 0);
-        }
+                for (lengthType y = 0; y < h; y++) setRGB(at.x, y, z, 255, 0, 0);
 
         // Green sweeps along y, top to bottom.
-        if (h > 1 && (axis == kAxisAll || axis == kAxisY)) {
-            const lengthType y = sweepIndex(h);
+        if (whole.y > 1 && (axis == kAxisAll || axis == kAxisY) && at.y >= 0 && at.y < h)
             for (lengthType z = 0; z < d; z++)
-                for (lengthType x = 0; x < w; x++)
-                    setRGB(x, y, z, 0, 255, 0);
-        }
+                for (lengthType x = 0; x < w; x++) setRGB(x, at.y, z, 0, 255, 0);
 
         // Blue sweeps along z, front to back, on a volume.
-        if (d > 1 && (axis == kAxisAll || axis == kAxisZ)) {
-            const lengthType z = sweepIndex(d);
+        if (whole.z > 1 && (axis == kAxisAll || axis == kAxisZ) && at.z >= 0 && at.z < d)
             for (lengthType y = 0; y < h; y++)
-                for (lengthType x = 0; x < w; x++)
-                    setRGB(x, y, z, 0, 0, 255);
-        }
+                for (lengthType x = 0; x < w; x++) setRGB(x, y, at.z, 0, 0, 255);
     }
 };
 

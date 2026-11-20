@@ -61,7 +61,12 @@ public:
     /// Milliseconds since render start, which @xref{animation|animation} follows rather than a frame count.
     uint32_t elapsed() const;
 
-    /// The layer's surface as one value, read once a frame since nothing may cache extents across ticks.
+    /// How much of a wall of several devices this effect computes: mirrored draws this device's lights as their own whole picture, region draws them as their part of the wall's one picture.
+    enum class Footprint : uint8_t { Mirrored, Region };
+    /// This effect's footprint, mirrored unless its split-equals-whole test shows its parts make the whole.
+    virtual Footprint footprint() const MM_NONBLOCKING { return Footprint::Mirrored; }
+
+    /// The layer's surface as one value, placed in the wall for a region effect, read once a frame since extents can change between ticks.
     mm::draw::Canvas canvas();
 
     /// Aim a fixture, a no-op on an absent channel, and never scaled by brightness.

@@ -4,6 +4,7 @@
 #include "core/module/Scheduler.h"
 #include "core/services/OscPacket.h"
 #include "core/system/ControlModule.h"   // splitTarget: a parameter named as a slot names it; readPreset: the document a look pushes
+#include "core/util/JsonUtil.h"   // effectsOnly: a received look's root members
 #include "core/util/fnv.h"
 #include "core/util/format.h"
 #include "platform/platform.h"     // millis and the MAC: when a chunk or a request goes, and each device's offset
@@ -44,6 +45,41 @@ bool lookModule(const MoonModule& m) {
     const ModuleRole r = m.role();
     if (r == ModuleRole::Effect || r == ModuleRole::Modifier || r == ModuleRole::Layer) return true;
     return !m.parent() && m.name() && std::strcmp(m.name(), ControlModule::kCapturable[ControlModule::kDriversRole]) == 0;
+}
+
+/// The top-level module named `name`, or null.
+const MoonModule* topModule(const char* name) {
+    Scheduler* sched = Scheduler::instance();
+    for (uint8_t i = 0; sched && i < sched->moduleCount(); i++)
+        if (sched->module(i)->name() && std::strcmp(sched->module(i)->name(), name) == 0) return sched->module(i);
+    return nullptr;
+}
+
+/// Whether object `n` holds only values, a module's own controls, and no child module.
+bool scalarsOnly(const json::JsonDoc& doc, const json::JsonNode& n) {
+    for (const json::JsonNode* c = doc.node(n.firstChild); c; c = doc.node(c->next))
+        if (c->type == json::JsonType::Object || c->type == json::JsonType::Array) return false;
+    return true;
+}
+
+/// Whether a look's root member `n` stays within what lookModule allows: the Effects container's subtree, a look module's own, or the Drivers card's own controls, not its drivers.
+bool lookMember(const json::JsonDoc& doc, const json::JsonNode& n) {
+    if (n.type != json::JsonType::Object || !n.key) return false;
+    if (std::strcmp(n.key, ControlModule::kCapturable[ControlModule::kEffectsRole]) == 0) return true;   // its members are paths within it
+    const MoonModule* top = topModule(n.key);
+    if (!top || !lookModule(*top)) return false;
+    return std::strcmp(n.key, ControlModule::kCapturable[ControlModule::kDriversRole]) != 0 || scalarsOnly(doc, n);   // a driver of the card brings its pins
+}
+
+/// Whether a received look's document sets only what an effects preset does, the trust boundary's rule for every member it names, beside the file's own `$` keys.
+bool effectsOnly(const char* text) {
+    json::JsonDoc doc;
+    if (!json::parse(text, doc)) return false;
+    const json::JsonNode* root = doc.rootNode();
+    if (!root || root->type != json::JsonType::Object) return false;
+    for (const json::JsonNode* n = doc.node(root->firstChild); n; n = doc.node(n->next))
+        if (!(n->key && n->key[0] == '$') && !lookMember(doc, *n)) return false;
+    return true;
 }
 
 }  // namespace
@@ -362,7 +398,12 @@ void SharedControls::fill(Look& l, uint32_t index, const uint8_t* data, size_t n
     l.have |= bit;
     if (l.have != allOf(l.size)) return;
     l.needDueMs = 0;
-    if (fnv1a(l.text, l.size) == l.digest) return;   // whole: tickLooks applies it at its time
+    if (fnv1a(l.text, l.size) == l.digest) {   // whole: tickLooks applies it at its time, unless it reaches past the effects
+        if (effectsOnly(l.text)) return;
+        mm::formatTo(lookNote_, sizeof(lookNote_), "look %s sets more than effects", l.name);
+        l.applied = true;   // held unapplied, so the members' digests agree
+        return;
+    }
     mm::formatTo(lookNote_, sizeof(lookNote_), "look %s damaged", l.name);
     l.have = 0;   // asked for again
     l.needDueMs = platform::millis() + spreadMs();

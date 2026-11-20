@@ -242,11 +242,9 @@ public:
 
 private:
     static constexpr uint8_t kMaxRestarts = 3;
-    /// The smallest frame the strictest supported encoder accepts.
-    static constexpr uint16_t kMinEncodeSize = 80;
-    /// The largest frame width the strictest supported encoder accepts.
-    static constexpr uint16_t kMaxEncodeWidth  = 1920;
-    static constexpr uint16_t kMaxEncodeHeight = 2032;
+    static constexpr uint16_t kMinEncodeSize = platform::kEncoderMinSide;
+    static constexpr uint16_t kMaxEncodeWidth  = platform::kEncoderMaxWidth;
+    static constexpr uint16_t kMaxEncodeHeight = platform::kEncoderMaxHeight;
     /// A ceiling on the blow-up, so a slider cannot ask for a frame no encoder will take.
     static constexpr uint8_t kMaxScale = 80;
     static_assert(kMaxScale >= kMinEncodeSize,
@@ -300,10 +298,12 @@ private:
             // Why it failed differs per platform, and a wrong reason sends the user hunting.
             if constexpr (platform::hasEncoderChoice) {
                 setStatus("ffmpeg not found - see the docs", Severity::Warning);
-            } else if (width_ < 80 || height_ < 80 || width_ > 1920 || height_ > 2032) {
+            } else if (width_ < kMinEncodeSize || height_ < kMinEncodeSize || width_ > kMaxEncodeWidth || height_ > kMaxEncodeHeight) {
                 std::snprintf(statusBuf_, sizeof(statusBuf_),
-                              "%ux%u is outside the encoder's 80x80 to 1920x2032",
-                              static_cast<unsigned>(width_), static_cast<unsigned>(height_));
+                              "%ux%u is outside the encoder's %ux%u to %ux%u",
+                              static_cast<unsigned>(width_), static_cast<unsigned>(height_),
+                              static_cast<unsigned>(kMinEncodeSize), static_cast<unsigned>(kMinEncodeSize),
+                              static_cast<unsigned>(kMaxEncodeWidth), static_cast<unsigned>(kMaxEncodeHeight));
                 setStatus(statusBuf_, Severity::Warning);
             } else {
                 setStatus("the hardware encoder did not start", Severity::Error);

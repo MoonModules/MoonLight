@@ -159,7 +159,7 @@ let releasesInFlight = null;
 let releasesMemo = null;   // { modified, data }
 let releasesAskedAt = 0;   // when the feed was last asked, answered or not
 
-// Returns the release list, newest first, or null while none has loaded: the one list the picker, the update badge and the network map read.
+// Returns the release list, highest version first, or null while none has loaded: the one list the picker, the update badge and the network map read.
 // `revalidate` asks the server past the HTTP cache's ten minutes, for a view the user opened to see what is new.
 async function loadReleases({ revalidate = false } = {}) {
     if (releasesInFlight) return releasesInFlight;   // a request on its way answers every caller, a cold page's second one included
@@ -182,7 +182,7 @@ async function fetchReleases(revalidate) {
     return releasesMemo?.data ?? null;
 }
 
-// The newest published, stable release, what GitHub's /releases/latest answers, from a list newest first that holds it (the feed keeps five).
+// The highest-versioned stable release, the first in the feed's version order that holds it (the feed keeps five).
 const latestStable = (releases) => (releases || []).find(r => !r.prerelease && !r.draft) || null;
 // The release tagged `tag`, such as the moving `latest`, or null.
 const releaseByTag = (releases, tag) => (releases || []).find(r => r.tag_name === tag) || null;
@@ -930,7 +930,7 @@ export const installPicker = {
      *   listeners the caller wired on the element keep firing.
      * @param {boolean} [opts.extrasNeedRelease] - the extras install only
      *   with a release picked, so a release list that does not load shows
-     *   its status without them (the map's move).
+     *   its status alone (the map's move).
      * @param {string} [opts.targetChip] - another device's chip ("esp32s3") or revision line ("esp32p4rev3"), for a device's
      *   map installing onto it: the firmware and device lists hold that chip's only.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection

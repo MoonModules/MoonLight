@@ -59,8 +59,8 @@ One boot that gets through is enough: the calibration is saved, and later boots 
 Three aids get a weak board through, the first that works being enough:
 
 - **A capacitor**, 470 to 1000 µF, across the board's 3V3 and GND pins, as close to them as the wires allow. It covers the peak.
-- **A bench supply**, 3.3 V with a current limit of about 1 A, into the 3V3 pin with USB unplugged, for that one boot. It bypasses the regulator, so it gets through a board the capacitor does not. Back on its own supply afterwards, the board runs.
-- **A lower transmit power**, 8 dBm in the WiFi card, for a running board that still resets on WiFi bursts or once its lights are bright. The [device catalog](https://github.com/MoonModules/MoonLight/blob/main/mooninstaller/deviceModels.json) sets it for boards known to need it, such as the LOLIN D32. It takes effect once MoonLight runs, after the first boot.
+- **A bench supply**, 3.3 V with a current limit of about 1 A, its positive to the 3V3 pin and its negative to GND, with USB unplugged, for that one boot. It bypasses the regulator, so it gets through a board the capacitor does not. Back on its own supply afterward, the board boots with its calibration saved; a board that then resets on WiFi bursts needs the capacitor kept in place or the lower transmit power below.
+- **A lower transmit power**, 8 dBm as the WiFi card's transmit power, for a running board that still resets on WiFi bursts or once its lights are bright. The installer sets it over USB from the [device catalog](https://github.com/MoonModules/MoonLight/blob/main/mooninstaller/deviceModels.json) for boards known to need it, such as the LOLIN D32; a board migrated over the air keeps WLED's own limit, so set 8 in its WiFi card by hand once MoonLight runs.
 
 A board that resets this way after MoonLight runs starts in [safe mode](troubleshooting.md#the-device-rebooted-on-its-own), its lights held dark, and needs a restart from its page once its power is solid.
 

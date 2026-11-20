@@ -104,10 +104,13 @@ def cpp(path: Path) -> list[str]:
     # A header, or a source not in this host's build: the flags of the nearest unit below src/, else of module_types.cpp, the unit that
     # includes every module, since a core unit does not see light/ and the light domain is headers only.
     parts = rel.split("/")[:-1]
-    while entry is None and len(parts) > 1:
+    platform_own = len(parts) >= 3 and parts[:2] == ["src", "platform"]   # src/platform/<p>/: compiled only by builds whose units come from <p>
+    while entry is None and len(parts) > (2 if platform_own else 1):
         folder = "/" + "/".join(parts) + "/"
         entry = next((e for e in entries if folder in e["file"]), None)
         parts.pop()
+    if entry is None and platform_own:
+        return []   # another platform's file, which its own build checks
     entry = entry or next((e for e in entries if e["file"].endswith("/src/module_types.cpp")), entries[0] if entries else None)
     if entry is None:
         return []
@@ -124,8 +127,11 @@ def cpp(path: Path) -> list[str]:
     compiler = args[0] if shutil.which(args[0]) else shutil.which("c++")
     if not compiler:
         return []
-    lang = ["-x", "c++"] if path.suffix == ".h" else []
-    result = _run([compiler, *flags, "-fsyntax-only", "-Wno-pragma-once-outside-header", *lang, str(path)], cwd=entry.get("directory", REPO))
+    cwd = entry.get("directory", REPO)
+    if path.suffix == ".h":   # a unit that includes it, as the header-set check builds one, so a constant only includers use is no unused variable
+        result = _run([compiler, *flags, "-fsyntax-only", "-x", "c++", "-"], cwd=cwd, input=f'#include "{path}"\n')
+    else:
+        result = _run([compiler, *flags, "-fsyntax-only", str(path)], cwd=cwd)
     errors = [ln for ln in result.stderr.splitlines() if " error: " in ln] if result and result.returncode else []   # a note from a file that compiles is no failure
     if not errors:
         return []
@@ -380,7 +386,9 @@ def diff_gate() -> int:
         print("Raised against HEAD (the ratchets' rules over the touched files; Extract Function, as check_code says):")
         for ln in raised:
             print("  " + ln)
-    failing = raised or any(ln.startswith(("Prose rule", "C++ does not compile", "Python (pyflakes)")) for ln in listed)
+    if UNFINISHED:   # a check the deadline cut short reports an empty list, so the gate fails until every check runs whole
+        print("Unfinished within the gate's time: " + ", ".join(UNFINISHED))
+    failing = raised or UNFINISHED or any(ln.startswith(("Prose rule", "C++ does not compile", "Python (pyflakes)")) for ln in listed)
     print(f"{len(paths)} changed file(s): {'findings above' if failing else 'nothing raised'}.")
     return 1 if failing else 0
 

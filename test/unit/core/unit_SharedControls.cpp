@@ -390,6 +390,36 @@ TEST_CASE("a look whose document does not match its digest is refused, said so, 
     }
 }
 
+TEST_CASE("a look reaching past the effects is refused whole, said so, so membership sets no network setting on a member") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const std::string doc = R"({"$slot":3,"Lamp":{"speed":33},"WiFi":{"channel":11}})";
+        const auto c = lookChunk(m.id(), "sneaky", uint64_t{5000} << 16, doc, 0);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.radio->channel == 6);
+        CHECK(m.lamp->speed == 1);   // the whole look stays out, the effect's part included
+        REQUIRE(sync.sharedNote() != nullptr);
+        CHECK(std::string(sync.sharedNote()) == "look sneaky sets more than effects");
+        sync.close();
+    }
+}
+
+TEST_CASE("a look with the file's own pad and a look module's controls applies, as a preset applied here does") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const auto c = lookChunk(m.id(), "padded", uint64_t{5000} << 16, R"({"$slot":3,"Lamp":{"speed":33}})", 0);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.lamp->speed == 33);
+        sync.close();
+    }
+}
+
 // The Reviewer's case: a large look on a board without room for it, its next chunk writing through a null document.
 TEST_CASE("a look memory refuses leaves its slot empty, so its chunks are dropped safely and the next copy tries afresh") {
     LookCase t;

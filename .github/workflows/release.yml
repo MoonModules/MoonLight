@@ -832,7 +832,11 @@ jobs:
                 --json tagName,isPrerelease \
                 | jq -r '.[] | select(.isPrerelease) | .tagName' | head -5)
           # The moving `latest` always, whatever release candidates came after it: the developer channel reads it from the feed.
-          LATEST=$(gh release view latest --json tagName --jq .tagName 2>/dev/null || true)
+          # Only a confirmed absent `latest` leaves it out; any other failure stops the deploy before it drops the feed entry and its binaries.
+          if ! LATEST=$(gh release view latest --json tagName --jq .tagName 2>"$RUNNER_TEMP/latest.err"); then
+            grep -q "release not found" "$RUNNER_TEMP/latest.err" || { cat "$RUNNER_TEMP/latest.err" >&2; exit 1; }
+            LATEST=""
+          fi
           KEEP=$(printf '%s\n%s\n%s\n' "$STABLE" "$PRE" "$LATEST" | sed '/^$/d' | sort -u)
           echo "Releases to keep on Pages:"
           echo "$KEEP" | sed 's/^/  /'
@@ -877,12 +881,18 @@ jobs:
             echo "Staged binaries + relative manifests into releases/$T"
           done
 
-          # The release feed the device UI, MoonDeck and the installer read (install-picker.js): the releases kept above, newest first, in
-          # GitHub's release shape trimmed to the fields they use. Pages serves it to any origin with a max-age, so the browsers' HTTP caches
-          # pace the checks and no page spends GitHub's 60 anonymous API requests an hour.
+          # The release feed the device UI, MoonDeck and the installer read (install-picker.js): the releases kept above, highest version
+          # first by semantic-version precedence, so the first stable entry is the newest stable whenever it was published, and the moving
+          # `latest` above them all; in GitHub's release shape trimmed to the fields they use. Pages serves it to any origin with a max-age,
+          # so the browsers' HTTP caches pace the checks and no page spends GitHub's 60 anonymous API requests an hour.
           mkdir -p pages/install
           for T in $KEEP; do gh api "repos/$GITHUB_REPOSITORY/releases/tags/$T"; done \
-            | jq -s 'sort_by(.published_at) | reverse
+            | jq -s 'def precedence: (.tag_name | ltrimstr("v")) as $t
+                       | ([$t | capture("^(?<core>[0-9]+\\.[0-9]+\\.[0-9]+)(-(?<pre>.+))?$")] | first) as $m
+                       | if $m == null then [[1e9], 1, []]
+                         else [($m.core | split(".") | map(tonumber)), (if $m.pre then 0 else 1 end),
+                               ($m.pre // "" | split(".") | map(tonumber? // .))] end;
+                     sort_by(precedence) | reverse
                      | map({tag_name, name, prerelease, draft, published_at, created_at, html_url,
                             assets: [.assets[] | {name, browser_download_url, digest}]})' \
             > pages/install/releases.json

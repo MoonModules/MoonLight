@@ -21,32 +21,37 @@
 ///
 /// ## Why the box is clipped
 ///
-/// `addPixel` already rejects an out-of-bounds pixel, but only AFTER the distance function has run for it, which leaves two faults the clip removes.
-/// A radius the caller chose makes the walk cost r squared however small the grid is, so one large number stalls the render thread.
-/// And `lengthType` is 16 bits, so a radius near its ceiling puts `x1` at INT16_MAX, the increment wraps to negative, and the loop never ends at all.
+/// `addPixel` rejects a pixel outside only after its distance ran, so an unclipped radius walks r squared on any grid, and near 16-bit `lengthType`'s ceiling `x1` wraps negative and the loop runs forever.
 ///
-/// An empty canvas is emptied at BOTH ends for the same reason: the walk is inclusive.
-/// Setting only `x1 = -1` left `x0` at whatever negative value the caller computed, and -2 to -1 is a two-iteration range writing outside the buffer.
+/// An empty canvas is emptied at both ends, the walk being inclusive: a negative `x0` beside `x1 = -1` is a range of two writing outside the buffer.
 ///
 /// ## Addressing
 ///
 /// Index order matches the engine, and a pixel outside the grid is silently clipped, so a line running off the edge stops drawing.
 ///
+/// ## Positions in a wall
+///
+/// Every draw call takes the device's own grid, so an effect looping over its own lights keeps the loop the compiler proves in range, its bounds checks gone. A region effect computes its positions in the whole picture and converts each one once with `cv.local(p)`, which subtracts the device's place in the wall; a position off this device clips.
+///
+/// ## One loop over a device's lights
+///
+/// An effect that colors each light by its position writes the color as a lambda and leaves the loop to `eachLight`: the buffer, the channels and the row stride are core's, and the effect reads like one formula.
+///
+/// The position is in the whole picture, the canvas's origin added, so on a device of a wall the same code draws its part of the wall's picture (sort-first parallel rendering: each device renders the one scene through its own viewport). Only the device's own lights are visited, so the wall costs one add per axis, as a hand-written loop over the place in the wall does.
+///
+/// The lambda reads only its inputs, the canvas it fills being write-only to it, since the loop writes through a restrict pointer; an effect reading its neighbors' pixels stays mirrored.
+///
 /// ## Signed distance fields
 ///
-/// An SDF answers how far a point is from a shape's edge: negative inside, zero on it, positive outside.
-/// One number then gives a fill, an edge, an outline, a glow and a smooth blend, and the same expression serves a strand, a matrix and a volume.
+/// An SDF answers how far a point is from a shape's edge, negative inside and positive outside, so one number gives a fill, an edge, an outline, a glow and a blend, on a strand, a matrix or a volume.
 ///
 /// ## Squared first
 ///
-/// Measured on an S3 at 128 by 128: about 14 cycles a pixel squared, against about 108 for the true distance.
-/// So every shape has a squared variant, and an effect asks for a real distance only when it needs one.
+/// On an S3 at 128 by 128 a squared distance costs about 14 cycles a pixel and the true one about 108, so every shape has a squared variant and an effect asks for a real distance only where it needs one.
 ///
 /// ## Rendering below the output resolution
 ///
-/// A field's cost is per light, so computing fewer and interpolating the rest is what affords one on a large fixture.
-/// The stretch costs a fixed price per output light, so it saves nothing on a field that was already cheap.
-/// On a 64 by 64 layer a two-octave field goes 59 to 34 microseconds at half resolution, a curl field 212 to 71.
+/// Computing fewer lights and interpolating the rest affords a costly field on a large fixture, a cheap one gaining little: at half resolution on 64 by 64, a two-octave field goes 59 to 34 µs, a curl field 212 to 71.
 
 
 namespace mm::draw {
@@ -60,12 +65,26 @@ struct Canvas {
     size_t   bytes = 0;        ///< total writable bytes (the bound every write is clipped to)
     Coord3D  dims{0, 0, 0};    ///< logical extents; z is >= 1 (see the depth guard above)
     uint8_t  cpl = 3;          ///< channels per light
+    Coord3D  origin{0, 0, 0};  ///< where this buffer sits in the whole picture, a device's place in its group canvas
+    Coord3D  whole{0, 0, 0};   ///< the whole picture's extents, zero where the buffer is the whole
+
+    /// The extents a position-dependent effect scales by: the whole picture's, else this buffer's own.
+    Coord3D extent() const { return whole.x ? whole : dims; }
 
     /// Build from a Buffer + the layer's logical extents, applying the depth guard.
     static Canvas of(Buffer& buf, lengthType w, lengthType h, lengthType d) {
         return Canvas{buf.data(), buf.bytes(),
                       Coord3D{w, h, static_cast<lengthType>(d > 0 ? d : 1)},
                       buf.channelsPerLight()};
+    }
+
+    /// A position in the whole picture as one in this buffer's own grid, which every draw call takes: @xref{positions-in-a-wall}.
+    Coord3D local(Coord3D p) const {
+        return {static_cast<lengthType>(p.x - origin.x), static_cast<lengthType>(p.y - origin.y), static_cast<lengthType>(p.z - origin.z)};
+    }
+    /// The same for a plane effect, its z the plane it draws, which the layer extrudes.
+    Coord3D local(lengthType x, lengthType y) const {
+        return {static_cast<lengthType>(x - origin.x), static_cast<lengthType>(y - origin.y), 0};
     }
 
     /// Byte offset of a coordinate, or `bytes` when it is outside the grid.
@@ -94,7 +113,31 @@ inline RGB readAt(const Canvas& cv, size_t off) {
                cv.cpl >= 2 ? cv.data[off + 1] : uint8_t{0},
                cv.cpl >= 3 ? cv.data[off + 2] : uint8_t{0}};
 }
+
+/// eachLight's loop, its writes through a restrict pointer: a byte store may alias anything, and the restrict keeps a lambda's captures in registers.
+template <typename LightFn>
+inline void eachLightRows(uint8_t* __restrict out, const Canvas& cv, LightFn& fn) {
+    const uint8_t cpl = cv.cpl;
+    const size_t rowBytes = static_cast<size_t>(cv.dims.x) * cpl;
+    const size_t rows = static_cast<size_t>(cv.dims.y) * cv.dims.z;
+    const uint8_t* const end = cv.data + cv.bytes;
+    Coord3D p{cv.origin.x, cv.origin.y, cv.origin.z};
+    const lengthType xEnd = static_cast<lengthType>(cv.origin.x + cv.dims.x), yEnd = static_cast<lengthType>(cv.origin.y + cv.dims.y);
+    for (size_t r = 0; r < rows && out + rowBytes <= end; r++) {   // a box larger than its buffer stops at the last whole row
+        for (p.x = cv.origin.x; p.x < xEnd; p.x++, out += cpl) {
+            const RGB c = fn(p);
+            if (cpl >= 1) out[0] = c.r;
+            if (cpl >= 2) out[1] = c.g;
+            if (cpl >= 3) out[2] = c.b;
+        }
+        if (++p.y == yEnd) { p.y = cv.origin.y; p.z++; }
+    }
+}
 }  // namespace detail
+
+/// Call `fn(p)` for each of this device's lights and write the color it returns, `p` the light's position in the whole picture, its place in the wall on a device of one: @xref{one-loop-over-a-devices-lights}.
+template <typename LightFn>
+inline void eachLight(const Canvas& cv, LightFn fn) { detail::eachLightRows(cv.data, cv, fn); }
 
 /// One pixel, clipped to the grid: the Canvas form.
 inline void pixel(const Canvas& cv, Coord3D p, RGB c) { detail::writeAt(cv, cv.offsetOf(p), c); }
@@ -676,8 +719,7 @@ inline void lineAA(const Canvas& cv, Coord3D a, Coord3D b, RGB c, uint8_t shorte
 }
 
 namespace sprites {
-/// A small movable bitmap: palette-indexed pixels (index 0 = the transparent key, the classic key-color scheme), frames stacked vertically (frame f = rows [f*h, (f+1)*h)). Carried as constexpr data, the fonts.h shape. Full alpha (Porter-Duff over) stays deferred until a consumer needs it.
-/// A transparent index is what classic sprites used and what LED walls need.
+/// A small movable bitmap of palette-indexed pixels, index 0 the transparent key as classic sprites and LED walls use, its frames stacked vertically (frame f is rows f*h to (f+1)*h), constexpr data as fonts.h holds.
 struct Sprite {
     const uint8_t* pixels;    ///< palette-indexed bytes, one per pixel per frame
     const RGB* palette;       ///< the sprite's own colors; index 0 is never read
