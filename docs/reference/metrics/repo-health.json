@@ -1,5 +1,5 @@
 {
-  "commit": "72096ae0",
+  "commit": "548bbb5c",
   "flash": {
     "esp32s3-n16r8": 2582192,
     "esp32": 2364624,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2542880,
-    "host-macos": 2813792,
+    "host-macos": 2833680,
     "host-windows": 1925120,
     "esp32c3": 2486480,
     "host-linux": 2548000,
@@ -28,14 +28,14 @@
     "esp32s31": "2026-11-18",
     "esp32": "2026-11-18",
     "esp32-pico": "2026-11-18",
-    "esp32s3-n16r8": "2026-11-18",
+    "esp32s3-n16r8": "2026-11-19",
     "esp32s3-n8r8": "2026-10-30",
     "esp32s3-zero": "2026-10-30",
     "esp32-16mb": "2026-10-30",
     "esp32p4rev1-eth-wifi": "2026-11-18",
     "esp32-eth": "2026-11-18",
     "esp32p4rev3-eth": "2026-11-11",
-    "host-macos": "2026-11-18",
+    "host-macos": "2026-11-19",
     "host-windows": "2026-09-30",
     "esp32c3": "2026-11-18",
     "host-linux": "2026-10-12",
@@ -800,8 +800,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 9,
-      "fps": 111111,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -843,9 +843,9 @@
   "loc": {
     "core": 40400,
     "light": 36396,
-    "platform": 30069,
+    "platform": 30441,
     "ui": 15291,
-    "test": 94944,
+    "test": 95925,
     "moondeck": 36413
   },
   "comments": {
@@ -858,16 +858,16 @@
       "ratio": 0.233
     },
     "platform": {
-      "lines": 5384,
-      "ratio": 0.201
+      "lines": 5473,
+      "ratio": 0.202
     },
     "ui": {
       "lines": 3732,
       "ratio": 0.259
     },
     "test": {
-      "lines": 8313,
-      "ratio": 0.101
+      "lines": 8336,
+      "ratio": 0.1
     },
     "moondeck": {
       "lines": 4233,
@@ -875,7 +875,7 @@
     }
   },
   "tests": {
-    "cases": 3587,
+    "cases": 3629,
     "scenarios": 37
   },
   "docs": {
@@ -887,7 +887,7 @@
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6942,
+    "functions": 6979,
     "over_threshold": 332,
     "worst_ccn": 128
   }

@@ -38,11 +38,23 @@
 ///
 /// ## Shutdown
 ///
-/// Shutdown stops publishing, joins the encode thread, joins the refresh thread within a deadline, submits a blank at least as deep as the whole DMA ring (`xferBufCount` buffers of `xferBufSize` bytes), then frees the buffers.
+/// Shutdown stops publishing, joins the encode thread, waits for the refresh thread within a deadline, stops the backend and frees the buffers.
 ///
-/// The blank is ring-deep because on a kernel whose submit returns once queued, the real chunks may still be in flight, and a blank that fills the ring returns only after every one of them has gone out, so the SM stops on a dark word.
+/// The deadline is `kHub75JoinDeadlineMs` (3 s) at least. A slow pixel clock raises it: it is the wire time of the frame the thread may be inside plus the ring-deep blank, doubled for the feed lag and given half again as a margin (`pioShutdownWireMs`), so a healthy submit at a low clock is not read as stuck.
 ///
-/// If the refresh thread does not return within the deadline, a submit is stuck in the kernel: shutdown reports it (wedged, shutdownError), keeps the buffers and the backend, which that thread still reads, and a new open is refused until a later shutdown finds the thread gone.
+/// At the slowest divider (65535, about 610 Hz) the figure is minutes, about 400 s for a 16,512-slot frame by arithmetic, as long as the blank takes on the wire.
+///
+/// The refresh thread submits the blank itself as it leaves its loop, as deep as the whole DMA ring (`xferBufCount` buffers of `xferBufSize` bytes), so on a kernel whose submit returns once queued the blank returns only after every real chunk has gone out. It skips the blank when its last frame submit failed, and the stop then waits for none.
+///
+/// The deadline therefore covers the one call that can block for good, and the closing thread makes no submit. When the thread came back and its blank went out, the backend waits out the blank's wire time and then stops the SM with firmware-message calls: disable, dark word on the pins, clear the FIFOs, remove the program.
+///
+/// When the thread has not returned by the deadline, a submit is stuck in the kernel: the backend stops at once, skipping the wait, and shutdown reports it (wedged, shutdownError), keeps the buffers and the backend, which that thread reads while it is inside, and refuses a new open until a later shutdown finds the thread gone.
+///
+/// The report says what the stop did to the panel: dark when the disable and the pin write succeeded, with the backend's note such as a FIFO that did not drain, else that the stop failed and the panel may hold its last row (hub75_pio_backend.h, Stop). A clean shutdown reports them the same way: it returns true and `shutdownError` holds the text, which the seam publishes as the close error.
+///
+/// A backend whose stop failed retries it in the next shutdown until it has succeeded once: a retry that works replaces the failure with the dark report or clears it, and one that fails again names that failure. A later shutdown frees everything once the stuck thread has returned, as on kernels whose submits time out (rpi-6.6.y, rpi-6.12.y and the others that wait for delivery).
+///
+/// On kernels that queue (6.18.39 and later) a thread that returns right at the deadline can submit its blank into an SM about to be disabled, and that submit then waits for good once the SM stops draining. A stop on the wedged path is terminal there until the process exits (hub75_pio_backend.h, Submit semantics).
 ///
 /// ## Feed
 ///
@@ -82,8 +94,8 @@ class Hub75PioEngine final : public Hub75EngineBase<Hub75PioOptions> {
         if (refreshThread_.joinable()) refreshThread_.detach();
     }
 
-    /// Blank-first shutdown (@xref{shutdown|shutdown}): joins both threads, blanks ring-deep, drains the FIFO, disables the SM and frees everything; true when finished, false when the refresh thread stayed stuck past the deadline. Idempotent.
-    bool shutdown();
+    /// Joins the encode thread, then the refresh thread within a deadline, stops the backend and frees the buffers; false while that thread is stuck, buffers kept (@xref{shutdown|shutdown}); `shutdownError()` holds a failed stop or note. Idempotent.
+    bool shutdown() override;
 
     /// Brightness for subsequently encoded frames (0..255), as lit time; it takes effect on the next encode and leaves the frame on display as it is.
     void setBrightness(uint8_t brightness) MM_NONBLOCKING { brightness_.store(brightness); }
@@ -108,12 +120,15 @@ class Hub75PioEngine final : public Hub75EngineBase<Hub75PioOptions> {
   private:
     bool admit(const Hub75PioOptions& o, std::string& error) override;
     void sizeTheWall() override;
+    uint64_t bufferBytes() const override;
     void allocate() override;
     bool startBackend(bool useStubBackend, std::string& error) override;
-    void dropBackend() override;
     bool encodeLane(const uint8_t* rgb, int lane, uint16_t* slotWords, uint8_t brightness) override;
     void repack(uint32_t* out) override;
     void refreshLoop() override;
+    void resetExtras() override { blankSent_.store(false); }
+    /// Sets the shutdown report from this stop's result: the wedge's reason when `joined` is false, then what the stop did to the panel (dark, or failed), with `said`, the backend's note or failure; a clean shutdown reports a failed stop or a note only.
+    void reportStop(bool joined, bool stopped, const std::string& said);
 
     size_t rowWords_ = 0;        // slots per (plane, row) group: the pass, hold words included
     uint32_t pixelClockActualHz_ = 0;
@@ -121,6 +136,9 @@ class Hub75PioEngine final : public Hub75EngineBase<Hub75PioOptions> {
     uint8_t clkdivFrac_ = 0;
     uint32_t xferBufSize_ = 0;    // the kernel DMA bounce buffer size, bytes
     uint32_t xferBufCount_ = 0;   // the kernel DMA bounce buffers
+
+    std::string wedgeReason_;   // why the join deadline passed, kept apart from the report so each stop rebuilds the report from it
+    std::atomic<bool> blankSent_{false};   // the refresh thread's blank went out, so the stop waits for it; the thread writes it before it ends
 
     RepackTables tables_{};
 

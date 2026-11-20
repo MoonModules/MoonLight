@@ -2,7 +2,9 @@
 
 /// Pins the PIO engine against the stub backend: the options it refuses, the clock divider it rounds, the wide words its refresh thread submits for a known frame, and the blank frame its shutdown leaves, and what the engine hands the backend (the start configuration, the blank's size). No hardware is touched; the stub captures every submit, keeps its records and raises the faults a case asks for.
 ///
-/// The double buffer's cases land beside these with the double buffer: no torn frame, the newest frame wins, the submit cadence holds while an encode runs, shutdown joins both threads before it blanks, and a failed encode keeps the last frame, each under both stub queue models.
+/// The double buffer's cases land beside these with the double buffer: no torn frame, the newest frame wins, the submit cadence holds while an encode runs, the refresh thread blanks as it leaves its loop and the closing thread stops the backend after it, and a failed encode keeps the last frame, each under both stub queue models.
+///
+/// One case opens the real PIO, where piolib is built and the run set MM_TEST_REAL_PIO=1; on a host the seam refuses, that case skips even then.
 
 #include "doctest.h"
 #include "platform/Hub75Pio.h"
@@ -17,6 +19,7 @@
 #include <cerrno>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -38,6 +41,30 @@ uint32_t repacked(const mm::platform::RepackTables& tables, const uint16_t (&slo
     mm::platform::repackSlots(ptrs, lanes, 1, tables, &wide);
     return wide;
 }
+
+// MM_TEST_REAL_PIO set to `value` for the scope, or cleared for null, and put back to the run's own value after: the case reads the rule whatever the shell holds.
+class RealPioEnv {
+  public:
+    explicit RealPioEnv(const char* value) {
+        if (const char* now = std::getenv(kName)) {
+            had_ = true;
+            saved_ = now;
+        }
+        apply(value);
+    }
+    ~RealPioEnv() { apply(had_ ? saved_.c_str() : nullptr); }
+    RealPioEnv(const RealPioEnv&) = delete;
+    RealPioEnv& operator=(const RealPioEnv&) = delete;
+
+  private:
+    static constexpr const char* kName = "MM_TEST_REAL_PIO";
+    static void apply(const char* value) {
+        if (value) setenv(kName, value, 1);
+        else unsetenv(kName);
+    }
+    bool had_ = false;
+    std::string saved_;
+};
 
 }  // namespace
 
@@ -193,6 +220,10 @@ TEST_CASE("Hub75PioEngine: a second open is refused, and shutdown is idempotent 
     REQUIRE(engine.open(pioSmall(), error, true));
     CHECK_FALSE(engine.open(pioSmall(), error, true));
     CHECK(error == "PIO engine already running");
+    mm::platform::Hub75PioOptions invalid = pioSmall();
+    invalid.parallel = 9;
+    CHECK_FALSE(engine.open(invalid, error, true));
+    CHECK(error == "PIO engine already running");   // the engine's state is refused before the options are read
 
     std::vector<uint8_t> frame(64 * 32 * 3, 255);   // all white, so the blank after it is unmistakable
     engine.publishRgb(frame.data());
@@ -309,8 +340,11 @@ TEST_CASE("Hub75PioEngine: the shutdown hands the backend one blank, as deep as 
     // A 2,048-word frame is 8 KiB, so the ring is four 8 KiB buffers: 32 KiB, four frames deep.
     CHECK(mm::platform::stubBackendLastBlankBytes() == start.config.xferBufCount * start.config.xferBufSize);
     CHECK(mm::platform::stubBackendLastBlankBytes() == 4 * 2048 * 4);
+    CHECK(mm::platform::stubBackendStops() == 1);
+    CHECK(mm::platform::stubBackendLastStopDrained());   // the thread came back, so the stop waits out the blank (a stop that skipped the wait would leave the queue to the kernel)
     run.engine.shutdown();
     CHECK(mm::platform::stubBackendBlanks() == 1);   // still 1: a second shutdown adds no blank
+    CHECK(mm::platform::stubBackendStops() == 1);    // and a second shutdown adds no stop
 }
 
 TEST_CASE("Hub75PioEngine: a backend that will not open or start refuses the open, and the engine stays stopped") {
@@ -372,14 +406,92 @@ TEST_CASE("Hub75PioEngine: a submit that times out, as the 6.12 kernel's does, i
     checkFailingSubmitsRecover(-ETIMEDOUT);   // the code the patched piolib returns where stock piolib exits
 }
 
-TEST_CASE("Hub75PioEngine: a blank that fails to submit is counted at shutdown") {
+TEST_CASE("Hub75PioEngine: a blank that fails to submit is counted once, and the shutdown still finishes with the pins dark") {
     mm::test::PioRun run(pioSmall());
     REQUIRE(mm::test::waitFirstSubmit(run.engine));
-    failEverySubmit(-EIO);
-    const uint64_t before = run.engine.submitErrors();
-    run.engine.shutdown();
-    CHECK(run.engine.submitErrors() > before);
+    mm::platform::StubFaults faults;
+    faults.failBlank = true;   // the frames go out, so the refresh thread's last submit succeeds and it tries the blank
+    mm::platform::stubBackendSetFaults(faults);
+    CHECK(run.engine.submitErrors() == 0);
+    CHECK(run.engine.shutdown());
+    CHECK(run.engine.submitErrors() == 1);
+    CHECK(mm::platform::stubBackendBlankAttempts() == 1);
+    CHECK(mm::platform::stubBackendPinsDark());
+    CHECK_FALSE(mm::platform::stubBackendLastStopDrained());   // the blank was skipped, so the stop skips its wait
     CHECK_FALSE(run.engine.isRunning());
+}
+
+TEST_CASE("Hub75PioEngine: a FIFO that did not drain after the blank is a note on a dark panel, and the shutdown says the panel is dark") {
+    mm::test::PioRun run(pioSmall());
+    REQUIRE(mm::test::waitFirstSubmit(run.engine));
+    mm::platform::StubFaults faults;
+    faults.drainTimesOut = true;
+    mm::platform::stubBackendSetFaults(faults);
+    CHECK(run.engine.shutdown());
+    CHECK(mm::platform::stubBackendLastStopDrained());   // the blank went out, so the stop waited and polled
+    CHECK(mm::platform::stubBackendPinsDark());
+    const std::string said = run.engine.shutdownError();
+    CHECK(said.find("the panel is dark") != std::string::npos);
+    CHECK(said.find("did not drain") != std::string::npos);        // the note rides along
+    CHECK(said.find("may hold its last row") == std::string::npos);
+    CHECK(said.find("the stop failed") == std::string::npos);
+    mm::platform::stubBackendSetFaults({});
+    std::string error;
+    REQUIRE(run.engine.open(pioSmall(), error, true));
+    CHECK(run.engine.shutdown());
+    CHECK(run.engine.shutdownError().empty());   // a clean stop leaves the report empty
+}
+
+TEST_CASE("Hub75PioEngine: a close after a submit that timed out sends no blank, waits for none, and leaves the panel dark with nothing to report") {
+    mm::test::PioRun run(pioSmall());
+    REQUIRE(mm::test::waitFirstSubmit(run.engine));
+    REQUIRE(run.engine.shutdown());   // a first run ends with its blank out and a stop that waited
+    REQUIRE(mm::platform::stubBackendLastStopDrained());
+    const uint32_t blanksBefore = mm::platform::stubBackendBlankAttempts();
+    std::string error;
+    REQUIRE(run.engine.open(pioSmall(), error, true));   // the second run's close depends on its own run alone
+    REQUIRE(mm::test::waitFirstSubmit(run.engine));
+    mm::platform::StubFaults faults;
+    faults.failSubmits = -1;
+    faults.submitError = -ETIMEDOUT;   // a kernel that waits for delivery, with the SM not draining
+    faults.drainTimesOut = true;       // so the FIFO would stay full for a stop that waited
+    mm::platform::stubBackendSetFaults(faults);
+    REQUIRE(mm::test::waitUntil([&] { return run.engine.submitErrors() > 0; }));
+    CHECK(run.engine.shutdown());
+    CHECK(mm::platform::stubBackendBlankAttempts() == blanksBefore);   // the second run tried no blank
+    CHECK_FALSE(mm::platform::stubBackendLastStopDrained());
+    CHECK(mm::platform::stubBackendPinsDark());
+    CHECK(run.engine.shutdownError().empty());   // no drain wait, so no timeout to note, and no claim that the panel may hold its row
+}
+
+TEST_CASE("Hub75PioEngine: the wire time of the blank is rounded up from the divider, a fraction included") {
+    CHECK(mm::platform::pioWireMicros(2048, 400, 0) == 20480);      // 100 kHz: 10 us a word
+    CHECK(mm::platform::pioWireMicros(65536, 4, 0) == 6554);        // the ring at 10 MHz: 6,553.6 us
+    CHECK(mm::platform::pioWireMicros(65536, 4, 128) == 7373);      // divider 4.5: 7,372.8 us
+    CHECK(mm::platform::pioWireMicros(0, 4, 0) == 0);
+    CHECK(mm::platform::pioWireMicros(1, 1, 0) == 1);               // a word at the fastest divider is under 1 us, and rounds up
+}
+
+TEST_CASE("Hub75PioEngine: the wait for the blank doubles the ring's wire time for the feed lag, at every divider") {
+    CHECK(mm::platform::pioBlankWaitMicros(65536, 4, 0) == 2 * 6554);   // 13 ms at 10 MHz
+    CHECK(mm::platform::pioBlankWaitMicros(65536, 400, 0) == 2 * 655360);   // 1.3 s at 100 kHz
+    CHECK(mm::platform::pioBlankWaitMicros(65536, 4000, 0) == 2 * 6553600);   // 13 s at 10 kHz: the whole wait runs
+    CHECK(mm::platform::pioBlankWaitMicros(0, 4, 0) == 0);
+}
+
+TEST_CASE("Hub75PioEngine: the shutdown's wire time is the frame and the ring-deep blank, doubled for the feed lag and given half again") {
+    // 10 kHz, a 2,048-word frame and an 8,192-word ring: 204.8 ms and 819.2 ms on the wire.
+    CHECK(mm::platform::pioShutdownWireMs(2048, 8192, 4000, 0) == 3072);
+    CHECK(mm::platform::pioShutdownWireMs(2048, 8192, 4000, 0) > static_cast<uint64_t>(mm::platform::kHub75JoinDeadlineMs));
+    CHECK(mm::platform::pioShutdownWireMs(2048, 8192, 4, 0) < static_cast<uint64_t>(mm::platform::kHub75JoinDeadlineMs));   // 10 MHz: 3 ms, the floor decides
+    CHECK(mm::platform::pioShutdownWireMs(0, 0, 4, 0) == 0);
+    // A big frame counts as much as the ring: 16,512 words at the same clock.
+    CHECK(mm::platform::pioShutdownWireMs(16512, 8192, 4000, 0) == 7412);   // (1651.2 + 819.2 ms) x 3, rounded up
+    // At least the blank's own doubled wait, which is what the engine's deadline rests on.
+    for (const int d : {1, 4, 400, 4000, 65535}) {
+        const uint16_t divider = static_cast<uint16_t>(d);
+        CHECK(mm::platform::pioShutdownWireMs(2048, 8192, divider, 0) * 1000 >= mm::platform::pioWireMicros(8192, divider, 0) * mm::platform::kPioFeedLagFactor);
+    }
 }
 
 TEST_CASE("Hub75PioEngine: a failed encode keeps the last good frame submitting, and the next good one replaces it") {
@@ -453,16 +565,106 @@ TEST_CASE("Hub75PioEngine: on the ring model the engine submits, and the shutdow
     mm::platform::stubBackendReset();
 }
 
-TEST_CASE("Hub75PioEngine: an engine opened directly, with no test mode, is refused where the real backend is made") {
-    // The seam refuses early with its own reason; a path around it, such as this one, meets the same refusal in createPioBackend, so no case reaches piolib or /dev/pio0.
-    const uint32_t opens = mm::platform::pioBackendRealOpens();
+TEST_CASE("Hub75PioEngine: an engine opened directly, with no test mode, reaches the real PIO only when MM_TEST_REAL_PIO=1 opts the run in") {
+    // The seam refuses early with its own reason; a path around it, such as this one, meets the same rule in createPioBackend, so no case reaches piolib or /dev/pio0 unless the run opts in.
+    RealPioEnv notOptedIn(nullptr);
+    const uint32_t opens = mm::platform::hub75PioTestRealOpens();
     mm::platform::Hub75PioEngine engine;
     std::string error;
-    CHECK_FALSE(engine.open(pioSmall(), error));   // the real backend, as production asks for it
-    CHECK(error == "the real PIO is not opened from a test binary");
+    CHECK_FALSE(engine.open(pioSmall(), error));   // the real backend, as production asks for it, with the gate closed
+    CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);   // the refusal says how to opt in
     CHECK_FALSE(engine.isRunning());
-    CHECK(mm::platform::pioBackendRealOpens() == opens);
-    mm::platform::setTestHub75PioReal(true);   // with the gate open the refusal is the build's: piolib is absent here, so the real backend stays out of reach
+    CHECK(mm::platform::hub75PioTestRealOpens() == opens);
+    mm::platform::setTestHub75PioGateOpen(true);   // the gate reopened is not the opt-in: the run's environment decides, on every build
+    CHECK_FALSE(engine.open(pioSmall(), error));
+    CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);
+    CHECK_FALSE(engine.isRunning());
+    CHECK(mm::platform::hub75PioTestRealOpens() == opens);
+}
+
+TEST_CASE("Hub75PioEngine: only MM_TEST_REAL_PIO=1 opts the run in, and no other value does, 0 included") {
+    // The rule reads the variable's value, not whether it is set: a run that says 0 has asked for no PIO.
+    mm::platform::setTestHub75PioGateOpen(true);
+    const uint32_t opens = mm::platform::hub75PioTestRealOpens();
+    for (const char* value : {"0", "", "true", "yes", "2", "1 ", " 1", "01", "off"}) {
+        CAPTURE(std::string(value));
+        RealPioEnv env(value);
+        CHECK_FALSE(mm::platform::hub75PioTestRealOptedIn());
+        mm::platform::Hub75PioEngine engine;
+        std::string error;
+        CHECK_FALSE(engine.open(pioSmall(), error));
+        CHECK(error.find("MM_TEST_REAL_PIO=1") != std::string::npos);   // refused by the test rule, whatever the build
+        CHECK(mm::platform::hub75PioTestRealOpens() == opens);
+    }
+    RealPioEnv exactly("1");
+    CHECK(mm::platform::hub75PioTestRealOptedIn());
+}
+
+TEST_CASE("Hub75PioEngine: the real-backend gate refuses a closed gate always, a reopened one unless the run opted in, and never a program's gate") {
+    using mm::platform::PioBackendGate;
+    using mm::platform::pioBackendGateRefuses;
+    CHECK(pioBackendGateRefuses(PioBackendGate::Closed, false));
+    CHECK(pioBackendGateRefuses(PioBackendGate::Closed, true));
+    CHECK(pioBackendGateRefuses(PioBackendGate::Reopened, false));
+    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Reopened, true));
+    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Program, false));
+    CHECK_FALSE(pioBackendGateRefuses(PioBackendGate::Program, true));
+}
+
+#ifndef MM_HUB75_PIO_HAVE_PIOLIB
+TEST_CASE("Hub75PioEngine: an engine opened directly in a run that opted in, where the build has no piolib, names the library") {
+    RealPioEnv optedIn("1");   // safe here: this build links no piolib, so the real backend stays out of reach
+    mm::platform::setTestHub75PioGateOpen(true);
+    mm::platform::Hub75PioEngine engine;
+    std::string error;
     CHECK_FALSE(engine.open(pioSmall(), error));
     CHECK(error == "needs a Raspberry Pi build with piolib");
+    CHECK_FALSE(engine.isRunning());
 }
+#else
+namespace {
+
+// Holds an engine and the reopened gate for the scope, then shuts down and closes the gate; a wedged engine is leaked, as the seam leaks its own, since a thread in the kernel reads its buffers.
+struct RealPioScope {
+    mm::platform::Hub75PioEngine* held = new mm::platform::Hub75PioEngine;
+    mm::platform::Hub75PioEngine& engine = *held;
+    RealPioScope() { mm::platform::setTestHub75PioGateOpen(true); }
+    ~RealPioScope() {
+        const bool clean = mm::test::waitUntil([&] { return engine.shutdown(); }) && !engine.wedged();
+        if (clean) delete held;   // otherwise the engine stays allocated for the life of the process
+        mm::platform::setTestHub75PioGateOpen(false);
+    }
+    RealPioScope(const RealPioScope&) = delete;
+    RealPioScope& operator=(const RealPioScope&) = delete;
+};
+
+}  // namespace
+
+// Opens the real PIO and runs only where piolib is built and the run set MM_TEST_REAL_PIO=1; on a host the seam refuses, an opted-in run skips this case too. Stop MoonLight's service first, since /dev/pio0 is single-claim.
+TEST_CASE("Hub75PioEngine: on a Pi, in a run that opted in, the real PIO opens, submits frames and closes dark, and the engine opens again") {
+    if (!mm::platform::hub75PioTestRealOptedIn()) {
+        MESSAGE("skipped: the run did not set MM_TEST_REAL_PIO=1");
+        return;
+    }
+    if (const char* why = mm::platform::hub75PioRefusal()) {
+        MESSAGE("skipped: the seam refuses PIO on this host (", std::string(why), "), and a direct open bypasses that refusal");
+        return;
+    }
+    RealPioScope scope;
+    mm::platform::Hub75PioEngine& engine = scope.engine;
+    const uint32_t opens = mm::platform::hub75PioTestRealOpens();
+    for (int cycle = 0; cycle < 2; cycle++) {
+        CAPTURE(cycle);
+        std::string error;
+        REQUIRE_MESSAGE(engine.open(pioSmall(), error), error);
+        CHECK(std::string(engine.backendName()).find("piolib") != std::string::npos);
+        CHECK(mm::test::waitUntil([&] { return engine.framesSubmitted() >= 100; }, 2000));   // a 2,048-word frame is 0.2 ms on the wire at 10 MHz
+        CHECK(engine.shutdown());
+        CHECK(engine.shutdownError().empty());                   // the stop darkened the panel and reported cleanly
+        CHECK(std::string(engine.backendName()) == "(none)");    // and the backend was closed
+        CHECK_FALSE(engine.isRunning());
+        CHECK_FALSE(engine.wedged());
+    }
+    CHECK(mm::platform::hub75PioTestRealOpens() == opens + 2);   // each cycle opened the real backend
+}
+#endif

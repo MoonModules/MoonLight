@@ -44,6 +44,16 @@ void* hub75_pio_open(int* err) {
     return (void*)pio;
 }
 
+/* Sets the OUT pins (GPIO 2..27) to a wide word, bit 0 on GPIO 2: one
+ * firmware message, which takes effect with the state machine disabled
+ * (measured on 6.18.60, 2026-11-19). */
+static void set_out_pins(PIO pio, int sm, uint32_t wide_word) {
+    const uint32_t out_mask = ((1u << HUB75_OUT_PIN_COUNT) - 1u)
+                              << HUB75_OUT_BASE_GPIO;
+    pio_sm_set_pins_with_mask(pio, (uint)sm, wide_word << HUB75_OUT_BASE_GPIO,
+                              out_mask);
+}
+
 int hub75_pio_claim_sm(void* handle) {
     PIO pio = (PIO)handle;
     pio_select(pio);
@@ -95,8 +105,6 @@ void hub75_pio_init_sm(void* handle, int sm,
     PIO pio = (PIO)handle;
     pio_sm_config config;
     uint gpio;
-    const uint32_t out_mask = ((1u << HUB75_OUT_PIN_COUNT) - 1u)
-                              << HUB75_OUT_BASE_GPIO;
     /* The config calls below read the thread's current instance, which
      * pio_select() sets per thread: this runs on whichever thread starts. */
     pio_select(pio);
@@ -104,8 +112,7 @@ void hub75_pio_init_sm(void* handle, int sm,
      * idle word. Output values start at 0, which on this board is OE low
      * (lit) on row 0, so switching first lights one row until the first
      * frame. */
-    pio_sm_set_pins_with_mask(pio, (uint)sm,
-                              params->idle_wide_word << HUB75_OUT_BASE_GPIO, out_mask);
+    set_out_pins(pio, sm, params->idle_wide_word);
     pio_sm_set_consecutive_pindirs(pio, (uint)sm, HUB75_OUT_BASE_GPIO,
                                    HUB75_OUT_PIN_COUNT, true);
     for (gpio = HUB75_OUT_BASE_GPIO;
@@ -130,12 +137,34 @@ void hub75_pio_init_sm(void* handle, int sm,
     pio_sm_init(pio, (uint)sm, (uint)params->offset, &config);
 }
 
+/* The result of a piolib call that returns void and discards its ioctl's
+ * result: a failed ioctl leaves its code in errno and a successful one
+ * leaves errno alone, so the caller clears errno before the call. Reads
+ * piolib's error flag too, for a piolib that sets it. */
+static int silent_call_result(PIO pio) {
+    if (errno != 0)
+        return -errno;
+    return pio_get_error(pio) ? -EIO : 0;
+}
+
+int hub75_pio_set_pins(void* handle, int sm, uint32_t wide_word) {
+    PIO pio = (PIO)handle;
+    pio_clear_error(pio);
+    errno = 0;
+    set_out_pins(pio, sm, wide_word);
+    return silent_call_result(pio);
+}
+
 void hub75_pio_clear_fifos(void* handle, int sm) {
     pio_sm_clear_fifos((PIO)handle, (uint)sm);
 }
 
-void hub75_pio_set_enabled(void* handle, int sm, int enable) {
-    pio_sm_set_enabled((PIO)handle, (uint)sm, enable ? true : false);
+int hub75_pio_set_enabled(void* handle, int sm, int enable) {
+    PIO pio = (PIO)handle;
+    pio_clear_error(pio);
+    errno = 0;
+    pio_sm_set_enabled(pio, (uint)sm, enable ? true : false);
+    return silent_call_result(pio);
 }
 
 int hub75_pio_xfer(void* handle, int sm, void* data, uint32_t bytes) {
@@ -160,13 +189,15 @@ void hub75_pio_remove_program(void* handle, const uint16_t* instructions,
     pio_remove_program(pio, &program, (uint)offset);
 }
 
-/* One kernel client per process. piolib's pio_open() starts an IRQ wait
+/* One kernel client per process, with every piolib to date (read in
+ * utils PR #233, open since 2026-11-18). pio_open() starts an IRQ wait
  * thread blocked in PIO_IOC_IRQ_WAIT on the instance's fd, and pio_close()
  * closes the fd with that thread still blocked, so the ioctl keeps the file
- * alive and the kernel's release, the one place it frees the client's DMA
- * claims, waits for process exit. A second client's pio_sm_config_xfer then
- * gets EBUSY. Keeping the instance open makes a re-init the same client,
- * which re-configures its own DMA. The kernel frees everything at exit.
+ * alive and the kernel's release, which frees the client's DMA claims, waits
+ * for process exit. A second client's pio_sm_config_xfer then gets EBUSY.
+ * PR #233 would end that thread at pio_close; until it merges, keeping the
+ * instance open makes a re-init the same client, which re-configures its own
+ * DMA. The kernel frees everything at exit.
  *
  * The DMA claim belongs to the state machine configured, and is freed when
  * that same one is configured anew. hub75_pio_claim_sm() therefore prefers

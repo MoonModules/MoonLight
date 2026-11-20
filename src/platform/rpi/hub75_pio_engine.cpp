@@ -15,6 +15,7 @@
 #include "platform/rpi/hub75_pio_engine.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <iterator>
 #include <thread>
@@ -42,14 +43,6 @@ constexpr uint32_t kXferBufCount = 4;
 }  // namespace
 
 bool Hub75PioEngine::admit(const Hub75PioOptions& o, std::string& error) {
-    if (running_) {
-        error = "PIO engine already running";
-        return false;
-    }
-    if (wedged_) {
-        error = shutdownError_;   // the last refresh thread is still in the kernel
-        return false;
-    }
     return hub75PioCheckOptions(o, error);
 }
 
@@ -78,7 +71,20 @@ void Hub75PioEngine::sizeTheWall() {
     const uint64_t wireMs = pixelClockActualHz_ ? static_cast<uint64_t>(frameSlots_) * 1000 / pixelClockActualHz_ : 0;
     stallMs_ = std::max<uint64_t>(stallFloorMs_, 4 * wireMs);
 
+    // The shutdown's wire time (the frame the thread may be inside, then the ring-deep blank) sizes the join deadline: at a slow clock a healthy submit stays inside the deadline.
+    const uint64_t ringWords = static_cast<uint64_t>(xferBufCount_) * xferBufSize_ / kBytesPerPixelClock;
+    const uint64_t shutdownWireMs = pioShutdownWireMs(frameSlots_, ringWords, clkdivInt_, clkdivFrac_);
+    sizeJoinDeadline(shutdownWireMs);
+
     buildRepackTables(tables_);
+}
+
+uint64_t Hub75PioEngine::bufferBytes() const {
+    const uint64_t rgb = 3 * static_cast<uint64_t>(virtWidth_) * virtHeight_ * 3;                          // the RGB triple buffer
+    const uint64_t laneSlots = static_cast<uint64_t>(lanes_) * frameSlots_ * sizeof(uint16_t);              // each lane's slot stream
+    const uint64_t encoded = 3 * static_cast<uint64_t>(frameSlots_) * sizeof(uint32_t);                    // the encoded triple buffer
+    const uint64_t blank = static_cast<uint64_t>(xferBufCount_) * xferBufSize_;                            // the blank, as deep as the DMA ring
+    return rgb + laneSlots + encoded + blank;
 }
 
 void Hub75PioEngine::allocate() {
@@ -118,48 +124,67 @@ bool Hub75PioEngine::startBackend(bool useStubBackend, std::string& error) {
     return true;
 }
 
-void Hub75PioEngine::dropBackend() {
-    backend_->close();
-    backend_.reset();
+void Hub75PioEngine::reportStop(bool joined, bool stopped, const std::string& said) {
+    // Built from this stop's own result, so a later stop that retries replaces what the earlier one said, and one that finds the SM dark says the same again.
+    const std::string dark = said.empty() ? "the panel is dark" : "the panel is dark (" + said + ")";
+    const std::string failed = "the stop failed (" + said + "), so the panel may hold its last row";
+    if (joined) {
+        if (!stopped) shutdownError_ = failed;                // the join cleared the report, so a clean stop leaves it empty
+        else if (!said.empty()) shutdownError_ = dark;
+    } else {
+        shutdownError_ = wedgeReason_ + (stopped ? ", and " + dark : "; " + failed);
+    }
 }
 
 bool Hub75PioEngine::shutdown() {
-    if (!running_ && !backend_ && threadsJoined()) return true;
-    // Both threads first: the blank goes out only as the sole submitter, and every reader of a buffer is gone before it is freed.
-    if (!stopThreads()) return false;
+    if (!running_ && threadsJoined()) return true;   // a fresh engine, or one already shut down
+    // The refresh thread blanks as it leaves its loop, so the join deadline covers the only call that can block for good; this thread makes no submit.
+    const bool alreadyWedged = wedged();
+    const bool joined = stopThreads();
+    if (!joined && !alreadyWedged) wedgeReason_ = shutdownError_;   // the join's own reason, before the stop adds to it
     if (backend_) {
-        // Blank-first: the backend submits the ring-deep blank, waits for the FIFO to drain, then disables the SM, leaving the panel dark; the seam's close returns void, so a failure is counted, not printed.
-        std::string error;
-        if (!backend_->blankAndStop(blank_.data(),
-                                    static_cast<uint32_t>(blank_.size() * 4),
-                                    error)) {
-            submitErrors_++;
+        // The stop is firmware-message calls only, so it runs on the wedged path too, and a backend that failed it tries again here; the seam's close returns void, so what it says rides in the report. The stop waits for the blank only when it went out.
+        std::string said;
+        const bool stopped = backend_->stop(joined && blankSent_.load(), said);
+        reportStop(joined, stopped, said);
+        if (joined) {
+            backend_->close();
+            backend_.reset();
         }
-        backend_->close();
-        backend_.reset();
     }
+    if (!joined) return false;   // the stuck thread still reads the buffers and the backend
     releaseBuffers();
     return true;
 }
 
 void Hub75PioEngine::refreshLoop() {
     RefreshWindow window;
+    bool lastSubmitOk = true;
     while (!stop_.load()) {
         // Take the newest encoded frame if the encode thread published one since the last take, else submit the current frame again.
         encoded_.take();
         submitEnteredMs_.store(hub75NowMs());   // a hung submit shows as a stall, not as a frozen rate
         const int rc = backend_->submitFrame(encoded_.current(), static_cast<uint32_t>(frameSlots_ * kBytesPerPixelClock));
         submitEnteredMs_.store(0);
-        if (rc == 0) {
+        lastSubmitOk = rc == 0;
+        if (lastSubmitOk) {
             framesSubmitted_++;
             window.count(fps_);
         } else {
-            // Count the failure, let the window see the miss so the rate falls to 0, pause and retry: the ioctl's error (-EINTR, -EIO, or -ETIMEDOUT on 6.12) lands here, and a hung submit is the shutdown deadline's case.
+            // Count the failure, let the window see the miss so the rate falls to 0, pause and retry: the ioctl's error (-EIO, -EINTR from 6.18.53, -ETIMEDOUT where a submit waits for delivery) lands here, and a hung submit is the shutdown deadline's case.
             submitErrors_++;
             window.count(fps_, false);
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
+    // A failed last submit skips the blank: on a kernel that waits for delivery it could take 2 s and outlast the deadline, and the stop darkens the panel anyway, with no wait for the blank it skipped.
+    if (!lastSubmitOk) return;
+    // The ring-deep blank, so every real chunk has gone out when it returns; -ENODEV means the stop already ran, as when a stuck submit returned late.
+    submitEnteredMs_.store(hub75NowMs());
+    const int rc = backend_->submitBlank(blank_.data(), static_cast<uint32_t>(blank_.size() * 4));
+    submitEnteredMs_.store(0);
+    blankSent_.store(rc == 0);
+    if (rc != 0 && rc != -ENODEV) submitErrors_++;
 }
 
 void Hub75PioEngine::repack(uint32_t* out) {

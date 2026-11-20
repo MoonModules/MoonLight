@@ -12,11 +12,13 @@
 ///
 /// ## Faults
 ///
-/// `StubFaults` makes the open, the start or the next submits fail, or makes a submit hang until the fault is cleared. A hang stands in for the wait of a kernel from 6.18.39, whose submit has no timeout.
+/// `StubFaults` makes the open, the start, the stop, the next submits or the blank fail, or makes a submit hang until the fault is cleared. A hang stands in for the wait of a kernel from 6.18.39, whose submit has no timeout, and it holds in both queue models.
 ///
 /// A failed submit returns -EIO, or the code a test sets: the codes a failed ioctl hands back through piolib (-EINTR, -EIO, -EFAULT, -EINVAL, -ETIMEDOUT, -EREMOTEIO).
 ///
-/// `fifoEmptyEarly` makes the blank stop the way the piolib backend's FIFO poll can: as soon as the blank is queued, recording how many chunks of real frames were then still in flight. A blank that does not cover the whole ring leaves some, and the SM stops on whatever word of one it shifted last.
+/// `drainTimesOut` makes a stop with `drain` return true with a note in `error`, as a FIFO that stays full does on the real backend, which the disable darkens all the same.
+///
+/// `fifoEmptyEarly` makes stop() skip the wait for the queue, as an early FIFO-empty poll does, recording how many chunks of real frames were then still in flight. A blank that does not cover the whole ring leaves some, and the SM stops on whatever word of one it shifted last.
 ///
 /// ## Limits
 ///
@@ -30,6 +32,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 #include "platform/rpi/hub75_pio_backend.h"
@@ -49,7 +52,10 @@ struct StubFaults {
     int failSubmits = 0;       ///< the next this many submits, the blank's included, fail with `submitError`; every one when -1
     int submitError = -5;      ///< the code a failed submit returns, -EIO by default
     bool hangSubmits = false;  ///< a submit blocks until the faults change, as one stuck in the kernel
-    bool fifoEmptyEarly = false;   ///< the blank stops the stub as soon as it is queued, as an early FIFO-empty poll does
+    bool failBlank = false;        ///< a blank submit fails with `submitError`, and the frames' submits succeed
+    bool failStop = false;         ///< a stop fails with an error and leaves the pins as they were, as a disable or a pin write the kernel refuses does; every stop fails while it is set, retries included
+    bool fifoEmptyEarly = false;   ///< a stop with `drain` skips the wait for the queue, as an early FIFO-empty poll does
+    bool drainTimesOut = false;    ///< a stop with `drain` notes that the FIFO did not drain, as piolib's does, and still darkens the pins
     uint32_t copyMicros = 0;       ///< microseconds a submit takes to copy the frame out of the caller's buffer, reading half before and half after, as a slow kernel copy does
 };
 
@@ -87,14 +93,32 @@ size_t stubBackendFrameIds(StubFrameId* out, size_t cap);
 /// What the last start() received, with the count of starts.
 StubStartRecord stubBackendLastStart();
 
-/// Submits attempted after the blank stopped the stub and before the next start, which a refresh thread still alive at the blank would make.
-uint32_t stubBackendSubmitsAfterBlank();
+/// Submits attempted after a stop and before the next start, which a refresh thread still alive at the stop, or released late, would make.
+uint32_t stubBackendSubmitsAfterStop();
 
-/// Frame submits made by a thread with SIGTERM deliverable, a set the engine's refresh thread stays out of (blockStopSignals); the blank, sent from the shutdown's thread, is not counted.
+/// Frame submits made by a thread with SIGTERM deliverable, a set the engine's refresh thread stays out of (blockStopSignals); the blank is not counted.
 uint32_t stubBackendSubmitsWithStopOpen();
 
-/// How many chunks of real frames were still in flight when the last blank stopped the stub: 0 when the stop was safe, since only the blank's own chunks were left.
+/// How many chunks of real frames were still in flight when the last stop with `drain` ran: 0 when the stop was safe, since only the blank's own chunks were left.
 uint32_t stubBackendRealChunksInFlightAtStop();
+
+/// Blank submits the stub was asked for since the last reset, the failed ones included.
+uint32_t stubBackendBlankAttempts();
+
+/// The thread that made the last recorded blank submit, a default id before any.
+std::thread::id stubBackendBlankThread();
+
+/// The submits, frames and blanks, that `thread` made since the last reset.
+uint32_t stubBackendSubmitsFromThread(std::thread::id thread);
+
+/// The stops that stopped a started stub since the last reset: one per start, whatever later stops and retries follow.
+uint32_t stubBackendStops();
+
+/// Whether the last of those stops had `drain` set: true after a clean shutdown, false after one that skipped the wait, as on a missed join deadline; false before any.
+bool stubBackendLastStopDrained();
+
+/// Whether a stop has run and set the pins to the dark word since the last start; a start clears it, and a stop that failed (`failStop`) leaves it clear.
+bool stubBackendPinsDark();
 
 /// Blank frames the stub has been asked to submit since the last reset.
 uint32_t stubBackendBlanks();

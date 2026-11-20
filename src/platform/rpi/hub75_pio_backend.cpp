@@ -6,18 +6,31 @@
 
 #include <atomic>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 
 namespace mm::platform {
 
 namespace {
-std::atomic<bool> realAllowed_{true};         // a program may open the real backend; the test binary turns it off
-std::atomic<uint32_t> realOpens_{0};          // real backends created
+
+// A program opens the real backend freely. The test binary closes the gate before every case, and a case may reopen it; the real backend then opens only when MM_TEST_REAL_PIO=1 (hub75_pio_backend.h, Real-backend gate).
+std::atomic<PioBackendGate> gate_{PioBackendGate::Program};
+std::atomic<uint32_t> realOpens_{0};   // real backends created
+
+// Whether the test binary's rule keeps the real backend closed now.
+bool refusedByTest() { return pioBackendGateRefuses(gate_.load(), pioBackendRealOptedIn()); }
+
 }  // namespace
+
+// The environment is read at each call, so a case that sets or clears the variable sees its own value.
+bool pioBackendRealOptedIn() {
+    const char* value = std::getenv("MM_TEST_REAL_PIO");
+    return value != nullptr && std::strcmp(value, "1") == 0;
+}
 
 PioBackend* createPioBackend(bool preferStub) {
     if (preferStub) return createStubBackend();
-    if (!realAllowed_.load()) return nullptr;   // refused here, before piolib or /dev/pio0 is looked at
+    if (refusedByTest()) return nullptr;   // refused here, before piolib or /dev/pio0 is looked at
 #ifdef MM_HUB75_PIO_HAVE_PIOLIB
     realOpens_++;
     return createPiolibBackend();
@@ -27,12 +40,12 @@ PioBackend* createPioBackend(bool preferStub) {
 }
 
 const char* pioBackendRefusal() {
-    return realAllowed_.load() ? "needs a Raspberry Pi build with piolib" : "the real PIO is not opened from a test binary";
+    return refusedByTest() ? kPioTestRefusal : "needs a Raspberry Pi build with piolib";
 }
 
-bool pioBackendRealAllowed() { return realAllowed_.load(); }
+bool pioBackendGateOpen() { return gate_.load() != PioBackendGate::Closed; }
 
-void setPioBackendRealAllowed(bool allowed) { realAllowed_.store(allowed); }
+void setPioBackendGateOpen(bool open) { gate_.store(open ? PioBackendGate::Reopened : PioBackendGate::Closed); }
 
 uint32_t pioBackendRealOpens() { return realOpens_.load(); }
 

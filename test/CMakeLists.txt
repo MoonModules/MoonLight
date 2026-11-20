@@ -128,6 +128,7 @@ add_executable(mm_tests
     unit/core/unit_platform_update.cpp
     unit/core/unit_platform_hub75pio_options.cpp
     unit/core/unit_platform_machine.cpp
+    unit/core/unit_platform_memory.cpp
     unit/core/unit_ReceiverList.cpp
     unit/core/unit_Addressing.cpp
     unit/core/unit_NameResolver.cpp

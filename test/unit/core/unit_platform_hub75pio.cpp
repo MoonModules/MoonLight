@@ -12,6 +12,7 @@
 #include "unit/light/hub75_port.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -29,6 +30,13 @@ mm::platform::Hub75PioOptions benchWall() {
     o.panelsPerLane = 2;
     o.parallel = 3;
     return o;
+}
+
+// Opens the small wall on the stub with a 100 ms join deadline and waits for its first frame, as the cases of a close that meets a stuck thread begin.
+void openSmallWithShortDeadline() {
+    mm::platform::setTestHub75PioJoinDeadlineMs(100);
+    REQUIRE(mm::platform::hub75PioOpen(mm::test::pioSmall()));
+    REQUIRE(mm::test::waitUntil([] { return mm::platform::stubBackendSubmittedFrames() > 0; }));
 }
 
 // The PIO check's reason on a Pi 5 running `release`, or empty when PIO serves there.
@@ -140,7 +148,7 @@ TEST_CASE("Hub75Pio: an open outside a test mode is refused in the test binary b
     mm::PioHost pi5("6.18.60+rpt-rpi-2712", true);   // a host that would serve the PIO, where piolib is linked
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
-    CHECK(std::string(mm::platform::hub75PioLastError()) == "the real PIO is not opened from a test binary");
+    CHECK(std::string(mm::platform::hub75PioLastError()).find("MM_TEST_REAL_PIO=1") != std::string::npos);   // the refusal says how to opt in
     CHECK(mm::platform::hub75PioTestRealAttempts() == attempts + 1);   // asked for, and stopped at the gate
     CHECK(mm::platform::hub75PioTestRealOpens() == 0);                 // none reached the backend
     CHECK(mm::platform::hub75PioWidth() == 0);
@@ -149,7 +157,7 @@ TEST_CASE("Hub75Pio: an open outside a test mode is refused in the test binary b
 #ifndef MM_HUB75_PIO_HAVE_PIOLIB
 TEST_CASE("Hub75Pio: without piolib an open outside a test mode fails naming the library") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
-    mm::platform::setTestHub75PioReal(true);   // the host's own refusal is the case; piolib is absent, so the real backend stays out of reach
+    mm::platform::setTestHub75PioGateOpen(true);   // the host's own refusal is the case; piolib is absent, so the real backend stays out of reach
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
     CHECK(std::string(mm::platform::hub75PioLastError()) == "needs a Raspberry Pi build with piolib");
@@ -160,7 +168,7 @@ TEST_CASE("Hub75Pio: without piolib an open outside a test mode fails naming the
 #ifdef MM_HUB75_PIO_HAVE_PIOLIB
 TEST_CASE("Hub75Pio: a stalling kernel refuses the open outright, since the PIO output has no fallback") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
-    mm::platform::setTestHub75PioReal(true);   // the kernel check refuses before any backend is reached
+    mm::platform::setTestHub75PioGateOpen(true);   // the kernel check refuses before any backend is reached
     mm::PioHost stalls("6.18.50+rpt-rpi-2712", true);
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
@@ -170,7 +178,7 @@ TEST_CASE("Hub75Pio: a stalling kernel refuses the open outright, since the PIO 
 
 TEST_CASE("Hub75Pio: without /dev/pio0 the open is refused, whatever the kernel") {
     mm::platform::setTestHub75Pio(Hub75PioMode::Off);
-    mm::platform::setTestHub75PioReal(true);   // the device check refuses before any backend is reached
+    mm::platform::setTestHub75PioGateOpen(true);   // the device check refuses before any backend is reached
     mm::PioHost host("6.18.60+rpt-rpi-2712", false);
     CHECK_FALSE(mm::platform::hub75PioOpen(benchWall()));
     REQUIRE(mm::platform::hub75PioLastError() != nullptr);
@@ -385,6 +393,20 @@ TEST_CASE("Hub75PioStub: the correction reaches the engine, and the rate is the 
     CHECK(mm::platform::hub75PioFps() != 99);
 }
 
+TEST_CASE("Hub75PioStub: a correction set before the open holds across it, so the first frames light at it") {
+    mm::PioPortGuard guard(Hub75PioMode::Stub);
+    mm::platform::hub75PioCorrection(0);   // the output sets the correction ahead of its first push, before the engine opens
+    REQUIRE(mm::platform::hub75PioOpen(mm::test::pioSmall()));
+    const uint64_t submitted = mm::platform::stubBackendSubmittedFrames();
+    std::vector<uint8_t> frame(64 * 32 * 3, 255);   // all white
+    mm::platform::hub75PioPush(frame.data());
+    CHECK(mm::test::waitUntil([&] { return mm::platform::stubBackendSubmittedFrames() >= submitted + 3; }));
+    // Brightness 0 lights no word: the white frame goes out dark although the engine opened after the correction.
+    std::vector<uint32_t> last(2048);
+    REQUIRE(mm::platform::stubBackendCopyLastFrame(last.data(), last.size()) == 2048);
+    CHECK(mm::test::litWords(last) == 0);
+}
+
 TEST_CASE("Hub75PioStub: frames pushed from another task while the engine runs reach it, and the close joins") {
     // The render task pushes while the refresh thread encodes and submits: the publish-versus-refresh handover under the sanitizer lanes.
     mm::PioPortGuard guard(Hub75PioMode::Stub);
@@ -472,11 +494,55 @@ TEST_CASE("Hub75Pio: a pixel clock past the 20 MHz the bench ran opens with a wa
     }
 }
 
-TEST_CASE("Hub75Pio: a close that finds the refresh thread stuck says so, and a later close finishes") {
+TEST_CASE("Hub75Pio: a close whose stop fails publishes why though it finished, and a close whose stop works leaves none") {
     mm::PioPortGuard guard(Hub75PioMode::Stub);
-    mm::platform::setTestHub75PioJoinDeadlineMs(100);
     REQUIRE(mm::platform::hub75PioOpen(mm::test::pioSmall()));
     REQUIRE(mm::test::waitUntil([] { return mm::platform::stubBackendSubmittedFrames() > 0; }));
+    mm::platform::StubFaults faults;
+    faults.failStop = true;
+    mm::platform::stubBackendSetFaults(faults);
+    mm::platform::hub75PioClose();   // the thread joined, so the close finished, and the failed stop still shows
+    REQUIRE(mm::platform::hub75PioCloseError() != nullptr);
+    const std::string why = mm::platform::hub75PioCloseError();
+    CHECK(why.find("the stop failed") != std::string::npos);
+    CHECK(why.find("may hold its last row") != std::string::npos);
+    CHECK(why.find("did not return") == std::string::npos);
+    mm::platform::stubBackendSetFaults({});
+    REQUIRE(mm::platform::hub75PioOpen(mm::test::pioSmall()));   // the engine opens again: the PIO is free
+    mm::platform::hub75PioClose();
+    CHECK(mm::platform::hub75PioCloseError() == nullptr);        // a stop that worked leaves none
+}
+
+TEST_CASE("Hub75Pio: a later close whose retried stop fails again keeps a failure message, and a close whose stop works clears it") {
+    mm::PioPortGuard guard(Hub75PioMode::Stub);
+    openSmallWithShortDeadline();
+    mm::platform::StubFaults faults;
+    faults.hangSubmits = true;
+    faults.failStop = true;
+    mm::platform::stubBackendSetFaults(faults);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));   // the refresh thread is inside the hung submit
+    mm::platform::hub75PioClose();
+    REQUIRE(mm::platform::hub75PioCloseError() != nullptr);
+    CHECK(std::string(mm::platform::hub75PioCloseError()).find("did not return") != std::string::npos);
+    faults.hangSubmits = false;   // the thread returns, and the stop stays refused
+    mm::platform::stubBackendSetFaults(faults);
+    auto failureOnly = [] {
+        mm::platform::hub75PioClose();
+        const char* why = mm::platform::hub75PioCloseError();
+        return why != nullptr && std::string(why).find("did not return") == std::string::npos;
+    };
+    CHECK(mm::test::waitUntil(failureOnly));   // the close finished, and it did not clear what the stop said
+    REQUIRE(mm::platform::hub75PioCloseError() != nullptr);
+    CHECK(std::string(mm::platform::hub75PioCloseError()).find("the stop failed") != std::string::npos);
+    mm::platform::stubBackendSetFaults({});
+    REQUIRE(mm::platform::hub75PioOpen(mm::test::pioSmall()));
+    mm::platform::hub75PioClose();
+    CHECK(mm::platform::hub75PioCloseError() == nullptr);
+}
+
+TEST_CASE("Hub75Pio: a close that finds the refresh thread stuck says so, and a later close finishes") {
+    mm::PioPortGuard guard(Hub75PioMode::Stub);
+    openSmallWithShortDeadline();
     mm::test::hangSubmits();
     CHECK(mm::platform::hub75PioCloseError() == nullptr);
     mm::platform::hub75PioClose();

@@ -11,10 +11,12 @@
 #include "platform/rpi/hub75_pio_backend_stub.h"
 #include "platform/rpi/hub75_pio_pins.h"
 
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -111,15 +113,124 @@ TEST_CASE("Hub75PioStub: the queue model can be switched back to blocking") {
     CHECK(submitsTake(s, 2) >= 2 * kSlowerWire);
 }
 
-TEST_CASE("Hub75PioStub: on the ring the blank waits for the queue to drain, and the stub then stops") {
+TEST_CASE("Hub75PioStub: on the ring a stop with drain waits for the queue to empty, and the stub then refuses submits") {
     Started s(kFrameBytes, 4);
     mm::platform::stubBackendSetQueueModel(StubQueueModel::Ring);
     const auto t0 = Clock::now();
     for (int i = 0; i < 3; i++) CHECK(s.submit() == 0);
     std::vector<uint32_t> blank(kFrameWords, 0xFFFF);
-    CHECK(s.backend->blankAndStop(blank.data(), kFrameBytes, s.error));
+    CHECK(s.backend->submitBlank(blank.data(), kFrameBytes) == 0);
+    CHECK(s.backend->stop(true, s.error));
     CHECK(Clock::now() - t0 >= 4 * kFrameWire);   // three frames and the blank, every chunk out
+    CHECK(mm::platform::stubBackendPinsDark());
     CHECK(s.submit() == -ENODEV);                 // stopped
+}
+
+TEST_CASE("Hub75PioStub: a stop with drain clear runs while a submit hangs, darkens the pins and refuses the submits after it") {
+    Started s(kFrameBytes, 4);
+    mm::platform::stubBackendSetQueueModel(StubQueueModel::Ring);
+    StubFaults faults;
+    faults.hangSubmits = true;
+    mm::platform::stubBackendSetFaults(faults);
+    std::atomic<int> rc{-1};
+    std::thread stuck([&] { rc = s.submit(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));   // the submit is inside the hang
+    CHECK_FALSE(mm::platform::stubBackendPinsDark());
+    const auto t0 = Clock::now();
+    CHECK(s.backend->stop(false, s.error));
+    CHECK(Clock::now() - t0 < kFrameWire);   // no wait for the queue
+    CHECK(mm::platform::stubBackendPinsDark());
+    mm::platform::stubBackendSetFaults({});   // the kernel lets the submit go
+    stuck.join();
+    CHECK(rc == 0);                           // the submit that was inside returns as it would
+    CHECK(s.submit() == -ENODEV);             // and a later one is refused
+    CHECK(mm::platform::stubBackendSubmitsAfterStop() == 1);
+    CHECK(s.backend->stop(true, s.error));    // a second stop is a no-op
+    CHECK(mm::platform::stubBackendRealChunksInFlightAtStop() == 0);
+}
+
+TEST_CASE("Hub75PioStub: a stop records whether it drained, a second stop is not counted, and a start clears the dark word") {
+    Started s(kFrameBytes, 4);
+    CHECK(mm::platform::stubBackendStops() == 0);
+    CHECK_FALSE(mm::platform::stubBackendLastStopDrained());
+    CHECK(s.backend->stop(true, s.error));
+    CHECK(mm::platform::stubBackendStops() == 1);
+    CHECK(mm::platform::stubBackendLastStopDrained());
+    CHECK(mm::platform::stubBackendPinsDark());
+    CHECK(s.backend->stop(false, s.error));            // finds the stub stopped: a no-op
+    CHECK(mm::platform::stubBackendStops() == 1);
+    CHECK(mm::platform::stubBackendLastStopDrained());   // the no-op did not overwrite what the real stop recorded
+
+    mm::platform::PioStartConfig config;
+    config.clkdivInt = kSlowDivider;
+    config.xferBufSize = kFrameBytes;
+    config.xferBufCount = 4;
+    REQUIRE(s.backend->start(config, s.error));
+    CHECK_FALSE(mm::platform::stubBackendPinsDark());   // the started SM drives its pins again
+    CHECK(s.backend->stop(false, s.error));
+    CHECK(mm::platform::stubBackendStops() == 2);
+    CHECK_FALSE(mm::platform::stubBackendLastStopDrained());
+    CHECK(mm::platform::stubBackendPinsDark());
+}
+
+TEST_CASE("Hub75PioStub: a stop that fails reports it, leaves the pins as they were and still counts") {
+    Started s(kFrameBytes, 4);
+    StubFaults faults;
+    faults.failStop = true;
+    mm::platform::stubBackendSetFaults(faults);
+    CHECK_FALSE(s.backend->stop(false, s.error));
+    CHECK(s.error.find("stop failed") != std::string::npos);
+    CHECK_FALSE(mm::platform::stubBackendPinsDark());
+    CHECK(mm::platform::stubBackendStops() == 1);
+    CHECK(s.submit() == -ENODEV);   // the stub is stopped all the same
+}
+
+TEST_CASE("Hub75PioStub: a stop that failed runs again on the next stop, darkens the pins when it works and is counted once") {
+    Started s(kFrameBytes, 4);
+    StubFaults faults;
+    faults.failStop = true;
+    mm::platform::stubBackendSetFaults(faults);
+    CHECK_FALSE(s.backend->stop(false, s.error));
+    CHECK_FALSE(s.backend->stop(true, s.error));   // the fault is still set: the retry fails too, and says so
+    CHECK(s.error.find("stop failed") != std::string::npos);
+    CHECK_FALSE(mm::platform::stubBackendPinsDark());
+    mm::platform::stubBackendSetFaults({});
+    s.error.clear();
+    CHECK(s.backend->stop(true, s.error));   // the retry works
+    CHECK(s.error.empty());
+    s.error = "an earlier stop's text";
+    CHECK(s.backend->stop(true, s.error));   // dark now: a no-op that still returns the string cleared
+    CHECK(s.error.empty());
+    CHECK(mm::platform::stubBackendPinsDark());
+    CHECK(mm::platform::stubBackendStops() == 1);                   // one stop of a started stub, however many tries
+    CHECK_FALSE(mm::platform::stubBackendLastStopDrained());        // the record is the first stop's
+}
+
+TEST_CASE("Hub75PioStub: a FIFO that times out on a stop with drain is a note on a stop that darkens the pins, and a stop with drain clear has none") {
+    StubFaults faults;
+    faults.drainTimesOut = true;
+    {
+        Started s(kFrameBytes, 4);
+        mm::platform::stubBackendSetFaults(faults);
+        CHECK(s.backend->stop(true, s.error));   // the pins are dark: the stop worked
+        CHECK(s.error.find("did not drain") != std::string::npos);
+        CHECK(mm::platform::stubBackendPinsDark());
+    }
+    {
+        Started s(kFrameBytes, 4);
+        mm::platform::stubBackendSetFaults(faults);
+        CHECK(s.backend->stop(false, s.error));   // no wait, so no timeout
+        CHECK(s.error.empty());
+    }
+    {
+        Started s(kFrameBytes, 4);
+        faults.failStop = true;
+        mm::platform::stubBackendSetFaults(faults);
+        CHECK_FALSE(s.backend->stop(true, s.error));   // a failed stop names both the note and the failure
+        CHECK(s.error.find("did not drain") != std::string::npos);
+        CHECK(s.error.find("stop failed") != std::string::npos);
+        CHECK_FALSE(mm::platform::stubBackendPinsDark());
+    }
 }
 
 TEST_CASE("Hub75PioStub: the faults refuse the open, the start and the next submits, and a reset clears them") {
@@ -188,7 +299,7 @@ TEST_CASE("Hub75PioStub: a blank is recorded apart from the frames, and is the l
     CHECK(s.submit() == 0);
     CHECK(mm::platform::stubBackendBlanks() == 0);
     std::vector<uint32_t> blank(1000, 0xABCD);
-    CHECK(s.backend->blankAndStop(blank.data(), 4000, s.error));
+    CHECK(s.backend->submitBlank(blank.data(), 4000) == 0);
     CHECK(mm::platform::stubBackendBlanks() == 1);
     CHECK(mm::platform::stubBackendLastBlankBytes() == 4000);
     CHECK(mm::platform::stubBackendSubmittedFrames() == 1);   // the blank is no frame
@@ -197,14 +308,17 @@ TEST_CASE("Hub75PioStub: a blank is recorded apart from the frames, and is the l
     CHECK(last[0] == 0xABCD);
 }
 
-TEST_CASE("Hub75PioStub: a blank that fails to submit fails the stop, which still stops the stub") {
+TEST_CASE("Hub75PioStub: a blank that fails to submit returns the fault's code, the frames still go, and the stop still stops the stub") {
     Started s(kFrameBytes, 4);
     StubFaults faults;
-    faults.failSubmits = -1;
+    faults.failBlank = true;
     mm::platform::stubBackendSetFaults(faults);
     std::vector<uint32_t> blank(16, 0);
-    CHECK_FALSE(s.backend->blankAndStop(blank.data(), 64, s.error));
-    CHECK_FALSE(s.error.empty());
+    CHECK(s.submit() == 0);
+    CHECK(s.backend->submitBlank(blank.data(), 64) == -EIO);
+    CHECK(mm::platform::stubBackendBlankAttempts() == 1);
+    CHECK(mm::platform::stubBackendBlanks() == 0);   // a failed blank is no blank
+    CHECK(s.backend->stop(true, s.error));
     CHECK(s.submit() == -ENODEV);   // stopped all the same
 }
 
@@ -287,7 +401,8 @@ TEST_CASE("Hub75PioStub: an early FIFO-empty stop leaves real chunks in flight u
         std::vector<uint32_t> frame(1024, 0x10);
         for (int i = 0; i < 4; i++) CHECK(s.backend->submitFrame(frame.data(), 4096) == 0);
         std::vector<uint32_t> blank(blankBytes / 4, 0);
-        CHECK(s.backend->blankAndStop(blank.data(), blankBytes, s.error));
+        CHECK(s.backend->submitBlank(blank.data(), blankBytes) == 0);
+        CHECK(s.backend->stop(true, s.error));
         return mm::platform::stubBackendRealChunksInFlightAtStop();
     };
     CHECK(inFlight(4096) == 3);       // a one-chunk blank is queued behind the first real chunk's wait: three are still out
@@ -300,7 +415,8 @@ TEST_CASE("Hub75PioStub: a safe stop leaves no real chunk in flight") {
     std::vector<uint32_t> frame(1024, 0x10);
     for (int i = 0; i < 4; i++) CHECK(s.backend->submitFrame(frame.data(), 4096) == 0);
     std::vector<uint32_t> blank(1024, 0);
-    CHECK(s.backend->blankAndStop(blank.data(), 4096, s.error));   // fault-free, the stop drains first
+    CHECK(s.backend->submitBlank(blank.data(), 4096) == 0);
+    CHECK(s.backend->stop(true, s.error));   // fault-free, the stop drains first
     CHECK(mm::platform::stubBackendRealChunksInFlightAtStop() == 0);
 }
 

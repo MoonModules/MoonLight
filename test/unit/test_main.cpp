@@ -6,9 +6,8 @@
 #include <cstdint>
 #include <cstdio>
 
-#include "platform/Hub75Pio.h"    // setTestHub75PioReal: no case opens the real PIO
+#include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on, hub75PioTestRealOptedIn: whether the run may have any
 #include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
-#include "platform/rpi/hub75_pio_backend.h"   // pioBackendRealOpens: the count the run ends on
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
 // Every test case and subcase rerun starts on the real clock, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
@@ -20,7 +19,7 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::platform::hdmiTestClear();
         mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
         mm::platform::setTestMachineRest(mm::platform::Machine::Other);
-        mm::platform::setTestHub75PioReal(false);
+        mm::platform::setTestHub75PioGateOpen(false);
     }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }
@@ -43,9 +42,14 @@ int main(int argc, char** argv) {
     doctest::Context context(argc, argv);
     int result = context.run();
     if (context.shouldExit()) return result;   // a query such as --list-test-cases
-    if (const uint32_t opens = mm::platform::pioBackendRealOpens()) {
-        std::fprintf(stderr, "FAIL: %u case(s) opened the real PIO backend (piolib, /dev/pio0)\n", static_cast<unsigned>(opens));
-        result = 1;
+    if (const uint32_t opens = mm::platform::hub75PioTestRealOpens()) {
+        // A run that set MM_TEST_REAL_PIO=1 asked for the real PIO (hub75_pio_backend.h, Real-backend gate), so its opens are the point; any other run that opened it has a case that got past the gate.
+        if (mm::platform::hub75PioTestRealOptedIn()) {
+            std::fprintf(stderr, "NOTE: %u case(s) opened the real PIO backend (piolib, /dev/pio0): MM_TEST_REAL_PIO=1\n", static_cast<unsigned>(opens));
+        } else {
+            std::fprintf(stderr, "FAIL: %u case(s) opened the real PIO backend (piolib, /dev/pio0)\n", static_cast<unsigned>(opens));
+            result = 1;
+        }
     }
     return result;
 }

@@ -51,7 +51,7 @@ namespace {
 Hub75Recorder rec_;   // the stand-in for the panels, which a test reads
 std::string lastError_;
 std::string warning_;   // what degrades the running panels: a clock past the benched feed
-std::string closeError_;   // why the last close did not finish
+std::string closeError_;   // what the last close reported: a stuck thread, a failed stop or a note on a dark panel, empty when it finished clean
 
 Hub75PioMode mode_ = Hub75PioMode::Off;
 int testAvailable_ = -1;   // the test hook's forced availability: -1 the host decides, 0 forced unavailable, 1 forced available
@@ -69,8 +69,9 @@ bool testOpenFails_ = false;    // whether a test mode refuses the open
 // The engine, one per process, lives until the process ends: a refresh thread stuck in the kernel may still be reading it at exit. A normal exit still blanks the panels, through the driver's release.
 Hub75PioEngine& engine_ = *new Hub75PioEngine;
 // The real-backend gate lives where every real open converges (hub75_pio_backend.h), so the seam only asks it.
-bool realAllowed() { return pioBackendRealAllowed(); }
-void setRealAllowed(bool allowed) { setPioBackendRealAllowed(allowed); }
+bool gateOpen() { return pioBackendGateOpen(); }
+void setGateOpen(bool open) { setPioBackendGateOpen(open); }
+bool realOptedIn() { return pioBackendRealOptedIn(); }
 uint32_t realOpensNow() { return pioBackendRealOpens(); }
 #else
 // A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
@@ -99,9 +100,10 @@ NoEngine& engine_ = *new NoEngine;
 constexpr uint64_t kHub75StallMs = 0;
 constexpr int kHub75JoinDeadlineMs = 0;
 void stubBackendReset() {}
-bool noEngineRealAllowed_ = true;   // no real backend exists here, so the gate is moot; it answers for the seam's early refusal
-bool realAllowed() { return noEngineRealAllowed_; }
-void setRealAllowed(bool allowed) { noEngineRealAllowed_ = allowed; }
+bool noEngineGateOpen_ = true;   // no real backend exists here, so the gate is moot; it answers for the seam's early refusal
+bool gateOpen() { return noEngineGateOpen_; }
+void setGateOpen(bool open) { noEngineGateOpen_ = open; }
+bool realOptedIn() { return false; }   // no real backend exists here to opt in to
 uint32_t realOpensNow() { return 0; }
 #endif
 std::atomic<bool> realOpen_{false};   // whether the engine, rather than the recorder, holds the panels
@@ -208,9 +210,9 @@ bool hub75PioAvailable() {
 #endif
 }
 
-// Why the real backend is not opened here, or null when it may be: the test binary's gate, a build that omits piolib, or a kernel that stalls a PIO reopen (hub75PioRefusal, the one home of that check).
+// Why the real backend is not opened here, or null when it may be: the test binary's closed gate, a build that omits piolib, or a kernel that stalls a PIO reopen (hub75PioRefusal). A reopened gate leaves the decision to createPioBackend.
 static const char* realOpenRefusal() {
-    if (!realAllowed()) return "the real PIO is not opened from a test binary";
+    if (!gateOpen()) return kPioTestRefusal;
 #ifndef MM_HUB75_PIO_HAVE_PIOLIB
     return "needs a Raspberry Pi build with piolib";
 #else
@@ -262,7 +264,7 @@ void hub75PioPush(const uint8_t* rgb) MM_NONBLOCKING {
 
 void hub75PioCorrection(uint8_t brightness) MM_NONBLOCKING {
     rec_.setBrightness(brightness);
-    if (realOpen_.load(std::memory_order_acquire)) engine_.setBrightness(brightness);
+    engine_.setBrightness(brightness);   // an atomic store the engine keeps across opens, so a value set before the open lights the first frame
 }
 
 uint16_t hub75PioFps() MM_NONBLOCKING {
@@ -284,9 +286,9 @@ uint32_t hub75PioSubmitErrors() MM_NONBLOCKING {
 void hub75PioClose() {
     if (realOpen_.load() || rec_.width() != 0) closes_++;
     realOpen_.store(false, std::memory_order_release);   // before the shutdown, so no push reaches an engine that is stopping
-    // Blank-first; harmless on an engine that is not open. A refresh thread stuck in a submit leaves its reason here.
-    if (engine_.shutdown()) closeError_.clear();
-    else closeError_ = engine_.shutdownError();
+    // The engine stops with the panel dark; harmless on an engine that is not open. A refresh thread stuck in a submit, a stop that failed or a note on a dark panel leaves its text here, whether the shutdown finished or not; a clean stop leaves none.
+    engine_.shutdown();
+    closeError_ = engine_.shutdownError();
     rec_.close();
     testOptions_ = Hub75PioOptions{};
     std::string().swap(warning_);
@@ -314,7 +316,9 @@ void setTestHub75Pio(Hub75PioMode mode) {
 
 void setTestHub75PioFps(uint16_t hz) { testFps_ = hz; }
 
-void setTestHub75PioReal(bool allowed) { setRealAllowed(allowed); }
+void setTestHub75PioGateOpen(bool open) { setGateOpen(open); }
+
+bool hub75PioTestRealOptedIn() { return realOptedIn(); }
 
 uint32_t hub75PioTestRealAttempts() { return realAttempts_; }
 

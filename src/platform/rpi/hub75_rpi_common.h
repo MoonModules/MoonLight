@@ -8,7 +8,9 @@
 ///
 /// ## Open sequence
 ///
-/// open() is one sequence in the base, and each engine supplies the steps as protected virtuals (a template method): check the options, size the wall, allocate, encode the black RGB frame so the first submit has a frame, start the backend, then start the two threads. A step that fails leaves the engine stopped with the reason in `error` and its buffers freed.
+/// open() is one sequence in the base, and each engine supplies the steps as protected virtuals (a template method): check the options, size the wall, allocate, encode the black RGB frame so the first submit has a frame, start the backend, then start the two threads. A failed step leaves the engine stopped, its reason in `error` and its buffers freed; a failed thread start ends in shutdown.
+///
+/// The allocation follows "if it fits, it sits": the engine sums the bytes the wall's buffers need (`bufferBytes`) and refuses when they exceed the memory the platform reports available, with a reason naming both figures in MB. The rules set no ceiling of their own. Where the platform cannot report the memory, a `std::bad_alloc` from the allocation frees what was taken and refuses with a reason.
 ///
 /// The base is a template over `Options` because the two engines take different option structs, which the base stores and passes. The hooks run at open, once per lane (encodeLane) and once per frame (repack), and the per-word and per-row loops stay inside them.
 ///
@@ -24,9 +26,9 @@
 ///
 /// ## Shutdown
 ///
-/// shutdown order is fixed: stop publishing, join the encode thread, join the refresh thread, blank the panels, free the buffers. The refresh thread is joined with a deadline, because a submit blocked in the kernel for good would otherwise hang the join.
+/// shutdown order is fixed: stop publishing, join the encode thread, join the refresh thread, stop the backend, free the buffers. The refresh thread blanks the panels itself as it leaves its loop, and it is joined with a deadline, because a submit blocked in the kernel for good would otherwise hang the join.
 ///
-/// When the deadline passes the engine reports it, keeps every buffer and the backend, since the stuck thread still reads them, and refuses a new open until a later shutdown finds the thread gone.
+/// When the deadline passes the engine stops the backend at once, which darkens the panel when the stop's calls succeed, reports the thread stuck, keeps every buffer and the backend, since the stuck thread still reads them, and refuses a new open until a later shutdown finds the thread gone.
 ///
 /// publishRgb counts itself in flight, and shutdown waits for the count to reach zero before it frees the RGB slots, so every publish writes into live memory.
 ///
@@ -46,6 +48,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <bit>
@@ -53,7 +56,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
+#include <new>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -66,6 +72,7 @@
 #include "platform/rpi/hub75_board_pins.h"   // kHub75Lanes: the board's lane count
 #include "platform/rpi/hub75_pio_options.h"   // the option rules, hub75LaneGeometry
 #include "platform/nonblocking.h"   // MM_NONBLOCKING: the triple buffer's publish is tick-safe
+#include "platform/platform.h"   // availableMemory: what the open's allocation checks against
 
 // hub75Encode writes little-endian slot words and the repack reads them back as uint16_t: ARM (Pi) and x86 Linux are little-endian, a big-endian host fails to compile rather than byte-swap the bus.
 static_assert(std::endian::native == std::endian::little, "hub75 repack assumes a little-endian host");
@@ -187,7 +194,7 @@ class RefreshWindow {
     std::chrono::steady_clock::time_point windowStart_ = std::chrono::steady_clock::now();
 };
 
-/// Blocks SIGINT, SIGTERM and SIGHUP on the calling thread, so a stop lands outside every transfer: an interrupted submit returns -EINTR with its progress lost. A no-op where POSIX signals are absent.
+/// Blocks SIGINT, SIGTERM and SIGHUP on the calling thread, so a stop lands outside every transfer: from 6.18.53 a handler lacking SA_RESTART makes a submit return -EINTR, and 6.18.39 to 6.18.52 cut the frame short. A no-op where signals are absent.
 inline void blockStopSignals() {
 #if defined(__unix__) || defined(__APPLE__)
     sigset_t stops;
@@ -219,26 +226,33 @@ inline uint64_t hub75NowMs() MM_NONBLOCKING {
 /// How long a submit may be in flight before the engine reads as stalled, in milliseconds: two rate windows.
 constexpr uint64_t kHub75StallMs = 2000;
 
-/// How long shutdown waits for the refresh thread before it reports the thread stuck, in milliseconds.
+/// The least shutdown waits for the refresh thread before it reports the thread stuck, in milliseconds; a wall that takes long on the wire raises it (hub75_pio_engine.h, Shutdown).
 constexpr int kHub75JoinDeadlineMs = 3000;
 
 /// The state and the open sequence both engines share, over their options `Options`: the buffers, the two threads, the counters and the accessors that read them (@xref{open-sequence|open sequence}, @xref{threads|threads}).
 template <class Options>
 class Hub75EngineBase {
   public:
-    /// Validates the options, sizes and allocates, opens the backend and starts the threads; on failure fills `error`, returns false and leaves the engine stopped with its buffers freed.
+    /// Refuses a running or wedged engine, checks options, sizes the wall, allocates, opens the backend, starts the threads; every failure fills `error`; one after the two refusals also stops the engine and frees the buffers unless a thread is stuck.
     bool open(const Options& o, std::string& error, bool useStubBackend = false) {
+        if (running_.load()) {
+            error = "PIO engine already running";
+            return false;
+        }
+        if (wedged_.load()) {
+            error = shutdownError_;   // the last refresh thread is still in the kernel
+            return false;
+        }
         if (!admit(o, error)) return false;
         options_ = o;
         sizeTheWall();
-        allocate();
+        if (!allocateWall(error)) return false;
         if (!firstFrame(error) || !startBackend(useStubBackend, error)) {
             releaseBuffers();
             return false;
         }
         if (launchThreads(error)) return true;
-        dropBackend();
-        releaseBuffers();
+        shutdown();   // the one teardown, the refresh thread joined within the deadline: one stuck in a submit leaves the engine wedged, with its backend and buffers kept
         return false;
     }
 
@@ -252,7 +266,7 @@ class Hub75EngineBase {
     }
     /// Measured refresh in Hz, from the submit counter over a ~1 s window; 0 after shutdown, and while a submit has been in flight longer than the stall time, since a hung submit counts no frame.
     uint16_t fps() const MM_NONBLOCKING { return stalled() ? 0 : fps_.load(); }
-    /// Whether the refresh thread has been inside one submit for longer than the stall time: the PIO is not draining, and the panel holds its last word (@xref{shutdown|shutdown}).
+    /// Whether the refresh thread has been inside one submit for longer than the stall time: the PIO is not draining, and the panel holds its last word until a close darkens it (@xref{shutdown|shutdown}).
     bool stalled() const MM_NONBLOCKING {
         const uint64_t entered = submitEnteredMs_.load();
         return entered != 0 && hub75NowMs() - entered > stallMs_;
@@ -275,7 +289,7 @@ class Hub75EngineBase {
     uint64_t framesEncoded() const { return framesEncoded_.load(); }
     /// Frames published by the render thread (thread-safe).
     uint64_t framesPublished() const { return rgb_.published(); }
-    /// Submits the backend reported as failed, the shutdown's blank included (thread-safe).
+    /// Submits the backend reported as failed, the refresh thread's blank on exit included (thread-safe).
     uint64_t submitErrors() const MM_NONBLOCKING { return submitErrors_.load(); }
     /// The last encode duration in microseconds (the encode thread writes it).
     uint64_t lastEncodeUs() const { return lastEncodeUs_.load(); }
@@ -288,10 +302,12 @@ class Hub75EngineBase {
     bool threadsJoined() const { return !encodeThread_.joinable() && !refreshThread_.joinable(); }
     /// Whether the last shutdown gave up on a refresh thread stuck in a submit; the engine then holds its buffers and refuses an open.
     bool wedged() const { return wedged_.load(); }
-    /// Why the last shutdown did not finish, empty when it did.
+    /// Why the last shutdown did not finish, or that its stop failed, or the note a stop left when it darkened the panel; empty after a clean stop.
     const std::string& shutdownError() const { return shutdownError_; }
-    /// Sets how long shutdown waits for the refresh thread, in milliseconds.
-    void setJoinDeadlineMs(int ms) { joinDeadlineMs_ = ms; }
+    /// Sets the least shutdown waits for the refresh thread, in milliseconds, and the deadline now; the next open raises the deadline above it for a wall that takes long on the wire.
+    void setJoinDeadlineMs(int ms) { joinFloorMs_ = joinDeadlineMs_ = ms; }
+    /// How long shutdown waits for the refresh thread now, in milliseconds: the floor, or more for the wall the last open sized.
+    int joinDeadlineMs() const { return joinDeadlineMs_; }
 
     /// A test hook: the next `n` frames fail to encode, every frame when `n` is -1, none when 0; it holds across opens until set again.
     void failEncodes(int n) { encodeFaults_.store(n); }
@@ -299,6 +315,14 @@ class Hub75EngineBase {
     void delayEncodes(uint32_t us) { encodeDelayUs_.store(us); }
     /// A test hook: while paused, the encode thread takes no frame.
     void pauseEncodes(bool paused) { encodePaused_.store(paused); }
+    /// A test hook: the bytes the open finds available, in place of the platform's reading; 0 reads the platform again, and it holds across opens until set again.
+    void setAvailableMemory(uint64_t bytes) { availableMemory_.store(bytes); }
+    /// A test hook: while set, the open's refresh thread fails to start, as on a machine that cannot make a thread; it holds across opens until cleared.
+    void failRefreshThreadStart(bool fails) { refreshStartFails_.store(fails); }
+    /// A test hook: while set, the open's encode thread fails to start, as on a machine that cannot make a thread; it holds across opens until cleared.
+    void failEncodeThreadStart(bool fails) { encodeStartFails_.store(fails); }
+    /// A test hook: while set, the open's allocation ends in std::bad_alloc once the buffers are sized, as a machine that runs out of memory does; it holds across opens until cleared.
+    void failAllocations(bool fails) { allocationFails_.store(fails); }
 
     /// An engine owns threads and a backend, so it is not copyable.
     Hub75EngineBase(const Hub75EngineBase&) = delete;
@@ -311,16 +335,18 @@ class Hub75EngineBase {
   protected:
     Hub75EngineBase() = default;
 
-    /// Refuses a second open and options the engine cannot drive, with the reason in `error`.
+    /// Refuses options the engine cannot drive, with the reason in `error`; open() has refused a running or wedged engine already.
     virtual bool admit(const Options& o, std::string& error) = 0;
     /// Derives the lane and canvas sizes and the slots per frame from the validated options.
     virtual void sizeTheWall() = 0;
+    /// The bytes allocate() takes for the sized wall: the RGB buffer, the lane scratch, the three encoded frames and the blank frame.
+    virtual uint64_t bufferBytes() const = 0;
     /// Sizes the RGB buffer, the lane scratch, the three encoded frames and the blank frame.
     virtual void allocate() = 0;
     /// Creates and opens the backend and starts it; on failure fills `error` and leaves no backend.
     virtual bool startBackend(bool useStubBackend, std::string& error) = 0;
-    /// Closes the backend after the threads failed to start.
-    virtual void dropBackend() = 0;
+    /// Joins the encode thread, then the refresh thread within the deadline, stops the backend and frees the buffers; false when the refresh thread stayed stuck, which leaves the backend and the buffers kept.
+    virtual bool shutdown() = 0;
     /// Resets the counters only the engine keeps, before the threads start; an engine with none leaves this default.
     virtual void resetExtras() {}
     /// Encodes one lane's strip of `rgb` into `slotWords` at `brightness`; false when the encoder refuses the geometry.
@@ -329,6 +355,12 @@ class Hub75EngineBase {
     virtual void repack(uint32_t* out) = 0;
     /// The refresh thread's body: submits the newest encoded frame until stop_ is set.
     virtual void refreshLoop() = 0;
+
+    /// Sets the join deadline for a wall whose shutdown needs `wireMs` milliseconds on the wire: that, or the floor, whichever is more.
+    void sizeJoinDeadline(uint64_t wireMs) {
+        joinDeadlineMs_ = static_cast<int>(std::min<uint64_t>(std::max<uint64_t>(static_cast<uint64_t>(joinFloorMs_), wireMs),
+                                                               static_cast<uint64_t>(std::numeric_limits<int>::max())));
+    }
 
     /// Stops publishing and joins the encode thread, then the refresh thread within the deadline; false when it stayed stuck, leaving it joinable. A stop that finds it still stuck returns at once, so only the first pays the deadline.
     bool stopThreads() {
@@ -343,8 +375,9 @@ class Hub75EngineBase {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 if (!refreshDone_.load()) {
                     wedged_.store(true);
+                    // What the stop then did to the panel is the engine's to say, once it has run.
                     shutdownError_ = "a submit did not return within " + std::to_string(joinDeadlineMs_) +
-                                     " ms: the PIO is stuck and the panel holds its last word until the process exits";
+                                     " ms: the backend stays held until a close after the refresh thread returns";
                     return false;
                 }
             }
@@ -405,7 +438,8 @@ class Hub75EngineBase {
     uint64_t stallFloorMs_ = kHub75StallMs;  // the least a submit may take before the engine reads as stalled
     uint64_t stallMs_ = kHub75StallMs;       // how long a submit may take before the engine reads as stalled: the floor, or more for a frame that takes long on the wire
     std::string shutdownError_;
-    int joinDeadlineMs_ = kHub75JoinDeadlineMs;
+    int joinFloorMs_ = kHub75JoinDeadlineMs;     // the least the join deadline may be
+    int joinDeadlineMs_ = kHub75JoinDeadlineMs;  // how long shutdown waits for the refresh thread: the floor, or more for a wall that takes long on the wire
     std::atomic<uint8_t> brightness_{255};
     std::atomic<uint16_t> fps_{0};
 
@@ -415,6 +449,29 @@ class Hub75EngineBase {
     std::atomic<uint64_t> lastEncodeUs_{0};      // the encode thread writes it
 
   private:
+    /// Allocates the wall's buffers when they fit the memory available now; a wall that exceeds the memory, or an allocation that throws std::bad_alloc, frees what was taken, fills `error` with the figures and returns false.
+    bool allocateWall(std::string& error) {
+        const uint64_t need = bufferBytes();
+        const uint64_t injected = availableMemory_.load();
+        const uint64_t have = injected != 0 ? injected : platform::availableMemory();
+        constexpr uint64_t kMegabyte = 1024 * 1024;
+        const std::string needMb = std::to_string((need + kMegabyte - 1) / kMegabyte) + " MB";   // rounded up and the figure available rounded down, so a refusal always reads the need above the figure available
+        if (have != 0 && need > have) {
+            error = "the wall's buffers need " + needMb + " and " + std::to_string(have / kMegabyte) + " MB is available";
+            releaseBuffers();   // zeroes the slot count and the rate, so refreshHz() reads 0
+            return false;
+        }
+        try {
+            allocate();
+            if (allocationFails_.load()) throw std::bad_alloc();
+        } catch (const std::bad_alloc&) {
+            releaseBuffers();
+            error = "the system ran out of memory allocating the wall's buffers (" + needMb + ")";
+            return false;
+        }
+        return true;
+    }
+
     /// Encodes the black RGB frame into the first encoded frame, so the refresh thread has a valid frame from its first iteration.
     bool firstFrame(std::string& error) {
         if (!encodeFrame(rgb_.current(), encoded_.writeSlot())) {
@@ -457,23 +514,21 @@ class Hub75EngineBase {
         refreshDone_.store(false);
         running_ = true;
         try {
+            if (refreshStartFails_.load()) throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
             refreshThread_ = std::thread([this] {
                 blockStopSignals();
                 refreshLoop();
                 refreshDone_.store(true);
             });
         } catch (...) {
-            running_ = false;
             error = "failed to start the refresh thread";
             return false;
         }
         try {
+            if (encodeStartFails_.load()) throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
             encodeThread_ = std::thread([this] { encodeLoop(); });
         } catch (...) {
-            running_ = false;
-            stop_.store(true);
-            refreshThread_.join();
-            error = "failed to start the encode thread";
+            error = "failed to start the encode thread";   // the refresh thread is joined by open()'s shutdown, within the deadline: it submits a blank as it leaves, which can block for good
             return false;
         }
         return true;
@@ -485,6 +540,10 @@ class Hub75EngineBase {
     std::atomic<int> encodeFaults_{0};      // the frames the failEncodes hook still fails
     std::atomic<uint32_t> encodeDelayUs_{0};
     std::atomic<bool> encodePaused_{false};
+    std::atomic<uint64_t> availableMemory_{0};   // the bytes the setAvailableMemory hook injects, 0 for the platform's reading
+    std::atomic<bool> refreshStartFails_{false};   // whether the failRefreshThreadStart hook fails the refresh thread's start
+    std::atomic<bool> encodeStartFails_{false};   // whether the failEncodeThreadStart hook fails the encode thread's start
+    std::atomic<bool> allocationFails_{false};   // whether the failAllocations hook ends the allocation in std::bad_alloc
 };
 
 /// The default Hub75Layout the repack hard-codes, pinned by the static_assert below (@xref{default-layout|default layout}).

@@ -41,7 +41,7 @@ const char* hub75PioLastError();
 /// What degrades a running panel, or null: a pixel clock above the highest the bench ran (`kPioBenchedPixelClockHz`), where the DMA feed falls behind the wire.
 const char* hub75PioWarning();
 
-/// Why the last close did not finish, or null when it did: the refresh thread stayed stuck in a submit, so the panel holds its last word and the PIO stays held until the process exits.
+/// What the last close reported, or null when it finished clean: the refresh thread stuck in a submit (the PIO stays held until a close after that thread returns), a stop that failed so the panel may hold its last row, or a dark panel with a note.
 const char* hub75PioCloseError();
 
 /// The canvas the panels form, 0 with none open.
@@ -58,7 +58,7 @@ void hub75PioCorrection(uint8_t brightness) MM_NONBLOCKING;
 /// Frames shown in the last second; it falls to 0 while every submit fails.
 uint16_t hub75PioFps() MM_NONBLOCKING;
 
-/// Whether a submit has been in flight longer than the stall time: the PIO is not draining and the panel holds its last word. `hub75PioFps` reads 0 while it holds.
+/// Whether a submit has been in flight longer than the stall time: the PIO is not draining and the panel holds its last word until a close darkens it. `hub75PioFps` reads 0 while it holds.
 bool hub75PioStalled() MM_NONBLOCKING;
 
 /// Submits that failed since the last open, which the output shows as the PIO failing when it rises.
@@ -84,8 +84,10 @@ void setTestHub75PioStalled(bool stalled);
 void setTestHub75PioSubmitErrors(uint32_t count);
 /// How long a submit may be in flight before the engine reads as stalled, in milliseconds, while Stub mode holds the seam.
 void setTestHub75PioStallMs(uint64_t ms);
-/// Whether the seam may reach the real backend (piolib, /dev/pio0) outside a test mode: true in a program, false in the test binary, which refuses such an open first, whatever is linked. A case that wants the host's own refusal sets it.
-void setTestHub75PioReal(bool allowed);
+/// Opens or closes the seam's gate outside a test mode: true in a program, false in the test binary before every case. An open gate is no permission for the real backend, since `MM_TEST_REAL_PIO=1` decides (hub75_pio_backend.h, Real-backend gate).
+void setTestHub75PioGateOpen(bool open);
+/// Whether the run opted in to the real backend, `MM_TEST_REAL_PIO=1` exactly: the test binary's main then lets a run that opened it pass.
+bool hub75PioTestRealOptedIn();
 /// Opens outside a test mode that were asked for since the program started, whether the seam allowed them or not.
 uint32_t hub75PioTestRealAttempts();
 /// Opens that reached the real backend since the program started: 0 in a test run, which a listener checks at its end.

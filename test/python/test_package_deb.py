@@ -12,11 +12,12 @@ import package_host as pd  # noqa: E402
 
 
 def staged(tmp_path, monkeypatch):
-    """The files package_deb stages, relative to the package root, with their modes."""
+    """The files package_deb stages for an amd64 host, whatever machine this runs on, relative to the package root, with their modes."""
     binary = tmp_path / "MoonLight"
     binary.write_text("program")
     monkeypatch.setattr(pd, "DIST_DIR", tmp_path / "dist")
     monkeypatch.setattr(pd.shutil, "which", lambda name: "/usr/bin/dpkg-deb")
+    monkeypatch.setattr(pd, "linux_arch", lambda: ("amd64", "x64", "Linux x64"))   # the layout is the same on every host; the arm64 copyright reads piolib's license, a submodule file
     seen = {}
 
     def pack(cmd, *args, **kwargs):

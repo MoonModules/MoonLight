@@ -46,6 +46,27 @@ bool waitFirstSubmit(const Engine& engine) {
     return waitUntil([&] { return engine.framesSubmitted() > 0; });
 }
 
+/// Lets a hung submit go and waits for `engine` to finish shutting down, so a refresh thread stuck in the stub is back before its engine is destroyed.
+template <class Engine>
+void releaseHang(Engine& engine) {
+    mm::platform::stubBackendSetFaults({});
+    waitUntil([&] { return engine.shutdown(); });
+}
+
+/// Releases the hang of `engine` when it goes out of scope, however the case ends: a case that fails while the engine is wedged then lets the thread go before the engine is destroyed, which would read freed buffers.
+template <class Engine>
+struct HangRelease {
+    Engine& engine;   ///< the engine whose refresh thread may be hung
+    /// Guard `e`, declared after it so the guard goes first.
+    explicit HangRelease(Engine& e) : engine(e) {}
+    /// Let the hang go and wait for the shutdown.
+    ~HangRelease() { releaseHang(engine); }
+    /// A guard releases once, so it is not copyable.
+    HangRelease(const HangRelease&) = delete;
+    /// A guard releases once, so it is not assignable.
+    HangRelease& operator=(const HangRelease&) = delete;
+};
+
 /// The PIO engine opened on the stub backend with its records and faults cleared and its queue model set, shut down however the case ends.
 struct PioRun {
     mm::platform::Hub75PioEngine engine;   ///< the engine under test
@@ -57,9 +78,9 @@ struct PioRun {
         mm::platform::stubBackendSetQueueModel(model);
         REQUIRE(engine.open(o, error, true));
     }
-    /// Stop the engine, which a second shutdown leaves as it is, and clear the stub's faults.
+    /// Release a hung submit and stop the engine, which a second shutdown leaves as it is, and clear the stub's faults.
     ~PioRun() {
-        engine.shutdown();
+        releaseHang(engine);
         mm::platform::stubBackendReset();
     }
 };

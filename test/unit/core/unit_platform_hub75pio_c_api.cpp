@@ -2,7 +2,7 @@
 
 /// Pins the C shim between the piolib backend and piolib (hub75_pio_c_api.c), one level below the backend's own test: the shim's source is compiled here, as C++, against a scripted stand-in for piolib.h (piolib_fake/piolib.h) whose functions this file defines.
 ///
-/// It shows the cached handle, the same-state-machine preference and its fallback, when the DMA state machine is remembered, and how each failure maps to an errno.
+/// It shows the cached handle, the same-state-machine preference and its fallback, when the DMA state machine is remembered, how each failure maps to an errno, and that the disable and the pins report their failure from errno or piolib's error flag, since piolib's calls return void.
 ///
 /// The shim's statics live for the process, so the cases run in the order written, each leaving the state the next expects. What this cannot show is piolib itself: the real kernel behavior behind these calls is the Pi's to prove (the bench, U7). That the shim is valid C is checked by compiling it as C against the real header.
 
@@ -31,6 +31,12 @@ struct Piolib {
     bool addFlagsError = false;     // pio_add_program sets the error flag
     uint addOffset = 3;             // what pio_add_program answers
     int initPc = -1;                // the program counter pio_sm_init was given
+    uint32_t pinVals = 0;           // the values the last pio_sm_set_pins_with_mask was given
+    uint32_t pinMask = 0;           // and its mask
+    int pinsErrno = 0;              // errno the set-pins ioctl leaves when it fails, 0 for success
+    int enableErrno = 0;            // errno the set-enabled ioctl leaves when it fails, 0 for success
+    bool enableSetsFlag = false;    // pio_sm_set_enabled sets piolib's error flag, as a piolib that records it would
+    int enableArg = -1;             // the last pio_sm_set_enabled argument
     std::vector<std::string> calls;
 };
 Piolib lib;
@@ -74,7 +80,12 @@ int pio_sm_config_xfer(PIO, uint sm, uint, uint, uint) {
     return lib.xferConfigRc;
 }
 int pio_sm_xfer_data(PIO, uint, uint, uint, void*) { return 0; }
-void pio_sm_set_pins_with_mask(PIO, uint, uint32_t, uint32_t) {}
+void pio_sm_set_pins_with_mask(PIO, uint, uint32_t vals, uint32_t mask) {
+    lib.calls.push_back("set_pins_with_mask");
+    lib.pinVals = vals;
+    lib.pinMask = mask;
+    if (lib.pinsErrno) errno = lib.pinsErrno;   // piolib's void call discards the ioctl's result, and its errno stays
+}
 void pio_sm_set_consecutive_pindirs(PIO, uint, uint, uint, bool) {}
 void pio_gpio_init(PIO, uint) {}
 pio_sm_config pio_get_default_sm_config(void) { return pio_sm_config{}; }
@@ -90,7 +101,12 @@ void pio_sm_init(PIO, uint, uint initial_pc, const pio_sm_config*) {
     lib.initPc = static_cast<int>(initial_pc);
 }
 void pio_sm_clear_fifos(PIO, uint) {}
-void pio_sm_set_enabled(PIO, uint, bool) {}
+void pio_sm_set_enabled(PIO, uint, bool enabled) {
+    lib.calls.push_back(enabled ? "enable" : "disable");
+    lib.enableArg = enabled ? 1 : 0;
+    if (lib.enableErrno) errno = lib.enableErrno;
+    if (lib.enableSetsFlag) lib.errorFlag = true;
+}
 bool pio_sm_is_tx_fifo_empty(PIO, uint) { return true; }
 }
 
@@ -100,6 +116,7 @@ bool pio_sm_is_tx_fifo_empty(PIO, uint) { return true; }
 #define hub75_pio_add_program shim_hub75_pio_add_program
 #define hub75_pio_config_xfer shim_hub75_pio_config_xfer
 #define hub75_pio_init_sm shim_hub75_pio_init_sm
+#define hub75_pio_set_pins shim_hub75_pio_set_pins
 #define hub75_pio_clear_fifos shim_hub75_pio_clear_fifos
 #define hub75_pio_set_enabled shim_hub75_pio_set_enabled
 #define hub75_pio_xfer shim_hub75_pio_xfer
@@ -112,6 +129,7 @@ bool pio_sm_is_tx_fifo_empty(PIO, uint) { return true; }
 #undef hub75_pio_add_program
 #undef hub75_pio_config_xfer
 #undef hub75_pio_init_sm
+#undef hub75_pio_set_pins
 #undef hub75_pio_clear_fifos
 #undef hub75_pio_set_enabled
 #undef hub75_pio_xfer
@@ -226,6 +244,63 @@ TEST_CASE("Hub75PioCApi: the state machine init makes the instance current first
     REQUIRE(!lib.calls.empty());
     CHECK(lib.calls.front() == "pio_select");   // the config calls read the thread's current instance
     CHECK(lib.initPc == 7);
+}
+
+TEST_CASE("Hub75PioCApi: the pins are set through one call on the OUT range, the same at the start and at the stop") {
+    lib = Piolib{};
+    void* pio = shim_hub75_pio_open(nullptr);
+    constexpr uint32_t kOutMask = ((1u << 26) - 1u) << 2;   // GPIO 2 to 27
+    constexpr uint32_t kWord = 0x00C0FFEEu;                 // an arbitrary wide word, bit 0 on GPIO 2
+
+    hub75_pio_sm_params params{};
+    params.idle_wide_word = kWord;
+    lib.calls.clear();
+    shim_hub75_pio_init_sm(pio, 1, &params);
+    CHECK(callsOf("set_pins_with_mask").size() == 1);   // the start sets the pins first, once
+    CHECK(lib.pinVals == kWord << 2);
+    CHECK(lib.pinMask == kOutMask);
+
+    lib.pinVals = lib.pinMask = 0;
+    lib.calls.clear();
+    shim_hub75_pio_set_pins(pio, 1, kWord);
+    CHECK(lib.calls == std::vector<std::string>{"set_pins_with_mask"});   // one firmware message and no other call
+    CHECK(lib.pinVals == kWord << 2);    // the same values and mask the start gave
+    CHECK(lib.pinMask == kOutMask);
+}
+
+TEST_CASE("Hub75PioCApi: the pins' result is the ioctl's errno, since piolib's call is void, and a stale errno is not a failure") {
+    lib = Piolib{};
+    void* pio = shim_hub75_pio_open(nullptr);
+    CHECK(shim_hub75_pio_set_pins(pio, 1, 0x1234u) == 0);
+    errno = EAGAIN;   // left by some earlier call in the thread
+    CHECK(shim_hub75_pio_set_pins(pio, 1, 0x1234u) == 0);   // the shim clears it before its own call, so it reads only that call's
+    lib.pinsErrno = ETIMEDOUT;
+    CHECK(shim_hub75_pio_set_pins(pio, 1, 0x1234u) == -ETIMEDOUT);
+    lib.pinsErrno = EIO;
+    CHECK(shim_hub75_pio_set_pins(pio, 1, 0x1234u) == -EIO);
+    lib.pinsErrno = 0;
+    CHECK(shim_hub75_pio_set_pins(pio, 1, 0x1234u) == 0);   // and it recovers once the ioctl does
+}
+
+TEST_CASE("Hub75PioCApi: the disable's result is the ioctl's errno or piolib's error flag, and the enable and the disable pass their argument") {
+    lib = Piolib{};
+    void* pio = shim_hub75_pio_open(nullptr);
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 0) == 0);
+    CHECK(lib.enableArg == 0);
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 1) == 0);
+    CHECK(lib.enableArg == 1);
+    errno = EBUSY;
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 0) == 0);   // stale errno again
+
+    lib.enableErrno = EIO;
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 0) == -EIO);
+    lib.enableErrno = 0;
+    lib.enableSetsFlag = true;   // a piolib that records the failure in its flag has no errno to give
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 0) == -EIO);
+    CHECK(lib.errorFlag);   // the flag was set by that call
+    lib.enableSetsFlag = false;
+    CHECK(shim_hub75_pio_set_enabled(pio, 1, 0) == 0);   // cleared before the next call, so a flag left by an earlier one is no failure
+    CHECK_FALSE(lib.errorFlag);
 }
 
 #endif

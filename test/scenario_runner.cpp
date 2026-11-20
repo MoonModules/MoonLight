@@ -117,7 +117,7 @@ static void printModuleMemory(mm::MoonModule* mod, int indent) {
 #include <string>
 #include <map>
 #include <filesystem>
-#include "platform/Hub75Pio.h"   // setTestHub75PioReal: a scenario stays off the real PIO
+#include "platform/Hub75Pio.h"   // setTestHub75PioGateOpen: a scenario stays off the real PIO
 #include "platform/machine.h"     // setTestMachineRest: a scenario runs the same on every board
 #include <vector>
 
@@ -959,7 +959,7 @@ static int checkControlNames() {
 int main(int argc, char* argv[]) {
     mm::platform::hdmiTestClear();   // the HDMI stand-in, so no scenario drives a real screen
     mm::platform::setTestMachineRest(mm::platform::Machine::Other);   // a scenario builds modules and applies documents of any kind: on no machine's path, and
-    mm::platform::setTestHub75PioReal(false);                          // out of reach of the real PIO of the Pi it runs on
+    mm::platform::setTestHub75PioGateOpen(false);                          // out of reach of the real PIO of the Pi it runs on
     if (argc < 2) {
         // Every scenario under scenarios/, after the control-name check only this binary can run, holding every type: @xref{why-a-filesystem-error-escapes-main}.
         const int badNames = checkControlNames();

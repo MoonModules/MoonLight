@@ -11,7 +11,7 @@
 /// ## Piolib API notes
 ///
 /// - `pio0` is pio_open_helper(0) and calls exit(1) if /dev/pio0 cannot be opened, so the C shim calls pio_open(0), which returns the error, once, and keeps the handle: a second pio_open(0) in the process returns -EBUSY. A missing node shows up as -EINVAL, since piolib then finds no instance.
-/// - pio_enable_fatal_errors(pio, false) turns piolib's error paths (e.g. pio_add_program with no program space) into return values plus pio_get_error(), instead of aborting the process. The pinned piolib's rp1_ioctl also returns -ETIMEDOUT and -EREMOTEIO, which stock piolib answers with exit(1) (hub75_pio_backend.h, Submit semantics).
+/// - pio_enable_fatal_errors(pio, false) turns piolib's error paths (e.g. pio_add_program with no program space) into return values plus pio_get_error(), instead of aborting the process. The pinned piolib's rp1_ioctl also returns -ETIMEDOUT and -EREMOTEIO, which stock piolib from commit bb3e2622 answers with exit(1) (hub75_pio_backend.h, Submit semantics).
 /// - pio_sm_put() stays off the hot path: each put is a mailbox RPC (>= 10 us), far too slow to stream pixels.
 /// - Frames go through pio_sm_xfer_data, whose blocking depends on the kernel; see hub75_pio_backend.h.
 ///
@@ -21,6 +21,7 @@
 
 #include "platform/rpi/hub75_pio_backend.h"
 
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -55,7 +56,7 @@ bool readNode(PioNode& node) {
     return true;
 }
 
-/// How long blankAndStop() waits for the TX FIFO to drain after the blank before disabling the SM anyway; the FIFO holds at most 8 words per direction, so any sane pixel clock drains it in microseconds.
+/// How long stop() polls the TX FIFO for empty, after the blank's wire time, before disabling the SM anyway; the FIFO holds at most 8 words per direction, so any sane pixel clock drains it in microseconds.
 constexpr int kFifoDrainTimeoutMs = 100;
 
 class PiolibBackend : public PioBackend {
@@ -99,6 +100,8 @@ class PiolibBackend : public PioBackend {
         programInstructions_ = config.programInstructions;
         programLength_ = config.programLength;
         programLoaded_ = true;
+        const uint64_t ringWords = static_cast<uint64_t>(config.xferBufSize) * config.xferBufCount / kBytesPerPixelClock;
+        blankWaitMicros_ = pioBlankWaitMicros(ringWords, config.clkdivInt, config.clkdivFrac);
 
         // The configuration is silent (hub75_pio_c_api.h, Silent configuration): a state machine that did not start shows as the first submit failing or blocking.
         const hub75_pio_sm_params smParams = {offset_, config.wrapTarget, config.wrap,
@@ -107,6 +110,7 @@ class PiolibBackend : public PioBackend {
         hub75_pio_clear_fifos(pio_, sm_);
         hub75_pio_set_enabled(pio_, sm_, 1);
         started_ = true;
+        dark_ = false;   // a started SM drives its own pins, so a stop owes the dark word
         return true;
     }
 
@@ -116,48 +120,25 @@ class PiolibBackend : public PioBackend {
         return hub75_pio_xfer(pio_, sm_, const_cast<void*>(data), bytes);
     }
 
-    bool blankAndStop(const void* blankData, uint32_t blankBytes,
-                      std::string& error) override {
-        bool ok = true;
-        if (started_) {
-            // 1. Drive the panel dark: submit the blank, which the engine made as deep as the DMA ring, so that its submit returns only after every real chunk has gone out (hub75_pio_backend.h, Submit semantics).
-            const int rc = submitFrame(blankData, blankBytes);
-            if (rc != 0) {
-                error = "blank frame submit failed (" + std::to_string(rc) +
-                        "); continuing with shutdown";
-                ok = false;
-            }
-            // 2. Wait for the TX FIFO to drain, so the SM has shifted out the last blank word and is stalled on `pull` with the pins holding the dark word. Only a blank as deep as the ring makes an empty FIFO mean a blank word.
-            if (!waitForFifoDrain()) {
-                if (error.empty())
-                    error = "TX FIFO did not drain within timeout; "
-                            "disabling SM anyway";
-                ok = false;
-            }
-            // 3. Blank is established, so it is safe to stop the SM: the pins hold the dark word (PIO output registers keep their values when the SM is disabled).
-            hub75_pio_set_enabled(pio_, sm_, 0);
-            hub75_pio_clear_fifos(pio_, sm_);
-            started_ = false;
+    bool stop(bool drain, std::string& error) override {
+        error.clear();   // this stop's notes and failures alone
+        // The flag goes first, so a refresh thread released late finds the backend stopped and makes no further submit.
+        const bool wasStarted = started_.exchange(false);
+        if (wasStarted && drain) {
+            // The refresh thread's ring-deep blank is queued, and on 6.18.39 and later an empty FIFO does not show the DMA finished: wait out the blank's wire time, then poll. A FIFO that stays full is a note, since the disable darkens the panel anyway.
+            std::this_thread::sleep_for(std::chrono::microseconds(blankWaitMicros_));
+            if (!waitForFifoDrain()) addFailure(error, "TX FIFO did not drain within timeout; disabling SM anyway");
         }
+        if (!dark_) darken(error);
         if (programLoaded_) {
             hub75_pio_remove_program(pio_, programInstructions_, programLength_,
                                      offset_);
             programLoaded_ = false;
         }
-        return ok;
+        return dark_;
     }
 
     void close() override {
-        if (started_) {
-            // No blank frame is available here, so disable directly; the engine always calls blankAndStop() before close() on the clean path, so this is only the error path.
-            hub75_pio_set_enabled(pio_, sm_, 0);
-            started_ = false;
-        }
-        if (programLoaded_) {
-            hub75_pio_remove_program(pio_, programInstructions_, programLength_,
-                                     offset_);
-            programLoaded_ = false;
-        }
         if (opened_) {
             hub75_pio_release(pio_, sm_);
             pio_ = nullptr;
@@ -169,6 +150,22 @@ class PiolibBackend : public PioBackend {
     const char* name() const override { return "piolib (/dev/pio0)"; }
 
   private:
+    // Disables the SM and sets the pins to the dark word, firmware-message calls each bounded by the kernel, so they work with a thread stuck in a submit. A failed ioctl is reported and the rest still run; the next stop repeats them.
+    void darken(std::string& error) {
+        const int disabled = hub75_pio_set_enabled(pio_, sm_, 0);
+        if (disabled < 0) addFailure(error, std::string("cannot disable the PIO state machine: ") + std::strerror(-disabled));
+        const int dark = hub75_pio_set_pins(pio_, sm_, kBlankWideWord);
+        if (dark < 0) addFailure(error, std::string("cannot set the pins to the dark word: ") + std::strerror(-dark));
+        hub75_pio_clear_fifos(pio_, sm_);
+        dark_ = disabled >= 0 && dark >= 0;
+    }
+
+    // Adds one note or failure to the text the stop reports, after any earlier one.
+    static void addFailure(std::string& error, const std::string& what) {
+        if (!error.empty()) error += "; ";
+        error += what;
+    }
+
     // Polls the TX FIFO until it is empty; false when it is still not empty after kFifoDrainTimeoutMs.
     bool waitForFifoDrain() {
         const auto deadline = std::chrono::steady_clock::now() +
@@ -186,8 +183,10 @@ class PiolibBackend : public PioBackend {
     const uint16_t* programInstructions_ = nullptr;
     int programLength_ = 0;
     bool opened_ = false;
-    bool started_ = false;
+    std::atomic<bool> started_{false};   // written by the closing thread's stop(), read by the refresh thread's submits
     bool programLoaded_ = false;
+    bool dark_ = true;   // the SM is disabled and the pins are on the dark word, or there is no SM to stop; false from start() until a stop has done both once
+    uint64_t blankWaitMicros_ = 0;   // the ring's wire time doubled for the feed lag; set by start()
 };
 
 }  // namespace

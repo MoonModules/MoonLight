@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -30,7 +31,11 @@ struct Shim {
     int programRc = 3;        // the load offset, or a negative errno
     int xferRc = 0;           // every transfer's result
     int xferFailsAfter = -1;  // transfers from this count on use xferRc, earlier ones succeed; -1 for all
+    int disableRc = 0;        // what disabling the SM answers: 0, or a negative errno
+    int setPinsRc = 0;        // what setting the pins answers: 0, or a negative errno
     bool fifoEmpty = true;
+    int fifoPolls = 0;
+    uint32_t pinsWord = 0;    // the last wide word set on the pins
     int xfers = 0;
     uint32_t lastXferBytes = 0;
     hub75_pio_sm_params initParams{};
@@ -69,8 +74,16 @@ void hub75_pio_init_sm(void*, int, const struct hub75_pio_sm_params* params) {
     shim.calls.push_back("init_sm");
     shim.initParams = *params;
 }
+int hub75_pio_set_pins(void*, int, uint32_t wide_word) {
+    shim.calls.push_back("set_pins");
+    shim.pinsWord = wide_word;
+    return shim.setPinsRc;
+}
 void hub75_pio_clear_fifos(void*, int) { shim.calls.push_back("clear_fifos"); }
-void hub75_pio_set_enabled(void*, int, int enable) { shim.calls.push_back(enable ? "enable" : "disable"); }
+int hub75_pio_set_enabled(void*, int, int enable) {
+    shim.calls.push_back(enable ? "enable" : "disable");
+    return enable ? 0 : shim.disableRc;
+}
 int hub75_pio_xfer(void*, int, void*, uint32_t bytes) {
     shim.calls.push_back("xfer");
     shim.lastXferBytes = bytes;
@@ -78,7 +91,10 @@ int hub75_pio_xfer(void*, int, void*, uint32_t bytes) {
     shim.xfers++;
     return fails || shim.xferFailsAfter < 0 ? shim.xferRc : 0;
 }
-int hub75_pio_tx_fifo_empty(void*, int) { return shim.fifoEmpty ? 1 : 0; }
+int hub75_pio_tx_fifo_empty(void*, int) {
+    shim.fifoPolls++;
+    return shim.fifoEmpty ? 1 : 0;
+}
 void hub75_pio_remove_program(void*, const uint16_t*, int, int) { shim.calls.push_back("remove_program"); }
 void hub75_pio_release(void*, int sm) { shim.calls.push_back(sm >= 0 ? "release" : "release_none"); }
 }
@@ -236,30 +252,151 @@ TEST_CASE("Hub75PioPiolib: a submit before the start answers -ENODEV, and after 
     b.backend->close();
 }
 
-TEST_CASE("Hub75PioPiolib: the blank goes out, the FIFO drains, then the SM stops and the program goes, in that order") {
+TEST_CASE("Hub75PioPiolib: a stop with drain polls the FIFO, then disables the SM, darkens the pins, clears the FIFOs and removes the program, with no transfer") {
     Backend b;
     REQUIRE(b.backend->open(b.error));
     REQUIRE(b.backend->start(config(), b.error));
     shim.calls.clear();
-    std::vector<uint32_t> blank(8192, mm::platform::kBlankWideWord);
-    CHECK(b.backend->blankAndStop(blank.data(), static_cast<uint32_t>(blank.size() * 4), b.error));
-    CHECK(shim.lastXferBytes == 32768);
-    CHECK(shim.calls == std::vector<std::string>{"xfer", "disable", "clear_fifos", "remove_program"});
+    shim.pinsWord = 0;
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK(b.backend->stop(true, b.error));
+    CHECK(std::chrono::steady_clock::now() - t0 >= std::chrono::microseconds(1000));   // the ring's wire time, doubled: 8,192 words at 10 MHz is 0.8 ms before the doubling
+    CHECK(shim.calls == std::vector<std::string>{"disable", "set_pins", "clear_fifos", "remove_program"});   // no xfer, and no config_xfer
+    CHECK(shim.pinsWord == mm::platform::kBlankWideWord);
+    CHECK(shim.fifoPolls == 1);
     b.backend->close();
     CHECK(shim.calls.back() == "release");
 }
 
-TEST_CASE("Hub75PioPiolib: a blank that fails, or a FIFO that never empties, still stops the SM and says so") {
+TEST_CASE("Hub75PioPiolib: a stop with drain clear skips the wait and the poll, and runs the same four calls") {
+    Backend b;
+    REQUIRE(b.backend->open(b.error));
+    PioStartConfig c = config();
+    c.clkdivInt = 4000;   // 10 kHz: the ring's 8,192 words are 819 ms on the wire, 1.6 s doubled, which a stop with the wait would sleep
+    REQUIRE(b.backend->start(c, b.error));
+    shim.calls.clear();
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK(b.backend->stop(false, b.error));
+    CHECK(std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(800));   // half the wait it skips: far from it, under any load
+    CHECK(shim.calls == std::vector<std::string>{"disable", "set_pins", "clear_fifos", "remove_program"});
+    CHECK(shim.fifoPolls == 0);
+    CHECK(shim.pinsWord == mm::platform::kBlankWideWord);
+    b.backend->close();
+}
+
+TEST_CASE("Hub75PioPiolib: a stop whose disable fails says so, returns false, and still sets the pins, clears the FIFOs and removes the program") {
+    for (const bool drain : {false, true}) {
+        CAPTURE(drain);
+        Backend b;
+        REQUIRE(b.backend->open(b.error));
+        REQUIRE(b.backend->start(config(), b.error));
+        shim.disableRc = -EIO;
+        shim.calls.clear();
+        CHECK_FALSE(b.backend->stop(drain, b.error));
+        CHECK(contains(b.error, "cannot disable the PIO state machine"));
+        CHECK(contains(b.error, std::strerror(EIO)));
+        CHECK_FALSE(contains(b.error, "dark word"));   // the pins were set
+        const std::vector<std::string> tail(shim.calls.end() - 4, shim.calls.end());
+        CHECK(tail == std::vector<std::string>{"disable", "set_pins", "clear_fifos", "remove_program"});   // the others ran
+        b.backend->close();
+    }
+}
+
+TEST_CASE("Hub75PioPiolib: a stop whose pins will not set says so, returns false, and has disabled the SM and removed the program") {
+    Backend b;
+    REQUIRE(b.backend->open(b.error));
+    REQUIRE(b.backend->start(config(), b.error));
+    shim.setPinsRc = -ETIMEDOUT;
+    shim.calls.clear();
+    CHECK_FALSE(b.backend->stop(false, b.error));
+    CHECK(contains(b.error, "cannot set the pins to the dark word"));
+    CHECK(contains(b.error, std::strerror(ETIMEDOUT)));
+    CHECK_FALSE(contains(b.error, "cannot disable"));
+    CHECK(shim.calls == std::vector<std::string>{"disable", "set_pins", "clear_fifos", "remove_program"});
+    b.backend->close();
+}
+
+TEST_CASE("Hub75PioPiolib: a stop with every step failing names each, once, and a later stop that finds them working starts from no error") {
+    Backend b;
+    REQUIRE(b.backend->open(b.error));
+    REQUIRE(b.backend->start(config(), b.error));
+    shim.disableRc = -EIO;
+    shim.setPinsRc = -EIO;
+    shim.fifoEmpty = false;   // the drain times out too
+    CHECK_FALSE(b.backend->stop(true, b.error));
+    CHECK(contains(b.error, "did not drain"));
+    CHECK(contains(b.error, "cannot disable"));
+    CHECK(contains(b.error, "cannot set the pins"));
+    shim.disableRc = 0;
+    shim.setPinsRc = 0;
+    CHECK(b.backend->stop(true, b.error));   // the retry finds both steps working: it succeeds and the old text is gone
+    CHECK(b.error.empty());
+    b.backend->close();
+}
+
+TEST_CASE("Hub75PioPiolib: a stop that failed runs the disable, the pins and the FIFO clear again, with no wait, until both steps have succeeded once, whichever step failed") {
+    struct Step {
+        int Shim::*rc;         // the shim's answer for the step that fails
+        const char* failure;   // what the stop says of it
+        const char* other;     // what it says of the other step, which works
+    };
+    for (const Step& step : {Step{&Shim::disableRc, "cannot disable the PIO state machine", "cannot set the pins"},
+                             Step{&Shim::setPinsRc, "cannot set the pins to the dark word", "cannot disable"}}) {
+        CAPTURE(step.failure);
+        Backend b;
+        REQUIRE(b.backend->open(b.error));
+        REQUIRE(b.backend->start(config(), b.error));
+        shim.*step.rc = -EIO;
+        CHECK_FALSE(b.backend->stop(false, b.error));   // the wedged path's stop, with the refresh thread still inside
+        shim.calls.clear();
+        shim.pinsWord = 0;
+        CHECK_FALSE(b.backend->stop(true, b.error));   // the later shutdown's retry, the thread gone: the step is still refused, and the result follows it
+        CHECK(contains(b.error, step.failure));
+        CHECK_FALSE(contains(b.error, step.other));
+        CHECK(shim.calls == std::vector<std::string>{"disable", "set_pins", "clear_fifos"});   // the first stop took the program, and a retry waits for the SM only
+        CHECK(shim.fifoPolls == 0);
+        shim.*step.rc = 0;
+        shim.calls.clear();
+        CHECK(b.backend->stop(true, b.error));   // the step works now: dark, and the old text is gone
+        CHECK(b.error.empty());
+        CHECK(shim.calls == std::vector<std::string>{"disable", "set_pins", "clear_fifos"});
+        CHECK(shim.pinsWord == mm::platform::kBlankWideWord);
+        shim.calls.clear();
+        CHECK(b.backend->stop(true, b.error));   // dark now: no further call
+        CHECK(shim.calls.empty());
+        b.backend->close();
+    }
+}
+
+TEST_CASE("Hub75PioPiolib: after a stop a submit answers -ENODEV, a second stop makes no call, and the close releases the claim, once") {
+    Backend b;
+    REQUIRE(b.backend->open(b.error));
+    REQUIRE(b.backend->start(config(), b.error));
+    CHECK(b.backend->stop(false, b.error));
+    shim.calls.clear();
+    std::vector<uint32_t> blank(64, mm::platform::kBlankWideWord);
+    CHECK(b.backend->submitBlank(blank.data(), 256) == -ENODEV);   // the refresh thread released late finds the backend stopped
+    CHECK(b.backend->submitFrame(blank.data(), 256) == -ENODEV);
+    CHECK(b.backend->stop(true, b.error));
+    CHECK(shim.calls.empty());
+    b.backend->close();
+    CHECK(shim.calls == std::vector<std::string>{"release"});   // the stop took the SM and the program, and the close gives the claim back
+    b.backend->close();   // a second close finds everything released already
+    CHECK(shim.calls.size() == 1);
+}
+
+TEST_CASE("Hub75PioPiolib: a blank is the same transfer as a frame, and a FIFO that stays full still stops the SM, darkens the pins and says so") {
     {
         Backend b;
         REQUIRE(b.backend->open(b.error));
         REQUIRE(b.backend->start(config(), b.error));
+        shim.calls.clear();
+        std::vector<uint32_t> blank(8192, mm::platform::kBlankWideWord);
+        CHECK(b.backend->submitBlank(blank.data(), static_cast<uint32_t>(blank.size() * 4)) == 0);
+        CHECK(shim.lastXferBytes == 32768);
+        CHECK(shim.calls == std::vector<std::string>{"xfer"});
         shim.xferRc = -EIO;
-        std::vector<uint32_t> blank(64, 0);
-        CHECK_FALSE(b.backend->blankAndStop(blank.data(), 256, b.error));
-        CHECK(contains(b.error, "blank frame submit failed"));
-        CHECK(std::count(shim.calls.begin(), shim.calls.end(), "disable") == 1);
-        CHECK(std::count(shim.calls.begin(), shim.calls.end(), "remove_program") == 1);
+        CHECK(b.backend->submitBlank(blank.data(), 256) == -EIO);   // the shim's code comes back
         b.backend->close();
     }
     {
@@ -267,23 +404,40 @@ TEST_CASE("Hub75PioPiolib: a blank that fails, or a FIFO that never empties, sti
         REQUIRE(b.backend->open(b.error));
         REQUIRE(b.backend->start(config(), b.error));
         shim.fifoEmpty = false;
-        std::vector<uint32_t> blank(64, 0);
-        CHECK_FALSE(b.backend->blankAndStop(blank.data(), 256, b.error));
+        CHECK(b.backend->stop(true, b.error));   // the panel is dark: the timeout is a note, not a failure
         CHECK(contains(b.error, "did not drain"));
+        CHECK_FALSE(contains(b.error, "cannot"));
+        CHECK(shim.pinsWord == mm::platform::kBlankWideWord);
         CHECK(std::count(shim.calls.begin(), shim.calls.end(), "disable") == 1);
+        CHECK(std::count(shim.calls.begin(), shim.calls.end(), "set_pins") == 1);
+        CHECK(std::count(shim.calls.begin(), shim.calls.end(), "remove_program") == 1);
         b.backend->close();
     }
 }
 
-TEST_CASE("Hub75PioPiolib: a close without a blank still disables the SM, removes the program and releases the claim, once") {
+TEST_CASE("Hub75PioPiolib: the wait before the SM stops follows the ring and the clock") {
     Backend b;
     REQUIRE(b.backend->open(b.error));
-    REQUIRE(b.backend->start(config(), b.error));
+    PioStartConfig c = config();
+    c.xferBufSize = 2048;   // 4 buffers: 2,048 words
+    c.clkdivInt = 400;      // 100 kHz: the ring is 20.5 ms on the wire, 41 ms doubled
+    REQUIRE(b.backend->start(c, b.error));
+    const auto t0 = std::chrono::steady_clock::now();
+    CHECK(b.backend->stop(true, b.error));
+    const auto waited = std::chrono::steady_clock::now() - t0;
+    CHECK(waited >= std::chrono::milliseconds(40));
+    CHECK(waited < std::chrono::milliseconds(1000));
+    b.backend->close();
+}
+
+TEST_CASE("Hub75PioPiolib: a close after a failed start releases the claim, as the engine closes a backend it never stopped") {
+    Backend b;
+    shim.xferConfigRc = -EBUSY;
+    REQUIRE(b.backend->open(b.error));
+    CHECK_FALSE(b.backend->start(config(), b.error));
     shim.calls.clear();
     b.backend->close();
-    CHECK(shim.calls == std::vector<std::string>{"disable", "remove_program", "release"});
-    b.backend->close();   // a second close finds everything released already
-    CHECK(shim.calls.size() == 3);
+    CHECK(shim.calls == std::vector<std::string>{"release"});
 }
 
 #endif

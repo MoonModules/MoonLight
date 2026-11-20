@@ -16,11 +16,13 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <map>
 #include <mutex>
 #include <thread>
 #include <utility>
@@ -41,10 +43,16 @@ struct StubState {
     StubStartRecord start;
     uint32_t blanks = 0;
     uint32_t lastBlankBytes = 0;
-    bool blankStopped = false;      // the blank has stopped the stub, until the next start
-    uint32_t realInFlightAtStop = 0;   // chunks of real frames still in flight when the last blank stopped the stub
-    uint32_t submitsAfterBlank = 0;
+    bool stopped = false;      // a stop has stopped the stub, until the next start
+    uint32_t realInFlightAtStop = 0;   // chunks of real frames still in flight when the last stop ran
+    uint32_t submitsAfterStop = 0;
     uint32_t submitsWithStopOpen = 0;   // frame submits made by a thread that did not block SIGTERM
+    uint32_t blankAttempts = 0;         // blank submits tried, the failed ones included
+    std::thread::id blankThread;        // the thread of the last blank submit that was recorded
+    std::map<std::thread::id, uint32_t> submitThreads;   // the submits (frames and blanks) each thread made
+    bool pinsDark = false;              // a stop has set the pins to the dark word, until the next start
+    uint32_t stops = 0;                 // stops that stopped a started stub, since the last reset
+    bool lastStopDrained = false;       // whether the last of them had `drain` set
     StubFaults faults;
     StubQueueModel model = StubQueueModel::Blocking;
 };
@@ -112,7 +120,8 @@ class StubBackend : public PioBackend {
                 error = "stub start refused: -EINVAL (more than 4 bounce buffers, or a buffer size of 0 or not a multiple of 4)";
                 return false;
             }
-            state_.blankStopped = false;
+            state_.stopped = false;
+            state_.pinsDark = false;   // a started SM drives its own pins, so the dark word of an earlier stop is gone
             state_.start.starts++;
             state_.start.config = config;
             state_.start.program.assign(config.programInstructions,
@@ -125,44 +134,51 @@ class StubBackend : public PioBackend {
         inFlight_.clear();
         busyUntil_ = Clock::now();
         started_ = true;
+        dark_ = false;   // a started SM drives its own pins, so a stop owes the dark word
         return true;
     }
 
     int submitFrame(const void* data, uint32_t bytes) override {
-        if (!started_) {
-            std::lock_guard<std::mutex> lock(stateMu_);
-            if (state_.blankStopped) state_.submitsAfterBlank++;
-            return -ENODEV;   // as the piolib backend answers before its start
-        }
+        if (!started_) return refuseAfterStop();
         return submit(data, bytes, false);
     }
 
-    bool blankAndStop(const void* blankData, uint32_t blankBytes, std::string& error) override {
-        bool ok = true;
-        bool early = false;
-        uint32_t realInFlight = 0;
-        if (started_) {
-            // The blank is queued, then the FIFO drains and the SM stops: an early FIFO-empty poll stops it first.
-            if (submit(blankData, blankBytes, true) != 0) {
-                error = "stub blank submit failed";
-                ok = false;
+    int submitBlank(const void* data, uint32_t bytes) override {
+        if (!started_) return refuseAfterStop();
+        return submit(data, bytes, true);
+    }
+
+    bool stop(bool drain, std::string& error) override {
+        error.clear();   // this stop's note or failure alone
+        // The flag goes first, so a submit released late is refused; a stop that finds the stub stopped and dark is a no-op, and one that finds a failed stop runs it again.
+        const bool wasStarted = started_.exchange(false);
+        if (!wasStarted && dark_) return true;
+        StubFaults faults;
+        {
+            std::lock_guard<std::mutex> lock(stateMu_);
+            if (wasStarted) {
+                state_.stops++;
+                state_.lastStopDrained = drain;
             }
-            {
-                std::lock_guard<std::mutex> lock(stateMu_);
-                early = state_.faults.fifoEmptyEarly;
-            }
-            if (early) realInFlight = realChunksInFlight();
-            else drain();
+            faults = state_.faults;
         }
-        started_ = false;
+        // A stop with `drain` clear leaves the queue alone: the refresh thread may be inside it.
+        const uint32_t realInFlight = wasStarted && drain ? drainFor(faults, error) : 0;
         std::lock_guard<std::mutex> lock(stateMu_);
-        state_.blankStopped = true;
-        state_.realInFlightAtStop = realInFlight;
-        return ok;
+        state_.stopped = true;
+        if (wasStarted) state_.realInFlightAtStop = realInFlight;
+        if (faults.failStop) {
+            addNote(error, "stub stop failed (test fault): the SM was not disabled and the pins were not set");
+            return false;   // the pins are not darkened
+        }
+        state_.pinsDark = true;
+        dark_ = true;
+        return true;
     }
 
     void close() override {
         started_ = false;
+        dark_ = true;
         opened_ = false;
     }
 
@@ -206,7 +222,9 @@ class StubBackend : public PioBackend {
 
     // Record one accepted frame, or blank, in the state; the caller holds stateMu_.
     void record(FrameCapture&& c, uint32_t bytes, bool blank) {
+        state_.submitThreads[std::this_thread::get_id()]++;
         if (blank) {
+            state_.blankThread = std::this_thread::get_id();
             state_.blanks++;
             state_.lastBlankBytes = bytes;
         } else {
@@ -226,11 +244,15 @@ class StubBackend : public PioBackend {
     int submit(const void* data, uint32_t bytes, bool blank) {
         FrameCapture frame = captureFrame(data, bytes);
         StubQueueModel model;
+        {
+            std::lock_guard<std::mutex> lock(stateMu_);
+            if (blank) state_.blankAttempts++;
+        }
         hang();
         {
             std::lock_guard<std::mutex> lock(stateMu_);
             model = state_.model;
-            if (takeSubmitFault()) return state_.faults.submitError;
+            if (takeSubmitFault() || (blank && state_.faults.failBlank)) return state_.faults.submitError;
             record(std::move(frame), bytes, blank);
         }
         if (model == StubQueueModel::Blocking) {
@@ -276,8 +298,29 @@ class StubBackend : public PioBackend {
         }
     }
 
+    // A submit after a stop: counted, and answered as the piolib backend answers before its start.
+    int refuseAfterStop() {
+        std::lock_guard<std::mutex> lock(stateMu_);
+        if (state_.stopped) state_.submitsAfterStop++;
+        return -ENODEV;
+    }
+
+    // Adds one note or failure to the text the stop reports, after any earlier one.
+    static void addNote(std::string& error, const char* what) {
+        if (!error.empty()) error += "; ";
+        error += what;
+    }
+
+    // The wait a stop with `drain` makes for the queue, or its skip under `fifoEmptyEarly`; returns the chunks of real frames still in flight, and notes a FIFO that `drainTimesOut`.
+    uint32_t drainFor(const StubFaults& faults, std::string& error) {
+        const uint32_t realInFlight = faults.fifoEmptyEarly ? realChunksInFlight() : 0;
+        if (!faults.fifoEmptyEarly) drainQueue();
+        if (faults.drainTimesOut) addNote(error, "stub TX FIFO did not drain (test fault); disabling SM anyway");
+        return realInFlight;
+    }
+
     // Wait until every queued chunk has gone out: the TX FIFO is empty.
-    void drain() {
+    void drainQueue() {
         if (!inFlight_.empty()) std::this_thread::sleep_until(busyUntil_);
         inFlight_.clear();
     }
@@ -297,7 +340,8 @@ class StubBackend : public PioBackend {
     };
 
     bool opened_ = false;
-    bool started_ = false;
+    bool dark_ = true;   // no SM runs or its pins are dark; false from start() until a stop has succeeded once
+    std::atomic<bool> started_{false};   // the closing thread's stop() writes it while the refresh thread submits
     uint32_t dividerQ8_ = 0;   // the SM clock divider in 1/256ths
     uint32_t ringBytes_ = UINT32_MAX;
     uint32_t ringCount_ = 1;
@@ -340,9 +384,9 @@ StubStartRecord stubBackendLastStart() {
     return state_.start;
 }
 
-uint32_t stubBackendSubmitsAfterBlank() {
+uint32_t stubBackendSubmitsAfterStop() {
     std::lock_guard<std::mutex> lock(stateMu_);
-    return state_.submitsAfterBlank;
+    return state_.submitsAfterStop;
 }
 
 uint32_t stubBackendRealChunksInFlightAtStop() {
@@ -353,6 +397,37 @@ uint32_t stubBackendRealChunksInFlightAtStop() {
 uint32_t stubBackendSubmitsWithStopOpen() {
     std::lock_guard<std::mutex> lock(stateMu_);
     return state_.submitsWithStopOpen;
+}
+
+uint32_t stubBackendBlankAttempts() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.blankAttempts;
+}
+
+std::thread::id stubBackendBlankThread() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.blankThread;
+}
+
+uint32_t stubBackendSubmitsFromThread(std::thread::id thread) {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    const auto it = state_.submitThreads.find(thread);
+    return it == state_.submitThreads.end() ? 0 : it->second;
+}
+
+uint32_t stubBackendStops() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.stops;
+}
+
+bool stubBackendLastStopDrained() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.lastStopDrained;
+}
+
+bool stubBackendPinsDark() {
+    std::lock_guard<std::mutex> lock(stateMu_);
+    return state_.pinsDark;
 }
 
 uint32_t stubBackendBlanks() {
@@ -384,10 +459,16 @@ void stubBackendReset() {
     state_.start = StubStartRecord{};
     state_.blanks = 0;
     state_.lastBlankBytes = 0;
-    state_.blankStopped = false;
+    state_.stopped = false;
     state_.realInFlightAtStop = 0;
-    state_.submitsAfterBlank = 0;
+    state_.submitsAfterStop = 0;
     state_.submitsWithStopOpen = 0;
+    state_.blankAttempts = 0;
+    state_.blankThread = std::thread::id{};
+    state_.submitThreads.clear();
+    state_.pinsDark = false;
+    state_.stops = 0;
+    state_.lastStopDrained = false;
     state_.faults = StubFaults{};
     state_.model = StubQueueModel::Blocking;
 }
