@@ -18,7 +18,7 @@ def test_the_commit_gates_come_from_the_trigger_table_with_each_process_it_names
     gates = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
     assert gates["commit-docs/docgen"]["script"] == "moondeck/check/check_docgen.py"
     assert "src/**" in gates["commit-docs/docgen"]["globs"]
-    assert gates["commit/specs"]["globs"] == []                       # a gate naming no files runs on every change
+    assert gates["commit-every/specs"]["globs"] == []                       # a gate naming no files runs on every change
     assert "judgment" in gates["commit/reviewer"]                      # a step that is judgment is the reader's
 
 

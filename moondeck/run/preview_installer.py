@@ -77,7 +77,7 @@ def _stage_referenced_board_images(dst_dir: Path):
 def stage_install_page():
     """Refresh the preview dir, mirroring the GitHub Pages layout.
 
-    Re-staging on every run keeps the local copy honest: if you edit index.html or any sibling JS while the server is up, restart via the Stop/Run cycle to pick up changes (or rely on the `?nocache=1` query parameter the picker honors).
+    Re-staging on every run keeps the local copy honest: if you edit index.html or any sibling JS while the server is up, restart via the Stop/Run cycle to pick up changes.
 
     Layout matches Pages exactly: the installer under /install/, board images under /install/assets/deviceModels/, the releases tree under /install/releases/. A root index.html redirects / → /install/ so the historical `localhost:8421/` entry point still lands on the installer. The shared install-picker.js (under src/ui/, shared with the on-device UI) is copied in.
     """
@@ -273,7 +273,6 @@ def main() -> int:
     print(f"==> serving at http://localhost:{PORT}/")
     print(f"    installer: http://localhost:{PORT}/install/")
     print("    open in Chrome / Edge / Opera (Web Serial requires one of these)")
-    print("    add ?nocache=1 to bypass the picker's 5-min sessionStorage cache")
     print()
     sys.stdout.flush()
 

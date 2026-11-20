@@ -31,6 +31,18 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The devices keep one fleet clock, on UDP 65511
+
+**Action: allow UDP 65511 and the multicast group 239.255.77.80 where a firewall sits between devices.**
+
+Every MoonLight device keeps a fleet clock, asking the lowest device that runs it for its time on UDP port 65511 and saying it runs the clock to 239.255.77.80 every sixteen seconds. Effects animate on it, so the same effect on two devices shows the same moment; when a device first syncs, its animations jump once to the fleet's time. An animation's phase is the fleet time times its rate, so each step of a speed control moves the picture to where the new rate puts it. A group's status names the device it follows (`clock: MM-C3, ±4.7 ms`). Only devices on this release or later run it, and only they are asked.
+
+### MoonBase matches the app by handoff version
+
+**Action: *nothing*, or install MoonBase once.**
+
+The app reports MoonBase behind only when it speaks another handoff version, the number of the contract between the two images, rather than whenever their versions differ. A MoonBase installed before this release carries no handoff version, so the warning and the map's ⬆ stay until the MoonBase from this release or a later one is installed from the Firmware card's MoonBase tab; after that, a new release leaves it quiet unless the contract changed.
+
 ### A `receivers` field takes a device group's name, and holds up to 32
 
 **Action: *nothing*.**
@@ -41,7 +53,7 @@ The `receivers` of OSC, audio sync and Network Send take a device group's name b
 
 **Action: *remove* an OscService set up only to keep group members in step; membership alone keeps them in step now.**
 
-A member of a device group follows the group's switches, encoders and faders, each as the parameter it drives (`Drivers.brightness`), and its effects presets, with no OSC set up: membership is the one setting. A change made on any member sets that parameter on every other member, whatever their own slots drive, and the newer change wins when two meet. An effects preset applied on one member is fetched from it and applied on the others; a driver or layout preset stays on its board. A member back from a restart takes the group's values within seconds. These travel on the groups' address, 239.255.77.79 port 65510.
+A member of a device group follows the group's switches, encoders and faders, each as the parameter it drives (`Drivers.brightness`), and its effects presets, with no OSC set up: membership is the one setting. A change made on any member sets that parameter on every other member at one moment of the fleet clock, 100 ms ahead, whatever their own slots drive, and the newer change wins when two meet; the member where it changed leads by those 100 ms. An effects preset applied on one member reaches the others whole, in chunks every member takes from the multicast and repairs on request, and applies at the same moment; a driver or layout preset stays on its board. A member back from a restart takes the group's values within seconds. These travel on the groups' address, 239.255.77.79 port 65510. A script sets a member by MAC with `field: "mac"`; the `device` field takes the picker's index, a number.
 
 ### A `latest` host's firmware id is `host-<os>-<arch>`
 

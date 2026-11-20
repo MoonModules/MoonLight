@@ -6,11 +6,12 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "core/util/ClockSync.h"   // FleetTime: the fleet clock, back to the local clock per case
 #include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on
 #include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case and subcase rerun starts on the real clock, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
+// Every test case and subcase rerun starts on the real clock and its own local time, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
 struct FreshFixturesPerTest : doctest::IReporter {
     explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
     static void reset() {
@@ -18,6 +19,7 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::platform::setTestClockStep(0);
         mm::platform::hdmiTestClear();
         mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
+        mm::FleetTime::reset();   // the process-wide fleet time, which a case's Devices tree may have claimed
         mm::platform::setTestMachineRest(mm::platform::Machine::Other);
         mm::platform::setTestHub75PioGateOpen(false);
     }

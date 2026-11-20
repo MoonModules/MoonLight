@@ -77,3 +77,45 @@ TEST_CASE("DevicesModule: a MoonLight device is not downgraded by a WLED packet"
     CHECK(row.find("\"type\":\"MoonLight\"") != std::string::npos);
     CHECK(row.find("\"type\":\"WLED\"") == std::string::npos);
 }
+
+// The bench case: boards heard on a guest network stayed listed at its addresses for a day after the desktop moved back to the main one.
+TEST_CASE("DevicesModule: a new address of its own drops the rows learned on the old network") {
+    ClockGuard guard;
+    struct AddressGuard { ~AddressGuard() { platform::setTestEthIPv4(nullptr); } } address;
+    platform::setTestNowMs(1000);
+    const uint8_t guest[4] = {192, 168, 9, 151};
+    platform::setTestEthIPv4(guest);
+    DevicesModule dev;
+    dev.tick1s();
+    const uint8_t board[4] = {192, 168, 9, 137};
+    discovery_rows::hearPresence(dev, board, "WLED0-0", /*mm=*/false);
+    REQUIRE_FALSE(discovery_rows::rowAt(dev, "192.168.9.137").empty());
+
+    const uint8_t home[4] = {192, 168, 1, 151};
+    platform::setTestEthIPv4(home);
+    dev.tick1s();
+    CHECK(discovery_rows::rowAt(dev, "192.168.9.137").empty());
+    CHECK_FALSE(discovery_rows::rowAt(dev, "192.168.1.151").empty());   // this device's own row moves with it
+
+    const uint8_t same[4] = {192, 168, 1, 137};
+    discovery_rows::hearPresence(dev, same, "WLED0-0", /*mm=*/false);
+    dev.tick1s();
+    CHECK_FALSE(discovery_rows::rowAt(dev, "192.168.1.137").empty());   // the new network's devices stay
+}
+
+// The bench case: a board renamed SS-0-1 still listed itself as MM-33FC, so its group showed the old name.
+TEST_CASE("DevicesModule: this device's own row follows a rename on the next tick") {
+    ClockGuard guard;
+    struct AddressGuard { ~AddressGuard() { platform::setTestEthIPv4(nullptr); } } address;
+    platform::setTestNowMs(1000);
+    const uint8_t self[4] = {192, 168, 1, 235};
+    platform::setTestEthIPv4(self);
+    char name[24] = "MM-33FC";
+    DevicesModule dev;
+    dev.setSelfName(name);
+    dev.tick1s();
+    CHECK(discovery_rows::rowAt(dev, "192.168.1.235").find("\"name\":\"MM-33FC\"") != std::string::npos);
+    std::strcpy(name, "SS-0-1");
+    dev.tick1s();
+    CHECK(discovery_rows::rowAt(dev, "192.168.1.235").find("\"name\":\"SS-0-1\"") != std::string::npos);
+}

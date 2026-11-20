@@ -4,54 +4,45 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/BouncingBallsEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"  // setTestNowMs — freeze millis() for a deterministic first frame
+#include "platform/platform.h"  // setTestNowMs: a frozen clock for a deterministic frame
+
+#include <vector>
 
 // Restore the real clock after any test that froze it, so a frozen value can't leak into order-dependent neighbors.
 namespace { struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } }; }
 
-// On the first frame every ball is at rest (zero-init state) and bounces off the floor, so the effect paints the bottom row of every column and leaves the rows above it black.
-TEST_CASE("BouncingBallsEffect lights the bottom row on the first frame") {
-    ClockGuard guard;
-    mm::platform::setTestNowMs(1);  // any non-zero value freezes millis() at t=1ms
-
+namespace {
+/// The frame a fresh BouncingBallsEffect draws on a `w` by `h` grid at `ms`.
+std::vector<uint8_t> frameAt(int w, int h, uint32_t ms) {
     mm::Layouts layouts;
     mm::GridLayout grid;
-    grid.width = 4;
-    grid.height = 4;
+    grid.width = w;
+    grid.height = h;
     grid.depth = 1;
     layouts.addChild(&grid);
-
     mm::Layer layer;
     layer.setLayouts(&layouts);
     layer.setChannelsPerLight(3);
-
     mm::BouncingBallsEffect balls;
     layer.addChild(&balls);
-
+    mm::platform::setTestNowMs(ms);
     layer.applyState();
     layer.tick();
+    std::vector<uint8_t> bytes(layer.buffer().data(), layer.buffer().data() + layer.buffer().bytes());
+    layer.removeChild(&balls);
+    return bytes;
+}
+}  // namespace
 
-    auto& buf = layer.buffer();
-    REQUIRE(buf.count() == 16);
-
-    const int w = 4, h = 4;
-    // Bottom row (y = h-1): at least one column is lit — the balls all rest here on frame one.
-    bool bottomLit = false;
-    for (int x = 0; x < w; x++) {
-        size_t idx = static_cast<size_t>((h - 1) * w + x) * 3;
-        if (buf.data()[idx] | buf.data()[idx + 1] | buf.data()[idx + 2]) { bottomLit = true; break; }
-    }
-    CHECK(bottomLit);
-
-    // Every row above the floor is black on the first frame (balls have not risen yet).
-    bool upperLit = false;
-    for (int y = 0; y < h - 1; y++) {
-        for (int x = 0; x < w; x++) {
-            size_t idx = static_cast<size_t>(y * w + x) * 3;
-            if (buf.data()[idx] | buf.data()[idx + 1] | buf.data()[idx + 2]) { upperLit = true; }
-        }
-    }
-    CHECK_FALSE(upperLit);
+// A ball is a function of its column and the time alone, so two effects started apart draw the same frame at the same moment: what keeps the boards of a wall in one picture.
+TEST_CASE("BouncingBallsEffect draws the same frame at the same moment, whenever it started") {
+    ClockGuard guard;
+    const auto a = frameAt(8, 16, 123457);
+    const auto b = frameAt(8, 16, 123457);
+    CHECK(a == b);
+    bool lit = false;
+    for (uint8_t v : a) lit = lit || v;
+    CHECK(lit);
 }
 
 // numBalls=0 draws nothing: the effect clamps below its minimum and the buffer stays black.
@@ -129,11 +120,7 @@ TEST_CASE("BouncingBallsEffect balls rise above the floor as time advances") {
 
     layer.applyState();
 
-    // Frame one at t=1 relaunches every ball (impactVelocity kick set from its floor bounce).
-    mm::platform::setTestNowMs(1);
-    layer.tick();
-
-    // A ball with the maximum kick (√19.62·1.0 ≈ 4.43) climbs for ~450ms before falling back; sample partway up its arc. Scan a spread of instants so the assertion doesn't hinge on one exact frame.
+    // A ball with the maximum kick climbs for about 450 ms before falling back; a spread of instants keeps the assertion off one exact frame.
     const int w = 1, h = 16;
     bool roseAboveFloor = false;
     for (uint32_t t = 50; t <= 400 && !roseAboveFloor; t += 50) {

@@ -267,10 +267,8 @@ uv run moondeck/run/preview_installer.py
 
 Long-running: MoonDeck shows **Stop** while the server is up. Two modes, picked automatically:
 
-- **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the real GitHub Releases API and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS without burning a build.
+- **Render-only.** With no app image under `build/esp32-*/`, the picker populates against the live release feed on Pages and the dropdowns work. Clicking **Install** fails, because the local server has no `releases/` tree. Useful for iterating on HTML / CSS / JS while the build stands still.
 - **Flash-ready.** When at least one ESP32 or Teensy build exists, the script also stages every app image it finds under `build/esp32-*/`, and every built Teensy `build/teensy41*/MoonLight.bin`, under `releases/latest/` as version `local-dev`. It generates matching Pages-relative manifests with the same `generate_manifest.py` the release workflow uses. Clicking **Install** on `latest` flashes a USB-connected ESP32 or Teensy and hands off to the repository's own orchestrator UI in `install-orchestrator.js`. That does the Improv-Serial provisioning and the APPLY_OP push of the device model's modules and controls, in place of ESP Web Tools. End-to-end, same code paths as the public installer. This is the developer's test ground for the install flow before deploying to GitHub Pages: Web Serial works on `http://localhost` without the secure-origin requirement that gates the public site.
-
-Add `?nocache=1` to the URL to bypass the picker's 5-minute sessionStorage cache while editing.
 
 ### check_specs
 
@@ -965,6 +963,15 @@ uv run moondeck/diag/preview_health.py 192.168.1.132 --seconds 60   # longer win
 ```
 
 When the verdict is `CHOPPY`/`DEAD`, the *cause* (which close path fired on the device) needs device-side serial logging: that scaffolding is added on demand during diagnosis, separate from this always-on probe. Run with its grid left as it is, it is safe beside a live preview a browser is also watching (subject to the 4-client preview limit).
+
+### measure_fleet_clock
+
+**How closely the devices' fleet clocks agree** ([FleetClock](../src/core/system/FleetClock.h)). Every device holding the fleet's time answers the fleet clock's request on UDP 65511 with it, whoever asks, to the port it came from; this script asks the devices in rounds from this computer, every device once per round, back to back, and compares each with the first device in the round where their two round trips add up least, NTP's clock filter for a pair: one instant, so this computer's clock and its drift cancel out, within half the two round trips. It prints each device against the first with its bound, the spread, and whether the plan's 1 ms aim is met by the widest spread the bounds allow: exit `0` when it is, `2` when it is not, `1` when no two devices answered in one round. Read-only: it sends requests and leaves every device as it was; a device that stays silent runs no fleet clock, or holds no fleet time yet.
+
+```bash
+uv run moondeck/diag/measure_fleet_clock.py                          # every MoonLight device in the desktop app's Discovery list
+uv run moondeck/diag/measure_fleet_clock.py 192.168.1.122 192.168.1.115 --count 100
+```
 
 ## ESP32 Tab
 

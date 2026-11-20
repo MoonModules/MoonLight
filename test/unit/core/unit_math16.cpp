@@ -66,7 +66,7 @@ TEST_CASE("map32 can reach the last column of a grid") {
     CHECK(map32(254, 0, 255, 0, width) == 15);      // just under still lands inside
 }
 
-// Full-width ranges: an int32 subtraction of INT32_MIN from INT32_MAX overflows, so every operand widens before the arithmetic. A mapping engine that corrupts at the extremes would misplace pixels silently rather than crash, which is the worst failure mode.
+// Full-width ranges: INT32_MAX minus INT32_MIN overflows an int32, so every operand widens first; a mapper corrupting at the extremes would misplace pixels silently, the worst failure mode.
 TEST_CASE("map32 survives full-width 32-bit ranges") {
     constexpr int32_t lo = INT32_MIN, hi = INT32_MAX;
     CHECK(map32(lo, lo, hi, 0, 100) == 0);            // the extremes still clamp correctly
@@ -87,14 +87,30 @@ TEST_CASE("sin16 and map32 evaluate at compile time") {
     CHECK(true);
 }
 
+TEST_CASE("BeatPhase is fleet time times the rate, so a device starting late or rendering faster reads the same phase") {
+    BeatPhase early, late;
+    for (uint32_t ms = 1000; ms < 5000; ms += 7) early.advanceTo(ms, 120);   // running since 1 s, a frame every 7 ms
+    early.advanceTo(5000, 120);
+    late.advanceTo(5000, 120);                                              // its first frame at 5 s
+    CHECK(late.phase(65536) == early.phase(65536));
+}
+
 TEST_CASE("BeatPhase keeps animating when frames are under a millisecond") {
     BeatPhase p;
-    p.advanceTo(1000, 120);                            // first call only sets the time base
-    CHECK(p.phase(256) == 0);
-
-    // 1000 frames of a sub-millisecond dt: a per-tick divide would round each to zero and freeze. (Integer ms means some ticks advance 0 and some 1, the accumulator must survive both.)
+    p.advanceTo(1000, 120);
+    const uint32_t start = p.phase(65536);
+    // Sub-millisecond frames: a per-step divide would round each step to zero and freeze; the product divided at the read moves.
     for (uint32_t i = 1; i <= 1000; i++) p.advanceTo(1000 + i / 2, 120);
-    CHECK(p.phase(256) > 0);
+    CHECK(p.phase(65536) > start);
+}
+
+TEST_CASE("BeatPhase jumps to where a new rate puts it, the same on every device") {
+    BeatPhase a, b;
+    a.advanceTo(10000, 60);
+    a.advanceTo(10020, 120);   // a's frame lands after the change
+    b.advanceTo(10020, 120);   // b's first frame is after it
+    CHECK(a.numerator() == b.numerator());
+    CHECK(a.numerator() == static_cast<uint64_t>(10020) * 120);
 }
 
 TEST_CASE("BeatPhase advances proportionally to elapsed time and rate") {
@@ -123,17 +139,13 @@ TEST_CASE("BeatPhase holds still at rate zero and resets to zero") {
     CHECK(p.numerator() == 0);
 }
 
-// millis() wraps every ~49 days; unsigned subtraction gives the correct delta across the wrap, so a long-running device must not see the phase jump backwards or leap.
-TEST_CASE("BeatPhase survives the millis wrap") {
-    BeatPhase p;
-    p.advanceTo(0xFFFFFF00u, 120);
-    p.advanceTo(0xFFFFFF00u + 100u, 120);              // wraps past 2^32
-    const uint64_t afterWrap = p.numerator();
-
-    BeatPhase q;
-    q.advanceTo(1000, 120);
-    q.advanceTo(1100, 120);                            // the same 100 ms, no wrap
-    CHECK(afterWrap == q.numerator());
+// Fleet milliseconds wrap every 49 days; the phase restarts there on every device at once, so they stay in step through it.
+TEST_CASE("BeatPhase restarts at the clock's wrap alike on every device") {
+    BeatPhase a, b;
+    a.advanceTo(0xFFFFFFF0u, 120);
+    a.advanceTo(0xFFFFFFF0u + 100u, 120);   // past 2^32, to 84
+    b.advanceTo(84u, 120);                  // the same wrapped moment, read by a device that started after it
+    CHECK(a.numerator() == b.numerator());
 }
 
 // --- Polar ---------------------------------------------------------------------------------
@@ -163,7 +175,7 @@ TEST_CASE("atan16 is monotone around a full sweep") {
     uint16_t prev = 0;
     int wraps = 0;
     for (int deg = 0; deg < 360; deg += 3) {
-        const double rad = deg * 3.14159265358979 / 180.0;
+        const double rad = deg * std::numbers::pi / 180.0;
         const int32_t x = static_cast<int32_t>(10000 * std::cos(rad));
         const int32_t y = static_cast<int32_t>(10000 * std::sin(rad));
         const uint16_t a = atan16(y, x);
@@ -177,7 +189,7 @@ TEST_CASE("atan16 is monotone around a full sweep") {
 TEST_CASE("atan16 stays within a fraction of a degree of the true angle") {
     double worst = 0.0;
     for (int deg = 0; deg < 360; deg++) {
-        const double rad = deg * 3.14159265358979 / 180.0;
+        const double rad = deg * std::numbers::pi / 180.0;
         const int32_t x = static_cast<int32_t>(30000 * std::cos(rad));
         const int32_t y = static_cast<int32_t>(30000 * std::sin(rad));
         const double got = atan16(y, x) * 360.0 / 65536.0;
@@ -390,7 +402,7 @@ TEST_CASE("isqrt64 finds a root across the whole 64-bit range") {
     }
 }
 
-// atan16 folds into the first octant by taking the magnitude of each axis. INT32_MIN is the one value whose negation has no int32 representation, so the obvious fold is undefined behavior at exactly one input per axis, and a coordinate reaches it whenever a caller passes an unclamped difference. The angles below are the correct quadrants: due-left, straight-down, and the diagonal between them.
+// atan16 folds by each axis's magnitude, and INT32_MIN's negation has no int32 form, so an unclamped difference reaches undefined behavior; below: due-left, straight-down and the diagonal.
 TEST_CASE("atan16 handles the extremes of its input range") {
     CHECK(atan16(INT32_MIN, 0) == 49152);            // straight down (three quarter turns)
     CHECK(atan16(0, INT32_MIN) == 32768);            // due left (half a turn)
@@ -399,7 +411,7 @@ TEST_CASE("atan16 handles the extremes of its input range") {
     CHECK(atan16(0, 0) == 0);                        // the centre has no direction
 }
 
-// The 8-bit waveforms cap at 255, which quantises coarsely across the fixtures this drives, a 128x128 wall indexed through a 0..255 ramp moves in steps, not smoothly. These are the same textbook shapes at full range, so a position scales to any axis length without rescaling.
+// The 8-bit waveforms cap at 255, so a 128x128 wall indexed through them moves in steps; these are the same textbook shapes at full range, scaling to any axis length.
 TEST_CASE("a triangle wave rises to full scale and falls back") {
     CHECK(mm::triwave16(0) == 0);
     CHECK(mm::triwave16(32767) == 65534);       // just short of the peak, on the way up
@@ -435,9 +447,7 @@ TEST_CASE("a half-life decay loses exactly half its value over one half-life") {
 }
 
 TEST_CASE("two decay steps reach the same place as one step of twice the time") {
-    // The framerate-independence property, and the reason the half-life form replaces a per-frame fade: a device rendering at 30 fps and one at 60 must dim a trail at the same rate in SECONDS. Written as decay(2dt) == decay(dt)^2, which is what that means arithmetically.
-    //
-    // The tolerance is one count at the BYTE width every caller narrows to (a channel is 8 bits), not at the 16-bit width of the weight itself: 256 of 65536. Measured worst case is 11.
+    // Frame-rate independence, decay(2dt) == decay(dt)^2, within one count of the byte a caller narrows to (256 of 65536; measured worst case 11).
     for (uint32_t halfLife : {10u, 100u, 1000u, 5000u}) {
         for (uint32_t dt = 1; dt < halfLife * 2; dt += 7) {
             const uint64_t once = mm::halfLifeKeep(dt, halfLife);

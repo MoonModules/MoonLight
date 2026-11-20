@@ -72,7 +72,7 @@ public:
     /// Which controls need a fresh encode, the encoder fixing its rate at spawn.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "targetFps") == 0 || std::strcmp(name, "scale") == 0 ||
-               isCorrectionControl(name);
+               isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Derive the scaled geometry, start the encoder, and listen for a client.
@@ -84,19 +84,7 @@ public:
         }
         if (!layer_) return;
 
-        srcWidth_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        srcHeight_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
-        scale_     = scale ? scale : autoScale();
-        uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
-        uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
-        // Chroma is sampled in 2x2 blocks, so the hardware encoder takes even dimensions only.
-        if ((scaledW & 1u) || (scaledH & 1u)) {
-            scale_  = static_cast<uint8_t>(scale_ * 2);
-            scaledW *= 2;
-            scaledH *= 2;
-        }
-        width_  = static_cast<lengthType>(scaledW);
-        height_ = static_cast<lengthType>(scaledH);
+        if (!sizeFrame()) return;   // its status names why
 
         const size_t pixels = static_cast<size_t>(width_) * height_;
         if (!rgb_.resize(pixels * 3)) {
@@ -104,7 +92,6 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
-        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         platform::EncoderConfig cfg{};
         cfg.width       = static_cast<uint16_t>(width_);
@@ -300,15 +287,41 @@ private:
         return static_cast<uint16_t>(kbit < 500 ? 500 : (kbit > 8000 ? 8000 : kbit));
     }
 
+    /// The picture of the window and the frame it is drawn into, scaled to clear the encoder's minimum and even; false, its status set, when the window stays below the minimum at the largest scale.
+    bool sizeFrame() {
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        srcWidth_  = picture_.width();
+        srcHeight_ = picture_.height();
+        scale_     = scale ? scale : autoScale();
+        uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
+        uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
+        evenFrame(scale_, scaledW, scaledH);
+        if (scaledW < kMinSide || scaledH < kMinSide) {   // a narrow window past the largest scale, or a table refused its memory and left one dark pixel
+            if (picture_.placed())
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "a %ux%u window at scale %u is below the encoder's %ux%u: widen the window",
+                              static_cast<unsigned>(srcWidth_), static_cast<unsigned>(srcHeight_), static_cast<unsigned>(scale_),
+                              static_cast<unsigned>(kMinSide), static_cast<unsigned>(kMinSide));
+            else
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "no memory to place the window's lights by the layout");
+            setStatus(statusBuf_, Severity::Error);
+            return false;
+        }
+        width_  = static_cast<lengthType>(scaledW);
+        height_ = static_cast<lengthType>(scaledH);
+        return true;
+    }
+
     /// The smallest scale clearing the encoder's minimum frame, so a small wall still encodes.
     uint8_t autoScale() const {
         uint8_t s = 1;
-        while (s < kMaxScale && (srcWidth_ * s < 128 || srcHeight_ * s < 96)) s = static_cast<uint8_t>(s + 1);
+        while (s < kMaxScale && (static_cast<uint32_t>(srcWidth_) * s < kMinSide || static_cast<uint32_t>(srcHeight_) * s < kMinSide)) s = static_cast<uint8_t>(s + 1);
         return s;
     }
 
     /// The largest block one light is drawn as, which bounds the encoded frame.
     static constexpr uint8_t kMaxScale = 16;
+    /// The smallest side the encoder takes, which autoScale reaches for.
+    static constexpr uint32_t kMinSide = platform::kEncoderMinSide;
 
 public:
     /// Frame-rate ceiling, which is also the keyframe interval.

@@ -5,7 +5,6 @@
 
 import { loadReleases } from "./install-picker.js";
 import { armPressTwice } from "./uikit.js";
-import { UPDATE_TTL_MS } from "./releases.js";
 import { installFirmware, peerFirmware } from "./deviceinstall.js";
 import { peerBase, peerUpdate, deviceOf, noImageNote } from "./devicepopup.js";
 
@@ -79,9 +78,13 @@ function memberLine(m) {
     return { line, ui };
 }
 
-// What the update ended in, for the line under the button.
-function summaryText({ done, failed, untouched }) {
-    if (!failed.length) return `Updated ${done.length} member${done.length === 1 ? "" : "s"}.`;
+// The popup's note while members are behind: `left` of `total`, counted down as each install ends well.
+export function behindNote(left, total) {
+    return left ? `${left} of ${total} members ${left === 1 ? "is" : "are"} behind.` : "Every member is up to date.";
+}
+
+// What a failed update ended in, for the line under the button; an update that ends well closes the popup instead.
+function failureText({ failed, untouched }) {
     const f = failed[0];
     return `${f.member.name} failed: ${f.text} ${untouched.length} member${untouched.length === 1 ? "" : "s"} left untouched.`;
 }
@@ -111,7 +114,7 @@ export function openGroupPopup(group, opts) {
 // Read each member and the releases, list the members, and offer the update when one is behind.
 async function fillGroup(group, opts, box, note, dlg) {
     const home = opts?.hooks?.home ? opts.hooks.home() : location.origin;
-    const releases = await loadReleases({ maxAgeMs: UPDATE_TTL_MS });
+    const releases = await loadReleases();
     const members = await Promise.all(group.rows.map(async (row) => {
         const base = peerBase(row, home);
         const ask = !row.missing && row.type === "MoonLight";
@@ -122,15 +125,24 @@ async function fillGroup(group, opts, box, note, dlg) {
     const lines = new Map(members.map(m => [m, memberLine(m)]));
     box.append(...[...lines.values()].map(l => l.line));
     const waves = planWaves(members);
-    note.textContent = waves.length ? `${waves.flat().length} of ${members.length} members are behind.` : releases ? "Every member is up to date or skipped." : "GitHub does not answer, so whether a newer release exists is unknown.";
+    let left = waves.flat().length;
+    note.textContent = waves.length ? behindNote(left, members.length) : releases ? "Every member is up to date or skipped." : "The release list does not load, so whether a newer release exists is unknown.";
     if (!waves.length) return;
     const btn = el("button", "graph-popup-update", "Update group");
     const result = el("div");
+    // Each member that ends well counts the note down, so the popup says where the waves are.
+    const install = async (m) => {
+        const r = await installMember(m, lines.get(m).ui);
+        if (r.ok) note.textContent = behindNote(--left, members.length);
+        return r;
+    };
     armPressTwice(btn, async () => {
         btn.disabled = true;
         dlg.dataset.busy = "1";   // closable again however the waves end, a thrown install among them
         try {
-            result.textContent = summaryText(await runWaves(waves, (m) => installMember(m, lines.get(m).ui)));
+            const outcome = await runWaves(waves, install);
+            if (outcome.failed.length) result.textContent = failureText(outcome);
+            else dlg.close();   // done: every member it updated is on the new version, which the map shows
         } catch (err) {
             result.textContent = `The update stopped: ${err.message}`;
         } finally {

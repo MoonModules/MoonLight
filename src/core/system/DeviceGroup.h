@@ -25,13 +25,11 @@ namespace json { struct JsonDoc; struct JsonNode; }
 ///
 /// ## Members
 ///
-/// Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements is marked missing, here and on the map.
+/// Add a row and pick a device; a device is offered once Discovery knows its MAC. A member unheard for three of its announcements, or in MoonBase, is marked missing, here and on the map.
 ///
 /// ## Shared
 ///
 /// The members hold the group too, and an edit on any of them reaches the others within seconds. Deleting the group on one deletes it on all; a device removed from it drops it.
-///
-/// A device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again.
 ///
 /// ## Shared controls
 ///
@@ -39,7 +37,7 @@ namespace json { struct JsonDoc; struct JsonNode; }
 ///
 /// ## Updating the members
 ///
-/// Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The first failure stops the waves.
+/// Click the group's box on the map and press Update group twice: the first member behind installs alone, then three at a time, this device last. The popup counts down and closes when all are done; the first failure stops the waves and stays with its reason.
 ///
 /// ## Reaching the members
 ///
@@ -56,6 +54,10 @@ namespace json { struct JsonDoc; struct JsonNode; }
 /// DeviceGroupSync carries the definition between devices; this module merges it.
 ///
 /// **Repeats by Trickle** (RFC 6206). The definition goes out at a random moment in the second half of an interval unless a member was heard sending the same one, the interval doubling from 1 s to 64 s while the members agree and back to 1 s on any difference, so the traffic stays near flat as a group grows.
+///
+/// **Deletion markers.** A device remembers the last eight deleted groups; a member off through more than eight deletions brings its copy back, to delete again.
+///
+/// **Skipped in an update.** A member its host updates, one updated by hand, one too old to name its firmware and one not heard are listed as skipped, each with its reason; one lacking TLS is installed by the browser's download and upload.
 ///
 /// **What it costs.** Zero work on the render path. A member is 56 bytes, grown by doubling against the heap's reserve; a refused growth refuses the row, or the whole restored list, and says so.
 class DeviceGroup : public MoonModule, public ListSource {
@@ -203,6 +205,8 @@ private:
     Hlc* clock();
     /// Count the members and the missing among them for the status, with what the shared controls add.
     void refreshStatus() MM_NONBLOCKING;
+    /// Write the status line: the members, the missing among them, the shared controls' note and the clock's.
+    void formatStatus(ListRow members, ListRow missing, const char* note, const char* clock) MM_NONBLOCKING;
     /// The members with a device, the unheard among them counted in `missing`.
     ListRow countMembers(const DevicesModule* discovery, ListRow& missing) const MM_NONBLOCKING;
     /// How many members with a device the chunk starting at `from` carries, at most `per`.
@@ -225,7 +229,7 @@ private:
     char     groupName_[24] = "";   ///< the shared name, a last-writer-wins register, saved hidden
     Stamp    nameStamp_{};   ///< when and by whom the shared name was last set
     char     nameHlc_[40] = "";   ///< the name's stamp as "hlc:writer" in hex, saved hidden
-    char     status_[80] = "";    ///< "3 members, 1 missing, shared controls full"
+    char     status_[128] = "";   ///< "3 members, 1 missing, shared controls full, clock: MM-C3, ±0.4 ms"
     uint8_t  statusTick_ = 0;     ///< ticks toward the next status
     uint8_t  interval_ = 1, sendAt_ = 1, elapsed_ = 0, heard_ = 0;   ///< Trickle: the interval in seconds, its send moment, seconds into it, consistent copies heard
     bool     sendDue_ = false;    ///< the send moment came with no consistent copy heard

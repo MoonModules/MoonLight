@@ -23,11 +23,11 @@ namespace mm {
 ///
 /// ## The NDI runtime
 ///
-/// You install it yourself; without it the driver says so and nothing else changes. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime).
+/// You install it yourself; until then the driver says so and runs on. The steps: [installing the NDI runtime](https://moonmodules.org/MoonLight/reference/watching-the-output.html#installing-the-ndi-runtime).
 ///
 /// ## Receivers
 ///
-/// To see the output you need a receiver. NDI Video Monitor, part of NDI Tools, is the simplest; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank.
+/// NDI Video Monitor, part of NDI Tools, is the simplest receiver; OBS gains an NDI Source through the DistroAV plugin. MoonLight appears under the name in `sourceName`, or the device's own name when that is blank.
 ///
 /// ## Status line
 ///
@@ -65,7 +65,7 @@ public:
 
     /// A geometry change resizes the frame; a name change re-creates the sender (NDI has no rename).
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "sourceName") == 0 || isCorrectionControl(name);
+        return std::strcmp(name, "sourceName") == 0 || isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Open the sender and size the staging buffers for the current geometry.
@@ -73,8 +73,9 @@ public:
         release();
         if (!layer_) return;
 
-        width_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        height_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
+        placeWindowed(picture_, *layer_, sourceBuffer_);
+        width_  = picture_.width();
+        height_ = picture_.height();
 
         if (!platform::ndiAvailable()) {
             // Not an error: the feature is not installed, and the fix is a user action.
@@ -100,7 +101,6 @@ public:
             return;
         }
 
-        picture_.place(*layer_, width_, height_);   // a refused table keeps the raster order, and the status says why
         std::snprintf(statusBuf_, sizeof(statusBuf_), "sending %ux%u at %u fps%s",
                       static_cast<unsigned>(width_), static_cast<unsigned>(height_),
                       static_cast<unsigned>(fps), picture_.note());

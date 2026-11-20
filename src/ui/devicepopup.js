@@ -7,7 +7,7 @@
 import { installPicker, loadReleases, releaseAsset, firmwareAssetName, moonbaseAssetName, migrateAssetName, chipKey } from "./install-picker.js";
 import { graphOutputs } from "./devicemap.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, fetchWithin } from "./uikit.js";
-import { UPDATE_TTL_MS, channelUpdate, releaseOfVersion, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
+import { channelUpdate, releaseOfVersion, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
 import { installFirmware, peerFirmware, waitForRestart, waitForMoonBase } from "./deviceinstall.js";
 
 // The hooks a page passes, each with a default: the detail as plain rows and the page's own origin as home, so a page passing only the
@@ -262,7 +262,7 @@ async function mountMapPicker(box, base, chip, ranFirmware, extra, move, blocker
     box.appendChild(mount);
     const picker = await installPicker.init({
         container: mount, targetChip: chip, ownFirmwareKey: ranFirmware || null,
-        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, blocker,
+        deviceSupport: await loadMapDeviceSupport(), installRowExtras: extras, extrasNeedRelease: true, blocker,
         onInstall: async (_firmware, _manifestUrl, binaryUrl, _entry, label, tag) => {
             const dlg = box.closest("dialog");
             if (dlg) dlg.dataset.busy = "1";   // the move runs in the browser: openDevicePopup keeps the popup open meanwhile
@@ -561,10 +561,10 @@ function buildPeerSummary(row, home) {
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
         const update = fw.summary?.update;
-        const releases = await loadReleases({ maxAgeMs: UPDATE_TTL_MS });   // null when GitHub does not answer and none are kept
+        const releases = await loadReleases();   // null while the release feed has not loaded
         const u = releases && peerUpdate(deviceOf(fw), releases);
         if (!u) {
-            const lead = releases ? "The app is up to date" : "GitHub does not answer, so whether a newer release exists is unknown";
+            const lead = releases ? "The app is up to date" : "The release list does not load, so whether a newer release exists is unknown";
             note.textContent = `${lead}.`;
             offerImageUpdates(box, base, fw, note, releases, lead);
             return;
@@ -663,9 +663,10 @@ export function heldGroups(state) {
 
 const sameMac = (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase();
 
-// The groups a node can join or leave from here, each with whether the node with `mac` is a member. Pure.
-export function membershipOffers(groups, mac) {
-    return (groups || []).map(g => ({ ...g, member: g.members.some(r => sameMac(r.mac, mac)) }));
+// The groups a node can join or leave from here, each with whether the node with `mac` is a member: one of ours joins (MoonLight, or
+// MoonBase between two images, DevicesModule's own rule, since only MoonLight runs a group's sync), and any member leaves. Pure.
+export function membershipOffers(groups, mac, type) {
+    return (groups || []).map(g => ({ ...g, member: g.members.some(r => sameMac(r.mac, mac)) })).filter(g => g.member || type === "MoonLight" || type === "MoonBase");
 }
 
 // The row id of the member with `mac` in a held group, or null. Pure.
@@ -703,7 +704,7 @@ function buildGroupMembership(row, home) {
     box.hidden = true;
     (async () => {
         const state = await fetchJsonWithin(`${home}/api/state`).catch(() => null);
-        const offers = membershipOffers(heldGroups(state), row.mac);
+        const offers = membershipOffers(heldGroups(state), row.mac, row.type);
         if (!offers.length) return;
         const head = document.createElement("strong");
         head.textContent = "Groups";

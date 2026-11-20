@@ -63,8 +63,6 @@ public:
     /// Frame-rate limit, so a fast render tick does not saturate the link.
     uint8_t fps = 40;
 
-    /// It sends a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// Bind the format and the host interface, after the window.
     void defineDriverControls() override {

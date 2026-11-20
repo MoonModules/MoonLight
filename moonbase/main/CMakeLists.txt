@@ -11,3 +11,5 @@ idf_component_register(
     REQUIRES nvs_flash esp_netif esp_event esp_wifi esp_eth app_update esp_https_ota
              mbedtls esp_partition joltwallet__littlefs)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra)
+# The handoff record nothing references: the linker keeps it only when told to, as ESP-IDF's custom app description documents.
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-u moonbase_handoff")

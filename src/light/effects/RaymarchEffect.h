@@ -29,9 +29,11 @@ namespace mm {
 class RaymarchEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
-    const char* tags() const override { return "💫🖌️"; }
+    const char* tags() const override { return "💫🧩🖌️"; }
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
+    /// One ray per pixel from its place in the wall, so each device of a wall marches its own share of one scene.
+    Footprint footprint() const MM_NONBLOCKING override { return Footprint::Region; }
 
     /// How fast the scene animates.
     uint8_t bpm      = 10;

@@ -38,8 +38,6 @@ public:
     /// Hue converts to HSV, RGB-fixed, so there is no correction UI to show.
     bool hasCorrectionControls() const override { return false; }
 
-    /// It drives a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// Bind the bridge address, the pairing button, and the room and light filters.
     void defineDriverControls() override {

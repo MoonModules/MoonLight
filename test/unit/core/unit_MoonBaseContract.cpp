@@ -1,11 +1,12 @@
 /// @module NetworkModule
 /// @also FilesystemModule, FirmwareUpdateModule
 
-/// The two contracts between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, and the install routes both images serve.
+/// The handoff contract between the app and MoonBase: the config keys MoonBase scrapes with ConfigScrape.h, the install routes both images serve, and the version that numbers them ([FirmwareImage.h](../../../src/core/util/FirmwareImage.h)).
 
 #include "doctest.h"
 #include "unit/source_tree.h"
 #include "core/util/ConfigScrape.h"
+#include "core/util/FirmwareImage.h"   // kHandoffVersion and the NVS names: the contract's number and its one shared part
 #include "network_device.h"
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
@@ -14,6 +15,8 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <regex>
+#include <set>
 #include <string>
 
 namespace {
@@ -272,4 +275,52 @@ TEST_CASE("the two boot images serve the OTA routes under the same names, and an
     // MoonBase says which MoonBase it is. Without it, two devices running different builds are indistinguishable, which is what turned one bench failure into a git bisect.
     CHECK_MESSAGE(moonbase.find("/api/version") != std::string::npos,
                   "MoonBase must report its own version");
+}
+
+// The contract `kHandoffVersion` numbers, read from both images' sources: a change to what one expects of the other fails until the number is raised with the pin.
+TEST_CASE("the handoff contract is pinned to its version" * doctest::skip(!mm::sourceTreePresent())) {
+    const std::filesystem::path repo = mm::sourceRoot();
+    const auto read = [&](const std::filesystem::path& rel) {
+        std::ifstream f(repo / rel);
+        REQUIRE_MESSAGE(f.good(), "cannot open " << rel.string());
+        return std::string((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    };
+    const std::string moonbase = read("moonbase/main/moonbase_main.cpp");
+    std::string ui;
+    for (const auto& e : std::filesystem::directory_iterator(repo / "src/ui"))
+        if (e.path().extension() == ".js") ui += read(std::filesystem::relative(e.path(), repo));
+    const auto matches = [](const std::string& text, const char* pattern) {
+        std::set<std::string> out;
+        const std::regex re(pattern);
+        for (std::sregex_iterator it(text.begin(), text.end(), re), end; it != end; ++it) out.insert((*it)[1]);
+        return out;
+    };
+
+    // The routes MoonBase serves that the app's pages call, ended by a quote, a backtick or a query, so a longer route never counts as a shorter one.
+    std::set<std::string> routes;
+    for (const std::string& r : matches(moonbase, R"re("(?:GET|POST) (/[A-Za-z0-9/_.-]+))re")) {
+        if (std::regex_search(ui, std::regex(std::regex_replace(r, std::regex(R"([.])"), R"(\.)") + R"re([`"'?])re"))) routes.insert(r);
+    }
+    const std::set<std::string> keys  = matches(moonbase, R"re(configscrape::find\w+\(buf, "(\w+)")re");
+    const std::set<std::string> files = matches(moonbase, R"re("/fs/\.config/(\w+\.json)")re");
+
+    const std::set<std::string> pinnedRoutes{"/api/firmware/cancel", "/api/firmware/upload", "/api/firmware/url", "/api/system", "/moonbase"};
+    const std::set<std::string> pinnedKeys{"EthernetModule", "deviceName", "ethClockExtIn", "ethClockGpio", "ethMdcGpio", "ethMdioGpio",
+                                           "ethPhyAddr", "ethRstGpio", "ethType", "firmware", "txPowerSetting"};
+    const std::set<std::string> pinnedFiles{"NetworkModule.json", "SystemModule.json"};
+    const char* bump = "the handoff contract changed: raise kHandoffVersion in FirmwareImage.h and update this pin with it";
+    CHECK_MESSAGE(mm::firmware::kHandoffVersion == 1, bump);
+    CHECK_MESSAGE(routes == pinnedRoutes, bump);
+    CHECK_MESSAGE(keys == pinnedKeys, bump);
+    CHECK_MESSAGE(files == pinnedFiles, bump);
+    CHECK_MESSAGE(std::string(mm::firmware::kHandoffNvsNamespace) == "moonbase", bump);
+    CHECK_MESSAGE(std::string(mm::firmware::kHandoffUrlKey) == "url", bump);
+    CHECK_MESSAGE(std::string(mm::firmware::kHandoffTriesKey) == "tries", bump);
+
+    // The NVS names have one home, which both images read, so neither keeps a copy that could drift from the pin.
+    const std::string ota = read("src/platform/esp32/platform_esp32_ota.cpp");
+    for (const std::string* image : {&moonbase, &ota}) {
+        CHECK_MESSAGE(image->find("nvs_open(\"moonbase\"") == std::string::npos, "an image opens the handoff namespace by a literal");
+        CHECK_MESSAGE(image->find(", \"tries\"") == std::string::npos, "an image names the tries key by a literal");
+    }
 }

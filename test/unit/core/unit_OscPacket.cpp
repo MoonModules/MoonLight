@@ -11,16 +11,18 @@ using namespace mm;
 
 namespace {
 
+// Append an OSC string to `p`: its bytes, its terminator, padding to four.
+void putString(std::vector<uint8_t>& p, const char* s) {
+    const size_t n = std::strlen(s) + 1;
+    for (size_t i = 0; i < n; i++) p.push_back(static_cast<uint8_t>(s[i]));
+    while (p.size() % 4) p.push_back(0);
+}
+
 // Build a message the way a real controller does, so the tests exercise the padding: address, pad to 4, type tags, pad to 4, big-endian argument.
 std::vector<uint8_t> build(const char* addr, const char* tags, const uint8_t* arg, size_t argLen) {
     std::vector<uint8_t> p;
-    auto put = [&](const char* s) {
-        const size_t n = std::strlen(s) + 1;
-        for (size_t i = 0; i < n; i++) p.push_back(static_cast<uint8_t>(s[i]));
-        while (p.size() % 4) p.push_back(0);
-    };
-    put(addr);
-    put(tags);
+    putString(p, addr);
+    putString(p, tags);
     for (size_t i = 0; i < argLen; i++) p.push_back(arg[i]);
     return p;
 }
@@ -179,11 +181,7 @@ TEST_CASE("A message with no arguments parses, carrying no value") {
 // A controller that labels its messages must not make them unusable: the string is stepped over and the number after it is still found.
 TEST_CASE("A leading string argument is skipped to reach the number") {
     std::vector<uint8_t> p;
-    auto put = [&](const char* s) {
-        const size_t n = std::strlen(s) + 1;
-        for (size_t i = 0; i < n; i++) p.push_back(static_cast<uint8_t>(s[i]));
-        while (p.size() % 4) p.push_back(0);
-    };
+    const auto put = [&](const char* s) { putString(p, s); };
     put("/mm/fader/2");
     put(",sf");
     put("label");
@@ -299,4 +297,58 @@ TEST_CASE("a Reader refuses a message cut at any length, never reading past its 
     CHECK(std::string(whole.str()) == "Kitchen");
     CHECK(whole.i32() == 7);
     CHECK(whole.ok());
+}
+
+TEST_CASE("a bundle carries one message and the fleet time it applies at, and a cut or foreign bundle reads as none") {
+    uint8_t msg[32];
+    mm::osc::Writer w(msg, sizeof(msg), "/a", ",i");
+    w.i32(7);
+    uint8_t bundle[64];
+    const int64_t at = 123456789012;   // microseconds of fleet time
+    const size_t n = mm::osc::writeBundle(bundle, sizeof(bundle), mm::osc::timetagOfUs(at), msg, w.size());
+    REQUIRE(n == 20 + w.size());
+    CHECK(std::memcmp(bundle, "#bundle", 8) == 0);
+    uint64_t tag = 0;
+    const uint8_t* inner = nullptr;
+    size_t innerLen = 0;
+    REQUIRE(mm::osc::readBundle(bundle, n, tag, inner, innerLen));
+    CHECK(innerLen == w.size());
+    CHECK(std::memcmp(inner, msg, innerLen) == 0);
+    const int64_t back = mm::osc::usOfTimetag(tag);
+    CHECK(back >= at - 1);   // the 32-bit fraction rounds down by at most a microsecond
+    CHECK(back <= at);
+    CHECK_FALSE(mm::osc::readBundle(bundle, n - 4, tag, inner, innerLen));   // its message cut short
+    CHECK_FALSE(mm::osc::readBundle(msg, w.size(), tag, inner, innerLen));   // a plain message
+    mm::osc::Message m;
+    CHECK_FALSE(mm::osc::parse(bundle, n, m));   // a controller's parse still refuses a bundle
+    CHECK(mm::osc::writeBundle(bundle, 20, 1, msg, w.size()) == 0);   // no room
+}
+
+TEST_CASE("OscPacket: a blob is written as its length and its bytes padded to four, and read back whole") {
+    uint8_t buf[64];
+    const uint8_t data[5] = {1, 2, 3, 4, 5};
+    osc::Writer w(buf, sizeof(buf), "/b", ",bi");
+    w.blob(data, sizeof(data));
+    w.i32(42);
+    REQUIRE(w.size() == 4 + 4 + 4 + 8 + 4);   // address, tags, the length, five bytes padded to eight, the integer
+    osc::Reader r(buf, w.size(), "/b");
+    size_t n = 0;
+    const uint8_t* got = r.blob(n);
+    REQUIRE(got != nullptr);
+    CHECK(n == 5);
+    CHECK(std::memcmp(got, data, 5) == 0);
+    CHECK(r.i32() == 42u);
+    CHECK(r.ok());
+}
+
+TEST_CASE("OscPacket: a blob longer than the datagram is refused") {
+    uint8_t buf[64];
+    const uint8_t data[8] = {};
+    osc::Writer w(buf, sizeof(buf), "/b", ",b");
+    w.blob(data, sizeof(data));
+    const size_t len = w.size() - 4;   // cut short
+    osc::Reader r(buf, len, "/b");
+    size_t n = 0;
+    CHECK(r.blob(n) == nullptr);
+    CHECK_FALSE(r.ok());
 }

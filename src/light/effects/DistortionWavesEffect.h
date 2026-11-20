@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/util/math16.h"            // BeatPhase: the shared BPM accumulator
+#include "core/util/math16.h"            // BeatPhase: the phase of fleet time at a rate
 #include "light/effects/EffectBase.h"
 
 namespace mm {
@@ -39,10 +39,10 @@ public:
         const lengthType h = height();
         const uint8_t cpl = channelsPerLight();
 
-        // A speed of 0 freezes, and BeatPhase still tracks time so resuming does not jump.
+        // The fleet time times the speed, so every device shows one moment; a speed of 0 holds the phase at zero.
         phase_.advanceTo(elapsed(), speed);
         const uint8_t t = static_cast<uint8_t>(phase_.phase(256));
-        // From the same accumulator at its own scale, since the wrapped value jumps at every wrap.
+        // From the same phase at its own scale, since the wrapped value jumps at every wrap.
         const uint8_t ty = static_cast<uint8_t>(phase_.phase(333));
 
         for (lengthType y = 0; y < h; y++) {

@@ -1,5 +1,5 @@
 /// @module Layer
-/// @also MetaballsEffect, SpiralEffect, LavaLampEffect, SpiralEffect
+/// @also MetaballsEffect, SpiralEffect, LavaLampEffect, TrailsEffect
 
 #include "doctest.h"
 #include "light/layers/Effects.h"
@@ -10,20 +10,18 @@
 #include "light/effects/SpiralEffect.h"
 #include "light/effects/LavaLampEffect.h"
 #include "light/effects/NoiseEffect.h"
+#include "light/effects/TrailsEffect.h"
+#include "core/util/ClockSync.h"   // FleetTime: a fleet clock stepping under a running layer
+#include "golden_frame.h"          // LayerFixture, ScopedTestClock
 #include "platform/platform.h"
 
 #include <vector>
 
-// Regression: per-tick phase accumulators computed `dt * bpm * 256 / 60000`, which truncates to 0 on host where dt ≈ 0..1 ms, the animations froze.
-// Fix accumulates the raw (dt*bpm) numerator and only divides at the read site.
-// These tests pin animation across a short time gap for every affected effect.
+// Every phase-driven effect moves across a run of short ticks: a phase keeps its numerator wide and divides where it is read, so a frame of a millisecond still moves it.
 
 namespace {
 
-// Run the effect through a sequence of short ticks totalling `total_ms`, take snapshots along the way, and return true if at least two snapshots differ.
-// The robustness matters because some effects' visible state can land on a near-identical frame at two sampled instants by accident, a single before/after pair can miss the motion. Multiple samples across a longer interval can't.
-//
-// Time advances through the platform test-clock seam, no wall-clock sleeps, so the test is deterministic and instant regardless of CI load.
+/// Whether `Effect` changes over `total_ms` of short ticks on the test clock, sampled several times so one near-identical pair of frames cannot pass for a freeze.
 template <typename Effect>
 bool animates_over_ms(int total_ms) {
     mm::Layouts layouts;
@@ -73,7 +71,7 @@ TEST_CASE("LavaLampEffect animates over a 100ms gap") {
     CHECK(animates_over_ms<mm::LavaLampEffect>(100));
 }
 
-// Replace path: swap one effect for another mid-flight (same shape as HttpServerModule::handleReplaceModule) and confirm the new effect animates. Replacing one effect with another mid-tick (HttpServerModule's swap path) leaves the new effect animating, not frozen.
+// An effect swapped for another mid-run, as HttpServerModule's replace does, leaves the new one animating.
 TEST_CASE("Replacing an effect at runtime: new effect still animates") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -105,4 +103,51 @@ TEST_CASE("Replacing an effect at runtime: new effect still animates") {
     std::vector<uint8_t> second(layer.buffer().data(), layer.buffer().data() + layer.buffer().bytes());
     mm::platform::setTestNowMs(0);
     CHECK_FALSE_MESSAGE(first == second, "Replaced Metaballs frozen across 100ms gap");
+}
+
+// --- The frame length an effect integrates by, against a fleet-clock step --------------------------
+
+namespace {
+/// Step this process's fleet clock `aheadMs` ahead of its own, as a device's first sync does.
+void stepFleetClock(int64_t aheadMs) {
+    mm::ClockDiscipline d;
+    d.steer(static_cast<int64_t>(mm::platform::uptimeUs()), aheadMs * 1000);
+    mm::FleetTime::publish(d);
+}
+
+/// Lit lights in a layer's buffer.
+int litLights(mm::Layer& layer) {
+    int lit = 0;
+    const uint8_t* b = layer.buffer().data();
+    for (size_t i = 0; i < layer.buffer().count(); i++) lit += (b[i * 3] | b[i * 3 + 1] | b[i * 3 + 2]) != 0;
+    return lit;
+}
+}  // namespace
+
+TEST_CASE("a layer's frame length follows the local clock while a fleet-clock step moves its elapsed time") {
+    mm::golden::ScopedTestClock clock(1000);
+    mm::golden::LayerFixture fx(8, 8);
+    fx.layer.applyState();
+    fx.tickAt(1000);
+    CHECK(fx.layer.frameMs() == 0);   // the first frame has none before it
+    stepFleetClock(86400000);         // a day ahead, the reference's uptime
+    fx.tickAt(1020);
+    CHECK(fx.layer.elapsed() > 86400000u);   // the fleet time jumped
+    CHECK(fx.layer.frameMs() == 20);         // the frame did not
+    mm::FleetTime::reset();
+}
+
+TEST_CASE("Trails keeps its trail when the fleet clock steps under it, as a device's first sync does") {
+    mm::golden::ScopedTestClock clock(1000);
+    mm::golden::LayerFixture fx(16, 16);
+    mm::TrailsEffect trails;
+    fx.add(trails);
+    for (uint32_t t = 1000; t <= 3000; t += 20) fx.tickAt(t);
+    const int before = litLights(fx.layer);
+    REQUIRE(before > 0);
+    stepFleetClock(86400000);
+    fx.tickAt(3020);
+    CHECK(litLights(fx.layer) * 2 > before);   // one frame's fade, not a wiped or flooded plane
+    fx.layer.removeChild(&trails);
+    mm::FleetTime::reset();
 }

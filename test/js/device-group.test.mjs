@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { GROUP_WAVE_SIZE, planWaves, runWaves, memberState } from "../../src/ui/devicegroup.js";
+import { GROUP_WAVE_SIZE, planWaves, runWaves, memberState, behindNote } from "../../src/ui/devicegroup.js";
 import { heldGroups, membershipOffers, memberRowId } from "../../src/ui/devicepopup.js";
 
 const member = (name, extra = {}) => ({ name, url: `https://example.org/${name}.bin`, ...extra });
@@ -87,7 +87,7 @@ test("a member is skipped with its reason: missing, not MoonLight, silent, or wi
 });
 
 
-test("a node is offered to join each group its device's state holds, member of it or not, and to leave the ones it is in", () => {
+test("a MoonLight node is offered to join each group its device's state holds, and any node to leave the ones it is in", () => {
     const state = { modules: [{ name: "Network", children: [] }, { name: "Devices", children: [
         { name: "DesktopGroup", role: "devicegroup", controls: [{ name: "id", value: "a1" }, { name: "groupName", value: "DesktopGroup" },
           { name: "members", value: [{ id: 3, device: "MM-P4-pc", mac: "30:ED:A0:E1:5C:E9" }] }] },
@@ -95,8 +95,16 @@ test("a node is offered to join each group its device's state holds, member of i
         { name: "Discovery", type: "DevicesModule", controls: [] }] }] };   // the state's modules, a top-level list as /api/state serves it
     const held = heldGroups(state);
     assert.deepEqual(held.map(g => [g.id, g.name, g.module]), [["a1", "DesktopGroup", "DesktopGroup"], ["b2", "Hall", "Hall 2"]]);   // the module's own name kept
-    assert.deepEqual(membershipOffers(held, "30:ed:a0:e1:5c:e9").map(g => g.member), [true, false]);
-    assert.deepEqual(membershipOffers(heldGroups(null), "aa:bb:cc:dd:ee:ff"), []);   // a device holding no group offers an empty list
+    assert.deepEqual(membershipOffers(held, "30:ed:a0:e1:5c:e9", "MoonLight").map(g => g.member), [true, false]);
+    assert.deepEqual(membershipOffers(heldGroups(null), "aa:bb:cc:dd:ee:ff", "MoonLight"), []);   // a device holding no group offers an empty list
+    assert.deepEqual(membershipOffers(held, "3c:e9:0e:86:0c:dc", "WLED"), []);   // only MoonLight runs a group's sync: a WLED joins none
+    assert.deepEqual(membershipOffers(held, "30:ed:a0:e1:5c:e9", "MoonBase").map(g => g.member), [true, false]);   // a board between images leaves or joins as MoonLight does   // a device holding no group offers an empty list
     assert.equal(memberRowId(held[0], "30:ed:a0:e1:5c:e9"), 3);   // leaving finds the row by its MAC, whatever its case
     assert.equal(memberRowId(held[1], "30:ed:a0:e1:5c:e9"), null);
+});
+
+test("the popup's note counts the members behind down as each install ends well, to every member up to date", () => {
+    assert.equal(behindNote(3, 5), "3 of 5 members are behind.");
+    assert.equal(behindNote(1, 5), "1 of 5 members is behind.");
+    assert.equal(behindNote(0, 5), "Every member is up to date.");
 });

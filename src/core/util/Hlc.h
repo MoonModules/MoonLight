@@ -1,7 +1,9 @@
 #pragma once
 
+#include "core/util/ClockSync.h"   // FleetTime: the fleet clock's offset, which puts every device's readings on one time
 #include "platform/platform.h"
 
+#include <algorithm>   // std::max: an uptime on the fleet clock held at zero or above
 #include <cstdint>
 #include <cstdlib>
 
@@ -42,7 +44,7 @@ struct Stamp {
 ///
 /// @technical
 ///
-/// **Which physical clock.** The device's uptime until clocks are synced across a group, so concurrent edits converge on one value while which one wins is arbitrary; a restored stamp is observed at boot, so the readings keep growing across a restart.
+/// **Which physical clock.** The fleet clock (FleetClock.h), so the last edit made wins across devices; before the first sync it is the device's own uptime, and concurrent edits still converge on one value. A restored stamp is observed at boot, so the readings keep growing across a restart.
 ///
 /// **Where the readings stop.** At Stamp::kMaxHlc, the largest reading every peer accepts: a clock a crafted stamp drove there still stamps edits the peers take, the writer breaking ties among them.
 class Hlc {
@@ -62,7 +64,7 @@ public:
 private:
     /// The textbook update: the physical part is the largest of ours, the one seen and the clock's; the counter grows when that part does not move.
     void advance(uint64_t seen) MM_NONBLOCKING {
-        const uint64_t pt = static_cast<uint64_t>(platform::millis()) << 16;
+        const uint64_t pt = static_cast<uint64_t>(std::max<int64_t>(0, platform::millis() + FleetTime::offsetUs() / 1000)) << 16;   // the device's uptime on the fleet clock
         const uint64_t l = last_ & ~kCounter, s = seen & ~kCounter;
         const uint64_t top = l > s ? (l > pt ? l : pt) : (s > pt ? s : pt);
         uint64_t counter = 0;

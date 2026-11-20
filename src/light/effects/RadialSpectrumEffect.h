@@ -49,17 +49,13 @@ public:
         std::memset(beats_, 0, sizeof(beats_));
         head_ = 0;
         carry_ = 0;
-        started_ = false;
     }
 
     /// Birth any due rings from the current spectrum, then read one out per light.
     void tick() MM_NONBLOCKING override {
         const draw::Canvas cv = canvas();
         const lengthType w = width(), h = height(), dep = depth();
-        const uint32_t now = elapsed();
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         const AudioFrame* f = AudioService::latestFrame();
         const uint8_t* src = f ? (smooth ? f->bandsSmoothed : f->bands) : nullptr;
@@ -136,9 +132,7 @@ private:
     uint16_t head_ = 0;                         ///< the newest ring
     uint32_t carry_ = 0;                        ///< time owed toward the next ring, in ms
     uint8_t  pendingBeat_[3] = {};              ///< each range's hit waiting for the next ring
-    bool     started_ = false;      ///< false until a frame has been timed
     uint16_t lastSeq_ = 0;          ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
-    uint32_t lastMs_ = 0;           ///< the previous frame's timestamp
 };
 
 }  // namespace mm

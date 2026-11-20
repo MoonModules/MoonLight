@@ -10,9 +10,11 @@
 #include "core/system/DeviceGroup.h"
 #include "core/system/DeviceGroupSync.h"
 #include "core/system/Devices.h"
-#include "core/util/JsonFetch.h"
+#include "core/util/ClockSync.h"
+#include "core/util/fnv.h"
 #include "platform/platform.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -77,21 +79,56 @@ std::vector<uint8_t> valuesMessage(const char* id, const char* param, int32_t va
     return p;
 }
 
-/// A recall of look `name` for group `id`, served at 10.0.0.5:8080.
-std::vector<uint8_t> lookMessage(const char* id, const char* name, uint64_t hlc) {
+/// A look's advertisement for group `id`: its name, stamp, size, digest and the chunks the sender holds.
+std::vector<uint8_t> lookAdvert(const char* id, const char* name, uint64_t hlc, uint32_t size, uint32_t digest, uint32_t have) {
     std::vector<uint8_t> p(256);
-    osc::Writer w(p.data(), p.size(), SharedControls::kLookAddress, ",sshiii");
+    osc::Writer w(p.data(), p.size(), SharedControls::kLookAddress, ",sshiiii");
     w.str(id);
     w.str(name);
     w.i64(hlc);
     w.i32(7);
-    const uint8_t ip[4] = {10, 0, 0, 5};
-    uint32_t packed = 0;
-    std::memcpy(&packed, ip, 4);
-    w.i32(packed);
-    w.i32(8080);
+    w.i32(size);
+    w.i32(digest);
+    w.i32(have);
     p.resize(w.size());
     return p;
+}
+
+/// Chunk `index` of document `doc`, look `name` for group `id`, stamped `hlc`; `digest` as given, the document's own by default.
+std::vector<uint8_t> lookChunk(const char* id, const char* name, uint64_t hlc, const std::string& doc, uint32_t index, uint32_t digest = 0) {
+    std::vector<uint8_t> p(2048);
+    osc::Writer w(p.data(), p.size(), SharedControls::kChunkAddress, ",sshiiihib");
+    w.str(id);
+    w.str(name);
+    w.i64(hlc);
+    w.i32(7);
+    w.i32(static_cast<uint32_t>(doc.size()));
+    w.i32(digest ? digest : fnv1a(doc.data(), doc.size()));
+    w.i64(0);
+    w.i32(index);
+    const size_t offset = size_t{index} * SharedControls::kChunkBytes;
+    w.blob(reinterpret_cast<const uint8_t*>(doc.data()) + offset, std::min<size_t>(SharedControls::kChunkBytes, doc.size() - offset));
+    p.resize(w.size());
+    return p;
+}
+
+/// A request for the chunks in `missing` of the look stamped `hlc`, group `id`.
+std::vector<uint8_t> lookNeed(const char* id, uint64_t hlc, uint32_t missing) {
+    std::vector<uint8_t> p(128);
+    osc::Writer w(p.data(), p.size(), SharedControls::kNeedAddress, ",shii");
+    w.str(id);
+    w.i64(hlc);
+    w.i32(7);
+    w.i32(missing);
+    p.resize(w.size());
+    return p;
+}
+
+/// A preset document setting the lamp's speed to 33, padded with spaces to `size` bytes: JSON whitespace, so it applies at any size.
+std::string speedDoc(size_t size = 0) {
+    std::string doc = R"({"Lamp":{"speed":33}})";
+    if (doc.size() < size) doc.insert(1, size - doc.size(), ' ');
+    return doc;
 }
 
 /// A device in the group "Stage" it made, a Lamp, and the Control module with fader1 driving the lamp's brightness.
@@ -228,62 +265,192 @@ TEST_CASE("a member back from a restart takes the group's newer value, and a cha
 }
 
 namespace {
-/// The preset document the maker serves, counted.
-int gFetches = 0;
-std::string gUrl;
-int servePreset(const char*, const char* url, const char*, char* body, size_t cap) {
-    gFetches++;
-    gUrl = url;
-    const char doc[] = R"({"$slot":3,"Lamp":{"speed":33}})";
-    if (cap < sizeof(doc)) return 0;
-    std::memcpy(body, doc, sizeof(doc));
-    return 200;
+/// A preset file for a case, removed when it ends, so no later case's Control module loads it as a pad.
+struct PresetFile {
+    std::string path;
+    PresetFile(const char* name, const std::string& doc) : path(std::string(ControlModule::kPresetDir) + "/" + name + ".json") {
+        REQUIRE(platform::fsWriteAtomic(path.c_str(), doc.data(), doc.size()));
+    }
+    ~PresetFile() { platform::fsRemove(path.c_str()); }
+};
+
+/// A member and its group's sync for a look case, the markers loaded; chunks heard by index.
+struct LookCase {
+    Member m;
+    RecordingSync sync{*m.devices};
+    LookCase() { sync.tick(*m.devices, m.saved, sizeof(m.saved)); }
+    ~LookCase() { sync.close(); }
+    /// Hear chunks `indices` of `doc`, look `name` stamped `hlc`.
+    void hear(const char* name, uint64_t hlc, const std::string& doc, std::initializer_list<uint32_t> indices) {
+        for (uint32_t i : indices) { const auto c = lookChunk(m.id(), name, hlc, doc, i); sync.handle(*m.devices, c.data(), c.size()); }
+    }
+};
+
+/// Read and apply what a member has: the 20 ms read, then the frame boundary where a live document applies.
+void settleLook(RecordingSync& sync, Member& m) {
+    for (int i = 0; i < 3; i++) {
+        sync.receive(*m.devices);
+        m.scheduler.preparePending();
+    }
 }
 }  // namespace
 
-TEST_CASE("an effects preset recall fetches the document from its maker and applies it, once per stamp") {
+TEST_CASE("a look applied here goes out as its document in chunks, to every group held") {
     Member m;
-    gFetches = 0;
-    platform::setTestHttpFetch(&servePreset);
-    {
-        RecordingSync sync(*m.devices);
-        sync.tick(*m.devices, m.saved, sizeof(m.saved));
-        const auto p = lookMessage(m.id(), "warm sunset", uint64_t{5000} << 16);
-        sync.handle(*m.devices, p.data(), p.size());
-        for (int i = 0; i < 4; i++) {   // fetch, then apply between frames, a step of the 20 ms read each
-            sync.receive(*m.devices);
-            JsonFetch::instance().settle(2000);
-            m.scheduler.preparePending();
-        }
-        CHECK(gFetches == 1);
-        CHECK(gUrl == "http://10.0.0.5:8080/api/file?path=/.config/presets/warm%20sunset.json");
-        CHECK(m.lamp->speed == 33);
-        m.lamp->speed = 1;
-        sync.handle(*m.devices, p.data(), p.size());   // the same recall repeated
-        for (int i = 0; i < 4; i++) {
-            sync.receive(*m.devices);
-            JsonFetch::instance().settle(2000);
-            m.scheduler.preparePending();
-        }
-        CHECK(gFetches == 1);
-        CHECK(m.lamp->speed == 1);
-        sync.close();
-    }
-    platform::setTestHttpFetch(nullptr);
-}
-
-TEST_CASE("a look applied here goes out as a recall naming it, to every group held") {
-    Member m;
+    const PresetFile preset("sunset", speedDoc());
     {
         RecordingSync sync(*m.devices);
         sync.tick(*m.devices, m.saved, sizeof(m.saved));
         sync.sent.clear();
         sync.lookApplied("sunset");
-        const auto looks = sync.to(SharedControls::kLookAddress);
-        REQUIRE(looks.size() == 1);
-        osc::Reader r(looks[0].data(), looks[0].size(), SharedControls::kLookAddress);
+        const auto chunks = sync.to(SharedControls::kChunkAddress);
+        REQUIRE(chunks.size() == 1);   // a small preset is one chunk
+        osc::Reader r(chunks[0].data(), chunks[0].size(), SharedControls::kChunkAddress);
         CHECK(std::string(r.str()) == m.id());
         CHECK(std::string(r.str()) == "sunset");
+        r.i64(); r.i32();
+        CHECK(r.i32() == speedDoc().size());
+        sync.close();
+    }
+}
+
+TEST_CASE("a member takes a pushed look from its chunk and applies it once whole, once per stamp") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const auto c = lookChunk(m.id(), "warm sunset", uint64_t{5000} << 16, speedDoc(), 0);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.lamp->speed == 33);
+        m.lamp->speed = 1;
+        sync.handle(*m.devices, c.data(), c.size());   // the same chunk repeated
+        settleLook(sync, m);
+        CHECK(m.lamp->speed == 1);
+        sync.close();
+    }
+}
+
+TEST_CASE("a large look whose middle chunk is lost is asked for, and applied once it arrives") {
+    LookCase t;
+    const std::string doc = speedDoc(2500);   // three chunks
+    const uint64_t hlc = uint64_t{5000} << 16;
+    t.hear("big", hlc, doc, {0, 2});
+    t.sync.sent.clear();
+    platform::setTestNowMs(platform::millis() + SharedControls::kSpreadMs);
+    settleLook(t.sync, t.m);
+    CHECK(t.m.lamp->speed == 1);   // not whole: not applied
+    const auto needs = t.sync.to(SharedControls::kNeedAddress);
+    REQUIRE(needs.size() == 1);
+    osc::Reader r(needs[0].data(), needs[0].size(), SharedControls::kNeedAddress);
+    r.str(); r.i64(); r.i32();
+    CHECK(r.i32() == 0x2u);   // chunk 1 only
+    t.hear("big", hlc, doc, {1});
+    settleLook(t.sync, t.m);
+    CHECK(t.m.lamp->speed == 33);
+}
+
+TEST_CASE("a member holding a look answers a request for its chunks at its offset, and stays quiet about one another sent first") {
+    Member m;
+    const std::string doc = speedDoc(1500);   // two chunks
+    const uint64_t hlc = uint64_t{5000} << 16;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        for (uint32_t i : {0u, 1u}) { const auto c = lookChunk(m.id(), "duo", hlc, doc, i); sync.handle(*m.devices, c.data(), c.size()); }
+        settleLook(sync, m);
+        sync.sent.clear();
+        const auto need = lookNeed(m.id(), hlc, 0x3u);
+        sync.handle(*m.devices, need.data(), need.size());
+        const auto c0 = lookChunk(m.id(), "duo", hlc, doc, 0);   // another member answers chunk 0 first
+        sync.handle(*m.devices, c0.data(), c0.size());
+        platform::setTestNowMs(platform::millis() + SharedControls::kSpreadMs);
+        settleLook(sync, m);
+        const auto chunks = sync.to(SharedControls::kChunkAddress);
+        REQUIRE(chunks.size() == 1);
+        osc::Reader r(chunks[0].data(), chunks[0].size(), SharedControls::kChunkAddress);
+        r.str(); r.str(); r.i64(); r.i32(); r.i32(); r.i32(); r.i64();
+        CHECK(r.i32() == 1u);   // only the chunk nobody sent
+        sync.close();
+    }
+}
+
+TEST_CASE("a look whose document does not match its digest is refused, said so, and asked for again") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const auto c = lookChunk(m.id(), "bad", uint64_t{5000} << 16, speedDoc(), 0, 0x12345678u);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.lamp->speed == 1);
+        REQUIRE(sync.sharedNote() != nullptr);
+        CHECK(std::string(sync.sharedNote()) == "look bad damaged");
+        sync.close();
+    }
+}
+
+TEST_CASE("a look reaching past the effects is refused whole, said so, so membership sets no network setting on a member") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const std::string doc = R"({"$slot":3,"Lamp":{"speed":33},"WiFi":{"channel":11}})";
+        const auto c = lookChunk(m.id(), "sneaky", uint64_t{5000} << 16, doc, 0);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.radio->channel == 6);
+        CHECK(m.lamp->speed == 1);   // the whole look stays out, the effect's part included
+        REQUIRE(sync.sharedNote() != nullptr);
+        CHECK(std::string(sync.sharedNote()) == "look sneaky sets more than effects");
+        sync.close();
+    }
+}
+
+TEST_CASE("a look with the file's own pad and a look module's controls applies, as a preset applied here does") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const auto c = lookChunk(m.id(), "padded", uint64_t{5000} << 16, R"({"$slot":3,"Lamp":{"speed":33}})", 0);
+        sync.handle(*m.devices, c.data(), c.size());
+        settleLook(sync, m);
+        CHECK(m.lamp->speed == 33);
+        sync.close();
+    }
+}
+
+// The Reviewer's case: a large look on a board without room for it, its next chunk writing through a null document.
+TEST_CASE("a look memory refuses leaves its slot empty, so its chunks are dropped safely and the next copy tries afresh") {
+    LookCase t;
+    const std::string doc = speedDoc(2500);   // three chunks
+    const uint64_t hlc = uint64_t{5000} << 16;
+    platform::setTestAllocRefusedFrom(2000);   // the document's 2501 bytes refused, every smaller allocation allowed
+    t.hear("big", hlc, doc, {0, 1});           // the second of the same stamp: no document to write into
+    platform::setTestAllocRefusedFrom(0);
+    REQUIRE(t.sync.sharedNote() != nullptr);
+    CHECK(std::string(t.sync.sharedNote()) == "look big too large");
+    t.hear("big", hlc, doc, {0, 1, 2});
+    settleLook(t.sync, t.m);
+    CHECK(t.m.lamp->speed == 33);   // with room again, the same look is taken whole
+}
+
+TEST_CASE("an advertisement of a newer look makes a member ask for all of it") {
+    Member m;
+    const std::string doc = speedDoc(1500);
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        const auto a = lookAdvert(m.id(), "duo", uint64_t{5000} << 16, static_cast<uint32_t>(doc.size()), fnv1a(doc.data(), doc.size()), 0x3u);
+        sync.handle(*m.devices, a.data(), a.size());
+        sync.sent.clear();
+        platform::setTestNowMs(platform::millis() + SharedControls::kSpreadMs);
+        settleLook(sync, m);
+        const auto needs = sync.to(SharedControls::kNeedAddress);
+        REQUIRE(needs.size() == 1);
+        osc::Reader r(needs[0].data(), needs[0].size(), SharedControls::kNeedAddress);
+        r.str(); r.i64(); r.i32();
+        CHECK(r.i32() == 0x3u);
         sync.close();
     }
 }
@@ -383,7 +550,7 @@ TEST_CASE("each group keeps its own share of the table, so a device in two group
     CHECK(both.digest(g1) == one.digest(g1));
 }
 
-TEST_CASE("a group that leaves this device takes its values and recall with it, so nine groups made and dropped leave room to recall a look") {
+TEST_CASE("a group that leaves this device takes its values and look with it, so nine groups made and dropped leave room for a look") {
     Member m;
     {
         RecordingSync sync(*m.devices);
@@ -395,7 +562,7 @@ TEST_CASE("a group that leaves this device takes its values and recall with it, 
             g->setName("Passing");
             g->setup();
             sync.tick(*m.devices, m.saved, sizeof(m.saved));
-            const auto look = lookMessage(g->groupId(), "warm", static_cast<uint64_t>(50000 + 1000 * i) << 16);   // a recall and a value of its own
+            const auto look = lookAdvert(g->groupId(), "warm", static_cast<uint64_t>(50000 + 1000 * i) << 16, 20, 1, 1);   // a look and a value of its own
             const auto value = valuesMessage(g->groupId(), "Lamp.speed", 5, static_cast<uint64_t>(50000 + 1000 * i) << 16);
             sync.handle(*m.devices, look.data(), look.size());
             sync.handle(*m.devices, value.data(), value.size());
@@ -405,12 +572,75 @@ TEST_CASE("a group that leaves this device takes its values and recall with it, 
             sync.tick(*m.devices, m.saved, sizeof(m.saved));
         }
         sync.sent.clear();
+        const PresetFile preset("look", speedDoc());
         sync.lookApplied("look");
-        const auto looks = sync.to(SharedControls::kLookAddress);
-        REQUIRE(looks.size() == 1);   // the Stage group's recall still has its place
-        osc::Reader r(looks[0].data(), looks[0].size(), SharedControls::kLookAddress);
+        const auto looks = sync.to(SharedControls::kChunkAddress);
+        REQUIRE(looks.size() == 1);   // the Stage group's look still has its place
+        osc::Reader r(looks[0].data(), looks[0].size(), SharedControls::kChunkAddress);
         CHECK(std::string(r.str()) == m.id());
         CHECK(sync.sharedNote() == nullptr);
+        sync.close();
+    }
+}
+
+namespace {
+/// Puts this process on a fleet clock `aheadUs` ahead of its own, for a case, and back to its own clock after.
+struct OnFleetClock {
+    explicit OnFleetClock(int64_t aheadUs = 0) { set(aheadUs); }
+    void set(int64_t aheadUs) {
+        ClockDiscipline d;
+        d.steer(static_cast<int64_t>(platform::uptimeUs()), aheadUs);
+        FleetTime::publish(d);
+    }
+    ~OnFleetClock() { FleetTime::reset(); }
+};
+}  // namespace
+
+TEST_CASE("a change made here on the fleet clock goes out as a bundle applying 100 ms ahead; without the clock, plain") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));
+        OnFleetClock fleet;
+        sync.sent.clear();
+        REQUIRE(m.scheduler.setControl("Control", "fader1", "{\"value\":77}") == Scheduler::SetControlResult::Ok);
+        REQUIRE(sync.sent.size() == 1);
+        uint64_t tag = 0;
+        const uint8_t* inner = nullptr;
+        size_t innerLen = 0;
+        REQUIRE(osc::readBundle(sync.sent[0].data(), sync.sent[0].size(), tag, inner, innerLen));
+        const int64_t lead = osc::usOfTimetag(tag) - FleetTime::nowUs();
+        CHECK(lead <= DeviceGroupSync::kApplyLeadUs);   // virtual time: the uptime the fleet clock reads stands still,
+        CHECK(lead >= DeviceGroupSync::kApplyLeadUs - 1);   // and a timetag's fraction rounds down by under a microsecond
+        CHECK(readValues(std::vector<uint8_t>(inner, inner + innerLen)).value == 77);
+        sync.close();
+    }
+}
+
+TEST_CASE("a timed change waits for its moment on a member on the fleet clock; one stamped too far ahead, or reaching a member without the clock, applies on arrival") {
+    Member m;
+    {
+        RecordingSync sync(*m.devices);
+        sync.tick(*m.devices, m.saved, sizeof(m.saved));   // the markers loaded, so the 20 ms read runs
+        const auto p = valuesMessage(m.id(), "Lamp.speed", 42, uint64_t{5000} << 16);
+        uint8_t bundle[300];
+        OnFleetClock fleet;
+        const size_t n = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 500000), p.data(), p.size());   // half a second ahead
+        sync.handle(*m.devices, bundle, n);
+        sync.receive(*m.devices);
+        CHECK(m.lamp->speed != 42);   // held
+        fleet.set(2000000);           // the fleet clock moves past its moment
+        sync.receive(*m.devices);
+        CHECK(m.lamp->speed == 42);
+        const auto far = valuesMessage(m.id(), "Lamp.speed", 44, uint64_t{5500} << 16);
+        const size_t f = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 10000000), far.data(), far.size());   // past the furthest hold
+        sync.handle(*m.devices, bundle, f);
+        CHECK(m.lamp->speed == 44);
+        FleetTime::reset();           // off the fleet clock: on arrival, whatever the timetag says
+        const auto q = valuesMessage(m.id(), "Lamp.speed", 43, uint64_t{6000} << 16);
+        const size_t k = osc::writeBundle(bundle, sizeof(bundle), osc::timetagOfUs(FleetTime::nowUs() + 10000000), q.data(), q.size());
+        sync.handle(*m.devices, bundle, k);
+        CHECK(m.lamp->speed == 43);
         sync.close();
     }
 }

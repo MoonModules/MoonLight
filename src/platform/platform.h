@@ -58,6 +58,8 @@ uint32_t millis() MM_NONBLOCKING;
 uintptr_t currentThreadId() MM_NONBLOCKING;
 /// Microseconds since boot, for measuring a tick rather than driving one.
 uint32_t micros() MM_NONBLOCKING;
+/// Microseconds since boot, 64 bits wide, so it wraps after half a million years: the fleet clock's local time.
+uint64_t uptimeUs() MM_NONBLOCKING;
 
 /// Drive `millis()` from a test, on a device too so a scenario run on real hardware can freeze time. Zero restores the real clock, which a test must do in release.
 void setTestNowMs(uint32_t ms);
@@ -69,8 +71,8 @@ void setTestBindFails(bool fail);
 enum class TestJoin : uint8_t { Network, Succeed, Fail };
 /// Set how multicast joins behave; the test binary starts every case on Succeed.
 void setTestJoin(TestJoin mode);
-/// The group a socket left last, as a host test reads it.
-const uint8_t* testLastLeftGroup();
+/// The group a socket left last, as a host test reads it, copied into `out`.
+void testLastLeftGroup(uint8_t out[4]);
 /// Report this much free internal RAM, as a board without PSRAM under load would; 0 restores the host's unreported figure.
 void setTestFreeInternalHeap(size_t bytes);
 /// Report addresses in [begin, end) as PSRAM, as a board with PSRAM places a buffer; null restores the host's none.
@@ -299,7 +301,7 @@ void setTestWifiRadioReady(bool ready);
 /// Start the link to the radio chip on its own task where it is still unstarted, so its firmware can be read and updated over Ethernet; false where there is no such chip or the task cannot start.
 bool coprocessorConnect();
 
-/// This host's LAN IPv4 as a dotted string, or empty; on ESP32 the device IP belongs to NetworkModule.
+/// This host's LAN IPv4 as a dotted string, or empty, valid until the calling thread's next call; on ESP32 the device IP belongs to NetworkModule.
 const char* deviceIp();
 
 /// Why the device last reset, which the UI reads to flag a crashed prior boot.
@@ -642,6 +644,9 @@ struct EncoderConfig {
     const char* outDir;        ///< absolute directory for the playlist and segments
 };
 
+/// The frames every platform's encoder takes, the ESP32's H.264 block being the strictest (esp_h264_types.h): 80x80 to 1920x2032.
+constexpr uint16_t kEncoderMinSide = 80, kEncoderMaxWidth = 1920, kEncoderMaxHeight = 2032;
+
 /// Start encoding to `cfg`, replacing any encoder already running.
 bool encoderStart(const EncoderConfig& cfg);
 
@@ -950,11 +955,13 @@ bool otaRunningMoonBase();
 bool otaMoonBaseVersion(char* out, size_t len);
 /// When that MoonBase was built, so the UI shows its identity as it shows the app's.
 bool otaMoonBaseBuild(char* out, size_t len);
+/// The handoff version that MoonBase speaks, read from the record after its descriptor; 0 when there is no MoonBase or record.
+uint32_t otaMoonBaseHandoff();
 /// How much of its slot MoonBase fills.
 bool otaMoonBaseSize(uint32_t* used, uint32_t* total);
 #ifndef ESP_PLATFORM   // a host-test seam, which no ESP32 code calls
-/// Give a host a MoonBase with this descriptor version and build time, for a host test; null removes it.
-void setTestMoonBase(const char* version, const char* built);
+/// Give a host a MoonBase with this descriptor version, build time and handoff version, for a host test; a null version removes it.
+void setTestMoonBase(const char* version, const char* built, uint32_t handoff);
 #endif
 /// An install of `target` from a URL, which the device fetches itself; runs on its own task and returns at once. For the radio chip it starts the link first where it is still unstarted.
 bool otaFetchUrl(OtaTarget target, const char* url, char* statusBuf, size_t statusBufLen,
@@ -1168,7 +1175,7 @@ private:
     int fd_ = -1;
 };
 
-/// Restart the device: a hardware reset on ESP32, a process exit on host.
+/// Restart the device: a hardware reset on ESP32 and Teensy; on a host the program starts again (in place on macOS and Linux, in the same console on Windows, by its sticky service on Android), the newly installed one when an update waits.
 [[noreturn]] void reboot();
 
 // PWM output for lights whose channels are each a pin: the chip's LEDC peripheral, one timer per driver.

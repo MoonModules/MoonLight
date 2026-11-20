@@ -35,10 +35,10 @@ def repo(tmp_path, monkeypatch):
     return work.resolve()
 
 
-def test_the_watcher_watches_each_top_folder_holding_a_governed_file_and_each_such_file_at_the_root():
-    watched = hook.watch_paths()
-    assert str(ROOT / "src") in watched and str(ROOT / "moonwalk") in watched and str(ROOT / "CLAUDE.md") in watched
-    assert str(ROOT / "build") not in watched                     # script output, outside every check
+def test_after_a_tool_call_every_governed_file_differing_from_the_index_is_a_candidate_whatever_wrote_it(repo):
+    (repo / "fresh.md").write_text("# Probe\n", encoding="utf-8")   # as a shell script writes it, no editor tool involved
+    (repo / "fresh.pyc").write_bytes(b"\0")                         # no check governs it
+    assert hook.changed_now() == {str(repo / "fresh.md")}
 
 
 def test_a_file_equal_to_the_index_is_left_unchecked_and_a_new_one_once_per_version(repo):
@@ -62,7 +62,7 @@ def test_a_sweeps_files_are_checked_as_one_batch_by_the_hook_holding_the_run_loc
     monkeypatch.setattr(hook, "check_batch", lambda paths: batches.append(sorted(paths)) or [f"{len(paths)} checked"])
     for name in ("a.md", "b.md"):
         hook._queue(str(tmp_path / name))                        # queued by the hooks that found the run lock held
-    assert hook.drain(tmp_path / "c.md") == ["3 checked"] and len(batches) == 1
+    assert hook.drain({str(tmp_path / "c.md")}) == ["3 checked"] and len(batches) == 1
 
 
 @needs_flock
@@ -71,16 +71,16 @@ def test_a_hook_finding_the_run_lock_held_queues_its_file_and_leaves(tmp_path, m
     monkeypatch.setattr(hook, "check", lambda paths: ["checked here"])
     monkeypatch.setattr(hook, "DEADLINE", time.monotonic() + 100)
     with hook._Lock("run.lock", wait=False):
-        assert hook.drain(tmp_path / "x.md") == []
+        assert hook.drain({str(tmp_path / "x.md")}) == []
     assert hook._queue(take=False) == {str(tmp_path / "x.md")}  # left for the holder's next batch
 
 
-def test_findings_reach_the_agent_as_the_systemMessage_and_a_deleted_or_ungoverned_file_is_ignored(monkeypatch, capsys):
-    monkeypatch.setattr(hook, "drain", lambda path: [f"finding in {path.name}"])
+def test_findings_reach_the_agent_as_the_systemMessage_and_a_call_that_changed_nothing_is_silent(monkeypatch, capsys):
+    monkeypatch.setattr(hook, "drain", lambda paths: [f"finding in {Path(p).name}" for p in sorted(paths)])
     monkeypatch.setattr(hook.os, "nice", lambda n: 0)               # the dispatch under test, not the test runner's priority
-    for payload, says in (({"hook_event_name": "FileChanged", "file_path": str(ROOT / "README.md"), "event": "change"}, "finding in README.md"),
-                          ({"hook_event_name": "FileChanged", "file_path": str(ROOT / "README.md"), "event": "unlink"}, None),
-                          ({"hook_event_name": "FileChanged", "file_path": str(ROOT / "x.pyc"), "event": "add"}, None)):
+    payload = {"hook_event_name": "PostToolUse", "tool_name": "Bash"}
+    for changed, says in (({str(ROOT / "README.md")}, "finding in README.md"), (set(), None)):
+        monkeypatch.setattr(hook, "changed_now", lambda c=changed: c)
         monkeypatch.setattr(sys, "stdin", type("In", (), {"read": lambda self, p=payload: json.dumps(p)})())
         assert hook.main() == 0
         out = capsys.readouterr().out
@@ -103,6 +103,41 @@ def test_a_compiler_note_that_says_error_is_no_failure_while_a_nonzero_exit_is(t
     assert "C++ does not compile" in hook.cpp(source)[0]
 
 
+def test_a_header_compiles_through_a_unit_that_includes_it_so_a_constant_only_includers_use_is_no_error(tmp_path, monkeypatch):
+    import shutil
+    if not shutil.which("c++"):
+        pytest.skip("no C++ compiler")
+    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+    import build_host
+    src = tmp_path / "src"
+    src.mkdir()
+    unit, header, broken = src / "unit.cpp", src / "consts.h", src / "broken.h"
+    unit.write_text("int main() { return 0; }\n")
+    header.write_text("#pragma once\nstatic constexpr int kOnlyIncludersUseIt = 3;\n")
+    broken.write_text("#pragma once\nint missingSemicolon()\n")
+    (tmp_path / "bld").mkdir()
+    (tmp_path / "bld" / "compile_commands.json").write_text(json.dumps(
+        [{"file": str(unit), "directory": str(tmp_path), "command": f"c++ -Wall -Werror -Wunused-const-variable -c {unit}"}]))
+    monkeypatch.setattr(build_host, "host_build_dir", lambda: str(tmp_path / "bld"))
+    monkeypatch.setattr(hook, "_rel", lambda p: "src/" + Path(p).name)
+    assert hook.cpp(header) == []
+    assert "C++ does not compile" in hook.cpp(broken)[0]
+
+
+def test_another_platforms_file_is_left_to_its_own_build_and_this_hosts_platform_file_is_compiled(tmp_path, monkeypatch):
+    import subprocess
+    sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+    import build_host
+    host_unit = ROOT / "src" / "platform" / "host" / "platform_host.cpp"
+    (tmp_path / "bld").mkdir()
+    (tmp_path / "bld" / "compile_commands.json").write_text(json.dumps([{"file": str(host_unit), "directory": str(tmp_path), "command": f"c++ -c {host_unit}"}]))
+    monkeypatch.setattr(build_host, "host_build_dir", lambda: str(tmp_path / "bld"))
+    monkeypatch.setattr(hook.shutil, "which", lambda name: "/usr/bin/c++")
+    monkeypatch.setattr(hook, "_run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 1, stdout="", stderr="x.cpp:1:1: error: sdkconfig.h not found\n"))
+    assert hook.cpp(ROOT / "src" / "platform" / "esp32" / "platform_esp32_h264.cpp") == []
+    assert "C++ does not compile" in hook.cpp(ROOT / "src" / "platform" / "host" / "host_address.h")[0]
+
+
 def test_a_file_is_recorded_as_checked_once_its_checks_ran_and_not_when_the_budget_cut_one_short(repo, monkeypatch):
     fresh = repo / "cut.md"
     fresh.write_text("# Probe\n", encoding="utf-8")
@@ -112,6 +147,19 @@ def test_a_file_is_recorded_as_checked_once_its_checks_ran_and_not_when_the_budg
     monkeypatch.setattr(hook, "check", lambda paths: [])
     hook.check_batch({str(fresh)})
     assert hook.changed({str(fresh)}) == {}
+
+
+def test_the_diff_gate_fails_on_a_check_the_deadline_cut_short_and_passes_on_a_whole_clean_run(monkeypatch, capsys):
+    monkeypatch.setattr(hook, "UNFINISHED", [])
+    monkeypatch.setattr(hook, "touched", lambda: [])
+    monkeypatch.setattr(hook, "lizard_rises", lambda paths: [])
+    monkeypatch.setattr(hook, "clone_rises", lambda paths: [])
+    monkeypatch.setattr(hook, "python", lambda paths: [])
+    monkeypatch.setattr(hook, "prose", lambda paths: [])
+    assert hook.diff_gate() == 0
+    monkeypatch.setattr(hook, "prose", lambda paths: hook.UNFINISHED.append("check_prose.py") or [])
+    assert hook.diff_gate() == 1
+    assert "Unfinished within the gate's time: check_prose.py" in capsys.readouterr().out
 
 
 def test_a_check_that_fails_to_run_leaves_its_files_unfinished_while_one_that_reports_findings_does_not(tmp_path, monkeypatch):

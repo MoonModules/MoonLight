@@ -93,8 +93,8 @@ TEST_CASE("Breakout's descending wall gains rows over time") {
     rig.layer.applyState();
     rig.layer.tick();
     const uint16_t dealt = rig.fx.bricksLeftForTest();
-    // Twelve seconds at ten rows a minute is two new rows; the ball takes a few bricks meanwhile.
-    for (uint32_t t = 1000; t <= 13000; t += 20) {
+    // Eighteen seconds at ten rows a minute is three new rows, more than the few bricks the ball takes meanwhile.
+    for (uint32_t t = 1000; t <= 19000; t += 20) {
         mm::platform::setTestNowMs(t);
         rig.layer.tick();
     }

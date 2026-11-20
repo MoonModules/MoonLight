@@ -694,8 +694,10 @@ def _header_rules(rel: str, text: str):
             # The PROSE, not the marker and the indent. Measuring the raw line held a member
             # nested in a class to a stricter budget than the same words at file scope, which
             # is a rule nobody wrote, and it disagreed with the run cap below that strips both.
-            width = len(re.sub(r"^\s*///\s?", "", lines[k]))
-            if width > cap:
+            body = re.sub(r"^\s*///\s?", "", lines[k])
+            width = len(body)
+            # A control's `@guide` line is held by its word cap (MAX_MORE_WORDS), which allows more than a line's characters by design.
+            if width > cap and not body.startswith("@guide"):
                 out.append((f"{rel}::line {k + 1}",
                             f"doc line {width} chars > {cap}"))
             out += _wrap_rule(rel, lines, k, end, start)

@@ -16,7 +16,7 @@ namespace mm {
 /// Streams the layer as H.264 over HLS from the device's own HTTP server, which a TV, VLC or a browser can play.
 /// @card HlsDriver.png
 ///
-/// Open the `url` the card shows. Where @ref NdiDriver feeds production tools, this feeds anything that plays video.
+/// Open the `url` the card shows.
 ///
 /// Each light a `scale` by `scale` block, placed where the layout puts it and corrected as the wall is. Latency is HLS's own, 2 to 5 seconds, so this is for watching rather than live control. The status line carries the state, the drops, or why the encoder stopped.
 ///
@@ -78,7 +78,7 @@ public:
     /// Which controls need a fresh encode, the encoder fixing its rate at spawn.
     bool affectsPrepare(const char* name) const override {
         return std::strcmp(name, "targetFps") == 0 || std::strcmp(name, "scale") == 0 ||
-               std::strcmp(name, "encoder") == 0 || isCorrectionControl(name);
+               std::strcmp(name, "encoder") == 0 || isWindowControl(name) || isCorrectionControl(name);
     }
 
     /// Derive the scaled geometry, make the segment directory, and start the encoder.
@@ -86,22 +86,16 @@ public:
         release();
         if (!layer_) return;
 
-        srcWidth_  = layer_->physicalWidth()  > 0 ? layer_->physicalWidth()  : 1;
-        srcHeight_ = layer_->physicalHeight() > 0 ? layer_->physicalHeight() : 1;
+        placeWindowed(picture_, *layer_, sourceBuffer_);   // a refused table keeps the raster order, and the status says why
+        srcWidth_  = picture_.width();
+        srcHeight_ = picture_.height();
         // An explicit scale is honored except below a hardware encoder's own minimum frame.
         const uint8_t floorScale = platform::hasEncoderChoice ? 1 : autoScale();
         scale_     = scale ? (scale > floorScale ? scale : floorScale) : autoScale();
         // Widened BEFORE multiplying: both operands are sane while their product need not be.
         uint32_t scaledW = static_cast<uint32_t>(srcWidth_)  * scale_;
         uint32_t scaledH = static_cast<uint32_t>(srcHeight_) * scale_;
-        // Chroma is sampled in 2x2 blocks, so a hardware encoder takes even dimensions only.
-        if constexpr (!platform::hasEncoderChoice) {
-            if ((scaledW & 1u) || (scaledH & 1u)) {
-                scale_  = static_cast<uint8_t>(scale_ * 2);
-                scaledW *= 2;
-                scaledH *= 2;
-            }
-        }
+        evenFrame(scale_, scaledW, scaledH);
         if (scaledW > kMaxEncodeWidth || scaledH > kMaxEncodeHeight) {
             std::snprintf(statusBuf_, sizeof(statusBuf_),
                           "%ux%u at scale %u exceeds the encoder's %ux%u",
@@ -121,7 +115,6 @@ public:
             return;
         }
         if (!sizeLightScratch()) return;   // its status names the shortage
-        picture_.place(*layer_, srcWidth_, srcHeight_);   // a refused table keeps the raster order, and the status says why
 
         // Only where the encoder writes segments to disk rather than keeping them in RAM.
         if constexpr (platform::hasFsSegments) {
@@ -249,11 +242,9 @@ public:
 
 private:
     static constexpr uint8_t kMaxRestarts = 3;
-    /// The smallest frame the strictest supported encoder accepts.
-    static constexpr uint16_t kMinEncodeSize = 80;
-    /// The largest frame width the strictest supported encoder accepts.
-    static constexpr uint16_t kMaxEncodeWidth  = 1920;
-    static constexpr uint16_t kMaxEncodeHeight = 2032;
+    static constexpr uint16_t kMinEncodeSize = platform::kEncoderMinSide;
+    static constexpr uint16_t kMaxEncodeWidth  = platform::kEncoderMaxWidth;
+    static constexpr uint16_t kMaxEncodeHeight = platform::kEncoderMaxHeight;
     /// A ceiling on the blow-up, so a slider cannot ask for a frame no encoder will take.
     static constexpr uint8_t kMaxScale = 80;
     static_assert(kMaxScale >= kMinEncodeSize,
@@ -307,10 +298,12 @@ private:
             // Why it failed differs per platform, and a wrong reason sends the user hunting.
             if constexpr (platform::hasEncoderChoice) {
                 setStatus("ffmpeg not found - see the docs", Severity::Warning);
-            } else if (width_ < 80 || height_ < 80 || width_ > 1920 || height_ > 2032) {
+            } else if (width_ < kMinEncodeSize || height_ < kMinEncodeSize || width_ > kMaxEncodeWidth || height_ > kMaxEncodeHeight) {
                 std::snprintf(statusBuf_, sizeof(statusBuf_),
-                              "%ux%u is outside the encoder's 80x80 to 1920x2032",
-                              static_cast<unsigned>(width_), static_cast<unsigned>(height_));
+                              "%ux%u is outside the encoder's %ux%u to %ux%u",
+                              static_cast<unsigned>(width_), static_cast<unsigned>(height_),
+                              static_cast<unsigned>(kMinEncodeSize), static_cast<unsigned>(kMinEncodeSize),
+                              static_cast<unsigned>(kMaxEncodeWidth), static_cast<unsigned>(kMaxEncodeHeight));
                 setStatus(statusBuf_, Severity::Warning);
             } else {
                 setStatus("the hardware encoder did not start", Severity::Error);

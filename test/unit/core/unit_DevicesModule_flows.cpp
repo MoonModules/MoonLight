@@ -121,8 +121,8 @@ TEST_CASE("DevicesModule: this device's row names what drives its lights, while 
 // A peer's map marks a node whose MoonBase is behind its app, from the node's own row, so the row carries the flag exactly while it is behind.
 TEST_CASE("DevicesModule: this device's row names a MoonBase behind the app, and its mode, for a peer's map to mark") {
     std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
-    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr); } } noMoonBaseAfter;
-    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
+    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr, 0); } } noMoonBaseAfter;
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00", 0);
     Rig rig;
     auto* fw = new mm::FirmwareUpdateModule();
     fw->setTypeName("FirmwareUpdateModule");   // the factory key the row finds it by
@@ -132,7 +132,7 @@ TEST_CASE("DevicesModule: this device's row names a MoonBase behind the app, and
     const std::string behind = detailFor(*rig.dev, "192.0.2.1");
     CHECK(std::strstr(behind.c_str(), "\"moonbaseMismatch\":\"0.0.1\"") != nullptr);
     CHECK(std::strstr(behind.c_str(), "\"mode\":0") != nullptr);   // no System module: the user level
-    mm::platform::setTestMoonBase(nullptr, nullptr);
+    mm::platform::setTestMoonBase(nullptr, nullptr, 0);
     fw->setup();
     CHECK(std::strstr(detailFor(*rig.dev, "192.0.2.1").c_str(), "moonbaseMismatch") == nullptr);
 }

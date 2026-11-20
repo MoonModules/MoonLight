@@ -58,6 +58,13 @@
 #include "lwip/netdb.h"
 #include "nvs_flash.h"
 
+// The handoff version this image speaks, right after the app descriptor, where the app reads it with this image at rest (FirmwareImage.h, "The handoff version"); `-u moonbase_handoff` keeps it.
+extern "C" {
+extern const mm::firmware::HandoffRecord moonbase_handoff;
+__attribute__((section(".rodata_custom_desc"))) const mm::firmware::HandoffRecord moonbase_handoff = {
+    mm::firmware::kHandoffMagic, mm::firmware::kHandoffVersion};
+}
+
 namespace {
 
 // The app's config volume, labeled `littlefs` or, on older tables, `spiffs`; only ever read, so a failed install cannot corrupt user config.
@@ -783,9 +790,9 @@ constexpr uint8_t kMaxStagedInstalls = 3;
 // Forget the staged install, its URL and its count, once an install has ended or the user chose another way.
 void clearStagedInstall() {
     nvs_handle_t h;
-    if (nvs_open("moonbase", NVS_READWRITE, &h) != ESP_OK) return;
-    nvs_erase_key(h, "url");
-    nvs_erase_key(h, "tries");
+    if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_erase_key(h, mm::firmware::kHandoffUrlKey);
+    nvs_erase_key(h, mm::firmware::kHandoffTriesKey);
     nvs_commit(h);
     nvs_close(h);
 }
@@ -793,7 +800,7 @@ void clearStagedInstall() {
 void unattendedInstallTask(void*) {
     // Remember the source across reboots (key "last_url", page prefill only): the retry escape must survive a power cycle, not just this session.
     nvs_handle_t nh;
-    if (nvs_open("moonbase", NVS_READWRITE, &nh) == ESP_OK) {
+    if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &nh) == ESP_OK) {
         nvs_set_str(nh, "last_url", stagedUrlTask_);
         nvs_commit(nh);
         nvs_close(nh);
@@ -1017,10 +1024,10 @@ extern "C" void app_main() {
     uint8_t stagedTries = 0;
     {
         nvs_handle_t h;
-        if (nvs_open("moonbase", NVS_READONLY, &h) == ESP_OK) {
+        if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READONLY, &h) == ESP_OK) {
             size_t len = sizeof(stagedUrl);
-            if (nvs_get_str(h, "url", stagedUrl, &len) != ESP_OK) stagedUrl[0] = '\0';
-            nvs_get_u8(h, "tries", &stagedTries);
+            if (nvs_get_str(h, mm::firmware::kHandoffUrlKey, stagedUrl, &len) != ESP_OK) stagedUrl[0] = '\0';
+            nvs_get_u8(h, mm::firmware::kHandoffTriesKey, &stagedTries);
             nvs_close(h);
         }
     }
@@ -1034,7 +1041,7 @@ extern "C" void app_main() {
     // With nothing staged, prefill the retry buffer from the remembered last source so the page offers it after any reboot. Never auto-installed: only the page's Install uses it.
     if (!stagedUrl[0]) {
         nvs_handle_t h;
-        if (nvs_open("moonbase", NVS_READONLY, &h) == ESP_OK) {
+        if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READONLY, &h) == ESP_OK) {
             size_t len = sizeof(stagedUrlTask_);
             if (nvs_get_str(h, "last_url", stagedUrlTask_, &len) != ESP_OK) stagedUrlTask_[0] = '\0';
             nvs_close(h);
@@ -1059,8 +1066,8 @@ extern "C" void app_main() {
     if (online && stagedUrl[0]) {
         // Counted as it starts, after the network is up, so only an install that resets the device spends a try.
         nvs_handle_t h;
-        if (nvs_open("moonbase", NVS_READWRITE, &h) == ESP_OK) {
-            nvs_set_u8(h, "tries", static_cast<uint8_t>(stagedTries + 1));
+        if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) == ESP_OK) {
+            nvs_set_u8(h, mm::firmware::kHandoffTriesKey, static_cast<uint8_t>(stagedTries + 1));
             nvs_commit(h);
             nvs_close(h);
         }

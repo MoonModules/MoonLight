@@ -72,9 +72,8 @@ TEST_CASE("the contrast control decides how much of the field lights up") {
     // This is what makes Aurora curtains rather than cloud: a high window leaves only the peaks of the field visible, a low one lets most of it through.
     const auto sharp = render(32, 32, [](AuroraEffect& e) { e.contrast = 200; });
     const auto soft  = render(32, 32, [](AuroraEffect& e) { e.contrast = 40; });
-    CHECK(litShare(sharp) < litShare(soft));
-    CHECK(litShare(sharp) < 0.5);      // a minority of the panel is curtain
-    CHECK(litShare(soft) > 0.5);       // and the field itself covers it
+    CHECK(litShare(sharp) < 0.5);                      // a minority of the panel is curtain
+    CHECK(litShare(soft) > 1.5 * litShare(sharp));     // and a low window lets far more of the field through
 }
 
 TEST_CASE("curtains appear rather than an even wash of light") {

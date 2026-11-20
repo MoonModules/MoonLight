@@ -104,6 +104,88 @@ With step 15's scheduling the critical path becomes the test build, then the lon
 
 **Actions**: step 15 extended (the cheap, often-failing checks first; the scenarios gate isolated as the measurement it now is); step 3's next part unchanged (docgen and complexity per file in the hook); step 25 (check_code names each new clone pair against the committed list).
 
+## After-action review: the fourth commit round (2026-11-19)
+
+A day's work, about 70 files and 2,200 insertions, took five gate runs from 12:33 to 14:22. Run 1 stopped when the Reviewer, beside the gates, found two fleet-clock defects; run 2 failed three ratchets written during the day (code +24, prose +39, docgen 3 errors); the fixes in rounds 3 to 5 moved code inputs each time, and one refactor surfaced an order-dependent test (a process-wide `FleetTime` no case reset). The write-time hook had not run since 08:35 (`build/hook/checked.json` untouched), most likely because the session continued from a summary and its watcher was not registered again (a hypothesis); nothing reported its silence, and the agent read the silence as a clean tree. The last run passed every gate but the code ratchet at +2, both named in the commit.
+
+## After-action review: the fifth commit round (2026-11-19 evening)
+
+An afternoon and evening of bench-driven work, 42 files: the look pushed to the group, 25 PR review findings, Discovery and driver fixes. The gates ran as agreed: `--list` first, the KPI left out on the product owner's go, the Reviewer beside the gates.
+
+- **Run 1, 20:03 to 20:17 (13 min 16 s)**: 13 of 15 gates passed; two ratchets failed, code +10 (complex functions +4, duplicated blocks +4, a large file, a long function) and prose +2 (a British spelling). The firmware build was the long pole (394 s), the code check waited behind the host build (155 s after it). The Reviewer, beside the gates, found five defects: a null write after a refused allocation, a regression the agent made the same afternoon (the picker's status view dropping the device card's URL and File rows), one membership rule in three places, a stale sentence, a file read once per group.
+- **Correction, 20:17 to about 20:35**: the five findings fixed with a test each, and every rise cleared by Extract Function; the code check ran three times by hand (2.5 min each) and jscpd once to find the clones, since check_code `--files` does not show duplicates.
+- **Run 2, 20:34 to 20:48 (13 min 11 s)**: 15 of 16 passed, the help regenerated first; the firmware build alone took the first 5.5 minutes, every other gate waiting behind it, then the code check 214 s. The unit suite failed two MQTT cases that pass alone and as `test_host.py` runs them; it ran beside the scenarios and the docs gates, and a port collision in its log shows two processes contending: a flake of the parallel schedule. Its rerun alone passed in 31 s. The round: two full runs and one single-gate rerun, about 27 minutes of gates and 18 of correction between them.
+
+**What went wrong: correction afterwards instead of prevention beforehand.**
+
+1. **The write-time hook had not run all day.** `build/hook/checked.json` last changed at 08:35, as in the fourth round; the fourth review named the cause (a session continued from a summary loses the watcher) and nothing re-armed it. Every rise run 1 found, the complex and long functions, the large file, the British spelling, is a rule the hook reports per file in seconds.
+2. **Most edits bypassed the hook's trigger anyway.** The agent edited through Python and `sed` in the shell rather than the Edit tool, and a `FileChanged` watcher only sees what it is told to watch; the same edits through the editor tools would still have needed the watcher alive.
+3. **Duplication is visible only to a whole-tree run.** Four clones came from this change (two in the look's header code, HLS's even rule made identical to RTSP's, a test's setup copied); no per-file check reports them, so the first sign was the 13-minute gate.
+4. **The Reviewer read the push only at commit time.** The look push was a plan step finished at about 19:15; its crash path and the picker regression waited an hour for the commit's Reviewer. The step loop the textbook table names (the Reviewer per finished step) did not run.
+5. **Checks run by hand are not cached.** The agent ran the unit suite, the JS and Python suites, docgen and prose many times outside the runner during the day, and the runner ran them all again, its cache knowing none of them.
+
+**Improvements, in the order they pay back:**
+
+- **The hook proves it is alive, and the gate runs it first** (step 20's purpose, the textbook table's "per-file checks at commit" row): `run_gates.py` runs `hook_written.check()` over every changed file as its first gate, before any build, failing in seconds on what run 1 found after 13 minutes; and the agent checks `build/hook/checked.json`'s age at the start of a session and after a summary, re-arming the watcher when it is stale.
+- **Edits go through the editor tools**, so a write-time check sees them; a shell edit is for a mechanical rename across files, followed by the hook's check on the files it touched.
+- **Clones per change**: jscpd run over the changed files against the tree (check_code's own `clones()`, filtered to the diff) inside that first gate, so a copied block shows before the build; about a minute where the whole check costs 2.5.
+- **The Reviewer at every finished plan step**, on that step's diff, as the step loop says; the commit's Reviewer then reads a diff already read.
+- **The agent runs a check through the runner** (`run_gates.py --only <gate>`), never by hand, so every pass is cached and the commit run repeats nothing.
+- **The code check split in two**: lizard, jscpd and the boundary rules report in seconds without a build; only the blocking-call and stack-frame rules wait for check_nonblocking's build.
+- **The firmware build with ccache** (`CCACHE_ENABLE=False` today): the long pole of every round, mostly recompiling what did not change.
+- **No gate waits behind the firmware build that does not need it**: in run 2 every gate waited 5.5 minutes for it, since it holds every core token; the cheap checks start first (step 15's own next).
+- **A gate that shares a port or a folder with another runs after it, never beside it**: the unit suite and the scenarios each declare what they hold, as a `needs` or a resource the scheduler keeps exclusive.
+
+## After-action review: the sixth commit round (2026-11-20 afternoon)
+
+56 files, +1,584 / −661: SuperSync's first steps and 14 CodeRabbit findings. **Planned**: about 10 minutes clean, 20 with one fix batch. **Happened**: the product owner's go at 13:26, every gate green at 14:03 (37 minutes), the commit at 15:01 after a decision on the host tick. Records: `build/gates/run-20261120-132839.json`, `-135526.json`, `-140247.json`.
+
+| Step | Planned | Actual |
+|--|--|--|
+| Run 1 | about 8 min | 11.5 min: 14 passed, 3 ratchets failed; the S3 firmware the gate measures (esp32s3-n16r8) built for 5.5 min, every all-cores gate waiting behind it |
+| Reviewer, beside run 1 | about 10 min | 8 min: 12 points, one a real defect (places parked the 20 ms read) |
+| Finding the failures | none planned | about 9 min: the runner keeps only a failing gate's tail, so the errors were read by hand, including one blind `--only` rerun (3 min) |
+| Fix batch | about 5 min | about 3 min, 15 files |
+| Rerun | about 3 min | 4.7 min: four gates cached, the firmware incremental (60 s), the KPI 21 s; one temporal word left, in a C++ comment |
+| Last word | none planned | 1 min: the comment reworded and prose alone rerun, the skipped code gates named in the commit |
+
+The change grew during the gates from 51 to 56 files: six generated (help.json and the metrics), 15 written in the fix batch.
+
+**What went wrong**
+
+1. **Run 1's progress was hidden**: the runner piped through `tail`, so the minute lines the commit process asks for reached the product owner only at the end.
+2. **The blocking-call ratchet rose 67 at once, seen only in the whole-tree check**: a virtual `footprint()` in `canvas()`, which the write-time hook compiles but whose `-Wfunction-effects` warnings it does not count.
+3. **A failing gate's findings were cut off**: docgen's three errors and the temporal word sat above the tail the record keeps.
+4. **The bench builds missed the gate's firmware target**: the round built esp32 and esp32s3-n32r16 for the boards, and the gate rebuilt esp32s3-n16r8 from scratch.
+5. **The host tick had no baseline**: the two commits before skipped the KPI, so a 7 to 46 µs move could not be placed in this change or theirs.
+
+**Actions**, as steps below: 29 (the hook counts `-Wfunction-effects` per compiled file), 30 (a failing gate's findings kept whole), 31 (the last bench build includes the gate's firmware target), 32 (classified changes skip the firmware), 33 (a fix round carries no new behavior), 34 (the KPI tick measured every commit, or its skip named with its baseline).
+
+## The plan against the textbook (2026-11-19)
+
+The textbook shape is layered, each layer catching its class of defect at its cheapest moment: **shift left and fail fast** (Humble and Farley's commit stage: [under five minutes, never ten](https://www.oreilly.com/library/view/continuous-delivery-reliable/9780321670250/ch07.xhtml)), an **inner loop** of seconds on the file written and an **outer loop** of CI on the whole tree, every stage checking **only what changed** ([pre-commit](https://pre-commit.com/) on the staged files, [Nx affected](https://nx.dev/docs/features/ci-features/affected)), fed by **small batches** ([Google: about 100 lines a change](https://google.github.io/eng-practices/review/developer/small-cls.html); [DORA](https://dora.dev/guides/dora-metrics-four-keys/)). Agentic development adds that the agent needs a verification signal at every step ([Anthropic's best practices](https://code.claude.com/docs/en/best-practices)), that a guardrail must prove it is alive, since an agent cannot notice a missing check, and that the agent's memory and rule changes stay visible to the human.
+
+| Layer | When | What runs | Catches |
+|--|--|--|--|
+| Inner loop | every edit, seconds | the per-file checks on the file written (docgen, code, prose, compile) | budgets, complexity, wording, as written |
+| Step loop | per finished plan step, minutes | the affected tests, and the Reviewer on that step's diff | design and logic defects while the step is fresh |
+| Commit stage | once, under ten minutes | the per-file checks over the whole diff first, then the affected builds and tests | what slipped, in seconds rather than minutes |
+| Outer loop | merge, on CI | everything, whole tree | cross-cutting and platform breakage |
+
+| Practice | Textbook | MoonLight has | Gap | Refinement, and what it removes |
+|--|--|--|--|--|
+| Per-file checks at commit | pre-commit and [lefthook](https://lefthook.dev/usage/commands/run) run their hooks on the staged files | `hook_written.py` at write time; the gate runs whole-tree checks | the gate trusts the hook ran; on 2026-11-19 it had not | `run_gates.py` runs the hook's `check()` over every changed file as its first gate, before any build; removes step 20's bypass proposal and the by-hand hook runs |
+| A guardrail that proves it is alive | a [dead man's switch](https://healthchecks.io/docs/monitoring_cron_jobs/): alert when the heartbeat stops | the hook writes `build/hook/checked.json` | nothing reads it, so a silent watcher reads as a clean tree | the runner's first line: "hook last ran at <time>; N of M changed files unchecked" |
+| Editor-time feedback | on-save checks; Claude Code's [FileChanged](https://code.claude.com/docs/en/hooks) fires whatever wrote the file | step 16 | whether a resumed session re-registers the watcher is untraced | trace it once (`claude --debug hooks` on a resumed session); the first row holds either way |
+| Ratchet per file and rule | [Spotless `ratchetFrom`](https://github.com/diffplug/spotless/blob/main/plugin-gradle/README.md), [Betterer](https://phenomnomnominal.github.io/betterer/docs/introduction), [Notion's per-file counts](https://www.notion.com/blog/how-we-evolved-our-code-notions-ratcheting-system-using-custom-eslint-rules) | totals per rule in `code.json` and `docgen.json` | a rise written at 10:00 shows at 13:00 as a whole-tree total | step 4's open half: counts per file and rule, the gate checks each changed file's row, the total a sum; removes the whole-tree lizard and docgen runs per commit |
+| Cheap checks first | the commit stage's compile, unit tests and analysis in minutes | longest-path scheduling; step 15's cheap-first open | every failure of four rounds came from docgen, check_code or the docs build, 6 to 8 minutes in | the per-file gate above is the fail-fast stage; removes the open part of step 15 |
+| Review of a small change, early | Google reviews one self-contained change and measures [response time](https://google.github.io/eng-practices/review/reviewer/speed.html) | step 8: the Reviewer per finished step | on 2026-11-19 it read the whole day at the end | step 11's reviewed ref, and `--list` printing the unreviewed diff's size |
+| Small batches | DORA; the repo's own 400 lines and ten files for a contribution (`14-merge.yaml`) | one combined commit per cycle, the product owner's call | evidence: the rounds took 30, 38, over 60 and 110 minutes | none proposed; the numbers are for the product owner to weigh |
+| Test isolation | [pytest-randomly](https://adamj.eu/tech/2018/01/08/pytest-randomly-history/): a leaky test rarely survives a shuffled order | `test_main.cpp` resets each process-wide state by hand | each new static needs its reset; the missing one surfaced in a commit round | CI's sanitizer lane runs doctest `--order-by=rand` and prints the seed |
+| Measure the gates | DORA's lead time, change fail rate, rework | step 1: a record per run | no number per round | a round record: lead time, runs per round, time to first failure, fail rate per gate, hook coverage; removes the hand-timed reviews above |
+
+**The five refinements with the most saving per effort**, from the research: (1) the hook's checks as the runner's first gate over the diff, an hour; (2) the heartbeat line, minutes; (3) counts per file and rule, a day; (4) the round record, half a day; (5) random test order in CI's sanitizer lane, minutes.
+
 ## End states
 
 | | End state | Gains | Loses |
@@ -144,6 +226,19 @@ With step 15's scheduling the critical path becomes the test build, then the lon
 | 25 | **check_code names a new clone pair**: the duplicated-block rule reports a count, so a rise means finding the new pair by hand; on 2026-11-18 that took three comparisons against a HEAD worktree. The check compares its pairs, by file and without line numbers, with the committed run's and names each new one, as it names a new complex function. | ⏳ | an hour |
 | 26 | **A merge from a green branch runs no gate**: with `MERGE_HEAD` present, the runner asks `gh` whether the merged-in commit's CI passed (main's does, by branch protection); if it did, the files that came over unchanged are checked by that CI and the branch's own by its last commit, and the files differing from both parents (git's combined diff, `git diff --cc`) go to CI on the merge push. The run says "nothing to run: merged from main, green at <sha>". The metrics stay out of the trigger: code.json merges three-way per counter (ours + theirs − base), repo-health keeps the branch's copy for the next commit's KPI to rewrite. On 2026-11-18 merging #257's main ran every gate for 13 minutes, since main's `platform.h` change recompiled the tests (340 s) and the S3 (174 s), where both parents were green. | ⏳ | an hour |
 | 27 | **No gate run starts without its cost on screen**: `run_gates.py --list` prints each gate's expected time from the records and flags a rebuild when the diff touches a widely included header (by includer count, step 12), and the agent shows that line and waits for the product owner's go before running. On 2026-11-18 a merge's run was announced as 5 to 7 minutes and took 13. | ⏳ | an hour |
+| 28 | **Every gate runs only on what it reads, the next change** (product owner, 2026-11-19): a rerun after a two-file fix (a MoonWalk YAML and a Python test) ran nine gates where two could be affected, docgen and the Python suite, since triggers name more than their inputs. Each gate's `given` names the files whose change can move its result, and "every change" goes: specs on the spec files, backlog on the plan and backlog files, firmwares on the firmware catalog and its scripts, help and docs on what reaches their output, prose and the hook gate on the files changed since the last pass rather than the whole branch diff. Verified by the next round's record: each gate it runs traces to a changed file it reads. The pragmatic rule the product owner applied by hand before any runner, run what the change can affect, written into the triggers. | ⏳ next | half a day |
+| 29 | **The hook counts `-Wfunction-effects` per compiled file** (2026-11-20): it already compiles each header it checks; counting the blocking-call warnings against HEAD's compile of the same file reports the render-path ratchet at write time, where the sixth round saw a rise of 67 only in the whole-tree check. | open | hours |
+| 30 | **A failing gate's findings kept whole** (2026-11-20): the record keeps a gate's error section in full beside its tail, so a failure is read from the record, never from a rerun. | open | an hour |
+| 31 | **The last bench build includes the gate's firmware target** (2026-11-20): after the last C++ change, the board build also builds esp32s3-n16r8, so the freshness gate checks rather than builds. | open | minutes |
+| 32 | **Classified changes skip the firmware** (product owner, 2026-11-20): a C++ change whose token stream equals HEAD's once comments are stripped, and a change to host-only files (`src/platform/host`, `test/`), skip the firmware build and the KPI; the runner proves the class rather than trusting it. A pure move stays built, the ESP32's compiler differing from the host's. | open | half a day |
+| 33 | **A fix round carries no new behavior** (product owner, 2026-11-20): after the first gate run, a batch holds only what makes the gates pass and the Reviewer's correctness findings; a new behavior goes to the backlog for the next change. | open | a rule |
+| 34 | **The KPI tick measured every commit, or its skip named with its baseline** (2026-11-20): a commit that skips the KPI leaves the next without a baseline, as the sixth round found a 7 to 46 µs move it could not place. | open | a rule |
+| 35 | **The merge run's cache reads the last passing commit run** (product owner, 2026-11-20): the pre-merge gates compare with `main`, so every file the branch changed counts as new though each commit passed its gates; on 2026-11-20 the hook, MoonBase and part of the docs reran for files unchanged since. A gate reruns for files changed since its last pass, the merge's resolution and `main`'s files whose own CI skipped that gate (#258 skipped the ESP32 build). | open | half a day |
+| 36 | **The MoonBase gate builds MoonBase alone** (product owner, 2026-11-20): `esp32-fresh-moonbase` runs `build_esp32.py --firmware esp32`, the whole classic family, the app, MoonBase, every board's bootloader and the migration image, 421 s on 2026-11-20, where the check needs the MoonBase image. | open | an hour |
+| 37 | **The firmware freshness reads ninja's dependencies** (2026-11-20): after its build, `check_esp32_built.py` walks the source folders file by file (`newest_source`, an `rglob` per folder), about four of the 502 s of the 2026-11-20 merge run at one core; `ninja -t deps`, which the script already reads, names every input. | open | an hour |
+| 38 | **The hook compares prose findings with HEAD** (product owner, 2026-11-20): `diff_gate` fails on any prose warning in a touched file, so a file met for a one-line fix fails on sections it never changed (five long sections in moonlight.md and mooncore.md on 2026-11-20); it compares as it does for lizard and jscpd, failing on what the change raised. | open | an hour |
+| 39 | **A manual hook run cannot hang** (2026-11-20): four manual `hook_written.py` runs waited on the queue's lock for up to six and a half hours, each behind the one before; a stale holder is detected by its process and a run waits a bounded time. | open | an hour |
+| 40 | **The code check's build uses its cores** (2026-11-20): after a widely included header changed, its build compiled the test target one file at a time (`make -s`, no jobs), 324 s of the code gate, where the host build before it took 19 s; it builds with the runner's job tokens or reads that build (step 22). | open | minutes |
 
 ## Every script, its cost and its value
 

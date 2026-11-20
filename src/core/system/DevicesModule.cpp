@@ -35,7 +35,7 @@ void DevicesModule::writeMemberOptions(JsonSink& sink, const char* key) const {
     bool first = true;
     for (ListRow i = 0; i < deviceCount_; i++) {
         const Device& d = devices_[i];
-        if (!hasMac(d.mac)) continue;
+        if (!hasMac(d.mac) || !ours(d.type)) continue;
         char ip[16], label[48];
         formatDottedQuad(ip, d.ip);
         mm::formatTo(label, sizeof(label), "%s (%s)", d.name[0] ? d.name : ip, ip);
@@ -49,7 +49,7 @@ void DevicesModule::writeMemberOptions(JsonSink& sink, const char* key) const {
 bool DevicesModule::memberOption(uint32_t index, uint8_t mac[6], const char*& name) const {
     for (ListRow i = 0; i < deviceCount_; i++) {
         const Device& d = devices_[i];
-        if (!hasMac(d.mac) || index--) continue;
+        if (!hasMac(d.mac) || !ours(d.type) || index--) continue;
         std::memcpy(mac, d.mac, 6);
         name = d.name;
         return true;
@@ -102,7 +102,7 @@ void DevicesModule::writeGroups(JsonSink& sink, const Device& d) const {
     }
     if (first) return;
     sink.append("]");
-    if (!heardLately(d.mac)) sink.append(",\"missing\":true");
+    if (!present(d.mac)) sink.append(",\"missing\":true");
 }
 
 const DeviceGroup* DevicesModule::groupNamed(const char* name) const MM_NONBLOCKING {
@@ -126,7 +126,7 @@ bool DevicesModule::appendGroupMembers(const char* name, Receiver* out, uint8_t&
         if (n >= cap) { left++; return; }
         out[n] = Receiver{};
         out[n].member = true;
-        if (d && heardLately(mac)) std::memcpy(out[n].ip, d->ip, 4);   // an unheard member keeps its place with no address, so a split over the members holds
+        if (d && present(mac)) std::memcpy(out[n].ip, d->ip, 4);   // a member not present keeps its place with no address, so a split over the members holds
         n++;
     });
     return true;
@@ -141,6 +141,33 @@ void DevicesModule::writeServices(JsonSink& sink) const {
         else sink.appendf("%s\"%s\"", i ? "," : "", s.protocol);   // a service with no port, raw Ethernet's
     }
     sink.append("]");
+}
+
+bool DevicesModule::flushNeighbors() {
+    ListRow w = 0;
+    for (ListRow r = 0; r < deviceCount_; r++) {
+        if (!devices_[r].self && !isGroupAddress(devices_[r].ip)) continue;
+        if (w != r) devices_[w] = devices_[r];
+        w++;
+    }
+    const bool dropped = w != deviceCount_;
+    deviceCount_ = w;
+    return dropped;
+}
+
+DevicesModule::Device* DevicesModule::rowFor(const uint8_t ip[4], const uint8_t mac[6], bool& changed) {
+    Device* byIp = findByIp(ip);
+    if (!hasMac(mac)) return byIp;
+    if (Device* byMac = findByMac(mac)) {
+        if (byMac == byIp) return byMac;
+        if (byIp) { dropRow(byIp); byMac = findByMac(mac); }   // the address's old row: this device's own before it named its MAC, or a device gone from it
+        std::memcpy(byMac->ip, ip, 4);
+        changed = true;
+        return byMac;
+    }
+    if (byIp && hasMac(byIp->mac)) { dropRow(byIp); changed = true; return nullptr; }
+    if (byIp) { std::memcpy(byIp->mac, mac, 6); changed = true; }
+    return byIp;
 }
 
 }  // namespace mm

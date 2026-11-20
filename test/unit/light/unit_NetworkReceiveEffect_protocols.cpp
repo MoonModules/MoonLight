@@ -449,7 +449,8 @@ TEST_CASE("UdpSocket's joinMulticast leaves the earlier group before it joins th
     const uint8_t first[4] = {239, 255, 0, 1}, second[4] = {239, 255, 0, 2};
     s.joinMulticast(first);
     s.joinMulticast(second);
-    const uint8_t* left = mm::platform::testLastLeftGroup();
+    uint8_t left[4];
+    mm::platform::testLastLeftGroup(left);
     CHECK((left[0] == 239 && left[1] == 255 && left[2] == 0 && left[3] == 1));
     s.close();
 }

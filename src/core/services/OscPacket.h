@@ -42,7 +42,7 @@
 ///
 /// It reads an unauthenticated datagram off the LAN, so every read is length-checked against the buffer end, works in the caller's buffer alone, and a malformed packet returns false having read only its own length.
 ///
-/// Bundles are recognized and refused: controllers send plain messages, and a bundle is a timed batch.
+/// A controller's bundle is recognized and refused: controllers send plain messages. A device group's change travels as a bundle of one message, its timetag the fleet time it applies at (readBundle, writeBundle).
 ///
 /// One guard needs naming: a padded string length overshoots when the terminator sits in the buffer's last bytes, so it is tested against what remains as well as against zero.
 ///
@@ -216,6 +216,39 @@ inline uint8_t toByte(const Message& m) {
     return static_cast<uint8_t>(m.i <= 0 ? 0 : (m.i >= 255 ? 255 : m.i));
 }
 
+/// A bundle's timetag for fleet time `us`: OSC 1.0's NTP format, seconds in the high word and the fraction of a second in the low; the fleet clock has no wall time, so the seconds count fleet time.
+inline uint64_t timetagOfUs(int64_t us) {
+    const uint64_t u = us > 0 ? static_cast<uint64_t>(us) : 0;
+    return ((u / 1000000) << 32) | (((u % 1000000) << 32) / 1000000);
+}
+
+/// The fleet time in microseconds a timetag names.
+inline int64_t usOfTimetag(uint64_t t) {
+    return static_cast<int64_t>((t >> 32) * 1000000 + (((t & 0xFFFFFFFFu) * 1000000) >> 32));
+}
+
+/// Wrap one message in a bundle stamped `timetag` into `out`: "#bundle", the timetag, the message's size and the message; 0 when it does not fit.
+inline size_t writeBundle(uint8_t* out, size_t cap, uint64_t timetag, const uint8_t* msg, size_t len) {
+    if (!len || len % 4 || cap < 20 + len) return 0;
+    std::memcpy(out, "#bundle\0", 8);
+    for (int b = 0; b < 8; b++) out[8 + b] = static_cast<uint8_t>(timetag >> (56 - 8 * b));
+    for (int b = 0; b < 4; b++) out[16 + b] = static_cast<uint8_t>(len >> (24 - 8 * b));
+    std::memcpy(out + 20, msg, len);
+    return 20 + len;
+}
+
+/// The timetag and first message of the bundle in `pkt`; false when `pkt` is no bundle or its message runs past `len`.
+inline bool readBundle(const uint8_t* pkt, size_t len, uint64_t& timetag, const uint8_t*& msg, size_t& msgLen) {
+    if (!pkt || len < 24 || std::memcmp(pkt, "#bundle\0", 8) != 0) return false;
+    timetag = 0;
+    for (int b = 0; b < 8; b++) timetag = (timetag << 8) | pkt[8 + b];
+    const int32_t n = beInt32(pkt + 16);
+    if (n <= 0 || static_cast<size_t>(n) > len - 20) return false;
+    msg = pkt + 20;
+    msgLen = static_cast<size_t>(n);
+    return true;
+}
+
 /// A message of several arguments, strings and 32- and 64-bit integers (OSC 1.0's `s`, `i` and `h`), its type tags given up front; `size()` is 0 once anything did not fit.
 class Writer {
 public:
@@ -236,6 +269,15 @@ public:
     void i32(uint32_t v) { word(v); }
     /// A 64-bit integer argument, high word first.
     void i64(uint64_t v) { word(static_cast<uint32_t>(v >> 32)); word(static_cast<uint32_t>(v)); }
+    /// A blob argument: its length, then its bytes padded to four (OSC 1.0).
+    void blob(const uint8_t* data, size_t n) {
+        word(static_cast<uint32_t>(n));
+        const size_t padded = pad4(n);
+        if (!room(padded)) return;
+        std::memset(out_ + len_, 0, padded);
+        std::memcpy(out_ + len_, data, n);
+        len_ += padded;
+    }
     /// The message's length, or 0 when it overflowed its buffer.
     size_t size() const { return ok_ ? len_ : 0; }
 
@@ -284,6 +326,17 @@ public:
         if (!take('h') || !fits(8)) return 0;
         const uint64_t hi = word();
         return (hi << 32) | word();
+    }
+    /// The next argument as a blob, its bytes in the datagram and its length into `n`; null when it is none.
+    const uint8_t* blob(size_t& n) {
+        n = 0;
+        if (!take('b') || !fits(4)) return nullptr;
+        const int32_t len = static_cast<int32_t>(word());
+        if (len < 0 || !fits(pad4(static_cast<size_t>(len)))) { ok_ = false; return nullptr; }
+        const uint8_t* data = p_;
+        p_ += pad4(static_cast<size_t>(len));
+        n = static_cast<size_t>(len);
+        return data;
     }
 
 private:

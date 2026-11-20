@@ -162,14 +162,14 @@ The test: *would the Layer know to skip this?* If yes (an empty grid, a disabled
 
 **Effects render at every channel count.** An effect writes per channel, the way `draw::pixel` does (`if (write >= 1) …r; if (write >= 2) …g;`), so a light carries as much of the color as it has channels, RGB on three, R+G on two, R on one. Channels the effect doesn't set belong to the driver. Every light has at least one channel: `Layer::setChannelsPerLight` enforces that at the setter.
 
-**Effects must animate at every tick rate.** Per-tick phase math computed as `dt * bpm * K / 60000` truncates to 0 on devices where `dt < 234/bpm` ms: the host ticks every 0–1 ms, so even bpm=60 freezes. The fix is to keep the raw `dt * bpm` numerator in the phase accumulator and divide only at the read site:
+**Effects must animate at every tick rate.** An animation's phase is a function of the fleet time and its rate, not a sum of per-frame steps: `BeatPhase` (`math16.h`) holds `elapsed() * rate` and divides only where it is read, so a frame of a millisecond still moves it and every device of a wall reads one phase:
 
 ```cpp
-phase_num_ += static_cast<uint64_t>(dt) * bpm;
-uint8_t t = static_cast<uint8_t>((phase_num_ * 256) / 60000);
+phase_.advanceTo(elapsed(), bpm);
+uint8_t t = static_cast<uint8_t>(phase_.phase(256));
 ```
 
-See NoiseEffect / MetaballsEffect for the canonical pattern. Animation speed must depend only on `bpm` and wallclock, not on tick rate or grid size.
+Anything integrated frame by frame, a trail's push or a decay, steps by `frameMs()`, the frame's length on the local clock, which a fleet-clock step leaves alone. Animation speed depends on the rate and the clock alone, whatever the tick rate or the grid size.
 
 **Everything that changes over time is driven by elapsed time, never by the frame count.** The rule above is one half of it, a phase that truncates to zero and freezes. The other half is the mirror image and as wrong: state advanced by a fixed amount *per frame* runs at whatever speed the hardware happens to render. The same gravity setting is an explosion on a host at 5,000 fps and a drift on an ESP32 at 470. This applies to every per-frame quantity, more than phase: a force, a velocity, a trail fade, a decay, a drop rate, a simulation step. The user sets a speed; the hardware must not get a vote.
 
@@ -294,8 +294,9 @@ Network-based drivers (ArtNet, E1.31, DDP) pace their output with a **non-blocki
 How lighting uses the core [multi-device runtime](mooncore.md#multi-device-runtime) (discovery + clock sync) to drive an installation spanning multiple controllers:
 
 - **The same effect on every board.** [Shared controls](mooncore.md#multi-device-runtime) carry the surface, and whatever the Control card assigns it to, so several boards run one effect with one set of controls. This is the controls half of supersync; the clock is the other.
-- **Synced visuals from the shared clock.** Effects animate off elapsed time ([Effects](#effects)), so a synced clock is what makes a wall of controllers animate in lockstep regardless of each one's frame rate. This is the light-domain payoff of the core clock sync.
-- **Light distribution**: one device sending rendered light data to another uses the existing ArtNet / E1.31 / DDP standards. The ArtNet *driver* sends to fixtures; device-to-device distribution as a sync topology is part of the backlog card Clock sync. No bespoke protocol.
+- **Synced visuals from the shared clock.** Effects animate off the fleet time ([Effects](#effects)), so a wall of controllers animates in lockstep regardless of each one's frame rate. This is the light-domain payoff of the core fleet clock.
+- **One picture across a wall (SuperSync).** Each device places its own layout in the wall from its Layouts, its groups derive the wall from every member's place, and an effect that declares a region draws its part of the wall's one picture: per light through `draw::eachLight`, or its positions converted with `cv.local()`. No pixels travel; each device computes its own lights.
+- **Light distribution**: one device sending rendered light data to another uses the existing ArtNet / E1.31 / DDP standards, for a member that cannot compute its part. No bespoke protocol.
 
 ## What bounds a parallel driver
 

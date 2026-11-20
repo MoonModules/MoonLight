@@ -3,6 +3,7 @@
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/module/MoonModule.h"
 #include "core/util/build_info.h"   // kVersion / kRelease / kBuildDate / kFirmwareName
+#include "core/util/FirmwareImage.h"  // kHandoffVersion: the MoonBase this app works with
 #include "platform/platform.h" // firmwareSize / firmwarePartition
 #include "platform/coprocessor_status.h"   // kLinkNotStarted: the radio chip line that offers connect
 
@@ -65,7 +66,7 @@ inline bool otaInFlight() {
 ///
 /// Each image has its own tab: the app, MoonBase where present, the WiFi coproc on a P4 with WiFi. A Restart in MoonBase button sits on the card.
 ///
-/// When MoonBase's version differs from the app's, the card warns and the top bar shows `⬆ MoonBase`; installing the matching one from its tab clears it.
+/// A MoonBase that does not match the app gets a dot on its tab, a warning there and `⬆ MoonBase` in the top bar; installing the matching one there clears them.
 ///
 /// ## The WiFi coproc
 ///
@@ -84,7 +85,7 @@ inline bool otaInFlight() {
 /// A wrong image fails at the start or at boot, and is recoverable over USB. On a device with one app slot the recovery image installs and reboots back.
 class FirmwareUpdateModule : public MoonModule {
 public:
-    /// MoonBase's version while it does not match this app, else null, so a peer's map offers the matching one.
+    /// MoonBase's version while it speaks another handoff than this app, else null, so a peer's map offers the matching one.
     const char* moonbaseMismatch() const { return moonbaseOutdated_ ? moonbaseStr_ : nullptr; }
     /// The WiFi coprocessor's firmware line while it does not match this app, else null.
     static const char* coprocessorMismatch() {
@@ -126,8 +127,8 @@ public:
             platform::otaMoonBaseBuild(built, sizeof(built));
             std::snprintf(moonbaseBuildStr_, sizeof(moonbaseBuildStr_), "%s%s%s",
                           id ? id : "", id && built[0] ? " · " : "", built);
-            // The matching pair is the tested pair, whichever channel the app follows.
-            moonbaseOutdated_ = std::strcmp(moonbaseStr_, kVersion) != 0;
+            // It matches when it speaks this app's handoff, whichever release either came from (FirmwareImage.h, "The handoff version").
+            moonbaseOutdated_ = platform::otaMoonBaseHandoff() != firmware::kHandoffVersion;
         }
     }
 
@@ -212,7 +213,7 @@ public:
 
     /// Rebuild the controls when the selector changes which image they describe; connect starts the radio chip's link.
     void onControlChanged(const char* controlName) override {
-        if (std::strcmp(controlName, "image") == 0) rebuildControls();
+        if (std::strcmp(controlName, "image") == 0) { rebuildControls(); publishStatus(); }
         if (std::strcmp(controlName, "connect") == 0) platform::coprocessorConnect();
     }
 
@@ -259,12 +260,13 @@ public:
         if (rebind) rebuildControls();
     }
 
-    /// Publish the phase on the shared slot, taking its severity from the text's own prefix; between installs, a MoonBase that does not match this app.
+    /// Publish the phase on the shared slot, taking its severity from the text's own prefix; between installs, on the tab of an image that does not match this app, that mismatch.
     void publishStatus() {
         if (std::strcmp(statusStr_, "idle") == 0) {
-            // A constant, since both versions are on the card's rows already.
-            if (moonbaseOutdated_) setStatus("MoonBase does not match this app: install the matching one on the MoonBase tab", Severity::Warning);
-            else if (coprocessorOutdated_) setStatus("the radio chip's firmware does not match this app: install the matching one on the WiFi coproc tab", Severity::Warning);
+            // A constant, since both versions are on the card's rows already; another tab carries the mismatch as its tab's dot.
+            const Image shown = imageSel_ < imageCount_ ? images_[imageSel_] : kImageApp;
+            if (moonbaseOutdated_ && shown == kImageMoonBase) setStatus("MoonBase does not match this app: install the matching one here", Severity::Warning);
+            else if (coprocessorOutdated_ && shown == kImageCoprocessor) setStatus("the radio chip's firmware does not match this app: install the matching one here", Severity::Warning);
             else clearStatus();
         } else {
             setStatus(statusStr_,
@@ -292,7 +294,7 @@ private:
     char     moonbaseStr_[32] = "standby";
     /// The git id, then the build date.
     char     moonbaseBuildStr_[36] = {};
-    bool     moonbaseOutdated_ = false;    ///< it differs from this app's version
+    bool     moonbaseOutdated_ = false;    ///< it speaks another handoff version than this app
     /// The installed image against the size of its slot, which a new image must fit.
     /// @guide The bar doubles as the install bar: it fills with the incoming image mid-install.
     uint32_t moonbaseSizeVal_  = 0;

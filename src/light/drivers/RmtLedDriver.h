@@ -71,8 +71,6 @@ public:
     /// The RMT tick clock this driver requests, 25 ns per tick: a clock, not a tick count, since the encoder converts via the granted resolution.
     static constexpr uint32_t kResolutionHz = 40'000'000;
 
-    /// It outputs a slice of the shared buffer.
-    bool hasWindowControls() const override { return true; }
 
     /// Bind the two pin text lists and the loopback self-test controls.
     void defineDriverControls() override {

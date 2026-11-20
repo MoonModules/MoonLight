@@ -31,6 +31,17 @@ processes:
       - id: tests
         say: Test the change.
         when: { process: host-tests }
+      - id: checks
+        say: Run a check through the gate runner.
+        when: { run: { script: moondeck/check/run_gates.py, args: "--only <gate>" } }
+        detail: |
+          A check run while writing goes through `run_gates.py --only`, never by hand, so its pass is cached and the commit's run repeats only what changed after it. The write-time hook runs after every tool call on its own; this is for a gate it does not cover, a suite or a build.
+      - id: step-review
+        say: Have the Reviewer read a finished plan step.
+        actor: agent
+        when: { manual: "When a step of a plan is done, before the next one starts." }
+        detail: |
+          On that step's diff, while it is fresh: a defect found here costs the step's own files, found at the commit it costs a rerun of the gates. The commit's Reviewer then reads only the last step. Its findings are processed as [Process a review finding](moonwalk.md#review-finding) says.
   - id: host-tests
     title: Test the change on the host
     actor: contributor

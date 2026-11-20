@@ -19,9 +19,11 @@ namespace mm {
 class TruchetEffect : public EffectBase {
 public:
     /// Catalog tags: this effect is the power-function showcase.
-    const char* tags() const override { return "💫🖌️"; }
+    const char* tags() const override { return "💫🧩🖌️"; }
     /// Writes the z=0 slice, which extrude fills through a volume.
     Dim dimensions() const override { return Dim::D2; }
+    /// A pixel's color is a function of its place in the wall and the time, so each device shades its own lights of one tiling.
+    Footprint footprint() const MM_NONBLOCKING override { return Footprint::Region; }
 
     /// How fast the pattern drifts.
     uint8_t bpm      = 6;

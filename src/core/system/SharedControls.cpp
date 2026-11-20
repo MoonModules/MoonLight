@@ -1,14 +1,15 @@
-/// The shared values and recalls behind SharedControls.h: merged by their stamps, written as OSC, and a recalled look fetched from its maker.
+/// The shared values and looks behind SharedControls.h: merged by their stamps, written as OSC, and a look pushed in chunks and repaired on request.
 #include "core/system/SharedControls.h"
 
 #include "core/module/Scheduler.h"
 #include "core/services/OscPacket.h"
-#include "core/system/ControlModule.h"   // splitTarget: a parameter named as a slot names it; kPresetDir: where a preset is served
-#include "core/util/JsonFetch.h"         // the fetch and the live apply, off the render path
+#include "core/system/ControlModule.h"   // splitTarget: a parameter named as a slot names it; readPreset: the document a look pushes
+#include "core/util/JsonUtil.h"   // effectsOnly: a received look's root members
 #include "core/util/fnv.h"
 #include "core/util/format.h"
+#include "platform/platform.h"     // millis and the MAC: when a chunk or a request goes, and each device's offset
 
-#include <cctype>   // std::isalnum: the characters a URL carries as they are
+#include <algorithm>   // std::min: the last chunk is the rest
 #include <cstdio>
 #include <cstring>
 
@@ -28,23 +29,6 @@ bool validName(const char* name) {
     return n > 0 && n < SharedControls::kNameLen && !std::strchr(name, '/') && !std::strstr(name, "..");
 }
 
-/// Whether `c` is one of RFC 3986's unreserved characters, which a URL carries as they are.
-bool unreserved(unsigned char c) {
-    return std::isalnum(c) || c == '-' || c == '.' || c == '_' || c == '~';
-}
-
-/// `s` percent-encoded into `out`, false when it does not fit.
-bool percentEncode(const char* s, char* out, size_t cap) {
-    size_t at = 0;
-    for (; *s; s++) {
-        const auto c = static_cast<unsigned char>(*s);
-        const int n = unreserved(c) ? std::snprintf(out + at, cap - at, "%c", c) : std::snprintf(out + at, cap - at, "%%%02X", c);
-        if (n < 0 || at + static_cast<size_t>(n) >= cap) return false;
-        at += static_cast<size_t>(n);
-    }
-    return true;
-}
-
 /// Whether a control of this type holds a value a slot drives: a number, a toggle or a choice; a pin, an address or text stays the board's own.
 bool valueType(ControlType t) {
     switch (t) {
@@ -61,6 +45,41 @@ bool lookModule(const MoonModule& m) {
     const ModuleRole r = m.role();
     if (r == ModuleRole::Effect || r == ModuleRole::Modifier || r == ModuleRole::Layer) return true;
     return !m.parent() && m.name() && std::strcmp(m.name(), ControlModule::kCapturable[ControlModule::kDriversRole]) == 0;
+}
+
+/// The top-level module named `name`, or null.
+const MoonModule* topModule(const char* name) {
+    Scheduler* sched = Scheduler::instance();
+    for (uint8_t i = 0; sched && i < sched->moduleCount(); i++)
+        if (sched->module(i)->name() && std::strcmp(sched->module(i)->name(), name) == 0) return sched->module(i);
+    return nullptr;
+}
+
+/// Whether object `n` holds only values, a module's own controls, and no child module.
+bool scalarsOnly(const json::JsonDoc& doc, const json::JsonNode& n) {
+    for (const json::JsonNode* c = doc.node(n.firstChild); c; c = doc.node(c->next))
+        if (c->type == json::JsonType::Object || c->type == json::JsonType::Array) return false;
+    return true;
+}
+
+/// Whether a look's root member `n` stays within what lookModule allows: the Effects container's subtree, a look module's own, or the Drivers card's own controls, not its drivers.
+bool lookMember(const json::JsonDoc& doc, const json::JsonNode& n) {
+    if (n.type != json::JsonType::Object || !n.key) return false;
+    if (std::strcmp(n.key, ControlModule::kCapturable[ControlModule::kEffectsRole]) == 0) return true;   // its members are paths within it
+    const MoonModule* top = topModule(n.key);
+    if (!top || !lookModule(*top)) return false;
+    return std::strcmp(n.key, ControlModule::kCapturable[ControlModule::kDriversRole]) != 0 || scalarsOnly(doc, n);   // a driver of the card brings its pins
+}
+
+/// Whether a received look's document sets only what an effects preset does, the trust boundary's rule for every member it names, beside the file's own `$` keys.
+bool effectsOnly(const char* text) {
+    json::JsonDoc doc;
+    if (!json::parse(text, doc)) return false;
+    const json::JsonNode* root = doc.rootNode();
+    if (!root || root->type != json::JsonType::Object) return false;
+    for (const json::JsonNode* n = doc.node(root->firstChild); n; n = doc.node(n->next))
+        if (!(n->key && n->key[0] == '$') && !lookMember(doc, *n)) return false;
+    return true;
 }
 
 }  // namespace
@@ -231,117 +250,227 @@ void SharedControls::apply(const char* param, int32_t value) {
 
 // ---- The look -------------------------------------------------------------------------------
 
-SharedControls::Recall* SharedControls::recallOf(uint32_t group) {
-    for (uint8_t i = 0; i < recallCount_; i++)
-        if (recalls_[i].group == group) return &recalls_[i];
-    if (recallCount_ >= kMaxGroups || !recalls_.ensure(recallCount_ + 1u)) return nullptr;
-    Recall& r = recalls_[recallCount_++];
-    r = Recall{};
-    r.group = group;
-    return &r;
+SharedControls::Look* SharedControls::lookOf(uint32_t group, bool make) {
+    for (uint8_t i = 0; i < lookCount_; i++)
+        if (looks_[i].group == group) return &looks_[i];
+    if (!make || lookCount_ >= kMaxGroups || !looks_.ensure(lookCount_ + 1u)) return nullptr;
+    Look& l = looks_[lookCount_++];
+    l = Look{};
+    l.group = group;
+    return &l;
 }
 
-void SharedControls::recallLocal(uint32_t group, const char* name, const uint8_t ip[4], uint16_t port, const Stamp& s) {
-    Recall* r = validName(name) ? recallOf(group) : nullptr;
-    if (!r) return;
-    mm::formatTo(r->name, sizeof(r->name), "%s", name);
-    std::memcpy(r->ip, ip, 4);
-    r->port = port;
-    r->stamp = s;
-    r->applied = true;   // applied here already
+void SharedControls::freeText(Look& l) {
+    platform::free(l.text);
+    l.text = nullptr;
 }
 
-size_t SharedControls::writeRecall(uint8_t* out, size_t cap, const char* groupId) const {
-    const uint32_t group = keyOf(groupId);
-    const Recall* r = nullptr;
-    for (uint8_t i = 0; i < recallCount_ && !r; i++)
-        if (recalls_[i].group == group) r = &recalls_[i];
-    if (!r || !r->name[0]) return 0;
-    // The group's id, the look's name, its stamp, and where its maker serves it.
-    osc::Writer w(out, cap, kLookAddress, ",sshiii");
-    w.str(groupId);
-    w.str(r->name);
-    w.i64(r->stamp.hlc);
-    w.i32(r->stamp.writer);
-    uint32_t ip = 0;
-    std::memcpy(&ip, r->ip, 4);
-    w.i32(ip);
-    w.i32(r->port);
-    return w.size();
-}
-
-bool SharedControls::mergeRecall(osc::Reader& r, uint32_t group, Hlc* clock) {
-    const char* name = r.str();
-    const Stamp s{r.i64(), r.i32()};
-    const uint32_t ip = r.i32();
-    const auto port = static_cast<uint16_t>(r.i32());
-    if (!r.ok() || !s.valid() || !validName(name)) return true;
-    if (clock) clock->observe(s.hlc);
-    Recall* held = recallOf(group);
-    if (!held) return true;
-    if (held->name[0] && !s.newerThan(held->stamp)) return !held->stamp.newerThan(s);   // the same recall again, or an older one, which Trickle answers
-    mm::formatTo(held->name, sizeof(held->name), "%s", name);
-    std::memcpy(held->ip, &ip, 4);
-    held->port = port;
-    held->stamp = s;
-    held->applied = false;
+bool SharedControls::restart(Look& l, const LookHead& h) {
+    char* text = static_cast<char*>(platform::alloc(h.size + 1));   // first, so a refusal leaves no half-held look behind
+    freeText(l);
+    const uint32_t group = l.group;
+    l = Look{};
+    l.group = group;
+    if (!text) { mm::formatTo(lookNote_, sizeof(lookNote_), "look %s too large", h.name); return false; }   // the slot stays empty: the next copy tries afresh
+    text[h.size] = '\0';
+    l.text = text;
+    l.stamp = h.stamp;
+    mm::formatTo(l.name, sizeof(l.name), "%s", h.name);
+    l.size = h.size;
+    l.digest = h.digest;
+    l.needDueMs = platform::millis() + spreadMs();
     return true;
 }
 
-bool SharedControls::urlOf(const Recall& r, char* out, size_t cap) {
-    char file[3 * kNameLen + 1];
-    if (!percentEncode(r.name, file, sizeof(file))) return false;
-    const int n = std::snprintf(out, cap, "http://%u.%u.%u.%u:%u/api/file?path=%s/%s.json", r.ip[0], r.ip[1], r.ip[2], r.ip[3],
-                                static_cast<unsigned>(r.port), ControlModule::kPresetDir, file);
-    return n > 0 && static_cast<size_t>(n) < cap;
+uint32_t SharedControls::spreadMs() {
+    static const uint32_t spread = [] {
+        uint8_t mac[6];
+        platform::getMacAddress(mac);
+        return fnv1a(mac, sizeof(mac)) % kSpreadMs;
+    }();
+    return spread;
 }
 
-void SharedControls::tickFetch() {
-    if (applyHandle_) {
-        const int outcome = JsonFetch::instance().outcome(this, applyHandle_);
-        if (outcome != -1) endFetch(outcome == 200 ? nullptr : "not applied");
+void SharedControls::writeHead(osc::Writer& w, const char* groupId, const Look& l) {
+    w.str(groupId);
+    w.str(l.name);
+    w.i64(l.stamp.hlc);
+    w.i32(l.stamp.writer);
+    w.i32(l.size);
+    w.i32(l.digest);
+}
+
+bool SharedControls::readHead(osc::Reader& r, LookHead& h) {
+    h.name = r.str();
+    h.stamp = Stamp{r.i64(), r.i32()};
+    h.size = r.i32();
+    h.digest = r.i32();
+    return r.ok() && h.stamp.valid() && validName(h.name) && h.size && h.size <= uint32_t{kChunkBytes} * kMaxChunks;
+}
+
+void SharedControls::lookLocal(uint32_t group, const char* name, char* doc, const Stamp& s, int64_t atUs) {
+    const size_t size = doc ? std::strlen(doc) : 0;
+    Look* l = validName(name) && size && size <= size_t{kChunkBytes} * kMaxChunks ? lookOf(group, true) : nullptr;
+    if (!l) {
+        if (doc) mm::formatTo(lookNote_, sizeof(lookNote_), "look %s not shared", name);
+        platform::free(doc);
         return;
     }
-    if (fetchHandle_) { advanceFetch(); return; }
-    startFetch();
+    freeText(*l);
+    *l = Look{};
+    l->group = group;
+    mm::formatTo(l->name, sizeof(l->name), "%s", name);
+    l->stamp = s;
+    l->size = static_cast<uint32_t>(size);
+    l->digest = fnv1a(doc, size);
+    l->text = doc;
+    l->have = allOf(l->size);
+    l->send = l->have;   // every chunk, from the next read on
+    l->sendDueMs = platform::millis();
+    l->atUs = atUs;
+    l->applied = true;   // applied here already
+    lookNote_[0] = 0;
 }
 
-void SharedControls::startFetch() {
-    for (uint8_t i = 0; i < recallCount_; i++) {
-        Recall& r = recalls_[i];
-        if (r.applied || !r.name[0]) continue;
-        r.applied = true;   // tried once per stamp; a later recall tries again
-        mm::formatTo(fetchName_, sizeof(fetchName_), "%s", r.name);
-        char url[160];
-        if (!urlOf(r, url, sizeof(url))) { endFetch("not fetched"); return; }
-        fetchHandle_ = JsonFetch::instance().fetch(this, url, UINT32_MAX / 2);   // once: a recall is a moment, not a feed
-        if (!fetchHandle_) endFetch("not fetched");
-        return;
+bool SharedControls::merge(uint8_t kind, osc::Reader& r, uint32_t group, Hlc* clock) {
+    switch (kind) {
+        case 0: return mergeValues(r, group, clock);
+        case 1: return mergeLook(r, group, clock);
+        case 2: mergeChunk(r, group, clock); return true;
+        default: mergeNeed(r, group); return true;
     }
 }
 
-void SharedControls::advanceFetch() {
-    JsonFetch& f = JsonFetch::instance();
-    const int outcome = f.outcome(this, fetchHandle_);
-    if (outcome == -1) return;   // on its way
-    json::JsonDoc* doc = outcome == 200 ? f.doc(this, fetchHandle_) : nullptr;
-    applyHandle_ = doc ? f.push(this, nullptr, fetchHandle_) : 0;   // applied live between frames, as a script's push to its own device is
-    if (!applyHandle_) endFetch("not fetched");
+size_t SharedControls::writeLook(uint8_t* out, size_t cap, const char* groupId) const {
+    const Look* l = nullptr;
+    for (uint8_t i = 0; i < lookCount_ && !l; i++)
+        if (looks_[i].group == keyOf(groupId)) l = &looks_[i];
+    if (!l || !l->name[0]) return 0;
+    osc::Writer w(out, cap, kLookAddress, ",sshiiii");
+    writeHead(w, groupId, *l);
+    w.i32(l->have);
+    return w.size();
 }
 
-void SharedControls::endFetch(const char* failed) {
-    if (failed) mm::formatTo(fetchNote_, sizeof(fetchNote_), "look %s %s", fetchName_, failed);
-    else fetchNote_[0] = 0;
-    JsonFetch::instance().release(this);   // released at once: the next recall fetches again
-    fetchHandle_ = applyHandle_ = 0;
+bool SharedControls::mergeLook(osc::Reader& r, uint32_t group, Hlc* clock) {
+    LookHead h;
+    const bool fits = readHead(r, h);
+    r.i32();   // the chunks the sender holds: a member short of some asks for them itself
+    if (!fits || !r.ok()) return true;
+    if (clock) clock->observe(h.stamp.hlc);
+    Look* l = lookOf(group, true);
+    if (!l) return true;
+    if (l->name[0] && !h.stamp.newerThan(l->stamp)) return !l->stamp.newerThan(h.stamp);   // the same look, or an older one, which Trickle answers
+    restart(*l, h);   // its chunks are asked for at this device's offset
+    return true;
+}
+
+bool SharedControls::readChunk(osc::Reader& r, LookHead& h, Chunk& c) {
+    const bool fits = readHead(r, h);
+    c.atUs = static_cast<int64_t>(r.i64());
+    c.index = r.i32();
+    c.data = r.blob(c.n);
+    return fits && r.ok() && c.index < chunksOf(h.size) && c.n == std::min<uint32_t>(kChunkBytes, h.size - c.index * kChunkBytes);   // whole, the last one the rest
+}
+
+void SharedControls::mergeChunk(osc::Reader& r, uint32_t group, Hlc* clock) {
+    LookHead h;
+    Chunk c;
+    if (!readChunk(r, h, c)) return;
+    if (clock) clock->observe(h.stamp.hlc);
+    Look* l = lookOf(group, true);
+    if (!l || !accepts(*l, h)) return;
+    if (!l->atUs) l->atUs = c.atUs;
+    fill(*l, c.index, c.data, c.n);
+}
+
+bool SharedControls::accepts(Look& l, const LookHead& h) {
+    if (l.name[0] && l.stamp.newerThan(h.stamp)) return false;   // an older look's chunk
+    if (!l.name[0] || h.stamp.newerThan(l.stamp)) return restart(l, h);   // a newer look starts with it, unless memory refuses it
+    return l.size == h.size && l.digest == h.digest;   // the same stamp naming another document is refused
+}
+
+void SharedControls::fill(Look& l, uint32_t index, const uint8_t* data, size_t n) {
+    const uint32_t bit = 1u << index;
+    l.send &= ~bit;   // sent by another: this device stays quiet about it
+    if (!l.text || (l.have & bit)) return;
+    std::memcpy(l.text + index * kChunkBytes, data, n);
+    l.have |= bit;
+    if (l.have != allOf(l.size)) return;
+    l.needDueMs = 0;
+    if (fnv1a(l.text, l.size) == l.digest) {   // whole: tickLooks applies it at its time, unless it reaches past the effects
+        if (effectsOnly(l.text)) return;
+        mm::formatTo(lookNote_, sizeof(lookNote_), "look %s sets more than effects", l.name);
+        l.applied = true;   // held unapplied, so the members' digests agree
+        return;
+    }
+    mm::formatTo(lookNote_, sizeof(lookNote_), "look %s damaged", l.name);
+    l.have = 0;   // asked for again
+    l.needDueMs = platform::millis() + spreadMs();
+}
+
+void SharedControls::mergeNeed(osc::Reader& r, uint32_t group) {
+    const Stamp s{r.i64(), r.i32()};
+    const uint32_t missing = r.i32();
+    Look* l = r.ok() ? lookOf(group, false) : nullptr;
+    if (!l || l->stamp.newerThan(s) || s.newerThan(l->stamp)) return;   // only the same look's chunks are answered
+    const uint32_t answer = missing & l->have & allOf(l->size);
+    if (!answer) return;
+    if (!l->send) l->sendDueMs = platform::millis() + spreadMs();
+    l->send |= answer;
+}
+
+size_t SharedControls::writeDue(uint8_t* out, size_t cap, const char* groupId, uint32_t nowMs) {
+    Look* l = lookOf(keyOf(groupId), false);
+    if (!l || !l->name[0]) return 0;
+    if (l->send && static_cast<int32_t>(nowMs - l->sendDueMs) >= 0) {
+        uint8_t index = 0;
+        while (!(l->send & (1u << index))) index++;
+        l->send &= ~(1u << index);
+        const uint32_t offset = uint32_t{index} * kChunkBytes;
+        osc::Writer w(out, cap, kChunkAddress, ",sshiiihib");
+        writeHead(w, groupId, *l);
+        w.i64(static_cast<uint64_t>(l->atUs));
+        w.i32(index);
+        w.blob(reinterpret_cast<const uint8_t*>(l->text) + offset, std::min<uint32_t>(kChunkBytes, l->size - offset));
+        return w.size();
+    }
+    if (l->needDueMs && static_cast<int32_t>(nowMs - l->needDueMs) >= 0) {
+        l->needDueMs = nowMs + kNeedEveryMs + spreadMs();
+        osc::Writer w(out, cap, kNeedAddress, ",shii");
+        w.str(groupId);
+        w.i64(l->stamp.hlc);
+        w.i32(l->stamp.writer);
+        w.i32(allOf(l->size) & ~l->have);
+        return w.size();
+    }
+    return 0;
+}
+
+bool SharedControls::due(const Look& l, int64_t fleetNowUs, bool synced, int64_t maxHoldUs) {
+    if (l.applied || !l.text || !l.size || l.have != allOf(l.size)) return false;
+    return !(synced && l.atUs > fleetNowUs && l.atUs - fleetNowUs <= maxHoldUs);   // whole, and its time come or not to be waited for
+}
+
+void SharedControls::tickLooks(int64_t fleetNowUs, bool synced, int64_t maxHoldUs) {
+    Scheduler* sched = Scheduler::instance();
+    for (uint8_t i = 0; sched && i < lookCount_; i++) {
+        Look& l = looks_[i];
+        if (!due(l, fleetNowUs, synced, maxHoldUs)) continue;
+        char* copy = static_cast<char*>(platform::alloc(l.size + 1));   // the live apply frees what it takes
+        if (!copy) continue;
+        std::memcpy(copy, l.text, l.size + 1);
+        if (!sched->applyLive(copy, nullptr, 0)) { platform::free(copy); continue; }   // the next read tries again
+        l.applied = true;
+        lookNote_[0] = 0;
+    }
 }
 
 void SharedControls::clear() {
-    if (fetchHandle_ || applyHandle_) JsonFetch::instance().release(this);
-    fetchHandle_ = applyHandle_ = 0;
-    valueCount_ = recallCount_ = 0;
+    for (uint8_t i = 0; i < lookCount_; i++) freeText(looks_[i]);
+    valueCount_ = lookCount_ = 0;
     full_ = false;
-    fetchNote_[0] = 0;
+    lookNote_[0] = 0;
 }
 
 }  // namespace mm

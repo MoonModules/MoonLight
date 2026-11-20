@@ -57,9 +57,7 @@ public:
             initialized_ = true;
         }
 
-        uint32_t now = elapsed();
-        uint32_t dt = now - lastElapsed_;
-        lastElapsed_ = now;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
         // Growth per frame, scaled by the speed control and the elapsed time.
         uint16_t growth = static_cast<uint16_t>((static_cast<uint32_t>(speed) * dt) >> 7);
         if (growth == 0) growth = 1;
@@ -110,7 +108,6 @@ private:
     uint16_t radius_[MAX_RIPPLES] = {};   ///< wide, since a large panel's far corner exceeds a byte
     uint8_t hue_[MAX_RIPPLES] = {};       ///< each ring's palette entry
     bool initialized_ = false;            ///< false until the first tick seeds the rings
-    uint32_t lastElapsed_ = 0;            ///< the previous frame's timestamp
     Random8 rng_{0xC0DECAFEu};            ///< the spawn's placement and color
     /// One random byte, the shape the spawn below wants.
     uint8_t rand8() { return rng_.next8(); }

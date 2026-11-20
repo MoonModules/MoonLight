@@ -1,18 +1,8 @@
 {
   "hooks": {
-    "SessionStart": [
+    "PostToolUse": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "uv run \"$CLAUDE_PROJECT_DIR/moondeck/check/hook_written.py\"",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "FileChanged": [
-      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
         "hooks": [
           {
             "type": "command",

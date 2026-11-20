@@ -87,7 +87,7 @@ TEST_CASE("draw: a line partly off the grid clips cleanly") {
     // (cells x>=4 don't exist; the test passing without a crash proves the clip)
 }
 
-// The `shorten` parameter pulls the far endpoint back toward `a` by shorten/255 (with WLEDMM *2 rounding), so an effect can sweep a partial segment. For a→b = (0,0)→(8,0): shorten 255 draws the whole line (tip at 8), 128 ≈ half (tip at (16*128/255+1)/2 = 4), 1 = just the start pixel (tip 0), 0 = nothing. This pins the rounding of the shorten branch.
+// `shorten` pulls the far end back toward `a` by shorten/255, WLEDMM's *2 rounding: (0,0)→(8,0) tips at 8 for 255, at 4 for 128, at 0 for 1, and leaves the buffer blank for 0.
 TEST_CASE("draw: line shorten pulls the far endpoint back toward the start") {
     Coord3D dims{9, 1, 1};
     auto litUpTo = [&](uint8_t shorten) {
@@ -180,7 +180,7 @@ TEST_CASE("draw: blur spreads in 2D and 3D and is safe at degenerate sizes") {
     }
 }
 
-// A glyph blits in the correct orientation: neither X-mirrored (a 'b' as a 'd') nor Y-flipped. 'L' is the ideal probe: its vertical bar must be on the LEFT and its foot on the BOTTOM row. This guards the column-bit and row-direction reads, so the DemoReel name overlay renders each letter upright and un-mirrored.
+// A glyph blits upright and unmirrored, so 'L' has its bar on the LEFT and its foot on the BOTTOM row: the column-bit and row-direction reads the DemoReel name overlay stands on.
 TEST_CASE("draw: glyph renders upright and un-mirrored (the 'L' probe)") {
     Buffer buf;
     const auto& f = fonts::kFont6x8;                 // 6x8: 'L' bar at col 1, foot on row 6
@@ -209,7 +209,7 @@ TEST_CASE("draw: glyph renders upright and un-mirrored (the 'L' probe)") {
     CHECK(topLit == 1);     // just the bar at the top
 }
 
-// draw::sprite, the multi-color sibling of glyph: palette-indexed frames with index 0 as the transparent key. These pin the contract a screensaver effect stands on: the right frame at the right place, holes where the key is, silence at the edges and on bad indices.
+// draw::sprite, glyph's multi-color sibling, index 0 the transparent key: the right frame at the right place, holes at the key, silence at the edges and on bad indices.
 TEST_CASE("draw::sprite blits the requested frame with transparent holes") {
     Buffer buf;
     Coord3D dims{6, 4, 1};
@@ -296,7 +296,7 @@ TEST_CASE("decay dims a plane by half over one half-life at a realistic frame ti
 }
 
 TEST_CASE("a 16-bit trail plane decays at the same rate whatever the framerate") {
-    // The property a byte plane CANNOT hold: re-rounding a byte hundreds of times a second either erases the trail (truncating) or freezes it solid (rounding). Measured, decaying 200 over a 500 ms half-life in 500 ms of frames, where the exact answer is 100: a byte plane gives 96 at 50 ms frames, 73 at 5 ms and 0 at 1 ms. The wide plane below holds 100/101/102.
+    // A byte plane re-rounded each frame erases or freezes a trail: 200 decayed over a 500 ms half-life should be 100, a byte plane gives 96 at 50 ms frames, 73 at 5 ms, 0 at 1 ms; the wide plane holds 100 to 102.
     auto runWide = [](int frames, uint32_t dt) {
         uint16_t plane[16];
         for (uint16_t& v : plane) v = 200 * 257;               // 200 widened to 16 bits
@@ -476,7 +476,7 @@ TEST_CASE("a spiral is a radial flow with a turn added, so it both circles and e
 // draw::quantize is the 16-to-8 boundary every wide pipeline ends at. What the modes buy is not more levels, it is where the discarded half of the value goes.
 
 TEST_CASE("truncating a slow gradient bands it, and dithering restores its true mean") {
-    // A dark, slow ramp is the worst case: 64 distinct 16-bit values that truncation flattens to a handful of steps. Neither mode can add levels to a single frame; what ordered dithering fixes is the MEAN, so the band sits where the real value is rather than below it.
+    // A dark, slow ramp is the worst case: 64 distinct 16-bit values truncate to a handful of steps, and ordered dithering fixes the MEAN, so the band sits at the real value.
     double trueSum = 0, truncSum = 0, ditherSum = 0;
     uint8_t carry = 0;
     for (int i = 0; i < 64; i++) {
@@ -491,7 +491,7 @@ TEST_CASE("truncating a slow gradient bands it, and dithering restores its true 
 }
 
 TEST_CASE("temporal dithering resolves neighbors that a single frame cannot") {
-    // The property that makes a 16-bit pipeline worth having on 8-bit LEDs: eight values a fraction of a byte apart all truncate to the same one or two levels, but averaged over frames they separate, and the eye does that averaging. This is what turns a stepped fade into a smooth one.
+    // Eight values a fraction of a byte apart truncate to one or two levels, yet averaged over frames, as the eye averages, they separate: a stepped fade turned smooth.
     constexpr int kLights = 8, kFrames = 32;
     uint16_t v[kLights];
     uint8_t carry[kLights] = {};
@@ -582,7 +582,7 @@ TEST_CASE("a volumetric field interpolates along z as well, so a coarse cube fil
 }
 
 TEST_CASE("an upscaled saddle stays inside the values it was given, so a field that dips does not light up") {
-    // The fixtures above are uniform or monotone, so every interpolation ascends. A noise field is a saddle almost everywhere: along one diagonal it rises, along the other it falls. A descending pair is where an unsigned difference wraps, and blending a wrapped row against an unwrapped one lands far outside the input range (this fixture produced 98354 for inputs of 0 and 100).
+    // A noise field is a saddle, rising along one diagonal and falling along the other; a descending pair is where an unsigned difference wraps, landing far outside the inputs (98354 for 0 and 100).
     std::vector<uint16_t> src(2 * 2 * 3, 0), dst(8 * 8 * 3, 0);
     for (int c = 0; c < 3; c++) {
         src[(0 * 2 + 0) * 3 + c] = 100;      // high, low
@@ -601,10 +601,10 @@ TEST_CASE("upscale16 declines rather than writing when the caller's tap table is
     for (uint16_t v : dst) CHECK(v == 7);                // untouched
 }
 
-// advect16 and blit16 are what every wide-plane effect (Trails, Nebula, Fluid, and a scripted trail) actually renders through, and neither had a test: the 8-bit advect was pinned and its 16-bit sibling was not, which is how a plane-wide primitive ships unverified.
+// advect16 and blit16 are what every wide-plane effect (Trails, Nebula, Fluid, a scripted trail) renders through, so these pin the 16-bit transport as the 8-bit advect's tests pin its own.
 
 TEST_CASE("a 16-bit plane carried by a whole-cell flow arrives intact, so light is transported rather than smeared away") {
-    // One lit cell, pushed one whole cell to the right each frame. A whole-cell step has no bilinear fraction, so the value must survive exactly: any loss here is the transport itself leaking, which over a hundred frames of a trail is the difference between a tail and a haze.
+    // One lit cell pushed one whole cell right each frame has no bilinear fraction, so its value survives exactly: any loss is the transport leaking, a haze instead of a tail.
     const lengthType W = 8, H = 1;
     std::vector<uint16_t> a(size_t(W) * H * 3, 0), b(a.size(), 0);
     a[(0 * 3) + 0] = 60000; a[(0 * 3) + 1] = 40000; a[(0 * 3) + 2] = 20000;
@@ -640,7 +640,7 @@ TEST_CASE("a half-cell flow splits a 16-bit sample between the two cells it stra
 }
 
 TEST_CASE("a flow off the edge circulates under Wrap and carries the light out of the grid under Clamp") {
-    // The advection samples BACKWARD (every destination asks where its contents came from), so a leftward flow means cell x reads cell x+1. Under Wrap the left column reads the right one and the light comes round; under Clamp nothing reads past the wall, so light that flows off the edge is GONE rather than piling up against it. Both are correct and an effect picks one: a trail that should circulate wants Wrap, a fluid in a box wants Clamp.
+    // Advection samples BACKWARD, so a leftward flow reads x+1: under Wrap light comes round, under Clamp light flowing off the edge is GONE; a circulating trail wants Wrap, a fluid in a box Clamp.
     const lengthType W = 4;
     std::vector<uint16_t> a(size_t(W) * 3, 0), b(a.size(), 0);
     a[(0 * 3)] = 50000;                          // at the left wall, pushed further left
@@ -679,7 +679,7 @@ TEST_CASE("blit16 narrows a wide plane to the canvas, and dithering carries the 
 }
 
 TEST_CASE("scrolling along y moves every column, and along z every cell of the volume") {
-    // The lines of a y-scroll are the (z, x) COLUMNS, and those are not evenly spaced by one stride: x steps by a light within a slice, z steps by a whole slice. Treating them as one evenly-spaced sequence scrolled the first column of each slice and left the rest standing, which reads as a partial scroll nobody would call a scroll.
+    // A y-scroll's lines are the (z, x) COLUMNS, x a light apart within a slice and z a whole slice apart, so one even stride scrolls only each slice's first column.
     Buffer buf; REQUIRE(buf.allocate(9, 3)); buf.clear();
     const draw::Canvas cv = draw::Canvas::of(buf, 3, 3, 1);
     for (lengthType y = 0; y < 3; y++)
@@ -734,7 +734,7 @@ TEST_CASE("a ring's inner edge is antialiased, not cut") {
     draw::ring(cv, draw::toSub(10), draw::toSub(10), draw::toSub(6), draw::toSub(2),
                RGB{255, 255, 255});
 
-    // Walking in from the band toward the center must pass through a PARTIAL pixel. Two discs subtracted would step straight from full to black here, which is the bug this shape exists to avoid: the inner edge of a subtracted ring is never blended, only removed.
+    // Walking in from the band to the center passes a PARTIAL pixel, where two subtracted discs would step from full to black, the inner edge removed rather than blended.
     bool sawPartial = false;
     for (int y = 10; y >= 0; y--) {
         const uint8_t v = at(buf, dims, 10, static_cast<lengthType>(y), 0).r;
@@ -814,4 +814,106 @@ TEST_CASE("a pixel is scaled, added to and blended in place") {
     CHECK(a.r == 100); CHECK(a.g == 50); CHECK(a.b == 25);
     CHECK(b.r == 255); CHECK(b.g == 255); CHECK(b.b == 50);
     CHECK(c.r == 0); CHECK(c.g == 0); CHECK(c.b == 250);
+}
+
+// --- eachLight: the loop an effect leaves to core ---------------------------------------------
+
+TEST_CASE("eachLight colors every light by its position in the whole picture, its origin added") {
+    Buffer buf;
+    buf.allocate(4 * 3 * 2, 3);
+    buf.clear();
+    draw::Canvas cv = draw::Canvas::of(buf, 4, 3, 2);
+    cv.origin = {16, 32, 8};   // this device's place in a wall
+    int visits = 0;
+    draw::eachLight(cv, [&](Coord3D p) {
+        visits++;
+        return RGB{static_cast<uint8_t>(p.x), static_cast<uint8_t>(p.y), static_cast<uint8_t>(p.z)};
+    });
+    CHECK(visits == 4 * 3 * 2);   // its own lights, no more
+    const Coord3D dims{4, 3, 2};
+    for (lengthType z = 0; z < 2; z++)
+        for (lengthType y = 0; y < 3; y++)
+            for (lengthType x = 0; x < 4; x++) {
+                const RGB c = at(buf, dims, x, y, z);
+                CAPTURE(x); CAPTURE(y); CAPTURE(z);
+                CHECK(c.r == 16 + x);
+                CHECK(c.g == 32 + y);
+                CHECK(c.b == 8 + z);
+            }
+}
+
+TEST_CASE("eachLight on a box larger than its buffer stops at the last whole row") {
+    Buffer buf;
+    buf.allocate(4 * 2, 3);   // two rows of four
+    buf.clear();
+    draw::Canvas cv = draw::Canvas::of(buf, 4, 4, 1);   // a box claiming four rows
+    cv.bytes = buf.bytes();
+    int visits = 0;
+    draw::eachLight(cv, [&](Coord3D) { visits++; return RGB{1, 2, 3}; });
+    CHECK(visits == 4 * 2);
+}
+
+TEST_CASE("eachLight writes as many channels as a light has, up to three") {
+    Buffer buf;
+    buf.allocate(2, 1);   // a single-channel fixture
+    buf.clear();
+    const draw::Canvas cv = draw::Canvas::of(buf, 2, 1, 1);
+    draw::eachLight(cv, [](Coord3D) { return RGB{7, 8, 9}; });
+    CHECK(buf.data()[0] == 7);
+    CHECK(buf.data()[1] == 7);
+}
+
+// --- Positions in a wall: a region effect converts with cv.local(p) -------------------------
+
+namespace {
+/// A 4x4 canvas placed at (16, 32) in a wall, its buffer cleared.
+struct PlacedCanvas {
+    Buffer buf;
+    draw::Canvas cv;
+    PlacedCanvas() {
+        buf.allocate(4 * 4, 3);
+        buf.clear();
+        cv = draw::Canvas::of(buf, 4, 4, 1);
+        cv.origin = {16, 32, 0};
+    }
+    RGB at(lengthType x, lengthType y) { return ::at(buf, {4, 4, 1}, x, y, 0); }
+    int lit() {
+        int n = 0;
+        for (lengthType y = 0; y < 4; y++)
+            for (lengthType x = 0; x < 4; x++) n += !isBlack(at(x, y));
+        return n;
+    }
+};
+}  // namespace
+
+TEST_CASE("a wall position converted with local lands on the device holding it, and one elsewhere clips") {
+    PlacedCanvas pc;
+    CHECK(pc.cv.local({17, 33, 0}) == Coord3D{1, 1, 0});   // the wall's (17, 33) is this device's (1, 1)
+    draw::pixel(pc.cv, pc.cv.local({17, 33, 0}), RGB{9, 8, 7});
+    CHECK(pc.at(1, 1).r == 9);
+    draw::pixel(pc.cv, pc.cv.local({1, 1, 0}), RGB{9, 8, 7});     // the wall's corner, on another device
+    draw::pixel(pc.cv, pc.cv.local({20, 33, 0}), RGB{9, 8, 7});   // one past this device's right edge
+    CHECK(pc.lit() == 1);
+}
+
+TEST_CASE("a line across the wall, its ends converted, draws only the part crossing this device") {
+    PlacedCanvas pc;
+    draw::line(pc.cv, pc.cv.local({0, 34, 0}), pc.cv.local({47, 34, 0}), RGB{5, 5, 5});
+    CHECK(pc.lit() == 4);
+    for (lengthType x = 0; x < 4; x++) CHECK(pc.at(x, 2).r == 5);
+}
+
+TEST_CASE("a filled circle straddling a device's edge, its center converted, lights only its own part") {
+    PlacedCanvas pc;
+    const Coord3D c = pc.cv.local({15, 33, 0});   // one light left of this device
+    draw::fillCircle(pc.cv, c.x, c.y, 2, RGB{3, 3, 3});
+    CHECK_FALSE(isBlack(pc.at(0, 1)));
+    CHECK(isBlack(pc.at(3, 1)));
+}
+
+TEST_CASE("on a device alone local changes nothing, its origin being zero") {
+    Buffer buf;
+    buf.allocate(4, 3);
+    const draw::Canvas cv = draw::Canvas::of(buf, 2, 2, 1);
+    CHECK(cv.local({1, 1, 0}) == Coord3D{1, 1, 0});
 }

@@ -870,8 +870,8 @@ TEST_CASE("/api/system carries the summary a peer's map shows: how it updates, i
 // A peer's map offers a MoonBase update only while the device reports one behind its app, so the summary names it exactly then.
 TEST_CASE("/api/system names a MoonBase behind the app, and only while it is") {
     std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
-    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr); } } noMoonBaseAfter;
-    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
+    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr, 0); } } noMoonBaseAfter;
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00", 0);
     mm::Scheduler s;
     auto* fw = new mm::FirmwareUpdateModule();
     fw->setTypeName("FirmwareUpdateModule");   // the factory key the summary finds it by, as the factory sets it
@@ -886,7 +886,7 @@ TEST_CASE("/api/system names a MoonBase behind the app, and only while it is") {
     }
     CHECK(std::strstr(behind, "\"moonbaseMismatch\":\"0.0.1\",") != nullptr);
 
-    mm::platform::setTestMoonBase(nullptr, nullptr);   // MoonBase brought level with the app, or none at all
+    mm::platform::setTestMoonBase(nullptr, nullptr, 0);   // MoonBase brought level with the app, or none at all
     fw->setup();
     char level[512] = {};
     {

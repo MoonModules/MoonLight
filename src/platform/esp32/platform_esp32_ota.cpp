@@ -56,7 +56,7 @@
 ///
 /// Which recovery image a device carries is read from its descriptor at a fixed offset, costing one flash read and no reboot.
 ///
-/// The recovery image answers the same question about itself elsewhere: that reports what it is executing, this reports an image it is not, a different question rather than a second copy. Both carry the same version string, so callers compare by equality.
+/// The recovery image answers the same question about itself elsewhere: that reports what it is executing, this reports an image it is not, a different question rather than a second copy. Whether it matches the app is read the same way, from the handoff record one read further on.
 ///
 /// Its SIZE comes from the slot rather than the image: the metadata call reads through a mapping arranged for the running partition and errors for this one, leaving the row absent.
 ///
@@ -724,6 +724,14 @@ bool otaMoonBaseBuild(char* out, size_t len) {
     return out[0] != 0;
 }
 
+// Which handoff version that MoonBase speaks, one partition read of its first bytes (FirmwareImage.h, "The handoff version").
+uint32_t otaMoonBaseHandoff() {
+    const esp_partition_t* part = moonBasePartition();
+    uint8_t head[firmware::kHandoffBytes];
+    if (!part || esp_partition_read(part, 0, head, sizeof(head)) != ESP_OK) return 0;
+    return firmware::handoffVersion(head, sizeof(head));
+}
+
 // The recovery SLOT's size, for the interface to show beside the application's figure.
 bool otaMoonBaseSize(uint32_t* used, uint32_t* total) {
     const esp_partition_t* part = moonBasePartition();
@@ -765,9 +773,9 @@ bool otaRunningMoonBase() {
 
 void moonbaseClearStagedUrl() {
     nvs_handle_t h;
-    if (nvs_open("moonbase", NVS_READWRITE, &h) != ESP_OK) return;
-    nvs_erase_key(h, "url");
-    nvs_erase_key(h, "tries");   // MoonBase's count of installs the URL started
+    if (nvs_open(firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_erase_key(h, firmware::kHandoffUrlKey);
+    nvs_erase_key(h, firmware::kHandoffTriesKey);   // MoonBase's count of installs the URL started
     nvs_commit(h);
     nvs_close(h);
 }
@@ -776,9 +784,9 @@ void moonbaseClearStagedUrl() {
 bool moonbaseStageInstallUrl(const char* url) {
     if (!url || !url[0]) return false;
     nvs_handle_t h;
-    if (nvs_open("moonbase", NVS_READWRITE, &h) != ESP_OK) return false;
-    nvs_erase_key(h, "tries");   // a new URL starts with every try MoonBase allows
-    const bool ok = nvs_set_str(h, "url", url) == ESP_OK && nvs_commit(h) == ESP_OK;
+    if (nvs_open(firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return false;
+    nvs_erase_key(h, firmware::kHandoffTriesKey);   // a new URL starts with every try MoonBase allows
+    const bool ok = nvs_set_str(h, firmware::kHandoffUrlKey, url) == ESP_OK && nvs_commit(h) == ESP_OK;
     nvs_close(h);
     return ok;
 }

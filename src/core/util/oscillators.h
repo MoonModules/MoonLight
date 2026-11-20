@@ -8,40 +8,31 @@
 ///
 /// @technical
 ///
-/// Every animated quantity in a generative field is an oscillator.
-/// Where a shape sits, how far a coordinate is displaced, how fast a layer rotates, how bright it is this instant.
-/// Written by hand that is a phase member, a waveform call and a range map per quantity.
-/// That is why an effect animating several things grows a row of near-identical members and a block of arithmetic in its tick.
-/// The bank is that pattern owned once: declare how many, set each one's rate, waveform and output range, advance the bank, then read.
+/// Every animated quantity in a generative field is an oscillator, its position, displacement, rotation or brightness, which by hand is a phase member, a waveform call and a range map each.
+///
+/// The bank owns that pattern once: declare how many, set each one's rate, waveform and output range, advance the bank, then read.
 ///
 /// ## Why a bank rather than loose oscillators
 ///
-/// Advancing is one pass, so the cost is per frame rather than per pixel.
-/// A pixel loop reads values already computed, which is the whole point when a field samples the same oscillator thousands of times.
+/// Advancing is one pass, so the cost is per frame rather than per pixel. A pixel loop reads values already computed, which is the whole point when a field samples the same oscillator thousands of times.
 ///
-/// Phases are held together, so oscillators keep their relationships.
-/// Two layers at the same rate a quarter-cycle apart stay that way for as long as the device runs.
-/// That is what makes a composition read as deliberate rather than as drift.
+/// Phases are held together, so oscillators keep their relationships. Two layers at the same rate a quarter-cycle apart stay that way for as long as the device runs. That is what makes a composition read as deliberate rather than as drift.
 ///
 /// ## How a bank is used
 ///
-/// Once per frame the bank is advanced to the current time, and a value is then read wherever it is needed, including inside a pixel loop.
-/// Configuration happens in prepare, or whenever a control changes.
+/// Once per frame the bank is advanced to the current time, and a value is then read wherever it is needed, including inside a pixel loop. Configuration happens in prepare, or whenever a control changes.
 ///
-/// A rate change takes effect from that frame without jumping the phase, which is what live reconfiguration requires.
+/// The phase is the fleet time times the rate (math16.h's BeatPhase), so every device of a wall reads one value at one moment, and a rate change moves the phase to where the new rate puts it.
 ///
 /// ## Why the range map divides rather than shifts
 ///
-/// Dividing by the full range rather than shifting is the difference between an oscillator that reaches its stated maximum and one that stops a step short of it forever.
-/// An effect sweeping a hue to its top would never arrive.
+/// Dividing by the full range rather than shifting is the difference between an oscillator that reaches its stated maximum and one that stops a step short of it forever. An effect sweeping a hue reaches its top this way.
 ///
-/// The intermediate is wide because a range spanning the full signed width overflows a narrow product.
-/// A caller mapping onto pixel coordinates times a scale gets there sooner than it looks.
+/// The intermediate is wide because a range spanning the full signed width overflows a narrow product. A caller mapping onto pixel coordinates times a scale gets there sooner than it looks.
 ///
 /// ## Standard shapes only
 ///
-/// Sine, triangle, sawtooth and square, all from the 16-bit tier.
-/// Anything richer is a combination of oscillators, which is the vocabulary these shaders are written in, rather than a new waveform here.
+/// Sine, triangle, sawtooth and square, all from the 16-bit tier. Anything richer is a combination of oscillators, which is the vocabulary these shaders are written in, rather than a new waveform here.
 
 namespace mm {
 

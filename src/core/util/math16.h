@@ -6,122 +6,73 @@
 ///
 /// ## Why a 16-bit tier alongside the 8-bit one
 ///
-/// An 8-bit result positions to 256 levels.
-/// Visibly steps on a large fixture: a wall of twelve thousand lights shows the staircase in a slow gradient or a drifting blob.
-/// Effects must look smooth at every size, so the contract is 16-bit.
+/// An 8-bit result has 256 levels, which a wall of twelve thousand lights shows as a staircase in a slow gradient, so the contract is 16-bit and effects look smooth at every size.
 ///
 /// The 8-bit tier stays for genuinely 8-bit domains, a palette index and a hue being modulo 256 by design, and as the internal fast path.
 ///
 /// ## The cost was measured, not assumed
 ///
-/// Interpolating the existing 8-bit table was tried first, since it adds no bytes, and rejected.
-/// Rounding the endpoints to 8 bits distorts the segments the interpolation runs between, giving around one percent of amplitude, which is worse than the classic 16-bit implementations manage.
+/// Interpolating the 8-bit table, which adds no bytes, was tried first and rejected: its endpoints rounded to 8 bits leave about one percent of amplitude error, worse than the classic 16-bit forms.
 ///
-/// A small quarter-wave 16-bit table with the same linear interpolation measures two orders of magnitude better, at a cost that rounds to nothing.
-/// An exact implementation exists but spends eight times the table and two wide multiplies per call.
-/// This is the middle that keeps large-fixture gradients smooth without either price.
+/// A small quarter-wave 16-bit table with the same interpolation measures two orders of magnitude better for a few hundred bytes, where an exact form spends eight times the table.
 ///
 /// ## Why the sine is signed
 ///
-/// The unsigned form, with the midpoint at the zero crossing, was tried first to match the 8-bit sine.
-/// It is the wrong call: this is the most-ported symbol in the LED world, so any snippet doing arithmetic on it breaks silently, everything offset by half scale.
-/// Eleven of our own call sites were already subtracting that midpoint to undo the convention, which is the same signal from the inside.
+/// The unsigned form, its midpoint at the zero crossing, broke every ported snippet doing arithmetic on the LED world's most-ported symbol, and eleven of our own calls subtracted the midpoint back.
 ///
-/// The contract was verified against the two codebases users port from, at their main branches rather than a release.
-/// The contract we bind to should be the one users will have.
-/// One declares the signed return in its own header comment.
-/// The other's effects add the midpoint back when they want an unsigned value, which is precisely the arithmetic that broke against our old return.
+/// The signed contract matches the main branches of the two codebases users port from: one declares it in its header, and the other's effects add the midpoint back for an unsigned value.
 ///
-/// A standard name must carry the standard contract.
-/// The 8-bit sine keeps its own, because palette and hue domains are genuinely unsigned.
+/// A standard name carries the standard contract; the 8-bit sine keeps its own, since palette and hue domains are genuinely unsigned.
 ///
 /// ## How the wave is reconstructed
 ///
-/// It is a quarter-wave lookup with linear interpolation.
-/// The top bits of the angle pick the quadrant, the next six the table entry, and the low byte the position between entries.
-/// Mirroring the index in odd quadrants and negating in the upper half reconstructs the full wave from a quarter of the table.
+/// A quarter-wave lookup with linear interpolation: the angle's top bits pick the quadrant, the next six the entry and the low byte the step between, mirrored in odd quadrants and negated in the upper half.
 ///
 /// ## What the helpers exist to stop being hand-rolled
 ///
-/// The range mapper puts the fencepost in one place.
-/// Six effects hand-rolled it, each carrying its own comment about mapping to one less than the extent when the output is a grid.
-/// Callers map to the extent and the pixel writer clamps, which is the form that does not lose the last column.
+/// The range mapper puts the fencepost in one place, which six effects hand-rolled: callers map to the extent and the pixel writer clamps, the form that keeps the last column.
 ///
-/// The narrow integer root is a binary restoring method, with no divide and no float.
-/// Matters because the chip has no fast divide and effects call it per pixel for a true distance.
-/// Where a comparison against a threshold will do, comparing squared values instead skips it entirely: measured on hardware that is roughly an eighth of the cost.
-/// The wide form was promoted here from the audio path so both roots have one home.
+/// The narrow integer root is a binary restoring method, with no divide and no float, since effects call it per pixel; a squared comparison against a threshold skips it at an eighth of the cost.
 ///
-/// The hash addresses randomness by position, which a stream generator cannot do.
-/// A stream advances per call, so a device rendering one extra frame or holding a different light count diverges forever.
-/// Addressing by position keeps a dissolve, a starfield or a per-pixel offset identical across devices, which is what supersync requires.
+/// The hash addresses randomness by position, which a stream cannot: a stream advances per call, so a device with one extra frame diverges for good, where a hashed starfield matches on every device.
 ///
 /// ## Why a follower needs two rates
 ///
-/// A follower with a single rate is the wrong instrument for anything reactive.
-/// It makes the attack as sluggish as the decay and rounds off the transient the effect exists to show.
-/// Every meter standard separates the two, and a broadcast peak programme meter is the shape wanted here.
-/// Rise almost at once, fall over a comfortable time so the eye can read the peak.
-/// Equal values reduce to the single-rate form exactly, so the two-rate one is a superset rather than a second mechanism.
+/// A single-rate follower makes the attack as sluggish as the decay, so like a broadcast peak programme meter this one rises almost at once and falls slowly; equal rates make it the single-rate form.
 ///
-/// The falling-peak meter takes that further, rising instantly and decaying slowly.
-/// A peak that eased upward would miss transients, and one that dropped instantly would show nothing to read.
+/// The falling-peak meter rises instantly and decays slowly, since a peak easing upward misses transients and one dropping at once is gone before the eye reads it.
 ///
-/// The simple follower is deliberately frame-rate dependent, which is what every LED codebase uses; a caller needing true time independence scales its rate by its own step.
+/// The simple follower is frame-rate dependent, as every LED codebase's is; a caller needing time independence scales its rate by its own step.
 ///
 /// ## Why decay is stated as a half-life
 ///
-/// The caller states the thing they actually mean: that half of a value is gone after so many milliseconds.
-/// Frame-rate independence is then a property of the formula rather than of the caller's arithmetic, because the exponent carries the elapsed time.
-/// Two short steps and one long one reach the same place.
+/// The caller states what they mean, half a value gone after so many milliseconds, and the exponent carries the elapsed time, so two short steps and one long one reach the same place.
 ///
-/// The per-frame form does not survive a fast device.
-/// A fade that keeps a fixed fraction each frame has a half-life that moves with the frame rate.
-/// One setting is a long tail at sixty frames a second and an instant clear at twenty times that.
-/// The effects that hit this carry a remainder by hand to stop the fade truncating to nothing.
+/// A fixed fraction kept per frame has a half-life that moves with the frame rate, a long tail at sixty frames a second and an instant clear at twenty times that.
 ///
 /// ## Why the polar pair is 16-bit too
 ///
-/// The 8-bit forms use an octant arctangent and an octagonal distance, taken as the larger axis plus half the smaller.
-/// That is up to a tenth off a true radius and saturates at the byte's top.
-/// On a small panel neither shows; on a large one the octagon reads as visible corners on what should be a circle.
-/// The saturation flattens everything past that distance from the center.
+/// The 8-bit forms take an octant arctangent and an octagonal distance, up to a tenth off a true radius and saturating at the byte's top, which shows as corners on a large fixture's circles.
 ///
-/// The 16-bit forms address a grid in polar coordinates, which is the vocabulary behind every radial look: rings, spirals, rotation, kaleidoscopes, tunnels, radial wipes, a spectrum bent around a circle.
-/// The angle feeds the sine and the palette directly, and the distance is a true Euclidean radius.
-/// Both are general grid arithmetic rather than helpers for the few effects that happen to call them first.
+/// The 16-bit forms address a grid in polar coordinates, behind rings, spirals, kaleidoscopes and tunnels: the angle feeds the sine and the palette, and the distance is a true Euclidean radius.
 ///
 /// ## Why easings are here
 ///
-/// These are Robert Penner's curves under their industry-standard names.
-/// An easing takes a progress value and bends it, so motion accelerates and settles instead of running at a constant speed.
-/// Anything that travels, grows, fades or transitions reads better through one, and a linear ramp is what makes an animation look mechanical.
+/// These are Robert Penner's curves under their industry-standard names: an easing bends a progress value so motion accelerates and settles, where a linear ramp looks mechanical.
 ///
 /// ## Three places the obvious arithmetic overflows
 ///
-/// The range mapper widens every operand before the arithmetic.
-/// A full-width span does not fit in a same-width subtraction, so computing the spans narrow overflows at the extremes.
-/// The product of two such spans fits in the wider type for every range this maps between, an extent, a byte, a band count or a frequency.
-/// Only mapping a full range onto another full range would exceed it, which no caller does.
+/// The range mapper widens every operand first, since a full-width span overflows a same-width subtraction; two spans' product fits the wider type for every range a caller maps.
 ///
-/// The integer root starts from a power-of-two bound rather than the input itself.
-/// The Newton step overflows when it starts at the input, which at the type's maximum made the first iteration wrap and the function return zero.
-/// Halving the bit width gives a start above the true root and inside the range, so every iteration stays representable.
+/// The integer root starts from a power-of-two bound, since a Newton step starting at the type's maximum wrapped and returned zero; half the bit width starts above the root and in range.
 ///
-/// The distance squares in the wider unsigned type and roots there.
-/// The narrow form is wrong far inside the normal range rather than only at the extremes: two coordinates of seventy thousand already sum past the narrow maximum.
-/// It saturated and reported the type's top for that distance.
+/// The distance squares and roots in the wider unsigned type, since the narrow form saturates far inside the normal range: two coordinates of seventy thousand already sum past its maximum.
 ///
 /// ## Two casts the arctangent needs
 ///
-/// It folds into the first octant on unsigned magnitudes.
-/// Negating the signed minimum has no representation, so the obvious conditional negation is undefined at exactly one input per axis; widening first keeps the fold exact across the whole range.
+/// It folds into the first octant on unsigned magnitudes widened first, since negating the signed minimum has no representation and the obvious negation is undefined at one input per axis.
 ///
-/// It subtracts from zero rather than applying unary minus.
-/// The unary form is well defined on an unsigned value, being modular arithmetic.
-/// Is exactly what is wanted, but one major compiler reports it and that build treats warnings as errors.
-/// Subtracting from zero is the same operation with no diagnostic anywhere.
-/// A quadratic core can swap in behind the same name if a field-heavy effect ever needs it.
+/// It subtracts from zero rather than applying unary minus, the same modular operation, which one major compiler reports as a warning its build treats as an error.
 
 #include "core/util/math8.h"
 #include "platform/platform.h"   // MM_NONBLOCKING: the hot path calls halfLifeKeep every frame
@@ -184,22 +135,17 @@ constexpr int32_t map32(int32_t v, int32_t inLo, int32_t inHi, int32_t outLo, in
 
 // ---- Beat phase ------------------------------------------------------------
 
-/// A resolution- and framerate-independent BPM phase accumulator.
+/// A resolution- and framerate-independent BPM phase: fleet time times the rate, so every device of the network reads one phase at one moment.
 ///
-/// Nine effects hand-rolled this identically, and the shape is subtle enough to be worth owning once.
-/// The per-tick product `dt * bpm * scale / 60000` rounds to ZERO when dt is under a millisecond (every host frame.
-/// An ESP32 running a small fixture fast), so the animation silently freezes. The fix all nine converged on is to accumulate the RAW numerator in 64 bits and divide only at the read: which is what this does.
+/// A function of the time and the rate alone, as WLED's `strip.now * speed` is: a device starting late or restarting is in step from its first frame, and a rate change jumps the phase.
 ///
-/// Usage: one member per animated quantity; call `advanceTo(nowMs, rate)` once per frame, then read as often as needed. `rate` is BPM-like: the caller's speed control, whatever its units.
+/// The product stays in 64 bits and divides only at the read, since `ms * bpm * scale / 60000` rounded per step would freeze a slow rate.
+///
+/// Usage: one member per animated quantity; call `advanceTo(nowMs, rate)` once per frame with the layer's fleet time, then read as often as needed. `rate` is BPM-like: the caller's speed control, whatever its units.
 class BeatPhase {
 public:
-    /// Accumulate this frame's contribution. Safe to call with a rate of 0 (the phase holds).
-    void advanceTo(uint32_t nowMs, uint32_t rate) {
-        if (!started_) { started_ = true; lastMs_ = nowMs; return; }
-        const uint32_t dt = nowMs - lastMs_;       // unsigned: correct across the millis() wrap
-        lastMs_ = nowMs;
-        num_ += static_cast<uint64_t>(dt) * rate;
-    }
+    /// Take this frame's phase from the fleet time and the rate; a rate of 0 holds the phase at zero.
+    void advanceTo(uint32_t nowMs, uint32_t rate) { num_ = static_cast<uint64_t>(nowMs) * rate; }
 
     /// The phase scaled by `scale` and divided late: `phase(256)` is the uint8 angle form
     uint32_t phase(uint32_t scale) const {
@@ -209,21 +155,14 @@ public:
     /// The undivided numerator, for a caller that scales differently (NoiseEffect multiplies the
     uint64_t numerator() const { return num_; }
 
-    /// Feed a pre-scaled product directly: for the callers whose rate already carries a factor.
-    void advanceScaled(uint32_t elapsedMs, uint64_t scaledRate) {
-        if (!started_) { started_ = true; lastMs_ = elapsedMs; return; }
-        const uint32_t dt = elapsedMs - lastMs_;
-        lastMs_ = elapsedMs;
-        num_ += static_cast<uint64_t>(dt) * scaledRate;
-    }
+    /// The same for a caller whose rate already carries a factor.
+    void advanceScaled(uint32_t elapsedMs, uint64_t scaledRate) { num_ = static_cast<uint64_t>(elapsedMs) * scaledRate; }
 
-    /// Forget the accumulated phase, restarting from zero.
-    void reset() { num_ = 0; lastMs_ = 0; started_ = false; }
+    /// Zero the phase until the next advance.
+    void reset() { num_ = 0; }
 
 private:
-    uint64_t num_ = 0;        ///< raw dt·rate numerator; divided by 60000 only at the read
-    uint32_t lastMs_ = 0;
-    bool     started_ = false;
+    uint64_t num_ = 0;   ///< the raw time·rate numerator, divided by 60000 only at the read
 };
 
 /// Integer square root, rounded down, by the binary restoring method: no divide and no float.

@@ -49,13 +49,15 @@ void saveSoon(MoonModule& m) {
 bool pickedDevice(const char* field, const char* valueJson, uint8_t mac[6], const char*& name) {
     const DevicesModule* discovery = DevicesModule::active();
     if (std::strcmp(field, "device") == 0) {
+        const char* v = json::valueAfterKey(valueJson, "value");
+        if (!v || *v == '"') return false;   // an index is a number: a MAC sent here would read as its leading digits and pick another device
         const int index = json::parseInt(valueJson, "value");   // resolved against the offered list as it stands now
         return index >= 0 && discovery && discovery->memberOption(static_cast<uint32_t>(index), mac, name);
     }
     if (std::strcmp(field, "mac") != 0) return false;
     char text[24] = "";
     json::parseString(valueJson, "value", text, sizeof(text));
-    if (!mdns::parseMac(text, mac) || isZeroMac(mac)) return false;
+    if (!mdns::parseMac(text, mac) || isZeroMac(mac) || (discovery && !discovery->joinable(mac))) return false;
     name = discovery ? discovery->nameOfMac(mac) : nullptr;
     return true;
 }
@@ -79,7 +81,7 @@ void DeviceGroup::defineControls() {
     /// The devices in this group.
     /// @field device The device, by name and address; it stays the member through a rename or a new address.
     /// @field mac Its identity.
-    /// @field status Present when it was heard within three of its announcements, missing otherwise.
+    /// @field status Present when it was heard running MoonLight within three of its announcements, missing otherwise, a board in MoonBase among them.
     controls_.addList("members", *this);
 }
 
@@ -134,9 +136,16 @@ ListRow DeviceGroup::countMembers(const DevicesModule* discovery, ListRow& missi
     for (ListRow i = 0; i < count_; i++) {
         if (members_[i].removed || isZeroMac(members_[i].mac)) continue;
         members++;
-        if (!(discovery && discovery->heardLately(members_[i].mac))) missing++;
+        if (!(discovery && discovery->present(members_[i].mac))) missing++;
     }
     return members;
+}
+
+void DeviceGroup::formatStatus(ListRow members, ListRow missing, const char* note, const char* clock) MM_NONBLOCKING {
+    char missingText[16] = "";
+    if (missing) mm::formatTo(missingText, sizeof(missingText), ", %u missing", static_cast<unsigned>(missing));
+    mm::formatTo(status_, sizeof(status_), "%u members%s%s%s%s%s", static_cast<unsigned>(members), missingText, note ? ", " : "", note ? note : "",
+                 clock ? ", " : "", clock ? clock : "");
 }
 
 void DeviceGroup::refreshStatus() MM_NONBLOCKING {
@@ -144,9 +153,8 @@ void DeviceGroup::refreshStatus() MM_NONBLOCKING {
     ListRow missing = 0;
     const ListRow members = countMembers(discovery, missing);
     const char* note = discovery ? discovery->sharedNote() : nullptr;   // the shared controls past their bound, or a look not fetched
-    char missingText[16] = "";
-    if (missing) mm::formatTo(missingText, sizeof(missingText), ", %u missing", static_cast<unsigned>(missing));
-    mm::formatTo(status_, sizeof(status_), "%u members%s%s%s", static_cast<unsigned>(members), missingText, note ? ", " : "", note ? note : "");
+    const char* clock = parent() ? static_cast<const Devices*>(parent())->fleetClock().note() : nullptr;   // a group lives under Devices: whom the fleet clock follows
+    formatStatus(members, missing, note, clock);
     setStatus(status_, missing || note ? Severity::Warning : Severity::Status);
 }
 
@@ -188,7 +196,7 @@ void DeviceGroup::writeListRow(JsonSink& sink, ListRow row) const {
     if (isZeroMac(m.mac)) { sink.append("}"); return; }
     sink.append(",\"mac\":");
     writeMac(sink, m.mac);
-    sink.appendf(",\"status\":\"%s\"}", discovery && discovery->heardLately(m.mac) ? "present" : "missing");
+    sink.appendf(",\"status\":\"%s\"}", discovery && discovery->present(m.mac) ? "present" : "missing");
 }
 
 void DeviceGroup::writeListRowSaved(JsonSink& sink, ListRow row) const {

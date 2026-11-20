@@ -23,7 +23,7 @@
 //
 // Sections (top to bottom):
 //   1. Constants + module state
-//   2. GitHub Releases API + sessionStorage cache
+//   2. The release feed
 //   3. Asset parsing (manifest-*.json → firmware, firmware-*.bin → binary)
 //   4. Compatibility filter (OTA only)
 //   5. Relative-time helper
@@ -40,14 +40,15 @@
 // 1. Constants + module state
 // ---------------------------------------------------------------------------
 
-const RELEASES_API = "https://api.github.com/repos/MoonModules/MoonLight/releases";
-const API_URL = `${RELEASES_API}?per_page=10`;
-const CACHE_KEY = "MoonLight.releases.v1";
-const CACHE_TTL_MS = 5 * 60 * 1000;  // 5 min — short enough to surface new RCs, long enough to avoid rate-limit thrash
+// The release feed the release workflow writes beside the installer on Pages: the releases Pages serves, newest first, in GitHub's release
+// shape trimmed to the fields read here. Pages answers any origin with a ten-minute max-age and a Last-Modified, so the browser's HTTP cache
+// decides when it is asked again, and then mostly as an empty 304; GitHub's API, with its 60 anonymous requests an hour per address, is not asked.
+const RELEASES_FEED = "https://moonmodules.org/MoonLight/install/releases.json";
+// How long the page reads the list it holds before it asks the feed again, answered or not: the feed's own max-age.
+const RELEASES_MAX_AGE_MS = 10 * 60 * 1000;
 
 // Persisted user selection — survives page reloads and full browser restarts,
-// so a returning user doesn't have to re-pick their firmware every time. Keyed
-// separately from the API cache (which is sessionStorage with a TTL); these
+// so a returning user doesn't have to re-pick their firmware every time; these
 // are intent, not data, and never expire on their own.
 const PREF_RELEASE_KEY  = "MoonLight.picker.releaseTag";
 const PREF_FIRMWARE_KEY = "MoonLight.picker.firmware";
@@ -107,6 +108,7 @@ function makeState() {
         // re-renders triggered by release-list reloads.
         installRowExtras: null,
         extrasAfterInstall: false,
+        extrasNeedRelease: false,   // the extras install only with a release picked, so the status view leaves them out
         moonbaseOnly: false,
         targetChip: null,      // another device's chip ("esp32s3"), or its revision line ("esp32p4rev3"), which a device's map installs onto: firmwares and devices of it only
         releases: [],          // normalized release records from the API
@@ -138,22 +140,11 @@ let _lastState = null;
 let _pendingHostMode = null;
 
 // ---------------------------------------------------------------------------
-// 2. GitHub Releases API + sessionStorage cache
+// 2. The release feed
 // ---------------------------------------------------------------------------
 
-// Safe sessionStorage accessor — private/incognito Safari throws on
-// getItem/setItem entirely, not just quota. Wrap every access so a host
-// browser with storage disabled is a cache miss, not an exception.
-function safeStorageGet(key) {
-    try { return sessionStorage.getItem(key); } catch (_) { return null; }
-}
-function safeStorageSet(key, value) {
-    try { sessionStorage.setItem(key, value); } catch (_) { /* ignore */ }
-}
-
-// Same wrappers for localStorage — the persisted user selection (release tag,
-// firmware) survives across browser sessions. Same try/catch shape so a hostile
-// storage backend is a "no preference" miss, not an exception.
+// Safe localStorage accessors for the persisted user selection (release tag, firmware), which survives across browser sessions: private
+// Safari throws on getItem/setItem entirely, so a hostile storage backend is a "no preference" miss, not an exception.
 function safeLocalGet(key) {
     try { return localStorage.getItem(key); } catch (_) { return null; }
 }
@@ -161,56 +152,37 @@ function safeLocalSet(key, value) {
     try { localStorage.setItem(key, value); } catch (_) { /* ignore */ }
 }
 
-// The one fetch in flight, shared: the device UI asks from its update badge every second and from the map, and a cold cache must start one request.
+// The one fetch in flight, shared: the device UI asks from its update badge every second and from the map on every draw.
 let releasesInFlight = null;
-// The parsed list and when it was fetched, kept in memory: the badge asks every second, and parsing the stored list each time costs a phone a
-// megabyte of JSON a second. sessionStorage is read once, on a cold start.
-let releasesMemo = null;   // { ts, data }
+// The last list parsed and the Last-Modified it came with, so a reply the HTTP cache answers is not parsed again each second; an offline page
+// keeps showing it. Last-Modified rather than the ETag, since a cross-origin page may read only the safelisted headers.
+let releasesMemo = null;   // { modified, data }
+let releasesAskedAt = 0;   // when the feed was last asked, answered or not
 
-// Returns the parsed releases array, newest first, or null on hard failure (network, 403): the one release list the picker, the update badge
-// and the network map read, each accepting a list up to `maxAgeMs` old (the badge asks every second and settles for an hour's). Stale cache is
-// served on transient failures so the dropdown doesn't go empty, and a failure is cached too, so an offline device does not ask again each second.
-async function loadReleases({ bypassCache = false, maxAgeMs = CACHE_TTL_MS } = {}) {
-    if (!bypassCache) {
-        if (!releasesMemo) {
-            try { releasesMemo = JSON.parse(safeStorageGet(CACHE_KEY) || "null"); } catch (_) { /* corrupt cache: fetch */ }
-        }
-        if (releasesMemo && Date.now() - releasesMemo.ts < maxAgeMs) return releasesMemo.data;
-    }
-    releasesInFlight ??= fetchReleases().finally(() => { releasesInFlight = null; });
+// Returns the release list, highest version first, or null while none has loaded: the one list the picker, the update badge and the network map read.
+// `revalidate` asks the server past the HTTP cache's ten minutes, for a view the user opened to see what is new.
+async function loadReleases({ revalidate = false } = {}) {
+    if (releasesInFlight) return releasesInFlight;   // a request on its way answers every caller, a cold page's second one included
+    if (!revalidate && releasesAskedAt && Date.now() - releasesAskedAt < RELEASES_MAX_AGE_MS) return releasesMemo?.data ?? null;
+    releasesInFlight ??= fetchReleases(revalidate).finally(() => { releasesInFlight = null; });
     return releasesInFlight;
 }
 
-// The fetch behind loadReleases. When GitHub does not answer (offline, or 403 at the anonymous 60 an hour) it serves the stale list, else
-// null, and stamps either as fresh, so the next attempt waits a whole cache age; a null stays in memory, so a refresh asks again.
-async function fetchReleases() {
+// The fetch behind loadReleases: the list parsed when it changed, the last one when the feed does not answer.
+async function fetchReleases(revalidate) {
+    releasesAskedAt = Date.now();
     try {
-        const res = await fetch(API_URL);
+        const res = await fetch(RELEASES_FEED, revalidate ? { cache: "no-cache" } : undefined);
         if (res.ok) {
-            const data = await res.json();
-            if (!latestStable(data)) await addLatestStable(data);
-            releasesMemo = { ts: Date.now(), data };
-            safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
-            return data;
+            const modified = res.headers?.get?.("last-modified") ?? null;
+            if (!modified || modified !== releasesMemo?.modified) releasesMemo = { modified, data: await res.json() };
+            return releasesMemo.data;
         }
-    } catch (_) { /* no network: the stale list below */ }
-    let stale = releasesMemo?.data ?? null;
-    if (stale === null) try { stale = JSON.parse(safeStorageGet(CACHE_KEY) || "null")?.data ?? null; } catch (_) { /* corrupt: none */ }
-    releasesMemo = { ts: Date.now(), data: stale };
-    if (stale !== null) safeStorageSet(CACHE_KEY, JSON.stringify(releasesMemo));
-    return stale;
+    } catch (_) { /* no network: the list already shown */ }
+    return releasesMemo?.data ?? null;
 }
 
-// A first page of prereleases completed with the newest stable release GitHub's /releases/latest names, so the official channel still finds
-// it; a list it cannot complete stays as it is.
-async function addLatestStable(data) {
-    try {
-        const res = await fetch(`${RELEASES_API}/latest`);
-        if (res.ok) data.push(await res.json());
-    } catch (_) { /* no network: the first page alone */ }
-}
-
-// The newest published, stable release, what GitHub's /releases/latest answers, from a list newest first that holds it (addLatestStable).
+// The highest-versioned stable release, the first in the feed's version order that holds it (the feed keeps five).
 const latestStable = (releases) => (releases || []).find(r => !r.prerelease && !r.draft) || null;
 // The release tagged `tag`, such as the moving `latest`, or null.
 const releaseByTag = (releases, tag) => (releases || []).find(r => r.tag_name === tag) || null;
@@ -489,6 +461,15 @@ function renderSkeleton(state) {
         </div>`;
 }
 
+// The Releases row saying why no release can be picked, with the caller's other ways to install (a URL, a file) kept below it, unless the
+// caller's extras need a release to install with, as the map's move does.
+function renderStatus(state, text) {
+    state.container.innerHTML =
+        `<div class="control-row"><span class="control-label">Releases</span><span class="rp-status"></span></div>`;
+    state.container.querySelector(".rp-status").textContent = text;
+    if (state.installRowExtras && !state.extrasNeedRelease) state.container.appendChild(state.installRowExtras);
+}
+
 function render(state) {
     // newest-first; releases without `published_at` (drafts) sort last.
     const sorted = state.releases.slice().sort((a, b) => {
@@ -591,7 +572,7 @@ function render(state) {
     //
     // Use textContent rather than innerHTML so a tag name that contains
     // HTML (a compromised release tag, a typo with a literal `<`) renders
-    // as text instead of getting injected. r.tag_name is GitHub-API-supplied
+    // as text instead of getting injected. r.tag_name is release-feed-supplied
     // — outside our control once the picker fetches it.
     releaseEl.replaceChildren();
     sorted.forEach((r, i) => {
@@ -947,6 +928,9 @@ export const installPicker = {
      *   uses this for the "Erase chip first" checkbox; on-device OTA omits
      *   it. The picker re-attaches the SAME node on every render(), so
      *   listeners the caller wired on the element keep firing.
+     * @param {boolean} [opts.extrasNeedRelease] - the extras install only
+     *   with a release picked, so a release list that does not load shows
+     *   its status alone (the map's move).
      * @param {string} [opts.targetChip] - another device's chip ("esp32s3") or revision line ("esp32p4rev3"), for a device's
      *   map installing onto it: the firmware and device lists hold that chip's only.
      * @param {object} [opts.deviceSupport] - the device-catalog + chip-detection
@@ -967,7 +951,7 @@ export const installPicker = {
      */
     async init({ container, ownFirmwareKey, onInstall, onDetect = null,
                  enableDevicePicker = true, installRowExtras = null, blocker = null,
-                 moonbaseOnly = false, extrasAfterInstall = false,
+                 moonbaseOnly = false, extrasAfterInstall = false, extrasNeedRelease = false,
                  deviceSupport = null, extraFirmwaresByTag = null, targetChip = null, downloadKey = null }) {
         const state = makeState();
         state.container = container;
@@ -977,6 +961,7 @@ export const installPicker = {
         state.enableDevicePicker = enableDevicePicker;
         state.installRowExtras = installRowExtras;
         state.extrasAfterInstall = extrasAfterInstall;
+        state.extrasNeedRelease = extrasNeedRelease;
         // Offer the MOONBASE image instead of the app firmwares: one per chip, unversioned, and
         // installed into the factory slot. The on-device card sets this from its image selector.
         state.moonbaseOnly = moonbaseOnly;
@@ -987,17 +972,16 @@ export const installPicker = {
         state.downloadKey = downloadKey;
 
         // Show the full field skeleton immediately (each select spins) instead of
-        // a single "Loading…" row, so a slow GitHub fetch doesn't leave the form
+        // a single "Loading…" row, so a slow release fetch doesn't leave the form
         // looking empty under the Port row. render() replaces this on success;
         // the error branches below replace it with their message.
         renderSkeleton(state);
-        const bypass = new URLSearchParams(location.search).get("nocache") === "1";
-        // Parallel: GitHub Releases API (slow, ~200ms) + local deviceModels.json
+        // Parallel: the release feed, asked past the HTTP cache since a picker opens to install what is new, + local deviceModels.json
         // (fast, ~5ms). The devices fetch only runs when the device picker is on AND
         // the host injected deviceSupport (web installer): the on-device OTA picker
         // does neither, so it skips the fetch and ships no device code.
         const [data, devices] = await Promise.all([
-            loadReleases({ bypassCache: bypass }),
+            loadReleases({ revalidate: true }),
             (enableDevicePicker && deviceSupport) ? deviceSupport.loadDevices() : Promise.resolve([]),
         ]);
         state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === firmwareChip(targetChip)) : devices;
@@ -1007,12 +991,7 @@ export const installPicker = {
             if (_pendingHostMode) state.ownFirmwareKey = HOST_DOWNLOAD;
             _pendingHostMode = null;
         }
-        if (!data) {
-            container.innerHTML =
-                `<div class="control-row"><span class="control-label">Releases</span>` +
-                `<span class="rp-status">Couldn't reach GitHub — refresh to retry.</span></div>`;
-            return;
-        }
+        if (!data) return renderStatus(state, "The release list does not load; refresh to retry.");
         // Normalize: enrich each release with its parsed firmwares list, then
         // merge in any locally-staged firmwares for that tag (preview only — the
         // host injects extraFirmwaresByTag so a brand-new firmware that isn't in
@@ -1031,12 +1010,7 @@ export const installPicker = {
         // Drop releases with zero usable firmwares (no firmware-* / manifest-* assets).
         .filter(r => r.firmwares.length > 0);
 
-        if (state.releases.length === 0) {
-            container.innerHTML =
-                `<div class="control-row"><span class="control-label">Releases</span>` +
-                `<span class="rp-status">No releases with installable firmware found.</span></div>`;
-            return;
-        }
+        if (state.releases.length === 0) return renderStatus(state, "No releases with installable firmware found.");
         render(state);
         // This picker's own picked device, for a host with several pickers on its page, where the getters below answer the last one mounted.
         return { selectedDeviceEntry: () => state.devices.find(d => d.name === state.selectedDevice) || null,

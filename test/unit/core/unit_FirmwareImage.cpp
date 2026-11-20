@@ -2,20 +2,17 @@
 ///
 /// @technical
 ///
-/// The MoonBase update ERASES the factory partition before it can know whether a stream is any good, so everything that can reject an image is decided from its first chunk.
-/// These tests are that decision.
+/// The MoonBase update ERASES the factory partition before it can know whether a stream is any good, so these tests decide everything that can reject an image from its first chunk.
 ///
 /// ## Real binaries, not only synthetic ones
 ///
-/// The offsets are pinned against REAL binaries wherever the build tree has them.
-/// The layout comes from the ESP32 toolchain, not from us, and a test that only checks our own synthetic bytes would agree with itself while disagreeing with every actual image.
-/// Every image found is checked, and a found image that cannot be parsed FAILS rather than being skipped: skipping the unparseable ones is skipping exactly what this catches.
+/// The offsets are pinned against REAL binaries wherever the build tree has them: the layout is the ESP32 toolchain's, and synthetic bytes alone would agree with themselves.
+///
+/// Every image found is checked, and a found image that cannot be parsed FAILS rather than being skipped, since the unparseable ones are exactly what this catches.
 ///
 /// ## Empty means not built, not passed
 ///
-/// A checkout that has not built for ESP32 has no images to check.
-/// That case has to stay distinguishable from "present but not checked".
-/// A loop that skips missing files and asserts nothing reports green either way, which looks exactly like a test that ran.
+/// A checkout that has not built for ESP32 has no images, and that stays distinguishable from "present but not checked": a loop that asserts no check looks like a test that ran.
 
 #include "doctest.h"
 #include "unit/source_tree.h"
@@ -58,7 +55,7 @@ std::vector<uint8_t> makeImage(uint8_t magic, uint16_t chip, const char* project
 std::vector<uint8_t> readHead(const std::filesystem::path& p) {
     std::ifstream f(p, std::ios::binary);
     if (!f) return {};
-    std::vector<uint8_t> b(kIdentifyBytes);
+    std::vector<uint8_t> b(kHandoffBytes);   // through the handoff record, which lies past the descriptor
     f.read(reinterpret_cast<char*>(b.data()), static_cast<std::streamsize>(b.size()));
     b.resize(static_cast<size_t>(f.gcount()));
     return b;
@@ -110,6 +107,12 @@ TEST_CASE("every built image identifies as what it is") {
         const char* verdict = moonBaseRejection(info, info.chip);
         if (project == "MoonLight-moonbase") CHECK(verdict == nullptr);
         else CHECK(verdict == std::string("not a MoonBase image"));
+        // A MoonBase built from this tree carries this tree's handoff record where the app reads it; an older build left in the tree predates the record.
+        const std::string version(info.version);   // `<version>+<build id>`: the build id says which commit built it, where a version spans several
+        if (project == "MoonLight-moonbase" && version == std::string(mm::kVersion) + "+" + mm::kBuildId) {
+            REQUIRE(head.size() >= kHandoffBytes);
+            CHECK(handoffVersion(head.data(), head.size()) == kHandoffVersion);
+        }
     }
     MESSAGE("checked ", images.size(), " built image(s)");
 }
@@ -151,6 +154,20 @@ TEST_CASE("a truncated stream reports what it can rather than reading past its b
         CHECK_FALSE(info.described);                         // but the descriptor is not complete
         CHECK(moonBaseRejection(info, ChipId::Esp32S3) != nullptr);
     }
+}
+
+TEST_CASE("the handoff record after the descriptor is read, and an image lacking one reads as none") {
+    std::vector<uint8_t> b = makeImage(kImageMagic, 0x0005, "MoonLight-moonbase");
+    b.resize(kHandoffBytes, 0);
+    CHECK(handoffVersion(b.data(), b.size()) == 0);             // an image from before the record: zeros where it would be
+    const HandoffRecord rec{kHandoffMagic, 7};
+    std::memcpy(b.data() + kHandoffOffset, &rec, sizeof(rec));
+    CHECK(handoffVersion(b.data(), b.size()) == 7);
+    CHECK(handoffVersion(b.data(), kHandoffBytes - 1) == 0);    // a buffer stopping short of it reads as none, within its end
+    CHECK(handoffVersion(nullptr, kHandoffBytes) == 0);
+    const HandoffRecord stray{0x12345678, 7};                   // whatever bytes follow an older image's descriptor
+    std::memcpy(b.data() + kHandoffOffset, &stray, sizeof(stray));
+    CHECK(handoffVersion(b.data(), b.size()) == 0);
 }
 
 TEST_CASE("a 32-character project name that fills its field stays terminated") {

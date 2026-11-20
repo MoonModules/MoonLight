@@ -203,6 +203,7 @@ bool otaBootMoonBase() { return false; }
 bool otaRunningMoonBase() { return false; }
 bool otaMoonBaseVersion(char*, size_t) { return false; }
 bool otaMoonBaseBuild(char*, size_t) { return false; }
+uint32_t otaMoonBaseHandoff() { return 0; }
 bool otaMoonBaseSize(uint32_t*, uint32_t*) { return false; }
 void moonbaseClearStagedUrl() {}
 

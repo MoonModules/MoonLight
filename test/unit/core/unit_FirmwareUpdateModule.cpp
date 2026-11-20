@@ -79,12 +79,12 @@ void* controlPtr(mm::FirmwareUpdateModule& fw, const char* name) {
 const char* readOnly(mm::FirmwareUpdateModule& fw, const char* name) { return static_cast<const char*>(controlPtr(fw, name)); }
 }  // namespace
 
-// MoonBase's `<version>+<build id>` splits into its version and build rows; a mismatch with the app warns between installs and is published for the UI's signals.
-TEST_CASE("a MoonBase that does not match the app says so, and only then") {
+// MoonBase's `<version>+<build id>` splits into its version and build rows; one on another handoff version than this app warns between installs on the MoonBase tab and is published for the UI's signals.
+TEST_CASE("a MoonBase on another handoff version than the app says so on the MoonBase tab, and only then") {
     std::strncpy(mm::g_otaStatus, "idle", sizeof(mm::g_otaStatus));
     // Removed however the case ends, so a failing REQUIRE does not leave a MoonBase behind for every later test.
-    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr); } } noMoonBaseAfter;
-    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00");
+    struct NoMoonBaseAfter { ~NoMoonBaseAfter() { mm::platform::setTestMoonBase(nullptr, nullptr, 0); } } noMoonBaseAfter;
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00", 0);
     mm::FirmwareUpdateModule fw;
     fw.defineControls();
     fw.setup();
@@ -93,6 +93,8 @@ TEST_CASE("a MoonBase that does not match the app says so, and only then") {
     REQUIRE(readOnly(fw, "moonbaseMismatch") != nullptr);
     CHECK(std::strcmp(readOnly(fw, "moonbaseMismatch"), "0.0.1") == 0);
     REQUIRE(controlPtr(fw, "image") != nullptr);
+    fw.tick1s();
+    CHECK(fw.status() == nullptr);   // the App tab shows no status: the MoonBase tab's dot carries the mismatch there
     *static_cast<uint8_t*>(controlPtr(fw, "image")) = 1;   // the MoonBase tab
     fw.rebuildControls();
     CHECK(std::strcmp(readOnly(fw, "version"), "0.0.1") == 0);
@@ -102,10 +104,8 @@ TEST_CASE("a MoonBase that does not match the app says so, and only then") {
     CHECK(std::strstr(fw.status(), "MoonBase does not match this app") != nullptr);
     CHECK(fw.severity() == mm::MoonModule::Severity::Warning);
 
-    // The matching MoonBase says nothing.
-    static char matching[48];
-    std::snprintf(matching, sizeof(matching), "%s+abc12345", mm::kVersion);
-    mm::platform::setTestMoonBase(matching, "Oct  4 2026 10:31:00");
+    // A MoonBase of another release on this app's handoff version stays quiet, as under a local build newer than every release.
+    mm::platform::setTestMoonBase("0.0.1+abc12345+", "Oct  4 2026 10:31:00", mm::firmware::kHandoffVersion);
     mm::FirmwareUpdateModule same;
     same.defineControls();
     same.setup();

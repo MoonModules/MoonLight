@@ -70,6 +70,7 @@ public:
             needDeal_ = true;
             creepClock_ = BeatPhase{};   // a fresh clock, or the time spent off arrives as one big drop
             lastCreep_ = 0;
+            creepMs_ = 0;
         }
         if (needDeal_ || rowsFit(g) != dealtFor_) dealWall(rowsFit(g));
         if (descend) creep(g);
@@ -164,7 +165,8 @@ private:
 
     /// Lower the wall by elapsed time; each full row of descent shifts the bricks down and adds a row on top.
     void creep(const Geo& g) {
-        creepClock_.advanceTo(elapsed(), kCreepRpm);
+        creepMs_ += frameMs();   // the descent's own time, on the local clock, so a fleet-clock step drops no rows
+        creepClock_.advanceTo(creepMs_, kCreepRpm);
         const uint32_t now = creepClock_.phase(256);   // 1/256ths of a row
         creepAt_ += now - lastCreep_;
         lastCreep_ = now;
@@ -353,6 +355,7 @@ private:
     bool      wasDescending_ = false;  ///< `descend` last frame, so a toggle deals a fresh wall
     BeatPhase creepClock_;             ///< the descent clock, in rows per minute
     uint32_t  lastCreep_ = 0;          ///< its last reading
+    uint32_t  creepMs_ = 0;            ///< the descent's time, the frames' lengths summed
     uint32_t  creepAt_ = 0;            ///< descent since the last row shift, in 1/256ths of a row
     uint16_t  left_ = 0;               ///< bricks still standing
     uint8_t   hits_ = 0, level_ = 0;   ///< bricks taken this wall, and the speed-up reached

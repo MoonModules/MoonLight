@@ -81,7 +81,7 @@ The device stays in [MoonBase](../moonwalk.md#update-firmware) rather than prete
 
 ## The device rebooted on its own
 
-Check the power first. A board browning out under load looks exactly like a software crash, and a supply that cannot hold current while lights draw is the more common cause.
+Check the power first. A board browning out under load looks exactly like a software crash, and a supply that cannot hold current while lights draw is the more common cause. A cheap board's own regulator can be the weak part even on a solid supply: a capacitor, a bench supply for one boot and a lower transmit power each help, as [a board that resets on its first boot](migrating-over-the-air.md#a-board-that-resets-on-its-first-boot) describes.
 
 A failed boot is a crash, a brownout, or a supply that cuts out within a minute of starting. After two in a row the device starts in safe mode: its LEDs stay dark, the preview runs, and the System card says why. Lower the brightness, or undo the last setting or script, then restart the device from the top bar.
 Unplugging a device twice within a minute of starting counts the same way, so leave it on for a minute and restart it.

@@ -3,16 +3,20 @@
 # requires-python = ">=3.10"
 # dependencies = ["pyflakes"]
 # ///
-"""Claude Code FileChanged hook: check a file the moment it changes on disk, so a finding is fixed while the line is still in mind.
+"""Claude Code PostToolUse hook: check every changed file after each tool call, so a finding is fixed while the line is still in mind.
 
 The rules live in the coding standards and in the commit checks; this hook moves the cheap ones to the moment of writing, as an
 editor's language server does on save. A finding found 200 lines later means a sweep and a rerun of the gate; found on the edit it
 means a rewrite of the one line.
 
-Wired in .claude/settings.json on two events. **SessionStart** hands Claude Code's file watcher the folders to watch (`watchPaths`):
-every top folder holding a file a check governs, and each such file at the root; a watched folder covers its subfolders and the files
-created in it. **FileChanged** then runs this hook for every write, whatever made it: the Edit and Write tools, a script run through
-Bash, the editor. It runs in the background (`async`), and its findings reach the agent on its next turn as the `systemMessage`.
+Wired in .claude/settings.json on **PostToolUse** of the tools that write: Edit, Write, NotebookEdit and Bash, whose scripts and `sed`
+write too. It checks every governed file that differs from the index at a version not checked before, so a file written any way since
+the last tool call is seen, and no file watcher has to stay registered across a session that continues from a summary. It runs in the
+background (`async`), and its findings reach the agent on its next turn as the `systemMessage`.
+
+**`--diff`**, the commit process's first gate: every file the change touches, checked afresh, and what it raised against HEAD (a
+function past a lizard limit, a file past its lines, a duplicated block over the changed lines), so a rise shows in a minute rather
+than after the builds. It exits 1 on what the change raised, and lists the rest.
 
 **One checker at a time, in batches.** A sweep by script changes many files at once and fires one hook each; each queues its file, and
 the one holding the run lock checks the queue in batches until it is empty, as a work queue with one consumer does. Only a file that
@@ -97,9 +101,17 @@ def cpp(path: Path) -> list[str]:
         return []
     entries = json.loads(db.read_text())
     entry = next((e for e in entries if Path(e["file"]).resolve() == path), None)
-    if entry is None:   # a header, or a source not in this host's build: the flags of a unit in the same top folder
-        top = "/" + rel.split("/", 1)[0] + "/"
-        entry = next((e for e in entries if top in e["file"]), entries[0] if entries else None)
+    # A header, or a source not in this host's build: the flags of the nearest unit below src/, else of module_types.cpp, the unit that
+    # includes every module, since a core unit does not see light/ and the light domain is headers only.
+    parts = rel.split("/")[:-1]
+    platform_own = len(parts) >= 3 and parts[:2] == ["src", "platform"]   # src/platform/<p>/: compiled only by builds whose units come from <p>
+    while entry is None and len(parts) > (2 if platform_own else 1):
+        folder = "/" + "/".join(parts) + "/"
+        entry = next((e for e in entries if folder in e["file"]), None)
+        parts.pop()
+    if entry is None and platform_own:
+        return []   # another platform's file, which its own build checks
+    entry = entry or next((e for e in entries if e["file"].endswith("/src/module_types.cpp")), entries[0] if entries else None)
     if entry is None:
         return []
     args = entry.get("arguments") or shlex.split(entry["command"])
@@ -115,8 +127,11 @@ def cpp(path: Path) -> list[str]:
     compiler = args[0] if shutil.which(args[0]) else shutil.which("c++")
     if not compiler:
         return []
-    lang = ["-x", "c++"] if path.suffix == ".h" else []
-    result = _run([compiler, *flags, "-fsyntax-only", "-Wno-pragma-once-outside-header", *lang, str(path)], cwd=entry.get("directory", REPO))
+    cwd = entry.get("directory", REPO)
+    if path.suffix == ".h":   # a unit that includes it, as the header-set check builds one, so a constant only includers use is no unused variable
+        result = _run([compiler, *flags, "-fsyntax-only", "-x", "c++", "-"], cwd=cwd, input=f'#include "{path}"\n')
+    else:
+        result = _run([compiler, *flags, "-fsyntax-only", str(path)], cwd=cwd)
     errors = [ln for ln in result.stderr.splitlines() if " error: " in ln] if result and result.returncode else []   # a note from a file that compiles is no failure
     if not errors:
         return []
@@ -173,11 +188,11 @@ def check(paths: list[Path]) -> list[str]:
     return findings
 
 
-def watch_paths() -> list[str]:
-    """What the watcher watches: each top folder holding a tracked file a check governs, and each such file at the root."""
-    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=REPO, capture_output=True, text=True, check=False).stdout.split("\0")
-    tops = {f.split("/", 1)[0] for f in tracked if f.endswith(GOVERNED)}
-    return sorted(str(REPO / t) for t in tops)
+def changed_now() -> set[str]:
+    """Every governed file that differs from the index or is new, ignored ones left out: what any write since the last check can have touched."""
+    listed = subprocess.run(["git", "ls-files", "-z", "--modified", "--others", "--exclude-standard"],
+                            cwd=REPO, capture_output=True, text=True, check=False).stdout
+    return {str(REPO / rel) for rel in filter(None, listed.split("\0")) if rel.endswith(GOVERNED)}
 
 
 def _seen_file() -> Path:
@@ -264,12 +279,13 @@ def _queue(add: str | None = None, take: bool = True) -> set[str]:
         return queued
 
 
-def drain(path: Path) -> list[str]:
-    """Queue `path`; the hook that holds the run lock checks the queue in batches until it is empty or the budget is spent."""
+def drain(paths: set[str]) -> list[str]:
+    """Queue `paths`; the hook that holds the run lock checks the queue in batches until it is empty or the budget is spent."""
     STATE.mkdir(parents=True, exist_ok=True)   # the versions checked live here on every platform
     if fcntl is None:
-        return check_batch({str(path)})
-    _queue(str(path))
+        return check_batch(paths)
+    for p in paths:
+        _queue(p)
     findings = []
     while True:
         with _Lock("run.lock", wait=False) as run:
@@ -287,21 +303,110 @@ def drain(path: Path) -> list[str]:
             return findings + [f"{len(left)} changed file(s) queued past the hook's {BUDGET_S} s, checked by the next write's hook: {names}."]
 
 
+def touched() -> list[Path]:
+    """Every governed file the change touches against HEAD, staged or not, and new ones: the commit's whole diff."""
+    names = subprocess.run(["git", "diff", "--name-only", "-z", "HEAD"], cwd=REPO, capture_output=True, text=True, check=False).stdout
+    names += subprocess.run(["git", "ls-files", "-z", "--others", "--exclude-standard"], cwd=REPO, capture_output=True, text=True, check=False).stdout
+    return sorted({REPO / n for n in filter(None, names.split("\0")) if n.endswith(GOVERNED) and (REPO / n).is_file()})
+
+
+def lizard_rises(paths: list[Path]) -> list[str]:
+    """The lizard rules and the file-length rule a touched C++ file breaks more often than at HEAD: check_code's own measure and limits,
+    HEAD's version measured from a copy under the same relative path."""
+    import tempfile  # noqa: PLC0415
+    import check_code  # noqa: PLC0415   (the rules' one home)
+    cpp = [p for p in paths if p.suffix in CPP_SUFFIXES and _rel(p).startswith(("src/", "test/"))]
+    if not cpp:
+        return []
+    now = check_code.measure(targets=[_rel(p) for p in cpp]) or []
+    with tempfile.TemporaryDirectory() as td:
+        olds = []
+        for p in cpp:
+            text = subprocess.run(["git", "show", f"HEAD:{_rel(p)}"], cwd=REPO, capture_output=True, text=True, check=False)
+            if text.returncode == 0:
+                (Path(td) / _rel(p)).parent.mkdir(parents=True, exist_ok=True)
+                (Path(td) / _rel(p)).write_text(text.stdout, encoding="utf-8")
+                olds.append(str(Path(td) / _rel(p)))
+        was = check_code.measure(targets=olds) or [] if olds else []
+        prefix = Path(td).resolve().as_posix() + "/"
+        for f in was:
+            f["file"] = Path(f["file"]).resolve().as_posix().replace(prefix, "") if f["file"].startswith("/") else f["file"]
+    # Per rule over the touched files, as the ratchet's total feels it: a function that rose in one file and one that fell in another cancel.
+    count = lambda rows: {rule: sum(1 for r in rows if r[1] == rule) for rule in {r[1] for r in rows}}  # noqa: E731
+    before, after = count(check_code.findings(was)), count(check_code.findings(now))
+    out = []
+    for rule, n in sorted(after.items()):
+        if n > before.get(rule, 0):
+            names = sorted({f"{r[2]} ({r[0]})" for r in check_code.findings(now) if r[1] == rule} - {f"{r[2]} ({r[0]})" for r in check_code.findings(was) if r[1] == rule})
+            out.append(f"{rule} {before.get(rule, 0)} -> {n} in the touched files: {', '.join(names[:6])}")
+    for p in cpp:
+        head = subprocess.run(["git", "show", f"HEAD:{_rel(p)}"], cwd=REPO, capture_output=True, text=True, check=False).stdout
+        lines, old = len(p.read_text(encoding="utf-8").splitlines()), len(head.splitlines())
+        if lines > check_code.MAX_FILE_LINES >= old:
+            out.append(f"{_rel(p)}: large file {old} -> {lines} lines")
+    return out
+
+
+def clone_rises(paths: list[Path]) -> list[str]:
+    """Duplicated blocks jscpd finds whose either side lies in lines this change added: a copy the change made."""
+    import check_code  # noqa: PLC0415
+    added: dict[str, list[tuple[int, int]]] = {}
+    diff = subprocess.run(["git", "diff", "-U0", "HEAD", "--", *map(_rel, paths)], cwd=REPO, capture_output=True, text=True, check=False).stdout
+    current = ""
+    for ln in diff.splitlines():
+        if ln.startswith("+++ b/"):
+            current = ln[6:]
+        elif ln.startswith("@@") and current:
+            plus = ln.split("+", 1)[1].split(" ", 1)[0].split(",")
+            start, n = int(plus[0]), int(plus[1]) if len(plus) > 1 else 1
+            if n:
+                added.setdefault(current, []).append((start, start + n - 1))
+    for p in paths:   # a new file is added whole
+        if not subprocess.run(["git", "cat-file", "-e", f"HEAD:{_rel(p)}"], cwd=REPO, capture_output=True, check=False).returncode == 0:
+            added[_rel(p)] = [(1, 10**9)]
+    new = lambda side: any(a <= side["end"] and side["start"] <= b for a, b in added.get(side["name"], []))  # noqa: E731
+    report = check_code.clones() or {}
+    return [f"duplicated block: {d['firstFile']['name']}:{d['firstFile']['start']}-{d['firstFile']['end']} == "
+            f"{d['secondFile']['name']}:{d['secondFile']['start']}-{d['secondFile']['end']}"
+            for d in report.get("duplicates", []) if new(d["firstFile"]) or new(d["secondFile"])]
+
+
+def diff_gate() -> int:
+    """The commit's first gate: the write-time checks on the whole diff, afresh, and what the change raised against HEAD."""
+    global DEADLINE
+    DEADLINE = time.monotonic() + 600   # a gate, not a hook: the runner's own timeout bounds it
+    paths = touched()
+    listed = []
+    for step in (lambda: prose(paths), lambda: python(paths), *[lambda p=p: cpp(p) for p in paths], *[lambda p=p: backups(p) for p in paths]):
+        listed += step()   # the write-time checks less the per-file listings, whose rises the comparison below reports
+    raised = lizard_rises(paths) + clone_rises(paths)
+    for ln in listed:
+        print(ln)
+    if raised:
+        print("Raised against HEAD (the ratchets' rules over the touched files; Extract Function, as check_code says):")
+        for ln in raised:
+            print("  " + ln)
+    if UNFINISHED:   # a check the deadline cut short reports an empty list, so the gate fails until every check runs whole
+        print("Unfinished within the gate's time: " + ", ".join(UNFINISHED))
+    failing = raised or UNFINISHED or any(ln.startswith(("Prose rule", "C++ does not compile", "Python (pyflakes)")) for ln in listed)
+    print(f"{len(paths)} changed file(s): {'findings above' if failing else 'nothing raised'}.")
+    return 1 if failing else 0
+
+
 def main() -> int:
+    if "--diff" in sys.argv[1:]:
+        return diff_gate()
     try:
-        payload = json.load(sys.stdin)
+        json.load(sys.stdin)   # the tool call's payload: which tool wrote matters less than what changed since the last check
     except (json.JSONDecodeError, ValueError):
         return 0
-    if payload.get("hook_event_name") == "SessionStart":
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "watchPaths": watch_paths()}}))
-        return 0
-    name = payload.get("file_path", "")
-    if not name or payload.get("event") == "unlink" or not name.endswith(GOVERNED):
+    paths = changed_now()
+    if not paths:
         return 0
     sys.path.insert(0, str(HERE.parent / "build"))
     from build_host import lower_priority  # noqa: PLC0415  (one home for yielding the CPU)
     lower_priority()   # beside the agent's builds and the product owner's editor
-    findings = drain(Path(name).resolve())
+    findings = drain(paths)
     if UNFINISHED:
         findings.append(f"Not finished (out of the hook's {BUDGET_S} s, or failed), so not checked: {', '.join(UNFINISHED)}.")
     if findings:

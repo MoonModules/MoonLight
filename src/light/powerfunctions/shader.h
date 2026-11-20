@@ -14,14 +14,11 @@
 ///
 /// ## A shared vocabulary
 ///
-/// What makes shader code portable is the standard names, so an effect reads the same wherever it came from.
-/// This header holds the 2D operations a shader composes into a gradient, a pattern, a warped field or a set of shapes.
-/// Marching rays to render 3D is a technique built on top of it, and lives beside it.
+/// Standard names make shader code portable: this header holds the 2D operations a shader composes into gradients, patterns, warped fields and shapes, and ray marching, built on them, lives beside it.
 ///
 /// ## Everything is 16-bit fixed point
 ///
-/// A value is a fraction of one, a distance is in sub-pixel units, and a color index is a byte because palettes are.
-/// The 8-bit forms stay for genuinely 8-bit domains.
+/// A value is a fraction of one, a distance is in sub-pixel units, and a color index is a byte because palettes are; the 8-bit forms serve 8-bit domains.
 ///
 /// The functions keep GLSL's built-in names.
 
@@ -202,17 +199,17 @@ inline RGB mixColor(RGB a, RGB b, frac16 t) {
 
 // --- The shader runner ---------------------------------------------------------------------------
 
-/// Run `fn(x, y, t)` for every pixel and write what it returns.
+/// Run `fn(x, y, t)` for every pixel of the first plane, in shader space over the whole picture, and write what it returns: draw::eachLight on a plane, which the layer extrudes.
 template <typename ShadeFn>
 inline void each(const draw::Canvas& cv, angle16 t, ShadeFn fn) {
-    const lengthType w = cv.dims.x, h = cv.dims.y;
-    for (lengthType py = 0; py < h; py++) {
-        for (lengthType px = 0; px < w; px++) {
-            int32_t sx, sy;
-            uv(px, py, w, h, sx, sy);
-            draw::pixel(cv, {px, py, 0}, fn(sx, sy, t));
-        }
-    }
+    draw::Canvas plane = cv;
+    plane.dims.z = 1;
+    const Coord3D whole = cv.extent();
+    draw::eachLight(plane, [&](Coord3D p) {
+        int32_t sx, sy;
+        uv(p.x, p.y, whole.x, whole.y, sx, sy);
+        return fn(sx, sy, t);
+    });
 }
 
 }  // namespace mm::shader

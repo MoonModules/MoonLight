@@ -49,7 +49,8 @@ The chip id matters because there is one MoonBase per chip, one paste apart, and
 
 ## Telling the two images apart
 
-Each image reports its version from the app descriptor IDF puts in every binary, with `PROJECT_VER` set to the same computed version for both. The app can therefore read the factory partition's version without booting it, and say when the two were built apart. A device that cannot name its own recovery image cannot be diagnosed: two boards that looked identical, one of which could not install firmware, took a bisect of the git log to tell apart.
+Each image reports its version from the app descriptor IDF puts in every binary, with `PROJECT_VER` set to the same computed version for both. The app can therefore read the factory partition's version while the app runs.
+Whether the two work together is a separate number: the handoff version, a record MoonBase carries right after its descriptor, which numbers the contract between the two images (the staged URL, the config MoonBase reads, the access point and the routes the app's pages call on it). The app warns only when MoonBase's number differs from its own, so a MoonBase from an older release, or under a local build, stays quiet until the contract changes ([FirmwareImage.h](../../../src/core/util/FirmwareImage.h)). A device that cannot name its own recovery image cannot be diagnosed: two boards that looked identical, one of which could not install firmware, took a bisect of the git log to tell apart.
 
 MoonBase is a standalone ESP-IDF project (`moonbase/`, ~750 KB against an 896 KB slot) sharing no source files with the app.
 That is the deliberate trade for an image that must stay small and, once working, hardly change.

@@ -18,11 +18,11 @@ struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } };
 /// Restores the real address when a test ends.
 struct AddressGuard { ~AddressGuard() { mm::platform::setTestEthIPv4(nullptr); } };
 
-/// A MoonLight presence packet from `ip` named `name`, carrying its MAC as MoonLight's tail does.
-inline void hearWithMac(mm::DevicesModule& dev, const uint8_t ip[4], const char* name, const uint8_t mac[6]) {
+/// A MoonLight presence packet from `ip` named `name`, carrying its MAC as MoonLight's tail does; `marker` kMbMarker makes it MoonBase's.
+inline void hearWithMac(mm::DevicesModule& dev, const uint8_t ip[4], const char* name, const uint8_t mac[6], uint32_t marker = mm::WledPacket::kMmMarker) {
     uint8_t pkt[80] = {};
     mm::WledPacket::build(pkt, ip, name, /*boardType=*/34, /*lightsOn=*/true);
-    mm::WledPacket::stampMarker(pkt, mm::WledPacket::kMmMarker);
+    mm::WledPacket::stampMarker(pkt, marker);
     const size_t len = mm::WledPacket::stampTail(pkt, sizeof(pkt), mac);
     dev.injectPacketForTest(pkt, len, ip);
 }

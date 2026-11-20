@@ -44,7 +44,6 @@ public:
     void prepare() override {
         AudioEffectBase::prepare();
         for (uint8_t b = 0; b < 16; b++) { pos_[b] = 0; vel_[b] = 0; peak_[b] = 0; }
-        started_ = false;
     }
 
     /// Integrate every needle, then tile the bank and draw each dial.
@@ -52,10 +51,7 @@ public:
         const draw::Canvas cv = canvas();
         const lengthType w = width(), h = height(), dep = depth();
         if (w < 2 || h < 2) return;
-        const uint32_t now = elapsed();
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         const AudioFrame* f = AudioService::latestFrame();
 
@@ -157,8 +153,6 @@ private:
     int32_t pos_[16] = {};      ///< needle position, 8.8 fixed point
     int32_t vel_[16] = {};      ///< needle velocity, which is the mass that makes it overshoot
     uint8_t peak_[16] = {};     ///< the peak-hold marker
-    bool    started_ = false;   ///< false until a frame has been timed
-    uint32_t lastMs_ = 0;       ///< the previous frame's timestamp
 };
 
 }  // namespace mm

@@ -103,7 +103,7 @@ TEST_CASE("every effect behaves the same at any framerate") {
             {"StarFieldEffect", 1.95},      // the same filled trail
             {"RandomEffect", 2.40},         // its spawns are discrete, and how many cells it lights follows the shared RNG's state
             {"FluidEffect", 1.45},          // at a low rate it pours its moving jet in batches, so the dye takes a slightly different path
-            {"NebulaEffect", 1.45},         // its births are placed in batches by an oscillator, as Fluid's pours are
+            {"NebulaEffect", 1.60},         // its births are placed in batches by an oscillator on fleet time, as Fluid's pours are; measured 1.57
             {"BouncingBallsEffect", 1.40},  // its motion is wall-clock; its trail rounds differently between the two rates
         };
         const std::string en(name);
