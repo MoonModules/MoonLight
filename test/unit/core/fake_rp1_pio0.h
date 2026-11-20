@@ -27,9 +27,9 @@ namespace rp1 = mm::platform::rp1;
 
 /// One transfer the fake received, as the driver saw its argument.
 struct FakeTransfer {
-    uint16_t sm = 0;
-    uint16_t dir = 0;
-    uint32_t bytes = 0;
+    uint16_t sm = 0;               ///< the state machine the transfer named
+    uint16_t dir = 0;              ///< the direction the transfer named, 0 toward the state machine
+    uint32_t bytes = 0;            ///< the byte count the transfer asked for
     uint64_t dataPointer = 0;      ///< the `data` field as received
     uint32_t chunks = 0;           ///< the ring buffers the frame fills, `bytes` over the buffer size rounded up
     std::vector<uint8_t> data;     ///< a copy of the frame's bytes
@@ -323,7 +323,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         callSms_.push_back(sm);
     }
 
-    // The state machine a call names, from its argument's first field, or -1 for a call that names SMs another way (a claim's or an enable's mask) or none.
+    /// The state machine a call names, from its argument's first field, or -1 for a call that names SMs another way (a claim's or an enable's mask) or none.
     static int smOf(uint32_t command, const uint8_t* kernelCopy) {
         for (const unsigned long request : {rp1::kIocSmXferData32, rp1::kIocSmConfigXfer32, rp1::kIocSmInit, rp1::kIocSmClearFifos, rp1::kIocSmSetPins, rp1::kIocSmSetPindirs, rp1::kIocSmFifoState}) {
             if (rp1::ioctlCommand(request) != command) continue;
@@ -349,7 +349,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return "xfer";
     }
 
-    // A mask of 0 claims any free state machine and returns its index; a state machine none is free for is refused with -EBUSY, a guess, since the firmware's errno for it is not in the kernel source.
+    /// A mask of 0 claims any free state machine and returns its index; a claim when no state machine is free is refused with -EBUSY, a guess, since the firmware's errno for it is not in the kernel source.
     int claim(const rp1::SmClaimArgs& args) {
         if (args.mask != 0) return -EINVAL;   // the backend asks for any free state machine
         for (int sm = 0; sm < rp1::kSmCount; sm++) {
@@ -361,7 +361,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return -EBUSY;
     }
 
-    // The same program loaded twice shares its slots and counts a reference; a new one takes its fixed origin or the first run of free words, or answers -ENOSPC, a guess like the claim's.
+    /// The same program loaded twice shares its slots and counts a reference; a new one takes its fixed origin or the first run of free words, or answers -ENOSPC, a guess like the claim's.
     int addProgram(const rp1::AddProgramArgs& args) {
         if (args.numInstrs < 1 || args.numInstrs > rp1::kInstructionCount) return -EINVAL;
         const std::vector<uint16_t> words(args.instrs, args.instrs + args.numInstrs);
@@ -390,7 +390,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return -ENOSPC;
     }
 
-    // Removing a program this open holds drops the open's hold and the reference; one it does not hold is -ENODEV, as on 6.18.
+    /// Removing a program this open holds drops the open's hold and the reference; one it does not hold is -ENODEV, as on 6.18.
     int removeProgram(const rp1::RemoveProgramArgs& args) {
         for (auto it = programs_.begin(); it != programs_.end(); ++it) {
             if (it->offset != args.origin || it->length != args.numInstrs || !it->heldByClient) continue;
@@ -437,7 +437,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return 0;
     }
 
-    // Returns 8, the bytes it wrote back, as the driver does, and the dispatcher copies them over the argument.
+    /// Returns 8, the bytes it wrote back, as the driver does, and the dispatcher copies them over the argument.
     int fifoState(uint8_t* kernelCopy) {
         rp1::SmFifoStateArgs args = read<rp1::SmFifoStateArgs>(kernelCopy);
         lastFifoTx_ = args.tx;
@@ -448,7 +448,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return static_cast<int>(sizeof(args));
     }
 
-    // A size a multiple of 4 and 1 to 4 buffers, a channel another client holds is -EBUSY, and a reconfigure by the holder replaces its ring.
+    /// A size a multiple of 4 and 1 to 4 buffers, a channel another client holds is -EBUSY, and a reconfigure by the holder replaces its ring.
     int configXfer(const rp1::SmConfigXfer32Args& args) {
         if (args.sm >= rp1::kSmCount || args.dir >= 2) return -EINVAL;
         if (args.bufSize == 0 || args.bufSize % 4 != 0 || args.bufCount < 1 || args.bufCount > 4) return -EINVAL;
@@ -461,7 +461,7 @@ class FakeRp1Pio0 : public mm::platform::Rp1PioDevice {
         return 0;
     }
 
-    // A transfer on a configured channel is cut into ring buffers and returns once queued. It records the argument as received; it hangs when scripted to, and ends -EINTR with the argument rewritten when a signal is scripted.
+    /// A transfer on a configured channel is cut into ring buffers and returns once queued. It records the argument as received; it hangs when scripted to, and ends -EINTR with the argument rewritten when a signal is scripted.
     int transfer(uint8_t* kernelCopy, bool& writeBack, std::unique_lock<std::mutex>& lock) {
         rp1::SmXferData32Args args = read<rp1::SmXferData32Args>(kernelCopy);
         if (args.sm >= rp1::kSmCount || args.dir >= 2 || args.dataBytes == 0 || args.data == 0) return -EINVAL;

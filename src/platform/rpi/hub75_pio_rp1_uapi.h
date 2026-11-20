@@ -10,7 +10,7 @@
 ///
 /// ## Why the layout is redefined here
 ///
-/// The kernel's header uses `uint16_t` and its siblings and includes only `<linux/ioctl.h>`, so it compiles only after something else declares them, and a macOS or CI host has no kernel headers at all. Declaring the layout here lets the backend and its fake kernel build and run on every host, and the compiler pins each size, field offset and number against the values computed for arm64, with a test for the numbers.
+/// The kernel's header uses `uintN_t` types and includes only `<linux/ioctl.h>`, so it compiles only after something else declares them, and macOS and CI hosts lack kernel headers. Declaring the layout here lets the backend and its fake kernel build and run on every host, and the compiler pins each size, field offset and number against the values computed for arm64, with a test for the numbers.
 ///
 /// The header's first line reads `SPDX-License-Identifier: GPL-2.0 + WITH Linux-syscall-note`, followed by `Copyright (c) 2023-26 Raspberry Pi Ltd.` (2023-24 on 6.12) and `All rights reserved.`
 ///
@@ -50,95 +50,95 @@ constexpr uint16_t kDirToSm = 0;
 
 /// The four config registers of a state machine, in the order the kernel's `rp1_pio_sm_config` holds them (rp1_pio_if.h:22-27 on 6.12, :23-28 on 6.18).
 struct SmConfig {
-    uint32_t clkdiv;
-    uint32_t execctrl;
-    uint32_t shiftctrl;
-    uint32_t pinctrl;
+    uint32_t clkdiv;                    ///< CLKDIV, the clock divider register
+    uint32_t execctrl;                  ///< EXECCTRL, the execution control register
+    uint32_t shiftctrl;                 ///< SHIFTCTRL, the shift control register
+    uint32_t pinctrl;                   ///< PINCTRL, the pin mapping register
 };
 
 /// The ADD_PROGRAM argument, 68 bytes (`rp1_pio_add_program_args`; rp1_pio_if.h:29-33 on 6.12, :30-34 on 6.18).
 struct AddProgramArgs {
-    uint16_t numInstrs;
-    uint16_t origin;
-    uint16_t instrs[kInstructionCount];
+    uint16_t numInstrs;                 ///< how many instruction words the program has
+    uint16_t origin;                    ///< the load offset asked for, or kOriginAny to let the kernel pick
+    uint16_t instrs[kInstructionCount]; ///< the program's instruction words
 };
 
 /// The REMOVE_PROGRAM argument, 4 bytes, `origin` being the offset ADD_PROGRAM returned (`rp1_pio_remove_program_args`; rp1_pio_if.h:35-38 on 6.12, :36-39 on 6.18).
 struct RemoveProgramArgs {
-    uint16_t numInstrs;
-    uint16_t origin;
+    uint16_t numInstrs;                 ///< how many instruction words the program has
+    uint16_t origin;                    ///< the offset ADD_PROGRAM returned
 };
 
 /// The SM_CLAIM argument, 2 bytes: the mask of the state machines asked for, 0 for any free one (`rp1_pio_sm_claim_args`; rp1_pio_if.h:40-42 on 6.12, :41-43 on 6.18).
 struct SmClaimArgs {
-    uint16_t mask;
+    uint16_t mask;                      ///< the state machines asked for, one bit each, or 0 for any free one
 };
 
 /// The SM_INIT argument, 20 bytes (`rp1_pio_sm_init_args`; rp1_pio_if.h:44-48 on 6.12, :45-49 on 6.18).
 struct SmInitArgs {
-    uint16_t sm;
-    uint16_t initialPc;
-    SmConfig config;
+    uint16_t sm;                        ///< the state machine to initialize
+    uint16_t initialPc;                 ///< the program counter the state machine starts at
+    SmConfig config;                    ///< the four config registers it is given
 };
 
 /// The SM_CLEAR_FIFOS argument, 2 bytes (`rp1_pio_sm_clear_fifos_args`; rp1_pio_if.h:63-65 on 6.12, :64-66 on 6.18).
 struct SmClearFifosArgs {
-    uint16_t sm;
+    uint16_t sm;                        ///< the state machine whose FIFOs are cleared
 };
 
 /// The SM_SET_PINS argument, 12 bytes: bit n of `values` and `mask` is GPIO n, and only the pins in `mask` change (`rp1_pio_sm_set_pins_args`; rp1_pio_if.h:74-79 on 6.12, :75-80 on 6.18).
 struct SmSetPinsArgs {
-    uint16_t sm;
-    uint16_t reserved;
-    uint32_t values;
-    uint32_t mask;
+    uint16_t sm;                        ///< the state machine that drives the write
+    uint16_t reserved;                  ///< reserved, sent to the firmware with the rest of the struct
+    uint32_t values;                    ///< the pin levels to write, bit n being GPIO n
+    uint32_t mask;                      ///< which pins change, bit n being GPIO n
 };
 
 /// The SM_SET_PINDIRS argument, 12 bytes, with a 1 in `dirs` for an output (`rp1_pio_sm_set_pindirs_args`; rp1_pio_if.h:81-86 on 6.12, :82-87 on 6.18).
 struct SmSetPindirsArgs {
-    uint16_t sm;
-    uint16_t reserved;
-    uint32_t dirs;
-    uint32_t mask;
+    uint16_t sm;                        ///< the state machine that drives the write
+    uint16_t reserved;                  ///< reserved, sent to the firmware with the rest of the struct
+    uint32_t dirs;                      ///< the pin directions to write, a 1 for an output
+    uint32_t mask;                      ///< which pins change, bit n being GPIO n
 };
 
 /// The SM_SET_ENABLED argument, 4 bytes: `mask` holds one bit per state machine, `enable` is 0 or 1 (`rp1_pio_sm_set_enabled_args`; rp1_pio_if.h:88-92 on 6.12, :89-93 on 6.18).
 struct SmSetEnabledArgs {
-    uint16_t mask;
-    uint8_t enable;
-    uint8_t reserved;
+    uint16_t mask;                      ///< the state machines to switch, one bit each
+    uint8_t enable;                     ///< 1 to enable them, 0 to disable them
+    uint8_t reserved;                   ///< reserved, sent to the firmware with the rest of the struct
 };
 
 /// The SM_FIFO_STATE argument, 8 bytes: `tx` picks the FIFO, and `level`, `empty` and `full` come back in the same struct (`rp1_pio_sm_fifo_state_args`; rp1_pio_if.h:127-134 on 6.12, :135-142 on 6.18).
 struct SmFifoStateArgs {
-    uint16_t sm;
-    uint8_t tx;
-    uint8_t reserved;
-    uint16_t level;
-    uint8_t empty;
-    uint8_t full;
+    uint16_t sm;                        ///< the state machine asked about
+    uint8_t tx;                         ///< 1 for its TX FIFO, 0 for its RX FIFO
+    uint8_t reserved;                   ///< reserved, sent to the firmware with the rest of the struct
+    uint16_t level;                     ///< the words in the FIFO, written back by the kernel
+    uint8_t empty;                      ///< nonzero when the FIFO is empty, written back by the kernel
+    uint8_t full;                       ///< nonzero when the FIFO is full, written back by the kernel
 };
 
 /// The GPIO_SET_FUNCTION argument, 4 bytes (`rp1_gpio_set_function_args`; rp1_pio_if.h:140-143 on 6.12, :156-159 on 6.18).
 struct GpioSetFunctionArgs {
-    uint16_t gpio;
-    uint16_t function;
+    uint16_t gpio;                      ///< the GPIO number
+    uint16_t function;                  ///< the function to give it, kGpioFunctionPio for PIO
 };
 
 /// The SM_CONFIG_XFER32 argument, 12 bytes, which takes a buffer size above the 16 bits of SM_CONFIG_XFER (`rp1_pio_sm_config_xfer32_args`; rp1_pio_if.h:163-168 on 6.12, :179-184 on 6.18).
 struct SmConfigXfer32Args {
-    uint16_t sm;
-    uint16_t dir;
-    uint32_t bufSize;
-    uint32_t bufCount;
+    uint16_t sm;                        ///< the state machine whose ring is configured
+    uint16_t dir;                       ///< the ring's direction, 0 toward the state machine
+    uint32_t bufSize;                   ///< the size of each ring buffer in bytes
+    uint32_t bufCount;                  ///< the number of ring buffers
 };
 
 /// The SM_XFER_DATA32 argument, 16 bytes; the kernel rewrites it in place when a signal interrupts the call, and `data` is the user pointer as a 64-bit integer (`rp1_pio_sm_xfer_data32_args`; rp1_pio_if.h:177-182 on 6.12, :237-242 on 6.18).
 struct SmXferData32Args {
-    uint16_t sm;
-    uint16_t dir;
-    uint32_t dataBytes;
-    uint64_t data;
+    uint16_t sm;                        ///< the state machine to transfer for
+    uint16_t dir;                       ///< the transfer direction, 0 toward the state machine
+    uint32_t dataBytes;                 ///< the byte count to transfer
+    uint64_t data;                      ///< the user buffer's address as a 64-bit integer
 };
 
 static_assert(sizeof(SmConfig) == 16 && sizeof(AddProgramArgs) == 68 && sizeof(RemoveProgramArgs) == 4 && sizeof(SmClaimArgs) == 2,

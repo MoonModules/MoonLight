@@ -64,6 +64,21 @@ struct Submitter {
 
 bool contains(const std::string& s, const char* part) { return s.find(part) != std::string::npos; }
 
+// Opens the rig's backend, starts it and stops it with the pins left dark.
+void openStartStop(Rig& r) {
+    REQUIRE(r.backend->open(r.error));
+    REQUIRE(r.backend->start(config(), r.error));
+    CHECK(r.backend->stop(false, r.error));
+}
+
+// A start that follows another, on a backend still open, is refused with "already started" before it loads the program again.
+void checkSecondStartRefused(Rig& r) {
+    const int adds = r.fake.count("add_program");
+    CHECK_FALSE(r.backend->start(config(), r.error));
+    CHECK(contains(r.error, "already started"));
+    CHECK(r.fake.count("add_program") == adds);
+}
+
 uint32_t command(unsigned long request) { return rp1::ioctlCommand(request); }
 
 using Calls = std::vector<std::string>;
@@ -238,9 +253,7 @@ TEST_CASE("Hub75PioRp1: a refused step of the start fails it, names the step, an
 
 TEST_CASE("Hub75PioRp1: the pin word and mask are the same at the start and at the stop") {
     Rig r;
-    REQUIRE(r.backend->open(r.error));
-    REQUIRE(r.backend->start(config(), r.error));
-    CHECK(r.backend->stop(false, r.error));
+    openStartStop(r);
     const auto writes = r.fake.pinWrites();
     REQUIRE(writes.size() == 2);
     CHECK(writes[0].first == (mm::platform::kBlankWideWord << 2));   // bit 0 of the word is GPIO 2
@@ -410,9 +423,7 @@ TEST_CASE("Hub75PioRp1: a stop that failed runs the disable, the pins and the FI
 
 TEST_CASE("Hub75PioRp1: after a stop a submit answers -ENODEV, a second stop makes no call, and the close closes the device, once") {
     Rig r;
-    REQUIRE(r.backend->open(r.error));
-    REQUIRE(r.backend->start(config(), r.error));
-    CHECK(r.backend->stop(false, r.error));
+    openStartStop(r);
     const size_t before = r.fake.calls().size();
     std::vector<uint32_t> blank(64, mm::platform::kBlankWideWord);
     CHECK(r.backend->submitBlank(blank.data(), 256) == -ENODEV);   // the refresh thread released late finds the backend stopped
@@ -753,10 +764,7 @@ TEST_CASE("Hub75PioRp1: a second open keeps the one file and claim, and a second
     CHECK(r.fake.opens() == 1);
     CHECK(r.fake.count("claim") == 1);
     REQUIRE(r.backend->start(config(), r.error));
-    const int adds = r.fake.count("add_program");
-    CHECK_FALSE(r.backend->start(config(), r.error));
-    CHECK(contains(r.error, "already started"));
-    CHECK(r.fake.count("add_program") == adds);
+    checkSecondStartRefused(r);
     CHECK(r.backend->stop(false, r.error));
     r.backend->close();
     CHECK(r.fake.programWordsUsed() == 0);
@@ -838,10 +846,7 @@ TEST_CASE("Hub75PioRp1: a start after a failed start, with no close between, is 
     r.fake.failCommand(command(rp1::kIocSmInit), -EIO);
     CHECK_FALSE(r.backend->start(config(), r.error));   // the program is loaded by then
     r.fake.failCommand(command(rp1::kIocSmInit), 0);
-    const int adds = r.fake.count("add_program");
-    CHECK_FALSE(r.backend->start(config(), r.error));
-    CHECK(contains(r.error, "already started"));
-    CHECK(r.fake.count("add_program") == adds);
+    checkSecondStartRefused(r);
     r.backend->close();
 }
 
