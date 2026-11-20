@@ -69,10 +69,9 @@ public:
 
         layer()->fadeToBlackBy(fade);
 
-        // The elapsed delta, which drives the decay and the phase integrator.
+        // The frame's length on the local clock drives the decay and the phase integrator, which a fleet-clock step leaves alone; the beat positions read the fleet time.
         const unsigned long now = elapsed();
-        const unsigned long deltaMs = now - lastTime;
-        lastTime = now;
+        const unsigned long deltaMs = frameMs();
 
         // Once a tick, cached, so a band spanning several columns still integrates once a frame.
         const AudioBars bars = barsOf(*f, bands);
@@ -153,14 +152,12 @@ private:
         std::memset(bandPhase, 0, sizeof(bandPhase));
         std::memset(lastBpm, 0, sizeof(lastBpm));
         std::memset(phaseOffset, 0, sizeof(phaseOffset));
-        lastTime = 0;
     }
 
     uint16_t bandSpeed[kMaxBands]   = {};   ///< each band's current run-rate, per band rather than per light so inline
     uint16_t bandPhase[kMaxBands]   = {};   ///< the BandPhases accumulator
     uint8_t  lastBpm[kMaxBands]     = {};   ///< the Chaos fix method's previous rate
     uint8_t  phaseOffset[kMaxBands] = {};   ///< and its carried offset
-    unsigned long lastTime                 = 0;    ///< the previous frame's timestamp
 };
 
 } // namespace mm

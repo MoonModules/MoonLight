@@ -88,19 +88,15 @@ public:
         field_.resize(s > 1 ? static_cast<size_t>(fw_) * fh_ * fd_ * 3 : 0);
         planeW_ = w; planeH_ = h; planeD_ = d;
         frame_ = 0;
-        started_ = false;
     }
 
     /// Carry the cloud along the curl flow, decay it, then birth new light into it.
     void tick() MM_NONBLOCKING override {
         if (!planeA_ || !planeB_) return;
         const lengthType w = width(), h = height(), d = depth();
-        // A zero delta on the first tick: `now - 0` would hand the flow the whole uptime.
         const uint32_t now = elapsed();
         const uint32_t t = now;              // the flow field's third axis, read inside the lambda
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         bank_.set(0, {.rate = static_cast<uint16_t>(4 + speed / 6), .low = 0, .high = 65535,
                       .phaseOffset = 0, .wave = Wave::Saw});
@@ -218,11 +214,9 @@ private:
     lengthType              planeW_ = 0, planeH_ = 0, planeD_ = 0;   ///< the shape the planes hold
     lengthType              fw_ = 0, fh_ = 0, fd_ = 0;               ///< the field's own extents
     bool                    front_ = true;     ///< which plane currently holds the cloud
-    uint32_t                lastMs_ = 0;       ///< the previous frame's timestamp
     uint32_t                frame_ = 0;        ///< counted so `fieldRate` can skip births
     uint8_t                 peak_ = 200;    ///< the field's high water mark, eased per frame
     uint8_t                 floor_ = 40;    ///< and its low, so the window spans what is there
-    bool                    started_ = false;   ///< false until a frame has been timed
 };
 
 }  // namespace mm

@@ -35,19 +35,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 **Action: allow UDP 65511 and the multicast group 239.255.77.80 where a firewall sits between devices.**
 
-Every MoonLight device keeps a fleet clock, asking the lowest device that runs it for its time on UDP port 65511 and saying it runs the clock to 239.255.77.80 every sixteen seconds. Effects animate on it, so the same effect on two devices shows the same moment; when a device first syncs, its animations jump once to the fleet's time. A group's status names the device it follows (`clock: MM-C3, ±4.7 ms`). Only devices on this release or later run it, and only they are asked.
-
-### A device group's change applies at a time
-
-**Action: *update* the members of a group to this release together; until then a member on older firmware follows a shared control within seconds rather than at once, and a look not at all.**
-
-A shared control changed on a member goes out as an OSC bundle stamped with the fleet time it applies at, 100 ms ahead, so the other members switch together; the member where it changed applies it at once and leads them by those 100 ms. A look goes out as its preset document in chunks carrying the same time, which every member takes from the multicast and repairs on request, rather than as a name each member fetched over HTTP. A member on older firmware ignores the bundle and takes the control from the group's next repeat, and does not take a look.
-
-### A group member is set by `mac` from the API
-
-**Action: *update* a script that sets a member by MAC through the `device` field: send it as `mac`.**
-
-`PATCH /api/list/<group>/members/<row>` with `field: "device"` takes the picker's index, a number, and refuses a quoted value, where a MAC sent there was read as an index from its leading digits and added another device. A MAC goes in `field: "mac"`.
+Every MoonLight device keeps a fleet clock, asking the lowest device that runs it for its time on UDP port 65511 and saying it runs the clock to 239.255.77.80 every sixteen seconds. Effects animate on it, so the same effect on two devices shows the same moment; when a device first syncs, its animations jump once to the fleet's time. An animation's phase is the fleet time times its rate, so each step of a speed control moves the picture to where the new rate puts it. A group's status names the device it follows (`clock: MM-C3, ±4.7 ms`). Only devices on this release or later run it, and only they are asked.
 
 ### MoonBase matches the app by handoff version
 
@@ -65,7 +53,7 @@ The `receivers` of OSC, audio sync and Network Send take a device group's name b
 
 **Action: *remove* an OscService set up only to keep group members in step; membership alone keeps them in step now.**
 
-A member of a device group follows the group's switches, encoders and faders, each as the parameter it drives (`Drivers.brightness`), and its effects presets, with no OSC set up: membership is the one setting. A change made on any member sets that parameter on every other member, whatever their own slots drive, and the newer change wins when two meet. An effects preset applied on one member is fetched from it and applied on the others; a driver or layout preset stays on its board. A member back from a restart takes the group's values within seconds. These travel on the groups' address, 239.255.77.79 port 65510.
+A member of a device group follows the group's switches, encoders and faders, each as the parameter it drives (`Drivers.brightness`), and its effects presets, with no OSC set up: membership is the one setting. A change made on any member sets that parameter on every other member at one moment of the fleet clock, 100 ms ahead, whatever their own slots drive, and the newer change wins when two meet; the member where it changed leads by those 100 ms. An effects preset applied on one member reaches the others whole, in chunks every member takes from the multicast and repairs on request, and applies at the same moment; a driver or layout preset stays on its board. A member back from a restart takes the group's values within seconds. These travel on the groups' address, 239.255.77.79 port 65510. A script sets a member by MAC with `field: "mac"`; the `device` field takes the picker's index, a number.
 
 ### A `latest` host's firmware id is `host-<os>-<arch>`
 

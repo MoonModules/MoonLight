@@ -60,6 +60,8 @@ public:
     nrOfLightsType nrOfLights() const;
     /// Milliseconds since render start, which @xref{animation|animation} follows rather than a frame count.
     uint32_t elapsed() const;
+    /// This frame's length in local milliseconds, 0 on the first: the step for anything integrated frame by frame, which a fleet-clock step leaves alone.
+    uint32_t frameMs() const MM_NONBLOCKING;
 
     /// How much of a wall of several devices this effect computes: mirrored draws this device's lights as their own whole picture, region draws them as their part of the wall's one picture.
     enum class Footprint : uint8_t { Mirrored, Region };

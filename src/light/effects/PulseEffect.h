@@ -60,9 +60,7 @@ public:
         const uint32_t now = elapsed();
 
         // The wake, by half-life rather than per frame, so the trail is the same at any framerate.
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        started_ = true;
-        lastMs_ = now;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
         draw::decay(cv, kWakeHalfLifeMs, dt);
 
         // When: a hit fires at once, and the idle clock fires while the room is quiet.
@@ -154,8 +152,6 @@ private:
     Pulse    pulses_[kPulses];
     uint8_t  next_ = 0;          ///< round-robin, so the oldest shell is the one replaced
     uint32_t lastIdle_ = 0;      ///< when the idle clock last fired
-    uint32_t lastMs_ = 0;        ///< the previous frame's time, for the wake's half-life
-    bool     started_ = false;   ///< the first frame has no previous one to measure against
     uint16_t lastSeq_ = 0;      ///< the frame the last hits came from, so a frame read on two ticks gives its hits once
 
     /// Start a shell, taking the oldest slot when every one is busy.

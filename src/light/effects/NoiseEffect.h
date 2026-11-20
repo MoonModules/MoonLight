@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/util/math16.h"            // BeatPhase: the shared BPM accumulator
+#include "core/util/math16.h"            // BeatPhase: the phase of fleet time at a rate
 #include "light/effects/EffectBase.h"
 
 namespace mm {

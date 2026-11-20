@@ -72,7 +72,6 @@ public:
         if (scratch_) std::memset(scratch_.data(), 0, scratch_.bytes());
         // resize() keeps old contents at an unchanged size, so the dither's error needs clearing too.
         if (carry_)   std::memset(carry_.data(), 0, carry_.bytes());
-        started_ = false;
         front_ = true;
     }
 
@@ -81,9 +80,7 @@ public:
         if (!plane_ || !scratch_ || !xProf_ || !yProf_) return;
         const lengthType w = width(), h = height(), d = depth();
         const uint32_t now = elapsed();
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         // Both clocks scale from `speed`, and 0 stops them. Their rates differ so they drift apart.
         bank_.set(0, {.rate = static_cast<uint16_t>(speed / 4), .low = 0, .high = 65535,
@@ -250,8 +247,8 @@ private:
     ScratchBuffer<int32_t>  xProf_{*this};     ///< one shift per column: the vertical flow
     ScratchBuffer<int32_t>  yProf_{*this};     ///< one shift per row: the horizontal flow
     OscillatorBank<2>       bank_;
-    bool     front_ = true, started_ = false;
-    uint32_t lastMs_ = 0, huePhase_ = 0;
+    bool     front_ = true;
+    uint32_t huePhase_ = 0;
 };
 
 }  // namespace mm

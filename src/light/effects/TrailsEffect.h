@@ -65,18 +65,14 @@ public:
             std::memset(scratch_.data(), 0, scratch_.bytes());
         }
         planeW_ = w; planeH_ = h; planeD_ = d;
-        started_ = false;      // the next tick is the first: it has no previous frame to measure
     }
 
     /// Move the trail plane along the flow, add the emitters, and draw it.
     void tick() MM_NONBLOCKING override {
         if (!plane_ || !scratch_) return;               // a zero grid, or an allocation that failed
         const lengthType w = width(), h = height(), d = depth();
-        // A zero delta on the first tick: `elapsed() - 0` would hand the flow the whole uptime.
         const uint32_t now = elapsed();
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         // Two oscillators: one walks the emitters, one breathes the flow's strength.
         bank_.set(0, {.rate = static_cast<uint16_t>(8 + speed / 8), .low = 0, .high = 65535,
@@ -210,8 +206,6 @@ private:
     bool                    front_ = true;     ///< which of the two currently holds the trail
     OscillatorBank<2>       bank_;
     lengthType              planeW_ = 0, planeH_ = 0, planeD_ = 0;
-    uint32_t                lastMs_ = 0;
-    bool                    started_ = false;   ///< false until a frame has been timed
     uint32_t                emitCarry_ = 0;     ///< time owed to the emitters, in ms
 };
 

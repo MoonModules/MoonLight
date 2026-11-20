@@ -42,6 +42,10 @@ namespace mm {
 /// ## Disabling and reordering shift indices
 ///
 /// Disabling a layout removes its lights and later layouts shift down; reordering sets each layout's physical range.
+///
+/// ## A device in two groups
+///
+/// The wall is the box around the places of every member of every group the device holds, so a device in two placed groups draws against both groups' box, and a member of one of them against its group's box alone: two overlapping groups with SuperSync on draw against two walls.
 class Layouts : public MoonModule {
 public:
     /// The tag the UI shows for this container.
@@ -76,7 +80,7 @@ public:
     /// Use `devices` for this device's place and its groups' wall, a test's; prepare finds the device's own otherwise.
     void useDevices(Devices* devices) { devices_ = devices; }
 
-    /// Publish this device's place and take the wall its groups make, once a second as the group sync derives it.
+    /// Publish this device's place and take the wall its groups make, once a second as the group sync derives it: @xref{a-device-in-two-groups}.
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
         if (!devices_) return;

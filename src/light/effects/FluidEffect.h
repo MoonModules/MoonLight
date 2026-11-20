@@ -67,7 +67,6 @@ public:
             if (carry_) std::memset(carry_.data(), 0, carry_.bytes());
         }
         planeW_ = w; planeH_ = h; planeD_ = d;
-        started_ = false;
         pourCarry_ = 0;
         poured_ = false;
     }
@@ -78,10 +77,7 @@ public:
         if (!fluid_.valid() || !dyeA_ || !dyeB_) return;
         const lengthType w = width(), h = height(), d = depth();
         const uint32_t now = elapsed();
-        // A zero delta on the first tick: the whole uptime would push the solver in one step.
-        const uint32_t dt = started_ ? now - lastMs_ : 0u;
-        lastMs_ = now;
-        started_ = true;
+        const uint32_t dt = frameMs();   // the frame's length on the local clock, which a fleet-clock step leaves alone
 
         // Four clocks a jet, at rates sharing no multiple, so the jets never march together.
         for (uint8_t i = 0; i < kMaxJets; i++) {
@@ -234,8 +230,6 @@ private:
     ScratchBuffer<uint8_t>  carry_{*this};    ///< the dither's per-channel error
     OscillatorBank<kMaxJets * kClocks> bank_;   ///< four clocks a jet
     bool                    front_ = true;      ///< which dye plane currently holds the picture
-    bool                    started_ = false;   ///< false until a frame has been timed
-    uint32_t                lastMs_ = 0;        ///< the previous frame's timestamp
     uint32_t                pourCarry_ = 0;   ///< time owed to the jets, in ms
     lengthType              planeW_ = 0, planeH_ = 0, planeD_ = 0;   ///< the shape the planes hold
     bool                    poured_ = false;  ///< has the opening pour happened yet

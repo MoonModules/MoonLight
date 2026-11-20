@@ -32,7 +32,7 @@ The MQTT client connects out to the broker the user names, and the commands it r
 
 ## The Devices map
 
-The [map](../moonmodules/core/system.md) shows what a device hears on the network: each device's name, address, MAC, firmware and version, the traffic between them and the services each offers, to anyone who reaches the device. It keeps all of it in memory and saves only the addresses a user added.
+The [map](../moonmodules/core/devices.md#discovery) shows what a device hears on the network: each device's name, address, MAC, firmware and version, the traffic between them and the services each offers, to anyone who reaches the device. It keeps all of it in memory and saves only the addresses a user added.
 
 Unasked, a device sends only its presence packet every 10 seconds, two mDNS browses a minute and one probe of an added address a minute, and reads ARP from its own table.
 

@@ -99,6 +99,7 @@ public:
     void prepare() override {
         // Restart discards the elapsed gap, so the first tick after a re-prepare cannot jump a trail.
         fadeTime_.reset();
+        frameStarted_ = false;
         fadeCarry_ = fadeDue_ = 0;
         // No layouts wired reads the same as every layout disabled: the layer ends up empty.
         const nrOfLightsType physicalCount = layouts_ ? layouts_->totalLightCount() : 0;
@@ -151,6 +152,9 @@ public:
         // Gated per child here because the layer iterates its own children, not through the Scheduler.
         const uint32_t local = platform::millis();
         elapsed_ = static_cast<uint32_t>(local + FleetTime::offsetUs() / 1000);   // fleet time: devices side by side show one moment
+        frameMs_ = frameStarted_ ? local - lastLocalMs_ : 0;   // the frame's length on the local clock, untouched by a fleet-clock step
+        lastLocalMs_ = local;
+        frameStarted_ = true;
         // The fade on the local clock, which only moves forward: a frozen clock spends a whole idle gap at once and wipes the trail.
         const uint32_t frameScale = fadeTime_.advance(local);
         fadeDue_ = fadeDue_ + frameScale < 2 * particles::FrameTime::kOne ? fadeDue_ + frameScale : 2 * particles::FrameTime::kOne;   // bounded: the carry, not this, holds how much
@@ -289,6 +293,8 @@ public:
     uint8_t channelsPerLight() const { return channelsPerLight_; }
     /// Milliseconds of fleet time at the start of this frame, the clock every effect animates against, the same on every device of the network.
     uint32_t elapsed() const { return elapsed_; }
+    /// This frame's length in milliseconds on the local clock, the step an effect integrates by, which a fleet-clock step leaves alone.
+    uint32_t frameMs() const MM_NONBLOCKING { return frameMs_; }
 
     /// Where this device's lights sit in the wall, from its Layouts, zero where it is the whole picture.
     Coord3D origin() const { return layouts_ ? layouts_->origin() : Coord3D{0, 0, 0}; }
@@ -500,6 +506,9 @@ private:
     lengthType height_ = 0;
     lengthType depth_ = 0;
     uint32_t elapsed_ = 0;
+    uint32_t frameMs_ = 0;       // this frame's length in local milliseconds, 0 on the first
+    uint32_t lastLocalMs_ = 0;   // the local clock at the previous frame
+    bool     frameStarted_ = false;   // whether lastLocalMs_ holds a frame's time
     uint8_t  fadeBy_ = 0;   // fade RATE collected from effects (MIN), consumed once at frame start
     uint32_t fadeCarry_ = 0;               // the fade collected since the last pass, so a high frame rate does not over-fade
     uint32_t fadeDue_ = 0;                 // the reference frames' share elapsed since the last pass, 256 a whole one
@@ -613,6 +622,7 @@ inline bool EffectBase::hasBeam() const {
 }
 inline nrOfLightsType EffectBase::nrOfLights() const { return layer()->buffer().count(); }
 inline uint32_t EffectBase::elapsed() const { return layer()->elapsed(); }
+inline uint32_t EffectBase::frameMs() const MM_NONBLOCKING { return layer()->frameMs(); }
 inline draw::Canvas EffectBase::canvas() {
     Layer* l = layer();
     draw::Canvas cv = draw::Canvas::of(l->buffer(), l->width(), l->height(), l->depth());

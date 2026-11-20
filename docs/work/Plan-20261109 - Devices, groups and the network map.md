@@ -21,54 +21,37 @@ The plan has two parts. **The steps** lead to supersync, numbered 1 to 16. **Bes
 
 #### 1. Devices on top, drawn as a map ✅
 
-Landed in: the [Devices page](../moonmodules/core/system.md) (its card, the map, growth and what memory refuses, from `DevicesModule.h`); the allocation rule and `platform::fitsWithReserve` in [moonmodule.md](../explanation/architecture/moonmodule.md); the list drawn as a graph, `ListSource::listAsGraph()` in [Control.h](../../src/core/module/Control.h); the ArtPoll reply named after the device in [NetworkReceiveEffect.h](../../src/light/effects/NetworkReceiveEffect.h); the move in [MIGRATING](../reference/MIGRATING.md) ("Discovery moves from Network to Devices").
+Shipped: the [Discovery card](../moonmodules/core/devices.md#discovery), its map, growth and what memory refuses; the allocation rule in [moonmodule.md](../explanation/architecture/moonmodule.md#lifecycle-propagation-to-children).
 
 #### 2. This device's flows and services ✅ (OSC, MQTT and Hue on the P4, PanelCard's ColorLight service on the NanoPi, 2026-11-17)
 
-Landed in: what each module reports, and why the socket counts nothing, in [NetworkUse.h](../../src/core/module/NetworkUse.h); the services, rows and edges the map draws, and the sighting rule, in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("The map's edges come from the modules"); each reporter in its own module's header; Home Assistant and every other client of the WLED API as a named inbound flow in [HttpServerModule.h](../../src/core/system/HttpServerModule.h); pinned in `unit_DevicesModule_flows.cpp` and `unit_HttpServerModule_apply.cpp`.
-
-- **Verified by:** NetworkSendDriver to a bench board and audio sync from a WLED, both drawn; .101's RTP-MIDI session shown on its node.
+Shipped: the map's edges, each module's own flows and services, on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
 #### 3. Peers' flows: the whole MoonLight map ✅ (bench 2026-11-19: a flow between two other devices on a third board's map, drawn broken when its receiver stopped)
 
-Landed in: the peers' maps merged, a broken link and an unreachable peer in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("The peers' maps merge into this one") and [devicemap.js](../../src/ui/devicemap.js); the page's port and the MAC in the presence packet in [WledPacket.h](../../src/core/system/WledPacket.h); a link-local address refused and the list never saved in DevicesModule.h ("Ports and addresses", "Aging out"); older firmware no longer listing a board on port 8080 in [MIGRATING](../reference/MIGRATING.md) ("Discovery moves from Network to Devices").
-
-- **Verified by:** the desktop's DDP to .156 drawn on a third board's map; the receiver stopped and the link drawn broken.
-- **Tested (2026-11-19), by the product owner and the agent.** The desktop's map showed MM-NanoPi (.156:8080) with its flows and MM-Pi5-1 (.204:8080) with its lights, MM-P4-hdmi once, every label inside its cell. On .221's map the desktop's DDP to .156 was drawn, neither end being .221; .156's NetworkReceive disabled over the API, .221's map drew the link red and dashed within seconds; enabled again after.
+Shipped: the peers' maps merged, broken links and unreachable peers, on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
 #### 4. A peer's summary, and identify ✅
 
-Landed in: the [Devices page](../moonmodules/core/system.md) ("The summary is `/api/system`", a node's popup, its firmware and identify); the summary's fields in [the REST API](../reference/openapi.yaml) (`/api/system`); keyboard-reachable nodes and the duplicate `Content-Length` refusal (CodeRabbit, PR #242) in `buildListGraph` and [HttpHead.h](../../src/core/util/HttpHead.h), each pinned by a test.
+Shipped: a node's summary and identify on the [Discovery card](../moonmodules/core/devices.md#discovery); the summary's fields under `/api/system` in [the REST API](../reference/openapi.yaml).
 
 #### 5. What drives each device's lights ✅
 
-Landed in: the [Devices page](../moonmodules/core/system.md) (the emoji a node's lights show); the `outputs` field in [the REST API](../reference/openapi.yaml) (`/api/system`), from `DriverBase::drivesLights` and `windowLength`.
+Shipped: the `outputs` of `/api/system` in [the REST API](../reference/openapi.yaml), shown on each node of the [Discovery card](../moonmodules/core/devices.md#discovery).
 
 ### Act as a group
 
 #### 6. Device groups, shared by their members ✅ (bench 2026-11-19: a five-member group edited from a board, a member missing in MoonBase)
 
-Landed in: [DeviceGroup.h](../../src/core/system/DeviceGroup.h) (its members by MAC, its id, missing members, the box on the map, the replication and what it costs), [DeviceGroupSync.h](../../src/core/system/DeviceGroupSync.h) and [Hlc.h](../../src/core/util/Hlc.h); a member's identity in [mooncore.md](../explanation/architecture/mooncore.md#device-name-one-identity-every-network-name-derives-from-it).
-
-- **Roles.** A role is pinned with the role's first user (step 8's waves, step 9's clock reference); until then each derives from the lowest live device id ([the message design](#the-messages)).
-- **Tested (2026-11-18), by the product owner and the agent.** rtpDGroup made on .101 with .221 as a member: .221 created it within seconds, and the Mac's map, no member, drew its box. After the review fixes (781cba15): a rename on .221 reached .101 within 3 s and one on .101 came back, each carrying its writer's stamp; the group deleted on .221 was gone from .101 within 3 s, both saved its marker, and after both rebooted it stayed gone.
-- **Tested (2026-11-19), by the agent.** DesktopGroup grown to five members (the desktop app, .221 P4, .122 classic, .115 C3, .203 Teensy 4.1) by two rows added on .115 over the API: the desktop, .221 and .122 held the same members within seconds, and the Teensy took the group as soon as step 8's update gave it the module. .122 sent into MoonBase showed missing on the desktop at once (5 members, 1 missing) and present again 24 s after its app booted. Two defects met and fixed: a MAC sent to the row's `device` field read as an index from its leading digits and added the wrong boards (the field now refuses a quoted value; a MAC goes to `mac`), and a member in MoonBase counted as present, since MoonBase sends the same presence packet (present now means heard running MoonLight).
-- **Verified by:** two groups on the bench, made on one board and edited on another, both maps drawing the same boxes; a member unplugged and shown missing; a unit test feeding the element set every arrival order.
+Shipped: the [Device group card](../moonmodules/core/devices.md#devicegroup), and its replication in [mooncore.md](../explanation/architecture/mooncore.md#multi-device-runtime).
 
 #### 7. A group acts as one ✅ (bench 2026-11-19: five members, a change everywhere within 3 s, simultaneous changes converging, a restarted member catching up)
 
-Landed in: a group's name in `receivers`, resolved each second, and the shared bound `kMaxReceivers` in [NameResolver.h](../../src/core/util/NameResolver.h) and [ReceiverList.h](../../src/core/util/ReceiverList.h); membership as the one setting, what travels, last writer wins per parameter, a look by its name and the catch-up in [DeviceGroupSync.h](../../src/core/system/DeviceGroupSync.h) and [SharedControls.h](../../src/core/system/SharedControls.h); unicast to each member in [DeviceGroup.h](../../src/core/system/DeviceGroup.h) ("Reaching the members"); MidiService's one participant in [control surfaces](../reference/control-surface.md); the move from OSC leader and followers to membership in [MIGRATING](../reference/MIGRATING.md).
-
-- **Tested (2026-11-18), by the product owner and the agent.** DesktopGroup: the desktop app, .221 (P4), .122 (classic) and .115 (C3), each with OSC listening and feedback to `DesktopGroup`. An encoder changed on any of the four reached the other three, the first device read within 3 to 20 ms; brightness changed on .122 reached every member once each mapped `fader1` to `Drivers.brightness`. A member restarted 40 s before still resolved its group to nobody, and a change made on it went out once its Discovery list had heard the others. A group member was sent to on the feedback port, where no member listens; it is sent to on the OSC port since.
-- **Tested (2026-11-19), by the agent**, on the five members above with their OscService modules removed, on dev.153 and later: `encoder1` (every member's `Drivers.palette`) set on the Teensy over the API reached all five within 3 s. Five races, two members setting `encoder1` to different values in the same instant (P4 and C3, classic and Teensy, desktop and P4, C3 and classic, Teensy and desktop), each ended on one value on all five. The C3 restarted while the desktop changed the group's value came back on the newer value, not its saved one.
-- **Verified by:** DesktopGroup, the desktop app, .221, .122 and .115 with their OscService modules removed: a fader, a switch and an encoder on any member followed by the others, members with different slots on one parameter converging; an effects preset pressed on one applied on the others, a driver preset staying; a member restarted taking the group's newer values; two members moving one control at once ending on one value.
+Shipped: shared controls in [mooncore.md](../explanation/architecture/mooncore.md#multi-device-runtime) and on the [Device group card](../moonmodules/core/devices.md#devicegroup); a group's name in `receivers` in [How feedback works](../reference/control-surface.md#how-feedback-works).
 
 #### 8. Update a group ✅ (bench 2026-11-19: three members behind, updated in waves in two minutes)
 
-Landed in: the waves, the popup and its skipped members in [DeviceGroup.h](../../src/core/system/DeviceGroup.h) ("Updating the members") and [devicegroup.js](../../src/ui/devicegroup.js), pinned in `device-group.test.mjs`; one peer from its popup in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("Behind, and defaults") and the shared install flow in [deviceinstall.js](../../src/ui/deviceinstall.js).
-
-- **Verified by:** a bench group updated from one board's page, a Teensy among them.
-- **Tested (2026-11-19), by the product owner and the agent.** DesktopGroup from .115's page, three of five members behind latest (dev.153): .122 (dev.150, through MoonBase) alone at 09:47, about 50 s; then the Teensy (dev.146, no TLS, so download and upload) and .221 (dev.150) together; all three on dev.153 by 09:48:56. The popup kept saying "3 of 5 members are behind" throughout; it now counts down as each member ends well and closes once every member is updated, staying open with the reason on a failure.
+Shipped: Updating the members, the waves and the skipped, on the [Device group card](../moonmodules/core/devices.md#devicegroup); one node's update on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
 #### 9. Clock sync 🧪 (built 2026-11-19: the fleet clock, apply at T, effects on fleet time; test: the spread under 1 ms and the line sweep across boards)
 
@@ -188,18 +171,11 @@ Each ships on its own, in any order.
 
 #### Every desktop updates itself through the Firmware module ✅
 
-Landed in: [the service](../reference/installing-on-linux.md#the-service) (the program it owns and why, updating as a board, rolling back by boot assessment); the image writer, the swap and the restart in [platform_host_update.cpp](../../src/platform/host/platform_host_update.cpp) and the header vetting in [ProgramImage.h](../../src/platform/host/ProgramImage.h); the `update` mode (`self`, `container`, `manual`) and the `sha256` of `/api/firmware/url` in [the REST API](../reference/openapi.yaml); the [MIGRATING](../reference/MIGRATING.md) entries (the firmware id `host-<os>-<arch>`, the service and the program's and settings' new paths, `/api/reboot` restarting a host in place).
-
-Asked by the product owner (2026-11-12): one way to update any MoonLight device. A desktop prepares the new version beside the running one and a restart activates it, as a board writes its other slot and reboots into it, through the same routes, the same Firmware card and the same asset naming; a container is its host's to replace.
-
-- **Tested (2026-11-13 and 2026-11-15), by the product owner and the agent.** This Mac: an upload and a URL with its digest installed and restarted in place, same PID, `.pending` cleared after a minute; a board image and a wrong digest refused. .204, the Raspberry Pi 5, from the CI `.deb`: the service runs as `moonlight` holding `CAP_NET_RAW` alone; an upload restarts it in place, no start counted; `/bin/false` installed as the pending program rolled back by the stop hook 37 ms after the failed start; an `apt install` puts the package's program back and drops `.prev`. .156's container refuses both install routes with 501. CI: every desktop compiles.
-- **Verified by:** .204's package updated from its own Firmware card and rolled back from a program made to fail; this Mac updated from its own Firmware card, by URL and by upload; Windows by CI's `smoke-update`, which installs a program through its own upload route and checks it restarts with `.prev` beside it, on each runner that builds a desktop; .156's container saying its host updates it.
+Shipped: a host's self-update in [mooncore.md](../explanation/architecture/mooncore.md#platform-abstraction), the Linux service and its rollback in [the service](../reference/installing-on-linux.md#the-service), the app on Android in [Running MoonLight on Android](../reference/installing-on-android.md#what-the-app-does).
 
 #### The map updates a desktop as it updates a board ✅
 
-Landed in: [installing on Linux](../reference/installing-on-linux.md) (a package updates from the map, a container by its host); a node's update and the device's `update` read from its summary in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("Behind, and defaults"); the `update` field of `/api/system` in [the REST API](../reference/openapi.yaml); the `.dmg` app in a folder its user writes in [MIGRATING](../reference/MIGRATING.md).
-
-- **Verified by:** .204, this Mac and a Windows PC each updated from another device's map; the `.dmg` app on this Mac updated from its own Firmware card and opened again from Finder; .156's container node saying its host updates it.
+Shipped: [the service](../reference/installing-on-linux.md#the-service), updated from the map as a board is, and [Docker](../reference/installing-on-linux.md#docker), updated by its host; the `update` field of `/api/system` in [the REST API](../reference/openapi.yaml).
 
 #### A container updated from the map, through Watchtower ⏳
 
@@ -223,9 +199,7 @@ Asked by the product owner (2026-11-12), after the desktops.
 
 #### The map marks a device behind its channel ✅ (a bench board behind, on the host's map, 2026-11-17)
 
-Landed in: the rule, `channelUpdate` in [releases.js](../../src/ui/releases.js), read by the status bar's badge, a node's popup and its mark, pinned in `ui-update-asset.test.mjs`; the channel for a user in the [update firmware](../moonwalk.md#update-firmware) process; a node's mark, and a MoonBase or WiFi coprocessor behind its app, in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("Behind, and defaults"); `mode`, `moonbaseMismatch` and `coprocessorMismatch` in [the REST API](../reference/openapi.yaml).
-
-- **Verified by:** a bench board one release behind and one current, side by side on the map; the behind one updated from its popup, its mark gone.
+Shipped: a node's mark and its popup's update on the [Discovery card](../moonmodules/core/devices.md#discovery); the channel in [Update MoonLight](../moonwalk.md#update-firmware); `moonbaseMismatch` and `coprocessorMismatch` in [the REST API](../reference/openapi.yaml).
 
 #### MoonBase on every device ⏳ (after WLED to MoonLight from the map)
 
@@ -238,17 +212,17 @@ Landed in: the rule, `channelUpdate` in [releases.js](../../src/ui/releases.js),
 
 #### WLED to MoonLight from the map ✅
 
-Landed in: [Migrating over the air](../reference/migrating-over-the-air.md) (what can move, by chip and firmware, and what can stop it); the [Move a WLED device](../moonwalk.md#migrate-wled) process; the migration image's steps, the bootloader and table per flash size and type, in [migrate_main.cpp](https://github.com/MoonModules/MoonLight/blob/main/moonbase/migrate/main/migrate_main.cpp); one image per family built with its first firmware in [build_esp32.py](https://github.com/MoonModules/MoonLight/blob/main/moondeck/build/build_esp32.py) (`migration_family`, `migration_tables`); a board in MoonBase on the map in [moonbase.md](../explanation/architecture/moonbase.md); the power-cut rounds in [wled_migration_test.py](https://github.com/MoonModules/MoonLight/blob/main/moondeck/build/wled_migration_test.py). Verified from the map: WLED 0.15 on the classic, the C3 and the 16 MB S3, WLED-MM on the P4 (2026-11-11); the 4 and 8 MB S3 are left to users' reports.
+Shipped: [Migrating over the air](../reference/migrating-over-the-air.md) and the [Move a WLED device](../moonwalk.md#migrate-wled) process; a board in MoonBase on the map in [moonbase.md](../explanation/architecture/moonbase.md#on-the-devices-map).
 
 #### ESPHome, Tasmota and others to MoonLight from the map ✅
 
-Landed in: [Migrating over the air](../reference/migrating-over-the-air.md) (Tasmota, ESPHome and any other firmware by hand, with the WiFi each carries); the Devices map's guards for other firmwares in [security](../explanation/security.md#the-devices-map); the readers of each firmware's saved WiFi, ESP-IDF's own as the last, in [WledNetworks.h](../../src/core/util/WledNetworks.h); ESPHome's update protocol and the relay's query in [EsphomeOta.h](../../src/core/util/EsphomeOta.h). Verified from the map: Tasmota 16 and ESPHome Web on the classic, ESPHome through the relay on an S3 (2026-11-11); the S3 and C3 of both are left to users' reports.
+Shipped: [What can move](../reference/migrating-over-the-air.md#what-can-move), and each firmware's guards the map keeps in [security](../explanation/security.md#the-devices-map).
 
 - **Still open, each its own track:** ESPixelStick (its EFU container), OpenMQTTGateway (pulls the image through `/up?o=`), Shelly Group's relay firmware (its own ZIP package, its table at 0x10000).
 
 #### MoonBase's page installs through the shared picker ✅
 
-Landed in: [moonbase.md](../explanation/architecture/moonbase.md) (its page installs through the picker loaded from the installer's site); the [retry step](../moonwalk.md#migrate-wled) of the migration process. Verified (2026-11-11): the P4 in MoonBase installing MoonLight from its own page.
+Shipped: [On the Devices map](../explanation/architecture/moonbase.md#on-the-devices-map), and the retry step of [Move a WLED device](../moonwalk.md#migrate-wled).
 
 #### WLED, WLED-MM, Tasmota and ESPHome installed on a device 🚧 (built: the installer's section and the map's links, 2026-11-17; next: the way back through MoonBase for WLED, the MoonDeck action)
 
@@ -309,7 +283,7 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 
 #### Every neighbor's MAC, by ARP ✅ (Windows run 2026-11-17: MM-Windows at .245 gave the Hue bridge at .143, an added address, its MAC 00:17:88:41:67:f0)
 
-Landed in: `platform::arpLookup`, per operating system, in [platform.h](../../src/platform/platform.h), and the macOS build's signing identifier, without which macOS 27 answers with an empty table, at its introduction in [CMakeLists.txt](../../CMakeLists.txt); an added address keyed by the MAC in [DevicesModule.h](../../src/core/system/DevicesModule.h) ("One device, one row"); ARP as the source that leaves Tasmota's Referer guard alone in [security](../explanation/security.md#the-devices-map). Verified: Tasmota's MAC on the macOS desktop and the Olimex (2026-11-10), the router added by address on moonpi1 (2026-11-13), the Hue bridge from MM-Windows (2026-11-17).
+Shipped: an added address's MAC from ARP on the [Discovery card](../moonmodules/core/devices.md#discovery), and ARP read from this device's own table in [security](../explanation/security.md#the-devices-map).
 
 - **More uses**, each its own decision:
     - *A fallback for every row without a MAC*, not only added addresses: any device this one has talked to. Receiving a device's broadcasts alone does not always put it in the table.
@@ -320,7 +294,7 @@ Landed in: `platform::arpLookup`, per operating system, in [platform.h](../../sr
 
 #### A security and privacy check of the map ✅
 
-Landed in: [security](../explanation/security.md) (the trust boundary and the `Origin` and `Host` rule, the Devices map, secrets, firmware, what leaves the device); the rule's code in `http::fromBeyondNetwork` ([HttpHead.h](../../src/core/util/HttpHead.h)), used by the app and MoonBase; [MIGRATING](../reference/MIGRATING.md) ("A page from outside the local network is refused"). Verified (2026-11-11) on the S3 bench board, the access point's UI included. Steps 15 and 17 take the map beyond the network and get their own review there.
+Shipped: [security](../explanation/security.md), the trust boundary, [the Devices map](../explanation/security.md#the-devices-map) and the review a feature beyond the network gets.
 
 #### MoonDeck and the web installer reviewed against the map 🚧 (MoonDeck's half done 2026-11-18; next: the web installer's half, and the replug test)
 

@@ -828,6 +828,9 @@ jobs:
           STABLE=$(gh release list --limit 50 --exclude-drafts \
                    --json tagName,isPrerelease \
                    | jq -r '.[] | select(.isPrerelease|not) | .tagName' | head -5)
+          # GitHub's newest stable release by name too, so it stays in the feed after any run of release candidates.
+          NEWEST=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null) || NEWEST=""   # an error's body lands on stdout, so a failure drops it
+          STABLE=$(printf '%s\n%s\n' "$NEWEST" "$STABLE" | sed '/^$/d' | sort -u)
           PRE=$(gh release list --limit 50 --exclude-drafts \
                 --json tagName,isPrerelease \
                 | jq -r '.[] | select(.isPrerelease) | .tagName' | head -5)
