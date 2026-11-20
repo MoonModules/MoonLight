@@ -1,7 +1,7 @@
 {
-  "commit": "05bd1f8f",
+  "commit": "348960d7",
   "flash": {
-    "esp32s3-n16r8": 2582192,
+    "esp32s3-n16r8": 2582896,
     "esp32": 2364624,
     "esp32p4rev1-eth": 2715120,
     "esp32p4rev1-eth-wifi": 2952240,
@@ -14,7 +14,7 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2542880,
-    "host-macos": 2834288,
+    "host-macos": 2748048,
     "host-windows": 1925120,
     "esp32c3": 2486480,
     "host-linux": 2548000,
@@ -28,14 +28,14 @@
     "esp32s31": "2026-11-18",
     "esp32": "2026-11-18",
     "esp32-pico": "2026-11-18",
-    "esp32s3-n16r8": "2026-11-20",
+    "esp32s3-n16r8": "2026-11-18",
     "esp32s3-n8r8": "2026-10-30",
     "esp32s3-zero": "2026-10-30",
     "esp32-16mb": "2026-10-30",
     "esp32p4rev1-eth-wifi": "2026-11-18",
     "esp32-eth": "2026-11-18",
     "esp32p4rev3-eth": "2026-11-11",
-    "host-macos": "2026-11-20",
+    "host-macos": "2026-11-18",
     "host-windows": "2026-09-30",
     "esp32c3": "2026-11-18",
     "host-linux": "2026-10-12",
@@ -800,8 +800,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 10,
-      "fps": 100000,
+      "tick_us": 7,
+      "fps": 142857,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -843,10 +843,10 @@
   "loc": {
     "core": 40400,
     "light": 36396,
-    "platform": 30614,
+    "platform": 26728,
     "ui": 15291,
-    "test": 96507,
-    "moondeck": 36393
+    "test": 92244,
+    "moondeck": 36361
   },
   "comments": {
     "core": {
@@ -858,36 +858,36 @@
       "ratio": 0.233
     },
     "platform": {
-      "lines": 5530,
-      "ratio": 0.203
+      "lines": 4680,
+      "ratio": 0.196
     },
     "ui": {
       "lines": 3732,
       "ratio": 0.259
     },
     "test": {
-      "lines": 8396,
-      "ratio": 0.1
+      "lines": 8194,
+      "ratio": 0.102
     },
     "moondeck": {
-      "lines": 4231,
+      "lines": 4227,
       "ratio": 0.134
     }
   },
   "tests": {
-    "cases": 3646,
+    "cases": 3475,
     "scenarios": 37
   },
   "docs": {
     "md_files": 126,
-    "md_lines": 20367,
+    "md_lines": 20390,
     "plans_files": 17,
     "backlog_lines": 2910,
     "lessons_lines": 458,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 6984,
+    "functions": 6716,
     "over_threshold": 332,
     "worst_ccn": 128
   }
