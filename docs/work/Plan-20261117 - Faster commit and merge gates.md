@@ -136,6 +136,31 @@ An afternoon and evening of bench-driven work, 42 files: the look pushed to the 
 - **No gate waits behind the firmware build that does not need it**: in run 2 every gate waited 5.5 minutes for it, since it holds every core token; the cheap checks start first (step 15's own next).
 - **A gate that shares a port or a folder with another runs after it, never beside it**: the unit suite and the scenarios each declare what they hold, as a `needs` or a resource the scheduler keeps exclusive.
 
+## After-action review: the sixth commit round (2026-11-20 afternoon)
+
+56 files, +1,584 / −661: SuperSync's first steps and 14 CodeRabbit findings. **Planned**: about 10 minutes clean, 20 with one fix batch. **Happened**: the product owner's go at 13:26, every gate green at 14:03 (37 minutes), the commit at 15:01 after a decision on the host tick. Records: `build/gates/run-20261120-132839.json`, `-135526.json`, `-140247.json`.
+
+| Step | Planned | Actual |
+|--|--|--|
+| Run 1 | about 8 min | 11.5 min: 14 passed, 3 ratchets failed; the S3 firmware the gate measures (esp32s3-n16r8) built for 5.5 min, every all-cores gate waiting behind it |
+| Reviewer, beside run 1 | about 10 min | 8 min: 12 points, one a real defect (places parked the 20 ms read) |
+| Finding the failures | none planned | about 9 min: the runner keeps only a failing gate's tail, so the errors were read by hand, including one blind `--only` rerun (3 min) |
+| Fix batch | about 5 min | about 3 min, 15 files |
+| Rerun | about 3 min | 4.7 min: four gates cached, the firmware incremental (60 s), the KPI 21 s; one temporal word left, in a C++ comment |
+| Last word | none planned | 1 min: the comment reworded and prose alone rerun, the skipped code gates named in the commit |
+
+The change grew during the gates from 51 to 56 files: six generated (help.json and the metrics), 15 written in the fix batch.
+
+**What went wrong**
+
+1. **Run 1's progress was hidden**: the runner piped through `tail`, so the minute lines the commit process asks for reached the product owner only at the end.
+2. **The blocking-call ratchet rose 67 at once, seen only in the whole-tree check**: a virtual `footprint()` in `canvas()`, which the write-time hook compiles but whose `-Wfunction-effects` warnings it does not count.
+3. **A failing gate's findings were cut off**: docgen's three errors and the temporal word sat above the tail the record keeps.
+4. **The bench builds missed the gate's firmware target**: the round built esp32 and esp32s3-n32r16 for the boards, and the gate rebuilt esp32s3-n16r8 from scratch.
+5. **The host tick had no baseline**: the two commits before skipped the KPI, so a 7 to 46 µs move could not be placed in this change or theirs.
+
+**Actions**, as steps below: 29 (the hook counts `-Wfunction-effects` per compiled file), 30 (a failing gate's findings kept whole), 31 (the last bench build includes the gate's firmware target), 32 (classified changes skip the firmware), 33 (a fix round carries no new behavior), 34 (the KPI tick measured every commit, or its skip named with its baseline).
+
 ## The plan against the textbook (2026-11-19)
 
 The textbook shape is layered, each layer catching its class of defect at its cheapest moment: **shift left and fail fast** (Humble and Farley's commit stage: [under five minutes, never ten](https://www.oreilly.com/library/view/continuous-delivery-reliable/9780321670250/ch07.xhtml)), an **inner loop** of seconds on the file written and an **outer loop** of CI on the whole tree, every stage checking **only what changed** ([pre-commit](https://pre-commit.com/) on the staged files, [Nx affected](https://nx.dev/docs/features/ci-features/affected)), fed by **small batches** ([Google: about 100 lines a change](https://google.github.io/eng-practices/review/developer/small-cls.html); [DORA](https://dora.dev/guides/dora-metrics-four-keys/)). Agentic development adds that the agent needs a verification signal at every step ([Anthropic's best practices](https://code.claude.com/docs/en/best-practices)), that a guardrail must prove it is alive, since an agent cannot notice a missing check, and that the agent's memory and rule changes stay visible to the human.
@@ -202,6 +227,12 @@ The textbook shape is layered, each layer catching its class of defect at its ch
 | 26 | **A merge from a green branch runs no gate**: with `MERGE_HEAD` present, the runner asks `gh` whether the merged-in commit's CI passed (main's does, by branch protection); if it did, the files that came over unchanged are checked by that CI and the branch's own by its last commit, and the files differing from both parents (git's combined diff, `git diff --cc`) go to CI on the merge push. The run says "nothing to run: merged from main, green at <sha>". The metrics stay out of the trigger: code.json merges three-way per counter (ours + theirs − base), repo-health keeps the branch's copy for the next commit's KPI to rewrite. On 2026-11-18 merging #257's main ran every gate for 13 minutes, since main's `platform.h` change recompiled the tests (340 s) and the S3 (174 s), where both parents were green. | ⏳ | an hour |
 | 27 | **No gate run starts without its cost on screen**: `run_gates.py --list` prints each gate's expected time from the records and flags a rebuild when the diff touches a widely included header (by includer count, step 12), and the agent shows that line and waits for the product owner's go before running. On 2026-11-18 a merge's run was announced as 5 to 7 minutes and took 13. | ⏳ | an hour |
 | 28 | **Every gate runs only on what it reads, the next change** (product owner, 2026-11-19): a rerun after a two-file fix (a MoonWalk YAML and a Python test) ran nine gates where two could be affected, docgen and the Python suite, since triggers name more than their inputs. Each gate's `given` names the files whose change can move its result, and "every change" goes: specs on the spec files, backlog on the plan and backlog files, firmwares on the firmware catalog and its scripts, help and docs on what reaches their output, prose and the hook gate on the files changed since the last pass rather than the whole branch diff. Verified by the next round's record: each gate it runs traces to a changed file it reads. The pragmatic rule the product owner applied by hand before any runner, run what the change can affect, written into the triggers. | ⏳ next | half a day |
+| 29 | **The hook counts `-Wfunction-effects` per compiled file** (2026-11-20): it already compiles each header it checks; counting the blocking-call warnings against HEAD's compile of the same file reports the render-path ratchet at write time, where the sixth round saw a rise of 67 only in the whole-tree check. | open | hours |
+| 30 | **A failing gate's findings kept whole** (2026-11-20): the record keeps a gate's error section in full beside its tail, so a failure is read from the record, never from a rerun. | open | an hour |
+| 31 | **The last bench build includes the gate's firmware target** (2026-11-20): after the last C++ change, the board build also builds esp32s3-n16r8, so the freshness gate checks rather than builds. | open | minutes |
+| 32 | **Classified changes skip the firmware** (product owner, 2026-11-20): a C++ change whose token stream equals HEAD's once comments are stripped, and a change to host-only files (`src/platform/host`, `test/`), skip the firmware build and the KPI; the runner proves the class rather than trusting it. A pure move stays built, the ESP32's compiler differing from the host's. | open | half a day |
+| 33 | **A fix round carries no new behavior** (product owner, 2026-11-20): after the first gate run, a batch holds only what makes the gates pass and the Reviewer's correctness findings; a new behavior goes to the backlog for the next change. | open | a rule |
+| 34 | **The KPI tick measured every commit, or its skip named with its baseline** (2026-11-20): a commit that skips the KPI leaves the next without a baseline, as the sixth round found a 7 to 46 µs move it could not place. | open | a rule |
 
 ## Every script, its cost and its value
 

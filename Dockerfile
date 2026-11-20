@@ -79,6 +79,9 @@ RUN apt-get update \
  && program=$(find /rootfs/usr -type f -name MoonLight | head -1) \
  && test -n "$program" \
  && mv "$program" /MoonLight \
+ # The package's copyright file. A release from before the file existed has none, and then the image has none.
+ && mkdir -p /doc \
+ && { cp /rootfs/usr/share/doc/moonlight/copyright /doc/copyright || echo "this release's package has no copyright file"; } \
  # Every shared object the binary resolves to, gathered by asking the loader rather than by
  # listing names: ldd walks the whole transitive chain, so this stays correct as that chain moves.
  # The four the distroless base already carries (libc, libstdc++, libm, libgcc_s) are EXCLUDED
@@ -117,6 +120,8 @@ COPY --from=fetch /MoonLight /usr/bin/MoonLight
 # Without this the container starts and dies immediately on "libcurl.so.4: cannot open shared
 # object file"; the release runs each image before it publishes one.
 COPY --from=fetch /deps/ /usr/lib/
+# The package's copyright file travels with the binary.
+COPY --from=fetch /doc/ /usr/share/doc/moonlight/
 
 # WHERE THE CONFIG LIVES, and why this line is required rather than a convenience. The host
 # build resolves its data directory from the environment (platform_host.cpp, userDataDir): on

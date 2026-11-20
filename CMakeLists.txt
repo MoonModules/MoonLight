@@ -192,6 +192,9 @@ add_library(mm_platform
     src/platform/host/platform_host_audio.cpp
     src/platform/host/platform_host_hdmi.cpp
     src/platform/host/platform_host_update.cpp
+    src/platform/host/platform_host_machine.cpp
+    src/platform/host/platform_host_pio.cpp
+    src/platform/rpi/hub75_pio_options.cpp
     src/platform/host/moonlive_emit_noarch.cpp
     src/platform/host/moonlive_asm_noarch.cpp
     src/platform/host/moonlive_emit_arm64.cpp
@@ -269,6 +272,30 @@ elseif(DEFINED ENV{MM_PACKAGING} AND NOT WIN32)
         "(Linux: libcurl4-openssl-dev, Windows: vcpkg install curl).")
 else()
     message(STATUS "libcurl not found: MoonCloud reporting disabled (install libcurl to enable)")
+endif()
+
+# The Raspberry Pi 5 PIO output: MoonLight's own engine (src/platform/rpi) behind the PIO seam (platform_host_pio.cpp).
+#
+# The engine needs GCC or Clang: it uses [[gnu::always_inline]] and POSIX threads and signals. MSVC builds the seam alone, which keeps the
+# recorder and the refusal ("needs a Raspberry Pi 5 build (Linux aarch64)") and nothing else, so a Windows build offers the PIO card to the tests
+# and never to a panel. MM_HUB75_PIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
+if(NOT MSVC)
+    target_sources(mm_platform PRIVATE
+        src/platform/rpi/hub75_pio_engine.cpp
+        src/platform/rpi/hub75_pio_repack.cpp
+        src/platform/rpi/hub75_pio_backend.cpp
+        src/platform/rpi/hub75_pio_backend_rp1.cpp
+        src/platform/rpi/hub75_pio_backend_stub.cpp)
+    target_compile_definitions(mm_platform PUBLIC MM_HUB75_PIO_HAS_ENGINE)
+    # The rp1 backend speaks /dev/pio0's ioctls itself, so it needs no library: its logic builds on every host (the tests run it against a fake kernel),
+    # the real device wherever the platform has the Linux headers, and createPioBackend picks it on Linux aarch64, the one place the RP1 PIO exists.
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_sources(mm_platform PRIVATE src/platform/rpi/hub75_pio_rp1_device.cpp)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+            target_compile_definitions(mm_platform PUBLIC MM_HUB75_PIO_HAVE_RP1)
+        endif()
+    endif()
+    set(MM_HUB75_PIO_ENGINE ON)   # test/ reads this, as it reads MM_CORE_HEADER_CHECK
 endif()
 
 target_link_libraries(mm_platform PUBLIC mm_core)

@@ -172,7 +172,7 @@ These build a bare pipeline with no optional modules, so a change here is a chan
 | Metric | Value |
 |---|---:|
 | markdown files | 126 |
-| markdown lines | 20,476 (+86) ⚠ |
+| markdown lines | 20,466 (+76) ⚠ |
 | plan files | 17 |
 | backlog lines | 2,910 |
 | lessons lines | 458 |

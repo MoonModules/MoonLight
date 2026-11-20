@@ -1,10 +1,12 @@
 #pragma once
 
-/// Helpers the Hub75Driver tests share: the HUB75 test port, opened for one case and closed however it ends (it is process-global, so a guard keeps one case's frame from reaching the next), and a select's option index by label.
+/// Helpers the HUB75 tests share: the HUB75 test ports, bus and PIO, opened for one case and closed however it ends (each is process-global, so a guard keeps one case's frame from reaching the next), the PIO seam's host stand-ins, and a select's option index by label.
 
 #include "../core/conditional_controls.h"   // mm::controlIndex
 #include "core/module/Control.h"
 #include "doctest.h"
+#include "platform/Hub75Pio.h"
+#include "platform/machine.h"
 #include "platform/platform.h"
 
 #include <cstring>
@@ -17,6 +19,36 @@ struct PortGuard {
     explicit PortGuard(bool parlio = false) { platform::setTestHub75(true, parlio); }
     /// Close the port.
     ~PortGuard() { platform::setTestHub75(false); }
+};
+
+/// Holds the PIO seam in `mode` for the case, on a host that answers as a Raspberry Pi 5, and leaves the seam closed and off after it, its levers and the stub backend's faults and records back to their start, and the host as it is.
+struct PioPortGuard {
+    /// Hold the seam in `mode`: the recorder by default.
+    explicit PioPortGuard(platform::Hub75PioMode mode = platform::Hub75PioMode::Record) {
+        platform::setTestHub75Pio(mode);
+        platform::setTestMachine(platform::Machine::Pi5);
+    }
+    /// Close the seam, release it and read the host again.
+    ~PioPortGuard() {
+        platform::setTestHub75Pio(platform::Hub75PioMode::Off);
+        platform::clearTestMachine();
+    }
+};
+
+/// The PIO check stands in for a host running `release`, with /dev/pio0 present or absent, then reads the real one again.
+struct PioHost {
+    /// Stand in for a host on `release`, with /dev/pio0 when `device`.
+    PioHost(const char* release, bool device) { platform::setTestPioHost(release, device); }
+    /// Read the real host again.
+    ~PioHost() { platform::setTestPioHost(nullptr, false); }
+};
+
+/// The PIO availability stands forced as `available` for the case, then the host decides again.
+struct PioAvailable {
+    /// Force the availability as `available`: 0 unavailable, 1 available.
+    explicit PioAvailable(int available) { platform::setTestHub75PioAvailable(available); }
+    /// Let the host decide again.
+    ~PioAvailable() { platform::setTestHub75PioAvailable(-1); }
 };
 
 /// The index of `label` among the options of select `control`, or -1.

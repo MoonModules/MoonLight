@@ -128,20 +128,42 @@ def package_linux(binary: Path, version: str) -> Path:
     release job depend on a third-party host. Worth adding once someone asks.
     """
     DIST_DIR.mkdir(exist_ok=True)
-    _, tar_label, readme_label = linux_arch()
+    deb_arch, tar_label, readme_label = linux_arch()
     out = DIST_DIR / f"MoonLight-linux-{tar_label}-v{version}.tar.gz"
     readme = DIST_DIR / "_README.txt"
     readme.write_text(readme_text(version, readme_label), encoding="utf-8")
+    # The same notice the .deb carries, beside the program.
+    notice = DIST_DIR / "_COPYRIGHT"
+    notice.write_text(copyright_text(), encoding="utf-8")
     try:
         with tarfile.open(out, "w:gz") as tar:
             tar.add(binary, arcname="MoonLight")
             tar.add(readme, arcname="README.txt")
+            tar.add(notice, arcname="COPYRIGHT")
     finally:
         readme.unlink(missing_ok=True)
+        notice.unlink(missing_ok=True)
     print(f"package_host: wrote {out}")
     stage_program(binary, version, f"host-linux-{tar_label}")
     package_deb(binary, version)
     return out
+
+
+def copyright_text() -> str:
+    """The copyright file every Linux package carries, in Debian's machine-readable format: the .deb's /usr/share/doc/moonlight/copyright, and
+    the same text as the tarball's COPYRIGHT and the container image's copy.
+    """
+    return (
+        "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/\n"
+        "Upstream-Name: MoonLight\n"
+        "Source: https://github.com/MoonModules/MoonLight\n"
+        "\n"
+        "Files: *\n"
+        "Copyright: the MoonLight authors, as recorded in the source repository's history\n"
+        "License: GPL-3+\n"
+        " The full text of the GNU General Public License version 3 is in the LICENSE file of the\n"
+        " source repository (https://github.com/MoonModules/MoonLight), and on Debian systems in\n"
+        " /usr/share/common-licenses/GPL-3.\n")
 
 
 def package_deb(binary: Path, version: str) -> Path | None:
@@ -199,6 +221,11 @@ def package_deb(binary: Path, version: str) -> Path | None:
     fav = ROOT / "mooninstaller" / "favicon.png"
     if fav.exists():
         shutil.copy2(fav, icons / "moonlight.png")
+
+    # Debian policy wants a copyright file in every package.
+    doc = stage / "usr" / "share" / "doc" / "moonlight"
+    doc.mkdir(parents=True)
+    (doc / "copyright").write_text(copyright_text(), encoding="utf-8")
 
     (stage / "DEBIAN" / "control").write_text(
         "Package: moonlight\n"

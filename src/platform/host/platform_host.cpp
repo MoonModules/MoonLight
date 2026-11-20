@@ -125,6 +125,7 @@
 /// A host has no second card, so a subfolder of the one real root stands in. `sdMounted_` gates it as a missing card would, and format is a wipe-and-recreate.
 
 #include "platform/platform.h"
+#include "platform/Hub75Pio.h"          // the PIO seam answers its backend's availability
 #include "platform/Hub75Bus.h"          // the HUB75 test port sizes its frame as the ESP32 port does
 #include "platform/usbvideo_frames.h"   // areaMean: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
@@ -3050,11 +3051,9 @@ std::vector<uint8_t> hub75TestFrame_;
 }  // namespace
 const char* hub75LastError() { return hub75TestOpen_ ? nullptr : "HUB75 needs an ESP32-S3, P4 or S31"; }
 bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes) {
+    if (backend == Hub75Backend::Pio) return hub75PioAvailable();   // the Pi 5's PIO answers through its own seam
     hub75TestPort_.offeredBytes = frameBytes;
     return hub75TestOpen_ && (backend == Hub75Backend::LcdCam || hub75TestParlio_);
-}
-const char* hub75BackendLabel(Hub75Backend backend) {
-    return backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
 }
 bool hub75Init(Hub75Handle& /*h*/, Hub75Backend backend, const Hub75Pins& pins,
                uint16_t width, uint16_t height, uint8_t scanRate, uint8_t bitDepth) {
