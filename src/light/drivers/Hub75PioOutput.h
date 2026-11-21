@@ -20,7 +20,7 @@ namespace mm {
 ///
 /// ## The refresh
 ///
-/// The frame is `bitDepth * scanRows * laneWidth` pixel clocks. Every rate this card quotes is that computed wire rate: 203.5 Hz on the wall at 10 MHz, where `shown` measured 169 fps on kernel 6.18 and 198 on 6.12, as the DMA feed falls behind the wire by a margin that differs by kernel. The rates at other clocks are in docs/reference/hardware/hub75-bench.md.
+/// The frame is `bitDepth * scanRows * (laneWidth + holdWords)` pixel clocks. Every rate this card quotes is that computed wire rate: 203.5 Hz on the wall at 10 MHz, where `shown` measured 169 fps on kernel 6.18 and 198 on 6.12, as the DMA feed falls behind the wire by a margin that differs by kernel. The rates at other clocks are in docs/reference/hardware/hub75-bench.md.
 ///
 /// The card offers 2 to 8 planes, starting at 6; the cost and encoding of the 8-bit setting are in docs/reference/hardware/hub75-panels.md.
 ///

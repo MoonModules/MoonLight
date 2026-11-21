@@ -30,6 +30,9 @@ struct Hub75Bench {
     mm::Buffer source;           ///< the rendered frame the driver corrects
     mm::Hub75Driver driver;      ///< the driver under test
 
+    /// Release the driver as its owner does before destroying it, while the layer and the frame it reads still stand, so a case that ends without release() leaves nothing allocated.
+    ~Hub75Bench() { driver.release(); }
+
     /// Size the layer from the layouts added, hold `lights` lights of RGB, and bind the driver to both.
     void wire(mm::nrOfLightsType lights) {
         layouts.applyState();
