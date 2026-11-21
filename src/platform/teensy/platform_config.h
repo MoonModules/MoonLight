@@ -69,6 +69,8 @@ constexpr bool hasRawEthernet = false;
 
 /// No NDI, HLS or RTSP source.
 constexpr bool hasNdi = false;
+/// False: no RP1 PIO block on a Teensy.
+constexpr bool hasHub75Pio = false;
 /// No H.264 encoder.
 constexpr bool hasHls = false;
 /// False: the Teensy has no display controller.

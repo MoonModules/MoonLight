@@ -742,22 +742,8 @@ protected:
         swapPeripheral(peripheralSel_);
     }
 
-    /// Does an enabled sibling driver already claim this backend's hardware block? RTTI-free: every module answers hwBlock(), and a non-parallel driver returns None.
-    bool siblingClaimsBlock() const {
-        if (!peripheral_) return false;
-        const LedHwBlock mine = peripheral_->hwBlock();
-        if (mine == LedHwBlock::None) return false;
-        const MoonModule* p = parent();
-        if (!p) return false;
-        for (uint8_t i = 0; i < p->childCount(); i++) {
-            const MoonModule* sib = p->child(i);
-            if (sib == this || !sib || !sib->enabled()) continue;
-            // role() confirms it, so this static_cast needs no RTTI.
-            if (sib->role() != ModuleRole::Driver) continue;
-            if (static_cast<const DriverBase*>(sib)->hwBlock() == mine) return true;
-        }
-        return false;
-    }
+    /// Does an enabled sibling driver already claim this backend's hardware block?
+    bool siblingClaimsBlock() const { return peripheral_ && siblingClaims(peripheral_->hwBlock()); }
 
 public:
     /// The hardware block this driver is DRIVING, for the sibling claim guard: gated on inited_, so the claim means the bus is up rather than that a backend is selected.
@@ -1056,7 +1042,7 @@ protected:
         // One block per chip, so a sibling holding it means idle with a status rather than fight.
         if (siblingClaimsBlock()) {
             deinit();
-            setConfigErr("peripheral already in use by another driver — pick a different one");
+            setConfigErr(kBlockInUse);
             return;
         }
         // A rebuild is the user fixing the setting, so a driver that gave up starts again.

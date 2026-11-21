@@ -41,6 +41,15 @@ constexpr uint8_t kHub75EncodeMaxBitDepth = 8;
 /// The deepest `bitDepth` the ESP32 port takes, until the repeated-planes card (backlog) lifts it: the lit-window weights cost top brightness, and plane 0 of a 64-column row lights 2 words at 6 bits, half that at 7. The driver and the port read it.
 constexpr uint8_t kHub75PortMaxBitDepth = 6;
 
+/// Hold words for a row of `rowWords` shift words at `bitDepth` planes, the one home of the formula (@xref{hold-words|Technical → Hold words}): 0 for an empty row, and for a wide one whose lowest plane already lights a word.
+inline size_t hub75HoldWords(size_t rowWords, uint8_t bitDepth) {
+    if (rowWords == 0 || bitDepth < 2 || bitDepth > kHub75EncodeMaxBitDepth) return 0;
+    // The lowest plane's window rounds to zero up to 2^(bitDepth-2) row words; above that the rounding stands.
+    if (rowWords > (static_cast<size_t>(1) << (bitDepth - 2))) return 0;
+    const size_t pass = (static_cast<size_t>(1) << (bitDepth - 1)) + 1;
+    return pass - rowWords;
+}
+
 /// The geometry one encode needs. `scanRate` is the panel's own and is NOT derivable from the height. Two panels of identical dimensions can scan differently, which is why it is a control rather than a calculation.
 struct Hub75Geometry {
     /// Bytes on the wire per pixel clock: one 16-bit bus word, sixteen rather than eight since the control lines live at bits 8-14.
@@ -85,14 +94,7 @@ struct Hub75Geometry {
     }
 
     /// Hold words the encoder leads each group with, so a narrow row's lowest plane lights a whole word (Hub75Encode.h): a function of the row width and the depth, 0 for an empty row, see @xref{hold-words|Technical → Hold words}.
-    size_t holdWords() const {
-        const size_t row = rowWords();
-        if (row == 0 || bitDepth < 2 || bitDepth > kHub75EncodeMaxBitDepth) return 0;
-        // The lowest plane's window rounds to zero up to 2^(bitDepth-2) row words; above that the rounding stands.
-        if (row > (static_cast<size_t>(1) << (bitDepth - 2))) return 0;
-        const size_t pass = (static_cast<size_t>(1) << (bitDepth - 1)) + 1;
-        return pass - row;
-    }
+    size_t holdWords() const { return hub75HoldWords(rowWords(), bitDepth); }
 
     /// Words one (plane, row) group holds on the wire: the shift words plus the hold words. A wide row needs no hold words, so the pass is the row.
     size_t passWords() const { return rowWords() + holdWords(); }

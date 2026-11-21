@@ -12,6 +12,7 @@
 #include "core/module/StateDocument.h"
 #include "core/util/ModuleFactory.h"
 #include "module_types.h"
+#include "platform/Hub75Pio.h"
 #include "platform/platform.h"
 
 #include <cstdio>
@@ -71,6 +72,7 @@ const std::vector<Known> kTooBig = {
     {"PanelCardDriver", "the packet_ frame buffer sits inline, sized to the largest card frame", false, mm::platform::hasRawEthernet},
     {"ParallelLedDriver", "the pin and strand text fields and the in-flight state sit inline"},
     {"HttpServerModule", "the eight WebSocket client connections sit inline"},
+    {"Hub75Driver", "the Pi 5's PIO output sits inline beside the bus output, with its 512-byte status text", true},
     {"ControlModule", "the surface, touch and resend tables sit inline"},
     {"PinsModule", "the 64-claim snapshot table sits inline"},
     {"FseqPlayerEffect", "its playlist of tracks sits inline, close enough to the budget that a host's layout decides which side it lands on", true},
@@ -180,8 +182,10 @@ const std::vector<Row>& survey() {
         mm::registerModuleTypes();
         // No socket is opened for real: a server module binds, fails and stays idle.
         mm::platform::setTestBindFails(true);
+        mm::platform::setTestHub75Pio(mm::platform::Hub75PioMode::Record);   // no module lights real panels on a build with the PIO backend
         std::vector<Row> r;
         for (uint8_t i = 0; i < mm::ModuleFactory::typeCount(); i++) r.push_back(place(i));
+        mm::platform::setTestHub75Pio(mm::platform::Hub75PioMode::Off);
         mm::platform::setTestBindFails(false);
         return r;
     }();

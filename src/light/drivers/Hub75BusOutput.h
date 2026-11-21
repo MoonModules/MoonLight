@@ -14,7 +14,7 @@ namespace mm {
 /// The HUB75 driver's output on the ESP32's parallel bus: it packs the corrected frame into the panel's bit planes in the platform's buffer, which LCD_CAM or Parlio clocks out.
 ///
 /// It owns the board table and the measured refresh text; the fourteen pins, the scan rate, the bit depth and the clock edge live on the driver, and the output binds them into the driver's card.
-class Hub75BusOutput : public Hub75Output {
+class Hub75BusOutput final : public Hub75Output {
 public:
     /// The board select and the fourteen pin controls, above the peripheral select.
     void addWiringControls(ControlList& controls) override {
@@ -40,7 +40,7 @@ public:
     /// The geometry, the clock edge and the measured refresh, below the peripheral select.
     void addControls(ControlList& controls) override {
         controls.addSelect("scanRate", owner_->scanSel, Hub75Settings::kScanOptions, Hub75Settings::kScanCount);
-        controls.addControl("bitDepth", owner_->bitDepth, 2, kHub75PortMaxBitDepth);
+        controls.addControl("bitDepth", owner_->bitDepth, depthRange().min, depthRange().max);
         // The one knob a chip family changes. WLED exposes the same flag as its bus "reversed" box.
         controls.addSelect("clockEdge", owner_->clockEdgeSel, Hub75Settings::kEdgeOptions, Hub75Settings::kEdgeCount);
 
@@ -66,6 +66,9 @@ public:
         }
         return false;
     }
+
+    /// The planes the ESP32 port takes, which the control bounds.
+    DepthRange depthRange() const override { return DepthRange{2, kHub75PortMaxBitDepth}; }
 
     /// The bytes the bit planes take for this layout at the selected scan and depth; 0 for an unusable layout.
     size_t frameBytes(uint16_t width, uint16_t height) const override {
@@ -121,7 +124,10 @@ public:
     }
 
     /// The geometry and the backend, as open() formatted them.
-    const char* describe() const override { return status_; }
+    const char* describe() const MM_NONBLOCKING override { return status_; }
+
+    /// The bus raises each refusal as an error at open, so a running bus has no warning to give.
+    const char* warning() const MM_NONBLOCKING override { return nullptr; }
 
     /// The layout's box, one light per panel pixel.
     size_t lights() const MM_NONBLOCKING override {
@@ -131,7 +137,7 @@ public:
     /// Pack the frame into the bit planes, brightness being the planes' lit time.
     void show(const uint8_t* rgb, uint8_t brightness) MM_NONBLOCKING override {
         geo_.brightness = brightness;
-        // No double buffer: a one-pass tear beats a second 256 KB frame, invisible at 300+ Hz.
+        // One buffer: a one-pass tear beats a second 256 KB frame, invisible at 300+ Hz.
         hub75Encode(rgb, platform::hub75Buffer(hub_), geo_);   // a null buffer, as with no bus open, makes hub75Encode return 0
     }
 
@@ -146,7 +152,7 @@ public:
     /// Stop the scan and release the panel's peripheral.
     void close() override { platform::hub75Deinit(hub_); }
 
-    /// The block the selected backend drives: WHICH block, not a guess, since claiming the wrong one frees a live block and holds a free one.
+    /// The block the selected backend drives, as the select names it, since claiming the wrong one frees a live block and holds a free one.
     LedHwBlock hwBlock() const override {
         return owner_->selectedBackend() == platform::Hub75Backend::Parlio ? LedHwBlock::Parlio
                                                                            : LedHwBlock::LcdCam;
@@ -214,7 +220,7 @@ private:
         const char* current = (boardSel < boardOptionCount_) ? boardOptions_[boardSel] : nullptr;
         boardOptionCount_ = 0;
         for (uint8_t i = 0; i < kBoardCount; i++) {
-            // A host is none of the three chips and offers every row; silicon sees its own.
+            // A host offers every row; silicon filters to its own chip's.
             constexpr bool anyKnownChip =
                 platform::isEsp32S3 || platform::isEsp32P4 || platform::isEsp32S31;
             if constexpr (anyKnownChip) {
@@ -224,7 +230,7 @@ private:
             boardIndex_[boardOptionCount_] = i;
             boardOptionCount_++;
         }
-        // Re-point by LABEL, so a filtered list cannot silently select a different board.
+        // Re-point by LABEL, so a filtered list keeps the picked board while it is offered, and falls to the first row when it is not.
         uint8_t sel = 0;
         if (current) {
             for (uint8_t k = 0; k < boardOptionCount_; k++) {
@@ -292,7 +298,7 @@ private:
     const char* boardOptions_[kBoardCount] = {};
     uint8_t boardIndex_[kBoardCount] = {};
     uint8_t boardOptionCount_ = 0;
-    bool prefilled_ = false;   // the board map is written once, not on every re-render
+    bool prefilled_ = false;   // the board map is written once, at the first card
 
     /// Convert a Pin control's value to the platform seam's pin type; -1 for unset becomes 0xFFFF, since a P4 GPIO number can exceed int8_t's range.
     static uint16_t toPin(int8_t p) {
@@ -301,7 +307,7 @@ private:
 
     platform::Hub75Handle hub_{};
     Hub75Geometry geo_{};
-    uint16_t lastRefresh_ = 0xFFFF;      // not 0: the first real 0 must still publish
+    uint16_t lastRefresh_ = 0xFFFF;      // 0xFFFF, so the first real 0 still publishes
     char status_[64] = {};
     char refreshStr_[16] = {};
 };

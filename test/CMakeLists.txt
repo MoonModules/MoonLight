@@ -301,6 +301,11 @@ add_executable(mm_tests
     unit/light/unit_Hub75Driver_output.cpp
     unit/light/unit_Hub75Driver_pins.cpp
     unit/light/unit_Hub75Encode.cpp
+    unit/light/unit_Hub75Canvas.cpp
+    unit/light/unit_Hub75Fit.cpp
+    unit/light/unit_Hub75PiOutput.cpp
+    unit/light/unit_Hub75PioOutput.cpp
+    unit/light/unit_Hub75Driver_pi.cpp
     unit/light/unit_ParallelSlots.cpp
     unit/light/unit_ParlioPeripheral.cpp
     unit/light/unit_GpioDmaPeripheral.cpp
