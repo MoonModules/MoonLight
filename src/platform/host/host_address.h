@@ -18,10 +18,10 @@ struct HeldAddress {
     bool virtualName;   ///< the interface is one virtualInterface() names
 };
 
-/// Whether `name` is a virtual interface: loopback and macOS's tunnels and radios by family and number (`utun3`), Linux's container and VM networks by any suffix (`veth1a2b3c`).
+/// Whether `name` is a virtual interface: loopback and macOS's tunnels and radios by family and number (`utun3`), Linux's Docker and VM networks by any suffix (`docker0`, `br-…`). A Multus bridge-CNI or Podman `veth` is left in the list: PanelCard binds it when that is the path to the card.
 inline bool virtualInterface(const char* name) {
     static constexpr const char* kNumbered[] = {"lo", "utun", "awdl", "llw", "anpi", "bridge", "gif", "stf", "ap", "pktap"};
-    static constexpr const char* kAnySuffix[] = {"veth", "docker", "br-", "virbr"};
+    static constexpr const char* kAnySuffix[] = {"docker", "br-", "virbr"};
     if (!name) return false;
     for (const char* p : kAnySuffix)
         if (std::strncmp(name, p, std::strlen(p)) == 0) return true;

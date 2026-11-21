@@ -46,7 +46,7 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 | **Logs** | standard output, so `docker logs` |
 | **Updates** | the host's, by Watchtower or Podman's auto-update; the Devices map says so rather than offering an update |
 | **Output** | Art-Net UDP 6454, DDP 4048 (set by `ddp_port`), E1.31 5568, all outbound |
-| **Capabilities** | none: it binds its port as an ordinary process |
+| **Capabilities** | [ColorLight panel frames](hardware/panel-cards.md#62-linux-including-raspberry-pi): file capability `cap_net_raw=ep`, with `NET_RAW` in the bounding set |
 | **Audio input** | a PulseAudio server: [Set up audio input](../moonwalk.md#audio-input) |
 | **HDMI out** | `--device /dev/dri`, on a host with no desktop holding the screen |
 
@@ -75,6 +75,6 @@ Docker widens the target from "a Debian-family board" to "anything that runs con
 - **A NAS**: Synology (Container Manager), QNAP (Container Station), Unraid, TrueNAS. Give it host networking, or mDNS and Art-Net broadcast will not leave the box.
 - **A mini PC or home server**: amd64, the largest and least surprising target.
 - **A router or firewall appliance** running OpenWrt or OPNsense with Docker: plausible where the device has the RAM, and its root filesystem is likely an overlay.
-- **Kubernetes**: one pod, one volume. Multicast needs an L2 CNI rather than the default bridge.
+- **Kubernetes**: one pod, one volume. Multicast needs an L2 CNI rather than the default bridge. ColorLight: [panel cards §6.2](hardware/panel-cards.md#62-linux-including-raspberry-pi).
 
 The realistic limits are architecture and memory, not the kind of device: 64-bit, arm64 or amd64. Memory is rarely the binding constraint: a container rendering a 16x16 grid measures 4.5 MB on a NanoPi. A large installation grows that by its buffers rather than by a fixed overhead.

@@ -37,11 +37,11 @@ TEST_CASE("a container's bridge, which broadcasts like Ethernet, is passed over 
     CHECK(lanAddress(kVpn, held, 3) == kLan);
 }
 
-TEST_CASE("the virtual interfaces are named by family: a macOS tunnel with its number, a Linux container network with any suffix") {
+TEST_CASE("the virtual interfaces are named by family: a macOS tunnel with its number, a Linux Docker or VM bridge with any suffix") {
     using mm::platform::virtualInterface;
-    for (const char* name : {"lo", "lo0", "utun3", "awdl0", "bridge100", "docker0", "veth1a2b3c", "br-4f2e9c", "virbr0"})
+    for (const char* name : {"lo", "lo0", "utun3", "awdl0", "bridge100", "docker0", "br-4f2e9c", "virbr0"})
         CHECK_MESSAGE(virtualInterface(name), name);
-    for (const char* name : {"en0", "eth0", "enp3s0", "wlan0", "wlp2s0", "apple", "local"})
+    for (const char* name : {"en0", "eth0", "enp3s0", "wlan0", "wlp2s0", "apple", "local", "veth1a2b3c", "net1"})
         CHECK_FALSE_MESSAGE(virtualInterface(name), name);
 }
 

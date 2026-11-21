@@ -54,11 +54,14 @@ ARG TARGETARCH
 COPY moonlight_$TARGETARCH.deb /tmp/moonlight.deb
 # libcurl4t64 is installed because the binary LINKS it (the one outbound HTTPS call), and
 # libpulse0 because its audio input LOADS it at runtime, which ldd cannot see; the sweep
-# then collects both plus everything they need. See ../../Dockerfile.
+# then collects both plus everything they need. libcap2-bin writes the file capability
+# panel-cards.md §6.2 describes (see ../../Dockerfile). BuildKit COPY keeps the xattr.
 RUN apt-get update \\
- && apt-get install -y --no-install-recommends libcurl4t64 libpulse0 \\
+ && apt-get install -y --no-install-recommends libcurl4t64 libpulse0 libcap2-bin \\
  && rm -rf /var/lib/apt/lists/* \\
  && dpkg-deb -x /tmp/moonlight.deb /rootfs \\
+ && setcap cap_net_raw=ep /rootfs/usr/lib/moonlight/MoonLight \\
+ && getcap /rootfs/usr/lib/moonlight/MoonLight | grep -q 'cap_net_raw=ep' \\
  && mkdir -p /doc \\
  && cp /rootfs/usr/share/doc/moonlight/copyright /doc/copyright \\
  && mkdir -p /deps \\

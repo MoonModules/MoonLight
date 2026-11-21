@@ -128,3 +128,7 @@ def test_gathering_moves_every_artifact_file_flat_into_dist(tmp_path, monkeypatc
 def test_the_release_dockerfile_selects_its_package_by_target_architecture():
     assert "COPY moonlight_$TARGETARCH.deb" in rs.DOCKERFILE and rs.DOCKERFILE.endswith('ENTRYPOINT ["/usr/bin/MoonLight"]\n')
     assert json.dumps(rs.ARCHITECTURES) == '["amd64", "arm64"]'
+
+
+def test_the_release_dockerfile_grants_the_program_net_raw_as_a_file_capability():
+    assert "setcap cap_net_raw=ep" in rs.DOCKERFILE
