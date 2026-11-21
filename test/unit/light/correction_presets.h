@@ -1,12 +1,14 @@
 #pragma once
 
-/// A test-only convenience for the curated color orders.
+/// Test-only conveniences for building a Correction: the curated color orders and a 32-channel moving head.
 ///
 /// @technical
 ///
-/// Test-only convenience for building a Correction from a named color order (RGB/GRB/BGR/RGBW/GRBW).
-/// The PRODUCTION Correction has one rebuild, rebuild(brightness, ChannelRole* roles, nChannels), because the real wirings come from the FixtureProfiles library as role arrays. The curated-order enum + a rebuild(brightness, preset) overload used to live in Correction.h purely so tests could write `corr.rebuild(255, GRB)` tersely without hand-building a role array.
-/// That was a test convenience sitting in production code (zero production callers, and it duplicated "what does GRB mean", which the library's seedBuiltins now owns). It lives here instead: the tests keep the terse form, and Correction.h carries only the one role-array rebuild the device actually uses.
+/// The production Correction has one rebuild, rebuild(brightness, ChannelRole* roles, nChannels), because the real wirings come from the FixtureProfiles library as role arrays.
+///
+/// The named orders (RGB/GRB/BGR/RGBW/GRBW) live here so a test keeps the terse `rebuildFromPreset(c, 255, PresetOrder::GRB)`; the library's seedBuiltins owns what each order means in production.
+///
+/// `WideProfile` places a light's color at channels 9 to 11 of 32, for a case that needs a wiring wider than RGB.
 
 #include "light/drivers/Correction.h"
 #include "light/drivers/ChannelRole.h"
@@ -29,5 +31,16 @@ inline void rebuildFromPreset(mm::Correction& c, uint8_t brightness, PresetOrder
         case PresetOrder::GRBW: { R r[] = {R::Green, R::Red, R::Blue, R::White};  c.rebuild(brightness, r, 4); break; }
     }
 }
+
+/// A 32-channel moving head with its color at channels 9 to 11, so correcting one light writes all 32.
+struct WideProfile {
+    ChannelRole roles[32] = {};   ///< every channel's role, unused but the three
+    /// Red, green and blue at 9, 10 and 11.
+    WideProfile() {
+        roles[9] = ChannelRole::Red;
+        roles[10] = ChannelRole::Green;
+        roles[11] = ChannelRole::Blue;
+    }
+};
 
 }  // namespace mm

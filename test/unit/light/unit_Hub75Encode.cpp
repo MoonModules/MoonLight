@@ -393,6 +393,21 @@ TEST_CASE("HUB75 encode: an unusable geometry writes nothing") {
     CHECK(out[0] == 0xAA);
 }
 
+TEST_CASE("HUB75 geometry: 96 rows pair at 1/8 and 1/16 and leave an odd three a scan at 1/32") {
+    // A layout 64 wide and 96 high at 8 bits: 12 rows an address step at 1/8 and 6 at 1/16, all in pairs, but 3 at 1/32, which pair up no better than one.
+    mm::Hub75Geometry geo;
+    geo.width = 64; geo.height = 96; geo.bitDepth = 8;
+    geo.scanRate = 8;
+    CHECK(geo.rowsPerScan() == 12);
+    CHECK(geo.valid());
+    geo.scanRate = 16;
+    CHECK(geo.rowsPerScan() == 6);
+    CHECK(geo.valid());
+    geo.scanRate = 32;
+    CHECK(geo.rowsPerScan() == 3);
+    CHECK(geo.valid() == false);
+}
+
 TEST_CASE("HUB75 frame size is what decides the peripheral") {
     // The sizes that decide Parlio (65,535 bytes a transfer) against LCD_CAM, two bytes a slot, pinned at 4-bit so a wire-format change cannot move the cliff unseen.
     mm::Hub75Geometry one;    // one 64x64 panel, 1/32 scan

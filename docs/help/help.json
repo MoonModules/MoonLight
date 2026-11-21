@@ -3975,12 +3975,27 @@
     "fixtureRef": {
      "line": "The profile name an older config saved, read once and then emptied."
     },
+    "rows": {
+     "line": "The rows of one panel on a Raspberry Pi's header."
+    },
+    "cols": {
+     "line": "The columns of one panel on a Raspberry Pi's header."
+    },
+    "panelsPerLane": {
+     "line": "Panels in series on one lane of a Pi's header; hzeller's `--led-chain` is the same."
+    },
+    "pixelClock": {
+     "line": "The Pi's pixel clock in kHz; 10,000 is 10 MHz."
+    },
+    "latchBlank": {
+     "line": "Blank words the Pi's latch holds, 0 for none."
+    },
     "board": {
      "line": "The board's wiring: picking one fills the fourteen pins, Custom keeps yours.",
      "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-board)."
     },
     "peripheral": {
-     "line": "The silicon block that drives the panel, LCD_CAM or Parlio, where the chip has both.",
+     "line": "The silicon block that drives the panel: LCD_CAM, Parlio or a Pi 5's PIO.",
      "more": "A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round."
     },
     "scanRate": {
@@ -3996,6 +4011,9 @@
     },
     "refresh": {
      "line": "The measured refresh rate: the number to report when a panel flickers."
+    },
+    "shown": {
+     "line": "The frames the panels showed in the last second."
     }
    },
    "role": "driver",

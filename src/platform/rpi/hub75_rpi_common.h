@@ -69,7 +69,7 @@
 #endif
 
 #include "platform/Hub75Bus.h"   // Hub75Geometry, Hub75Layout
-#include "platform/rpi/hub75_board_pins.h"   // kHub75Lanes: the board's lane count
+#include "platform/rpi/hub75_board_pins.h"   // the board's pin table, which brings kHub75Lanes from platform/Hub75Pio.h
 #include "platform/rpi/hub75_pio_options.h"   // the option rules, hub75LaneGeometry
 #include "platform/nonblocking.h"   // MM_NONBLOCKING: the triple buffer's publish is tick-safe
 

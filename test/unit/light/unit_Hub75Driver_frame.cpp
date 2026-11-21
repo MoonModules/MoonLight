@@ -1,7 +1,7 @@
 /// @module Hub75Driver
 /// @also Correction
 
-/// Hub75Driver's tick, pinned down to the bit planes without a panel. The host's HUB75 port, opened by the test (`setTestHub75` in platform.h), hands the driver one frame as the ESP32 port does, and each case compares it with what the encoder makes of the colors the panel should show.
+/// Hub75Driver's tick, pinned down to the bit planes. The host's HUB75 port, opened by the test (`setTestHub75` in platform.h) in place of a panel, hands the driver one frame as the ESP32 port does, and each case compares it with what the encoder makes of the colors the panel should show.
 
 #include "doctest.h"
 #include "light/drivers/Hub75Driver.h"
@@ -22,7 +22,7 @@
 
 namespace {
 
-// 16x32 at the driver's default 1/16 scan, the smallest box that pairs into rows; 6-bit, its default depth.
+// The default box, kWidth by kHeight (16 wide, 32 high): the smallest that pairs into rows at the driver's default 1/16 scan; the depth is its default, 6-bit.
 constexpr uint16_t kWidth = 16;
 constexpr uint16_t kHeight = 32;
 
@@ -70,7 +70,7 @@ std::unique_ptr<Rig> rig(uint16_t height = kHeight) {
     return std::make_unique<Rig>(height);
 }
 
-// A 16x32 RGB image, dark but for the one pixel at (x, y).
+// An RGB image of kWidth by kHeight pixels, dark but for the one pixel at (x, y); firstDifference reads its height from its size.
 std::vector<uint8_t> onePixel(uint16_t x, uint16_t y, uint8_t r, uint8_t g, uint8_t b) {
     std::vector<uint8_t> rgb(static_cast<size_t>(kWidth) * kHeight * 3, 0);
     uint8_t* p = rgb.data() + (static_cast<size_t>(y) * kWidth + x) * 3;
@@ -127,7 +127,7 @@ TEST_CASE("The HUB75 port opens at 6 bit planes and refuses 7, though the encode
     mm::platform::Hub75Pins pins;
     CHECK(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth));
     CHECK_FALSE(mm::platform::hub75Init(handle, mm::platform::Hub75Backend::LcdCam, pins, 64, 64, 32, mm::kHub75PortMaxBitDepth + 1));
-    // A refused re-init leaves the port closed, not on the frame it had: nothing to write into, nothing to start.
+    // A refused re-init leaves the port closed, its buffer and its scan released, where the port had held the earlier frame.
     CHECK(mm::platform::hub75Buffer(handle) == nullptr);
     CHECK_FALSE(mm::platform::hub75Start(handle));
     mm::platform::hub75Deinit(handle);

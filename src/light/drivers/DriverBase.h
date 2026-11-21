@@ -172,12 +172,35 @@ public:
 protected:
     Layer* layer_ = nullptr;
 
+    /// Does an enabled sibling driver already claim `block`? RTTI-free: every driver answers hwBlock(), and one owning no block answers None.
+    bool siblingClaims(LedHwBlock block) const {
+        if (block == LedHwBlock::None) return false;
+        const MoonModule* p = parent();
+        if (!p) return false;
+        for (uint8_t i = 0; i < p->childCount(); i++) {
+            const MoonModule* sib = p->child(i);
+            if (sib == this || !sib || !sib->enabled()) continue;
+            // role() confirms it, so this static_cast needs no RTTI.
+            if (sib->role() != ModuleRole::Driver) continue;
+            if (static_cast<const DriverBase*>(sib)->hwBlock() == block) return true;
+        }
+        return false;
+    }
+    /// The status of a driver that stays idle because a sibling holds its block.
+    static constexpr const char* kBlockInUse = "peripheral already in use by another driver: pick a different one";
+
     /// One light of a wiring wider than RGB, for correctToRgb, sized off the hot path by sizeLightScratch.
     ScratchBuffer<uint8_t> lightScratch_{*this};
+    /// The status while one light of the wiring has no scratch to correct through.
+    static constexpr const char* kNoLightMemory = "not enough memory for one light of this fixture";
+    /// Whether the wiring is wider than RGB and the scratch for one light of it is missing or too small.
+    bool lightScratchShort() const MM_NONBLOCKING {
+        return correction_.outChannels > 3 && lightScratch_.bytes() < correction_.outChannels;
+    }
     /// Size lightScratch_ to the wiring, saying so in the status when memory runs out; true when an RGB wiring needs none or the light fits.
     bool sizeLightScratch() {
         if (correction_.outChannels <= 3 || lightScratch_.resize(correction_.outChannels)) return true;
-        setStatus("not enough memory for one light of this fixture", Severity::Error);
+        setStatus(kNoLightMemory, Severity::Error);
         return false;
     }
 
@@ -225,9 +248,15 @@ protected:
         if (wire_) { platform::free(wire_); wire_ = nullptr; wireCap_ = 0; publishHeapBytes(); }
     }
 
-    /// The heap bytes this driver holds; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
+    /// The heap bytes this driver holds beside its ScratchBuffers, which count themselves; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
     virtual size_t driverHeapBytes() const { return wireCap_; }
-    void publishHeapBytes() { setDynamicBytes(driverHeapBytes()); }
+    /// Move the readout by the change in driverHeapBytes() since the last report, so every ScratchBuffer's own count stays in it. A driver reports through this alone, which keeps the total in step.
+    void publishHeapBytes() {
+        const size_t now = driverHeapBytes();
+        setDynamicBytes(dynamicBytes() - reportedHeapBytes_ + now);
+        reportedHeapBytes_ = now;
+    }
+    size_t reportedHeapBytes_ = 0;   ///< what driverHeapBytes() read at the last publish
 
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;

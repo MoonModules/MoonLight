@@ -7,6 +7,8 @@
 #include "../core/conditional_controls.h"   // mm::isHidden, mm::isVisible, mm::controlIndex
 #include "core/module/Control.h"
 #include "hub75_port.h"
+#include "light/drivers/Correction.h"
+#include "correction_presets.h"   // rebuildFromPreset
 #include "light/drivers/Hub75Driver.h"
 #include "light/layers/Buffer.h"
 #include "platform/Hub75Bus.h"   // kHub75PortMaxBitDepth
@@ -16,6 +18,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 namespace {
 
@@ -35,6 +38,77 @@ struct WiredDriver {
     // The owner releases a driver before destroying it, which frees what prepare() allocated.
     ~WiredDriver() { driver.release(); }
 };
+
+// An output that counts what the driver asks of it, in place of the bus output, to pin how often the driver calls across the interface.
+struct CountingOutput : mm::Hub75Output {
+    size_t count = 16u * 32u;           // the lights it answers
+    mutable size_t lightsCalls = 0;     // counted from const lights()
+    size_t shows = 0;
+    size_t probe = 0;                   // the light whose red show() records
+    uint8_t probeRed = 0;               // the red of light `probe` in the last frame shown
+    const char* warn = nullptr;         // the warning it answers, null while healthy
+
+    void addWiringControls(mm::ControlList&) override {}
+    void addControls(mm::ControlList&) override {}
+    bool onControlChanged(const char*) override { return false; }
+    bool affectsPrepare(const char*) const override { return false; }
+    mm::DepthRange depthRange() const override { return {2, 6}; }
+    size_t frameBytes(uint16_t, uint16_t) const override { return 0; }
+    const char* open(uint16_t, uint16_t) override { return nullptr; }
+    const char* describe() const MM_NONBLOCKING override { return "counting"; }
+    const char* warning() const MM_NONBLOCKING override { return warn; }
+    size_t lights() const MM_NONBLOCKING override { lightsCalls++; return count; }
+    void show(const uint8_t* rgb, uint8_t) MM_NONBLOCKING override { shows++; probeRed = rgb[probe * 3]; }
+    void tick1s() MM_NONBLOCKING override {}
+    void close() override {}
+    mm::LedHwBlock hwBlock() const override { return mm::LedHwBlock::LcdCam; }
+    uint8_t fixedPins(mm::MoonModule::FixedPin*, uint8_t) const override { return 0; }
+};
+
+// A driver on a 16 x 32 wall over a counting output, on the heap since a driver and a layer outgrow a test's stack frame; the driver is unprepared.
+struct CountedDriver {
+    mm::Wall wall{16, 32};
+    mm::Buffer source;
+    mm::Hub75Driver driver;
+    CountingOutput out;
+
+    CountedDriver() {
+        REQUIRE(source.allocate(16 * 32, 3));
+        driver.outputForTest() = &out;
+        driver.setLayer(&wall.layer);
+        driver.setSourceBuffer(&source);
+        mm::Correction correction;
+        mm::rebuildFromPreset(correction, 255, mm::PresetOrder::RGB);
+        driver.correctionForTest() = correction;
+    }
+    ~CountedDriver() { driver.release(); }
+};
+
+// The status a healthy 16x32 panel shows on the bus.
+const char* const kHealthyStatus = "16x32, 1/16 scan, 6-bit (LCD_CAM)";
+// A driver on the bus in that layout, opened.
+std::unique_ptr<WiredDriver> runningWiredDriver() {
+    auto w = std::make_unique<WiredDriver>();
+    REQUIRE(w->driver.severity() == mm::MoonModule::Severity::Status);
+    return w;
+}
+
+// Wire `d` for a light of 32 channels under a heap that refuses the scratch for one light, which the status says.
+void wideWiringShort(mm::Hub75Driver& d) {
+    const mm::WideProfile wide;
+    mm::RefuseAbove refuse(16);   // the 32-byte scratch is refused
+    d.correctionForTest().rebuild(255, wide.roles, 32);
+    d.onCorrectionChanged();
+}
+
+// Give `d` a gain, which asks for tables, under a heap that refuses them, which the status says.
+void gainsShort(mm::Hub75Driver& d) {
+    d.correctionForTest().gainGreen = 128;
+    mm::RefuseAbove refuse(512);   // the gained tables, four rows of 256 bytes, are refused
+    d.rebuildCorrection(255);
+}
+
+const char* const kNoLightText = "not enough memory for one light of this fixture";
 
 const char* const kPinNames[] = {"r1", "g1", "b1", "r2", "g2", "b2", "a", "b", "c", "d", "e", "clk", "lat", "oe"};
 
@@ -193,6 +267,43 @@ TEST_CASE("Hub75Driver publishes the measured refresh on its one-second tick whi
     CHECK(std::string(refresh) == "60 Hz");
 }
 
+TEST_CASE("Hub75Driver reads its output's lights once, in prepare(), and a frame costs the output's show() alone") {
+    auto w = std::make_unique<CountedDriver>();
+    w->driver.prepare();
+    REQUIRE(w->driver.severity() == mm::MoonModule::Severity::Status);
+    CHECK(w->out.lightsCalls == 1);
+    w->source.data()[0] = 200;
+    for (int frame = 0; frame < 5; frame++) w->driver.tick();
+    CHECK(w->out.shows == 5);
+    CHECK(w->out.probeRed == 200);
+    CHECK(w->out.lightsCalls == 1);   // five frames later, still the prepare()'s one
+    w->driver.onCorrectionChanged();
+    CHECK(w->out.lightsCalls == 1);
+}
+
+TEST_CASE("Hub75Driver reads its output's lights again on every prepare, and the next frame has the new length") {
+    auto w = std::make_unique<CountedDriver>();
+    w->out.count = 16u * 16u;
+    w->driver.prepare();
+    REQUIRE(w->driver.severity() == mm::MoonModule::Severity::Status);
+    CHECK(w->out.lightsCalls == 1);
+    CHECK(w->driver.dynamicBytes() == 16u * 16u * 3u);
+    w->out.count = 16u * 32u;   // the box the output opens at has grown
+    w->driver.prepare();
+    REQUIRE(w->driver.severity() == mm::MoonModule::Severity::Status);
+    CHECK(w->out.lightsCalls == 2);
+    REQUIRE(w->driver.dynamicBytes() == 16u * 32u * 3u);   // the scratch holds the new frame, so the frame below stays inside it
+    w->out.probe = 300;   // a light past the first box
+    w->source.data()[300 * 3] = 99;
+    w->driver.tick();
+    CHECK(w->out.probeRed == 99);
+    CHECK(w->out.lightsCalls == 2);
+}
+
+TEST_CASE("Hub75BusOutput is final, so a call whose static type is the bus output resolves without dispatch") {
+    CHECK(std::is_final_v<mm::Hub75BusOutput>);
+}
+
 TEST_CASE("Hub75Driver sizes its correction scratch to one RGB frame of the layout's box") {
     mm::PortGuard guard;
     auto w = std::make_unique<WiredDriver>();   // 16 x 32 lights, three bytes each
@@ -274,6 +385,25 @@ TEST_CASE("Hub75Driver asks the platform about the bytes its layout takes, and n
     CHECK(mm::platform::hub75TestPort().offeredBytes == 0);
 }
 
+TEST_CASE("Hub75Driver offers 48 rows at 1/8 scan and refuses them at 1/16, so the scan select reaches the geometry") {
+    // 48 rows leave 6 rows a scan at 1/8, which pair, and 3 at 1/16, which do not; the select alone changes which. A height of 24 pairs at no scan and 32 pairs at 1/8 and 1/16 alike, so of 24, 32 and 48 only 48 shows that.
+    mm::PortGuard guard;
+    auto w = std::make_unique<WiredDriver>(48);   // the default 1/16 scan
+    CHECK(w->driver.severity() == mm::MoonModule::Severity::Error);
+    CHECK(mm::platform::hub75TestPort().offeredBytes == 0);
+    w->driver.scanSel = 0;
+    w->driver.rebuildControls();
+    CHECK(mm::platform::hub75TestPort().offeredBytes > 0);
+    w->driver.prepare();
+    CHECK(w->driver.severity() == mm::MoonModule::Severity::Status);
+    CHECK(std::string(w->driver.status()) == "16x48, 1/8 scan, 6-bit (LCD_CAM)");
+    w->driver.scanSel = 1;
+    w->driver.rebuildControls();
+    CHECK(mm::platform::hub75TestPort().offeredBytes == 0);
+    w->driver.prepare();
+    CHECK(w->driver.severity() == mm::MoonModule::Severity::Error);
+}
+
 TEST_CASE("Hub75Driver releases the panel's peripheral when it stops, and when the scan will not start") {
     mm::PortGuard guard;
     auto w = std::make_unique<WiredDriver>();
@@ -310,4 +440,122 @@ TEST_CASE("Hub75Driver releases the panel's peripheral when the memory for one l
     CHECK(mm::platform::hub75TestFrame(nullptr) == nullptr);   // no frame reaches the port
     CHECK(d.hwBlock() == mm::LedHwBlock::None);
     CHECK(mm::platform::hub75TestPort().deinits == before + 2);   // the reinit's stop, then the close after the refusal
+}
+
+TEST_CASE("Hub75Driver keeps a light-memory shortage on its status through the one-second tick, and shows the panel's status once the shortage ends") {
+    mm::PortGuard guard;
+    auto w = runningWiredDriver();
+    mm::Hub75Driver& d = w->driver;
+    wideWiringShort(d);
+    CHECK(d.severity() == mm::MoonModule::Severity::Error);
+    CHECK(std::string(d.status()) == kNoLightText);
+    d.tick1s();
+    CHECK(d.severity() == mm::MoonModule::Severity::Error);
+    CHECK(std::string(d.status()) == kNoLightText);
+
+    mm::rebuildFromPreset(d.correctionForTest(), 255, mm::PresetOrder::RGB);   // an RGB wiring, which corrects straight into the frame
+    d.onCorrectionChanged();
+    CHECK(d.severity() == mm::MoonModule::Severity::Status);
+    CHECK(std::string(d.status()) == kHealthyStatus);
+}
+
+TEST_CASE("Hub75Driver retries the light scratch at the same width once memory is back, and shows the panel's status") {
+    mm::PortGuard guard;
+    auto w = runningWiredDriver();
+    mm::Hub75Driver& d = w->driver;
+    wideWiringShort(d);
+    REQUIRE(std::string(d.status()) == kNoLightText);
+    const mm::WideProfile wide;
+    d.correctionForTest().rebuild(255, wide.roles, 32);   // the same 32 channels, with the memory back
+    d.onCorrectionChanged();
+    CHECK(d.severity() == mm::MoonModule::Severity::Status);
+    CHECK(std::string(d.status()) == kHealthyStatus);
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u + 32u);
+}
+
+TEST_CASE("Hub75Driver keeps the gain-memory warning on its status through a prepare and the one-second tick, and shows the panel's status once the gains fit") {
+    mm::PortGuard guard;
+    auto w = runningWiredDriver();
+    mm::Hub75Driver& d = w->driver;
+    gainsShort(d);
+    CHECK(d.severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(d.status()).find("color balance") != std::string::npos);
+    d.prepare();   // the order production runs: the rebuild first, then the prepare
+    CHECK(d.severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(d.status()).find("color balance") != std::string::npos);
+    d.tick1s();
+    CHECK(d.severity() == mm::MoonModule::Severity::Warning);
+    CHECK(std::string(d.status()).find("color balance") != std::string::npos);
+
+    d.rebuildCorrection(255);   // the memory is back, so the gains apply and the warning leaves
+    d.tick1s();
+    CHECK(d.severity() == mm::MoonModule::Severity::Status);
+    CHECK(std::string(d.status()) == kHealthyStatus);
+}
+
+TEST_CASE("Hub75Driver shows the output's warning over the gain warning, and the gain warning again once the output's ends, the same each second") {
+    auto w = std::make_unique<CountedDriver>();
+    mm::Hub75Driver& d = w->driver;
+    d.prepare();
+    gainsShort(d);
+    const std::string gains = d.status();
+    REQUIRE(d.severity() == mm::MoonModule::Severity::Warning);
+    w->out.warn = "the output is stalled";
+    for (int second = 0; second < 2; second++) {
+        d.tick1s();
+        CHECK(std::string(d.status()) == "the output is stalled");
+    }
+    w->out.warn = nullptr;
+    for (int second = 0; second < 2; second++) {
+        d.tick1s();
+        CHECK(std::string(d.status()) == gains);
+    }
+    d.rebuildCorrection(255);   // the gains fit, so only the output's own status remains
+    d.tick1s();
+    CHECK(std::string(d.status()) == "counting");
+}
+
+TEST_CASE("Hub75Driver keeps the missing light scratch's error over the output's warning, and over the output's status after it ends") {
+    auto w = std::make_unique<CountedDriver>();
+    mm::Hub75Driver& d = w->driver;
+    d.prepare();
+    wideWiringShort(d);
+    w->out.warn = "the output is stalled";
+    d.tick1s();
+    CHECK(d.severity() == mm::MoonModule::Severity::Error);
+    CHECK(std::string(d.status()) == kNoLightText);
+    w->out.warn = nullptr;
+    d.tick1s();
+    CHECK(std::string(d.status()) == kNoLightText);
+}
+
+TEST_CASE("Hub75Driver's memory readout is the frame and the light scratch while it runs, and 0 after a release, for a wiring of 32 channels") {
+    mm::PortGuard guard;
+    auto w = runningWiredDriver();
+    mm::Hub75Driver& d = w->driver;
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u);
+    const mm::WideProfile wide;
+    d.correctionForTest().rebuild(255, wide.roles, 32);
+    d.onCorrectionChanged();
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u + 32u);   // the frame and one 32-channel light
+    d.prepare();   // a prepare keeps the scratch and the readout
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u + 32u);
+    d.release();
+    CHECK(d.dynamicBytes() == 0);
+}
+
+TEST_CASE("Hub75Driver's memory readout counts the gained tables and the 16-bit tables beside the frame, and returns to 0 after a release") {
+    mm::PortGuard guard;
+    auto w = runningWiredDriver();
+    mm::Hub75Driver& d = w->driver;
+    d.correctionForTest().gainGreen = 128;
+    d.rebuildCorrection(255);
+    d.prepare();
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u + 4u * 256u);   // the frame and four gained rows of 256 bytes
+    d.correctionForTest().wide = true;
+    d.rebuildCorrection(255);
+    d.prepare();
+    CHECK(d.dynamicBytes() == 16u * 32u * 3u + 4u * 256u + 2u * (256u + 4u * 256u));   // and the 16-bit curve and its gained rows
+    d.release();
+    CHECK(d.dynamicBytes() == 0);
 }

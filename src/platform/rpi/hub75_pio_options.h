@@ -24,12 +24,8 @@
 
 #include "platform/Hub75Bus.h"   // Hub75Geometry
 #include "platform/Hub75Pio.h"   // Hub75PioOptions
-#include "platform/rpi/hub75_board_pins.h"   // kHub75Lanes: the board's lane count
 
 namespace mm::platform {
-
-/// The most panels per lane an engine takes, 32: this layer builds independently of light/, so the number is stated here; an engine refuses longer ones rather than allocating a frame for them.
-constexpr uint8_t kHub75PanelsPerLaneMax = 32;
 
 /// Whether `value` lies outside lo..hi, the shape of every range rule.
 constexpr bool hub75Outside(int value, int lo, int hi) { return value < lo || value > hi; }

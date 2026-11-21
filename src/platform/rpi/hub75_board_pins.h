@@ -34,6 +34,8 @@
 
 #include <cstdint>
 
+#include "platform/Hub75Pio.h"   // kHub75Lanes: the board's lane count
+
 namespace mm::platform {
 
 /// The signals fanned out to all three lanes: each is a GPIO, with its 40-pin header pin in the trailing comment (@xref{shared-signals|Shared signals}).
@@ -53,9 +55,6 @@ struct LanePins {
     uint8_t r1, g1, b1;   ///< upper half
     uint8_t r2, g2, b2;   ///< lower half
 };
-
-/// The lanes the active board drives, one per HUB75 data path: the engines' lane tables, slot streams and repack all take this many.
-constexpr int kHub75Lanes = 3;
 
 /// The lanes' color pins in LanePins order; each row's comment gives the 40-pin header pins (@xref{lane-pins|Lane pins}).
 constexpr LanePins kLanePins[kHub75Lanes] = {

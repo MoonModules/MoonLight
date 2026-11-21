@@ -35,7 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "platform/rpi/hub75_board_pins.h"   // kHub75Lanes: the board's lane count
+#include "platform/rpi/hub75_board_pins.h"   // the board's pin table, which brings kHub75Lanes from platform/Hub75Pio.h
 
 namespace mm::platform {
 

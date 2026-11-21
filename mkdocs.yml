@@ -267,6 +267,7 @@ nav:
           - LED drivers: reference/hardware/led-drivers.md
           - HUB75 panels: reference/hardware/hub75-panels.md
           - HUB75 refresh rates: reference/hardware/hub75-refresh.md
+          - HUB75 bench record: reference/hardware/hub75-bench.md
           - Receiving cards for LED panels: reference/hardware/panel-cards.md
           - TV backlight: reference/hardware/tv-backlight.md
   # Contributors: how it is built, the rules, and the references a change needs.

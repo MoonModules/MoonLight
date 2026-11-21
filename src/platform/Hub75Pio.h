@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 
-/// HUB75 from a Pi 5's RP1 PIO: the seam MoonLight's own PIO engine sits behind, and the host test port that stands in for it.
+/// HUB75 from a Pi 5's RP1 PIO, gated by `hasHub75Pio`: the seam MoonLight's own PIO engine sits behind, and the host test port that stands in for it.
 ///
 /// The seam takes tightly packed RGB, since the engine encodes the bit planes and refreshes from its own threads. It drives GPIO 2 to 27, so the header's I2C1, SPI0, UART0, 1-wire, I2S and PWM must be off (hub75_board_pins.h, Pins the kernel may own). It lives apart from platform.h as a self-contained concern, as edid.h and Hub75Bus.h do, and its users include it directly.
 
@@ -11,6 +11,12 @@
 #include "platform/nonblocking.h"   // MM_NONBLOCKING
 
 namespace mm::platform {
+
+/// The lanes the active 3-channel board drives, one per HUB75 data path: the engines' lane tables, slot streams and repack all take this many, and so does the card.
+constexpr int kHub75Lanes = 3;
+
+/// The most panels in series on one lane an engine takes, 32; an engine refuses longer ones rather than allocating a frame for them, and the card's panels per lane stop here.
+constexpr uint8_t kHub75PanelsPerLaneMax = 32;
 
 /// One wall of panels under the PIO output's own option names: the panels as wired, in lanes the active 3-channel board drives together. The canvas is `cols * panelsPerLane` wide and `rows * parallel` high; each lane is one `cols * panelsPerLane` by `rows` strip, the lanes stacked.
 /// @technical The engine encodes the bit planes and refreshes from its own thread, so the seam takes RGB rather than the bus words `hub75Buffer` takes. MoonLight's correction already applied the curve, so the engine runs identity gamma.
