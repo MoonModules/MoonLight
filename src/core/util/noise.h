@@ -1,112 +1,84 @@
 #pragma once
 
+#include "platform/noinline.h"   // MM_NOINLINE: curl16 is shared, not inlined
+
 #include <cstdint>
 
 /// A smooth, deterministic pseudo-random field: the staple organic-motion source for effects.
 ///
 /// @technical
 ///
-/// The value varies smoothly across space, so neighboring coordinates give similar results, unlike a raw hash.
-/// Sample it across a grid for clouds, plasma or fire-like fields, and scroll a coordinate to animate.
-/// One gradient set and one interpolation serve all three dimensions.
+/// The value varies smoothly across space, so neighboring coordinates give similar results, unlike a raw hash: sample it across a grid for clouds, plasma or fire, scroll a coordinate to animate. One gradient set and one interpolation serve all three dimensions.
 ///
 /// ## The algorithm
 ///
-/// This is Perlin's improved noise.
-/// A pseudo-random gradient sits at every lattice corner, chosen by a hash from the twelve cube-edge directions.
-/// Its dot product with the offset from the corner, a quintic fade on the fraction, and a linear blend across the corners give the value.
+/// Perlin's improved noise: a pseudo-random gradient at every lattice corner, hashed from the twelve cube-edge directions, dotted with the offset from the corner, then a quintic fade on the fraction and a linear blend across the corners.
 ///
-/// Gradient noise is zero at every lattice point and has no value bias toward the corners.
-/// That is why it reads as smooth and isotropic where value noise, which picks a random value per corner, reads blocky and axis-aligned at low frequency.
+/// Gradient noise is zero at every lattice point with no bias toward the corners, so it reads smooth and isotropic where value noise, a random value per corner, reads blocky and axis-aligned at low frequency.
 ///
-/// Two dimensions is three with the last offset at zero.
-/// One takes gradients of its own, since the cube-edge set projected onto a single axis is zero for six codes of sixteen.
-/// The cost scales with the corners: two, four and eight dot products.
+/// Two dimensions is three with the last offset at zero. One has gradients of its own, since the cube-edge set projected onto one axis is zero for six codes of sixteen. The cost scales with the corners: two, four and eight dot products.
 ///
 /// ## Why the gradients are a table
 ///
-/// A table rather than the usual select expression, because the selects compile to branches and a core without a branch predictor pays for each one.
-/// The select form was forty-four branches per two-dimensional sample on this target; the table is loads and small multiplies.
+/// The usual select expression compiles to branches, which a core lacking a branch predictor pays for: forty-four per two-dimensional sample on this target. The table is loads and small multiplies.
 ///
 /// ## Why the core works a slice at a time
 ///
-/// One instantiation per arity compiles to straight-line code over exactly its corners.
-/// A slice is two or four corners with the blends between them, and three dimensions is that slice at two depths blended by the depth fade.
+/// One instantiation per arity compiles to straight-line code over exactly its corners. A slice is two or four corners with their blends; three dimensions is that slice at two depths blended by the depth fade.
 ///
-/// One body with eight corners in flight spilled half its registers on a sixteen-register window, fifty-two stack stores a sample.
-/// The slice form keeps at most four.
+/// One body with eight corners in flight spilled half its registers on a sixteen-register window, fifty-two stack stores a sample; the slice form keeps at most four.
 ///
 /// ## Why the scale is per arity
 ///
-/// Halving regardless is right for two and three dimensions and wrong for one, which then spans only the middle half of the range.
-/// Measured, a one-dimensional field covered the central half of the byte range and read washed out beside the same field sampled in two.
+/// Halving is right for two and three dimensions and wrong for one, which then spans only the middle half of the range: measured, a one-dimensional field read washed out beside the same field sampled in two.
 ///
 /// ## The three standard compositions
 ///
-/// One sample is a smooth blur; the looks people recognize come from composing samples, and each composition is a few lines over the base rather than a new field generator.
+/// One sample is a smooth blur; the looks people recognize come from composing samples, each composition a few lines over the base rather than a new field generator.
 ///
-/// Summing octaves at doubling frequency and halving amplitude turns the blur into cloud, terrain or smoke structure: large shapes with fine detail on them.
-/// The same sum over the absolute deviation creases the field, and those creases read as billows and flame.
-/// Sampling at a coordinate that noise itself displaced is the warp, which produces the flowing, marbled look.
+/// Octaves summed at doubling frequency and halving amplitude give cloud, terrain or smoke, large shapes with fine detail on them; the same sum over the absolute deviation creases into billows and flame.
 ///
-/// Cost is stated per call because it decides whether an effect fits.
-/// Each octave is one sample, so three octaves cost three, and a warp costs its own probes plus the field it then samples.
-/// On a large fixture that multiplies by the pixel count.
+/// Sampling where noise itself displaced the coordinate is the warp, which gives the flowing, marbled look.
+///
+/// Cost is per call, because it decides whether an effect fits: each octave is one sample, a warp its own probes plus the field it samples, and on a large fixture that multiplies by the pixel count.
 ///
 /// ## What a domain warp is for
 ///
-/// A warp displaces the sample coordinate by a noise field and then samples there, the strength saying how far that reaches in the same units as the coordinates.
-/// It is the primitive behind the flowing, marbled look.
-/// The field stops looking like a texture laid on the grid and starts looking like something moving through it, for two extra samples.
+/// A warp displaces the sample coordinate by a noise field, the strength in the coordinates' units, then samples there: the primitive behind the flowing, marbled look, the field reading as something moving through the grid rather than a texture on it, for two extra samples.
 ///
 /// ## Why the volumetric warp takes three probes
 ///
-/// It uses three rather than two, each offset by its own constant so the axes displace independently.
-/// Sampling one field three times would move everything along a diagonal.
+/// Three rather than two, each offset by its own constant, so the axes displace independently; sampling one field three times would move everything along a diagonal.
 ///
-/// Its octave count has no default, unlike the flat form's.
-/// With one, the two four-argument calls would both be viable and every existing call ambiguous, so requiring it makes the arity say which field the caller means.
+/// Its octave count has no default, unlike the flat form's: with one, both four-argument calls would be viable and every existing call ambiguous, so the arity says which field the caller means.
 ///
-/// Both share one body, so the two cannot drift apart.
-/// Each still compiles to exactly its own arity: the flat instantiation walks four corners and never touches the third axis.
-/// Calling the volumetric body with a zero third coordinate would have been simpler and measured nearly twice as slow.
-/// Every probe and the inner sum then walk eight corners to reach the same answer.
+/// Both share one body, so they stay in step, and each compiles to its own arity: the flat instantiation walks four corners and leaves the third axis alone. The volumetric body at a zero third coordinate measured nearly twice as slow, walking eight corners for the same answer.
 ///
 /// ## Why curl noise cannot clump
 ///
-/// It is the perpendicular gradient of a scalar field, from Bridson's curl-noise paper.
-/// Taking the gradient of a potential and turning it a quarter turn gives a field whose divergence is zero by construction.
-/// Whatever flows into a region flows out again.
+/// The perpendicular gradient of a scalar field, from Bridson's curl-noise paper: a potential's gradient turned a quarter turn has zero divergence by construction, so whatever flows into a region flows out again.
 ///
-/// That is what separates it from sampling noise straight into a velocity, where the field has sources and sinks.
-/// Anything carried by such a field collects in the sinks and drains from the sources, which looks like clumping rather than flow.
+/// Noise sampled straight into a velocity has sources and sinks, and anything it carries collects in the sinks and drains from the sources, which looks like clumping rather than flow.
 ///
-/// The output is scaled by a strength in the caller's own units, and the sampling distance for the central difference is in the same coordinates as the field.
-/// Too small and the difference is quantization noise; too large and the curl is of a blurrier field than the one being sampled.
-/// The default is a sixteenth of a cell.
+/// The strength is in the caller's units, and the central difference's distance in the field's coordinates: too small and it is quantization noise, too large a blurrier field. The default is a sixteenth of a cell.
 ///
 /// ## The output uses its full range
 ///
-/// The dot product is signed offsets added, so the blend spans about a cell rather than the tighter bound a unit vector suggests.
-/// An exact search over every gradient choice at every fraction gives half a cell in one dimension, a cell in two and slightly more in three.
+/// The dot product adds signed offsets, so the blend spans about a cell, not the tighter unit-vector bound: an exact search gives half a cell in one dimension, a cell in two and slightly more in three.
 ///
-/// Each tier halves the raw blend onto its range, so the midpoint is the field's mean and both ends are reached.
-/// The clamp is a guard that only the three-dimensional extreme touches.
+/// Each tier halves the raw blend onto its range, so the midpoint is the field's mean and both ends are reached; the clamp is a guard only the three-dimensional extreme touches.
 ///
 /// ## How a coordinate is read
 ///
-/// A coordinate is fixed point scaled however the caller likes: its high byte selects the noise cell and its low byte the interpolation position within.
-/// A larger step per pixel is therefore finer noise, with more cells across the grid, and a smaller step is broader and smoother.
+/// A coordinate is fixed point scaled as the caller likes: its high byte selects the cell, its low byte the position within. A larger step per pixel is finer noise, a smaller one broader and smoother.
 ///
 /// ## What the lattice hash costs
 ///
-/// Each coordinate is multiplied by its own odd constant and the results xored, which shares work across a cell's corners: six multiplies per three-dimensional sample rather than twenty-four.
-/// Then one shift, one multiply, and the top nibble of the product, its best-mixed part.
+/// Each coordinate is multiplied by its own odd constant and the results xored, sharing work across a cell's corners: six multiplies per three-dimensional sample rather than twenty-four, then a shift, a multiply and the top nibble of the product, its best-mixed part.
 ///
-/// Four bits is all a gradient needs, so that is the whole hash.
-/// A byte-wide avalanche spent three multiplies per corner on bits nothing read.
-/// Checked against it the sixteen codes are uniform to well under a percent, with adjacent corners as independent as the avalanche managed.
-/// A linear pre-mix with a single multiply was not: adjacent corners correlated six-fold, which reads as lattice patterns.
+/// Four bits is all a gradient needs. A byte-wide avalanche spent three multiplies a corner on bits the gradient discards; against it the sixteen codes are uniform to well under a percent, with adjacent corners as independent as the avalanche managed.
+///
+/// A linear pre-mix with a single multiply correlated adjacent corners six-fold, which reads as lattice patterns.
 ///
 /// Both tiers share the hash, so the 16-bit field is the 8-bit one at finer resolution rather than an unrelated field.
 ///
@@ -115,7 +87,7 @@
 namespace mm {
 namespace noise {
 
-/// A corner's gradient index, four bits, which is all a gradient needs.
+/// A corner's gradient index, four bits, which is all a gradient needs: @xref{what-the-lattice-hash-costs}.
 constexpr uint32_t corner(uint32_t x, uint32_t y, uint32_t z) {
     uint32_t h = (x * 0x8da6b343u) ^ (y * 0xd8163841u) ^ (z * 0xcb1ab31fu);
     h ^= h >> 16;
@@ -123,7 +95,7 @@ constexpr uint32_t corner(uint32_t x, uint32_t y, uint32_t z) {
     return h >> 28;
 }
 
-/// Perlin's twelve cube-edge gradients, padded to sixteen so a nibble indexes them by mask.
+/// Perlin's twelve cube-edge gradients, padded to sixteen so a nibble indexes them by mask: @xref{why-the-gradients-are-a-table}.
 inline constexpr int8_t kGradient[16][3] = {
     {1, 1, 0}, {-1, 1, 0}, {1, -1, 0}, {-1, -1, 0},
     {1, 0, 1}, {-1, 0, 1}, {1, 0, -1}, {-1, 0, -1},
@@ -165,8 +137,7 @@ constexpr uint32_t fade16(uint16_t t) {
     return a + (((b - a) * (t & 0xFFu)) >> 8);
 }
 
-/// The two tiers as policies for the one core below: the fraction width, the fade of a fraction.
-/// The blend a→b by a 0.16 weight sized to the tier's operand range.
+/// The two tiers as policies for the one core below: the fraction width, the fade of a fraction, and the blend a→b by a 0.16 weight sized to the tier's operand range.
 struct Tier8 {
     /// How many fraction bits a coordinate carries at this tier.
     static constexpr int kFrac = 8;
@@ -188,7 +159,7 @@ struct Tier16 {
     }
 };
 
-/// The core: gradient noise over the corners of one lattice cell, returning a raw blend.
+/// The core: gradient noise over the corners of one lattice cell, returning a raw blend: @xref{the-algorithm}, worked @xref{why-the-core-works-a-slice-at-a-time|a slice at a time}.
 template <class Tier, int Dims>
 constexpr int32_t layer(uint32_t ix, uint32_t iy, uint32_t iz, int32_t fx, int32_t fy, int32_t fz, uint32_t wx, uint32_t wy) {
     constexpr int32_t kCell = 1 << Tier::kFrac;
@@ -215,7 +186,7 @@ constexpr int32_t raw(uint32_t x, uint32_t y, uint32_t z) {
     return v;
 }
 
-/// Map a raw blend onto the tier's unsigned range, centered on the midpoint.
+/// Map a raw blend onto the tier's unsigned range, centered on the midpoint: @xref{the-output-uses-its-full-range}, @xref{why-the-scale-is-per-arity|scaled per arity}.
 template <class Tier, int Dims>
 constexpr uint32_t out(int32_t raw) {
     constexpr int32_t kCell = 1 << Tier::kFrac;
@@ -242,7 +213,7 @@ constexpr int32_t fbmWiden(int32_t v, int32_t mid, uint8_t octaves) {
 
 }  // namespace noise
 
-/// 1D gradient noise: x is a 16.0 fixed coordinate (high byte = cell, low byte = position).
+/// 1D gradient noise: x is a 16.0 fixed coordinate, @xref{how-a-coordinate-is-read|high byte the cell, low byte the position}.
 constexpr uint8_t inoise8(uint32_t x) {
     return static_cast<uint8_t>(noise::out<noise::Tier8, 1>(noise::raw<noise::Tier8, 1>(x, 0, 0)));
 }
@@ -272,7 +243,7 @@ constexpr uint16_t inoise16(uint32_t x, uint32_t y, uint32_t z) {
     return static_cast<uint16_t>(noise::out<noise::Tier16, 3>(noise::raw<noise::Tier16, 3>(x, y, z)));
 }
 
-/// Fractal Brownian motion at 16 bits: `octaves` samples at doubling frequency, halving amplitude.
+/// Fractal Brownian motion at 16 bits: `octaves` samples at doubling frequency, halving amplitude, the first of @xref{the-three-standard-compositions}.
 inline uint16_t fbm16(uint32_t x, uint32_t y, uint8_t octaves) {
     if (octaves == 0) return 32768;                     // no octaves: flat mid-field
     // Wide so each octave keeps its full width: a narrow accumulator bands exactly as this tier avoids.
@@ -365,7 +336,7 @@ inline uint8_t turbulence8(uint32_t x, uint32_t y, uint32_t z, uint8_t octaves) 
     return static_cast<uint8_t>(r > 255 ? 255 : r);
 }
 
-/// Domain warp: displace the sample coordinate by a noise field, then sample there. `strength` is how far the displacement reaches, in the same fixed-point units as the coordinates.
+/// Domain warp: displace the sample coordinate by a noise field, then sample there, `strength` reaching in the coordinates' units: @xref{what-a-domain-warp-is-for}.
 
 /// 3D domain warp: the same displacement with a z axis, so the field flows through a volume. Three probes, each offset by its own constant, so the axes displace independently.
 template <int Dims>
@@ -375,7 +346,7 @@ inline uint8_t warpImpl(uint32_t x, uint32_t y, uint32_t z, uint16_t strength, u
     if constexpr (Dims > 2) {
         dx = (static_cast<int32_t>(inoise8(x, y, z)) - 128) * strength / 128;
         dy = (static_cast<int32_t>(inoise8(x + 0x9E37u, y + 0x7C15u, z)) - 128) * strength / 128;
-        // The third probe rides that axis itself, so a flat fixture displaces nothing along it.
+        // The third probe rides that axis itself, so a flat fixture keeps its single plane.
         if (z) dz = (static_cast<int32_t>(inoise8(x + 0x6A09u, y + 0xBB67u, z)) - 128) * strength / 128;
     } else {
         dx = (static_cast<int32_t>(inoise8(x, y)) - 128) * strength / 128;
@@ -391,7 +362,7 @@ inline uint8_t warpImpl(uint32_t x, uint32_t y, uint32_t z, uint16_t strength, u
     }
 }
 
-/// 3D domain warp: the field flows through a volume rather than through a plane.
+/// 3D domain warp: the field flows through a volume rather than through a plane, @xref{why-the-volumetric-warp-takes-three-probes|three probes}.
 inline uint8_t warp8(uint32_t x, uint32_t y, uint32_t z, uint16_t strength, uint8_t octaves) {
     return warpImpl<3>(x, y, z, strength, octaves);
 }
@@ -401,9 +372,10 @@ inline uint8_t warp8(uint32_t x, uint32_t y, uint16_t strength, uint8_t octaves 
     return warpImpl<2>(x, y, 0u, strength, octaves);
 }
 
-/// Curl of a noise potential: a velocity field that cannot pile up or thin out.
-inline void curl16(uint32_t x, uint32_t y, uint32_t z, int32_t strength,
-                   int32_t& vx, int32_t& vy, uint32_t eps = 4096) {
+/// Curl of a noise potential: a velocity field that @xref{why-curl-noise-cannot-clump|cannot pile up or thin out}.
+// Out of line, one copy for every caller: inlined, each caller's loop carried about 7 KB of it on an ESP32, and the call measured faster on an ESP32-S3 panel (Nebula), so a call is the cheaper form on the target.
+MM_NOINLINE inline void curl16(uint32_t x, uint32_t y, uint32_t z, int32_t strength,
+                               int32_t& vx, int32_t& vy, uint32_t eps = 4096) {
     // Two central differences, turned a quarter turn, so flow runs along the contours.
     const int32_t dy = static_cast<int32_t>(inoise16(x, y + eps, z))
                      - static_cast<int32_t>(inoise16(x, y - eps, z));

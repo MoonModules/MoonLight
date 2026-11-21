@@ -1013,6 +1013,135 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/FlockEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#flockeffect"
   },
+  "SwirlEffect": {
+   "line": "Particles born by one of five emitters and moved by one of five fields: a strange attractor, a jet, rings, a flow, and every pairing between.",
+   "summary": "Pick how particles are born, the `emitter`, and what moves them, the `field`. A `preset` loads a pairing and its knobs at once. Every pairing draws but the edge emitter under an outward vortex with `edge` at die; the parts and their knobs are in the [Swirl power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html#swirl).\n\nCompare with [Flock](https://moonmodules.org/MoonLight/moonmodules/light/effects.html#flock), boids steering by their neighbors rather than following a field.",
+   "attribution": "[James Hutchinson](https://moonmodules.org/MoonLight/reference/attributions.html#james-hutchinson), [Claude](https://moonmodules.org/MoonLight/reference/attributions.html#claude), [Arne Halvorsen](https://moonmodules.org/MoonLight/reference/attributions.html#arne-halvorsen), [Robert Bridson](https://moonmodules.org/MoonLight/reference/attributions.html#robert-bridson)",
+   "guide": [
+    {
+     "title": "Turn the knob",
+     "text": "Every knob works at both ends. Low `shape` flings the swarm off the knot, and it reforms from the cloud; `expand` below 128 swallows the rings. A particle flung out or swallowed dies and its emitter refills."
+    },
+    {
+     "title": "Route the sound",
+     "text": "A mod slot moves a knob with the music, or with an LFO on a board with no microphone. `speed` likes the smooth level, `shape` a kick, `spread` the bass."
+    }
+   ],
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/SwirlEffect.gif",
+   "controls": {
+    "preset": {
+     "line": "Loads a pairing and its knobs at once; the mod slots stay as they are."
+    },
+    "emitter": {
+     "line": "How particles are born: scatter, cloud, nozzle, ring or edge."
+    },
+    "spread": {
+     "line": "The nozzle's cone, from a needle to a full circle."
+    },
+    "period": {
+     "line": "Steps between rings."
+    },
+    "ringSize": {
+     "line": "Particles in a ring; a smaller count blows a smaller ring."
+    },
+    "field": {
+     "line": "What moves them: attractor, flow, vortex, ballistic or orbit."
+    },
+    "shape": {
+     "line": "Halvorsen's constant a hundredfold; 189 is the usual knot."
+    },
+    "scale": {
+     "line": "The attractor's zoom, or the size of the flow's features."
+    },
+    "drift": {
+     "line": "How fast the flow changes."
+    },
+    "expand": {
+     "line": "Outward above 128, inward below, where the origin swallows them."
+    },
+    "swirl": {
+     "line": "Around the origin, one way above 128 and the other below."
+    },
+    "drag": {
+     "line": "The share of its speed a particle loses each step."
+    },
+    "gravity": {
+     "line": "The pull down the panel."
+    },
+    "pull": {
+     "line": "The orbit's pull toward the origin."
+    },
+    "count": {
+     "line": "How many particles fly."
+    },
+    "speed": {
+     "line": "Steps a second: 60 is the reference, 0 holds the picture."
+    },
+    "life": {
+     "line": "How long a particle lives, four steps a unit; 0 is forever."
+    },
+    "trail": {
+     "line": "How long the streaks stay; 0 draws each step fresh and holds no trail."
+    },
+    "size": {
+     "line": "How wide a particle is drawn, in lights."
+    },
+    "wander": {
+     "line": "How far the whole motion tours the panel."
+    },
+    "spin": {
+     "line": "Turns the motion: 128 holds it still, either side turns it."
+    },
+    "turbulence": {
+     "line": "Rough curls added over any field."
+    },
+    "color": {
+     "line": "What picks a particle's color: birth, age, speed or place."
+    },
+    "edge": {
+     "line": "At the border a particle flies off, ends, wraps or bounces."
+    },
+    "mod1Source": {
+     "line": "What slot 1 listens to: a sound signal or an LFO."
+    },
+    "mod1Dest": {
+     "line": "The knob slot 1 lifts."
+    },
+    "mod1Depth": {
+     "line": "How far a full source lifts slot 1's knob, in the knob's units."
+    },
+    "mod2Source": {
+     "line": "What slot 2 listens to: a sound signal or an LFO."
+    },
+    "mod2Dest": {
+     "line": "The knob slot 2 lifts."
+    },
+    "mod2Depth": {
+     "line": "How far a full source lifts slot 2's knob, in the knob's units."
+    },
+    "mod3Source": {
+     "line": "What slot 3 listens to: a sound signal or an LFO."
+    },
+    "mod3Dest": {
+     "line": "The knob slot 3 lifts."
+    },
+    "mod3Depth": {
+     "line": "How far a full source lifts slot 3's knob, in the knob's units."
+    },
+    "lfo1Rate": {
+     "line": "LFO 1's rate: 32 is one cycle a second."
+    },
+    "lfo2Rate": {
+     "line": "LFO 2's rate: 32 is one cycle a second."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎵",
+   "dim": 2,
+   "doc": "light/effects.md#swirl",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/SwirlEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#swirleffect"
+  },
   "BlurzEffect": {
    "line": "Audio-reactive blurred dots: one frequency band per frame lights a dot, then the whole frame is blurred for soft trails.",
    "summary": "The dot's position maps to that band, or to the major-peak frequency with `freqMap`. `geqScanner` sweeps the dot steadily across the strip, and with neither the dot jumps to a random position. A band struck that frame flashes its dot white.",

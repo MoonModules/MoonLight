@@ -284,7 +284,9 @@ struct Plane {
     bool onePixel(float radius) const { return radius <= 0.5f && scaleX() <= 1 && scaleY() <= 1; }
 
     /// Each step's fade, keeping `kTrailKeep` of every channel.
-    void fade() const { draw::fade(cv, static_cast<uint8_t>(255 - kTrailKeep)); }
+    void fade() const { fade(kTrailKeep); }
+    /// The same fade, keeping `keep` of every channel: a trail whose length is a control.
+    void fade(uint8_t keep) const { draw::fade(cv, static_cast<uint8_t>(255 - keep)); }
 
     /// Copy the colors into `layer`, a canvas of the same size, leaving its other channels as they are.
     void copyColorsTo(const draw::Canvas& layer) const {
@@ -329,7 +331,7 @@ struct Plane {
 
     /// A boid at (x, y) in the flock's space, as it is now: the one light it stands on, or a soft dot.
     void head(float x, float y, RGB c, float radius) const {
-        if (onePixel(radius)) blend(static_cast<int32_t>(x * scaleX()), static_cast<int32_t>(y * scaleY()), c, 1.0f);
+        if (onePixel(radius)) blend(static_cast<int32_t>(std::floor(x * scaleX())), static_cast<int32_t>(std::floor(y * scaleY())), c, 1.0f);   // floor, so a position a fraction off the left or top edge falls off the grid rather than onto it
         else dot(lightX(x), lightY(y), c, radius);
     }
 
@@ -354,6 +356,18 @@ inline void moveTraced(Boid& b, float maxSpeed, const Plane& trail, RGB c, float
     trail.trace(x0, y0, b.x, b.y, c, radius);
 }
 
+/// Size a trail of `trailBytes` and a pool of `n`, warning on `owner` with `noMemory` when memory runs out and clearing that warning once it fits.
+template <typename T>
+bool prepareTrailAndPool(MoonModule& owner, ScratchBuffer<uint8_t>& trail, ScratchBuffer<T>& pool, size_t trailBytes, uint16_t n, const char* noMemory) {
+    if (!trail.resize(trailBytes) || !pool.resize(n)) {
+        owner.setStatus(noMemory, MoonModule::Severity::Warning);
+        return false;
+    }
+    if (owner.status() && std::strcmp(owner.status(), noMemory) == 0) owner.clearStatus();
+    if (trail) std::memset(trail.data(), 0, trail.bytes());   // a prepare at the same size keeps the allocation, not the picture
+    return true;
+}
+
 /// A flock effect's memory: room for its boids and the persistent trail, held from the prepare, so the tick works in memory already held.
 struct Flock {
     ScratchBuffer<Boid> boids;      ///< every boid the effect may fly
@@ -364,13 +378,7 @@ struct Flock {
 
     /// Hold room for `n` boids and a cleared trail the size of `owner`'s grid, warning on `owner` when memory runs out and clearing that warning once it fits.
     bool prepare(MoonModule& owner, lengthType w, lengthType h, uint8_t cpl, uint8_t n) {
-        if (!trail.resize(static_cast<size_t>(w) * h * cpl) || !boids.resize(n)) {
-            owner.setStatus(kNoMemory, MoonModule::Severity::Warning);
-            return false;
-        }
-        if (owner.status() && std::strcmp(owner.status(), kNoMemory) == 0) owner.clearStatus();
-        if (trail) std::memset(trail.data(), 0, trail.bytes());   // a prepare at the same size keeps the allocation, not the picture
-        return true;
+        return prepareTrailAndPool(owner, trail, boids, static_cast<size_t>(w) * h * cpl, n, kNoMemory);
     }
 
     /// The trail as a plane on a `w` by `h` grid of `cpl` channels, or none while a resize outruns the prepare, which skips the frame until it catches up.
