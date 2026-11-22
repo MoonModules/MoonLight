@@ -495,7 +495,7 @@ export function catalogLink(name, mid, key) {
 // Point a catalog link at `name`'s card.
 export function setCatalogLink(link, name) {
     link.href = catalogUrl(name);
-    link.textContent = `${name} ↗`;
+    if (link.textContent !== `${name} ↗`) link.textContent = `${name} ↗`;   // an unchanged name keeps its text, and a selection in it
 }
 
 // A device-model name on its own card (a control flagged `catalog`) offers the catalog's defaults to apply, as the popup does, behind a
@@ -509,8 +509,10 @@ export function attachCatalogField(container, name, consent) {
         if (!consent()) return;
         btn.disabled = true;
         const sys = await fetchWithin("/api/system", 3000, r => (r.ok ? r.json() : null));
+        btn.disabled = false;   // a failed request leaves the button to try again
+        if (!sys || !sys.firmware) return;
         btn.remove();
-        if (sys && sys.firmware) await offerDeviceDefaults(container, "", { firmware: sys.firmware, summary: { board: name } });
+        await offerDeviceDefaults(container, "", { firmware: sys.firmware, summary: { board: name } });
     });
     container.append(btn);
 }

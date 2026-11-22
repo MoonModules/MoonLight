@@ -463,8 +463,26 @@ def catalog_rows(text: str):
 
 def attribution_anchor(names: list[str]) -> str:
     """An entry's card anchor on the attributions page: its first name in ASCII, lowercase, each run of other characters a hyphen, so `Jos Stam` is `#jos-stam`."""
-    plain = "".join(c for c in unicodedata.normalize("NFD", names[0]) if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9]+", "-", plain.lower()).strip("-")
+    return device_slug("".join(c for c in unicodedata.normalize("NFD", names[0]) if not unicodedata.combining(c)))
+
+
+DEVICE_MODELS = ROOT / "mooninstaller" / "deviceModels.json"
+# The chip families in the order the device models page lists them.
+sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from firmwares import HOST_FAMILIES  # noqa: E402  the computers, named once in the firmware registry
+DEVICE_CHIPS = ["ESP32", "ESP32-S3", "ESP32-P4", "ESP32-C3", "ESP32-S31", "Teensy 4.1", *HOST_FAMILIES]
+
+
+def device_slug(name: str) -> str:
+    """A device model's anchor on the device models page, and the one rule the device UI builds its links with: the name lowercased, each run of characters outside a-z and 0-9 one hyphen, no hyphen at either end, so `Teensy 4.1-NE + W5500` is `#teensy-4-1-ne-w5500`."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def device_models(path: Path = DEVICE_MODELS) -> dict[str, list[dict]]:
+    """The installer's catalog by chip family, in DEVICE_CHIPS order, each family's entries in file order; a chip the list does not name follows."""
+    entries = json.loads(path.read_text(encoding="utf-8"))
+    chips = DEVICE_CHIPS + sorted({e["chip"] for e in entries} - set(DEVICE_CHIPS))
+    return {c: [e for e in entries if e["chip"] == c] for c in chips if any(e["chip"] == c for e in entries)}
 
 
 def attribution_catalog(path: Path = ATTRIBUTIONS) -> dict:

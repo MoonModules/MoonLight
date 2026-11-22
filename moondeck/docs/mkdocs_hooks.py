@@ -29,7 +29,7 @@ import gen_tests  # noqa: E402
 import test_runs  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "check"))
 import _findings  # noqa: E402
-from gen_help import ATTRIBUTIONS, attribution_anchor, catalog_rows, display_name  # noqa: E402
+from gen_help import ATTRIBUTIONS, attribution_anchor, catalog_rows, device_models, device_slug, display_name  # noqa: E402
 from gen_moonwalk import build as build_moonwalk, absolute_links, dumps as moonwalk_json, render_text as moonwalk_text, split_text as split_moonwalk  # noqa: E402
 
 
@@ -421,6 +421,27 @@ def attributed_by(markdown: str) -> str:
     return "\n".join(out)
 
 
+def _cell(text: str) -> str:
+    """Text as one table cell."""
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def device_models_markdown(markdown: str) -> str:
+    """The device models page: the written intro, then one deck of every entry in chip-family order, a table of the installer's catalog (mooninstaller/deviceModels.json, the one home of the data). A row's name carries the entry's anchor, `device_slug`, which the deck script moves to its card and the device UI links to. The table stays for search and for a reader whose browser runs no JavaScript."""
+    out = [markdown.rstrip(), "", '<div class="mm-deck" data-kind="devices" markdown="1">', "",
+           "| Name | Chip | Firmwares | Supported | Planned | Product | Notes |", "|---|---|---|---|---|---|---|"]
+    for entries in device_models().values():
+        for e in entries:
+            name = _cell(e["name"]) + f'<span id="{device_slug(e["name"])}" data-anchor></span>'
+            if e.get("image"):
+                name += f'<br>![{_cell(e["name"])}](../{e["image"]})'
+            url = f"[Product page]({e['url']})" if e.get("url") else ""
+            out.append(f"| {name} | {_cell(e['chip'])} | {_cell(', '.join(e.get('firmwares', [])))} | {_cell(', '.join(e.get('supported', [])))} "
+                       f"| {_cell(', '.join(e.get('planned', [])))} | {url} | {_cell(e.get('description', ''))} |")
+    out += ["", "</div>", ""]
+    return "\n".join(out)
+
+
 _TAB_PAGES: set[str] = set()
 
 
@@ -447,6 +468,8 @@ def on_page_markdown(markdown, page, config, files):
         markdown = generated_catalog(page.file.src_uri, markdown) or markdown
     if page.file.abs_src_path and Path(page.file.abs_src_path) == ATTRIBUTIONS:
         markdown = deck_around_table(attributed_by(markdown))
+    if page.file.src_uri == "reference/device-models.md":
+        markdown = device_models_markdown(markdown)
     return markdown
 
 

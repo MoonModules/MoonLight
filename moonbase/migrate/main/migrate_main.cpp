@@ -240,7 +240,9 @@ bool readFile(const char* path, char* buf, size_t len, bool whole = false) {
     if (!f) return false;
     const size_t n = std::fread(buf, 1, len - 1, f);
     const bool more = std::fgetc(f) != EOF;   // a file larger than the buffer, which `whole` refuses rather than carrying its first part
+    const bool failed = std::ferror(f) != 0;   // a read error, which a short read and EOF can also report
     std::fclose(f);
+    if (failed) { ESP_LOGW(kTag, "%s did not read whole", path); return false; }
     buf[n] = 0;
     if (whole && more) ESP_LOGW(kTag, "%s is larger than %u bytes, so it is not carried", path, static_cast<unsigned>(len - 1));
     return !(whole && more);

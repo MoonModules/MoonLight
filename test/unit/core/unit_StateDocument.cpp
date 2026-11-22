@@ -392,6 +392,19 @@ TEST_CASE("a type this firmware leaves out is skipped and named, and the rest of
     CHECK(valueOf(t.find("A")) == 7);
 }
 
+// A module re-typed to a type this firmware leaves out is skipped whole: what is under it stays, and so does its name.
+TEST_CASE("a re-type to a left-out type keeps the module, its children and its name") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"Box": {"type": "SdBox", "K": {"type": "SdKnob", "value": 3}}}})").ok);
+    auto r = t.apply(R"({"Effects": {"Box": {"type": "SdLeftOut", "$name": "Renamed"}}})");
+    CHECK(r.ok);
+    CHECK(r.skipped == 1);
+    CHECK(t.children(t.effects) == "Box");
+    REQUIRE(t.find("Box") != nullptr);
+    CHECK(t.children(t.find("Box")) == "K");
+    CHECK(valueOf(t.find("K")) == 3);
+}
+
 TEST_CASE("a type no build knows still refuses the whole document beside a left-out one") {
     Tree t;
     REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}}})").ok);

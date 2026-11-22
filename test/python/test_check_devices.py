@@ -89,3 +89,11 @@ def test_a_name_that_is_no_string_is_reported_rather_than_crashing_the_gate(tmp_
 
 def test_the_gate_refuses_a_baud_written_as_a_float_which_esptool_would_misread(tmp_path, monkeypatch):
     assert run(tmp_path, monkeypatch, [{**ENTRY, "flashBaud": 921600.0}]) == 1
+
+
+HOST = {"name": "Generic Linux", "chip": "Linux", "firmwares": ["host-linux-x64"], "state": {"System": {"deviceModel": "Generic Linux"}}}
+
+
+def test_a_computer_names_a_host_family_and_host_firmwares(tmp_path, monkeypatch):
+    assert run(tmp_path, monkeypatch, [HOST]) == 0
+    assert run(tmp_path, monkeypatch, [{**HOST, "firmwares": ["esp32"]}]) == 1

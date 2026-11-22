@@ -2620,7 +2620,7 @@ function walkChoices(controls) {
     // A host build is `host-<system>-<arch>`; a container runs a host-linux build and is told apart by its catalog name.
     const [kind, system] = firmware.split("-");
     const os = kind === "host" ? { macos: "macOS", linux: "Linux", windows: "Windows" }[system] : undefined;
-    const platform = model === "Docker container" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
+    const platform = model === "Docker container" || model.startsWith("docker") ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
     if (!platform) return {};
     const board = platform === "ESP32" || platform === "Teensy";
     return { platform, target: board ? "Board" : "Host",

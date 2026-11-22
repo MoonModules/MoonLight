@@ -499,6 +499,9 @@ struct Applier {
         return ok;
     }
 
+    // A re-typed child that keeps what is under it: a wired one keeps its type, which applyChild reports, and a type this firmware leaves out is skipped.
+    bool keepsChildren(MoonModule* c, const char* newType) { return keepsWired(c) || leftOut(c, newType); }
+
     // Remove the child, empty a re-typed one, or walk into a kept one.
     bool pruneOne(MoonModule* m, MoonModule* c, const JsonNode* listed, bool replaceChildren) {
         if (!listed) return !(replaceChildren && c->userEditable() && !c->isWiredByCode()) || remove(m, c);
@@ -506,8 +509,8 @@ struct Applier {
         if (listed->type != JsonType::Object) return true;
         const char* newType = typeOf(doc, listed);
         if (!newType || std::strcmp(newType, c->typeName()) == 0) return prune(c, listed);
-        // A re-typed child is replaced in place, so everything under it goes now, freeing its names for elsewhere; a wired one keeps its type, which applyChild reports.
-        return keepsWired(c) || removeChildren(c);
+        // A re-typed child is replaced in place, so everything under it goes now, freeing its names for elsewhere.
+        return keepsChildren(c, newType) || removeChildren(c);
     }
 
     // Apply a module object's members to `m`, in document order, once prune() has removed what goes.
@@ -524,6 +527,7 @@ struct Applier {
         for (const JsonNode* member = first(obj); member; member = next(member)) {
             if (reserved(member->key) || member->type != JsonType::Object) continue;
             MoonModule* child = childNamed(m, member->key);
+            if (leftOut(child, typeOf(doc, member))) continue;   // a skipped member keeps its name too
             const size_t at = push(member->key);
             if (child && !rename(child, member) && !(stored() && skip())) return false;
             pop(at);

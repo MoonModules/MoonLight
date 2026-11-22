@@ -47,3 +47,7 @@ TARGET_TO_FAMILY: dict[str, str] = {**build_esp32.TARGET_TO_FAMILY, **build_teen
 def chip_family(firmware: str) -> str:
     """The chip family a firmware installs onto."""
     return TARGET_TO_FAMILY[FIRMWARES[firmware]["chip"]]
+
+
+# The host families a catalog entry's `chip` names for a computer: a machine class rather than a silicon family, so one host firmware serves several of them.
+HOST_FAMILIES = ["Raspberry Pi", "Linux", "macOS", "Windows", "Android", "Docker"]

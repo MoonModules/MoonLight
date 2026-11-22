@@ -221,6 +221,7 @@ nav:
   - Services: moonmodules/core/services.md
   - System: moonmodules/core/system.md
   - Devices: moonmodules/core/devices.md
+  - Device models: reference/device-models.md
   - MoonWalk: moonwalk.md
   - Tests: reference/tests.md
   - Attributions: reference/attributions.md

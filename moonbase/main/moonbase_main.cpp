@@ -165,18 +165,25 @@ size_t migratedNetworks(char* doc, size_t cap) {
     return len;
 }
 
-// Write the migrated networks as the app's own file, into the volume formatted for them, then clear them from NVS.
+// Clear the NVS copy once the file holds the networks; a failure is printed, and the next boot finds the file and leaves it as it is.
+static void clearMigratedNetworks() {
+    nvs_handle_t h;
+    bool cleared = false;
+    if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) == ESP_OK) {
+        cleared = nvs_erase_key(h, mm::firmware::kMigratedNetworkKey) == ESP_OK && nvs_commit(h) == ESP_OK;
+        nvs_close(h);
+    }
+    if (!cleared) std::printf("MoonBase: the migrated networks stay in NVS; %s holds them, so a later boot keeps the file\n", kNetworkConfig);
+}
+
+// Write the migrated networks as the app's own file, into the volume formatted for them, then clear them from NVS; a volume that holds the file keeps it, as a replay would undo the app's changes.
 void adoptMigratedNetworks(const char* doc, size_t len) {
+    struct stat st;
+    if (stat(kNetworkConfig, &st) == 0) { clearMigratedNetworks(); return; }
     mkdir("/fs/.config", 0775);
-    if (const int fd = open(kNetworkConfig, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
+    if (const int fd = open(kNetworkConfig, O_WRONLY | O_CREAT | O_EXCL, 0644); fd >= 0) {
         const bool wrote = write(fd, doc, len) == static_cast<ssize_t>(len);
-        const bool ok = close(fd) == 0 && wrote;   // the copy in NVS stays for the next boot unless both the write and the close held
-        nvs_handle_t h;
-        if (ok && nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) == ESP_OK) {
-            nvs_erase_key(h, mm::firmware::kMigratedNetworkKey);
-            nvs_commit(h);
-            nvs_close(h);
-        }
+        if (close(fd) == 0 && wrote) clearMigratedNetworks();   // the copy in NVS stays for the next boot unless both the write and the close held
         std::printf("MoonBase: the migrated networks written to %s\n", kNetworkConfig);
     }
 }

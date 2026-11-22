@@ -21,7 +21,7 @@
       },
       "chip": {
         "type": "string",
-        "description": "The MCU family, for the picker's chip filter: one of the families moondeck/build/firmwares.py names."
+        "description": "The MCU family, for the picker's chip filter, or a host family for a computer: one of the families moondeck/build/firmwares.py names, its HOST_FAMILIES for a computer."
       },
       "firmwares": {
         "type": "array",
