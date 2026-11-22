@@ -117,6 +117,8 @@ Windows names its capture devices `\Device\NPF_{…GUID…}`, so MoonLight match
 
 Raw frames go out over `AF_PACKET`, which needs `CAP_NET_RAW`. The kernel name goes in `interface`.
 
+The package's service grants that capability as ambient (`AmbientCapabilities=CAP_NET_RAW`) under the `moonlight` user. The container image grants it as a **file capability** on the program (`cap_net_raw=ep`): the image is distroless, so a file capability replaces the package's ambient grant, and a uid other than root gains the capability on every exec of that binary when the runtime's bounding set includes `NET_RAW`. Docker: `--cap-add=NET_RAW`. Kubernetes: `capabilities.drop: [ALL]`, `capabilities.add: [NET_RAW]`, and leave `allowPrivilegeEscalation` at its default, true, which lets the file capability take effect. An effective `CAP_NET_RAW` puts the frames on the wire; the driver records them and reports a packet rate either way.
+
 ### 6.3 macOS
 
 Raw frames go out over BPF (`/dev/bpf*`), root-only by default. Wireshark's **ChmodBPF** helper is the tidier option for regular use. On an Apple Silicon or Intel Mac the built-in port is usually gigabit and a USB-C dongle may not be, so check the status line rather than assuming.
