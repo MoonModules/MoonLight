@@ -273,7 +273,7 @@ function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
         }
         // Reject the part-suffixed .bins (bootloader / partition-table / ota-data / moonbase):
         // they're install fragments, not the main image. The OTA path needs the app image only.
-        if (/(?:-(?:bootloader|partition-table|ota-data)|moonbase[^/]*|-slot0)\.bin$/.test(a.name)) continue;
+        if (/(?:-(?:bootloader|partition-table)(?:-\d+mb)?|-ota-data|moonbase[^/]*|-slot0)\.bin$/.test(a.name)) continue;
         const m = binaryRe.exec(a.name);
         if (m) {
             const firmware = m[1];

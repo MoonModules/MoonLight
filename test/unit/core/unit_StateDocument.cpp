@@ -76,6 +76,7 @@ void registerTypes() {
     mm::ModuleFactory::registerType<SdBox>("SdBox");
     mm::ModuleFactory::registerType<SdDriver>("SdDriver");
     mm::ModuleFactory::registerType<SdFixed>("SdFixed");
+    mm::ModuleFactory::registerCompiledOut("SdLeftOut");   // a type this build leaves out, as a -lite firmware does SdCardService
     done = true;
 }
 
@@ -378,6 +379,26 @@ TEST_CASE("a rebuild run at once satisfies the one the document requested") {
     const int after = static_cast<SdCount*>(t.find("Counter"))->prepares;
     t.s.tick();
     CHECK(static_cast<SdCount*>(t.find("Counter"))->prepares == after);
+}
+
+TEST_CASE("a type this firmware leaves out is skipped and named, and the rest of the document applies") {
+    Tree t;
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "A": {"type": "SdKnob", "value": 7}, "Card": {"type": "SdLeftOut"}}})");
+    CHECK(r.ok);
+    CHECK(r.skipped == 1);
+    CHECK(std::string(r.error) == "this firmware leaves the type out");
+    CHECK(std::string(r.where) == "Effects.Card");
+    CHECK(t.children(t.effects) == "A");
+    CHECK(valueOf(t.find("A")) == 7);
+}
+
+TEST_CASE("a type no build knows still refuses the whole document beside a left-out one") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}}})").ok);
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "Card": {"type": "SdLeftOut"}, "D": {"type": "NoSuchType"}}})");
+    CHECK_FALSE(r.ok);
+    CHECK(std::string(r.error) == "unknown type");
+    CHECK(t.children(t.effects) == "A");
 }
 
 TEST_CASE("a document that names an unknown type or container changes nothing, wherever it names it") {

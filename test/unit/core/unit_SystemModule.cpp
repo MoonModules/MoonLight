@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "core/system/SystemModule.h"
 #include "core/util/JsonSink.h"
+#include "platform/host/host_update.h"   // inContainer: the rule the seed reads
 
 #include <cstring>
 #include <string>
@@ -208,3 +209,34 @@ TEST_CASE("SystemModule accepts back the unset deviceModel a fresh board reports
     CHECK_FALSE(mm::SystemModule::validateDeviceModel("12345678901234567890123456789012"));   // 32 chars
 }
 
+
+// A host's deviceModel is a catalog name, so the System card links to its card; a model a user applied is kept.
+TEST_CASE("SystemModule seeds an empty deviceModel with the generic catalog name of the host's system") {
+#if defined(__ANDROID__)
+    const char* expected = "Generic Android";
+#elif defined(__linux__)
+    const char* expected = mm::platform::inContainer() ? "Docker container" : "Generic Linux";
+#elif defined(__APPLE__)
+    const char* expected = "Generic macOS";
+#elif defined(_WIN32)
+    const char* expected = "Generic Windows";
+#endif
+    CHECK(std::strcmp(mm::platform::hostDeviceModel(), expected) == 0);
+    mm::SystemModule sys;
+    sys.setup();
+    sys.defineControls();
+    CHECK(std::strcmp(sys.deviceModel(), expected) == 0);
+}
+
+// The board's name is set by the catalog's defaults, so the card shows it read-only and flagged `catalog`, which the UI draws as a link to its card.
+TEST_CASE("SystemModule's deviceModel is read-only and names a catalog entry") {
+    mm::SystemModule sys;
+    sys.setup();
+    sys.defineControls();
+    const mm::ControlDescriptor* model = nullptr;
+    for (uint8_t i = 0; i < sys.controls().count(); i++)
+        if (std::strcmp(sys.controls()[i].name, "deviceModel") == 0) model = &sys.controls()[i];
+    REQUIRE(model != nullptr);
+    CHECK(model->readonly);
+    CHECK(model->catalog);
+}

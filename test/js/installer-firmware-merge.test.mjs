@@ -134,3 +134,9 @@ test("a board whose variant is known is offered that variant's firmwares only, t
     assert.ok(!offersFirmware(wled, "esp32-eth"), "another chip");
     assert.ok(offersFirmware({ moonbaseOnly: true, ownFirmwareKey: "esp32s3" }, "esp32s3") && !offersFirmware({ moonbaseOnly: true, ownFirmwareKey: "esp32s3" }, "esp32"));
 });
+
+test("a sized bootloader or table is an install fragment, never a firmware's app image", () => {
+    const fws = parseFirmwaresFromAssets([asset("manifest-esp32.json"), asset("moonlight-esp32-v8.0.0.bin"), asset("moonlight-esp32-v8.0.0-bootloader-4mb.bin"),
+                                          asset("moonlight-esp32-v8.0.0-partition-table-16mb.bin")], "v8.0.0");
+    assert.deepEqual(fws.map((f) => [f.firmware, f.binaryUrl]), [["esp32", "https://gh/moonlight-esp32-v8.0.0.bin"]]);
+});

@@ -13,7 +13,7 @@ running image. Comparing timestamps answers the question the gate actually means
 binary include what is on disk right now?
 
 Usage:
-  uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8
+  uv run moondeck/check/check_esp32_built.py --firmware esp32s3-opi
   uv run moondeck/check/check_esp32_built.py --firmware esp32 --max-age-hours 24
 
 Exit codes: 0 fresh · 1 missing or stale (the message says which, and what to run).
@@ -164,7 +164,7 @@ def compiled_sources(firmware):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--firmware", required=True,
-                        help="Firmware variant, e.g. esp32s3-n16r8 (its build dir is "
+                        help="Firmware variant, e.g. esp32s3-opi (its build dir is "
                              "build/esp32-<firmware>/).")
     parser.add_argument("--max-age-hours", type=float, default=0,
                         help="Also fail if the binary is older than this many hours, even "

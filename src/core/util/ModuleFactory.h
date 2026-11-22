@@ -151,7 +151,22 @@ public:
         return false;
     }
 
+    /// Name a type this build leaves out on purpose behind a capability gate (`hasSdCard` on a `-lite` firmware), so a state document naming it skips that member, where a type no build knows refuses the document.
+    static void registerCompiledOut(const char* typeName) {
+        if (isCompiledOut(typeName)) return;
+        for (const char*& slot : compiledOut_)
+            if (!slot) { slot = typeName; return; }   // the first free slot; a full list drops it
+    }
+    /// Whether this build left `typeName` out on purpose.
+    static bool isCompiledOut(const char* typeName) {
+        for (const char* name : compiledOut_)
+            if (name && std::strcmp(name, typeName) == 0) return true;
+        return false;
+    }
+
 private:
+    static inline const char* compiledOut_[8] = {};   // the capability gates a build can close, one type each, filled from the front
+
     struct TypeEntry {
         const char* name;
         CreateModuleFn create;

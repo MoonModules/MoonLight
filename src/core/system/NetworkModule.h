@@ -315,8 +315,15 @@ private:
         if (radioWanted()) return false;
         restartMdns();
         stopSta();
+        endRequestedJoin();
         fallBack(now);
         return true;
+    }
+
+    /// A join the card asked for ends with the radio, so only the station it starts carries it out.
+    void endRequestedJoin() {
+        if (wifi_ && wifi_->joinRequest()) wifi_->joinRefused("the radio is off");
+        startedSeq_ = 0;
     }
 
     /// The station has an address: adopt it, and send a phone that asked from the access point on to the new address.
@@ -691,6 +698,13 @@ private:
     /// Open or close the access point by its `opens` rule, and re-open it when how it appears changed.
     void syncAccessPoint(uint32_t now) {
         if constexpr (!platform::hasWiFi) return;
+        // The radio switched off closes the access point, the default one included, which a device with no access point card opens.
+        if (apUp_ && !radioWanted()) {
+            closeAp();
+            endRequestedJoin();
+            if (state_ == State::AP) fallBack(now);
+            return;
+        }
         if (!ap_) return;
         const bool others = othersConfigured();
         const auto opens = ap_->opens(others);
@@ -706,10 +720,10 @@ private:
         ap_->showClients(clients);
         // The whole time, whoever is on it: the join's channel move knocks every phone off, and one may come back to read the result.
         if (apHoldFrom_ && now - apHoldFrom_ > kHandoffMs) endHandoff();
-        const bool wanted = radioWanted() && (opens == AccessPointModule::Opens::Always
-                         || (opens == AccessPointModule::Opens::OnFailure && (!connected || apHoldFrom_)));
+        const bool wanted = opens == AccessPointModule::Opens::Always
+                         || (opens == AccessPointModule::Opens::OnFailure && (!connected || apHoldFrom_));
         if (!wanted) {
-            std::printf("NetworkModule: Shutting down AP (%s)\n", !radioWanted() ? "radio off" : connected ? "higher priority connected" : "it was for the first setup only");
+            std::printf("NetworkModule: Shutting down AP (%s)\n", connected ? "higher priority connected" : "it was for the first setup only");
             closeAp();
             if (state_ == State::AP) fallBack(now);   // never chosen while it was the fallback
         } else if (ap_->sig(firstNetworkPassword()) != apSig_) {

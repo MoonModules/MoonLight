@@ -318,7 +318,7 @@ The runner compares each measurement to the contract and fails if the device mis
 
 ```json
 "contract": {
-  "esp32-eth-wifi": {
+  "esp32-lite": {
     "tick_us": 90000,
     "free_heap": 105000,
     "set_by": "2026-06-02",
@@ -346,7 +346,7 @@ The runner compares each measurement to the contract and fails if the device mis
 - Both are **hand-set promises**, not auto-captured last readings. Renegotiating a contract requires `--update-contract --reason "..."`, see below.
 - `set_by` records when the contract was last (re)negotiated; `reason` records why. Both stamped automatically by `--update-contract`.
 
-Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `host-macos` / `host-linux` / `host-windows` for host builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
+Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-lite`, `esp32-ethonly`, `esp32s3-opi`, …) plus `host-macos` / `host-linux` / `host-windows` for host builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
 
 **Tolerance** absorbs run-to-run jitter only, not "I don't care":
 
@@ -366,7 +366,7 @@ The scenario file carries a **summary** of the window, published on purpose: `--
 
 ```json
 "observed": {
-  "esp32-eth-wifi": {
+  "esp32-lite": {
     "tick_us":         {"p50": 84210, "p95": 89483, "min": 80649, "max": 91002, "n": 32},
     "free_heap":       {"p50": 104220, "p95": 110640, "min": 95528, "max": 110640, "n": 32},
     "max_alloc_block": {"p50": 53248, "p95": 53248, "min": 49152, "max": 53248, "n": 32},
@@ -418,7 +418,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
       "op": "set_control", "id": "Grid", "key": "width", "value": 128,
       "measure": true,
       "contract": {
-        "esp32-eth-wifi": {
+        "esp32-lite": {
           "tick_us": 100000, "free_heap": 105000,
           "set_by": "2026-06-02", "reason": "initial contract"
         },

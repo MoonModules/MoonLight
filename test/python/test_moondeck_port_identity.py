@@ -28,7 +28,7 @@ def test_the_shared_native_usb_pid_names_no_chip_and_a_bridge_names_none_at_all(
 
 
 def test_a_firmware_names_its_chip_family():
-    assert _usb.firmware_to_chip("esp32p4rev1-eth") == "esp32-p4"
+    assert _usb.firmware_to_chip("esp32p4rev1") == "esp32-p4"
     assert _usb.firmware_to_chip("esp32s3-n8r8") == "esp32-s3"
     assert _usb.firmware_to_chip("esp32s31") == "esp32-s31"
     assert _usb.firmware_to_chip("esp32") == "esp32 (classic)"

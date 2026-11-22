@@ -27,11 +27,15 @@ export async function loadDevices() {
         const res = await fetch("./deviceModels.json");
         if (!res.ok) return [];
         const data = await res.json();
-        return Array.isArray(data) ? data : [];
+        return Array.isArray(data) ? flashable(data) : [];
     } catch (_) {
         return [];
     }
 }
+
+// The catalog's entries the installer can flash: the catalog also lists the computers MoonLight runs on, whose firmwares are the registry's
+// `host-` builds, downloaded rather than written to a board. Every consumer of the catalog in the installer filters through this one rule.
+export const flashable = (devices) => devices.filter(d => (d.firmwares || []).some(fw => !String(fw).startsWith("host-")));
 
 // The modules an entry's `state` document describes, depth first, as {id, type, controls}.
 // A root member is a top-level module (its type is not written, so `type` is null); an object member with a `type` is a child module; scalars and arrays are controls.
@@ -82,7 +86,7 @@ export function fillDeviceOptions(deviceEl, devices, passthroughLabel) {
 // esp32-ethonly apart (same silicon, different wiring), so when several devices
 // share the family we narrow + let the user pick rather than guessing.
 // What a board tells about itself, in the one shape measuredFirmware reads: { revision (major x 100 + minor, or null), flashMB
-// (0 when unread), psramMB (0 for none), psramMode ("quad", "octal" or "") }. Two sources make it.
+// (0 when unread), psramMB (0 for none), psramMode ("quad", "octal", "hex" or "") }. Two sources make it.
 
 // From esptool-js: the chip description with its revision ("ESP32-D0WD-V3 (revision v3.1)"), the features, where an in-package
 // PSRAM reads "Embedded PSRAM 8MB (AP_3v3)" (an S3's 2 MB part is quad, its 8 and 16 MB parts octal), and the flash size
@@ -107,7 +111,7 @@ function revisionOf(text) {
 
 // The in-package PSRAM esptool's features name ("Embedded PSRAM 8MB (AP_3v3)"), in MB, 1 where the size is unstated, 0 for none.
 function embeddedPsramMB(features) {
-    const m = (features || []).map(String).map(f => /Embedded PSRAM\s*(\d+)?\s*MB?/i.exec(f)).find(Boolean);
+    const m = (features || []).map(String).map(f => /Embedded PSRAM(?:\s*(\d+)\s*MB)?/i.exec(f)).find(Boolean);
     return m ? Number(m[1] || 0) || 1 : 0;
 }
 
@@ -167,8 +171,18 @@ export function firmwareFits(firmware, measured) {
         : false;
 }
 
+// The devices a detected board can be: its chip's, narrowed by what it measured to those with a firmware that runs on it (firmwareFits);
+// the chip's whole list when the facts name no firmware or no device fits them.
+export function devicesForBoard(devices, chip, facts) {
+    const ofChip = devices.filter(b => b.chip === chip);
+    const measured = facts ? measuredFirmware(chip, facts) : null;
+    if (!measured || !measured.firmware) return ofChip;
+    const fitting = ofChip.filter(b => (b.firmwares || []).some(fw => firmwareFits(fw, measured)));
+    return fitting.length ? fitting : ofChip;
+}
+
 export function applyDetectedChip(state, deviceEl) {
-    const matches = state.devices.filter(b => b.chip === state.detectedChip);
+    const matches = devicesForBoard(state.devices, state.detectedChip, state.detectedFacts);
     if (matches.length === 0) {
         // A chip we ship no device for: don't strand the user: leave the full
         // list and report it. (selectedDevice unchanged.) The chip itself is

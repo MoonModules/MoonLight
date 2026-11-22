@@ -95,10 +95,11 @@
              - clean-slate testing
            Costs about 3 s of chip-erase time per MB of flash before the flash starts. -->
       <div class="erase-row" id="erase-row">
+        <p class="note"><strong>Back up first</strong> (see below) on a board coming from an older two-slot layout: this release moves its filesystem, so it starts with an empty one, erase ticked or not. Restore after.</p>
         <label>
           <input type="checkbox" id="erase-before-flash">
           Erase chip first
-          <span class="note erase-note">wipes saved WiFi + device, adds about 3 s per MB of flash. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
+          <span class="note erase-note">wipes saved WiFi + device, adds about 3 s per MB of flash. Tick to start clean, or <strong>when a normal update fails</strong>.</span>
         </label>
         <label>
           <input type="checkbox" id="apply-device-defaults">

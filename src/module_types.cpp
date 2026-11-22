@@ -398,6 +398,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::FileManagerModule>("FileManagerModule", "core/system.md#file-manager");
     // Unlike WiFi/Ethernet, a board without hasSdCard can never gain the capability without a rebuild, so the type is not left addable for nothing.
     if constexpr (mm::platform::hasSdCard) mm::ModuleFactory::registerType<mm::SdCardService>("SdCardService", "core/services.md#sd-card");
+    else mm::ModuleFactory::registerCompiledOut("SdCardService");   // a catalog entry naming it still applies on a -lite firmware
     mm::ModuleFactory::registerType<mm::FirmwareUpdateModule>("FirmwareUpdateModule", "core/system.md#firmware-update");
     mm::ModuleFactory::registerType<mm::MoonCloudModule>("MoonCloudModule", "core/system.md#mooncloud");
     mm::ModuleFactory::registerType<mm::MoonStatsModule>("MoonStatsModule", "core/system.md#stats");

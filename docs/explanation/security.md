@@ -10,9 +10,9 @@ MoonLight trusts its local network. Every client that reaches a device can read 
 
 A device serves one plain HTTP port: 80 on a board, 8080 on a host. The REST API, the `/ws` state socket and the `/wsp` preview socket all live there, and every route answers every client on the network. A client can set any control, add or delete modules, read and write files, install firmware (on a host, a program that then runs as the user running MoonLight), reboot the device and reset it to factory settings. The routes: [the REST API](../reference/api.md).
 
-A web page from outside the network is refused. A browser names the page a request comes from in its `Origin` header, and a device answers 403, the WebSocket included, when that page's host is not on the network: a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name, or a name without a dot; a page the device served, called under the name it was opened by, passes as well. So a site from the internet cannot use a browser on the network against a device.
+A web page from outside the network is refused. A browser names the page a request comes from in its `Origin` header, and a device answers 403, the WebSocket included, when that page's host is not on the network: a private, shared (RFC 6598) or loopback address, `localhost`, a `.local`, `.home.arpa`, `.internal`, `.lan`, `.home` or `.localdomain` name, or a single-label name; a page the device served, called under the name it was opened by, passes as well. So a site from the internet cannot use a browser on the network against a device.
 
-A DNS-rebinding page, which points its own name at the device and reads it as its own, is refused by the `Host` header. A device answers an IP address, a local name (`localhost`, `.local`, `.home.arpa`, `.internal`, one label) and its own name under any domain, as its router names it from the hostname the device sends (`mm-acfd.fritz.box`, `mm-acfd.lan`); the name the device already has is all the rule reads. What remains is a rebinding page that guesses the device's name and serves it under its own domain, so a name that is hard to guess, such as the default `MM-XXXX`, keeps that out of reach.
+A DNS-rebinding page, which points its own name at the device and reads it as its own, is refused by the `Host` header. A device answers an IP address, a local name (`localhost`, `.local`, `.home.arpa`, `.internal`, `.lan`, `.home`, `.localdomain`, one label) and its own name under any domain, as its router names it from the hostname the device sends (`mm-acfd.fritz.box`, `mm-acfd.lan`); the name the device already has is all the rule reads. What remains is a rebinding page that guesses the device's name and serves it under its own domain, so a name that is hard to guess, such as the default `MM-XXXX`, keeps that out of reach.
 
 Both checks apply to requests on the network; a request through the device's own access point passes them, since its captive check asks under any name and its clients reach the device alone. Pages a device serves, the desktop app, other devices, MoonDeck, Home Assistant and scripts, which send no `Origin`, are unaffected; MoonBase applies the same rule.
 
@@ -44,7 +44,7 @@ The map stays on the network. A feature that carries it beyond, such as a group 
 
 ## Transport
 
-The device serves plain HTTP. Its own connections out use HTTPS wherever the platform has TLS, checked against the ESP-IDF root certificate bundle with no option to skip the check. A board without TLS, such as the Teensy, hands those requests to the browser showing its page. MoonCloud goes through the [browser relay](mooncloud.md), and a firmware URL becomes a browser download.
+The device serves plain HTTP. Its own connections out use HTTPS wherever the platform has TLS, checked against the ESP-IDF root certificate bundle with no option to skip the check. A board that lacks TLS, such as the Teensy, hands those requests to the browser showing its page. MoonCloud goes through the [browser relay](mooncloud.md), and a firmware URL becomes a browser download.
 
 ## Secrets
 
@@ -52,7 +52,7 @@ Passwords live in plain text in the device's `/.config` files, where the firmwar
 
 A page from the internet cannot read them, by the rule above; anyone on the network can. A client on the device's own access point (subnet 4.3.2.0/24) sees every password empty, and its requests for `/.config` files are refused. While such a client is connected, every client gets the state with passwords empty. This keeps the home network's password from a visitor who joins the access point to set the device up.
 
-The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it for one boot without a password: [the access point](../moonmodules/core/system.md#access-point).
+The access point uses the first known WiFi network's password, so it is as private as that network. The rule, the `opens` setting and the power-cycle gesture that opens it password-free for one boot: [the access point](../moonmodules/core/system.md#access-point).
 
 A [backup](../reference/backup-and-restore.md) holds every file, `/.config` included, so it carries the WiFi passwords in plain text. A state document and a [preset](../reference/presets.md#what-a-preset-holds) carry no secret, and applying one keeps the stored secrets.
 
@@ -76,7 +76,7 @@ Safe mode, factory reset and the access point's one-boot open gesture are recove
 
 ## What leaves the device
 
-Nothing leaves the device until the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text. The browser's own requests, such as the update check and the help, are listed in the same policy.
+Data leaves the device only once the user switches a [MoonCloud](mooncloud.md) member on, each with its own consent. What each member sends and what the server keeps: [privacy policy](../legal/privacy-policy.md). MoonTalk's public message board has no accounts, so a message is as public as its text. The browser's own requests, such as the update check and the help, are listed in the same policy.
 
 ## Source
 

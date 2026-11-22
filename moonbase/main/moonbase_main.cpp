@@ -24,7 +24,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>   // the presence packet's two destinations
+#include <fcntl.h>            // open: the migrated networks file, created owner-writable
 #include <sys/stat.h>         // mkdir: the .config folder of a volume formatted for migrated networks
+#include <unistd.h>           // write, close
 
 #include "esp_event.h"
 #include "esp_http_client.h"
@@ -166,9 +168,9 @@ size_t migratedNetworks(char* doc, size_t cap) {
 // Write the migrated networks as the app's own file, into the volume formatted for them, then clear them from NVS.
 void adoptMigratedNetworks(const char* doc, size_t len) {
     mkdir("/fs/.config", 0775);
-    if (FILE* f = std::fopen(kNetworkConfig, "w")) {
-        const bool ok = std::fwrite(doc, 1, len, f) == len;
-        std::fclose(f);
+    if (const int fd = open(kNetworkConfig, O_WRONLY | O_CREAT | O_TRUNC, 0644); fd >= 0) {
+        const bool wrote = write(fd, doc, len) == static_cast<ssize_t>(len);
+        const bool ok = close(fd) == 0 && wrote;   // the copy in NVS stays for the next boot unless both the write and the close held
         nvs_handle_t h;
         if (ok && nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) == ESP_OK) {
             nvs_erase_key(h, mm::firmware::kMigratedNetworkKey);

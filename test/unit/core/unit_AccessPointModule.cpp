@@ -482,3 +482,16 @@ TEST_CASE("a TX power set on the WiFi card reaches the radio on the next tick") 
     n.at(1000);
     CHECK(mm::platform::testLastTxPower() == 8);   // 2 dBm
 }
+
+// The radio switch outranks the card: an access point set to always closes when the radio switches off, and stays closed past the retry period.
+TEST_CASE("the access point set to always closes when the radio switches off") {
+    ApNetwork n;
+    n.opens(mm::AccessPointModule::Opens::Always);
+    n.net.setup();
+    REQUIRE(mm::platform::wifiApConnected());
+    *controlPtr<bool>(n.wifi, "radio") = false;
+    n.at(1000);
+    CHECK_FALSE(mm::platform::wifiApConnected());
+    n.at(120000);
+    CHECK_FALSE(mm::platform::wifiApConnected());
+}

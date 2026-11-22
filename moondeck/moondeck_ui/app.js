@@ -25,8 +25,8 @@ let deviceModels = []; // [{ name, firmwares: [...], ... }] — `name` is the id
 //     active_network_user_pinned: bool,   // set true when user picks the dropdown
 //     firmware, scenario, module, tab, flag_*,
 //     usbMacs, liveTests }                // the server's own: the USB adapter to MAC cache and the live tests' MACs
-// `firmware` is the variant flashed onto the ESP32 (esp32 / esp32-eth /
-// esp32-16mb / esp32s3-n16r8), separate from a device's `deviceModel`
+// `firmware` is the variant flashed onto the ESP32 (esp32 / esp32-lite /
+// esp32-ethonly / esp32s3-opi), separate from a device's `deviceModel`
 // (physical hardware). See docs/explanation/architecture/mooninstaller.md § Firmware vs board.
 // An older moondeck.json is carried over server-side in load_state().
 let state = { networks: [], active_network: "", firmware: "", scenario: "", module: "" };

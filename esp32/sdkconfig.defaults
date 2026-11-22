@@ -108,7 +108,7 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 
 # Parlio's completion ISR must run with the flash cache disabled: a control change writes the config to flash, and a DMA completion can land
 # in that window. Our own done callback was already IRAM_ATTR; the IDF driver's handler around it was not (github.com/MoonModules/MoonLight/issues/44).
-# The Cache error in pxPortGetCoprocArea seen then is the fault sdkconfig.defaults.esp32p4rev1-eth explains.
+# The Cache error in pxPortGetCoprocArea seen then is the fault sdkconfig.defaults.esp32p4 explains.
 CONFIG_PARLIO_TX_ISR_CACHE_SAFE=y
 CONFIG_PARLIO_RX_ISR_CACHE_SAFE=y
 # ...and the driver's own objects with it. The TX option above places the HANDLER in IRAM but,

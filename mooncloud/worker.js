@@ -21,7 +21,10 @@ const ALLOWED = [
   "event",
   "version",
   "previousVersion",
+  "firmware",
   "chip",
+  "chipRevision",
+  "chipPackage",
   "flash",
   "psram",
   "sdk",
@@ -130,8 +133,9 @@ async function handleReport(request, env) {
   // double-counting, which is what makes the totals a count of installations.
   await env.DB.prepare(
     `INSERT INTO reports
-       (installationId, event, version, previousVersion, chip, flash, psram, sdk, deviceModel, modules, country, receivedAt, totalHeap, freeHeap, lightCount, fps, dev)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (installationId, event, version, previousVersion, chip, flash, psram, sdk, deviceModel, modules, country, receivedAt, totalHeap, freeHeap, lightCount, fps, dev,
+        firmware, chipRevision, chipPackage)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(installationId, version) DO UPDATE SET
        event = excluded.event,
        previousVersion = excluded.previousVersion,
@@ -147,7 +151,10 @@ async function handleReport(request, env) {
        freeHeap = excluded.freeHeap,
        lightCount = excluded.lightCount,
        fps = excluded.fps,
-       dev = excluded.dev`
+       dev = excluded.dev,
+       firmware = excluded.firmware,
+       chipRevision = excluded.chipRevision,
+       chipPackage = excluded.chipPackage`
   )
     .bind(
       row.installationId,
@@ -166,7 +173,10 @@ async function handleReport(request, env) {
       row.freeHeap ?? 0,
       row.lightCount ?? 0,
       row.fps ?? 0,
-      row.dev ?? 0
+      row.dev ?? 0,
+      row.firmware ?? "",
+      row.chipRevision ?? "",
+      row.chipPackage ?? ""
     )
     .run();
 
@@ -205,7 +215,7 @@ async function handleStats(env, url) {
   //
   // Column names come from this table, never from the query string, so a parameter cannot reach the
   // SQL. Values are bound.
-  const FILTERABLE = ["version", "previousVersion", "chip", "flash", "psram", "sdk",
+  const FILTERABLE = ["version", "previousVersion", "firmware", "chip", "chipRevision", "chipPackage", "flash", "psram", "sdk",
                       "deviceModel", "country", "event"];
   const where = [];
   const binds = [];
@@ -388,6 +398,10 @@ async function handleStats(env, url) {
     filtered,
     versions: await counts("version"),
     chips: await counts("chip"),
+    // Which build each board runs, and the silicon that decides it (docs/work/Plan-20261121).
+    firmwares: await counts("firmware"),
+    revisions: await counts("chipRevision"),
+    packages: await counts("chipPackage"),
     deviceModels: await counts("deviceModel"),
     countries: await counts("country"),
     // Already in every report and previously unused: aggregating them costs the device nothing.
@@ -739,7 +753,10 @@ fetch("/api/stats" + location.search, { cache: "no-store" }).then(r => r.json())
   // chart is read-only, and Build is null on purpose: its job is to show the released-against-
   // development split, so filtering it to one side would leave it with nothing to compare.
   for (const [label, rows, key] of [["Version", d.versions, "version"],
+                               ["Firmware", d.firmwares, "firmware"],
                                ["Chip", d.chips, "chip"],
+                               ["Revision", d.revisions, "chipRevision"],
+                               ["Package", d.packages, "chipPackage"],
                                ["Board", d.deviceModels, "deviceModel"],
                                ["Flash", d.flash, "flash"],
                                ["PSRAM", d.psram, "psram"], ["SDK", d.sdk, "sdk"],

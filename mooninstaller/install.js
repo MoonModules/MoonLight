@@ -1173,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ethernet-only firmware: WiFi compiled out (firmwares.json `eth_only`). Keyed off the
         // name: `-ethonly`, the one build with WiFi compiled out. The orchestrator uses this to skip WiFi provisioning
         // (the build has no WIFI_SETTINGS RPC) and tell the user to connect Ethernet instead.
-        const ethOnly = /-ethonly$/.test(firmware);
+        const ethOnly = /-eth(only)?$/.test(firmware);   // -ethonly, or -eth in a release from before it
         await installer.start({
           // pickedPort may be null, and the orchestrator falls back to requestPort. In Teensy bootloader mode there is no port.
           port: teensyBootMode ? null : pickedPort,
@@ -1301,7 +1301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const parsed = await res.json();
         if (!Array.isArray(parsed)) throw new Error("not a device list");
-        devices = parsed;
+        devices = deviceSupport.flashable(parsed);
       } catch (e) {
         document.getElementById("device-grid").textContent = "Could not load deviceModels.json: " + e;
         return;

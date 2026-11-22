@@ -177,7 +177,7 @@ const char* chipPackage() {
         {EFUSE_RD_CHIP_VER_PKG_ESP32D0WDQ5,   "D0WD",       "D0WD-V3"},
         {EFUSE_RD_CHIP_VER_PKG_ESP32D2WDQ5,   "D2WD",       "D2WD"},
         {EFUSE_RD_CHIP_VER_PKG_ESP32U4WDH,    "U4WDH",      "U4WDH"},      // code 4, which ESP-IDF also names PICO-D2, a part that stayed a sample
-        {EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4,   "PICO-D4",    "PICO-D4"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4,   "PICO-D4",    "PICO-V3"},     // code 5 on revision 3 is ESP-IDF's ESP32-PICO-V3
         {EFUSE_RD_CHIP_VER_PKG_ESP32PICOV302, "PICO-V3-02", "PICO-V3-02"},
         {EFUSE_RD_CHIP_VER_PKG_ESP32D0WDR2V3, "D0WDR2-V3",  "D0WDR2-V3"},
     };

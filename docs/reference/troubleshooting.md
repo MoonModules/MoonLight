@@ -40,7 +40,7 @@ Confirm the firmware is innocent before reaching for the soldering iron: [Diagno
 - **Add a ~330 Ω series resistor** at the GPIO, close to the board, to damp reflections.
 - **Shorten or shield the data wire**, and keep it away from the power leads and the antenna.
 - **Share a solid, thick common ground** between the strip's supply and the board.
-- If the TX power check implicated RF coupling, set a per-board `Network.txPowerSetting` cap, the `deviceModels.json` mechanism the ESP32-S3 N16R8 Dev uses.
+- If the TX power check implicated RF coupling, set a per-board `Network.txPowerSetting` cap, the `deviceModels.json` mechanism the ESP32-S3 DevKitC-1 uses.
 
 How the bench found this is in [lessons.md](../contributing/lessons.md).
 

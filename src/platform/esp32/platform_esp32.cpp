@@ -344,19 +344,7 @@ bool arpLookup(const uint8_t ip[4], uint8_t mac[6]) {
 #endif
 }
 
-const char* macString() {
-    // The base MAC is fixed for the chip's life, so format it once into a static buffer the caller can point at (no per-module copy). Not called before the first use, single-threaded init.
-    static char buf[18] = {};
-    if (buf[0] == 0) {
-        uint8_t mac[6];
-        esp_efuse_mac_get_default(mac);
-        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
-                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-    return buf;
-}
-
-const char* hostPlatform() {
+const char* hostDeviceModel() {
     // Empty on a device: a board cannot self-identify, so `deviceModel` is injected by tooling from the catalog (MoonDeck, or the web installer over serial). Answering something here would overwrite a real board name with a guess.
     return "";
 }
@@ -438,9 +426,11 @@ const char* sdkVersion() {
 #endif
 
 const char* psramType() {
-    // The PSRAM interface mode and clock are compile-time (IDF has no runtime getter): CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8), not classic quad WROVER. Empty when PSRAM is not compiled in.
+    // The PSRAM interface mode and clock are compile-time (IDF has no runtime getter): hex on the P4, octal on the S3 -R8 parts and the S31, quad on the rest. Empty when PSRAM is not compiled in.
 #if !defined(CONFIG_SPIRAM)
     return "";
+#elif defined(CONFIG_SPIRAM_MODE_HEX)
+    return "hex" MM_PSRAM_CLOCK;
 #elif defined(CONFIG_SPIRAM_MODE_OCT)
     return "octal" MM_PSRAM_CLOCK;
 #else

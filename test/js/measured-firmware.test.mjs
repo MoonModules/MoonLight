@@ -70,3 +70,33 @@ test("a running device's own facts name its firmware, PSRAM outside the package 
     assert.equal(measuredFirmware("ESP32", factsFromDevice({ revision: "v3.0", flashMB: 16, psramMB: 0, psramMode: "" })).firmware, "esp32");
     assert.equal(measuredFirmware("ESP32-S3", factsFromDevice({ revision: "v0.2", flashMB: 8, psramMB: 8, psramMode: "octal" })).firmware, "esp32s3-opi");
 });
+
+import { devicesForBoard } from "../../src/ui/install-picker-devices.js";
+const catalog = [
+    { name: "DevKitC", chip: "ESP32-S3", firmwares: ["esp32s3-qspi", "esp32s3-opi", "esp32s3-opi-oflash"] },
+    { name: "Zero", chip: "ESP32-S3", firmwares: ["esp32s3-qspi-lite"] },
+    { name: "Matrix", chip: "ESP32-S3", firmwares: ["esp32s3-opi-oflash"] },
+    { name: "Gateway", chip: "ESP32", firmwares: ["esp32-lite"] },
+];
+const names = (list) => list.map((d) => d.name);
+
+test("a detected board lists only the devices with a firmware its measurement fits", () => {
+    const n16r8 = factsFromEsptool({ description: "ESP32-S3 (revision v0.2)", features: ["Embedded PSRAM 8MB (AP_3v3)"], flashSize: "16MB" });
+    assert.deepEqual(names(devicesForBoard(catalog, "ESP32-S3", n16r8)), ["DevKitC"]);
+});
+
+test("a board whose facts name no firmware lists its chip's whole catalog", () => {
+    const unread = factsFromEsptool({ description: "ESP32-S3 (revision v0.2)", features: ["Embedded PSRAM 8MB (AP_3v3)"], flashSize: undefined });
+    assert.deepEqual(names(devicesForBoard(catalog, "ESP32-S3", unread)), ["DevKitC", "Zero", "Matrix"]);
+    assert.deepEqual(names(devicesForBoard(catalog, "ESP32-S3", null)), ["DevKitC", "Zero", "Matrix"]);
+});
+
+test("a measurement no device fits keeps its chip's whole catalog, so the user still picks", () => {
+    const n4r2 = factsFromEsptool({ description: "ESP32-S3 (revision v0.2)", features: ["Embedded PSRAM 2MB (AP_3v3)"], flashSize: "8MB" });
+    const onlyOctal = catalog.filter((d) => d.name !== "DevKitC" && d.name !== "Zero");
+    assert.deepEqual(names(devicesForBoard(onlyOctal, "ESP32-S3", n4r2)), ["Matrix"]);
+});
+
+test("in-package PSRAM of unstated size counts, so a revision 1 classic still takes the cache-workaround build", () => {
+    assert.equal(fw("ESP32", "ESP32-D0WDR2 (revision v1.0)", ["Embedded PSRAM"], "4MB"), "esp32-rev1-lite");
+});

@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS reports (
   -- a caller that wants only those. Recorded from the first report because a flag added later
   -- cannot classify rows already stored.
   dev             INTEGER NOT NULL DEFAULT 0,
+  -- The build and the silicon that decides it: which firmware a board runs, its revision and its package (the classic's).
+  firmware        TEXT NOT NULL DEFAULT '',
+  chipRevision    TEXT NOT NULL DEFAULT '',
+  chipPackage     TEXT NOT NULL DEFAULT '',
 
   -- Raw numbers, bucketed into ranges by the server on read: storing a bucket would freeze every
   -- row at today's boundaries, and a range that turns out wrong could never be re-cut.

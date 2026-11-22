@@ -9,7 +9,7 @@ import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
 import { mountDeviceMap } from "./devicemap.js";
-import { openDevicePopup } from "./devicepopup.js";
+import { openDevicePopup, attachCatalogField, catalogLink, setCatalogLink } from "./devicepopup.js";
 import { openGroupPopup } from "./devicegroup.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
 import { channelUpdate, releaseTagOf, moonbaseAssetKeyFrom, INSTALLER_URL } from "./releases.js";
@@ -2616,9 +2616,11 @@ async function openWalk(at) {
 // choices that follow from it. The reader's own pick still wins, and an option a process does not list leaves its choice alone.
 function walkChoices(controls) {
     const value = (name) => String((controls || []).find(c => c.name === name)?.value ?? "");
-    const model = value("deviceModel"), chip = value("chip");
-    const os = { macos: "macOS", linux: "Linux", windows: "Windows" }[model.split("-")[0]];
-    const platform = model === "docker" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
+    const firmware = value("firmware"), model = value("deviceModel"), chip = value("chip");
+    // A host build is `host-<system>-<arch>`; a container runs a host-linux build and is told apart by its catalog name.
+    const [kind, system] = firmware.split("-");
+    const os = kind === "host" ? { macos: "macOS", linux: "Linux", windows: "Windows" }[system] : undefined;
+    const platform = model === "Docker container" ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
     if (!platform) return {};
     const board = platform === "ESP32" || platform === "Teensy";
     return { platform, target: board ? "Board" : "Host",
@@ -2977,6 +2979,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // not modify it; `disabled` would also block copy.
             if (ctrl.readonly) {
                 input.readOnly = true;
+                // A catalog name offers the catalog's defaults, which is how it changes.
+                if (ctrl.catalog) attachCatalogField(row, ctrl.value ?? "", docsSiteConsent);
             } else if (ctrl.commitOnChange) {
                 // A value whose every write is an action, such as renaming a file, is sent once, on Enter or on leaving the field, and a button pressed meanwhile sends it first.
                 input.addEventListener("input", () => { dragTs[key] = Date.now(); pendingSends[key] = () => write(ctrl.name, input.value); });
@@ -3010,7 +3014,8 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
                     await write("send", 1);
                 });
             }
-            row.appendChild(input);
+            // A catalog name reads as a link to its device model's card rather than a field.
+            row.appendChild(ctrl.readonly && ctrl.catalog && ctrl.value ? catalogLink(ctrl.value, moduleName, ctrl.name) : input);
             // A receivers text names the boards the device list knows among its entries, so an address says which board it is.
             const known = knownReceiversText(ctrl.known);
             if (known) {
@@ -4877,6 +4882,9 @@ function updateModuleControls(mod) {
             case "text": {
                 const input = queryByName(`input[type="text"][data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
                 if (input && input.value !== (ctrl.value ?? "")) input.value = ctrl.value ?? "";
+                // A catalog name drawn as a link follows a new model, as one the card's defaults applied.
+                const link = !input && ctrl.catalog ? queryByName(`a[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid) : null;
+                if (link && ctrl.value) setCatalogLink(link, ctrl.value);
                 break;
             }
             case "textarea": {

@@ -220,7 +220,7 @@ The release's build and staging steps, one subcommand each, so `release.yml` cal
 
 ```bash
 uv run moondeck/ci/release_stage.py tag --input-tag v7.1.0 --ref refs/tags/v7.1.0 --ref-name v7.1.0
-uv run moondeck/ci/release_stage.py stage-esp32 --firmware esp32s3-n16r8 --version 7.1.0
+uv run moondeck/ci/release_stage.py stage-esp32 --firmware esp32s3-opi --version 7.1.0
 ```
 
 ### run_process
@@ -352,8 +352,8 @@ The rules are in [documentation-standards.md](../docs/contributing/documentation
 Check that a firmware binary exists and is newer than every source that feeds it.
 
 ```bash
-uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8
-uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8 --build   # the commit gate: rebuild a stale one once
+uv run moondeck/check/check_esp32_built.py --firmware esp32s3-opi
+uv run moondeck/check/check_esp32_built.py --firmware esp32s3-opi --build   # the commit gate: rebuild a stale one once
 ```
 
 The cheap stand-in for a full `idf.py build` in the commit and merge checks. Freshness is measured against the **sources**, not the clock: a wall-clock rule ("built in the last hour") passes a binary that predates an edit made twenty minutes ago, which is the stale-artifact trap that sends debugging at the wrong image. On failure it names the newer file and prints the rebuild command; `--build` runs that rebuild once and checks again. `--max-age-hours N` adds an optional age rule on top; the default (0) disables it.
@@ -982,7 +982,7 @@ The tab is laid out top-to-bottom along the firmware workflow. Each dropdown sit
 
 ```text
 [Setup ESP-IDF] [Clean]            ← board-independent
-Firmware: [esp32 / esp32-eth / esp32-16mb / esp32s3-n16r8 / …]
+Firmware: [esp32 / esp32-lite / esp32-ethonly / esp32s3-opi / …]
 [Build]                            ← uses the selected Firmware
 Port:     [/dev/tty.usbserial-XXXX] [↻]
 [Flash] [Erase Flash]              ← uses the selected Port
@@ -1021,35 +1021,38 @@ Build one of the shipping ESP32 firmware variants. The MoonDeck **Build** button
 
 | Firmware key | Chip | What's in the image |
 |---|---|---|
-| `esp32` | `esp32` | WiFi **and** RMII Ethernet in one binary. Ethernet comes up only when a PHY responds; PHY type + pins are runtime config from `deviceModels.json` (default LAN8720 RMII pins). The default classic build. |
-| `esp32-eth` | `esp32` | Ethernet only (WiFi compiled out → smaller image, more free RAM). Same runtime PHY/pin config. |
-| `esp32-16mb` | `esp32` | Same as `esp32` but for 16 MB-flash classic boards (bigger OTA slots + filesystem). |
-| `esp32s3-n16r8` | `esp32s3` | ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM). WiFi + W5500 SPI Ethernet (external module, pins per board in `deviceModels.json`). |
+| `esp32` | `esp32` | Every classic ESP32 with more than 4 MB of flash, every revision: WiFi **and** RMII Ethernet in one binary, every feature. Ethernet comes up only when a PHY responds; PHY type + pins are runtime config from `deviceModels.json` (default LAN8720 RMII pins). PSRAM on revision 3 and up. |
+| `esp32-lite` | `esp32` | Classic boards with 4 MB of flash, every revision: no SD card. |
+| `esp32-ethonly` | `esp32` | Ethernet only (WiFi compiled out → smaller image, more free RAM). Same runtime PHY/pin config. |
+| `esp32-rev1-lite` | `esp32` | Revision 0 and 1 boards with PSRAM: the cache workaround, PSRAM used, the 4 MB tier. |
+| `esp32s3-opi` | `esp32s3` | ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM). WiFi + W5500 SPI Ethernet (external module, pins per board in `deviceModels.json`). |
 
 CLI equivalent:
 
 ```bash
 uv run moondeck/build/build_esp32.py --firmware esp32
-uv run moondeck/build/build_esp32.py --firmware esp32-eth
-uv run moondeck/build/build_esp32.py --firmware esp32-16mb
-uv run moondeck/build/build_esp32.py --firmware esp32s3-n16r8
+uv run moondeck/build/build_esp32.py --firmware esp32-lite
+uv run moondeck/build/build_esp32.py --firmware esp32-ethonly
+uv run moondeck/build/build_esp32.py --firmware esp32s3-opi
 ```
 
 Auto-detects ESP-IDF installation, sets target if needed, builds, and shows flash/RAM usage summary. Each firmware writes into `build/esp32-<firmware>/`, so switching firmwares (or building several in one session) keeps every variant on disk, with no clean rebuild on switch.
 
 An edited `sdkconfig` fragment reaches every build that uses it. IDF seeds `sdkconfig` from the fragments only when the file is absent, so each build dir records a digest of its fragments in `sdkconfig.fragments.sha256`. When they differ, the build deletes that `sdkconfig` and runs `idf.py reconfigure` (`sdkconfig_fragments.py`, shared with the MoonBase build), so only what reads a changed option recompiles. A value set by hand in menuconfig goes with it: the fragments are the config's one source.
 
-The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-eth` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17, as on the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (WT32-ETH01: reset on GPIO 16) needs a different `deviceModels.json` entry, no rebuild.
+The Ethernet PHY type and pin map are runtime config, not baked in: each firmware carries the driver(s) its chip can host (RMII EMAC for classic, W5500 SPI for S3), and `deviceModels.json` supplies the per-board PHY/pins. The `esp32` / `esp32-ethonly` builds default to the common LAN8720 RMII pins (PHY reset on GPIO 5, MDIO addr 0, clock GPIO 17, as on the [Olimex ESP32-Gateway](https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware)); a board with different pins (WT32-ETH01: reset on GPIO 16) needs a different `deviceModels.json` entry, no rebuild.
 
-Each ESP32-S3 SKU has its own firmware key because the sdkconfig fragment encodes flash size, partition layout, and PSRAM mode — flashing an `n16r8` binary onto a different module (e.g. N8R2) misaligns the partition table or fails PSRAM init. New SKUs become new keys (e.g. `esp32s3-n8r8`); we don't ship a generic `esp32s3` shortcut.
+Each ESP32-S3 PSRAM interface has its own firmware key because the sdkconfig fragment encodes the PSRAM mode (quad, octal, octal flash); flashing an `esp32s3-opi` binary onto a quad-PSRAM module (e.g. N8R2) fails PSRAM init. A new PSRAM interface becomes a new key (e.g. `esp32s3-qspi`); we don't ship a generic `esp32s3` shortcut.
 
-`--profile` is deprecated and accepted one release for migration: `--profile default` → `--firmware esp32`, `--profile eth-only` → `--firmware esp32-eth`.
+`--profile` is deprecated and accepted one release for migration: `--profile default` → `--firmware esp32`, `--profile eth-only` → `--firmware esp32-ethonly`.
 
 A variant marked `migrate` (the C3) also builds the migration image into `build/migrate-<chip>/MoonLight-migrate.bin`. A board running WLED installs it through WLED's own update page and moves to MoonLight without a cable (`moonbase/migrate/`). `--migrate-pause 10` adds a rehearsal image that pauses ten seconds after each step, in `build/migrate-<chip>-pause/`, so a power cut can be tested at each point on a bench board.
 
 ### flash_esp32
 
 Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware>/`, which ESP-IDF names `MoonLight.bin` after the project. Scripts read that name from `APP_BIN` in `build_esp32.py`. Each firmware lives in its own directory, so several coexist on disk and switching between them is free.
+
+The script measures the board's flash and writes that size's partition layout; `--flash-size <MB>` states the size for a flash chip that reports none.
 
 The MoonDeck button forwards the Firmware dropdown as `--firmware`. Flash exits cleanly with a "no build for <firmware> — run Build first" message when that dir doesn't exist. The log line up front confirms which build is being flashed and how old it is, e.g.:
 
@@ -1100,7 +1103,7 @@ The script never touches git, since the commit and the tag stay yours.
 Monitor serial output. Long-running — shows Stop button.
 
 ```bash
-uv run moondeck/run/monitor_esp32.py --port /dev/tty.usbserial-0001 --firmware esp32s3-n16r8
+uv run moondeck/run/monitor_esp32.py --port /dev/tty.usbserial-0001 --firmware esp32s3-opi
 ```
 
 Reads serial at 115200 baud. Output streams to MoonDeck's log and is saved to `esp32/monitor.log` for later inspection (useful when crashes flood the output).
@@ -1161,7 +1164,7 @@ Push WiFi credentials to a running MoonLight device over USB-serial. Uses the [I
 
 ```bash
 # Equivalent CLI for a weak-powered board (cap resolved from deviceModels.json):
-uv run moondeck/build/improv_provision.py --port /dev/cu.usbmodem-XXX --device-model "ESP32-S3 N16R8 Dev"
+uv run moondeck/build/improv_provision.py --port /dev/cu.usbmodem-XXX --device-model "ESP32-S3 DevKitC-1"
 # Or set the cap explicitly without a catalog entry:
 uv run moondeck/build/improv_provision.py --port /dev/cu.usbmodem-XXX --tx-power 8
 ```

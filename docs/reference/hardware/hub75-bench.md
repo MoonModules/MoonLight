@@ -14,7 +14,7 @@ The bench is a 256x192 wall on a Pi 5: six 128x64 panels, 2 to a lane, 3 lanes i
 |--|--|--|--|
 | Date | 2026-11-13 | 2026-11-18, 11:15 to 11:19 UTC | 2026-11-20, 13:24 to 13:39 UTC on 6.18; 16:14 to 17:17 UTC on 6.12 |
 | Kernel | 6.18.60+rpt-rpi-2712 | 6.18.60+rpt-rpi-2712 (DietPi, Debian 13.7) | 6.18.60+rpt-rpi-2712 (the same card), and 6.12.109+rpt-rpi-2712 (Raspberry Pi OS Lite 64-bit, Debian 12) |
-| Binary | - | `/usr/bin/MoonLight`, md5 d0bcb409, a piolib build of the PIO work of 2026-11-16 | md5 8ef6e72e, version 7.0.0-dev.1, from `release.yml`'s `build-linux-arm64` job; on 6.18 in place of `/usr/bin/MoonLight`, on 6.12 from its `.deb` |
+| Binary | - | `/usr/bin/MoonLight`, md5 d0bcb409, a piolib build of the PIO work of 2026-11-16 | md5 8ef6e72e, version 7.0.0-dev.1, from `release.yml`'s `build-linux-arm64` job; on 6.18 in place of `/usr/bin/MoonLight`, on 6.12 from its `.deb`. A build from before the commit review's fixes; the build after them was not retaken on this wall |
 | Backend | piolib, raspberrypi/utils 4284bd7 | piolib, raspberrypi/utils 4284bd74 (2026-11-12), static | the kernel's `/dev/pio0` ioctls |
 | Card | rising clock edge, latch blank 0 | falling clock edge (`clockEdge` 1), latch blank 1, curve CIE 1931, local brightness 255 | falling clock edge (`clockEdge` 1), latch blank 1 |
 | Method | `bitDepth` and `pixelClock` set on the Hub75 card and `shown` read | `bitDepth` and `pixelClock` set through `POST /api/control`, `shown` read from `GET /api/modules/Hub75`, three readings per setting of a 5 s window with `shown` sampled once a second; thread CPU from `/proc/<pid>/task/*/stat` over the same window | as the baseline |

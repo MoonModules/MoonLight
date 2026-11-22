@@ -106,9 +106,11 @@ public:
 
         // Text because that is what persistence saves, and seeded only when empty.
         if (deviceModel_[0] == 0) {
-            std::snprintf(deviceModel_, sizeof(deviceModel_), "%s", platform::hostPlatform());
+            std::snprintf(deviceModel_, sizeof(deviceModel_), "%s", platform::hostDeviceModel());
         }
         controls_.addText("deviceModel", deviceModel_, sizeof(deviceModel_), validateDeviceModel);
+        controls_.setReadOnly(controls_.count() - 1, true);   // set by the catalog's defaults, which tooling and the card's Apply write
+        controls_.setCatalogField(controls_.count() - 1);
 
         // Written from the constant each boot, and persisted only so the recovery image reads it.
         std::snprintf(firmwareVariant_, sizeof(firmwareVariant_), "%s", kFirmwareName);

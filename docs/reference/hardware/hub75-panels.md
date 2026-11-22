@@ -17,7 +17,7 @@ A Raspberry Pi 5 drives panels through its RP1 PIO from the 40-pin header instea
 Three boards have published pin maps, which the `board` select fills in:
 
 - **MoonHub75**, a Lilygo T7-S3 on a passive adapter. It also carries an INMP441 microphone socket on IO10/11/12, so an audio-reactive effect and a panel run together.
-- **Adafruit MatrixPortal S3.** Three of its lines sit on GPIO 35 to 37, which the octal-PSRAM images hold, so it runs the `esp32s3-n8r2` image, built for its quad-PSRAM N8R2 part. It has no microphone; one wires to the free header pins, A0 to A4 and TX/RX, which its [pinout](../../assets/deviceModels/esp32-s3-n8r2-adafruit-matrixportal-pinout.jpg) shows, and takes an Audio service set to those pins.
+- **Adafruit MatrixPortal S3.** Three of its lines sit on GPIO 35 to 37, which the octal-PSRAM images hold, so it runs the `esp32s3-qspi` image, built for its quad-PSRAM N8R2 part. It has no microphone; one wires to the free header pins, A0 to A4 and TX/RX, which its [pinout](../../assets/deviceModels/esp32-s3-n8r2-adafruit-matrixportal-pinout.jpg) shows, and takes an Audio service set to those pins.
 - **Waveshare ESP32-S3 RGB Matrix**, SKU 34422. The Waveshare ESP32-S3-Matrix is a different product, with an onboard 8x8 matrix and no HUB75 connector.
 
 A published map hides the pin rows, since those lines are soldered; they stay bound and still drive the panel. The generic per-chip sets and Custom show them. A line on a pin the chip wires to flash or PSRAM is refused before init, with the line named. Free pins per chip: [GPIO usage](gpio-usage.md).
@@ -105,7 +105,7 @@ The engine opens `/dev/pio0` for reading and writing. On the bench Pi the node r
 
 ### Kernels
 
-The output opens where `/dev/pio0` exists and the kernel serves a PIO. What the frame submit returns depends on the kernel:
+The output opens where `/dev/pio0` exists and the kernel serves a PIO. The engine needs the kernel's 32-bit transfer ioctls (`SM_CONFIG_XFER32` and `SM_XFER_DATA32`), which rpi-6.12.y serves; on an earlier kernel the output refuses at open and the status names the step that failed. What the frame submit returns depends on the kernel:
 
 - **6.12 (rpi-6.12.y):** the submit returns when every chunk has reached the state machine. A wait for a free buffer lasts up to 1 second; when it expires the kernel logs "DMA bounce timed out" and ends the copy, so the call returns 0 with the frame cut short and no error, after about 2 seconds in all. The completion wait that follows lasts up to 1 second per chunk and answers a timeout (-ETIMEDOUT) when it expires: the engine counts a failed submit, `shown` falls to 0, the status says the PIO is failing, and the engine retries after a pause. The engine's lowest pixel clock, 50 kHz, keeps one 64 KiB chunk inside that second.
 - **6.18.39 and later:** the submit returns once the last chunk is queued and blocks only while all four DMA buffers are busy. A state machine that stops draining blocks the call for good, and the engine's shutdown reports it.

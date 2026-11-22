@@ -345,7 +345,7 @@ def main() -> int:
                     help="Max seconds to wait for a final response (default: 45)")
     ap.add_argument("--device-model", dest="device_model", default=None, metavar="NAME",
                     help="deviceModel name from mooninstaller/deviceModels.json (e.g. "
-                         "'ESP32-S3 N16R8 Dev'). Resolves the deviceModel's TX-power cap "
+                         "'ESP32-S3 DevKitC-1'). Resolves the deviceModel's TX-power cap "
                          "(the WiFi entry's txPowerSetting) automatically and, after "
                          "provisioning, applies the entry's state document over "
                          "serial as APPLY_OP documents: the same config push the web installer "

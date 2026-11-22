@@ -42,11 +42,17 @@ processes:
         when: { manual: "Read it first: code starts after the approval." }
         detail: |
           Each cycle subtracts as well as adds.
+      - id: step-home
+        say: Move a finished step's content home, link it.
+        actor: agent
+        when: { manual: "When a step of a plan is ✅, and again for a plan that is finished." }
+        detail: |
+          What the system now is, how it works, why, and the measured facts worth keeping move to the page that owns them: a reason to the explanation, a fact to a reference page, a lesson to the lessons. What the page already says stays where it is. The step keeps its title, its status, one line of what is done and a link with an anchor to where it lives; who tested what when stays in git. A finished plan is then only references, and [closing it](moonwalk.md#pick-spec-plan) is a small step.
       - id: close
         say: Close the shipped plan as an issue.
         when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included, or once it is stopped: the product owner's call." }
         detail: |
-          First, what only the plan holds moves home: a reason to the explanation, a fact to a reference page, a lesson to the lessons, analysis an open plan uses to a [design study](design/index.md). Then the plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the rejected alternatives and why, where its knowledge lives, one line per step, and the plan and close dates. A shipped plan closes as completed; one that did not ship closes as not planned, saying cancelled, superseded or reverted. Its remaining backlog returns to the Project as cards, decided item by item.
+          First, what only the plan holds and no step has moved yet goes home: a reason to the explanation, a fact to a reference page, a lesson to the lessons, analysis an open plan uses to a [design study](design/index.md). Then the plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the rejected alternatives and why, where its knowledge lives, one line per step, and the plan and close dates. A shipped plan closes as completed; one that did not ship closes as not planned, saying cancelled, superseded or reverted. Its remaining backlog returns to the Project as cards, decided item by item.
   - id: branch
     title: Branch and work on it
     actor: product-owner

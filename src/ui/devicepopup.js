@@ -125,9 +125,10 @@ export function peerUpdate(dev, releases) {
     return u ? { label: u.label, version: u.version, ...updateAsset(u.rel, dev, u.version) } : null;
 }
 
-// What a device reports, in the shape the update rules read: version, firmware (null while unnamed), how it is updated and its mode.
+// What a device reports, in the shape the update rules read: version, firmware (null while unnamed), how it is updated, its mode and its image prefix.
 export function deviceOf(fw) {
-    return { version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update: fw.summary?.update, mode: fw.summary?.mode };
+    return { version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update: fw.summary?.update, mode: fw.summary?.mode,
+             assetPrefix: fw.summary?.assetPrefix };
 }
 
 // Why an update `u` with no image is not installed from here: a container's host, a firmware too old to name its image, or the user's own hand.
@@ -467,6 +468,51 @@ async function applyDeviceDefaults(base, model) {
     } catch (_) {
         return ` ${model.name}'s defaults did not reach it.`;
     }
+}
+
+// A device model's anchor on the docs' Device models page: the rule `device_slug` in moondeck/docs/gen_help.py writes the page with,
+// the name lowercased, each run outside a-z and 0-9 one hyphen, none at either end. The same sample names pin both.
+export function deviceSlug(name) {
+    return String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// A device model's card on the docs site's Device models page, which carries its picture, firmwares and product page.
+export function catalogUrl(name) {
+    return new URL(`../reference/device-models.html#${deviceSlug(name)}`, INSTALLER_URL).href;
+}
+
+// A device-model name as a link to its card, tagged with its control so a state change repoints it (setCatalogLink).
+export function catalogLink(name, mid, key) {
+    const link = document.createElement("a");
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.dataset.mid = mid;
+    link.dataset.key = key;
+    setCatalogLink(link, name);
+    return link;
+}
+
+// Point a catalog link at `name`'s card.
+export function setCatalogLink(link, name) {
+    link.href = catalogUrl(name);
+    link.textContent = `${name} ↗`;
+}
+
+// A device-model name on its own card (a control flagged `catalog`) offers the catalog's defaults to apply, as the popup does, behind a
+// button: the catalog comes from the docs site, so it loads on the click and after `consent()`, as help does. Offline, the name alone.
+export function attachCatalogField(container, name, consent) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "graph-popup-update";
+    btn.textContent = "Choose device model…";
+    btn.addEventListener("click", async () => {
+        if (!consent()) return;
+        btn.disabled = true;
+        const sys = await fetchWithin("/api/system", 3000, r => (r.ok ? r.json() : null));
+        btn.remove();
+        if (sys && sys.firmware) await offerDeviceDefaults(container, "", { firmware: sys.firmware, summary: { board: name } });
+    });
+    container.append(btn);
 }
 
 // A running MoonLight takes a device model's defaults as a moved one does: the models its firmware runs on, the one it reports picked, pressed

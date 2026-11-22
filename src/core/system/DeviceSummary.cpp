@@ -19,10 +19,11 @@ static void writeHardware(JsonSink& sink) {
     sink.writeJsonString(rev);
     sink.append(",\"package\":");
     sink.writeJsonString(platform::chipPackage());
-    // The interface the build drives, "octal, 80 MHz" or "quad, 40 MHz", is the found PSRAM's: its first word, and empty with none found.
+    // The interface the build drives, "hex, 200 MHz", "octal, 80 MHz" or "quad, 40 MHz", is the found PSRAM's: its first word, and empty with none found.
     const size_t psram = platform::psramFoundBytes();
     const char* mode = psram ? platform::psramType() : "";
-    const char* word = std::strncmp(mode, "octal", 5) == 0 ? "octal" : std::strncmp(mode, "quad", 4) == 0 ? "quad" : "";
+    char word[8] = {};
+    for (size_t i = 0; i + 1 < sizeof(word) && mode[i] && mode[i] != ','; i++) word[i] = mode[i];
     sink.appendf(",\"flashMB\":%u,\"psramMB\":%u,\"psramMode\":\"%s\"}",
                  static_cast<unsigned>(platform::flashChipSize() >> 20), static_cast<unsigned>(psram >> 20), word);
 }

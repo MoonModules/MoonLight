@@ -221,8 +221,8 @@ def _control_value(module: dict, name: str):
 def _detect_target(state: dict, local: bool = True) -> str:
     """Identify the build target so per-step contract values can be looked up.
 
-    ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-eth`, `esp32-eth-wifi`,
-    `esp32s3-n16r8`, …): set at compile time from MM_FIRMWARE_NAME and
+    ESP32: read FirmwareUpdateModule.firmware (`esp32`, `esp32-lite`, `esp32-ethonly`,
+    `esp32s3-opi`, …): set at compile time from MM_FIRMWARE_NAME and
     exposed through the `firmware` control. Host: its firmware names the release's program
     (`host-macos-arm64`), and its metrics key is this host's, host-<host-os> (still
     distinguishes macOS vs Linux vs Windows builds, which can differ in tick

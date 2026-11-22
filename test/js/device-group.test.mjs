@@ -108,3 +108,21 @@ test("the popup's note counts the members behind down as each install ends well,
     assert.equal(behindNote(1, 5), "1 of 5 members is behind.");
     assert.equal(behindNote(0, 5), "Every member is up to date.");
 });
+
+test("a device's update reads the image prefix it reports, so a current device asks for its own image", async () => {
+    const { deviceOf } = await import("../../src/ui/devicepopup.js");
+    assert.equal(deviceOf({ version: "7.1.0", firmware: "esp32", summary: { assetPrefix: "moonlight" } }).assetPrefix, "moonlight");
+    assert.equal(deviceOf({ version: "7.0.0", firmware: "esp32", summary: {} }).assetPrefix, undefined);   // too old to report one: the legacy name
+});
+
+test("a device model links to its card by the anchor the docs page writes", async () => {
+    const { deviceSlug } = await import("../../src/ui/devicepopup.js");
+    // The same samples as test_device_models_page.py, so the page's rule and this one stay one rule.
+    assert.equal(deviceSlug("ESP32-S3 DevKitC-1"), "esp32-s3-devkitc-1");
+    assert.equal(deviceSlug("Teensy 4.1-NE + W5500"), "teensy-4-1-ne-w5500");
+});
+
+test("a device model's link opens its card on the docs site's Device models page", async () => {
+    const { catalogUrl } = await import("../../src/ui/devicepopup.js");
+    assert.equal(catalogUrl("ESP32-S3 DevKitC-1"), "https://moonmodules.org/MoonLight/reference/device-models.html#esp32-s3-devkitc-1");
+});

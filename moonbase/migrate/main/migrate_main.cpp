@@ -235,13 +235,15 @@ void moveAside(const Region& write) {
 }
 
 // Read a whole small file into `buf`; false when it does not open.
-bool readFile(const char* path, char* buf, size_t len) {
+bool readFile(const char* path, char* buf, size_t len, bool whole = false) {
     FILE* f = std::fopen(path, "r");
     if (!f) return false;
     const size_t n = std::fread(buf, 1, len - 1, f);
+    const bool more = std::fgetc(f) != EOF;   // a file larger than the buffer, which `whole` refuses rather than carrying its first part
     std::fclose(f);
     buf[n] = 0;
-    return true;
+    if (whole && more) ESP_LOGW(kTag, "%s is larger than %u bytes, so it is not carried", path, static_cast<unsigned>(len - 1));
+    return !(whole && more);
 }
 
 // Step 2, on a board that ran MoonLight: its own NetworkModule.json, carried into the new filesystem as it is, so the board comes back on its networks and its Ethernet board; its length, 0 where the old filesystem holds none. Its other files travel by the device's backup bundle, saved before the move and restored after it.
@@ -253,7 +255,7 @@ size_t readMoonLightNetworks(char* doc, size_t cap) {
         conf.partition_label = label;
         conf.read_only = true;
         if (esp_vfs_littlefs_register(&conf) != ESP_OK) continue;
-        const bool have = readFile("/ml/.config/NetworkModule.json", doc, cap);
+        const bool have = readFile("/ml/.config/NetworkModule.json", doc, cap, true);
         esp_vfs_littlefs_unregister(label);
         if (have && doc[0]) return std::strlen(doc);
     }

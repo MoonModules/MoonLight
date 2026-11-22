@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>   // std::snprintf, for macString
 #include <new>      // std::nothrow_t, for InternalRamObject's allocation
 #include "platform_config.h"  // hasPsram / …: flags this header's contract refers to
 #include "nonblocking.h"      // MM_NONBLOCKING, which every declaration below carries
@@ -261,8 +262,16 @@ constexpr size_t kInternalFreeFloor = 100 * 1024;
 
 /// The device's MAC address.
 void getMacAddress(uint8_t mac[6]);
-/// The MAC as canonical "XX:XX:XX:XX:XX:XX", in a static buffer a ReadOnly control can bind straight to.
-const char* macString();
+/// The MAC as canonical "XX:XX:XX:XX:XX:XX", in a static buffer a ReadOnly control can bind straight to: formatted once, since the MAC is fixed for the device's life.
+inline const char* macString() {
+    static char buf[18] = {};
+    if (!buf[0]) {
+        uint8_t m[6];
+        getMacAddress(m);
+        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
+    }
+    return buf;
+}
 /// A neighbor's MAC from the address table this device's IPv4 stack keeps (ARP, RFC 826); false when the table holds none for `ip`, as before any exchange with it.
 bool arpLookup(const uint8_t ip[4], uint8_t mac[6]);
 /// The chip this runs on, as a static string.
@@ -274,8 +283,8 @@ const char* chipPackage();
 /// The bytes of PSRAM the chip found at boot, whether in the heap or left unused, as a revision 0 or 1 classic leaves it on a build lacking the cache workaround.
 size_t psramFoundBytes();
 
-/// The hardware this installation runs on, empty on a device, where tooling injects `deviceModel` instead.
-const char* hostPlatform();
+/// The catalog's generic device model for the system a host runs on, such as "Generic macOS" or "Docker container"; empty on a device, where tooling injects `deviceModel` instead.
+const char* hostDeviceModel();
 /// The SDK this was built against, as a static string.
 const char* sdkVersion();
 

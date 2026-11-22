@@ -17,7 +17,7 @@ class Scheduler;
 
 /// Where a document comes from, which decides how strictly it applies.
 enum class StateSource : uint8_t {
-    Request,   ///< a client's document, refused whole on the first problem so nothing changes by half
+    Request,   ///< a client's document, refused whole on the first problem, so it applies entirely or not at all; a type this firmware leaves out on purpose is skipped and named
     Live,      ///< a request that drives rather than configures, such as a show building its look: checked the same, and nothing it changes is marked to save
     Stored,    ///< a file the device wrote, onto the running tree: what this build cannot place is skipped, values clamp, code-wired children stay
     Boot,      ///< the same file during boot, before any setup: no lifecycle and no reactions, which the boot phases run after it
@@ -26,11 +26,11 @@ enum class StateSource : uint8_t {
 /// What applying a document did: the first failure and where it happened, or how much it changed.
 struct StateDocumentResult {
     bool ok = true;            ///< false at the first failure, which stops the walk
-    const char* error = "";    ///< what failed, a constant; for a stored file that applied, why the first skipped member could not be placed
+    const char* error = "";    ///< what failed, a constant; for a document that applied, why the first skipped member could not be placed
     char where[64] = {};       ///< the dotted path of the failing key, such as `Effects.Layer.Noise.speed`, or of that first skipped member
     uint16_t changes = 0;      ///< controls set and modules created, replaced or removed
     uint16_t deferred = 0;     ///< controls a script declares, set once the next prepare has compiled it
-    uint16_t skipped = 0;      ///< members a stored file names that this build cannot place, each logged
+    uint16_t skipped = 0;      ///< members this build cannot place, each logged: any a stored file names, and a compiled-out type in any document
 };
 
 /// Apply a state document to the tree; a request is checked whole before anything changes, a stored file member by member. A root `$` key, such as a preset's `$slot`, is the file's own.

@@ -319,7 +319,18 @@ void joinHomeOverWifi(WiFiNetwork& w) {
     w.net.tick1s();
     REQUIRE(std::string(modeOf(w.net)) == "WiFi STA");
 }
+// The card's scan, then its connect on the first network it found, as a user presses them, and the tick that carries the request out.
+void askToJoinScanned(WiFiNetwork& w) {
+    w.wifi.onControlChanged("scan");
+    w.wifi.tick1s();
+    w.wifi.tick1s();
+    mm::ListSource* avail = availableOf(w.wifi);
+    REQUIRE(avail != nullptr);
+    REQUIRE(avail->setListRowField(1, "connect", ""));
+    w.net.tick1s();
+}
 }  // namespace
+
 
 // Ethernet outranks WiFi, so a join asked for from the card while the cable carries the device is refused, and the card says why rather than dropping the wired link.
 TEST_CASE("a join asked for while Ethernet carries the device is refused with the reason") {
@@ -336,13 +347,7 @@ TEST_CASE("a join asked for while Ethernet carries the device is refused with th
         w.net.setup();
         w.net.tick1s();
         REQUIRE(std::string(modeOf(w.net)) == "Ethernet");
-        w.wifi.onControlChanged("scan");
-        w.wifi.tick1s();
-        w.wifi.tick1s();
-        mm::ListSource* avail = availableOf(w.wifi);
-        REQUIRE(avail != nullptr);
-        REQUIRE(avail->setListRowField(1, "connect", ""));
-        w.net.tick1s();
+        askToJoinScanned(w);
         CHECK(std::string(modeOf(w.net)) == "Ethernet");
         REQUIRE(w.wifi.status() != nullptr);
         CHECK(std::string(w.wifi.status()).find("Ethernet is in use") != std::string::npos);
@@ -820,4 +825,43 @@ TEST_CASE("switching the radio on resumes the station") {
         CHECK(std::string(w.net.status()) == "WiFi STA: home");
     }
     mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A join asked for from the card ends with the radio, so a station the radio starts later joins its own network and keeps its own addressing.
+TEST_CASE("switching the radio off ends a join the card asked for") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        mm::platform::WifiNetwork cafe{};
+        std::snprintf(cafe.ssid, sizeof(cafe.ssid), "cafe");
+        mm::platform::setTestWifiScan(&cafe, 1);
+        w.wifi.remember("home", "pw");
+        w.wifi.rebuildControls();
+        w.net.setup();
+        askToJoinScanned(w);
+        REQUIRE(w.wifi.joinRequest() != nullptr);
+        setRadio(w, false);
+        w.net.tick1s();
+        CHECK(w.wifi.joinRequest() == nullptr);
+    }
+    mm::platform::setTestWifiScan(nullptr, 0);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// A device with no access point card opens the default one when no network joins; the radio switched off closes that one too.
+TEST_CASE("switching the radio off closes the default access point") {
+    FrozenClock clock;
+    mm::platform::setTestWifiApAvailable(true);
+    {
+        WiFiNetwork w;
+        w.net.setup();
+        w.net.tick1s();
+        REQUIRE(mm::platform::wifiApConnected());
+        setRadio(w, false);
+        w.net.tick1s();
+        CHECK_FALSE(mm::platform::wifiApConnected());
+        CHECK(std::string(w.net.status()) == "No network: radio off and no cable");
+    }
+    mm::platform::setTestWifiApAvailable(false);
 }

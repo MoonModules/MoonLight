@@ -120,7 +120,7 @@ def main() -> int:
 
     if args.erase:
         # Deleting the image is the erase: merged_flash rebuilds it from the bootloader, partition
-        # table and app alone, so every DATA partition (nvs, otadata, spiffs, where the module tree
+        # table and app alone, so every DATA partition (nvs, otadata, littlefs, where the module tree
         # and the .mlv scripts live) comes back blank. On a real board this is erase_flash_esp32.py;
         # here the whole "flash chip" is one file, so removing it is the same operation.
         img = os.path.join(BUILD, "qemu-flash.bin")

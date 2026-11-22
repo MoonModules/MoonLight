@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MoonLight device API
-  version: 7.0.0-dev
+  version: 7.1.0-dev
   summary: The HTTP routes a MoonLight device serves, on port 80 on a board and 8080 on a host.
   description: |
     Every route answers a client sending no `Origin` and a page from this network, which a private, shared or loopback address, `localhost`, a `.local`, `.home.arpa` or `.internal` name or one label names, or the device itself under the name it was opened by; a page from beyond it gets 403 on every route, WebSockets included.

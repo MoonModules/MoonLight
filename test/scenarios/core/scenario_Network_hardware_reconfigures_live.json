@@ -66,7 +66,7 @@
       "description": "The render loop before anything is reconfigured, which every later measurement is read against.",
       "op": "measure",
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 8678,
             "p95": 8721,
@@ -174,7 +174,7 @@
       "description": "Announce and retract cost, recorded rather than asserted: with a broker the publish is real work, without one the announce is a local no-op, and neither is a number to promise.",
       "op": "measure",
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 8634,
             "p95": 10223,
@@ -298,7 +298,7 @@
       "description": "The render loop after the interface came up and went away. A reconfigure that stalls the loop is the fault this exists to catch.",
       "op": "measure",
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 8635,
             "p95": 9091,
