@@ -1,4 +1,4 @@
-/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here. Kept out of Control.h, which the module headers include only to call addX().
+/// The per-type JSON writing and parsing every consumer shares, so adding a ControlType is one edit here. Kept out of Control.h, which the module headers include only to call addX(), and ControlList's setters and grow, one copy for every defineControls.
 
 #include "core/module/Control.h"
 
@@ -12,6 +12,81 @@
 #include <type_traits>
 
 namespace mm {
+
+void ControlList::setHidden(uint8_t i, bool hidden) {
+    if (i < count_) controls_[i].hidden = hidden;
+}
+
+void ControlList::setDefault(uint8_t i, int32_t def) {
+    if (i < count_) controls_[i].def = def;
+}
+
+void ControlList::setReadOnly(uint8_t i, bool readonly) {
+    if (i < count_) controls_[i].readonly = readonly;
+}
+
+void ControlList::setAdvanced(uint8_t i, bool advanced) {
+    if (i < count_) controls_[i].minMode = advanced ? kModeExpert : kModeUser;
+}
+
+void ControlList::setDeveloper(uint8_t i) {
+    if (i < count_) controls_[i].minMode = kModeDeveloper;
+}
+
+void ControlList::setNumberField(uint8_t i, bool numberField) {
+    if (i < count_) controls_[i].numberField = numberField;
+}
+
+void ControlList::setCatalogField(uint8_t i) {
+    if (i < count_) controls_[i].catalog = true;
+}
+
+void ControlList::setReceiversField(uint8_t i) {
+    if (i < count_) controls_[i].receivers = true;
+}
+
+void ControlList::setHexField(uint8_t i) {
+    if (i < count_) controls_[i].numberField = controls_[i].hex = true;
+}
+
+void ControlList::setPersistLabel(uint8_t i, bool persistLabel) {
+    if (i < count_) controls_[i].persistLabel = persistLabel;
+}
+
+void ControlList::setFader(uint8_t i, bool fader, const char* target) {
+    if (i < count_) { controls_[i].fader = fader; controls_[i].surfaceTarget = target; }
+}
+
+void ControlList::setEncoder(uint8_t i, bool encoder, const char* target) {
+    if (i < count_) { controls_[i].encoder = encoder; controls_[i].surfaceTarget = target; }
+}
+
+void ControlList::setSwitchRow(uint8_t i, bool switchRow, const char* target) {
+    if (i < count_) { controls_[i].switchRow = switchRow; controls_[i].surfaceTarget = target; }
+}
+
+void ControlList::setDisplayStrip(uint8_t i, bool strip) {
+    if (i < count_) controls_[i].displayStrip = strip;
+}
+
+void ControlList::setLive(uint8_t i, bool live) {
+    if (i < count_) controls_[i].live = live;
+}
+
+bool ControlList::grow(const char* name) {
+    if (count_ < capacity_) return true;
+    const uint8_t newCap = capacity_ == 0 ? 4 : capacity_ >= 128 ? 255 : static_cast<uint8_t>(capacity_ * 2);
+    auto* newArr = count_ < 255 ? new (std::nothrow) ControlDescriptor[newCap] : nullptr;
+    if (!newArr) {
+        std::printf("controls: no room for %s\n", name ? name : "");
+        return false;
+    }
+    for (uint8_t i = 0; i < count_; i++) newArr[i] = controls_[i];
+    delete[] controls_;
+    controls_ = newArr;
+    capacity_ = newCap;
+    return true;
+}
 
 /// The longest option or palette name a value is saved and matched by; a parsed value longer than this was truncated, so it names nothing.
 constexpr size_t kMaxLabel = 63;
