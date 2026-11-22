@@ -53,7 +53,8 @@ struct OddDiesMotion {
 struct Rig {
     std::unique_ptr<Owner> ownerHeld = std::make_unique<Owner>();   // a module is large, so the test's frame stays small
     Owner& owner = *ownerHeld;
-    mm::swirl::Engine engine{owner};
+    std::unique_ptr<mm::swirl::Engine> engineHeld = std::make_unique<mm::swirl::Engine>(owner);   // the engine too, under the 512-byte frame warning
+    mm::swirl::Engine& engine = *engineHeld;
     mm::lengthType w, h;
     explicit Rig(uint16_t n, mm::lengthType w_ = 32, mm::lengthType h_ = 32, bool trail = true, bool depth = false) : w(w_), h(h_) {
         REQUIRE(engine.prepare(owner, n, depth, trail ? static_cast<size_t>(w) * h * 3 : 0));
@@ -87,8 +88,10 @@ size_t lit(const uint8_t* data, size_t bytes) {
 
 // The pool, the depth and the trail are sized to exactly what the prepare asks.
 TEST_CASE("SwirlEngine holds exactly the pool, depth and trail asked for") {
-    Owner owner;
-    mm::swirl::Engine e{owner};
+    const auto ownerHeld = std::make_unique<Owner>();   // off the frame, as the rig holds them
+    Owner& owner = *ownerHeld;
+    const auto engineHeld = std::make_unique<mm::swirl::Engine>(owner);
+    mm::swirl::Engine& e = *engineHeld;
     REQUIRE(e.prepare(owner, 64, false, 16 * 16 * 3));
     CHECK(e.pool.count() == 64);
     CHECK_FALSE(e.depthHeld());
@@ -270,7 +273,9 @@ TEST_CASE("SwirlEngine edge free ends a particle one space beyond the border") {
 // Two engines from the same start, with the same motion and its random draws, step to the same place.
 TEST_CASE("SwirlEngine steps deterministically from the same start") {
     Rig a(64), b(64);
-    mm::swirl::Motion ma, mb;
+    const auto heldA = std::make_unique<mm::swirl::Motion>(), heldB = std::make_unique<mm::swirl::Motion>();   // 116 bytes each, off the frame
+    mm::swirl::Motion& ma = *heldA;
+    mm::swirl::Motion& mb = *heldB;
     ma.emitter = mb.emitter = mm::swirl::Emitter::kNozzle;
     ma.field = mb.field = mm::swirl::Field::kBallistic;
     ma.turbulence = mb.turbulence = mm::swirl::Motion::kTurbStrength;
@@ -425,7 +430,8 @@ TEST_CASE("SwirlEngine's last inside position is the float just below the size")
 // The edge emitter births every particle on one of the four sides, moving inward.
 TEST_CASE("SwirlEngine edge emitter births on a side moving inward") {
     Rig rig(64);
-    mm::swirl::Motion m;
+    const auto held = std::make_unique<mm::swirl::Motion>();   // 116 bytes, off the frame
+    mm::swirl::Motion& m = *held;
     m.emitter = mm::swirl::Emitter::kEdge;
     m.count = 64;
     m.emit(rig.engine);

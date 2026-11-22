@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,8 @@ namespace {
 
 using mm::SwirlEffect;
 using Src = mm::modmatrix::Source;
+
+// Each test holds its effect on the heap, through `fx.own` or `make_unique`: a SwirlEffect is 568 bytes, over the compiler's 512-byte stack-frame warning on its own.
 
 // Render `frames` ticks of `e` 20 ms apart on a `w` by `h` grid, and return the last frame's bytes.
 std::vector<uint8_t> render(SwirlEffect& e, uint16_t w = 32, uint16_t h = 32, uint16_t frames = 60) {
@@ -41,6 +44,14 @@ float fromCenter(const mm::swirl::Particle& p) {
 void load(SwirlEffect& e, uint8_t p) {
     e.preset = p;
     e.onControlChanged("preset");
+}
+
+// Preset `p` on an effect `fx` holds, put on its layer, which prepares it.
+SwirlEffect& loaded(mm::golden::LayerFixture& fx, uint8_t p) {
+    SwirlEffect& e = fx.own<SwirlEffect>();
+    load(e, p);
+    fx.add(e);
+    return e;
 }
 
 // The control named `name`, which every test here expects to exist.
@@ -84,7 +95,8 @@ void route(SwirlEffect& e, uint8_t s, Src src, SwirlEffect::Param p, uint8_t dep
 // ---- the presets -------------------------------------------------------------------------------
 
 TEST_CASE("SwirlEffect starts as the Halvorsen preset: a cloud on the attractor") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     CHECK(e.preset == SwirlEffect::kHalvorsen);
     CHECK(e.emitter == static_cast<uint8_t>(mm::swirl::Emitter::kCloud));
     CHECK(e.field == static_cast<uint8_t>(mm::swirl::Field::kAttractor));
@@ -94,10 +106,12 @@ TEST_CASE("SwirlEffect starts as the Halvorsen preset: a cloud on the attractor"
 TEST_CASE("SwirlEffect draws every preset") {
     for (uint8_t p = 0; p < SwirlEffect::kPresetCount; p++) {
         CAPTURE(p);
-        SwirlEffect e;
+        const auto owned = std::make_unique<SwirlEffect>();
+        SwirlEffect& e = *owned;
         load(e, p);
         CHECK(litLights(render(e)) > 0);
-        SwirlEffect wide;
+        const auto ownedWide = std::make_unique<SwirlEffect>();
+        SwirlEffect& wide = *ownedWide;
         load(wide, p);
         CHECK(litLights(render(wide, 64, 16)) > 0);
     }
@@ -107,7 +121,7 @@ TEST_CASE("SwirlEffect draws every preset") {
 TEST_CASE("SwirlEffect Halvorsen settles onto the attractor before the first frame") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     fx.add(e);
     CHECK(e.liveForTest() == 120);
     float spread = 0;
@@ -120,9 +134,7 @@ TEST_CASE("SwirlEffect Halvorsen settles onto the attractor before the first fra
 TEST_CASE("SwirlEffect NozzleJet sprays from the origin and turns") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
-    load(e, SwirlEffect::kNozzleJet);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kNozzleJet);
     REQUIRE(e.liveForTest() > 0);
     float farthest = 0;
     for (uint16_t i = 0; i < e.liveForTest(); i++) farthest = std::max(farthest, fromCenter(*e.particleForTest(i)));
@@ -135,7 +147,7 @@ TEST_CASE("SwirlEffect NozzleJet sprays from the origin and turns") {
 // Rings are blown whole, one every period: held still, five rings stand after the prepare's hundred and fifty steps.
 TEST_CASE("SwirlEffect VortexRings blows whole rings") {
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     load(e, SwirlEffect::kVortexRings);
     e.param[SwirlEffect::kExpand] = 128;   // no expansion, so no ring reaches the border
     fx.add(e);
@@ -145,9 +157,7 @@ TEST_CASE("SwirlEffect VortexRings blows whole rings") {
 // The rings grow out from the origin.
 TEST_CASE("SwirlEffect VortexRings grow out from the origin") {
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
-    load(e, SwirlEffect::kVortexRings);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kVortexRings);
     REQUIRE(e.liveForTest() > 0);
     CHECK(e.liveForTest() <= e.param[SwirlEffect::kCount]);
     float farthest = 0;
@@ -158,9 +168,7 @@ TEST_CASE("SwirlEffect VortexRings grow out from the origin") {
 // The scatter is born everywhere at once, so the flow is full on the first frame, less the few the step carried past the border.
 TEST_CASE("SwirlEffect Advection fills the flow at once") {
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
-    load(e, SwirlEffect::kAdvection);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kAdvection);
     CHECK(e.liveForTest() > 150);
     CHECK(e.liveForTest() <= 160);
 }
@@ -169,7 +177,7 @@ TEST_CASE("SwirlEffect Advection fills the flow at once") {
 TEST_CASE("SwirlEffect Whirlpool draws the border in around a dark eye") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     load(e, SwirlEffect::kWhirlpool);
     CHECK(e.emitter == static_cast<uint8_t>(mm::swirl::Emitter::kEdge));
     CHECK(e.field == static_cast<uint8_t>(mm::swirl::Field::kOrbit));
@@ -204,7 +212,8 @@ TEST_CASE("SwirlEffect Whirlpool draws the border in around a dark eye") {
 
 // A preset writes its knobs; a rebuild, which a restore runs, leaves the knobs as they were set.
 TEST_CASE("SwirlEffect loads a preset on its change, never on a rebuild") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     load(e, SwirlEffect::kNozzleJet);
     CHECK(e.emitter == static_cast<uint8_t>(mm::swirl::Emitter::kNozzle));
     CHECK(e.param[SwirlEffect::kTurbulence] == 64);
@@ -215,7 +224,8 @@ TEST_CASE("SwirlEffect loads a preset on its change, never on a rebuild") {
 
 // A stored preset outside the list loads the first.
 TEST_CASE("SwirlEffect loads Halvorsen for an unknown preset") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     load(e, SwirlEffect::kAdvection);
     load(e, 99);
     CHECK(e.preset == SwirlEffect::kHalvorsen);
@@ -226,7 +236,8 @@ TEST_CASE("SwirlEffect loads Halvorsen for an unknown preset") {
 
 // A part's knobs show only while it is chosen; the shared ones always.
 TEST_CASE("SwirlEffect shows each part's knobs only while it is chosen") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     CHECK(control(e, "spread").hidden);
     CHECK_FALSE(control(e, "shape").hidden);
     CHECK_FALSE(control(e, "scale").hidden);
@@ -243,7 +254,8 @@ TEST_CASE("SwirlEffect shows each part's knobs only while it is chosen") {
 
 // A slot's destination and depth show once it has a source, and an LFO's rate once a slot listens to it.
 TEST_CASE("SwirlEffect shows a slot's routing once it has a source") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     CHECK(control(e, "mod1Dest").hidden);
     CHECK(control(e, "mod1Depth").hidden);
     CHECK(control(e, "lfo1Rate").hidden);
@@ -256,7 +268,10 @@ TEST_CASE("SwirlEffect shows a slot's routing once it has a source") {
 
 // Every hidden control stays bound, so a restore finds its value: the count of controls is the same for every choice.
 TEST_CASE("SwirlEffect declares the same controls whatever is chosen") {
-    SwirlEffect a, b;
+    const auto ownedA = std::make_unique<SwirlEffect>();
+    const auto ownedB = std::make_unique<SwirlEffect>();
+    SwirlEffect& a = *ownedA;
+    SwirlEffect& b = *ownedB;
     load(b, SwirlEffect::kVortexRings);
     b.modSource[2] = static_cast<uint8_t>(Src::kBass);
     a.rebuildControls();
@@ -269,7 +284,7 @@ TEST_CASE("SwirlEffect declares the same controls whatever is chosen") {
 // The pool holds what count can reach, rounded up to 32; the depth is the attractor's alone; the trail is the grid's.
 TEST_CASE("SwirlEffect holds the pool, depth and trail the choice needs") {
     mm::golden::LayerFixture fx(16, 16);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     fx.add(e);
     CHECK(e.capacityForTest() == 128);
     CHECK(e.depthHeldForTest());
@@ -278,9 +293,7 @@ TEST_CASE("SwirlEffect holds the pool, depth and trail the choice needs") {
 
 TEST_CASE("SwirlEffect holds no depth for a 2D field") {
     mm::golden::LayerFixture fx(16, 16);
-    SwirlEffect e;
-    load(e, SwirlEffect::kAdvection);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kAdvection);
     CHECK_FALSE(e.depthHeldForTest());
     CHECK(e.capacityForTest() == 160);
     CHECK(e.dynamicBytes() == 160 * sizeof(mm::swirl::Particle) + 16 * 16 * 3);
@@ -288,7 +301,8 @@ TEST_CASE("SwirlEffect holds no depth for a 2D field") {
 
 // At trail 0 no plane is held, and the particles still draw.
 TEST_CASE("SwirlEffect at trail 0 holds no trail and still draws") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     load(e, SwirlEffect::kAdvection);
     e.param[SwirlEffect::kTrail] = 0;
     const std::vector<uint8_t> frame = render(e);
@@ -300,7 +314,7 @@ TEST_CASE("SwirlEffect at trail 0 holds no trail and still draws") {
 // A slot on the trail can lift it from 0, so its trail is held.
 TEST_CASE("SwirlEffect holds the trail a slot can lift from 0") {
     mm::golden::LayerFixture fx(16, 16);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     e.param[SwirlEffect::kTrail] = 0;
     route(e, 0, Src::kBass, SwirlEffect::kTrail, 200);
     fx.add(e);
@@ -309,7 +323,8 @@ TEST_CASE("SwirlEffect holds the trail a slot can lift from 0") {
 
 // The pool reaches the count plus the depth of a slot on it, so a modulated count allocates in the prepare alone.
 TEST_CASE("SwirlEffect sizes the pool for a modulated count and allocates nothing on the tick") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     load(e, SwirlEffect::kAdvection);
     e.param[SwirlEffect::kCount] = 40;
     route(e, 0, Src::kLevel, SwirlEffect::kCount, 100);
@@ -331,7 +346,7 @@ TEST_CASE("SwirlEffect sizes the pool for a modulated count and allocates nothin
 // A control prepares again exactly when the buffers it needs differ from those held, or when it loads a preset.
 TEST_CASE("SwirlEffect prepares again only when the buffers must change") {
     mm::golden::LayerFixture fx(16, 16);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     fx.add(e);   // Halvorsen: pool 128, depth, trail
     CHECK_FALSE(e.affectsPrepare("speed"));
     CHECK(e.affectsPrepare("preset"));
@@ -356,7 +371,7 @@ TEST_CASE("SwirlEffect prepares again only when the buffers must change") {
 // A slot on the bass needs the analysis and one on the chord the notes, while the level and the LFOs run regardless. The demand follows the slot's change with no prepare, so routing a sound keeps the picture running.
 TEST_CASE("SwirlEffect needs the audio analysis only while a slot reads it") {
     mm::golden::LayerFixture fx(16, 16);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     fx.add(e);
     const auto demands = [&e] {
         uint8_t bits = 0;
@@ -390,7 +405,8 @@ TEST_CASE("SwirlEffect needs the audio analysis only while a slot reads it") {
 }
 
 TEST_CASE("SwirlEffect slot lifts its destination by its depth at a full source") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     e.param[SwirlEffect::kSpeed] = 60;
     route(e, 0, Src::kLevel, SwirlEffect::kSpeed, 100);
     ModRig rig(e);
@@ -403,7 +419,8 @@ TEST_CASE("SwirlEffect slot lifts its destination by its depth at a full source"
 }
 
 TEST_CASE("SwirlEffect stacks two slots on one destination within its range") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     e.param[SwirlEffect::kShape] = 189;
     route(e, 0, Src::kBass, SwirlEffect::kShape, 40);
     route(e, 1, Src::kKick, SwirlEffect::kShape, 40);
@@ -417,7 +434,10 @@ TEST_CASE("SwirlEffect stacks two slots on one destination within its range") {
 
 // A destination the chosen parts hide is outside the motion, so routing to it leaves the panel as it was.
 TEST_CASE("SwirlEffect slot on a hidden knob changes nothing") {
-    SwirlEffect plain, routed;
+    const auto ownedPlain = std::make_unique<SwirlEffect>();
+    const auto ownedRouted = std::make_unique<SwirlEffect>();
+    SwirlEffect& plain = *ownedPlain;
+    SwirlEffect& routed = *ownedRouted;
     route(routed, 0, Src::kLevel, SwirlEffect::kSpread, 255);   // spread is the nozzle's; Halvorsen runs a cloud
     std::vector<uint8_t> a, b;
     {
@@ -442,7 +462,7 @@ TEST_CASE("SwirlEffect slot on a hidden knob changes nothing") {
 TEST_CASE("SwirlEffect LFO moves a knob with no audio") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     e.param[SwirlEffect::kWander] = 0;
     e.lfoRate[0] = 32;   // a cycle a second
     route(e, 0, Src::kLfo1, SwirlEffect::kWander, 255);
@@ -463,10 +483,11 @@ TEST_CASE("SwirlEffect LFO moves a knob with no audio") {
 TEST_CASE("SwirlEffect wander moves the origin over the space") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect still, roaming;
-    roaming.param[SwirlEffect::kWander] = 255;
+    SwirlEffect& still = fx.own<SwirlEffect>();
     fx.add(still);
     mm::golden::LayerFixture fx2(32, 32);
+    SwirlEffect& roaming = fx2.own<SwirlEffect>();
+    roaming.param[SwirlEffect::kWander] = 255;
     fx2.add(roaming);
     CHECK(still.motionForTest().originXForTest() == doctest::Approx(mm::swirl::kCenter));
     CHECK(std::fabs(roaming.motionForTest().originXForTest() - mm::swirl::kCenter) > 3.0f);   // six hundred settle steps along its path
@@ -476,7 +497,7 @@ TEST_CASE("SwirlEffect wander moves the origin over the space") {
 TEST_CASE("SwirlEffect spin turns the frame both ways") {
     for (uint8_t spin : {uint8_t{128}, uint8_t{200}, uint8_t{60}}) {
         mm::golden::LayerFixture fx(16, 16);
-        SwirlEffect e;
+        SwirlEffect& e = fx.own<SwirlEffect>();
         load(e, SwirlEffect::kAdvection);
         e.param[SwirlEffect::kSpin] = spin;
         fx.add(e);   // one settle step: the turn of one step
@@ -492,7 +513,7 @@ TEST_CASE("SwirlEffect draws the same trail at any frame rate") {
     const auto run = [](uint32_t every, uint32_t until) {
         mm::golden::ScopedTestClock clock(1000);
         mm::golden::LayerFixture fx(32, 32);
-        SwirlEffect e;   // Halvorsen, its trail held
+        SwirlEffect& e = fx.own<SwirlEffect>();   // Halvorsen, its trail held
         fx.add(e);
         for (uint32_t t = 1000; t <= until; t += every) fx.tickAt(t);   // the first tick owes one step, then 60 a second
         return fx.frame();
@@ -504,7 +525,7 @@ TEST_CASE("SwirlEffect draws the same trail at any frame rate") {
 TEST_CASE("SwirlEffect at speed 0 holds the picture") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     fx.add(e);
     for (uint32_t f = 0; f <= 60; f++) fx.tickAt(1000 + f * 20);
     const std::vector<uint8_t> first = fx.frame();
@@ -518,9 +539,7 @@ TEST_CASE("SwirlEffect at speed 0 holds the picture") {
 TEST_CASE("SwirlEffect follows its count both ways") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
-    load(e, SwirlEffect::kAdvection);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kAdvection);
     e.param[SwirlEffect::kCount] = 20;
     fx.tickAt(1020);
     CHECK(e.liveForTest() <= 20);
@@ -540,9 +559,7 @@ TEST_CASE("SwirlEffect survives tiny grids") {
         for (int side : {1, 0}) {
             mm::golden::ScopedTestClock clock(1000);
             mm::golden::LayerFixture fx(side, side);
-            SwirlEffect e;
-            load(e, p);
-            fx.add(e);
+            loaded(fx, p);
             fx.tickAt(1000);
             fx.tickAt(1020);
         }
@@ -580,7 +597,8 @@ TEST_CASE("SwirlEffect runs every pairing at both ends of every knob") {
                 CAPTURE(em);
                 CAPTURE(fi);
                 CAPTURE(top);
-                SwirlEffect e;
+                const auto owned = std::make_unique<SwirlEffect>();
+                SwirlEffect& e = *owned;
                 e.emitter = em;
                 e.field = fi;
                 e.edge = static_cast<uint8_t>((em + fi + top) % static_cast<uint8_t>(mm::swirl::Edge::kCount));   // every border, spread over the pairings
@@ -595,7 +613,8 @@ TEST_CASE("SwirlEffect runs every pairing at both ends of every knob") {
 TEST_CASE("SwirlEffect runs at both ends of its pace") {
     for (uint8_t speed : {uint8_t{0}, uint8_t{255}}) {
         CAPTURE(speed);
-        SwirlEffect e;
+        const auto owned = std::make_unique<SwirlEffect>();
+        SwirlEffect& e = *owned;
         load(e, SwirlEffect::kNozzleJet);
         e.param[SwirlEffect::kCount] = 255;
         e.param[SwirlEffect::kTurbulence] = 255;
@@ -611,7 +630,8 @@ TEST_CASE("SwirlEffect draws every pairing at its default knobs") {
             if (em == static_cast<uint8_t>(mm::swirl::Emitter::kEdge) && fi == static_cast<uint8_t>(mm::swirl::Field::kVortex)) continue;
             CAPTURE(em);
             CAPTURE(fi);
-            SwirlEffect e;
+            const auto owned = std::make_unique<SwirlEffect>();
+            SwirlEffect& e = *owned;
             e.emitter = em;
             e.field = fi;
             e.edge = static_cast<uint8_t>(mm::swirl::Edge::kDie);
@@ -621,7 +641,8 @@ TEST_CASE("SwirlEffect draws every pairing at its default knobs") {
 
 // Stored values past every list, from an older build or a hand-edited file, run as a valid motion.
 TEST_CASE("SwirlEffect runs with every select past its list") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     e.emitter = 99;
     e.field = 99;
     e.edge = 99;
@@ -637,7 +658,7 @@ TEST_CASE("SwirlEffect runs with every select past its list") {
 // A count below the ring's size blows a smaller ring rather than none.
 TEST_CASE("SwirlEffect blows a smaller ring when the count is below the ring's size") {
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     load(e, SwirlEffect::kVortexRings);
     e.param[SwirlEffect::kCount] = 20;
     e.param[SwirlEffect::kExpand] = 128;   // held still, so the rings stay to be counted
@@ -648,7 +669,7 @@ TEST_CASE("SwirlEffect blows a smaller ring when the count is below the ring's s
 // An inward vortex swallows its particles at the origin: with no life to end them, none piles up there.
 TEST_CASE("SwirlEffect inward vortex swallows its particles") {
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     load(e, SwirlEffect::kVortexRings);
     e.param[SwirlEffect::kExpand] = 0;
     e.param[SwirlEffect::kSwirl] = 128;
@@ -659,7 +680,8 @@ TEST_CASE("SwirlEffect inward vortex swallows its particles") {
 
 // Each knob's control carries the name a mod slot lists it by, so the two lists stay one.
 TEST_CASE("SwirlEffect names each knob as its mod slots list it") {
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     e.rebuildControls();
     const mm::ControlDescriptor& dest = control(e, "mod1Dest");
     const auto* options = reinterpret_cast<const char* const*>(dest.aux);
@@ -680,9 +702,7 @@ TEST_CASE("SwirlEffect names each knob as its mod slots list it") {
 TEST_CASE("SwirlEffect settles without turbulence and churns from the first tick") {
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(32, 32);
-    SwirlEffect e;
-    load(e, SwirlEffect::kNozzleJet);
-    fx.add(e);
+    SwirlEffect& e = loaded(fx, SwirlEffect::kNozzleJet);
     CHECK(e.motionForTest().turbulence == 0);
     fx.tickAt(1020);
     CHECK(e.motionForTest().turbulence == 64 * mm::swirl::Motion::kTurbStrength / 255);
@@ -693,7 +713,7 @@ TEST_CASE("SwirlEffect frees every buffer and draws black when the trail is refu
     struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } alloc;
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(64, 64);   // a 12,288-byte trail beside a 3,072-byte pool
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     e.param[SwirlEffect::kTrail] = 0;
     fx.add(e);   // the layer holds its own buffer first, and the effect no trail, so the refusal below meets the trail alone
     for (uint32_t t = 1000; t <= 1100; t += 20) fx.tickAt(t);
@@ -718,7 +738,7 @@ TEST_CASE("SwirlEffect frees every buffer and draws black when the trail is refu
 TEST_CASE("SwirlEffect frees every buffer when the pool is refused") {
     struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } alloc;
     mm::golden::LayerFixture fx(16, 16);   // a 768-byte trail beside a 6,120-byte pool
-    SwirlEffect e;
+    SwirlEffect& e = fx.own<SwirlEffect>();
     e.param[SwirlEffect::kCount] = 255;
     mm::platform::setTestAllocRefusedFrom(4096);
     fx.add(e);
@@ -729,7 +749,8 @@ TEST_CASE("SwirlEffect frees every buffer when the pool is refused") {
 // The review's sequence: a slot moved to the trail while memory refuses it, then moved back, leaves every buffer sized for one pool, so the count lifted to the pool's top writes inside it.
 TEST_CASE("SwirlEffect keeps the depth the pool's size after a refused prepare") {
     struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } alloc;
-    SwirlEffect e;
+    const auto owned = std::make_unique<SwirlEffect>();
+    SwirlEffect& e = *owned;
     e.param[SwirlEffect::kTrail] = 0;
     e.param[SwirlEffect::kCount] = 55;
     route(e, 0, Src::kLevel, SwirlEffect::kCount, 200);
@@ -753,7 +774,8 @@ TEST_CASE("SwirlEffect keeps the depth the pool's size after a refused prepare")
 
 // A state document that names a preset and tuned knobs, applied to a running effect, ends at the knobs it names: the preset leads, the knobs apply after it.
 TEST_CASE("SwirlEffect keeps a document's tuned knobs over the preset it names") {
-    mm::Scheduler s;
+    const auto owned = std::make_unique<mm::Scheduler>();   // a Scheduler is 512 bytes, the frame warning's whole budget
+    mm::Scheduler& s = *owned;
     auto* e = new SwirlEffect();
     e->setName("Swirl");
     s.addModule(e);
@@ -773,7 +795,7 @@ TEST_CASE("SwirlEffect caps the settle's work by the count") {
     for (uint8_t count : {uint8_t{120}, uint8_t{255}}) {
         CAPTURE(count);
         mm::golden::LayerFixture fx(16, 16);
-        SwirlEffect e;
+        SwirlEffect& e = fx.own<SwirlEffect>();
         e.param[SwirlEffect::kCount] = count;
         e.param[SwirlEffect::kSpin] = 129;   // one notch: 0.0005 a step, small enough to stay inside one turn
         fx.add(e);
