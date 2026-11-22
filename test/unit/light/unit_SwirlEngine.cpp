@@ -406,6 +406,17 @@ TEST_CASE("SwirlEngine edge bounce reflects twice from a whole space out") {
     CHECK(p.vx == doctest::Approx(0.3f));
 }
 
+// The same from a whole space past the far border.
+TEST_CASE("SwirlEngine edge bounce reflects twice from a whole space past the far border") {
+    mm::swirl::Particle p;
+    p.x = 65.5f;
+    p.y = 16;
+    p.vx = 0.3f;
+    CHECK(mm::swirl::Engine::border(p, mm::swirl::Edge::kBounce));
+    CHECK(p.x == doctest::Approx(1.5f));
+    CHECK(p.vx == doctest::Approx(0.3f));
+}
+
 // The last position inside is the largest float below the space's size.
 TEST_CASE("SwirlEngine's last inside position is the float just below the size") {
     CHECK(mm::swirl::kLast == std::nextafter(mm::swirl::kSize, 0.0f));

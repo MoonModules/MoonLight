@@ -286,7 +286,7 @@ Craig Reynolds' [boids](../../reference/attributions.md) in [boids.h](../../../s
 
 Where [particles.h](#particles) is a fixed-point pool under forces and collisions, [swirl.h](../../../src/light/powerfunctions/swirl.h) is a float pool whose whole life is two choices: an emitter (scatter, cloud, nozzle, ring or edge) and a field (Halvorsen's attractor, Bridson's curl-noise flow, a vortex, ballistic drag and gravity, or an orbit). Any emitter pairs with any field from one step loop. A frame they share, its origin wandering a Lissajous figure and its angle spinning, moves any pairing around the space. The particles live in the flock's 32 by 32 space, the attractor's third axis in a side buffer held only while the attractor runs.
 
-The live particles sit packed at the front of the pool, a death moving the last one into its slot, so a birth, a death and a lower count each cost one move. A step is: the motion emits, the motion drives each live particle, the engine integrates (semi-implicit Euler) under the border's rule and the rescue rule, ages it, and draws the move as a streak into the trail. The trail is a `boids::Plane` held only while the effect's trail can be above 0, faded once a tick by the keep raised to the steps it runs. With no trail, each particle's last step draws straight into the layer.
+The live particles sit packed at the front of the pool, a death moving the last one into its slot, so a birth, a death and a lower count each cost one move. A step is: the motion emits, the motion drives each live particle, the engine integrates (semi-implicit Euler) under the border's rule and the rescue rule, ages it, and draws the move as a streak into the trail. The trail is a `boids::Plane` held only while the effect's trail can be above 0, faded by the keep each step. With no trail, each particle's last step draws straight into the layer.
 
 <div class="mm-pf" markdown="1">
 
@@ -339,6 +339,7 @@ The parts and their knobs, as the Swirl effect offers them:
 | `Source`, `kSourceOptions` | None and the 30 sources a slot can listen to, and the select list naming them | Swirl | — |
 | `Lfo`, `Inputs` | A sine LFO run by elapsed time at r/32 cycles a second; one tick's frame and LFO values | Swirl | — |
 | `read`, `apply` | A source's reading, 0 to 255, or 0 outside the list; the one routing rule, base plus source times depth, within the range | Swirl | — |
+| `readsAnalysis`, `readsNotes` | Whether a source reads the audio analysis, every frame signal from the bass on, or the notes, the chord: the demands an effect raises while a slot routes it | Swirl | — |
 
 </div>
 

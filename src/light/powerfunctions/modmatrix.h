@@ -78,6 +78,16 @@ inline constexpr uint8_t kLfoCount = 2;
 /// The source a stored control value names; `read` answers 0 for one outside the list.
 inline Source source(uint8_t v) { return static_cast<Source>(v); }
 
+static_assert(static_cast<uint8_t>(Source::kBass) == 3 && static_cast<uint8_t>(Source::kSmooth) + 1 == static_cast<uint8_t>(Source::kBass), "none, the level and the smooth level, and only they, sit before the analysis's sources");
+static_assert(static_cast<uint8_t>(Source::kBand15) + 1 == static_cast<uint8_t>(Source::kLfo1), "the LFOs follow the analysis's last source");
+/// Whether source `s` reads the audio analysis, which runs only while a reader needs it: every frame signal from the bass on, the level and its smoothing running regardless.
+inline bool readsAnalysis(Source s) {
+    const uint8_t v = static_cast<uint8_t>(s);
+    return v >= static_cast<uint8_t>(Source::kBass) && v <= static_cast<uint8_t>(Source::kBand15);
+}
+/// Whether source `s` reads the notes, which run on top of the analysis only while a reader needs them: the chord.
+inline bool readsNotes(Source s) { return s == Source::kChord; }
+
 /// One low-frequency oscillator: @xref{the-lfos}.
 struct Lfo {
     uint16_t phase = 0;   ///< where in its cycle it is, a full cycle being 65536

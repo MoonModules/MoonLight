@@ -1,6 +1,7 @@
 #pragma once
 
-#include "light/effects/EffectBase.h"
+#include "light/effects/AudioEffectBase.h"   // the analysis, while a mod slot reads it
+#include "core/services/AudioDemand.h"       // the notes, while a mod slot reads the chord
 #include "light/powerfunctions/modmatrix.h"   // the sources a mod slot listens to, the LFOs, and the one routing rule
 #include "light/powerfunctions/swirl.h"       // the particle engine and its emitters and fields
 
@@ -35,12 +36,12 @@ namespace mm {
 ///
 /// The attractor's depth, 4 bytes a particle, is held only while the attractor is the field, and the trail only while `trail` or a slot on it can be above 0.
 ///
-/// A control change prepares again exactly when the buffers it needs differ from those held, the depth by its count, or when it loads a preset; every other knob applies on the next tick, the pattern running on. A refused allocation frees all three buffers, and the tick skips until a prepare fits.
+/// A control change prepares again exactly when the buffers it needs differ from those held, the depth by its count, or when it loads a preset; every other knob applies on the next tick, the pattern running on, and a slot change that moves the audio it reads turns its demand on or off with no prepare. A refused allocation frees all three buffers, and the tick draws black until a prepare fits.
 ///
 /// ## The tick
 ///
-/// The tick resolves every knob through the mod slots once, fades the trail once by the combined keep of the steps it owes, runs them within its time, and draws. A prepare settles the pattern, @xref{memory-by-the-choice|in the buffers it sized}, turbulence at 0: six hundred steps for the attractor, one for the scatter, a hundred and fifty for the rest, at most 72,000 particle-steps in all.
-class SwirlEffect : public EffectBase {
+/// The tick resolves every knob through the mod slots once, runs the steps it owes within its time, each fading the trail first, and draws. A prepare settles the pattern, @xref{memory-by-the-choice|in the buffers it sized}, turbulence at 0: six hundred steps for the attractor, one for the scatter, a hundred and fifty for the rest, at most 72,000 particle-steps in all.
+class SwirlEffect : public AudioEffectBase {
 public:
     /// Catalog tags: MoonLight origin, and reacting to the audio frame.
     const char* tags() const override { return "💫🎵"; }
@@ -152,8 +153,10 @@ public:
         addLfoRate("lfo2Rate", 1);
     }
 
-    /// A preset loads its knobs and shows its part's controls; every other control is read on the next tick.
+    /// The audio demands follow the slots, and a preset loads its knobs and shows its part's controls; every other control is read on the next tick.
     void onControlChanged(const char* name) override {
+        followAnalysis();   // a slot's source or knob can move the audio it reads, which needs no buffer, so no prepare
+        notes_.set(readsNotes());
         if (std::strcmp(name, "preset") != 0) return;
         loadPreset(preset);
         rebuildControls();   // the preset moved the emitter and the field, so the hidden flags follow them
@@ -164,11 +167,11 @@ public:
         if (std::strcmp(name, "preset") == 0) return true;
         return poolWanted() != engine_.pool.count() || (depthWanted() ? poolWanted() : 0u) != engine_.depth.count() || trailBytesWanted() != engine_.trail.bytes();
     }
-    /// A swirl's buffers are its own, so its prepare touches no other module.
-    PrepareScope prepareScope() const override { return PrepareScope::Self; }
 
-    /// Hold the buffers the choice needs, settle the pattern, and start the step clock.
+    /// Need the audio the slots read, hold the buffers the choice needs, settle the pattern, and start the step clock.
     void prepare() override {
+        AudioEffectBase::prepare();   // the analysis while a slot reads it
+        notes_.set(readsNotes());
         if (!engine_.prepare(*this, poolWanted(), depthWanted(), trailBytesWanted())) return;
         motion_ = swirl::Motion{};
         lastMs_ = elapsed();
@@ -178,9 +181,12 @@ public:
         clock_.reset();
     }
 
-    /// Resolve the knobs, let particles past the count go, fade the trail once, run the steps this tick owes within its time, and draw.
+    /// Resolve the knobs, let particles past the count go, run the steps this tick owes within its time, each fading the trail, and draw.
     void tick() MM_NONBLOCKING override {
-        if (engine_.pool.count() == 0) return;   // the prepare ran out of memory: every buffer is free
+        if (engine_.pool.count() == 0) {   // the prepare ran out of memory: every buffer is free, and the layer shows black under the warning
+            draw::fill(canvas(), RGB{0, 0, 0});
+            return;
+        }
         std::optional<boids::Plane> trailPlane;
         if (engine_.trailHeld()) {
             trailPlane = engine_.plane(width(), height(), channelsPerLight());
@@ -191,8 +197,10 @@ public:
         const boids::Plane* plane = trailPlane ? &*trailPlane : nullptr;
         look_.radius = boids::radius(now_[kSize], width(), height());
         const uint32_t owed = clock_.steps(elapsed(), now_[kSpeed]);
-        if (plane && owed) plane->fade(keepOver(now_[kTrail], owed));
-        boids::runSteps(owed, [&] { engine_.step(motion_, plane, look_); });
+        boids::runSteps(owed, [&] {
+            if (plane) plane->fade(now_[kTrail]);   // a fade a step, so the trail is as long at any frame rate
+            engine_.step(motion_, plane, look_);
+        });
         engine_.present(plane, canvas(), look_);
     }
 
@@ -256,6 +264,7 @@ private:
     modmatrix::Lfo lfo_[modmatrix::kLfoCount];
     uint32_t lastMs_ = 0;           ///< the last tick's time, which runs the LFOs
     uint8_t now_[kParamCount] = {}; ///< every knob after the mod slots, this tick
+    AudioDemand notes_{*this, AudioFeature::Notes};   ///< the notes, while a slot reads the chord
 
     /// Publish knob `p` as `name`, within its bounds, hidden while its part is not chosen; a test holds `name` to the knob's destination name.
     void addKnob(const char* name, Param p) {
@@ -286,6 +295,19 @@ private:
     bool shown(Param p) const { return has(kParams[p].emitters, emitter) && has(kParams[p].fields, field); }
     /// Whether part `v` is in `mask`: every part for kAll, else its bit, none for a value past the list.
     static bool has(uint8_t mask, uint8_t v) { return mask == kAll || (v < 8 && ((mask >> v) & 1u)); }
+
+    /// Whether slot `i` moves a knob: a source and a destination in the list.
+    bool routed(uint8_t i) const { return modSource[i] && modDest[i] != 0 && modDest[i] <= kParamCount; }
+    /// Whether a routed slot's source answers `reads`, a modmatrix test such as `readsNotes`.
+    bool routesRead(bool (*reads)(modmatrix::Source)) const {
+        for (uint8_t i = 0; i < kSlotCount; i++)
+            if (routed(i) && reads(modmatrix::source(modSource[i]))) return true;
+        return false;
+    }
+    /// The analysis while a routed slot reads it: the base's demand follows this.
+    bool readsAnalysis() const override { return routesRead(modmatrix::readsAnalysis); }
+    /// Whether a routed slot reads the notes.
+    bool readsNotes() const { return routesRead(modmatrix::readsNotes); }
 
     /// Whether an armed slot listens to source `s`.
     bool listens(uint8_t s) const {
@@ -319,13 +341,6 @@ private:
     uint16_t settleSteps(uint8_t count) const {
         const uint16_t steps = depthWanted() ? 600 : emitter == static_cast<uint8_t>(swirl::Emitter::kScatter) ? 1 : 150;
         return static_cast<uint16_t>(std::min<uint32_t>(steps, kSettleWork / std::max<uint8_t>(count, 1)));
-    }
-
-    /// What `keep` a step keeps after `steps` steps: one fade standing in for one a step.
-    static uint8_t keepOver(uint8_t keep, uint32_t steps) {
-        uint32_t k = keep;
-        for (uint32_t s = 1; s < steps && k; s++) k = k * keep / 255;
-        return static_cast<uint8_t>(k);
     }
 
     /// A preset's emitter, field and border.
@@ -411,7 +426,7 @@ private:
     /// Lift each armed slot's knob by its source's share of its depth, within the knob's range.
     void applySlots(const modmatrix::Inputs& in) MM_NONBLOCKING {
         for (uint8_t i = 0; i < kSlotCount; i++) {
-            if (!modSource[i] || modDest[i] == 0 || modDest[i] > kParamCount) continue;
+            if (!routed(i)) continue;
             const uint8_t d = modDest[i] - 1;
             now_[d] = modmatrix::apply(now_[d], modmatrix::source(modSource[i]), modDepth[i], in, kParams[d].lo, kParams[d].hi);
         }

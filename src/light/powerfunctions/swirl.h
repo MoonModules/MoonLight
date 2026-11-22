@@ -50,9 +50,9 @@
 ///
 /// ## The trail
 ///
-/// The streaks live in a plane of their own, faded once a tick and copied to the layer each frame, and the particles are drawn over them fresh: the reason boids.h gives for keeping a trail apart from the layer.
+/// The streaks live in a plane of their own, faded each step and copied to the layer each frame, and the particles are drawn over them fresh: the reason boids.h gives for keeping a trail apart from the layer.
 ///
-/// The fade keeps `trail`'s share raised to the steps the tick runs, so one pass does the work of one a step, exponential decay composing. At `trail` 0 no plane is held, and each particle draws its last step's streak straight into the layer.
+/// Each step fades the plane by `trail` before it moves the particles, so a trail is as long at any frame rate. At `trail` 0 no plane is held, and each particle draws its last step's streak straight into the layer.
 ///
 /// ## Float, deliberately and locally
 ///
@@ -245,10 +245,11 @@ struct Engine {
         reflect(p.y, p.vy);
     }
 
-    /// One axis reflected off each border it crossed, its velocity turned back at each, then held inside [0, kSize).
+    /// One axis reflected off each border it crossed, from either side, its velocity turned back at each, then held inside [0, kSize).
     static void reflect(float& x, float& v) MM_NONBLOCKING {
         if (x < 0) { x = -x; v = -v; }
         if (x >= kSize) { x = 2 * kSize - x; v = -v; }
+        if (x < 0) { x = -x; v = -v; }   // from a whole space past the far border, off the near one too
         x = std::clamp(x, 0.0f, kLast);
     }
 

@@ -1,11 +1,11 @@
 {
- "(total)": 6497,
+ "(total)": 6485,
  "MoonLight.EmDash": 838,
- "MoonLight.Negation": 4878,
+ "MoonLight.Negation": 4867,
  "MoonLight.SectionLength": 31,
  "MoonLight.SelfReference": 14,
  "MoonLight.Spelling": 36,
  "MoonLight.Temporal": 154,
  "MoonLight.VagueClose": 23,
- "MoonLight.Weasel": 523
+ "MoonLight.Weasel": 522
 }

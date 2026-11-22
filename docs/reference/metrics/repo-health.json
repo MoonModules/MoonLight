@@ -1,8 +1,8 @@
 {
-  "commit": "f0005e1f",
+  "commit": "36435514",
   "flash": {
-    "esp32s3-n16r8": 2603040,
-    "esp32": 2383664,
+    "esp32s3-n16r8": 2606032,
+    "esp32": 2387136,
     "esp32p4rev1-eth": 2715120,
     "esp32p4rev1-eth-wifi": 2952240,
     "esp32s3-n8r8": 2355984,
@@ -14,36 +14,36 @@
     "esp32p4rev3-eth": 2615456,
     "esp32s3-zero": 2125456,
     "esp32-pico": 2542880,
-    "host-macos": 2788272,
+    "host-macos": 2932192,
     "host-windows": 1925120,
     "esp32c3": 2486480,
     "host-linux": 2548000,
     "esp32s3-n32r16": 2625760,
     "teensy41": 1365960,
-    "esp32p4rev3-eth-wifi": 2887488,
-    "esp32s3-n8r2": 2247072
+    "esp32p4rev3-eth-wifi": 2985872,
+    "esp32s3-n8r2": 2494640
   },
   "measured": {
     "esp32p4rev1-eth": "2026-11-18",
     "esp32s31": "2026-11-18",
-    "esp32": "2026-11-20",
+    "esp32": "2026-11-22",
     "esp32-pico": "2026-11-18",
-    "esp32s3-n16r8": "2026-11-20",
+    "esp32s3-n16r8": "2026-11-22",
     "esp32s3-n8r8": "2026-10-30",
     "esp32s3-zero": "2026-10-30",
     "esp32-16mb": "2026-10-30",
     "esp32p4rev1-eth-wifi": "2026-11-18",
     "esp32-eth": "2026-11-18",
     "esp32p4rev3-eth": "2026-11-11",
-    "host-macos": "2026-11-20",
+    "host-macos": "2026-11-22",
     "host-windows": "2026-09-30",
     "esp32c3": "2026-11-18",
     "host-linux": "2026-10-12",
     "esp32s3-n32r16": "2026-11-20",
     "teensy41": "2026-11-18",
     "esp32-wrover": "2026-10-30",
-    "esp32p4rev3-eth-wifi": "2026-11-16",
-    "esp32s3-n8r2": "2026-10-30"
+    "esp32p4rev3-eth-wifi": "2026-11-22",
+    "esp32s3-n8r2": "2026-11-22"
   },
   "perf": {
     "esp32": {
@@ -800,8 +800,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 37,
-      "fps": 27027,
+      "tick_us": 9,
+      "fps": 111111,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -841,24 +841,24 @@
     }
   },
   "loc": {
-    "core": 41556,
-    "light": 36601,
-    "platform": 30655,
+    "core": 41528,
+    "light": 38700,
+    "platform": 30674,
     "ui": 15305,
-    "test": 97894,
+    "test": 101259,
     "moondeck": 36642
   },
   "comments": {
     "core": {
-      "lines": 7931,
-      "ratio": 0.212
+      "lines": 7901,
+      "ratio": 0.211
     },
     "light": {
-      "lines": 7603,
-      "ratio": 0.233
+      "lines": 8110,
+      "ratio": 0.235
     },
     "platform": {
-      "lines": 5537,
+      "lines": 5542,
       "ratio": 0.203
     },
     "ui": {
@@ -866,8 +866,8 @@
       "ratio": 0.259
     },
     "test": {
-      "lines": 8421,
-      "ratio": 0.099
+      "lines": 8617,
+      "ratio": 0.098
     },
     "moondeck": {
       "lines": 4238,
@@ -875,19 +875,19 @@
     }
   },
   "tests": {
-    "cases": 3718,
+    "cases": 3881,
     "scenarios": 37
   },
   "docs": {
-    "md_files": 126,
-    "md_lines": 20500,
+    "md_files": 127,
+    "md_lines": 20697,
     "plans_files": 17,
     "backlog_lines": 2910,
     "lessons_lines": 458,
     "claude_md_lines": 139
   },
   "complexity": {
-    "functions": 7098,
+    "functions": 7251,
     "over_threshold": 330,
     "worst_ccn": 128
   }

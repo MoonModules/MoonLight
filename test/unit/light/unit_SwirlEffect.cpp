@@ -353,6 +353,42 @@ TEST_CASE("SwirlEffect prepares again only when the buffers must change") {
 
 // ---- modulation --------------------------------------------------------------------------------
 
+// A slot on the bass needs the analysis and one on the chord the notes, while the level and the LFOs run regardless. The demand follows the slot's change with no prepare, so routing a sound keeps the picture running.
+TEST_CASE("SwirlEffect needs the audio analysis only while a slot reads it") {
+    mm::golden::LayerFixture fx(16, 16);
+    SwirlEffect e;
+    fx.add(e);
+    const auto demands = [&e] {
+        uint8_t bits = 0;
+        for (const mm::ModuleResource* r = e.resources(); r; r = r->nextResource()) bits |= r->demandsOf(mm::AudioDemand::kProvider);
+        return bits;
+    };
+    const auto change = [&e](const char* name) {   // as the scheduler reacts: the change runs, then the prepare question
+        e.onControlChanged(name);
+        return e.affectsPrepare(name);
+    };
+    const uint8_t bands = mm::AudioDemand::bitOf(mm::AudioFeature::Bands), notes = mm::AudioDemand::bitOf(mm::AudioFeature::Notes);
+    CHECK(demands() == 0);
+    route(e, 0, Src::kLevel, SwirlEffect::kSpeed, 64);
+    CHECK_FALSE(change("mod1Source"));
+    CHECK(demands() == 0);
+    route(e, 0, Src::kBass, SwirlEffect::kSpeed, 64);
+    CHECK_FALSE(change("mod1Source"));
+    CHECK(demands() == bands);
+    e.modDest[0] = 0;   // a source with no knob left to move
+    CHECK_FALSE(change("mod1Dest"));
+    CHECK(demands() == 0);
+    route(e, 1, Src::kChord, SwirlEffect::kSpin, 64);
+    CHECK_FALSE(change("mod2Source"));
+    CHECK(demands() == (bands | notes));
+    route(e, 1, Src::kLfo1, SwirlEffect::kSpin, 64);
+    CHECK_FALSE(change("mod2Source"));
+    CHECK(demands() == 0);
+    route(e, 2, Src::kChord, SwirlEffect::kSize, 1);   // a document's slot, stored at boot with no change run, read at the prepare that follows the load
+    e.prepare();
+    CHECK(demands() == (bands | notes));
+}
+
 TEST_CASE("SwirlEffect slot lifts its destination by its depth at a full source") {
     SwirlEffect e;
     e.param[SwirlEffect::kSpeed] = 60;
@@ -449,6 +485,19 @@ TEST_CASE("SwirlEffect spin turns the frame both ways") {
         if (spin == 200) CHECK(theta == doctest::Approx(72 * 0.0005f));
         if (spin == 60) CHECK(theta == doctest::Approx(4 * mm::boids::kQuarterTurn - 68 * 0.0005f));
     }
+}
+
+// The trail fades once a step however the steps fall into ticks: thirteen steps in five ticks leave the frame thirteen in three leave.
+TEST_CASE("SwirlEffect draws the same trail at any frame rate") {
+    const auto run = [](uint32_t every, uint32_t until) {
+        mm::golden::ScopedTestClock clock(1000);
+        mm::golden::LayerFixture fx(32, 32);
+        SwirlEffect e;   // Halvorsen, its trail held
+        fx.add(e);
+        for (uint32_t t = 1000; t <= until; t += every) fx.tickAt(t);   // the first tick owes one step, then 60 a second
+        return fx.frame();
+    };
+    CHECK(run(50, 1200) == run(100, 1200));
 }
 
 // At speed 0 the picture holds exactly: no steps, no fade, the heads frozen.
@@ -639,14 +688,16 @@ TEST_CASE("SwirlEffect settles without turbulence and churns from the first tick
     CHECK(e.motionForTest().turbulence == 64 * mm::swirl::Motion::kTurbStrength / 255);
 }
 
-// A memory refusal frees every buffer and warns; the tick then leaves the layer black, and the next prepare that fits clears the warning.
-TEST_CASE("SwirlEffect frees every buffer when the trail is refused") {
+// A memory refusal frees every buffer and warns; the tick then draws the layer black over the last frame, and the next prepare that fits clears the warning.
+TEST_CASE("SwirlEffect frees every buffer and draws black when the trail is refused") {
     struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } alloc;
     mm::golden::ScopedTestClock clock(1000);
     mm::golden::LayerFixture fx(64, 64);   // a 12,288-byte trail beside a 3,072-byte pool
     SwirlEffect e;
     e.param[SwirlEffect::kTrail] = 0;
     fx.add(e);   // the layer holds its own buffer first, and the effect no trail, so the refusal below meets the trail alone
+    for (uint32_t t = 1000; t <= 1100; t += 20) fx.tickAt(t);
+    REQUIRE(litLights(fx.frame()) > 0);
     e.param[SwirlEffect::kTrail] = 230;
     mm::platform::setTestAllocRefusedFrom(8192);
     e.prepare();
@@ -656,7 +707,7 @@ TEST_CASE("SwirlEffect frees every buffer when the trail is refused") {
     CHECK(e.dynamicBytes() == 0);
     REQUIRE(e.status() != nullptr);
     CHECK(std::strcmp(e.status(), mm::swirl::kNoMemory) == 0);
-    fx.tickAt(1020);
+    fx.tickAt(1120);
     CHECK(litLights(fx.frame()) == 0);
     mm::platform::setTestAllocRefusedFrom(0);
     e.prepare();
