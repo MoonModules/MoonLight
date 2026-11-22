@@ -16,5 +16,5 @@ test("the device name is read once it is complete", () => {
 });
 
 test("firmware from before MM_IP is read from its status line", () => {
-    assert.equal(bootLogIp("Network — WiFi: 192.168.1.30\n"), "192.168.1.30");
+    assert.equal(bootLogIp("Network \u2014 WiFi: 192.168.1.30\n"), "192.168.1.30");
 });

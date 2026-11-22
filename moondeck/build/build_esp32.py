@@ -65,7 +65,7 @@ FIRMWARES: dict[str, dict] = {
     # The classic ESP32 (docs/work/Plan-20261121): one image per tier for every revision and module. PSRAM is found at boot on
     # every board and joins the heap where psramHeapSafe allows (revision 3 and up, or a build with the cache workaround).
     # WiFi and Ethernet in one binary: the RMII driver compiles in (the .eth fragment), and whether Ethernet comes up, on which
-    # pins and PHY, is runtime config (deviceModels.json -> NetworkModule -> ethInit); without a PHY the WiFi cascade takes over.
+    # pins and PHY, is runtime config (deviceModels.json -> NetworkModule -> ethInit); a board with no PHY falls to the WiFi cascade.
     "esp32": {
         "chip": "esp32",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
@@ -197,8 +197,8 @@ FIRMWARES: dict[str, dict] = {
         "ships": True,
         "panel_cards": False,
     },
-    # The P4 by revision line, since a revision 1 image does not boot on revision 3 nor the reverse: Ethernet (IP101/RMII, per-board pins
-    # from deviceModels.json) and WiFi over the on-board ESP32-C6 when it answers. A board without a C6 switches the radio off on its
+    # The P4 by revision line, since each revision line's image boots on its own line alone: Ethernet (IP101/RMII, per-board pins
+    # from deviceModels.json) and WiFi over the on-board ESP32-C6 when it answers. A board with no C6 switches the radio off on its
     # WiFi card, which keeps the network cascade off WiFi (docs/work/Plan-20261121, step 2).
     "esp32p4rev1": {
         "chip": "esp32p4",
@@ -770,7 +770,7 @@ def moonbase_flash_files(firmware: str, build_dir: Path, layout: tuple[int, Path
     """The corrected (offset, file) write list for a MoonBase-table flash: IDF's flash_files with
     the app remapped to ota_0, the blank otadata replaced by the slot-0 image (written into the
     build dir), and MoonBase added at the factory slot. `layout` (size, bootloader, table), from
-    layout_images, swaps in another flash size's layout; without it, the one the build carries."""
+    layout_images, swaps in another flash size's layout; with none given, the one the build carries."""
     import json as _json
     offs = partition_offsets(layout_table(firmware, layout[0]) if layout else moonbase_table_csv(firmware))
     moonbase_bin = build_dir.parent / f"moonbase-{migration_family(firmware)}" / MOONBASE_BIN

@@ -405,6 +405,16 @@ TEST_CASE("a re-type to a left-out type keeps the module, its children and its n
     CHECK(valueOf(t.find("K")) == 3);
 }
 
+// The names a left-out re-type keeps are still taken, so a document creating one of them elsewhere is refused before anything changes.
+TEST_CASE("a left-out re-type keeps its children's names taken") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"Box": {"type": "SdBox", "K": {"type": "SdKnob", "value": 3}}}})").ok);
+    auto r = t.apply(R"({"Effects": {"Box": {"type": "SdLeftOut"}, "New": {"type": "SdBox", "K": {"type": "SdKnob"}}}})");
+    CHECK_FALSE(r.ok);
+    CHECK(t.children(t.effects) == "Box");
+    CHECK(t.children(t.find("Box")) == "K");
+}
+
 TEST_CASE("a type no build knows still refuses the whole document beside a left-out one") {
     Tree t;
     REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}}})").ok);

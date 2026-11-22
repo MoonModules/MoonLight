@@ -308,7 +308,8 @@ struct Applier {
         if (!listed) return !top && replacesChildren(obj) && c->userEditable() && !c->isWiredByCode();
         if (listed->type != JsonType::Object) return listed->type == JsonType::Null;
         const char* type = typeOf(doc, listed);
-        if (!target && type && std::strcmp(type, c->typeName()) != 0) return true;   // re-typed, so everything under it goes
+        // Re-typed, so everything under it goes, unless the new type is one this firmware leaves out: that member is skipped whole and keeps its subtree.
+        if (!target && type && std::strcmp(type, c->typeName()) != 0) return !leftOut(c, type);
         into = listed;
         return false;
     }

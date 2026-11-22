@@ -682,7 +682,7 @@
       "esp32"
     ],
     "image": "assets/deviceModels/esp32-quinled-dig-octa-32-8l-v4.png",
-    "description": "Relay on 33 triggers an optional external relay board through a load switch. The SD card (SPI: clock 15, MOSI 16, MISO 36, CS 17) shares 17 with the microphone's WS: open the microphone's jumper and add the SD card service to use it.",
+    "description": "Relay on 33 triggers an optional external relay board through a load switch. The SD card (SPI: clock 15, MOSI 16, MISO 36, CS 17) shares 17 with the microphone's WS by design, so it is one or the other: set Audio to a mode other than the local microphone, which frees 17, then add the SD card service.",
     "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
     "supported": [
       "LEDs",

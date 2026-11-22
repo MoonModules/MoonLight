@@ -64,8 +64,8 @@ def test_carry_forward_keeps_previous_values_for_unmeasured_sections():
 
 
 def test_carry_forward_drops_a_renamed_firmware():
-    """A variant that no longer exists must not linger forever. Nothing measures it again, so
-    without this it would be carried forward on every run, which is how `esp32p4rev1-eth` would outlive
+    """A variant that no longer exists goes from the baseline. Nothing measures it again, so it
+    would otherwise be carried forward on every run, which is how `esp32p4rev1-eth` would outlive
     its rename to `esp32p4rev1` and keep reporting a stale size."""
     old = {"flash": {"esp32p4rev1-eth": 1600, "esp32p4rev1": 1650, "host-macos": 300}}
     merged = repo_health.merge_carry_forward({"flash": {}}, old)

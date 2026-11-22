@@ -188,6 +188,19 @@ void adoptMigratedNetworks(const char* doc, size_t len) {
     }
 }
 
+// Whether the partition already holds a LittleFS volume: its superblock names "littlefs" in the first or second block.
+static bool holdsLittleFs(esp_partition_subtype_t subtype, const char* label) {
+    const esp_partition_t* part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, subtype, label);
+    if (!part) return false;
+    char head[64];
+    for (const uint32_t block : {0u, 4096u}) {
+        if (esp_partition_read(part, block, head, sizeof(head)) != ESP_OK) continue;
+        for (size_t i = 0; i + 8 <= sizeof(head); i++)
+            if (std::memcmp(head + i, "littlefs", 8) == 0) return true;
+    }
+    return false;
+}
+
 // Read the stored WiFi credentials and Ethernet wiring, if there are any. Absent, unreadable or empty all mean the same thing to the caller: fall through the cascade.
 void loadCredentials() {
     // A board just moved over a layout whose filesystem overlapped the migration image: its volume is unformatted and its networks wait in NVS.
@@ -199,7 +212,8 @@ void loadCredentials() {
         esp_vfs_littlefs_conf_t conf = {};
         conf.base_path = kFsMountPoint;
         conf.partition_label = c.label;
-        conf.format_if_mount_failed = migratedLen > 0;   // the user's config otherwise, which is never formatted
+        // Formatted only for migrated networks, and only a volume that holds no LittleFS yet, so the app's config stays safe from a stash left behind.
+        conf.format_if_mount_failed = migratedLen > 0 && !holdsLittleFs(c.subtype, c.label);
         if (esp_vfs_littlefs_register(&conf) == ESP_OK) { label = c.label; break; }
     }
     if (!label) return;

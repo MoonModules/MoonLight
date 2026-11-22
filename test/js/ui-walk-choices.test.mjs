@@ -27,6 +27,7 @@ test("a host is named by its firmware key, whatever its device model says, and a
         { platform: "macOS", target: "Host", source: "The computer's audio on macOS" });
     assert.equal(walkChoices(host("host-linux-x64", "Docker container")).source, "A PulseAudio server into the container");
     assert.equal(walkChoices(host("host-windows-x64", "")).platform, "Windows");
+    assert.deepEqual(walkChoices(host("host-android-arm64", "Generic Android")), { platform: "Android", target: "Host" });
     assert.equal(walkChoices(host("host-linux-arm64", "Raspberry Pi 5")).platform, "Linux");
     assert.equal(walkChoices(host("host-linux-x64", "Docker container")).platform, "Docker");
     assert.equal(walkChoices(host("esp32s3-opi", "Docker container")).platform, "Docker");

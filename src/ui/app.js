@@ -2619,10 +2619,12 @@ function walkChoices(controls) {
     const firmware = value("firmware"), model = value("deviceModel"), chip = value("chip");
     // A host build is `host-<system>-<arch>`; a container runs a host-linux build and is told apart by its catalog name.
     const [kind, system] = firmware.split("-");
-    const os = kind === "host" ? { macos: "macOS", linux: "Linux", windows: "Windows" }[system] : undefined;
+    const os = kind === "host" ? { macos: "macOS", linux: "Linux", windows: "Windows", android: "Android" }[system] : undefined;
     const platform = model === "Docker container" || model.startsWith("docker") ? "Docker" : os || (chip.startsWith("ESP32") ? "ESP32" : chip.startsWith("i.MX") ? "Teensy" : "");
     if (!platform) return {};
     const board = platform === "ESP32" || platform === "Teensy";
+    // Android has no audio source of its own in MoonWalk, so its reader picks one.
+    if (platform === "Android") return { platform, target: "Host" };
     return { platform, target: board ? "Board" : "Host",
              source: board ? "A microphone on a board" : platform === "Docker" ? "A PulseAudio server into the container" : `The computer's audio on ${platform}` };
 }
