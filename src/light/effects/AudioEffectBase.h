@@ -5,7 +5,7 @@
 
 namespace mm {
 
-/// An effect that reads the audio analysis, the bands, the onsets or the peak: it needs the analysis running while it is on, as Demand.h describes, and an effect reading only the level, which runs regardless, stays an EffectBase.
+/// An effect that reads the audio analysis, the bands, the onsets or the peak: it needs the analysis running while it reads it, as Demand.h describes, and an effect reading only the level, which runs regardless, stays an EffectBase.
 class AudioEffectBase : public EffectBase {
 public:
     /// A switch that turns this effect's audio on or off, `audioReactive` or `goboOnBeat`, prepares it again, so its demand follows.
@@ -16,12 +16,14 @@ public:
     /// Need the analysis while this effect reads it; an effect's own prepare chains this first.
     void prepare() override {
         EffectBase::prepare();
-        analysis_.set(readsAnalysis());
+        followAnalysis();
     }
 
 protected:
     /// Whether this effect reads the analysis now; an effect whose audio is a switch answers with the switch.
     virtual bool readsAnalysis() const { return true; }
+    /// Set the demand to what the effect reads now: the prepare runs it, and an effect whose reading follows a control with no buffer behind it runs it on that control's change.
+    void followAnalysis() { analysis_.set(readsAnalysis()); }
 
 private:
     AudioDemand analysis_{*this, AudioFeature::Bands};   ///< the analysis, while this effect reads it

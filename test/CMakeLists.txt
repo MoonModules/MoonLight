@@ -290,6 +290,9 @@ add_executable(mm_tests
     unit/light/unit_ParticlesEffect.cpp
     unit/light/unit_FlockEffect.cpp
     unit/light/unit_MoonFlockEffect.cpp
+    unit/light/unit_ModMatrix.cpp
+    unit/light/unit_SwirlEngine.cpp
+    unit/light/unit_SwirlEffect.cpp
     unit/light/unit_PlasmaEffect.cpp
     unit/light/unit_PreviewDriver.cpp
     unit/light/unit_RainbowEffect.cpp
