@@ -9,6 +9,7 @@
 #include "light/powerfunctions/draw.h"        // Canvas, fill
 #include "light/util/Palette.h"               // colorFromPalette, Palettes::active
 #include "light/util/light_types.h"           // lengthType, and the platform's MM_HEAVY_COMPUTE
+#include "platform/noinline.h"                // MM_NOINLINE: the birth helpers, called from every emitter
 #include "platform/platform.h"                // MM_NONBLOCKING
 
 #include <algorithm>
@@ -465,8 +466,8 @@ private:
         constexpr float kTurn = 4 * boids::kQuarterTurn;
         return a >= kTurn ? a - kTurn : a < 0 ? a + kTurn : a;
     }
-    /// A draw in [0, 1).
-    float uniform() { return boids::uniform(rng); }
+    /// A draw in [0, 1); out of line, since only births draw.
+    MM_NOINLINE float uniform() { return boids::uniform(rng); }
     /// A draw in [-1, 1).
     float signedUniform() { return uniform() * 2.0f - 1.0f; }
     /// A position as a noise coordinate, kept clear of zero so a particle past the border still samples the field.
@@ -486,11 +487,11 @@ private:
         turbTime_++;
     }
 
-    /// A lifetime of `life` steps varied by a quarter either way, so a generation does not die at once; 0 stays immortal.
-    uint16_t lifetime() { return life ? static_cast<uint16_t>(life * (0.75f + 0.5f * uniform())) + 1 : 0; }
+    /// A lifetime of `life` steps varied by a quarter either way, so a generation does not die at once; 0 stays immortal. Out of line, called once a birth.
+    MM_NOINLINE uint16_t lifetime() { return life ? static_cast<uint16_t>(life * (0.75f + 0.5f * uniform())) + 1 : 0; }
 
-    /// A particle born at (x, y) with velocity (vx, vy), `hue` and `steps` to live; nullptr when the pool is full.
-    static Particle* born(Engine& e, float x, float y, float vx, float vy, uint8_t hue, uint16_t steps) {
+    /// A particle born at (x, y) with velocity (vx, vy), `hue` and `steps` to live; nullptr when the pool is full. One copy for every emitter, a birth running once a particle's life.
+    MM_NOINLINE static Particle* born(Engine& e, float x, float y, float vx, float vy, uint8_t hue, uint16_t steps) {
         Particle* p = e.spawn();
         if (!p) return nullptr;
         p->x = x;
