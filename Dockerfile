@@ -27,7 +27,8 @@
 # cannot be answered, because Docker Desktop runs a Linux VM and host networking joins the VM
 # rather than the machine's LAN.
 #
-# **Capabilities.** None. It binds 8080 as an ordinary process and needs no added capability.
+# **Capabilities.** File capability `cap_net_raw=ep` for ColorLight panel frames (`AF_PACKET`);
+# how the runtime grants `NET_RAW`: docs/reference/hardware/panel-cards.md §6.2.
 #
 # **Audio input through PulseAudio.** The image carries libpulse, so a PulseAudio server takes audio
 # in from the network, squeezelite or sendspin for instance, and MoonLight listens to it. How to point
@@ -65,7 +66,7 @@ ARG REPO=MoonModules/MoonLight
 # the audio input loads it at runtime rather than linking it, so ldd on the binary cannot see it
 # and the sweep below asks for it by name.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl libcurl4t64 libpulse0 \
+ && apt-get install -y --no-install-recommends ca-certificates curl libcurl4t64 libpulse0 libcap2-bin \
  && if [ "$RELEASE" = "stable" ]; then \
         api="https://api.github.com/repos/${REPO}/releases/latest"; \
     else \
@@ -79,6 +80,9 @@ RUN apt-get update \
  && program=$(find /rootfs/usr -type f -name MoonLight | head -1) \
  && test -n "$program" \
  && mv "$program" /MoonLight \
+ # File capability for panel frames: panel-cards.md §6.2.
+ && setcap cap_net_raw=ep /MoonLight \
+ && getcap /MoonLight | grep -q 'cap_net_raw=ep' \
  # The package's copyright file. A release from before the file existed has none, and then the image has none.
  && mkdir -p /doc \
  && { cp /rootfs/usr/share/doc/moonlight/copyright /doc/copyright || echo "this release's package has no copyright file"; } \

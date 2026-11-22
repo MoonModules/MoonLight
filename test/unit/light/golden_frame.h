@@ -47,6 +47,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <memory>   // unique_ptr, the fixture's parts
+#include <utility>  // move
 #include <vector>
 
 namespace mm::golden {
@@ -68,9 +70,15 @@ inline uint64_t hashBuffer(const uint8_t* data, size_t bytes) {
 
 /// The test fixture an effect renders on: a layer over one grid of `w` by `h` by `d` lights, `cpl` channels each.
 struct LayerFixture {
-    Layouts layouts;   ///< the layouts the layer maps
-    GridLayout grid;   ///< the one grid in them
-    Layer layer;       ///< the layer the effect draws on
+private:
+    /// The three on the heap, so a test's stack frame holds a pointer and three references rather than the 1,208 bytes of them, under the compiler's 512-byte frame warning; `own` does the same for an effect.
+    struct Parts { Layouts layouts; GridLayout grid; Layer layer; };
+    std::unique_ptr<Parts> parts_ = std::make_unique<Parts>();
+
+public:
+    Layouts& layouts = parts_->layouts;   ///< the layouts the layer maps
+    GridLayout& grid = parts_->grid;      ///< the one grid in them
+    Layer& layer = parts_->layer;         ///< the layer the effect draws on
 
     /// The grid and the layer, ready for an effect.
     explicit LayerFixture(lengthType w, lengthType h, lengthType d = 1, uint8_t cpl = 3) {
@@ -78,6 +86,18 @@ struct LayerFixture {
         layouts.addChild(&grid);
         layer.setLayouts(&layouts);
         layer.setChannelsPerLight(cpl);
+    }
+    /// Stays where it is built: a moved-from fixture would keep references to parts it gave away.
+    LayerFixture(LayerFixture&&) = delete;
+
+    /// A new `E` held on the heap for this fixture's life and off the layer until `add`, so a test sets it up first; released before the layer, as a local declared after the fixture is.
+    template <typename E>
+    E& own() {
+        auto made = std::make_unique<E>();
+        REQUIRE(made);   // a module's new answers null when the memory runs out
+        E& e = *made;
+        owned_.push_back(std::move(made));
+        return e;
     }
 
     /// Put `effect` on the layer and apply the state, which prepares it.
@@ -97,6 +117,9 @@ struct LayerFixture {
         auto& buf = layer.buffer();
         return std::vector<uint8_t>(buf.data(), buf.data() + buf.bytes());
     }
+
+private:
+    std::vector<std::unique_ptr<MoonModule>> owned_;   ///< what `own` made, after the parts so it goes first
 };
 
 /// Render a fixed number of ticks of one effect on a grid, and hash the final buffer: 20 ms apart, @xref{why-the-cadence-and-the-frame-count-are-fixed|the real cadence}, and @xref{why-the-frame-count-is-not-a-handful|200 of them} unless asked.
@@ -109,6 +132,14 @@ uint64_t renderHash(EffectT& effect, lengthType w, lengthType h, lengthType d, u
     auto& buf = fx.layer.buffer();
     REQUIRE(buf.data() != nullptr);
     return hashBuffer(buf.data(), buf.bytes());
+}
+
+/// How many lights of an RGB frame carry any color, for a test that asks whether an effect drew.
+inline size_t litLights(const std::vector<uint8_t>& frame) {
+    size_t lit = 0;
+    for (size_t i = 0; i + 2 < frame.size(); i += 3)
+        if (frame[i] | frame[i + 1] | frame[i + 2]) lit++;
+    return lit;
 }
 
 /// Check a render against its golden, and on mismatch print the value to paste back in, the workflow when a divergence is @xref{what-a-golden-is-not|intended and reviewed}.

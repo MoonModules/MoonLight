@@ -1,6 +1,6 @@
 # Power functions
 
-The shared toolbox the light domain is built from: a small set of named, integer-only routines that [effects](effects.md) compose into a look. The bounded exceptions are the headers that are float by nature, [raymarch.h](../../../src/light/powerfunctions/raymarch.h) and [boids.h](../../../src/light/powerfunctions/boids.h): each compiles only where the SoC declares a hardware FPU, a whole-header switch rather than a rule weakened in place. One home per idea, an effect that needs a distance, a bar, a noise field or a smooth follower calls the same one every other effect calls, so behavior is consistent, the cost is measured once, and a fix reaches everything at once.
+The shared toolbox the light domain is built from: a small set of named, integer-only routines that [effects](effects.md) compose into a look. The bounded exceptions are the headers that are float by nature, [raymarch.h](../../../src/light/powerfunctions/raymarch.h), [boids.h](../../../src/light/powerfunctions/boids.h) and [swirl.h](../../../src/light/powerfunctions/swirl.h): each compiles only where the SoC declares a hardware FPU, a whole-header switch rather than a rule weakened in place. One home per idea, an effect that needs a distance, a bar, a noise field or a smooth follower calls the same one every other effect calls, so behavior is consistent, the cost is measured once, and a fix reaches everything at once.
 
 Three consumers share this vocabulary, and each uses a different slice of it:
 
@@ -274,8 +274,72 @@ Craig Reynolds' [boids](../../reference/attributions.md) in [boids.h](../../../s
 | `Boid`, `Kind`, `kBoid`, `kPredator` | A boid's position, velocity and gathered acceleration, and the numbers for a boid and for a predator | Flock, MoonFlock | |
 | `look`, `gather`, `steerToward`, `move` | What a boid sees of the others the short way across the torus, its separation, alignment, cohesion and flight gathered as steering forces from one moment, then every boid's move | Flock, MoonFlock | |
 | `seed`, `gust`, `uniform`, `kSeed` | The random draws: a boid's start and heading, and the wind | Flock, MoonFlock | |
-| `pace`, `StepClock`, `runSteps` | Steps a second from a speed and the smoothed level; elapsed time turned into steps with the remainder kept; and the steps a tick runs within its time | Flock, MoonFlock | |
-| `Plane`, `mouthCovers` | A canvas a flock draws on, its trail kept apart from the layer for the reason boids.h gives: a per-step fade, the colors copied to the layer, soft dots, a boid's move as a streak, a boid as it is now, and a disc with a mouth | Flock, MoonFlock | |
+| `pace`, `StepClock`, `runSteps` | Steps a second from a speed and the smoothed level; elapsed time turned into steps with the remainder kept; and the steps a tick runs within its time | Flock, MoonFlock, Swirl | |
+| `Plane`, `mouthCovers` | A canvas a flock draws on, its trail kept apart from the layer for the reason boids.h gives: a per-step fade, the colors copied to the layer, soft dots, a boid's move as a streak, a boid as it is now, and a disc with a mouth | Flock, MoonFlock, Swirl | |
+| `prepareTrailAndPool` | A trail and a pool sized in one call, the memory warning set and cleared on the owner | Flock, MoonFlock, Swirl | |
+
+</div>
+
+## Swirl
+
+**Procedural particles: born by an emitter, moved by a field.**
+
+Where [particles.h](#particles) is a fixed-point pool under forces and collisions, [swirl.h](../../../src/light/powerfunctions/swirl.h) is a float pool whose whole life is two choices: an emitter (scatter, cloud, nozzle, ring or edge) and a field (Halvorsen's attractor, Bridson's curl-noise flow, a vortex, ballistic drag and gravity, or an orbit). Any emitter pairs with any field from one step loop. A frame they share, its origin wandering a Lissajous figure and its angle spinning, moves any pairing around the space. The particles live in the flock's 32 by 32 space, the attractor's third axis in a side buffer held only while the attractor runs.
+
+The live particles sit packed at the front of the pool, a death moving the last one into its slot, so a birth, a death and a lower count each cost one move. A step is: the motion emits, the motion drives each live particle, the engine integrates (semi-implicit Euler) under the border's rule and the rescue rule, ages it, and draws the move as a streak into the trail. The trail is a `boids::Plane` held only while the effect's trail can be above 0, faded by the keep each step. With no trail, each particle's last step draws straight into the layer.
+
+<div class="mm-pf" markdown="1">
+
+| Power function | What it does | Effects | Modifiers |
+|---|---|---|---|
+| `Particle`, `Engine` | A 24-byte particle (position, velocity, age, life, hue), and the packed pool, the depth, the trail and the step over them | Swirl | — |
+| `Engine::spawn`, `Engine::kill`, `Engine::trim` | The next slot, or none when the pool is full; a death by swap-and-pop; the particles past a count let go | Swirl | — |
+| `Engine::step`, `Engine::settle`, `Engine::advance`, `Engine::border` | One step (emit, drive, integrate, draw); the same with the drawing left out, for the prepare; the integration under the rescue rule; and the border free, die, wrap or bounce | Swirl | — |
+| `Engine::present`, `Engine::hue` | The trail copied to the layer with the heads over it, or the last step drawn fresh; the palette entry by birth, age, speed or place | Swirl | — |
+| `Motion`, `Emitter`, `Field` | The emitter and the field with their resolved numbers, and the frame: origin, turn and noise clocks | Swirl | — |
+
+</div>
+
+The parts and their knobs, as the Swirl effect offers them:
+
+| Emitter | Births | Its knobs |
+|---|---|---|
+| scatter | anywhere in the space | none |
+| cloud | a small cloud at the origin | none |
+| nozzle | a jet from the origin, aimed by the spin | `spread`, from a needle to a full circle |
+| ring | whole rings from the origin, one life each | `period`, the steps between rings; `ringSize`, the particles in one |
+| edge | along the border, moving inward; under an outward vortex with `edge` at die it leaves at once and the panel stays black | none |
+
+| Field | Motion | Its knobs |
+|---|---|---|
+| attractor | Halvorsen's attractor, seen in 3D and rolled by the spin | `shape`, its constant a hundredfold, 189 the value most renderings use; `scale`, the zoom |
+| flow | curl noise, turned by the spin | `scale`, the features' size; `drift`, how fast it changes |
+| vortex | out from the origin and around it | `expand`, out above 128 and in below; `swirl`, around one way above 128 and the other below |
+| ballistic | drag and gravity, down the panel | `drag`, `gravity` |
+| orbit | a pull toward the origin and a push around it | `pull`, `swirl`, `drag` |
+
+| Preset | Emitter + field | What it draws |
+|---|---|---|
+| Halvorsen | cloud + attractor, edge free | a chaotic spiral winding on black |
+| NozzleJet | nozzle + ballistic, turbulence 64, spin 142 | a turning jet, churned into curls |
+| VortexRings | ring + vortex | rings blooming out from the center and turning |
+| Advection | scatter + flow | particles carried on a slowly changing flow |
+| Whirlpool | edge + orbit, pull 160, swirl 220 | arms sweeping in from the border around a dark eye |
+
+## Modulation
+
+**Any parameter listening to the sound or an LFO: one routing rule every effect shares.**
+
+[modmatrix.h](../../../src/light/powerfunctions/modmatrix.h) is the shared modulation matrix: none and 30 sources, the `AudioFrame`'s signals (level, smooth level, bass, mid, treble, the drum hits together and per range, flux, peak, the chord pulse and the sixteen raw bands) and two LFOs, and one rule applied per route per tick: the modulated value is the base plus the source's reading times the depth over 255, within the parameter's own range. A source lifts a parameter above its base, and depth 0 leaves the base untouched. An effect offers a few mod slots, each a source, a destination and a depth, and resolves them once per tick, so every particle in a frame hears the same modulation. Integer-only, like the rest of the toolbox.
+
+<div class="mm-pf" markdown="1">
+
+| Power function | What it does | Effects | Modifiers |
+|---|---|---|---|
+| `Source`, `kSourceOptions` | None and the 30 sources a slot can listen to, and the select list naming them | Swirl | — |
+| `Lfo`, `Inputs` | A sine LFO run by elapsed time at r/32 cycles a second; one tick's frame and LFO values | Swirl | — |
+| `read`, `apply` | A source's reading, 0 to 255, or 0 outside the list; the one routing rule, base plus source times depth, within the range | Swirl | — |
+| `readsAnalysis`, `readsNotes` | Whether a source reads the audio analysis, every frame signal from the bass on, or the notes, the chord: the demands an effect raises while a slot routes it | Swirl | — |
 
 </div>
 

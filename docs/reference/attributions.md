@@ -9,6 +9,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [After Dark](https://en.wikipedia.org/wiki/After_Dark_%28software%29) | 🎨 | Berkeley Systems' screensavers, the Flying Toasters and the aquarium among them. |
 | [Aircoookie](https://github.com/Aircoookie) | 🧑 | Christian Schwinne, creator of WLED. |
 | [Andrew Tuline / atuline](https://github.com/atuline) | 🧑 | The WLED-SR audio-reactive effects. |
+| [Arne Halvorsen](https://sprott.physics.wisc.edu/chaos/symmetry.htm) | 🧑🧮 | The Halvorsen attractor, a cyclically symmetric chaotic system of three quadratic equations proposed on sci.fractals and analyzed by Sprott in *A Symmetric Chaotic Flow* (1997), which [Swirl](../moonmodules/light/effects.md#swirl) traces with a swarm of particles. |
 | [Art-Net](https://en.wikipedia.org/wiki/Art-Net) | 📜 | The lighting-network protocol for DMX over IP. |
 | [Bill Reeves / Particle system](https://en.wikipedia.org/wiki/Particle_system) File:Particle_sys_fire.jpg | 🧑🧮 | Particle systems, as a technique. |
 | [blazoncek](https://github.com/blazoncek) | 🧑 | Blaž Kristan: WLED effects, and their ports. |
@@ -18,7 +19,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Bresenham](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm) File:Bresenham.svg | 🧮 | Lines and circles on integer grids. |
 | [Chebyshev distance](https://en.wikipedia.org/wiki/Chebyshev_distance) File:Minkowski_distance_examples.svg | 🧮 | The grid metric max(\|dx\|, \|dy\|). |
 | [Christophe Gagnier / Moustachauve](https://github.com/Moustachauve) | 🧑 | Author of the native [WLED-Android](https://github.com/Moustachauve/WLED-Android) and [WLED-iOS](https://github.com/Moustachauve/WLED-iOS) apps, whose source let MoonLight devices appear in them. |
-| [Claude / Anthropic](https://www.anthropic.com/claude) | 🏢 | Anthropic's AI model, which wrote [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock) with James Hutchinson. |
+| [Claude / Anthropic](https://www.anthropic.com/claude) | 🏢 | Anthropic's AI model, which wrote [Flock](../moonmodules/light/effects.md#flock), [MoonFlock](../moonmodules/light/effects.md#moonflock) and [Swirl](../moonmodules/light/effects.md#swirl) with James Hutchinson. |
 | [Conical spiral](https://en.wikipedia.org/wiki/Conical_spiral) File:Spiral-cone-arch-s.svg | 🧮 | A spiral wound up the surface of a cone. |
 | [Craig Reynolds / Boids](https://www.red3d.com/cwr/boids/) | 🧑🧮 | Craig Reynolds' flocking boids simulation (1986) and its paper, *Flocks, Herds, and Schools: A Distributed Behavioral Model* (SIGGRAPH '87): separation, alignment and cohesion, from which every boid of [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock) steers; and the arrival behavior of [*Steering Behaviors For Autonomous Characters*](https://www.red3d.com/cwr/steer/) (GDC 1999), by which MoonFlock's boids land on their keys. |
 | [Damian Schneider / DedeHai](https://github.com/DedeHai) | 🧑 | Author of the WLED Particle System, whose shape our [particle kernel](../moonmodules/light/power-functions.md#particles) follows in fixed point. |
@@ -54,7 +55,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [IEC 60268-17](https://en.wikipedia.org/wiki/VU_meter) File:VU_Meter.jpg | 📜 | VU meter ballistics, to the millisecond. |
 | [Improv Wi-Fi](https://github.com/improv-wifi) | 📜 | The open serial provisioning standard the web installer uses. |
 | [Iñigo Quilez](https://iquilezles.org/) | 🧑 | Distance functions and their operators, smooth minimum, cosine palettes. |
-| [James Hutchinson / AnjinMeili](https://github.com/AnjinMeili) | 🧑 | [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock), designed on his HUB75 wall: MoonFlock's boid for each piano key, its heat, the drums, the predator and the keyboard. |
+| [James Hutchinson / AnjinMeili](https://github.com/AnjinMeili) | 🧑 | [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock), designed on his HUB75 wall: MoonFlock's boid for each piano key, its heat, the drums, the predator and the keyboard; and [Swirl](../moonmodules/light/effects.md#swirl), one effect of emitters and fields whose every knob turns to a wild end. |
 | [Jason Coon / Aurora](https://github.com/pixelmatix/aurora) | 🧑 | The Aurora pattern set for LED matrices, MIT licensed, whose Flock, by way of Marc Merlin's FastLED port and MatrixPrism's JavaScript translation, gives its numbers, its predator and its wind to [Flock](../moonmodules/light/effects.md#flock) and [MoonFlock](../moonmodules/light/effects.md#moonflock). |
 | [John Hart / Sphere tracing](https://en.wikipedia.org/wiki/Ray_marching) File:Visualization_of_SDF_ray_marching_algorithm.png | 🧑🧮 | Sphere tracing, the basis of raymarching. |
 | [Jos Stam / Stable Fluids](https://en.wikipedia.org/wiki/Jos_Stam) File:Jos_Stam_2005_-_by_Azam_Khan.jpg | 🧑🧮 | Stable Fluids, the solver behind the fluid effect. |

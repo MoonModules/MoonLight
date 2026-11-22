@@ -34,13 +34,7 @@ std::vector<uint8_t> renderFlock(const Flight& run) {
     return fx.frame();
 }
 
-/// How many lights carry any color.
-size_t litLights(const std::vector<uint8_t>& frame) {
-    size_t lit = 0;
-    for (size_t i = 0; i + 2 < frame.size(); i += 3)
-        if (frame[i] | frame[i + 1] | frame[i + 2]) lit++;
-    return lit;
-}
+using mm::golden::litLights;
 
 }  // namespace
 

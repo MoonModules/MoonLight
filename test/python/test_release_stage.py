@@ -152,3 +152,7 @@ def test_a_new_name_and_an_install_part_get_no_old_name_copy():
     olds = [old for _, old in rs.old_name_plan(dist, "8.0.0")]
     assert "firmware-esp32-lite-v8.0.0.bin" not in olds
     assert not any("bootloader" in o for o in olds)
+
+
+def test_the_release_dockerfile_grants_the_program_net_raw_as_a_file_capability():
+    assert "setcap cap_net_raw=ep" in rs.DOCKERFILE
