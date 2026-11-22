@@ -150,13 +150,12 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
                             releases_dir / f"{prefix}-partition-table-{size}mb.bin")
             shutil.copy(build_dir / "ota_data_initial.bin",
                         releases_dir / "shared-ota-data.bin")
-            # MoonBase firmwares also ship the shared maintenance image + the slot-0 otadata their manifests reference (same names release.yml stages).
-            if FIRMWARES.get(firmware, {}).get("moonbase"):
-                from build_esp32 import otadata_slot0_bytes
-                family = migration_family(firmware)   # the MoonBase image the board takes: the chip, the P4's revision line, octal flash
-                shutil.copy(build_dir.parent / f"moonbase-{family}" / MOONBASE_BIN,
-                            releases_dir / f"shared-moonbase-{family}.bin")
-                (releases_dir / "shared-ota-data-slot0.bin").write_bytes(otadata_slot0_bytes())
+            # The shared maintenance image + the slot-0 otadata the manifests reference (same names release.yml stages).
+            from build_esp32 import otadata_slot0_bytes
+            family = migration_family(firmware)   # the MoonBase image the board takes: the chip, the P4's revision line, octal flash
+            shutil.copy(build_dir.parent / f"moonbase-{family}" / MOONBASE_BIN,
+                        releases_dir / f"shared-moonbase-{family}.bin")
+            (releases_dir / "shared-ota-data-slot0.bin").write_bytes(otadata_slot0_bytes())
         except FileNotFoundError as e:
             # Partial build (bootloader / partition-table missing): skip this firmware rather than half-stage it, the picker would offer it but Install would fail mid-flash.
             print(f"==> skip {firmware}: missing {e.filename}", file=sys.stderr)

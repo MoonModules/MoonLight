@@ -137,12 +137,12 @@ def migrate_chips(images: list[Path]) -> list[tuple[Path, str]]:
 
 # The firmwares an installed device still asks for by an old name (`firmware-<name>-v<version>.bin`, before the firmware plan of
 # 2026-11-21), each with the firmware that serves it now; every other name a device carried then serves itself under that prefix.
-# Removed once MoonCloud stats show no device on an old name. The P4's Ethernet-only names stay out while the C6's driver takes GPIO 14 to 19, an LED output there.
+# Removed once MoonCloud stats show no device on an old name.
 OLD_NAMES = {
     "esp32": "esp32-lite", "esp32-16mb": "esp32", "esp32-pico": "esp32", "esp32-eth": "esp32-ethonly",
     "esp32-wrover": "esp32-rev1-lite", "esp32s3-zero": "esp32s3-qspi-lite", "esp32s3-n8r2": "esp32s3-qspi",
     "esp32s3-n8r8": "esp32s3-opi", "esp32s3-n16r8": "esp32s3-opi", "esp32s3-n32r16": "esp32s3-opi-oflash",
-    "esp32p4rev1-eth-wifi": "esp32p4rev1", "esp32p4rev3-eth-wifi": "esp32p4rev3",
+    "esp32p4rev1-eth-wifi": "esp32p4rev1", "esp32p4rev3-eth-wifi": "esp32p4rev3", "esp32p4rev1-eth": "esp32p4rev1", "esp32p4rev3-eth": "esp32p4rev3",
 }
 
 
@@ -184,7 +184,7 @@ def stage_esp32(firmware: str, version: str) -> None:
     build = ROOT / "build" / f"esp32-{firmware}"
     for source, name in esp32_stage_plan(firmware, version):
         shutil.copy(build / source, DIST / name)
-    # MoonBase, the second boot image on the 4 MB tables: chip-shared. The slot-0 otadata makes a fresh install boot the APP with MoonBase standing by; blank otadata would boot MoonBase.
+    # MoonBase, the second boot image on every table: chip-shared. The slot-0 otadata makes a fresh install boot the APP with MoonBase standing by; blank otadata would boot MoonBase.
     moonbase = sorted((ROOT / "build").glob("moonbase-*/MoonLight-moonbase.bin"))
     for image in moonbase:
         shutil.copy(image, DIST / f"shared-moonbase-{chip_of(image.parent, 'moonbase-')}.bin")

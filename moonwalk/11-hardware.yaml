@@ -73,21 +73,15 @@ processes:
     systems: [MoonDeck, MoonBase]
     dependsOn: [esp32-build-flash]
     intro: |
-      A board cannot rewrite the partition it runs from, so on a variant with [MoonBase](explanation/architecture/moonbase.md) the app hands over to MoonBase, which does the writing. A partition-table change still needs a cable: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
-    inputs:
-      type: object
-      properties:
-        moonbase: { type: string, enum: [With MoonBase, Without MoonBase], description: "Does the board's variant carry MoonBase?" }
+      A board cannot rewrite the partition it runs from, so the app hands over to [MoonBase](explanation/architecture/moonbase.md), which does the writing. A partition-table change still needs a cable: [MoonBase and the partition layout](reference/build-system.md#moonbase-and-the-partition-layout).
     steps:
       - id: install-moonbase
         say: Install MoonBase from the app.
-        given: [{ input: moonbase, equals: With MoonBase }]
         when: { run: { command: "curl -X POST --http1.1 -H \"Expect:\" --data-binary @build/moonbase-<chip>/MoonLight-moonbase.bin http://<device>/api/firmware/moonbase-update" } }
         detail: |
           Once, on a board that has none yet.
       - id: to-moonbase
         say: Reboot the app into MoonBase.
-        given: [{ input: moonbase, equals: With MoonBase }]
         when: { run: { command: "curl -X POST http://<device>/api/firmware/moonbase" } }
         detail: |
           It is back in about four seconds.
@@ -95,7 +89,7 @@ processes:
         say: Send the app image.
         when: { run: { command: "curl --http1.1 -H \"Expect:\" --data-binary @build/esp32-<firmware>/MoonLight.bin http://<device>/api/firmware/upload" } }
         detail: |
-          The request ends with no HTTP status (curl reports 000): the device reboots into the new image as the write completes. That is success. Without MoonBase the app takes the image itself on the same route.
+          The request ends with no HTTP status (curl reports 000): the device reboots into the new image as the write completes. That is success. A board still on a two-slot partition table has no MoonBase, and its app takes the image itself on the same route.
 
           **413** means the request reached the app rather than MoonBase, which did not take over; `GET /moonbase` tells them apart. **`incomplete request body`** means the body did not arrive in time: send with `--http1.1 -H "Expect:"`, so it starts without waiting for a `100 Continue`.
       - id: confirm

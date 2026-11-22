@@ -23,7 +23,7 @@ ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_esp32 import FIRMWARES, build_dir_for, APP_BIN
-from idf_env import find_idf, idf_env, idf_cmd
+from idf_env import find_idf, idf_env
 sys.path.insert(0, str(ROOT / "moondeck"))
 import _usb  # noqa: E402
 
@@ -192,21 +192,10 @@ def main():
         sys.exit(1)
 
     env = idf_env(idf_path)
-    cmd = idf_cmd(idf_path)
-    # -B + -DSDKCONFIG mirror build_esp32.py so idf.py flash reads the
-    # per-firmware sdkconfig (the chip target lives in there). Without
-    # -DSDKCONFIG, idf.py reads esp32/sdkconfig at the project root,
-    # which may belong to a different firmware.
-    b_arg = [
-        "-B", str(build_dir),
-        "-DSDKCONFIG=" + str(build_dir / "sdkconfig"),
-    ]
-
-    # -b sets the esptool flash baud (idf.py's own default is also 460800).
-    # --baud 921600 matches the web installer for ~2x speed, but isn't the
+    # The esptool flash baud defaults to 460800; --baud 921600 matches the web installer for ~2x speed, but isn't the
     # default because some USB bridges can't sustain it (see --baud help).
     print(f"==> flash baud: {baud}")
-    # A MoonBase variant cannot use `idf.py flash`: with a factory + ota_0 table, IDF stages the
+    # `idf.py flash` cannot place a MoonBase layout: with a factory + ota_0 table, IDF stages the
     # application at the FACTORY offset (0x10000), which is MoonBase's slot and too small for it.
     # The parts are placed at explicit offsets instead, the same shape the mooninstaller manifest
     # uses, with each offset read from the built partition table rather than hardcoded.
@@ -217,10 +206,7 @@ def main():
     print(f"==> layout: {note}")
     if size is None:
         sys.exit(2)
-    if FIRMWARES.get(args.firmware, {}).get("moonbase"):
-        flash_cmd = _moonbase_flash_cmd(build_dir, args.firmware, args.port, baud, env, size)
-    else:
-        flash_cmd = cmd + b_arg + ["flash", "-p", args.port, "-b", str(baud)]
+    flash_cmd = _moonbase_flash_cmd(build_dir, args.firmware, args.port, baud, env, size)
     sys.exit(subprocess.run(flash_cmd, cwd=ESP32_DIR, env=env).returncode)
 
 

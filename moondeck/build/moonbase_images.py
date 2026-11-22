@@ -28,7 +28,7 @@ def family_defaults(project: Path, family: str, chip: str) -> list[Path]:
 def build_moonbase(cmd: list[str], env: dict, chip: str, version: str = "", family: str = "") -> None:
     """Build the MoonBase image for `family`, by default the chip, into build/moonbase-<family>.
 
-    MoonBase (moonbase/) is the second boot image the MoonBase variants carry in their factory
+    MoonBase (moonbase/) is the second boot image every firmware carries in its factory
     partition: a small firmware whose job is installing the application, since a board with one
     app slot cannot rewrite the partition it is executing from. It is chip-specific but variant-
     agnostic, so every classic variant shares one build. Its size budget lives in

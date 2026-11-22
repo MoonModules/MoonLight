@@ -71,7 +71,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
                       "sdkconfig.defaults.moonbase-8mb"],
         "layouts": [8, 16],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32 classic with more than 4 MB flash, every revision: WiFi + Ethernet, every "
                        "feature; PSRAM used on revision 3 and up.",
@@ -82,7 +81,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
                       "sdkconfig.defaults.lite", "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32 classic with 4 MB flash, every revision: WiFi + Ethernet, the 4 MB tier "
                        "(no SD card); PSRAM used on revision 3 and up.",
@@ -93,7 +91,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
                       "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4, 8, 16],
-        "moonbase": True,
         "eth_only": True,
         "description": "ESP32 classic, every revision: Ethernet only (WiFi compiled out, so every feature "
                        "fits 4 MB and more RAM stays free). Per-board pins/PHY from deviceModels.json.",
@@ -105,7 +102,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
                       "sdkconfig.defaults.psram-workaround", "sdkconfig.defaults.lite", "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4, 8, 16],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32 classic revision 0 and 1 with PSRAM (the older WROVER modules): WiFi + "
                        "Ethernet, the PSRAM cache workaround, PSRAM used, the 4 MB tier (no SD card).",
@@ -122,7 +118,6 @@ FIRMWARES: dict[str, dict] = {
         "chip": "esp32",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.qemu", "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": True,
         "description": "ESP32 classic under QEMU, emulated Ethernet (openeth), no WiFi. "
                        "Run with moondeck/qemu/run_qemu.py, not flashed to hardware.",
@@ -142,7 +137,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad", "sdkconfig.defaults.eth-spi",
                       "sdkconfig.defaults.moonbase-8mb"],
         "layouts": [8, 16],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32-S3 with quad PSRAM and more than 4 MB flash (N8R2, such as the Adafruit "
                        "MatrixPortal S3): WiFi + W5500 SPI Ethernet, every feature.",
@@ -154,7 +148,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad", "sdkconfig.defaults.lite",
                       "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32-S3 with quad PSRAM and 4 MB flash (N4R2, such as the ESP32-S3-Zero): WiFi, "
                        "the 4 MB tier.",
@@ -167,7 +160,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-octal", "sdkconfig.defaults.eth-spi",
                       "sdkconfig.defaults.moonbase-8mb"],
         "layouts": [8, 16],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32-S3 with octal PSRAM, 8 MB flash and up (N8R8, N16R8): WiFi + W5500 SPI "
                        "Ethernet, every feature.",
@@ -179,7 +171,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-octal", "sdkconfig.defaults.esp32s3-oflash",
                       "sdkconfig.defaults.eth-spi"],
         "layouts": [32],
-        "moonbase": True,
         "eth_only": False,
         "description": "ESP32-S3 with octal PSRAM and octal flash (WROOM-2 N32R16V): WiFi + W5500 SPI "
                        "Ethernet, every feature.",
@@ -191,7 +182,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32c3",
                       "sdkconfig.defaults.moonbase-4mb"],
         "layouts": [4],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
         "eth_only": False,
         "description": "ESP32-C3 (4 MB flash, no PSRAM) - WiFi only, one RISC-V core at 160 MHz.",
         "ships": True,
@@ -205,7 +195,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4", "sdkconfig.defaults.esp32p4-wifi",
                       "sdkconfig.defaults.moonbase-16mb"],
         "layouts": [16],
-        "moonbase": True,
         "eth_only": False,
         "coprocessor": "esp32c6",   # the radio chip, whose ESP-Hosted firmware is built beside the app (coprocessor_image.py)
         "description": "ESP32-P4 revisions 0.x and 1.x: Ethernet, and WiFi over the on-board ESP32-C6 where the board has one.",
@@ -218,7 +207,6 @@ FIRMWARES: dict[str, dict] = {
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4", "sdkconfig.defaults.esp32p4-wifi",
                       "sdkconfig.defaults.esp32p4rev3", "sdkconfig.defaults.moonbase-16mb"],
         "layouts": [16],
-        "moonbase": True,
         "eth_only": False,
         "coprocessor": "esp32c6",
         "description": "ESP32-P4 revisions 3.x, the current silicon: Ethernet, and WiFi over the on-board ESP32-C6 where the board has one. "
@@ -230,7 +218,6 @@ FIRMWARES: dict[str, dict] = {
         "chip": "esp32s31",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s31", "sdkconfig.defaults.moonbase-16mb"],
         "layouts": [16],
-        "moonbase": True,
         "eth_only": False,
         "description": "Espressif ESP32-S31 Function-CoreBoard-1: WiFi 6 + 1 Gbps "
                        "Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip "
@@ -310,8 +297,7 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     # the OTA path can pick the matching release asset (every release ships
     # one .bin per firmware key; see release.yml).
     args.append(f"-DMM_FIRMWARE_NAME={firmware}")   # bare: CMake adds the quotes, so idf.py's cache comparison matches
-    if spec.get("moonbase"):
-        args.append(f"-DMM_MOONBASE_FAMILY={migration_family(firmware)}")   # the MoonBase image the board takes, which its Firmware card names
+    args.append(f"-DMM_MOONBASE_FAMILY={migration_family(firmware)}")   # the MoonBase image the board takes, which its Firmware card names
     # Burn the release-channel tag too, when the build pipeline supplies one.
     # Same -D mechanism; empty default left to build_info.cpp's #ifndef so a
     # local build needs no flag.
@@ -623,8 +609,7 @@ def main():
     family = migration_family(firmware)
     builds_migration = firmware == family_members(family)[0]
     preview = ["--preview"] if chip in PREVIEW_TARGETS else []
-    if FIRMWARES[firmware].get("moonbase") or builds_migration:
-        build_moonbase(cmd + preview, env, chip, args.version, family)
+    build_moonbase(cmd + preview, env, chip, args.version, family)
     if FIRMWARES[firmware].get("coprocessor"):
         build_coprocessor(cmd, env, FIRMWARES[firmware]["coprocessor"])
     if builds_migration:

@@ -141,6 +141,8 @@ def test_every_old_name_an_installed_device_asks_for_gets_the_firmware_that_serv
     assert plan["firmware-esp32-v8.0.0.bin"] == "moonlight-esp32-lite-v8.0.0.bin"
     assert plan["firmware-esp32-16mb-v8.0.0.bin"] == "moonlight-esp32-v8.0.0.bin"
     assert plan["firmware-esp32s3-n16r8-v8.0.0.bin"] == "moonlight-esp32s3-opi-v8.0.0.bin"
+    # Every P4 runs the one image of its revision, C6 fitted or not.
+    assert plan["firmware-esp32p4rev1-eth-v8.0.0.bin"] == plan["firmware-esp32p4rev1-eth-wifi-v8.0.0.bin"] == "moonlight-esp32p4rev1-v8.0.0.bin"
     # A name the plan kept serves itself under the old prefix, a board's and a host's image and a Teensy's hex alike.
     assert plan["firmware-esp32c3-v8.0.0.bin"] == "moonlight-esp32c3-v8.0.0.bin"
     assert plan["firmware-teensy41-v8.0.0.hex"] == "moonlight-teensy41-v8.0.0.hex"

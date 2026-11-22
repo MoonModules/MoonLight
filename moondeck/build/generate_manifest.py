@@ -159,25 +159,23 @@ def esp32_parts(args, prefix: str) -> list[dict] | None:
 
     parts = parts_from_flasher_args(flasher_args, prefix, min(FIRMWARES[args.firmware]["layouts"]))
 
-    # MoonBase firmwares: flasher_args stages the app at the first app partition: the factory
+    # flasher_args stages the app at the first app partition: the factory
     # slot, MoonBase's home: because IDF knows nothing about the two-image scheme. Remap the app
     # to ota_0, swap the blank ota-data for the slot-0 image (a blank one would boot MoonBase on
     # first start), and add MoonBase at the factory slot. Offsets come from the same partition CSV
     # the firmware builds with (moonbase_table_csv), so manifest and table cannot disagree.
     # release.yml stages the two shared-moonbase assets these paths point at.
     from build_esp32 import moonbase_table_csv, partition_offsets
-    spec = FIRMWARES[args.firmware]
-    if spec.get("moonbase"):
-        offs = partition_offsets(moonbase_table_csv(args.firmware))
-        for part in parts:
-            if part["path"] == f"{prefix}.bin":
-                part["offset"] = int(offs["ota_0"], 16)
-            elif part["path"] == "shared-ota-data.bin":
-                part["path"] = "shared-ota-data-slot0.bin"
-        from build_esp32 import migration_family
-        parts.append({"path": f"shared-moonbase-{migration_family(args.firmware)}.bin",
-                      "offset": int(offs["factory"], 16)})
-        parts.sort(key=lambda p: p["offset"])
+    offs = partition_offsets(moonbase_table_csv(args.firmware))
+    for part in parts:
+        if part["path"] == f"{prefix}.bin":
+            part["offset"] = int(offs["ota_0"], 16)
+        elif part["path"] == "shared-ota-data.bin":
+            part["path"] = "shared-ota-data-slot0.bin"
+    from build_esp32 import migration_family
+    parts.append({"path": f"shared-moonbase-{migration_family(args.firmware)}.bin",
+                  "offset": int(offs["factory"], 16)})
+    parts.sort(key=lambda p: p["offset"])
 
     return parts
 
