@@ -255,7 +255,7 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/moonlight-host-*.bin
       - uses: actions/upload-artifact@v4
         with:
           name: host-macos
@@ -327,7 +327,7 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/moonlight-host-*.bin
       - uses: actions/upload-artifact@v4
         with:
           name: host-windows
@@ -390,7 +390,7 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/moonlight-host-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_amd64.deb
       - uses: actions/upload-artifact@v4
@@ -453,7 +453,7 @@ jobs:
       # The program installs itself through its own Firmware route and restarts on it, on the system it is built for.
       - name: Install its own program and restart on it
         shell: bash
-        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/firmware-host-*.bin
+        run: uv run moondeck/ci/release_stage.py smoke-update --program dist/moonlight-host-*.bin
       - name: Check the glibc floor
         run: uv run moondeck/ci/check_glibc_floor.py dist/moonlight_*_arm64.deb
       - uses: actions/upload-artifact@v4
@@ -621,6 +621,12 @@ jobs:
           V: ${{ steps.ver.outputs.version }}
         run: uv run moondeck/ci/release_stage.py manifests --tag "$TAG" --version "$V" --repo "$GITHUB_REPOSITORY"
 
+      # An installed device from before the firmware plan of 2026-11-21 asks for firmware-<its name>-v<version>.bin: each such name gets the image that serves it now (OLD_NAMES in release_stage.py).
+      - name: Stage the images under the names installed devices ask for
+        env:
+          V: ${{ steps.ver.outputs.version }}
+        run: uv run moondeck/ci/release_stage.py old-names --version "$V"
+
       - name: Re-create the `latest` release fresh
         # The `latest` tag is a moving prerelease: every main-branch build
         # republishes it pointing at the new commit. Two things have to
@@ -684,6 +690,8 @@ jobs:
           # The `files:` block below is a multi-line literal string — every line
           # is a glob pattern, the action does NOT strip `#` as comment syntax.
           files: |
+            dist/moonlight-*.bin
+            dist/moonlight-*.hex
             dist/firmware-*.bin
             dist/firmware-*.hex
             dist/shared-*.bin
@@ -864,6 +872,7 @@ jobs:
             mkdir -p "pages/install/releases/$T"
             gh release download "$T" \
               --dir "pages/install/releases/$T" \
+              --pattern 'moonlight-*.bin' \
               --pattern 'firmware-*.bin' \
               --pattern '*-ota-data.bin' \
               --pattern 'shared-*.bin' \

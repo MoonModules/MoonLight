@@ -1,5 +1,10 @@
-/// Every shipped partition table has to be internally consistent. These are hand-edited CSVs whose offsets are absolute and whose mistakes are invisible until a board fails to boot or an OTA silently truncates, so the arithmetic is pinned here rather than discovered on hardware.
-/// Rules come from the ESP-IDF partition-table format: partitions may not overlap, must sit inside the flash the table is written for, must not start before the table itself ends, and an APP partition must be 64 KB aligned (the MMU maps app code in 64 KB pages).
+/// Every shipped partition table has to be internally consistent, so the arithmetic is pinned here rather than discovered on hardware.
+///
+/// These are hand-edited CSVs whose offsets are absolute, and a mistake shows only when a board fails to boot or an OTA silently truncates.
+///
+/// The rules are the ESP-IDF partition-table format's: no overlap, inside the flash the table is written for, after the table itself ends.
+///
+/// An APP partition is also 64 KB aligned, since the MMU maps app code in 64 KB pages.
 
 #include "doctest.h"
 #include "unit/source_tree.h"
@@ -26,18 +31,16 @@ struct Table {
     std::vector<Partition> parts;
 };
 
-// Each table's flash capacity, DECLARED rather than inferred from the largest end offset: an inferred capacity would grow with an oversized table and hide exactly the overflow this suite exists to catch. A new table must be added here, which is the point.
+// Each table's flash capacity, declared: one inferred from the largest end offset would grow with an oversized table and hide the overflow this suite catches.
 uint32_t declaredFlashBytes(const std::string& file) {
     static const std::pair<const char*, uint32_t> kCapacity[] = {
         {"esp32dev.csv",          4u * 1024 * 1024},
         {"4mb_moonbase.csv",      4u * 1024 * 1024},
         {"wled_4mb_1mb_fs.csv",   4u * 1024 * 1024},
         {"8mb_moonbase.csv",      8u * 1024 * 1024},
-        {"esp32s3_n8r8.csv",      8u * 1024 * 1024},
-        {"ota_16mb.csv",         16u * 1024 * 1024},
-        {"ota_16mb_moonbase.csv", 16u * 1024 * 1024},
+        {"16mb_moonbase.csv",     16u * 1024 * 1024},
         {"wled_16mb_9mb_fs.csv", 16u * 1024 * 1024},
-        {"ota_32mb.csv",         32u * 1024 * 1024},
+        {"32mb_moonbase.csv",     32u * 1024 * 1024},
     };
     for (const auto& [name, bytes] : kCapacity)
         if (file == name) return bytes;
@@ -130,7 +133,7 @@ TEST_CASE("the CSV number parser rejects signed and uint32-overflowing values") 
 
 TEST_CASE("every partition table describes a layout that fits its flash without overlaps" * doctest::skip(!mm::sourceTreePresent())) {
     const auto tables = allTables();
-    REQUIRE(tables.size() >= 3);   // esp32dev, esp32s3_n8r8, ota_16mb at time of writing
+    REQUIRE(tables.size() >= 3);   // the MoonBase layouts and esp32dev at least
 
     for (const auto& t : tables) {
         CAPTURE(t.file);
@@ -158,6 +161,23 @@ TEST_CASE("every partition table describes a layout that fits its flash without 
     }
 }
 
+// The filesystem holds LittleFS, so every table MoonLight ships names it so in label and subtype; WLED's tables, kept for the move, call theirs `spiffs`.
+TEST_CASE("every MoonLight table names its filesystem littlefs" * doctest::skip(!mm::sourceTreePresent())) {
+    for (const auto& t : allTables()) {
+        if (t.file.rfind("wled_", 0) == 0) continue;
+        CAPTURE(t.file);
+        int filesystems = 0;
+        for (const auto& p : t.parts) {
+            if (p.type != "data" || p.subtype == "nvs" || p.subtype == "ota" || p.subtype == "coredump") continue;
+            CAPTURE(p.name);
+            CHECK(p.name == "littlefs");
+            CHECK(p.subtype == "littlefs");
+            filesystems++;
+        }
+        CHECK(filesystems == 1);
+    }
+}
+
 TEST_CASE("app partitions are 64 KB aligned, as the MMU requires" * doctest::skip(!mm::sourceTreePresent())) {
     for (const auto& t : allTables()) {
         CAPTURE(t.file);
@@ -170,7 +190,7 @@ TEST_CASE("app partitions are 64 KB aligned, as the MMU requires" * doctest::ski
 }
 
 TEST_CASE("a table carries either two OTA slots or one slot plus a recovery app, never a mix" * doctest::skip(!mm::sourceTreePresent())) {
-    // Dual-OTA (ota_0 + ota_1) buys a power-fail rollback at the cost of holding two copies of the firmware. The safeboot shape (factory + ota_0) spends that space on the app instead and recovers through the factory image. Both are valid; a table that has ota_1 AND a factory partition would be paying for both and is a mistake.
+    // Two OTA slots buy a rollback with two firmware copies; factory + ota_0 recovers through MoonBase instead. A table with ota_1 and a factory pays for both: a mistake.
     for (const auto& t : allTables()) {
         CAPTURE(t.file);
         int ota = 0, factory = 0;
@@ -188,7 +208,7 @@ TEST_CASE("a table carries either two OTA slots or one slot plus a recovery app,
 }
 
 TEST_CASE("every MoonBase factory slot can be erased and holds a MoonBase image" * doctest::skip(!mm::sourceTreePresent())) {
-    // The app installs a new MoonBase by erasing this partition and streaming into it, and esp_partition_erase_range works in whole 4 KB sectors: an offset or size that is not a multiple would erase past the slot or leave a tail behind. Both are 64 KB aligned today (the app-alignment rule above), which satisfies this, but the erase depends on the weaker property and should say so rather than inherit it by luck.
+    // A new MoonBase is written by erasing this slot in whole 4 KB sectors (esp_partition_erase_range), so its offset and size are sector multiples, beside the 64 KB app rule.
     constexpr uint32_t kSector = 4096;
     constexpr uint32_t kImageBytes = 743 * 1024;   // the built image, which the slot must hold
     int factories = 0;

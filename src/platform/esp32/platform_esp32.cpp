@@ -379,6 +379,16 @@ const char* chipModel() {
     }
 }
 
+const char* chipRevision() {
+    static char buf[12] = {};   // esp_chip_info's revision is major x 100 + minor, as esptool prints it
+    if (!buf[0]) {
+        esp_chip_info_t info;
+        esp_chip_info(&info);
+        std::snprintf(buf, sizeof(buf), "v%u.%u", static_cast<unsigned>(info.revision / 100), static_cast<unsigned>(info.revision % 100));
+    }
+    return buf;
+}
+
 uint32_t IRAM_ATTR cycleCount() { return esp_cpu_get_cycle_count(); }
 
 uint8_t IRAM_ATTR currentCore() { return static_cast<uint8_t>(xPortGetCoreID()); }
@@ -551,12 +561,16 @@ bool coprocessorConnect() {
     // 4 KB as the version query's caller needs; priority 5, as the install tasks.
     return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
 }
+void coprocessorShutdown() {
+    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort (Plan-20261121, step 2).
+}
 bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 #else
 bool wifiRadioReady() MM_NONBLOCKING { return true; }   // a native radio starts whenever asked
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 #endif
 
 const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }

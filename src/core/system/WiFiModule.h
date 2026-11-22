@@ -57,6 +57,7 @@ public:
             controls_.addReadOnly("address", handoff_->address, sizeof(handoff_->address));
             controls_.addReadOnly("localName", handoff_->localName, sizeof(handoff_->localName));
         }
+        controls_.addControl("radio", radio_);
         /// Look for the networks in range.
         /// @guide A scan takes the radio off-channel for a few seconds, which drops incoming lights while connected. The device scans by itself only when its access point opens.
         controls_.addButton("scan");
@@ -170,6 +171,8 @@ public:
         return true;
     }
 
+    /// Whether the radio is switched on: off keeps the device on its cable alone.
+    bool radio() const MM_NONBLOCKING { return radio_; }
     /// The transmit-power cap in dBm, 0 for none.
     int16_t txPowerSetting() const MM_NONBLOCKING { return txPowerSetting_; }
     /// Set and save the transmit-power cap.
@@ -630,6 +633,7 @@ private:
     int8_t  rssi_ = 0;
     /// The power the radio transmits at now.
     int8_t  txPower_ = 0;
+    bool radio_ = true;   ///< Whether WiFi runs at all; a board on its cable alone starts no station or access point.
     /// Caps the radio's transmit power, for a board that browns out.
     /// @guide 0 lifts the cap. Lower it when the board resets as the radio sends.
     int16_t txPowerSetting_ = 0;

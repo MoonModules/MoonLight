@@ -29,9 +29,12 @@ constexpr const char* kReleaseRepo = "MoonModules/MoonLight";
 /// The repository's earlier name, which GitHub redirects, tried where the address above does not answer: one repository in both constants leaves a device nowhere to look.
 constexpr const char* kFallbackRepo = "MoonModules/projectMM";
 
-/// The release-asset URL a device updates itself from: repository, version, firmware variant, version.
+/// The first word of a release's app image names, `moonlight-<firmware>-v<version>.bin`, which a device reports so a client names the image it updates from (an older device asks for `firmware-`, which the release keeps for it).
+constexpr const char* kReleaseAssetPrefix = "moonlight";
+
+/// The release-asset URL a device updates itself from: repository, version, kReleaseAssetPrefix, firmware variant, version.
 constexpr const char* kReleaseAssetUrlFormat =
-    "https://github.com/%s/releases/download/v%s/firmware-%s-v%s.bin";
+    "https://github.com/%s/releases/download/v%s/%s-%s-v%s.bin";
 
 /// The release asset the radio chip updates from: repository, release tag, the ESP-Hosted version this firmware links, which names the matching image.
 constexpr const char* kCoprocessorAssetUrlFormat =
@@ -164,8 +167,8 @@ public:
             platform::otaMoonBaseSize(&moonbaseSizeVal_, &moonbaseTotalVal_);
             controls_.addReadOnly("version", moonbaseStr_, sizeof(moonbaseStr_));
             controls_.addReadOnly("build", moonbaseBuildStr_, sizeof(moonbaseBuildStr_));
-            // One image per chip, so the chip is what names its release asset.
-            std::snprintf(moonbaseChipStr_, sizeof(moonbaseChipStr_), "%s", platform::chipModel());
+            // One image per family (the chip, the P4's revision line, octal flash), which names its release asset; the chip where the build names none.
+            std::snprintf(moonbaseChipStr_, sizeof(moonbaseChipStr_), "%s", kMoonBaseFamily[0] ? kMoonBaseFamily : platform::chipModel());
             controls_.addReadOnly("firmware", moonbaseChipStr_, sizeof(moonbaseChipStr_));
             if (moonbaseTotalVal_ > 0) {
                 controls_.addProgress("partition", moonbaseSizeVal_, moonbaseTotalVal_);

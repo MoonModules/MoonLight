@@ -181,8 +181,9 @@ from improv_provision import is_eth_only
 
 
 def test_an_ethernet_only_entry_is_recognized_the_same_way_the_browser_does_it():
-    # install.js: ethOnly = /-eth$/.test(firmware). `-eth-wifi` is the co-processor build and is NOT eth-only.
-    assert is_eth_only({"firmwares": ["esp32p4rev1-eth"]})
-    assert not is_eth_only({"firmwares": ["esp32p4rev1-eth-wifi"]})
+    # install.js: ethOnly = /-ethonly$/.test(firmware), the one build with WiFi compiled out.
+    assert is_eth_only({"firmwares": ["esp32-ethonly"]})
+    assert not is_eth_only({"firmwares": ["esp32p4rev1"]})
+    assert not is_eth_only({"firmwares": ["esp32-lite", "esp32-ethonly"]})   # a board offered both is provisioned over WiFi
     assert not is_eth_only({"firmwares": ["esp32"]})
     assert not is_eth_only({"firmwares": []}) and not is_eth_only({}) and not is_eth_only(None)

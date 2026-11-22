@@ -1,0 +1,24 @@
+# Classic ESP32 PSRAM in one image for every revision and module, with or without PSRAM.
+# Append to sdkconfig.defaults + sdkconfig.defaults.eth (later fragment wins).
+#
+# ESP-IDF finds the PSRAM in its boot code (CONFIG_SPIRAM_BOOT_HW_INIT, on by default) by the
+# package's pins, and a board without it boots on (CONFIG_SPIRAM_IGNORE_NOTFOUND).
+# The heap step moves out of the boot code (CONFIG_SPIRAM_BOOT_INIT off) into MoonLight's startup
+# hook in platform_esp32_gpio.cpp, which adds the PSRAM to the heap only where psramHeapSafe
+# allows: revision 3 and up, or a build with the cache workaround (sdkconfig.defaults.psram-workaround).
+# On classic silicon CONFIG_SPIRAM=y is quad PSRAM, the one mode the chip has.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_IGNORE_NOTFOUND=y
+CONFIG_SPIRAM_BOOT_INIT=n
+CONFIG_SPIRAM_CACHE_WORKAROUND=n
+
+# mbedTLS allocates through malloc, which takes PSRAM where the heap has it and internal RAM
+# elsewhere. With SPIRAM on, ESP-IDF defaults it to PSRAM only (MBEDTLS_EXTERNAL_MEM_ALLOC), so on a
+# board without PSRAM psa_crypto_init fails in the startup stage and the boot aborts in a loop.
+CONFIG_MBEDTLS_DEFAULT_MEM_ALLOC=y
+
+# MoonLive native codegen needs an executable heap (allocExec -> MALLOC_CAP_EXEC IRAM), which
+# CONFIG_HEAP_HAS_EXEC_HEAP gates and memory protection (W^X) turns off: the standard ESP32-JIT
+# configuration, as in the S3 PSRAM fragments.
+CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
+CONFIG_HEAP_HAS_EXEC_HEAP=y

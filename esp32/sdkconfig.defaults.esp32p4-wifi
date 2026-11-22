@@ -1,7 +1,7 @@
-# Waveshare ESP32-P4-NANO: Ethernet + WiFi build.
+# ESP32-P4: WiFi over the on-board ESP32-C6 co-processor, in both revision lines' builds; a board lacking a C6 switches the radio off on its WiFi card.
 #   Board: https://www.waveshare.com/wiki/ESP32-P4-Nano-StartPage
 #
-# Layered onto sdkconfig.defaults + sdkconfig.defaults.esp32p4-eth by
+# Layered onto sdkconfig.defaults + sdkconfig.defaults.esp32p4 by
 # moondeck/build/build_esp32.py. The eth fragment brings the EMAC / RMII / flash /
 # PSRAM / partition layout; this fragment adds WiFi over the on-board ESP32-C6
 # co-processor.

@@ -1,7 +1,7 @@
 # Partition table for ESP32 classic (4 MB flash).
 # app0/app1: 1856 KB each -- the firmware crossed the old 1792 KB slot (CI flash-full,
 #            2026-08-26), so the slots grow one 64 KB alignment step past 1850 KB.
-# spiffs:    256 KB -- LittleFS state (config JSONs ~20 KB + MoonLive scripts ~50 KB; >2x headroom).
+# littlefs:  256 KB -- the filesystem (config JSONs ~20 KB + MoonLive scripts ~50 KB; >2x headroom).
 # coredump:  64 KB.
 # NOTE a device flashed with the OLD table keeps it until a FULL serial flash: OTA updates the app,
 # never the partition table.
@@ -11,7 +11,7 @@
 #   0xE000-0xFFFF   otadata      ( 8 KB)
 #   0x10000-0x1DFFFF  app0       (1856 KB)  -> ota_0
 #   0x1E0000-0x3AFFFF app1       (1856 KB)  -> ota_1
-#   0x3B0000-0x3EFFFF spiffs     ( 256 KB)  -> LittleFS state
+#   0x3B0000-0x3EFFFF littlefs   ( 256 KB)  -> config, scripts, presets
 #   0x3F0000-0x3FFFFF coredump   (  64 KB)
 #
 # Name,   Type, SubType, Offset,   Size,     Flags
@@ -19,5 +19,5 @@ nvs,      data, nvs,     0x9000,   0x5000,
 otadata,  data, ota,     0xe000,   0x2000,
 app0,     app,  ota_0,   0x10000,  0x1D0000,
 app1,     app,  ota_1,   0x1E0000, 0x1D0000,
-spiffs,   data, spiffs,  0x3B0000, 0x40000,
+littlefs, data, littlefs,0x3B0000, 0x40000,
 coredump, data, coredump,0x3F0000, 0x10000,

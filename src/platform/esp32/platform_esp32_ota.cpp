@@ -397,7 +397,7 @@ bool acceptFirstChunk(Image* img, size_t n) {
         return !why;
     }
     if (info.described && firmware::isMoonBaseImage(info.project)) { imageStatus(img, "error: that is a MoonBase image, not an app"); return false; }
-    if (!info.described || !firmware::isAppImage(info.project)) { imageStatus(img, "error: that image is not this project"); return false; }
+    if (!info.described || !firmware::isUpdateImage(info.project)) { imageStatus(img, "error: that image is not this project"); return false; }
     return true;
 }
 

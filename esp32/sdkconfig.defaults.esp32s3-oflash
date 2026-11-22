@@ -1,0 +1,8 @@
+# ESP32-S3 with octal flash (WROOM-2 N32R16V: 32 MB octal flash, 16 MB octal PSRAM, both at 1.8 V), after sdkconfig.defaults.esp32s3-octal.
+
+# Octal flash, named rather than left to IDF's auto-detect: the detection only switches the read mode, and the flash timing tuning keys on this option.
+CONFIG_ESPTOOLPY_OCT_FLASH=y
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+# MoonBase plus one app slot, as at every size, with a MoonBase built for octal flash (moonbase/sdkconfig.defaults.esp32s3oflash).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/32mb_moonbase.csv"

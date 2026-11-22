@@ -10,13 +10,7 @@
 # layout + the exec heap; the same shape as the P4 (the other on-chip-EMAC,
 # RISC-V, PSRAM target).
 
-# Custom partition table — shared 16 MB layout (app0/app1 = 4 MB each, spiffs
-# ~7.9 MB). Chip-independent flash map; the same file every 16 MB target uses.
-CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb.csv"
-
-# Flash size override (the CoreBoard ships 16 MB).
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# The partition table and the 16 MB flash size come from sdkconfig.defaults.moonbase-16mb, layered after this.
 # Quad I/O, as the S3 builds run: the CoreBoard's 16 MB flash (JEDEC 0x46 0x4018) is a quad part, and IDF's default, DIO, halves what the
 # cache fetches per clock. The flash mode is the bootloader's, which an update over the air keeps, so a board on a DIO image
 # (v7.0.0) refuses this one with ESP_ERR_OTA_SPI_MODE_MISMATCH and takes it once over USB, as docs/reference/MIGRATING.md says for the P4.
@@ -79,6 +73,6 @@ CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
 
 
-# FreeRTOS in IRAM, for the reason sdkconfig.defaults.esp32p4rev1-eth gives: the S31 is RISC-V with the same coprocessor save.
+# FreeRTOS in IRAM, for the reason sdkconfig.defaults.esp32p4 gives: the S31 is RISC-V with the same coprocessor save.
 # Status, and when the line goes: docs/reference/issues-in-other-projects.md.
 CONFIG_FREERTOS_IN_IRAM=y

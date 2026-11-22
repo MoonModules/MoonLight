@@ -21,7 +21,7 @@ which would pick the moving `latest` tag and give a meaningless count. With no
 `v*` tag yet, N falls back to the total commit count from the root.
 
 The same string is burned into the binary (-DMM_VERSION), the release asset names
-(firmware-<F>-v<V>.bin), and the ESP Web Tools manifest, so all three agree.
+(moonlight-<F>-v<V>.bin), and the ESP Web Tools manifest, so all three agree.
 
 Usage:
   compute_version.py --tag latest              # auto → latest → <next>-dev.<N>, e.g. 6.1.0-dev.6 after v6.0.0
@@ -105,6 +105,23 @@ def development_core(version: str) -> str:
     if last is None or _as_tuple(core) > _as_tuple(last):
         return core
     return next_minor(last)
+
+
+def for_head() -> str:
+    """The version this checkout builds as: its own vX.Y.Z tag's where HEAD carries one, else the `latest` version of this commit."""
+    try:
+        tag = subprocess.run(["git", "describe", "--tags", "--exact-match", "--match", "v[0-9]*"],
+                             cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        return compute("stable", tag)
+    except (subprocess.CalledProcessError, OSError):
+        return compute("local", "")
+
+
+def write_stamped_library(dest: Path) -> None:
+    """library.json for a page that shows the version, with `version` set to for_head(), so the installer names the exact build (7.1.0-dev.170) where the file names only its line."""
+    lib = json.loads(LIBRARY_JSON.read_text(encoding="utf-8"))
+    lib["version"] = for_head()
+    dest.write_text(json.dumps(lib, indent=2) + "\n", encoding="utf-8")
 
 
 def channel_for_tag(tag: str) -> str:

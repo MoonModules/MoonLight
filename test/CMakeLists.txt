@@ -6,6 +6,7 @@ add_executable(mm_tests
     ${CMAKE_SOURCE_DIR}/src/module_types.cpp
     # core/
     unit/core/unit_PartitionTables.cpp
+    unit/core/unit_PsramRule.cpp
     unit/core/unit_SpscRing.cpp
     unit/core/unit_AnalogService.cpp
     unit/core/unit_AudioCapture.cpp

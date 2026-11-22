@@ -1,0 +1,2 @@
+# The octal-flash S3 (WROOM-2 N32R16V, esp32s3-opi-oflash): this image runs from octal flash, which a quad build cannot read.
+CONFIG_ESPTOOLPY_OCT_FLASH=y

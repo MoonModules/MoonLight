@@ -7,40 +7,40 @@
 /// ## Two sources, because one of the questions has no query
 ///
 /// The SDK's own checks answer whether a pin is valid, output-capable and in the low-power domain, and those are always correct.
-/// Whether a pin is a boot strap or belongs to the flash or external memory has no query at all, being board and datasheet knowledge.
-/// So a small per-chip table carries it.
+///
+/// Whether a pin is a boot strap or belongs to the flash or external memory has no query, being board and datasheet knowledge, so a small per-chip table carries it.
+///
 /// That table mirrors the hardware reference page, which is its one documented source, and the two are kept in step.
 ///
 /// ## Two lists per chip, one of them conditional
 ///
-/// Reserved pins corrupt the device if used, and straps change the boot mode if driven at reset.
-/// The set is keyed on the build's target, so the build IS the chip variant, and a pin listed in neither is neither.
+/// Reserved pins corrupt the device if used, and straps change the boot mode if driven at reset; the set is keyed on the build's target, and every pin outside both lists is free.
 ///
-/// The second list is the pins the memory bus takes only when the module HAS external memory, which is a runtime fact rather than a build one.
-/// One image runs on a bare module and on one with it fitted, so those are added only when it is actually present.
+/// The second list is the pins the memory bus takes only on a module WITH external memory, a runtime fact: one image runs on both, so those are added when it is present.
 ///
 /// ## The package is read at runtime, not from the build
 ///
 /// The system-in-package parts wire their in-package memory differently while the same firmware runs on all of them, so the package comes from the chip's own fuses.
-/// On one of them four pads are not bonded at all, which in practice means the in-package parts use them.
-/// Muxing a peripheral onto one wedges the flash cache, and the board resets with no panic and no dump.
+///
+/// On one of them four pads are unbonded, used by the in-package parts: muxing a peripheral onto one wedges the flash cache, and the board resets with no panic and no dump.
+///
 /// Two neighboring pins ARE free on that package, which one bench board's microphone uses.
 ///
 /// ## Pins are configured for input and output together
 ///
-/// A plain output leaves the input buffer disabled, so a read returns nothing on a pin that is really driving high, and the map's live column then lies about it.
-/// That cost a long debugging round on a relay that was working the whole time.
-/// The input buffer costs nothing here and makes a driven pin readable, which is what every other peripheral on this chip already does.
+/// A plain output leaves the input buffer disabled, so a read of a pin driving high returns low and the map's live column lies; that cost a long round on a working relay.
+///
+/// The input buffer is free here and makes a driven pin readable, which is what every other peripheral on this chip already does.
 ///
 /// ## Only the first converter, deliberately
 ///
 /// One unit is opened on first use and kept, since the handle owns the peripheral and opening one per read would reconfigure it every tick.
-/// The second converter is shared with the radio on every chip here and times out whenever the radio holds it.
-/// A pin there would read fine on the bench and fail once the device joined a network, so refusing is the honest answer until something needs it.
 ///
-/// A raw count is not a fixed fraction of full scale, every part's converter being nonlinear in its own way.
-/// And the correction for its own silicon lives in the chip's fuses.
-/// The scheme is chosen by which capability the target declares, curve fitting where it is supported and line fitting otherwise.
+/// The second converter is shared with the radio on every chip here and times out whenever the radio holds it: a pin there reads fine on the bench and fails on a network.
+///
+/// A raw count is no fixed fraction of full scale, each converter being nonlinear in its own way, and the correction for its silicon lives in the chip's fuses.
+///
+/// The scheme follows the capability the target declares: curve fitting where it is supported, line fitting otherwise.
 
 #include "platform/platform.h"
 
@@ -55,11 +55,38 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_efuse.h"        // esp_efuse_get_pkg_ver: the classic ESP32's PACKAGE decides its pin table
 #include "soc/efuse_defs.h"   // EFUSE_RD_CHIP_VER_PKG_*: the package ids
-#include "esp_heap_caps.h"    // heap_caps_get_total_size(MALLOC_CAP_SPIRAM): detect PSRAM without a new
-                              // component dep (the heap component is always linked; esp_psram is not, and adding it to REQUIRES would switch main to strict mode, hiding the implicitly-available components the other platform files rely on)
+#include "hal/efuse_hal.h"    // efuse_hal_chip_revision: the PSRAM rule's revision and a package's -V3
+#include "esp_heap_caps.h"    // heap_caps_get_total_size(MALLOC_CAP_SPIRAM): PSRAM read from the always-linked heap, since esp_psram in REQUIRES would put main in strict mode
 
 #include <cstddef>
 #include <cstdint>
+
+#if defined(CONFIG_IDF_TARGET_ESP32) && defined(CONFIG_SPIRAM) && !defined(CONFIG_SPIRAM_BOOT_INIT)
+#include "esp_psram.h"                       // esp_psram_init / esp_psram_is_initialized
+#include "esp_private/esp_psram_extram.h"    // esp_psram_extram_add_to_heap_allocator: ESP-IDF's own boot heap step, which has no public twin
+#include "esp_private/startup_internal.h"    // ESP_SYSTEM_INIT_FN: the startup stage ESP-IDF's own PSRAM heap step runs in
+#include "esp_private/esp_gpio_reserve.h"    // esp_gpio_revoke: the pads a failed PSRAM probe keeps reserved
+#include "platform/esp32/psram_rule.h"
+
+// The heap step ESP-IDF's boot init takes at priority 103, taken here at 104 (before constructors and app_main) only where psramHeapSafe allows, since one classic image runs on every revision.
+ESP_SYSTEM_INIT_FN(mm_psram_heap, CORE, BIT(0), 104) {
+#ifdef CONFIG_SPIRAM_CACHE_WORKAROUND
+    constexpr bool kCacheWorkaround = true;
+#else
+    constexpr bool kCacheWorkaround = false;
+#endif
+    if (esp_psram_init() != ESP_OK) {   // no PSRAM: the probe reserved its pins before the ID read and kept them
+        esp_gpio_revoke(mm::platform::psramPadsFreedWhenAbsent(esp_efuse_get_pkg_ver()));
+        return ESP_OK;
+    }
+    if (!mm::platform::psramHeapSafe(efuse_hal_chip_revision(), kCacheWorkaround)) return ESP_OK;   // found, left unused
+    if (esp_psram_extram_add_to_heap_allocator() != ESP_OK) return ESP_OK;
+#ifdef CONFIG_SPIRAM_USE_MALLOC
+    heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+#endif
+    return ESP_OK;
+}
+#endif
 
 namespace mm::platform {
 
@@ -87,9 +114,7 @@ uint32_t packageId() {
     return pkg;
 }
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-// The wider memory bus reserves a second range, but only on a module that has it, and the mode is the image's rather than the part's.
-// So a narrower build leaves those free, which one board drives panel lines on, and the wider image cannot run on that part anyway.
-// The debug and serial roles are conflicts rather than reservations: they stay usable as ordinary pins, so the reserved list leaves them out.
+// The octal bus reserves 33-37 in an octal image only (a quad build keeps them for one board's panel lines); debug and serial pins stay ordinary pins, so they are left out.
 constexpr uint8_t kReserved[]        = {26, 27, 28, 29, 30, 31, 32};
 #if CONFIG_SPIRAM_MODE_OCT
 constexpr uint8_t kReservedIfPsram[] = {33, 34, 35, 36, 37};
@@ -115,7 +140,11 @@ constexpr uint8_t kStrap[]           = {};
 
 // Queried once and cached: PSRAM presence cannot change after boot. The heap-caps total for the SPIRAM region is the cheap read, 0 meaning none (the heap component is always linked, unlike esp_psram, see the include note).
 bool psramPresent() {
+#if defined(CONFIG_IDF_TARGET_ESP32) && defined(CONFIG_SPIRAM) && !defined(CONFIG_SPIRAM_BOOT_INIT)
+    static const bool present = esp_psram_is_initialized();   // found, in the heap or left unused: either way its chip owns the bus pins
+#else
     static const bool present = heap_caps_get_total_size(MALLOC_CAP_SPIRAM) > 0;
+#endif
     return present;
 }
 // The two pads the USB serial/JTAG port owns, where the chip has one.
@@ -130,13 +159,44 @@ bool usbSerialPad(uint8_t gpio) {
 
 }  // namespace
 
+size_t psramFoundBytes() {
+#if defined(CONFIG_IDF_TARGET_ESP32) && defined(CONFIG_SPIRAM) && !defined(CONFIG_SPIRAM_BOOT_INIT)
+    static const size_t bytes = esp_psram_is_initialized() ? esp_psram_get_size() : 0;   // found, in the heap or left unused (psramHeapSafe)
+#else
+    static const size_t bytes = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+#endif
+    return bytes;
+}
+
+const char* chipPackage() {
+#if defined(CONFIG_IDF_TARGET_ESP32)
+    // efuse_defs.h's package codes under the part names esptool prints, the datasheet's; a revision 3 die adds -V3 where esptool does.
+    struct Package { uint32_t code; const char* name; const char* v3; };
+    static constexpr Package kPackages[] = {
+        {EFUSE_RD_CHIP_VER_PKG_ESP32D0WDQ6,   "D0WDQ6",     "D0WDQ6-V3"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32D0WDQ5,   "D0WD",       "D0WD-V3"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32D2WDQ5,   "D2WD",       "D2WD"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32U4WDH,    "U4WDH",      "U4WDH"},      // code 4, which ESP-IDF also names PICO-D2, a part that stayed a sample
+        {EFUSE_RD_CHIP_VER_PKG_ESP32PICOD4,   "PICO-D4",    "PICO-D4"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32PICOV302, "PICO-V3-02", "PICO-V3-02"},
+        {EFUSE_RD_CHIP_VER_PKG_ESP32D0WDR2V3, "D0WDR2-V3",  "D0WDR2-V3"},
+    };
+    const uint32_t code = esp_efuse_get_pkg_ver();
+    for (const Package& p : kPackages)
+        if (p.code == code) return efuse_hal_chip_revision() >= 300 ? p.v3 : p.name;
+    return "unknown";
+#else
+    return "";
+#endif
+}
+
 GpioCapability gpioCapability(uint8_t gpio) {
     GpioCapability c;
     c.validGpio     = GPIO_IS_VALID_GPIO(gpio);
     c.outputCapable = GPIO_IS_VALID_OUTPUT_GPIO(gpio);
     c.rtc           = rtc_gpio_is_valid_gpio(static_cast<gpio_num_t>(gpio));
     c.strap         = inList(gpio, kStrap, sizeof(kStrap));
-    // kReservedIfPsram is gated on PSRAM being PRESENT, except where the image itself fixes the pins: an octal-PSRAM S3 build wires 33-37 to the PSRAM bus whatever the runtime finds, and a board whose PSRAM failed to init would otherwise hand those pads out as free GPIO.
+    // kReservedIfPsram follows PSRAM PRESENT, except where the image fixes the pins: an octal S3 build wires 33-37 to the bus whatever it finds, so a failed init frees no pads.
 #if defined(CONFIG_IDF_TARGET_ESP32S3) && CONFIG_SPIRAM_MODE_OCT
     constexpr bool kPsramPinsFixedByImage = true;
 #else
@@ -178,7 +238,7 @@ GpioLiveState gpioLiveState(uint8_t gpio) {
     gpio_drive_cap_t cap = GPIO_DRIVE_CAP_DEFAULT;
     gpio_get_drive_capability(static_cast<gpio_num_t>(gpio), &cap);
     s.driveCap = static_cast<uint8_t>(cap);    // 0..3 = WEAK / MEDIUM / STRONG / STRONGEST
-    // Live pin DIRECTION straight off the pad config (not the role's intent): is the output driver / input buffer enabled right now. A role that should drive but reads back !output = the pin isn't being driven (a dead driver or wire fault), the mismatch the map flags.
+    // Live pin DIRECTION off the pad config, the role's intent aside: a role that should drive but reads back as input is a dead driver or wire fault, the mismatch the map flags.
     gpio_io_config_t io = {};
     if (gpio_get_io_config(static_cast<gpio_num_t>(gpio), &io) == ESP_OK) {
         s.output = io.oe;
@@ -188,7 +248,7 @@ GpioLiveState gpioLiveState(uint8_t gpio) {
 }
 
 // --- GPIO as a working input/output -----------------------------------------------------------
-// The two above are the pin map's diagnostics. These are the role: a module that owns a pin reads a switch or drives a line through them. Thin by design - gpio_config once, then the register-level get/set - so a per-tick poll costs a read and the module keeps the policy (debounce, edges).
+// The pin map's diagnostics are above; these are the role, thin by design: gpio_config once, then register-level get/set, so a poll costs one read and the module keeps the policy.
 
 bool gpioInputBegin(uint8_t gpio, GpioPull pull) {
     if (!GPIO_IS_VALID_GPIO(gpio)) return false;
@@ -197,8 +257,10 @@ bool gpioInputBegin(uint8_t gpio, GpioPull pull) {
     gpio_config_t cfg = {};
     cfg.pin_bit_mask = 1ULL << gpio;
     cfg.mode         = GPIO_MODE_INPUT;
-    cfg.pull_up_en   = pull == GpioPull::Up   ? GPIO_PULLUP_ENABLE   : GPIO_PULLUP_DISABLE;
-    cfg.pull_down_en = pull == GpioPull::Down ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
+    // An input-only pad (the classic ESP32's 34-39) has no internal pull, so the board's own resistor serves and the pull is left out.
+    const bool hasPulls = GPIO_IS_VALID_OUTPUT_GPIO(gpio);
+    cfg.pull_up_en   = hasPulls && pull == GpioPull::Up   ? GPIO_PULLUP_ENABLE   : GPIO_PULLUP_DISABLE;
+    cfg.pull_down_en = hasPulls && pull == GpioPull::Down ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
     cfg.intr_type    = GPIO_INTR_DISABLE;      // polled, not interrupt-driven: see the seam's docs
     return gpio_config(&cfg) == ESP_OK;
 }
@@ -209,11 +271,11 @@ bool gpioRead(uint8_t gpio) {
 }
 
 bool gpioWrite(uint8_t gpio, bool high) {
-    // Output-capable, not merely valid: the classic ESP32's 34-39 are input-only, and driving one silently does nothing. Refusing here is what lets a caller report the pin rather than wonder.
+    // Output-capable, beyond valid: the classic ESP32's 34-39 are input-only and ignore a drive, so refusing here lets a caller report the pin.
     if (!GPIO_IS_VALID_OUTPUT_GPIO(gpio)) return false;
     // And not RESERVED, the same policy gpioInputBegin applies: a pin wired to flash or PSRAM corrupts the device when driven, and a relay list is exactly where a wrong number gets typed.
     if (gpioCapability(gpio).reserved) return false;
-    // Configured on first use so a caller that owns the pin just writes it. gpio_config is idempotent, and this runs on a control change, never per frame.
+    // Configured on first use so a caller that owns the pin writes it directly; gpio_config is idempotent, and this runs on a control change, once, outside the frame.
     gpio_config_t cfg = {};
     cfg.pin_bit_mask = 1ULL << gpio;
     // Input and output together: @xref{pins-are-configured-for-input-and-output-together|why a plain output makes the map lie}.
@@ -248,7 +310,7 @@ bool adcRead(uint8_t gpio, uint16_t& raw) {
     }
     if (!g_adcChanReady[chan]) {
         adc_oneshot_chan_cfg_t cfg = {};
-        // 12 dB (the full ~0..3.1 V span) and the chip's widest resolution: a sense divider and a pedal both swing across the whole range, and a narrower attenuation would clip them silently. adcMaxCount() reports the matching full scale so a caller scales correctly.
+        // 12 dB (the full ~0..3.1 V span) at the widest resolution, since a sense divider and a pedal swing across the whole range; adcMaxCount() reports the matching full scale.
         cfg.atten    = ADC_ATTEN_DB_12;
         cfg.bitwidth = ADC_BITWIDTH_DEFAULT;
         if (adc_oneshot_config_channel(g_adc1, static_cast<adc_channel_t>(chan), &cfg) != ESP_OK)
@@ -268,7 +330,7 @@ namespace {
 adc_cali_handle_t g_adcCali = nullptr;
 bool g_adcCaliTried = false;
 
-/// The calibration handle at our attenuation, or nothing where the chip carries no factory data; attempted once, since a part without it would otherwise retry on every read.
+/// The calibration handle at our attenuation, or null where the chip lacks factory data; attempted once, so a part that lacks it is asked a single time.
 adc_cali_handle_t adcCali() {
     if (g_adcCaliTried) return g_adcCali;
     g_adcCaliTried = true;

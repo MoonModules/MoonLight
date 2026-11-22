@@ -232,11 +232,10 @@ APPLY_OP_CHUNK_MAX = 128 - 3         # kImprovMaxPayload minus the [cmd][seq][la
 
 
 def is_eth_only(entry) -> bool:
-    """An entry whose firmware is an Ethernet-only build (`-eth`, not `-eth-wifi`) has WiFi
-    compiled out and no WIFI_SETTINGS RPC to answer: provisioning is plugging the cable in.
-    Mirrors install.js (`ethOnly = /-eth$/.test(firmware)`) so the two front ends agree."""
+    """An entry whose firmware is an Ethernet-only build (`-ethonly`) has WiFi compiled out and no WIFI_SETTINGS RPC to
+    answer: provisioning is plugging the cable in. Mirrors install.js (`ethOnly = /-ethonly$/.test(firmware)`) so the two front ends agree."""
     fws = entry.get("firmwares") if isinstance(entry, dict) else None
-    return bool(fws) and all(isinstance(f, str) and f.endswith("-eth") for f in fws)
+    return bool(fws) and all(isinstance(f, str) and f.endswith("-ethonly") for f in fws)
 
 
 def state_documents(entry) -> list:

@@ -1,0 +1,2 @@
+# The 4 MB tier (`-lite`): every feature that does not fit a 4 MB board's one 2496 KB app slot defaults off under this symbol (esp32/main/Kconfig.projbuild).
+CONFIG_MM_LITE=y

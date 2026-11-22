@@ -46,8 +46,8 @@
 //
 // Two breaking changes came with it, both handled here: writeFlash THROWS unless each part's
 // `data` is a Uint8Array (a binary string silently corrupted the image, #266), and
-// detectFlashSize() returns undefined rather than defaulting to "4MB" — unused here, since the
-// flash call passes flashSize "keep".
+// detectFlashSize() returns undefined rather than defaulting to "4MB", which layoutFor reads as
+// unread flash.
 //
 // Re-test the flash + reset path on any bump; hardResetChip() below drives DTR/RTS through the
 // transport, so it stays version-agnostic.
@@ -83,6 +83,8 @@ import {
     requestHalfKay,
     writeImage,
 } from "./teensy-writer.js";
+import { layoutFor } from "./flash-layout.js";
+import { bootLogIp, bootLogDevice } from "./boot-log.js";
 
 // ---------------------------------------------------------------------------
 // Manifest parser
@@ -121,8 +123,14 @@ async function fetchManifest(manifestUrl) {
             url: new URL(p.path, base).toString(),
             offset: p.offset,
         })),
+        // The bootloader and table per flash size (generate_manifest.py), the default parts being the smallest's; absent in a release from before it.
+        layouts: (build.layouts || []).map(l => ({ flashSize: l.flashSize, partitionTable: new URL(l.partitionTable, base).toString(),
+                                                   bootloader: l.bootloader && new URL(l.bootloader, base).toString() })),
     };
 }
+
+// Where every ESP32 layout keeps its partition table (ESP-IDF's CONFIG_PARTITION_TABLE_OFFSET default).
+const PARTITION_TABLE_OFFSET = 0x8000;
 
 // ---------------------------------------------------------------------------
 // Improv RPC payload encoders (frame building is in improv-frame.js)
@@ -341,16 +349,10 @@ async function readBootIp(port, timeoutMs) {
             if (result.timeout || result.done) break;
             buf += decoder.decode(result.value, { stream: true });
             if (!ip) {
-                // Primary: the explicit machine token. Fallback: the human-readable
-                // "… — Eth/WiFi: <ip>" status line (firmware predating MM_IP).
-                const m = buf.match(/MM_IP=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/)
-                       || buf.match(/(?:Eth|WiFi):\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-                if (m) { ip = m[1]; graceDeadline = Date.now() + DEVICE_GRACE_MS; }
+                ip = bootLogIp(buf);   // complete tokens only: a chunk can end inside the address
+                if (ip) graceDeadline = Date.now() + DEVICE_GRACE_MS;
             }
-            if (!mdns) {
-                const d = buf.match(/MM_DEVICE=(\S+\.local)/);
-                if (d) mdns = d[1];
-            }
+            if (!mdns) mdns = bootLogDevice(buf);
             if (ip && mdns) return { ip, mdns };   // both in → done
             if (buf.length > 8192) buf = buf.slice(-2048);  // cap; keep a tail for split lines
         }
@@ -364,7 +366,7 @@ async function readBootIp(port, timeoutMs) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP fallback for Improv-less paths (alreadyOnline, esp32-eth)
+// HTTP fallback for Improv-less paths (alreadyOnline, esp32-ethonly)
 // ---------------------------------------------------------------------------
 
 // User types `192.168.1.42` or `MM-XXXX.local` (or even a full `http://…/`);
@@ -446,7 +448,9 @@ async function connectAndDescribeChip(esploader) {
     await esploader.connect("default_reset", 2);
     const chipName = await esploader.chip.getChipDescription(esploader);
     esploader.info("Chip is " + chipName);
-    esploader.info("Features: " + (await esploader.chip.getChipFeatures(esploader)));
+    const features = await esploader.chip.getChipFeatures(esploader);
+    esploader.info("Features: " + features);
+    esploader.chipFeatures = features;   // what the installer measures beside the description: the in-package PSRAM
     esploader.info("Crystal is " + (await esploader.chip.getCrystalFreq(esploader)) + "MHz");
     esploader.info("MAC: " + (await esploader.chip.readMac(esploader)));
     if (typeof esploader.chip.postConnect !== "undefined") {
@@ -457,6 +461,14 @@ async function connectAndDescribeChip(esploader) {
         await esploader.changeBaud();
     }
     return chipName;
+}
+
+// What a connected board tells about itself, for the picker's measuredFirmware: its description with the revision, its features,
+// and its flash size, undefined when the flash chip reports none.
+async function boardFacts(esploader, description) {
+    let flashSize;
+    try { flashSize = await esploader.detectFlashSize(); } catch (_) { /* unread */ }
+    return { description, features: esploader.chipFeatures || [], flashSize };
 }
 
 // ---------------------------------------------------------------------------
@@ -600,7 +612,7 @@ export const installer = {
      *   a normal re-flash overwrites in place and users usually want
      *   persistent state to survive a firmware bump.
      * @param {boolean} [opts.ethOnly=false] - the picked firmware has WiFi compiled
-     *   out (firmwares.json `eth_only`: esp32-eth, esp32p4rev1-eth, esp32p4rev3-eth). Such a build connects
+     *   out (firmwares.json `eth_only`: esp32-ethonly). Such a build connects
      *   over Ethernet only and has no WiFi-provisioning RPC, so when the device isn't
      *   already online from the boot log we SKIP the WiFi-credentials step (which would
      *   otherwise send WIFI_SETTINGS and get UNKNOWN_RPC_COMMAND) and report a clear
@@ -615,7 +627,7 @@ export const installer = {
      * @param {() => Promise<{action: "ip"|"skip"|"retry", url?: string}>} [opts.uiWaitForIp]
      *   Host page resolves this when the user picks an action on the fallback
      *   "needs-ip" form. Only invoked when Improv didn't produce a URL
-     *   (alreadyOnline branch, or an Improv-less firmware like esp32-eth).
+     *   (alreadyOnline branch, or an Improv-less firmware like esp32-ethonly).
      *   Actions:
      *     - "ip"    — `url` is the typed value; orchestrator continues with
      *                 HTTP-injection path.
@@ -862,9 +874,22 @@ export const installer = {
             // Fetch the manifest + all part binaries before erasing flash.
             // Failing here (CDN issue, bad manifest) leaves the device
             // intact — better than mid-flash failure with an erased chip.
+            // The layout follows the measured flash: its bootloader, the size in its header and its digest made at build time, and its table
+            // replace the default (smallest) ones, written as they are. A board smaller than every layout is refused here, before anything is erased.
+            let parts = manifest.parts;
+            if (manifest.layouts.length) {
+                let measured;
+                try { measured = await esploader.detectFlashSize(); } catch (_) { /* unread: the smallest layout */ }
+                const { layout, note } = layoutFor(manifest.layouts, measured);
+                if (onLog) onLog(`[orchestrator] layout: ${note}`);
+                if (!layout) throw new Error(note);
+                const bootloaderOffset = esploader.chip.BOOTLOADER_FLASH_OFFSET;
+                parts = parts.map(p => (p.offset === PARTITION_TABLE_OFFSET ? { ...p, url: layout.partitionTable }
+                                      : p.offset === bootloaderOffset && layout.bootloader ? { ...p, url: layout.bootloader } : p));
+            }
             trackProgress("fetch-firmware");
             const fileArray = [];
-            for (const part of manifest.parts) {
+            for (const part of parts) {
                 const res = await fetch(part.url);
                 if (!res.ok) {
                     throw new Error(`part fetch HTTP ${res.status}: ${part.url}`);
@@ -1017,7 +1042,7 @@ export const installer = {
                 alreadyOnline = true;
                 defaultsApplied = await pushDefaultsOverSerial(port, device, applyDefaults, trackProgress, onLog);
             } else if (ethOnly) {
-                // Ethernet-only firmware (WiFi compiled out: esp32-eth, esp32p4rev1-eth) that
+                // Ethernet-only firmware (WiFi compiled out: esp32-ethonly) that
                 // did NOT print an IP — i.e. no Ethernet cable was connected at boot. There
                 // is no point attempting WiFi provisioning: the build has no WIFI_SETTINGS
                 // RPC, so sending one returns UNKNOWN_RPC_COMMAND (the error users hit). The
@@ -1047,7 +1072,7 @@ export const installer = {
             //   1. Device booted with saved WiFi credentials — it's at
             //      STATE_PROVISIONED already; SDK expects STATE_AUTHORIZED.
             //   2. Firmware doesn't include the Improv listener at all
-            //      (esp32-eth and other Improv-less builds — no UART RPC
+            //      (esp32-ethonly and other Improv-less builds: no UART RPC
             //      task is running).
             // Both share the same fallback path: skip provisioning + RPC
             // push, prompt the user for the device IP/hostname, and let
@@ -1323,9 +1348,10 @@ export const installer = {
             const chipName = await connectAndDescribeChip(esploader);
             // Keep the raw silicon name in _detected for the flash-progress log
             // (more informative there); hand the picker the FAMILY, which is what
-            // it compares against deviceModels.json's `chip`.
+            // it compares against deviceModels.json's `chip`, and what the board tells about itself,
+            // from which the picker names the firmware when no specific device is chosen (measuredFirmware).
             _detected = { port, transport, esploader, chipName };
-            return chipFamily(chipName);
+            return { family: chipFamily(chipName), facts: await boardFacts(esploader, chipName) };
         } catch (e) {
             // Failed before we could stash it — release the port so the next
             // attempt (or a manual flow) can re-open cleanly.

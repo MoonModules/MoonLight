@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 
-from build_esp32 import fragment_paths, stale_feature_cache  # noqa: E402
+from build_esp32 import config_seed_paths, fragment_paths, stale_feature_cache  # noqa: E402
 import build_esp32  # noqa: E402
 import sdkconfig_fragments  # noqa: E402
 
@@ -55,7 +55,14 @@ def test_an_unchanged_dir_is_not_reconfigured(tmp_path, monkeypatch):
     build.mkdir()
     (build / "sdkconfig").write_text("CONFIG_A=n\n")
     value = sdkconfig_fragments.refresh(["idf.py"], build, [frag], tmp_path, {})
-    assert len(ran) == 1 and not (build / "sdkconfig").exists()   # changed: deleted and reconfigured
+    # Changed: deleted and configured twice, the second pass resolving a component gated on a $CONFIG value.
+    assert len(ran) == 2 and not (build / "sdkconfig").exists()
     sdkconfig_fragments.record(build, value)
     sdkconfig_fragments.refresh(["idf.py"], build, [frag], tmp_path, {})
-    assert len(ran) == 1
+    assert len(ran) == 2
+
+
+def test_a_changed_kconfig_default_regenerates_the_sdkconfig_as_a_changed_fragment_does():
+    # A `default y if ...` edited in the project's Kconfig reaches an existing build dir only through the digest.
+    paths = config_seed_paths(["-DSDKCONFIG_DEFAULTS=sdkconfig.defaults", "-DMM_FIRMWARE_NAME=x"])
+    assert [p.name for p in paths] == ["sdkconfig.defaults", "Kconfig.projbuild"]

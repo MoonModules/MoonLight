@@ -669,6 +669,10 @@ const char* chipModel() {
 #endif
 }
 
+const char* chipRevision() { return ""; }   // ESP32-only: the revision picks a classic ESP32 firmware
+const char* chipPackage() { return ""; }
+size_t psramFoundBytes() { return 0; }
+
 bool httpsAvailable() MM_NONBLOCKING {
 #if defined(_WIN32) || defined(MM_HAVE_CURL)
     // Windows needs no libcurl: WinHTTP ships with the OS, so the send path is always compiled in.
@@ -1055,6 +1059,7 @@ const char* coprocessorLine() MM_NONBLOCKING { return ""; }
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 
 const char* psramType() {
     return "";   // host has no PSRAM

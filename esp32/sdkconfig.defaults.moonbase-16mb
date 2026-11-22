@@ -8,4 +8,5 @@
 # the user retries over the network). On 16 MB that returns 4 MB, and it goes to LittleFS:
 # 11264 KB instead of 7168 KB, which is where the space is actually useful (MoonLive scripts,
 # effect assets, captures).
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/ota_16mb_moonbase.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/16mb_moonbase.csv"

@@ -2214,6 +2214,9 @@ function createCard(mod, depth) {
             // firmware compatibility only. A board picker here would invite the user to
             // mis-narrow the firmware list.
             enableDevicePicker: false,
+            // The board's own facts, from which the picker suggests the firmware they name and offers every one the board fits.
+            ownHardware: kind === "moonbase" ? null : fetch("/api/system").then(r => r.json()).then(s => ({ chip: s.chip, hardware: s.hardware })).catch(() => null),
+            loadDeviceSupport: () => import(`${INSTALLER_URL}install-picker-devices.js`),
             installRowExtras: extras,
             // After the Install button, not before: these are other ways to install, so putting
             // them above would separate that button from the two dropdowns it acts on.

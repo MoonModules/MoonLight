@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>   // the presence packet's two destinations
+#include <sys/stat.h>         // mkdir: the .config folder of a volume formatted for migrated networks
 
 #include "esp_event.h"
 #include "esp_http_client.h"
@@ -67,7 +68,7 @@ __attribute__((section(".rodata_custom_desc"))) const mm::firmware::HandoffRecor
 
 namespace {
 
-// The app's config volume, labeled `littlefs` or, on older tables, `spiffs`; only ever read, so a failed install cannot corrupt user config.
+// The app's config volume, labeled `littlefs` or, on tables from before 7.1.0, `spiffs`; only ever read, so a failed install cannot corrupt user config.
 struct FsCandidate { esp_partition_subtype_t subtype; const char* label; };
 constexpr FsCandidate kFsCandidates[] = {
     {ESP_PARTITION_SUBTYPE_DATA_LITTLEFS, "littlefs"},
@@ -121,7 +122,7 @@ mm::configscrape::SavedIp ethIp_;
 // The board's WiFi TX cap in dBm, 0 for none: a board that browns out at full power must not do so in recovery.
 int txPowerDbm_ = 0;
 
-// The app's build variant ("esp32s3-zero"), or empty before the app has run, when the page offers every firmware for the chip.
+// The app's build variant ("esp32s3-qspi-lite"), or empty before the app has run, when the page offers every firmware for the chip.
 char g_appVariant[24] = {};
 // The name the app gives the board, or its anonymous `MM-XXXX` before the app has saved one: what the map shows on its node.
 char g_deviceName[33] = {};
@@ -150,18 +151,50 @@ void loadIdentity() {
     std::free(buf);
 }
 
+// The networks the migration image left in NVS, a NetworkModule.json, when the new layout's filesystem overlapped it as it ran; its length, or 0.
+size_t migratedNetworks(char* doc, size_t cap) {
+    nvs_handle_t h;
+    if (nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READONLY, &h) != ESP_OK) return 0;
+    size_t len = cap - 1;
+    const bool have = nvs_get_blob(h, mm::firmware::kMigratedNetworkKey, doc, &len) == ESP_OK;
+    nvs_close(h);
+    if (!have) return 0;
+    doc[len] = 0;
+    return len;
+}
+
+// Write the migrated networks as the app's own file, into the volume formatted for them, then clear them from NVS.
+void adoptMigratedNetworks(const char* doc, size_t len) {
+    mkdir("/fs/.config", 0775);
+    if (FILE* f = std::fopen(kNetworkConfig, "w")) {
+        const bool ok = std::fwrite(doc, 1, len, f) == len;
+        std::fclose(f);
+        nvs_handle_t h;
+        if (ok && nvs_open(mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) == ESP_OK) {
+            nvs_erase_key(h, mm::firmware::kMigratedNetworkKey);
+            nvs_commit(h);
+            nvs_close(h);
+        }
+        std::printf("MoonBase: the migrated networks written to %s\n", kNetworkConfig);
+    }
+}
+
 // Read the stored WiFi credentials and Ethernet wiring, if there are any. Absent, unreadable or empty all mean the same thing to the caller: fall through the cascade.
 void loadCredentials() {
+    // A board just moved over a layout whose filesystem overlapped the migration image: its volume is unformatted and its networks wait in NVS.
+    static char migrated[8192];
+    const size_t migratedLen = migratedNetworks(migrated, sizeof(migrated));
     const char* label = nullptr;
     for (const auto& c : kFsCandidates) {
         if (!esp_partition_find_first(ESP_PARTITION_TYPE_DATA, c.subtype, c.label)) continue;
         esp_vfs_littlefs_conf_t conf = {};
         conf.base_path = kFsMountPoint;
         conf.partition_label = c.label;
-        conf.format_if_mount_failed = false;   // never format: this volume is the user's config
+        conf.format_if_mount_failed = migratedLen > 0;   // the user's config otherwise, which is never formatted
         if (esp_vfs_littlefs_register(&conf) == ESP_OK) { label = c.label; break; }
     }
     if (!label) return;
+    if (migratedLen) adoptMigratedNetworks(migrated, migratedLen);
 
     // The keys are a cross-image contract with what the app writes; the app pins it with a unit test (unit_MoonBaseContract).
     if (char* buf = readConfig(kNetworkConfig)) {
@@ -483,10 +516,10 @@ const char kPage[] =
     "<br><small id=v></small></p>"
     "<section><b>From a file</b><br><input type=file id=f accept=.bin>"
     "<button onclick=up()>Install</button>"
-    // The last resort when no URL is at hand: name where the firmware-<variant>-v*.bin files live. A plain link, so it works from any device that can reach the internet.
+    // The last resort when no URL is at hand: name where the moonlight-<variant>-v*.bin files live. A plain link, so it works from any device that can reach the internet.
     "<br><small>Firmware files: <a href='https://github.com/MoonModules/MoonLight/releases' "
     "target=_blank rel=noopener>github.com/MoonModules/MoonLight/releases</a> "
-    "(the firmware-...bin matching this board)</small></section>"
+    "(the moonlight-...bin matching this board)</small></section>"
     // Installing from a release without typing a URL: the web installer's own picker, loaded from its site, and this image only receives the URL.
     "<section><b>From a release</b><div id=pick></div><small id=rs></small></section>"
     "<section><b>From a URL</b><br><input id=u size=34 placeholder=https://...>"

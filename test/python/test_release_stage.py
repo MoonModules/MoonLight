@@ -53,9 +53,11 @@ def test_the_teensy_build_covers_only_shipping_teensy_firmwares():
 
 def test_an_esp32_firmware_stages_under_the_release_names():
     assert rs.esp32_stage_plan("esp32", "7.0.0") == [
-        ("MoonLight.bin", "firmware-esp32-v7.0.0.bin"),
-        ("bootloader/bootloader.bin", "firmware-esp32-v7.0.0-bootloader.bin"),
-        ("partition_table/partition-table.bin", "firmware-esp32-v7.0.0-partition-table.bin"),
+        ("MoonLight.bin", "moonlight-esp32-v7.0.0.bin"),
+        ("bootloader/bootloader-8mb.bin", "moonlight-esp32-v7.0.0-bootloader-8mb.bin"),
+        ("partition_table/partition-table-8mb.bin", "moonlight-esp32-v7.0.0-partition-table-8mb.bin"),
+        ("bootloader/bootloader-16mb.bin", "moonlight-esp32-v7.0.0-bootloader-16mb.bin"),
+        ("partition_table/partition-table-16mb.bin", "moonlight-esp32-v7.0.0-partition-table-16mb.bin"),
         ("ota_data_initial.bin", "shared-ota-data.bin"),
         ("flasher_args.json", "flasher-esp32.json")]
 
@@ -78,7 +80,8 @@ def test_staging_a_firmware_copies_its_files_and_the_shared_images_once_per_chip
         (build / image).write_bytes(b"x")
     rs.stage_esp32("esp32", "1.0.0")
     assert sorted(p.name for p in (tmp_path / "dist").iterdir()) == sorted([
-        "firmware-esp32-v1.0.0-bootloader.bin", "firmware-esp32-v1.0.0-partition-table.bin", "firmware-esp32-v1.0.0.bin",
+        "moonlight-esp32-v1.0.0-bootloader-8mb.bin", "moonlight-esp32-v1.0.0-bootloader-16mb.bin", "moonlight-esp32-v1.0.0-partition-table-8mb.bin",
+        "moonlight-esp32-v1.0.0-partition-table-16mb.bin", "moonlight-esp32-v1.0.0.bin",
         "flasher-esp32.json", "shared-moonbase-esp32.bin", "shared-migrate-esp32.bin", "shared-ota-data-slot0.bin", "shared-ota-data.bin"])
 
 
@@ -128,3 +131,24 @@ def test_gathering_moves_every_artifact_file_flat_into_dist(tmp_path, monkeypatc
 def test_the_release_dockerfile_selects_its_package_by_target_architecture():
     assert "COPY moonlight_$TARGETARCH.deb" in rs.DOCKERFILE and rs.DOCKERFILE.endswith('ENTRYPOINT ["/usr/bin/MoonLight"]\n')
     assert json.dumps(rs.ARCHITECTURES) == '["amd64", "arm64"]'
+
+
+def test_every_old_name_an_installed_device_asks_for_gets_the_firmware_that_serves_it_now():
+    dist = ["moonlight-esp32-v8.0.0.bin", "moonlight-esp32-lite-v8.0.0.bin", "moonlight-esp32c3-v8.0.0.bin",
+            "moonlight-esp32-lite-v8.0.0-bootloader.bin", "moonlight-teensy41-v8.0.0.hex", "moonlight-host-linux-x64-v8.0.0.bin"]
+    plan = dict((old, new) for new, old in rs.old_name_plan(dist, "8.0.0"))
+    # The old 4 MB `esp32` gets the 4 MB tier: the new full `esp32` shares its name and needs 8 MB.
+    assert plan["firmware-esp32-v8.0.0.bin"] == "moonlight-esp32-lite-v8.0.0.bin"
+    assert plan["firmware-esp32-16mb-v8.0.0.bin"] == "moonlight-esp32-v8.0.0.bin"
+    assert plan["firmware-esp32s3-n16r8-v8.0.0.bin"] == "moonlight-esp32s3-opi-v8.0.0.bin"
+    # A name the plan kept serves itself under the old prefix, a board's and a host's image and a Teensy's hex alike.
+    assert plan["firmware-esp32c3-v8.0.0.bin"] == "moonlight-esp32c3-v8.0.0.bin"
+    assert plan["firmware-teensy41-v8.0.0.hex"] == "moonlight-teensy41-v8.0.0.hex"
+    assert plan["firmware-host-linux-x64-v8.0.0.bin"] == "moonlight-host-linux-x64-v8.0.0.bin"
+
+
+def test_a_new_name_and_an_install_part_get_no_old_name_copy():
+    dist = ["moonlight-esp32-lite-v8.0.0.bin", "moonlight-esp32-lite-v8.0.0-bootloader.bin"]
+    olds = [old for _, old in rs.old_name_plan(dist, "8.0.0")]
+    assert "firmware-esp32-lite-v8.0.0.bin" not in olds
+    assert not any("bootloader" in o for o in olds)

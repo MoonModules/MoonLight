@@ -361,7 +361,7 @@ test("two settled nodes newly linked by a group are relaxed together", () => {
 test("a search matches the devices whose name, address, type, version, firmware or group hold every term; the map greys out the rest", () => {
     const { graphMatches } = load(["graphMatches"]);
     const nodes = [node("hall-s3", { ip: "192.168.1.101", type: "MoonLight", firmware: "esp32s3-n16r8" }),
-                   node("desk-p4", { ip: "192.168.1.169", type: "MoonLight", firmware: "esp32p4rev1-eth" }),
+                   node("desk-p4", { ip: "192.168.1.169", type: "MoonLight", firmware: "esp32p4rev1" }),
                    node("bulb", { ip: "192.168.1.143", type: "Hue" })];
     const groups = new Map([["g1", { name: "Stage", members: new Set([0, 1]), missing: new Set() }]]);
     assert.equal(graphMatches(nodes, groups, "  "), null);                          // no search: every device as it is

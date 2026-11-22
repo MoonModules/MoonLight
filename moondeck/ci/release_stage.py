@@ -43,6 +43,7 @@ DIST = ROOT / "dist"
 FIRMWARES_JSON = ROOT / "mooninstaller" / "firmwares.json"
 SETUP_TEENSY = ROOT / "moondeck" / "build" / "setup_teensy.py"
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
+from build_esp32 import APP_ASSET_PREFIX, FIRMWARES as ESP32_FIRMWARES  # noqa: E402  the release image names a device asks for, and each firmware's layouts
 
 # The release image's build context file, written by container-context: one .deb per architecture, then the runtime stage.
 DOCKERFILE = """\
@@ -131,13 +132,44 @@ def migrate_chips(images: list[Path]) -> list[tuple[Path, str]]:
     return [(image, chip) for image, chip in chips if not chip.endswith("-pause")]
 
 
+# The firmwares an installed device still asks for by an old name (`firmware-<name>-v<version>.bin`, before the firmware plan of
+# 2026-11-21), each with the firmware that serves it now; every other name a device carried then serves itself under that prefix.
+# Removed once MoonCloud stats show no device on an old name. The P4's Ethernet-only names stay out while the C6's driver takes GPIO 14 to 19, an LED output there.
+OLD_NAMES = {
+    "esp32": "esp32-lite", "esp32-16mb": "esp32", "esp32-pico": "esp32", "esp32-eth": "esp32-ethonly",
+    "esp32-wrover": "esp32-rev1-lite", "esp32s3-zero": "esp32s3-qspi-lite", "esp32s3-n8r2": "esp32s3-qspi",
+    "esp32s3-n8r8": "esp32s3-opi", "esp32s3-n16r8": "esp32s3-opi", "esp32s3-n32r16": "esp32s3-opi-oflash",
+    "esp32p4rev1-eth-wifi": "esp32p4rev1", "esp32p4rev3-eth-wifi": "esp32p4rev3",
+}
+
+
+def old_name_plan(dist_names: list[str], version: str) -> list[tuple[str, str]]:
+    """Each (app image in dist/, its copy under the name an installed device asks for): every renamed firmware's successor, and every
+    app image whose name predates the plan under the old prefix. The plan's new names have no device asking for them by `firmware-`."""
+    plan = [(f"{APP_ASSET_PREFIX}-{new}-v{version}.bin", f"firmware-{old}-v{version}.bin") for old, new in OLD_NAMES.items()]
+    planned = set(OLD_NAMES) | set(OLD_NAMES.values())
+    for name in sorted(dist_names):
+        m = re.fullmatch(rf"{APP_ASSET_PREFIX}-(.+)-v{re.escape(version)}\.(bin|hex)", name)
+        if m and m.group(1) not in planned:
+            plan.append((name, f"firmware-{m.group(1)}-v{version}.{m.group(2)}"))
+    return plan
+
+
+def stage_old_names(version: str) -> None:
+    """Copy each app image under the name an installed device asks for (old_name_plan); a successor missing from dist/ stops the release."""
+    for source, name in old_name_plan([p.name for p in DIST.iterdir()], version):
+        shutil.copy(DIST / source, DIST / name)
+        print(f"  {name} <- {source}")
+
+
 def esp32_stage_plan(firmware: str, version: str) -> list[tuple[str, str]]:
     """Each (build output relative to its build dir, dist file name) one firmware's staging copies."""
-    prefix = f"firmware-{firmware}-v{version}"
+    prefix = f"{APP_ASSET_PREFIX}-{firmware}-v{version}"
     return [("MoonLight.bin", f"{prefix}.bin"),
-            ("bootloader/bootloader.bin", f"{prefix}-bootloader.bin"),
-            # App, bootloader and partition table are unique per firmware (one flash size holds several layouts), so staged with the prefix.
-            ("partition_table/partition-table.bin", f"{prefix}-partition-table.bin"),
+            # A bootloader and a table per flash size the firmware installs into, which the installer picks by the flash it measures: the bootloader's header names that size, its digest made by esptool merge-bin.
+            *[pair for size in ESP32_FIRMWARES[firmware]["layouts"]
+              for pair in ((f"bootloader/bootloader-{size}mb.bin", f"{prefix}-bootloader-{size}mb.bin"),
+                           (f"partition_table/partition-table-{size}mb.bin", f"{prefix}-partition-table-{size}mb.bin"))],
             # ota-data is byte-identical for ALL firmwares, so it is staged under a SHARED name and the release uploads it once.
             ("ota_data_initial.bin", "shared-ota-data.bin"),
             # Per-firmware flasher_args.json: the manifests take their offsets from the real build.
@@ -170,7 +202,7 @@ def stage_teensy(tag: str, version: str) -> None:
         subprocess.run(["uv", "run", str(ROOT / "moondeck" / "build" / "build_teensy.py"),
                         "--firmware", firmware, "--release", tag, "--version", version], cwd=ROOT, check=True)
         for extension in ("hex", "bin"):
-            shutil.copy(ROOT / "build" / firmware / f"MoonLight.{extension}", DIST / f"firmware-{firmware}-v{version}.{extension}")
+            shutil.copy(ROOT / "build" / firmware / f"MoonLight.{extension}", DIST / f"{APP_ASSET_PREFIX}-{firmware}-v{version}.{extension}")
 
 
 def list_dist() -> None:
@@ -341,7 +373,8 @@ def pages_site() -> None:
     shutil.copy(ROOT / "src" / "ui" / "install-picker.js", install)
     # The device-catalog / chip-detection half of the picker, imported by index.html: it must ship beside install-picker.js or the ES-module import 404s.
     shutil.copy(ROOT / "src" / "ui" / "install-picker-devices.js", install)
-    shutil.copy(ROOT / "library.json", install)   # the install page reads the project version from it
+    import compute_version
+    compute_version.write_stamped_library(install / "library.json")   # the install page shows the exact version it was staged from
     # Only the images a deviceModels.json entry references, so "assets/deviceModels/<slug>.jpg" resolves same-origin from /install/ without shipping the unused library.
     (install / "assets" / "deviceModels").mkdir(parents=True, exist_ok=True)
     for entry in json.loads((ROOT / "mooninstaller" / "deviceModels.json").read_text(encoding="utf-8")):
@@ -394,6 +427,8 @@ def main() -> int:
     teensy.add_argument("--version", required=True)
     sub.add_parser("gather", help="Flatten artifacts/ into dist/.")
     sub.add_parser("extras", help="Copy the control-surface session and the module help into dist/.")
+    old = sub.add_parser("old-names", help="Copy each app image in dist/ under the name an installed device asks for (OLD_NAMES).")
+    old.add_argument("--version", required=True)
     manifest = sub.add_parser("manifests", help="Write dist/manifest-<firmware>.json for every shipping firmware.")
     manifest.add_argument("--tag", required=True)
     manifest.add_argument("--version", required=True)
@@ -403,7 +438,7 @@ def main() -> int:
     sub.add_parser("container-context", help="Write ctx/ with the .debs and the release Dockerfile.")
     sub.add_parser("smoke-images", help="Run the amd64 and arm64 smoke images.")
     smoke = sub.add_parser("smoke-update", help="Install a host program through its own Firmware route and check it restarts on it.")
-    smoke.add_argument("--program", required=True, type=Path, help="dist/firmware-host-<os>-<arch>-v<version>.bin")
+    smoke.add_argument("--program", required=True, type=Path, help="dist/moonlight-host-<os>-<arch>-v<version>.bin")
     sub.add_parser("pages-site", help="Stage the installer under pages/install/.")
     docs = sub.add_parser("merge-docs", help="Copy the rendered docs site into pages/.")
     docs.add_argument("--site-dir", required=True, type=Path)
@@ -427,6 +462,8 @@ def main() -> int:
         extras()
     elif args.command == "manifests":
         manifests(args.tag, args.version, args.repo)
+    elif args.command == "old-names":
+        stage_old_names(args.version)
     elif args.command == "image-name":
         emit("name", image_name(args.repo))
     elif args.command == "container-context":

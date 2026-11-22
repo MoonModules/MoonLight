@@ -23,8 +23,9 @@ export function releaseOfVersion(releases, version) {
 }
 
 // The key that names a release asset, from the device's own `firmware` control. On the app tab
-// that is already the variant ("esp32s3-n16r8"); on the MoonBase tab the device reports the chip
-// ("ESP32-S3"), which the asset spells "esp32s3" after the build directory's IDF target.
+// that is already the variant ("esp32s3-opi"); on the MoonBase tab the device reports its MoonBase family
+// ("esp32s3oflash"), passed on as it is, or, on firmware from before the family, the chip ("ESP32-S3"),
+// which the asset spells "esp32s3" after the build directory's IDF target.
 //
 // Null when the control has not arrived: the picker reads that as "offer everything", a full list where
 // an unmatched key would leave a silently empty one.
@@ -48,7 +49,7 @@ function followsLatest(dev) {
 // on the map. `latest`'s version is its release name (release.yml), which GitHub's API serves cross-origin.
 export function channelUpdate(dev, releases) {
     if (!dev?.version) return null;
-    const ships = (rel, v) => !dev.firmware || !!releaseAsset(rel, firmwareAssetName(dev.firmware, v)).url;
+    const ships = (rel, v) => !dev.firmware || !!releaseAsset(rel, firmwareAssetName(dev.firmware, v, dev.assetPrefix || "firmware")).url;
     const stable = latestStable(releases);
     const sv = stable?.tag_name?.replace(/^v/, "");
     const official = sv && isNewer(sv, dev.version) && ships(stable, sv) ? { rel: stable, tag: stable.tag_name, label: stable.tag_name, version: sv } : null;

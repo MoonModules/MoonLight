@@ -19,12 +19,12 @@
 // "Firmware" here is the compiled binary variant (chip + radios + sdkconfig
 // fragments), not the physical device. See docs/explanation/architecture/mooninstaller.md § Firmware
 // vs device. Release assets are named per firmware variant
-// (firmware-<variant>-v<ver>.bin, manifest-<variant>.json).
+// (moonlight-<variant>-v<ver>.bin, manifest-<variant>.json).
 //
 // Sections (top to bottom):
 //   1. Constants + module state
 //   2. The release feed
-//   3. Asset parsing (manifest-*.json → firmware, firmware-*.bin → binary)
+//   3. Asset parsing (manifest-*.json → firmware, moonlight-*.bin → binary)
 //   4. Compatibility filter (OTA only)
 //   5. Relative-time helper
 //   6. DOM construction + event wiring
@@ -58,7 +58,7 @@ const PREF_DEVICE_KEY   = "MoonLight.picker.device";
 // written and this one is read as a fallback, so a returning visitor keeps their pick.
 const PREF_DEVICE_KEY_LEGACY = "MoonLight.picker.board";
 
-// A link may name what to preselect: `?release=v5.0.0&firmware=esp32s3-n16r8&device=...`
+// A link may name what to preselect: `?release=v5.0.0&firmware=esp32s3-opi&device=...`
 // It outranks the saved preference, since a link is the sender's intent and the preference
 // is the visitor's habit, and a support link that lands on the wrong device helps nobody.
 // An unknown value falls through to the saved preference rather than selecting nothing.
@@ -76,10 +76,10 @@ function urlParam(name) {
 // for someone with a v3 device to try: without them a v3 device has no image at all, since
 // the rev1 binary is rejected by its bootloader. Remove a key once its variant is
 // bench-verified.
-//
-// esp32p4rev1-eth-wifi is NOT experimental: on IDF v6.1-rc1 with
-// CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n it boots, associates and serves the UI.
-const EXPERIMENTAL_FIRMWARES = new Set(["esp32p4rev3-eth", "esp32p4rev3-eth-wifi"]);
+const EXPERIMENTAL_FIRMWARES = new Set(["esp32p4rev3"]);
+
+// The one list of what the 4 MB tier (-lite) leaves out, which the picker links while a -lite firmware is picked.
+const LITE_TIER_URL = "https://moonmodules.org/MoonLight/reference/hardware/firmware-variants/#the-4-mb-tier-lite";
 
 // One picker instance per init() call. Each tracks its own state so multiple
 // pickers on a page (unused today but possible) don't fight over selections.
@@ -94,6 +94,9 @@ function makeState() {
                                // null on on-device OTA (no local serial), which is
                                // also what gates the Detect button off there.
         detectedChip: null,    // chip family from the last successful Detect, or null
+        detectedFacts: null,   // what that Detect read from an ESP32: description, features, flash size (measuredFirmware)
+        suggested: null,       // on a running device that reports its facts: the firmware they name, { firmware, note }
+        fits: null,            // and whether a firmware runs on its board (firmwareFits), which widens the offer across names
         runDetect: null,       // render() fills this with the detect routine when
                                // the Detect button is present; runDetect() public
                                // method calls it (host's auto-fire on port grant)
@@ -192,7 +195,9 @@ const releaseByTag = (releases, tag) => (releases || []).find(r => r.tag_name ==
 // ---------------------------------------------------------------------------
 
 // The release assets' names, one home for each: an app image for a board and a host alike, MoonBase per chip, the migration image per chip.
-const firmwareAssetName = (firmware, version) => `firmware-${firmware}-v${version}.bin`;
+// An app image starts with the prefix the device reports (`assetPrefix`, from its kReleaseAssetUrlFormat); a device too old to report one asks
+// for `firmware-<name>`, which a release keeps for every name such a device carries.
+const firmwareAssetName = (firmware, version, prefix = "moonlight") => `${prefix}-${firmware}-v${version}.bin`;
 const moonbaseAssetName = (chip) => `shared-moonbase-${chip}.bin`;
 const migrateAssetName = (chip) => `shared-migrate-${chip}.bin`;
 
@@ -210,14 +215,16 @@ function mirrorUrl(url, base) {
 }
 
 // Each release's `assets[]` contains both manifest-<firmware>.json and
-// firmware-<firmware>-v<ver>(.bin|-bootloader.bin|-partition-table.bin|-ota-data.bin).
+// moonlight-<firmware>-v<ver>(.bin|-bootloader-<size>mb.bin|-partition-table-<size>mb.bin), or firmware- in a release from before that prefix.
 // The picker needs: per-firmware → {manifestUrl, binaryUrl}. Manifest URL drives
 // ESP Web Tools (web installer); binary URL drives /api/firmware/url (device OTA).
 function parseFirmwaresFromAssets(assets, tag, moonbaseOnly = false) {
     if (!assets) return [];
     const firmwares = new Map();
     const manifestRe = /^manifest-(.+)\.json$/;
-    const binaryRe = /^firmware-(.+)-v.+?\.bin$/;  // app .bin only (no -bootloader/-partition-table/-ota-data)
+    // A release with `moonlight-` images also carries `firmware-<old name>` copies for devices that still ask by an old name; those are skipped.
+    const prefix = assets.some(a => a.name.startsWith("moonlight-")) ? "moonlight" : "firmware";
+    const binaryRe = new RegExp(`^${prefix}-(.+)-v.+?\\.bin$`);  // app .bin only (no -bootloader/-partition-table/-ota-data)
 
     for (const a of assets) {
         const m = manifestRe.exec(a.name);
@@ -311,17 +318,15 @@ const ofOfferedKind = (f, ownFirmwareKey) => !!f.isHost === (ownFirmwareKey === 
 export const pickedEntry = (firmwares, firmware, ownFirmwareKey) =>
     (firmwares || []).find(f => f.firmware === firmware && ofOfferedKind(f, ownFirmwareKey));
 
-// A host's own program, firmware-host-<os>-<arch>-v<version>.bin, which a running host installs over the air.
+// A host's own program, moonlight-host-<os>-<arch>-v<version>.bin, which a running host installs over the air.
 const isHostProgram = (firmware) => /^host-(?!download$)/.test(firmware || "");
 
 // Bespoke rule for MoonLight's firmware keys: strip the `-eth*` suffix from
 // both sides; equal identities are mutually OTA-compatible. So `esp32` and
-// `esp32-eth` can flash each other (same physical ESP32 silicon; the variant
-// decides which radios are compiled in) — as can the legacy `esp32-eth-wifi`
-// key (dropped in the variant collapse, but still reported by devices flashed
-// before it; it strips to `esp32` and stays OTA-compatible). `esp32s3-n16r8` is
-// only compatible with itself (different chip family AND different partition
-// table). Web installer passes ownFirmwareKey=null → all candidates compatible.
+// `esp32-ethonly` can flash each other (same physical ESP32 silicon; the variant
+// decides which radios are compiled in), as can the legacy `esp32-eth-wifi`
+// key (still reported by devices flashed before the variant collapse; it strips
+// to `esp32`). `esp32s3-opi` is only compatible with itself. Web installer passes ownFirmwareKey=null → all candidates compatible.
 function isCompatible(ownFirmwareKey, candidateFirmwareKey, downloadKey = hostKeyForThisHost()) {
     // Download mode: the package for `downloadKey`, a device's own build on its card, else the OS the browser runs on, so a Mac is offered the .dmg and not the Windows .zip.
     // The archive shares its key with the host's own program, which the caller's download filter keeps out of this list.
@@ -329,22 +334,53 @@ function isCompatible(ownFirmwareKey, candidateFirmwareKey, downloadKey = hostKe
     // A host's own program installs on that host only; a board the web installer flashes takes its own firmware.
     if (isHostProgram(candidateFirmwareKey)) return ownFirmwareKey === candidateFirmwareKey;
     if (!ownFirmwareKey) return true;
-    const strip = f => f.replace(/-eth.*$/, "");
-    return strip(ownFirmwareKey) === strip(candidateFirmwareKey);
+    if (ownFirmwareKey === candidateFirmwareKey) return true;
+    // A classic ESP32 also takes the builds that run on every classic board, as firmwareFits rules on the installer site.
+    const everyClassic = ["esp32-lite", "esp32-ethonly", "esp32-rev1-lite"];
+    return (ownFirmwareKey === "esp32" || everyClassic.includes(ownFirmwareKey)) && everyClassic.includes(candidateFirmwareKey);
 }
 
 // Whether the picker offers `firmware` to a board: its MoonBase key's chip exactly; a target chip's firmwares, or a revision line's when the target
 // names one, since a P4 app built for another revision does not boot, narrowed by the variant the board runs when known, since another variant of
 // the chip can panic on its PSRAM; else the variants compatible with its own.
-function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey, downloadKey }, firmware) {
+function offersFirmware({ moonbaseOnly, targetChip, ownFirmwareKey, downloadKey, fits }, firmware) {
     if (moonbaseOnly) return firmware === ownFirmwareKey;
+    if (fits && ownFirmwareKey && ownFirmwareKey !== HOST_DOWNLOAD) return fitsAcrossNames(ownFirmwareKey, fits, firmware);
     const target = downloadKey || hostKeyForThisHost();
     const onTarget = /rev\d+$/.test(targetChip || "") ? firmware.split("-")[0] === targetChip : firmwareChip(firmware) === targetChip;
     if (targetChip) return onTarget && (!ownFirmwareKey || isCompatible(ownFirmwareKey, firmware, target));
     return isCompatible(ownFirmwareKey, firmware, target);
 }
 
-// The chip a firmware variant is built for, as a device reports it: esp32s3 for esp32s3-n16r8, esp32p4 for esp32p4rev1-eth, esp32 for esp32-eth.
+// With no specific device chosen, the Detect line also says what the board told and the firmware it names; "" otherwise.
+function measuredSuffix(state) {
+    const chosen = state.selectedDevice ? state.devices.find(b => b.name === state.selectedDevice) : null;
+    if (!state.detectedFacts || (chosen && !/generic/i.test(chosen.name))) return "";
+    return ` · ${state.deviceSupport.measuredFirmware(state.detectedChip, state.detectedFacts).note}`;
+}
+
+// A running device's facts name its firmware (measuredFirmware), from `ownHardware`, a promise of its summary's { chip, hardware }. The rule
+// lives in install-picker-devices.js, which `loadDeviceSupport` fetches from the installer site; a site from before the rule lacks
+// it, and the offer stays by name. Null for a host, for MoonBase, or when the device does not answer.
+async function deviceSuggestion(ownHardware, loadDeviceSupport) {
+    try {
+        const own = await ownHardware;
+        if (!own || !own.hardware || !loadDeviceSupport) return null;
+        const ds = await loadDeviceSupport();
+        if (!ds || !ds.measuredFirmware || !ds.factsFromDevice || !ds.firmwareFits) return null;
+        const suggested = ds.measuredFirmware(own.chip, ds.factsFromDevice(own.hardware));
+        return { suggested, fits: (firmware) => ds.firmwareFits(firmware, suggested) };
+    } catch (_) {
+        return null;   // offline, or the site unreachable: the offer stays by name
+    }
+}
+
+// A running device that reports its facts is offered its own firmware and every firmware its board fits (firmwareFits), across names.
+function fitsAcrossNames(ownFirmwareKey, fits, firmware) {
+    return firmwareChip(firmware) === firmwareChip(ownFirmwareKey) && (firmware === ownFirmwareKey || fits(firmware));
+}
+
+// The chip a firmware variant is built for, as a device reports it: esp32s3 for esp32s3-n16r8, esp32p4 for esp32p4rev1, esp32 for esp32-eth.
 function firmwareChip(firmware) {
     return firmware.split("-")[0].replace(/rev\d+$/, "");
 }
@@ -501,6 +537,10 @@ function render(state) {
             <span class="control-label">Firmware</span>
             <select id="rp-firmware" class="rp-select"></select>
         </div>
+        <div class="control-row" id="rp-lite-row" hidden>
+            <span class="control-label"></span>
+            <span class="rp-status">-lite: the 4 MB tier, with fewer features to fit. <a href="${LITE_TIER_URL}" target="_blank" rel="noopener">What it leaves out</a></span>
+        </div>
         <div class="control-row" id="rp-install-row">
             <span class="control-label"></span>
             <button id="rp-install" class="action-btn" type="button">Install</button>
@@ -637,10 +677,20 @@ function render(state) {
         // Defensive: a device the user picked that isn't in the catalog (e.g.
         // catalog edited mid-session) skips the narrow — better than rejecting
         // every firmware silently.
-        if (state.selectedDevice && !wantHost) {
-            const device = state.devices.find(b => b.name === state.selectedDevice);
-            if (device) {
-                compatible = compatible.filter(f => device.firmwares.includes(f.firmware));
+        // With no specific device chosen (a generic entry or the pass-through), what the board tells about itself
+        // names the one firmware (measuredFirmware); a specific device keeps its own list.
+        const device = state.selectedDevice ? state.devices.find(b => b.name === state.selectedDevice) : null;
+        const measured = !wantHost && state.detectedFacts && (!device || /generic/i.test(device.name))
+            ? state.deviceSupport.measuredFirmware(state.detectedChip, state.detectedFacts) : null;
+        let mismatch = "";
+        if (measured && measured.firmware) {
+            compatible = compatible.filter(f => f.firmware === measured.firmware);
+        } else if (device && !wantHost) {
+            // A chosen device's firmware is checked against what the board told: a mismatch names the facts rather than installing.
+            const board = state.detectedFacts ? state.deviceSupport.measuredFirmware(state.detectedChip, state.detectedFacts) : null;
+            compatible = compatible.filter(f => device.firmwares.includes(f.firmware) && state.deviceSupport.firmwareFits(f.firmware, board));
+            if (!compatible.length && board && board.firmware && !device.firmwares.some(fw => state.deviceSupport.firmwareFits(fw, board))) {
+                mismatch = `${device.name} takes ${device.firmwares.join(" or ")}, and this board reads ${board.note}: pick "Other / generic" to install that`;
             }
         }
         if (compatible.length === 0) {
@@ -654,7 +704,9 @@ function render(state) {
             //     lands in `latest` / the next tag, not the older stable.
             //   - otherwise → genuinely no build for this device/firmware.
             let reason;
-            if (state.ownFirmwareKey === HOST_DOWNLOAD) {
+            if (mismatch) {
+                reason = mismatch;   // the chosen device's firmware differs from what the board told
+            } else if (state.ownFirmwareKey === HOST_DOWNLOAD) {
                 reason = (state.downloadKey || hostKeyForThisHost())
                     ? "this release has no build for this host"
                     : "no host build is packaged for your OS: build from source";
@@ -693,7 +745,9 @@ function render(state) {
                 ? HOST_LABEL[f.firmware] || f.firmware
                 : EXPERIMENTAL_FIRMWARES.has(f.firmware)
                     ? `⚠️ ${f.firmware} (untested: no device to verify on)`
-                    : f.firmware;
+                    : state.suggested && f.firmware === state.suggested.firmware && f.firmware !== state.ownFirmwareKey
+                        ? `${f.firmware} (suggested for this board: ${state.suggested.note.split(":")[0]})`
+                        : f.firmware;
             firmwareEl.appendChild(opt);
         });
         // The button says what it will do. A host entry is downloaded and opened by the user;
@@ -710,8 +764,8 @@ function render(state) {
         //      passes null so this branch falls through.
         //   2. localStorage saved pick wins next: a returning user expects
         //      their last choice to stick across page loads, including the
-        //      case where they once picked a non-default variant (e.g. esp32-eth
-        //      on Olimex, whose default is esp32). Filtered through `compatible`
+        //      case where they once picked a non-default variant (e.g. esp32-ethonly
+        //      on Olimex, whose default is esp32-lite). Filtered through `compatible`
         //      so a stale saved value (release dropped that firmware) falls
         //      through harmlessly.
         //   3. The device's default firmware: the FIRST entry in its `firmwares`
@@ -740,6 +794,7 @@ function render(state) {
         }
         state.firmware = preferred || compatible[0].firmware;
         firmwareEl.value = state.firmware;
+        showLiteHint();
         // Single-firmware UX: when the narrow leaves exactly one option, the
         // <select> reads as a fixed badge (user sees what's being flashed but
         // can't change it — there's nothing to change to). Re-enabled at the
@@ -747,6 +802,11 @@ function render(state) {
         firmwareEl.disabled = (compatible.length === 1);
         firmwareReady = true;
         applyInstallEnabled();   // a valid firmware — but still gated on the port
+    }
+    // One line under the field while a -lite firmware is picked, linking the one list of what the tier leaves out.
+    function showLiteHint() {
+        const row = state.container.querySelector("#rp-lite-row");
+        if (row) row.hidden = !/-lite$/.test(state.firmware || "");
     }
     refreshFirmwareDropdown();
 
@@ -761,6 +821,7 @@ function render(state) {
 
     firmwareEl.addEventListener("change", () => {
         state.firmware = firmwareEl.value;
+        showLiteHint();
         // Only a flashable variant is worth remembering. There is one host archive per
         // host and the OS picks it, so storing it would just overwrite the ESP32 variant a
         // returning user chose.
@@ -798,10 +859,15 @@ function render(state) {
             // a later detect fails on a wrong port — without this the list would
             // still hide the classic devices and claim an S3 was found).
             state.detectedChip = null;
+            state.detectedFacts = null;
             let status;
             try {
-                state.detectedChip = await state.onDetect();   // "ESP32" | "ESP32-S3" | ...
+                // A family ("ESP32", "ESP32-S3", ...) or, from an ESP32's detect, the family and what the board tells about itself.
+                const detected = await state.onDetect();
+                state.detectedChip = typeof detected === "string" ? detected : detected.family;
+                state.detectedFacts = typeof detected === "string" ? null : state.deviceSupport.factsFromEsptool(detected.facts);
                 status = state.deviceSupport.applyDetectedChip(state, deviceEl);
+                status += measuredSuffix(state);
             } catch (e) {
                 // Restore the full, unfiltered device list, since detection did not land,
                 // so don't keep any narrowing from a previous attempt.
@@ -952,7 +1018,8 @@ export const installPicker = {
     async init({ container, ownFirmwareKey, onInstall, onDetect = null,
                  enableDevicePicker = true, installRowExtras = null, blocker = null,
                  moonbaseOnly = false, extrasAfterInstall = false, extrasNeedRelease = false,
-                 deviceSupport = null, extraFirmwaresByTag = null, targetChip = null, downloadKey = null }) {
+                 deviceSupport = null, extraFirmwaresByTag = null, targetChip = null, downloadKey = null,
+                 ownHardware = null, loadDeviceSupport = null }) {
         const state = makeState();
         state.container = container;
         state.ownFirmwareKey = ownFirmwareKey || null;
@@ -980,10 +1047,12 @@ export const installPicker = {
         // (fast, ~5ms). The devices fetch only runs when the device picker is on AND
         // the host injected deviceSupport (web installer): the on-device OTA picker
         // does neither, so it skips the fetch and ships no device code.
-        const [data, devices] = await Promise.all([
+        const [data, devices, suggestion] = await Promise.all([
             loadReleases({ revalidate: true }),
             (enableDevicePicker && deviceSupport) ? deviceSupport.loadDevices() : Promise.resolve([]),
+            deviceSuggestion(ownHardware, loadDeviceSupport),
         ]);
+        if (suggestion) { state.suggested = suggestion.suggested; state.fits = suggestion.fits; }
         state.devices = targetChip ? devices.filter(d => chipKey(d.chip) === firmwareChip(targetChip)) : devices;
         _lastState = state;
         // Honour a mode the host chose while the release fetch was still in flight.
@@ -1086,7 +1155,7 @@ export const installPicker = {
      * the window before that runs.
      */
     clearDetectedChip() {
-        if (_lastState) _lastState.detectedChip = null;
+        if (_lastState) { _lastState.detectedChip = null; _lastState.detectedFacts = null; }
     },
 
     /**

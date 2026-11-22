@@ -739,3 +739,85 @@ TEST_CASE("with no network known, the access point opens the tick a waiting WiFi
     mm::platform::setTestWifiRadioReady(true);
     mm::platform::setTestWifiApAvailable(false);
 }
+
+namespace {
+// The radio switch as the card's checkbox writes it.
+void setRadio(WiFiNetwork& w, bool on) {
+    if (w.wifi.controls().count() == 0) w.wifi.rebuildControls();
+    for (uint8_t i = 0; i < w.wifi.controls().count(); i++)
+        if (std::strcmp(w.wifi.controls()[i].name, "radio") == 0) { *static_cast<bool*>(w.wifi.controls()[i].ptr) = on; return; }
+    FAIL("no radio control");
+}
+}  // namespace
+
+// With the radio off the cascade stays down: the status says why, and no access point opens, past the retry period too.
+void checkRadioOffHolds(WiFiNetwork& w) {
+    CHECK(std::string(w.net.status()) == "No network: radio off and no cable");
+    CHECK_FALSE(mm::platform::wifiApConnected());
+    mm::platform::setTestNowMs(1000 + 120000);
+    w.net.tick1s();
+    w.net.tick1s();
+    CHECK_FALSE(mm::platform::wifiApConnected());
+    CHECK(std::string(w.net.status()) == "No network: radio off and no cable");
+}
+
+// The radio defaults on, so a device with the switch untouched behaves as before.
+TEST_CASE("the radio is on by default, and a network without a WiFi card counts it on") {
+    mm::WiFiModule wifi;
+    CHECK(wifi.radio());
+    mm::NetworkModule net;
+    CHECK(net.radioWanted());
+}
+
+// A device on its cable alone starts neither the station nor the access point, whatever it knows or is allowed to open.
+TEST_CASE("with the radio off and no cable the device stays idle and opens no access point") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestWifiApAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        setRadio(w, false);
+        w.net.setup();
+        checkRadioOffHolds(w);
+    }
+    mm::platform::setTestWifiApAvailable(false);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// Every setting applies live: the switch is noticed on the next tick and tears the radio down at once.
+TEST_CASE("switching the radio off stops a running station and access point") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    mm::platform::setTestWifiApAvailable(true);
+    {
+        WiFiNetwork w;
+        joinHomeOverWifi(w);
+        REQUIRE(mm::platform::wifiStaConnected());
+        setRadio(w, false);
+        mm::platform::setTestWifiStaIPv4(nullptr);   // the host's fake station keeps its address after a stop, as a real one loses it
+        w.net.tick1s();
+        checkRadioOffHolds(w);
+    }
+    mm::platform::setTestWifiStaIPv4(nullptr);
+    mm::platform::setTestWifiApAvailable(false);
+    mm::platform::setTestWifiStaAvailable(false);
+}
+
+// The cascade resumes where it would have been, on the next tick after the switch.
+TEST_CASE("switching the radio on resumes the station") {
+    FrozenClock clock;
+    mm::platform::setTestWifiStaAvailable(true);
+    {
+        WiFiNetwork w;
+        w.wifi.remember("home", "pw");
+        setRadio(w, false);
+        w.net.setup();
+        REQUIRE(std::string(w.net.status()) == "No network: radio off and no cable");
+        setRadio(w, true);
+        w.net.tick1s();
+        CHECK(std::strcmp(mm::platform::testLastStaSsid(), "home") == 0);
+        CHECK(std::string(w.net.status()) == "WiFi STA: home");
+    }
+    mm::platform::setTestWifiStaAvailable(false);
+}

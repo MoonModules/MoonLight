@@ -371,6 +371,9 @@ const char* macString() {
 }
 
 const char* chipModel() { return "i.MX RT1062"; }
+const char* chipRevision() { return ""; }
+const char* chipPackage() { return ""; }
+size_t psramFoundBytes() { return 0; }
 const char* hostPlatform() { return ""; }
 // The board installs an image it is handed, uploaded, having no TLS to fetch one.
 UpdateMode updateMode() { return UpdateMode::Self; }
@@ -382,6 +385,7 @@ const char* coprocessorLine() MM_NONBLOCKING { return ""; }
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 bool wifiRadioReady() MM_NONBLOCKING { return true; }
 const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot

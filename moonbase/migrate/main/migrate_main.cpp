@@ -4,7 +4,7 @@
 // Then it runs once, in this order, each step safe to repeat, so a power cut starts it over:
 // 1. Out of the way: running from the slot MoonBase goes to, it copies itself to the other slot and restarts there.
 // 2. The bootloader, MoonLight's for this board's flash among those it carries, as a cable install writes it (QIO where the variant runs it, the flash size in its header), read back. When it names more flash than the old one did, one restart lets it, so every later write reaches the whole chip.
-// 3. The networks: every WiFi name and password WLED saved, and its Ethernet board, or the network a Tasmota, an ESPHome or, failing those, ESP-IDF itself saved, read while the old firmware's filesystem and NVS still exist, so the one the device is on is among them.
+// 3. The networks: a MoonLight board's own NetworkModule.json, or every WiFi name and password WLED saved, and its Ethernet board, or the network a Tasmota, an ESPHome or, failing those, ESP-IDF itself saved, read while the old firmware's filesystem and NVS still exist, so the one the device is on is among them.
 // 4. MoonBase, written into the factory slot, or into the second app slot of a table without one, and read back.
 // 5. The networks again, as a NetworkModule.json in the new filesystem, so MoonBase comes up on the cable or joins the first network that answers. It overwrites part of WLED's filesystem, so a run after a cut finds no network there and leaves this file as it is.
 // 6. The table beside that bootloader, written at 0x8000 and read back. A power cut during this write or the bootloader's is the one that needs a cable.
@@ -35,6 +35,7 @@
 #endif
 
 #include "core/util/WledNetworks.h"   // WLED's saved networks, read as a host test reads them
+#include "core/util/FirmwareImage.h"  // kHandoffNvsNamespace, kMigratedNetworkKey: where the networks wait for MoonBase
 
 #include <cstdint>
 #include <cstdio>
@@ -117,7 +118,7 @@ Region moonbaseTarget() {
     return factory.size ? factory : entry(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1);
 }
 
-// The app's filesystem, labeled `littlefs` or, on the two-slot tables, `spiffs`.
+// The app's filesystem, labeled `littlefs` or, on tables from before 7.1.0, `spiffs`.
 Region filesystem() {
     const Region fs = entry(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_LITTLEFS);
     return fs.size ? fs : entry(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS);
@@ -195,7 +196,9 @@ const char* refusal(const Region& target, const Region& otadata, const Region& f
         if (!other || other == running || other->size < image.size) return "no other slot to move to";
         home = {other->address, image.size};
     }
-    if (overlaps(home, write) || overlaps(home, otadata) || overlaps(home, fs)) return "no slot clear of what MoonLight writes";
+    // The filesystem may overlap where the image runs: the networks then wait in NVS for MoonBase, which formats the volume (deferred, in writeOrStash).
+    (void)fs;
+    if (overlaps(home, write) || overlaps(home, otadata)) return "no slot clear of what MoonLight writes";
     return nullptr;
 }
 
@@ -239,6 +242,22 @@ bool readFile(const char* path, char* buf, size_t len) {
     std::fclose(f);
     buf[n] = 0;
     return true;
+}
+
+// Step 2, on a board that ran MoonLight: its own NetworkModule.json, carried into the new filesystem as it is, so the board comes back on its networks and its Ethernet board; its length, 0 where the old filesystem holds none. Its other files travel by the device's backup bundle, saved before the move and restored after it.
+size_t readMoonLightNetworks(char* doc, size_t cap) {
+    static constexpr const char* kLabels[] = {"spiffs", "littlefs"};   // the two labels MoonLight's tables give the filesystem
+    for (const char* label : kLabels) {
+        esp_vfs_littlefs_conf_t conf = {};
+        conf.base_path = "/ml";
+        conf.partition_label = label;
+        conf.read_only = true;
+        if (esp_vfs_littlefs_register(&conf) != ESP_OK) continue;
+        const bool have = readFile("/ml/.config/NetworkModule.json", doc, cap);
+        esp_vfs_littlefs_unregister(label);
+        if (have && doc[0]) return std::strlen(doc);
+    }
+    return 0;
 }
 
 // Step 2: every network WLED saved, the names in cfg.json and the passwords in wsec.json, its Ethernet board into `eth`, `hasEth` saying whether it maps, and its TX power limit; how many networks have a name.
@@ -299,8 +318,25 @@ int bdErase(const lfs_config* c, lfs_block_t b) {
 }
 int bdSync(const lfs_config*) { return 0; }
 
-// Step 4: a fresh filesystem holding the networks.
-bool writeNetworks(const Region& fs, const Network* nets, int count, const Ethernet* eth, int txPower) {
+// The networks as MoonLight's NetworkModule.json: `moonlight`, a MoonLight board's own, where it has one, else the document made from what WLED or NVS kept; its length, 0 when none came out.
+int networkDocument(const char*& doc, const Network* nets, int count, const Ethernet* eth, int txPower, const char* moonlight) {
+    static char made[400 + kMaxNetworks * 240];   // the Ethernet card, and each entry's name and password escaped at most twice their length
+    doc = moonlight ? moonlight : made;
+    return moonlight ? static_cast<int>(std::strlen(moonlight)) : mm::wlednet::networkDocument(made, sizeof(made), nets, count, eth, txPower);
+}
+
+// Step 4, where the new filesystem overlaps the image as it runs: the document waits in NVS, at one place in every table, for MoonBase to write into the volume it formats.
+bool stashNetworks(const char* doc, int n) {
+    if (nvs_flash_init_partition("nvs") != ESP_OK) return false;
+    nvs_handle_t h;
+    if (nvs_open_from_partition("nvs", mm::firmware::kHandoffNvsNamespace, NVS_READWRITE, &h) != ESP_OK) return false;
+    const bool ok = nvs_set_blob(h, mm::firmware::kMigratedNetworkKey, doc, static_cast<size_t>(n)) == ESP_OK && nvs_commit(h) == ESP_OK;
+    nvs_close(h);
+    return ok;
+}
+
+// Step 4: a fresh filesystem holding the networks document.
+bool writeNetworks(const Region& fs, const char* doc, int n) {
     g_fsOffset = fs.offset;
     // The geometry esp_littlefs mounts with, from the same component and settings, so MoonBase and MoonLight read this as their own.
     lfs_config cfg = {};
@@ -317,8 +353,6 @@ bool writeNetworks(const Region& fs, const Network* nets, int count, const Ether
     cfg.block_cycles = CONFIG_LITTLEFS_BLOCK_CYCLES;
     lfs_t lfs;
     if (lfs_format(&lfs, &cfg) != 0 || lfs_mount(&lfs, &cfg) != 0) return false;
-    static char doc[400 + kMaxNetworks * 240];   // the Ethernet card, and each entry's name and password escaped at most twice their length
-    const int n = mm::wlednet::networkDocument(doc, sizeof(doc), nets, count, eth, txPower);
     bool ok = n > 0 && lfs_mkdir(&lfs, "/.config") == 0;
     lfs_file_t f;
     if (ok && lfs_file_open(&lfs, &f, "/.config/NetworkModule.json", LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC) == 0) {
@@ -360,18 +394,28 @@ extern "C" void app_main() {
     Ethernet eth = {};
     bool hasEth = false;
     int txPower = 0;
-    int count = readWledNetworks(nets, kMaxNetworks, eth, hasEth, txPower);
-    if (!count) count = readNvsNetwork(nets);   // no WLED files: Tasmota, ESPHome and ESP-IDF itself keep a network in NVS
+    static char moonlightDoc[8192];   // a MoonLight's NetworkModule.json: its known networks and its Ethernet card
+    const bool fromMoonLight = readMoonLightNetworks(moonlightDoc, sizeof(moonlightDoc)) > 0;
+    if (fromMoonLight) ESP_LOGI(kTag, "MoonLight's own networks, carried as they are");
+    int count = fromMoonLight ? 0 : readWledNetworks(nets, kMaxNetworks, eth, hasEth, txPower);
+    if (!count && !fromMoonLight) count = readNvsNetwork(nets);   // no WLED files: Tasmota, ESPHome and ESP-IDF itself keep a network in NVS
     if (txPower) ESP_LOGI(kTag, "WLED's TX power limit: %d dBm", txPower);
     for (int i = 0; i < count; i++) ESP_LOGI(kTag, "network %d: %s", i + 1, nets[i].ssid);
     if (hasEth) ESP_LOGI(kTag, "WLED's Ethernet board: PHY %d, MDC %d, MDIO %d, clock %d", eth.type, eth.mdcGpio, eth.mdioGpio, eth.clockGpio);
-    if (!count && !hasEth) ESP_LOGW(kTag, "no WLED network found; the new filesystem keeps what an earlier run wrote");
+    if (!count && !hasEth && !fromMoonLight) ESP_LOGW(kTag, "no WLED network found; the new filesystem keeps what an earlier run wrote");
     pause("network read");
 
     if (!writeVerified(target.offset, moonbase_start, moonbaseLen)) { ESP_LOGE(kTag, "MoonBase did not write; the old table still starts this image"); return; }
     pause("MoonBase written");
 
-    if ((count || hasEth) && !writeNetworks(fs, nets, count, hasEth ? &eth : nullptr, txPower)) ESP_LOGW(kTag, "the networks did not write; MoonBase opens its access point");
+    if (count || hasEth || fromMoonLight) {
+        const char* doc = nullptr;
+        const int n = networkDocument(doc, nets, count, hasEth ? &eth : nullptr, txPower, fromMoonLight ? moonlightDoc : nullptr);
+        // Where the new filesystem overlaps this image, formatting it would erase the image as it runs: the networks wait in NVS for MoonBase.
+        const bool deferred = overlapsRunning(fs);
+        if (deferred ? !stashNetworks(doc, n) : !writeNetworks(fs, doc, n)) ESP_LOGW(kTag, "the networks did not write; MoonBase opens its access point");
+        else if (deferred) ESP_LOGI(kTag, "the networks wait in NVS: the new filesystem overlaps this image, so MoonBase formats it");
+    }
     pause("filesystem written");
 
     if (!writeVerified(ESP_PARTITION_TABLE_OFFSET, table_, ESP_PARTITION_TABLE_MAX_LEN)) { ESP_LOGE(kTag, "the table did not write"); return; }

@@ -112,11 +112,11 @@ export function peerBase(row, home) {
     return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
 }
 
-// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
+// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, <assetPrefix>-<name>-v<version>.bin for
 // a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
 function updateAsset(rel, dev, version) {
     const installs = !!dev.firmware && (!dev.update || dev.update === "self");
-    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version)) : { url: null, sha256: null };
+    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version, dev.assetPrefix || "firmware")) : { url: null, sha256: null };
 }
 
 // The release a device could move to from `releases` and the asset that installs it, by the same checks the update badge makes for this device.
@@ -560,6 +560,7 @@ function buildPeerSummary(row, home) {
             offerDeviceDefaults(summary, base, fw);
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
+        suggestFirmware(box, fw);
         const update = fw.summary?.update;
         const releases = await loadReleases();   // null while the release feed has not loaded
         const u = releases && peerUpdate(deviceOf(fw), releases);
@@ -584,6 +585,21 @@ function buildPeerSummary(row, home) {
     return box;
 }
 
+// A line under the firmware when the board's own facts name another firmware than it runs (measuredFirmware), such as a 16 MB board on the
+// 4 MB tier; its Firmware card offers the move. Shown only for a device that reports its facts, with the installer site in reach.
+async function suggestFirmware(box, fw) {
+    const hw = fw.summary?.hardware;
+    if (!hw || !fw.firmware) return;
+    const ds = await loadMapDeviceSupport();
+    if (!ds?.measuredFirmware || !ds.factsFromDevice) return;
+    const suggested = ds.measuredFirmware(fw.summary.chip, ds.factsFromDevice(hw));
+    if (!suggested.firmware || suggested.firmware === fw.firmware) return;
+    const p = document.createElement("div");
+    p.className = "graph-popup-note";
+    p.textContent = `This board takes ${suggested.firmware} (${suggested.note.split(":")[0]}): its Firmware card offers the move.`;
+    box.appendChild(p);
+}
+
 // The image that brings a device's MoonBase level with its app, shared-moonbase-<chip>.bin of the release its app ships in, with the SHA-256 GitHub
 // names for it; a null url when that release carries none for the chip.
 function moonbaseAsset(rel, chip) {
@@ -597,7 +613,7 @@ function offerImageUpdates(box, base, fw, note, releases, lead) {
     const sys = fw.summary || {};
     const offers = [];
     if (sys.moonbaseMismatch) {
-        const a = moonbaseAsset(releaseOfVersion(releases, fw.version), sys.chip);
+        const a = moonbaseAsset(releaseOfVersion(releases, fw.version), sys.moonbase || sys.chip);
         if (a.url) offers.push({ label: "MoonBase", kind: "moonbase", source: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch" });
     }
     if (sys.coprocessorMismatch) offers.push({ label: "WiFi coprocessor", kind: "coprocessor", source: { url: "" }, flag: "coprocessorMismatch" });

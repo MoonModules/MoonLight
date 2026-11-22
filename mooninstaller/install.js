@@ -86,10 +86,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-    // Show the project version next to the heading. library.json ships
-    // alongside index.html (preview_installer.py + release.yml both copy
-    // it). Fetch silently — if it's missing for any reason, leave the
-    // chip hidden rather than rendering "?" noise.
+    // Show the exact version next to the heading, such as 7.1.0-dev.170: preview_installer.py and
+    // release_stage.py pages-site stage library.json with the computed version (compute_version.for_head).
+    // Fetched silently: a missing file leaves the chip hidden, not a "?".
     (async () => {
         try {
             const res = await fetch("./library.json");
@@ -711,8 +710,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // The CLI (esptool.py) remains the fallback the error path points at.
     const WEB_FLASH_UNSUPPORTED_CHIPS = new Set();
 
-    // Map a firmware key to its chip family ("esp32s31" → "ESP32-S31", "esp32s3-n16r8"
-    // → "ESP32-S3", "esp32p4rev1-eth" → "ESP32-P4", "esp32*" → "ESP32") — the same prefix
+    // Map a firmware key to its chip family ("esp32s31" → "ESP32-S31", "esp32s3-opi"
+    // → "ESP32-S3", "esp32p4rev1" → "ESP32-P4", "esp32*" → "ESP32"), the same prefix
     // vocabulary build_esp32's TARGET_TO_FAMILY uses. Used as the chip fallback when no
     // device is picked (OTA / generic flash). "" for an unrecognized key.
     function firmwareToChip(firmware) {
@@ -738,13 +737,9 @@ document.addEventListener('DOMContentLoaded', () => {
           + `(esptool-js) has no chip definition for it. Flash with esptool.py instead `
           + `(which does support ${chip}); no dev environment needed:\n\n`
           + `1. Install esptool:   pipx install esptool   (or: pip install esptool)\n`
-          + `2. Download the 4 .bin files named below from the release.\n`
-          + `3. Flash (replace <your-port>, e.g. /dev/ttyUSB0 or COM3):\n\n`
-          + `   esptool --chip esp32s31 --port <your-port> --baud 460800 write-flash \\\n`
-          + `     0x2000  firmware-esp32s31-<ver>-bootloader.bin \\\n`
-          + `     0x8000  firmware-esp32s31-<ver>-partition-table.bin \\\n`
-          + `     0xe000  shared-ota-data.bin \\\n`
-          + `     0x10000 firmware-esp32s31-<ver>.bin\n\n`
+          + `2. Download your firmware's manifest-<firmware>.json and the files it lists from the release.\n`
+          + `3. Write each file at the offset its manifest names, with the bootloader and table of your flash size:\n`
+          + `   esptool --port <your-port> write-flash <offset> <file> ...\n\n`
           + `Then re-open this page to provision WiFi, or use the device's own UI. `
           + `Once running, the device updates itself over-the-air — no esptool needed again.`
         : `Stage: ${stage}\n${error && error.message ? error.message : error}`;
@@ -1176,10 +1171,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // txPower, the brown-out cap, is a hardware trait rather than a default, so it applies regardless; only the module and control push is gated.
         const applyDefaults = document.getElementById("apply-device-defaults").checked;
         // Ethernet-only firmware: WiFi compiled out (firmwares.json `eth_only`). Keyed off the
-        // name like isCompatible's `-eth*` rule — a `-eth` variant is eth-only UNLESS it's the
-        // `-eth-wifi` co-processor build. The orchestrator uses this to skip WiFi provisioning
+        // name: `-ethonly`, the one build with WiFi compiled out. The orchestrator uses this to skip WiFi provisioning
         // (the build has no WIFI_SETTINGS RPC) and tell the user to connect Ethernet instead.
-        const ethOnly = /-eth$/.test(firmware);
+        const ethOnly = /-ethonly$/.test(firmware);
         await installer.start({
           // pickedPort may be null, and the orchestrator falls back to requestPort. In Teensy bootloader mode there is no port.
           port: teensyBootMode ? null : pickedPort,

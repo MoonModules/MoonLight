@@ -13,6 +13,9 @@
 #ifndef MM_RELEASE
 #define MM_RELEASE ""
 #endif
+#ifndef MM_MOONBASE_FAMILY
+#define MM_MOONBASE_FAMILY ""
+#endif
 
 namespace mm {
 
@@ -20,6 +23,7 @@ const char* const kVersion      = MM_VERSION;
 const char* const kBuildId      = MM_BUILD_ID;
 const char* const kFirmwareName = MM_FIRMWARE_NAME;
 const char* const kRelease      = MM_RELEASE;
+const char* const kMoonBaseFamily = MM_MOONBASE_FAMILY;
 // Recompiled on every build: generate_build_info.py touches the stamp this file depends on.
 const char* const kBuildDate    = __DATE__ " " __TIME__;
 

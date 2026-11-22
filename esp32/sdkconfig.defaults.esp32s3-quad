@@ -1,12 +1,11 @@
-# ESP32-S3 with QUAD PSRAM: the S3-Zero (N4R2) and the N8R2 (the Adafruit MatrixPortal S3 carries one).
-# Append to sdkconfig.defaults (later fragment wins); the flash size and partition table come from the
-# moonbase-4mb or moonbase-8mb fragment layered on top.
+# ESP32-S3 with quad PSRAM (the R2 modules: the S3-Zero's N4R2, the MatrixPortal S3's N8R2): esp32s3-qspi and esp32s3-qspi-lite.
+# Append to sdkconfig.defaults (later fragment wins); the flash size and partition table come from the layout fragment.
 #
-# The N8R8/N16R8 images set SPIRAM_MODE_OCT, and an octal-mode binary does not merely under-perform on
+# The octal images (sdkconfig.defaults.esp32s3-octal) set SPIRAM_MODE_OCT, and an octal-mode binary does not merely under-perform on
 # quad hardware, it fails PSRAM init at boot. Quad also leaves GPIO 35 to 37 free, which the MatrixPortal
 # routes to HUB75 lines.
 
-# Quad I/O flash reads, as on the N16R8, where reading code over two lines (DIO, the IDF default) cost 16% of the tick.
+# Quad I/O flash reads, as on the octal S3, where reading code over two lines (DIO, the IDF default) cost 16% of the tick.
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 
 # PSRAM: 2 MB, QUAD mode.
@@ -23,3 +22,6 @@ CONFIG_SPIRAM_SPEED_80M=y
 # hardware W^X wall.
 CONFIG_ESP_SYSTEM_MEMPROT_FEATURE=n
 CONFIG_HEAP_HAS_EXEC_HEAP=y
+
+# A USB MIDI desk through a powered hub, since a desk such as the APC40 takes its power from USB and the board's port supplies none.
+CONFIG_USB_HOST_HUBS_SUPPORTED=y

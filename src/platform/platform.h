@@ -267,6 +267,12 @@ const char* macString();
 bool arpLookup(const uint8_t ip[4], uint8_t mac[6]);
 /// The chip this runs on, as a static string.
 const char* chipModel();
+/// The chip's silicon revision, such as v3.1, read from the chip; empty where the platform reports none.
+const char* chipRevision();
+/// The chip's package, such as D0WD-V3 or PICO-V3-02 on a classic ESP32, read from the efuses; empty on a chip with one package.
+const char* chipPackage();
+/// The bytes of PSRAM the chip found at boot, whether in the heap or left unused, as a revision 0 or 1 classic leaves it on a build lacking the cache workaround.
+size_t psramFoundBytes();
 
 /// The hardware this installation runs on, empty on a device, where tooling injects `deviceModel` instead.
 const char* hostPlatform();
@@ -300,6 +306,8 @@ void setTestWifiRadioReady(bool ready);
 #endif
 /// Start the link to the radio chip on its own task where it is still unstarted, so its firmware can be read and updated over Ethernet; false where there is no such chip or the task cannot start.
 bool coprocessorConnect();
+/// Shut the WiFi co-processor's link down and free its pins, where the chip has one; a no-op elsewhere. The next coprocessorConnect brings it back.
+void coprocessorShutdown();
 
 /// This host's LAN IPv4 as a dotted string, or empty, valid until the calling thread's next call; on ESP32 the device IP belongs to NetworkModule.
 const char* deviceIp();

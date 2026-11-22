@@ -112,7 +112,7 @@ test("a map installing onto another device matches firmware and devices by that 
     assert.equal(firmwareChip("esp32"), "esp32");
     assert.equal(firmwareChip("esp32-eth"), "esp32", "a classic's variants share its chip");
     assert.equal(firmwareChip("esp32s3-n16r8"), "esp32s3", "not the classic's, though esp32 is its prefix");
-    assert.equal(firmwareChip("esp32p4rev1-eth"), "esp32p4", "the silicon revision is a variant, not a chip");
+    assert.equal(firmwareChip("esp32p4rev1"), "esp32p4", "the silicon revision is a variant, not a chip");
     assert.equal(chipKey("ESP32-S3"), "esp32s3", "the catalog's family as firmware keys spell it");
     assert.equal(chipKey("ESP32"), "esp32");
 });
@@ -121,13 +121,13 @@ test("a board whose variant is known is offered that variant's firmwares only, t
     const zero = { targetChip: "esp32s3", ownFirmwareKey: "esp32s3-zero" };
     assert.ok(offersFirmware(zero, "esp32s3-zero"));
     assert.ok(!offersFirmware(zero, "esp32s3-n16r8"), "an octal-PSRAM build panics on the Zero's quad PSRAM");
-    const p4 = { targetChip: "esp32p4", ownFirmwareKey: "esp32p4rev1-eth" };
-    assert.ok(offersFirmware(p4, "esp32p4rev1-eth-wifi"), "the same board with its radio compiled in");
-    assert.ok(!offersFirmware(p4, "esp32p4rev3-eth"), "another chip revision");
+    const p4 = { targetChip: "esp32p4", ownFirmwareKey: "esp32p4rev1" };
+    assert.ok(offersFirmware(p4, "esp32p4rev1"), "the board's own firmware");
+    assert.ok(!offersFirmware(p4, "esp32p4rev3"), "another chip revision");
     const rev3 = { targetChip: "esp32p4rev3", ownFirmwareKey: null };   // a WLED-MM P4 its chip model names revision 3
-    assert.ok(offersFirmware(rev3, "esp32p4rev3-eth") && offersFirmware(rev3, "esp32p4rev3-eth-wifi"));
-    assert.ok(!offersFirmware(rev3, "esp32p4rev1-eth"), "a revision-1 app does not boot on revision 3");
-    assert.ok(offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev1-eth") && offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev3-eth"),
+    assert.ok(offersFirmware(rev3, "esp32p4rev3"));
+    assert.ok(!offersFirmware(rev3, "esp32p4rev1"), "a revision-1 app does not boot on revision 3");
+    assert.ok(offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev1") && offersFirmware({ targetChip: "esp32p4" }, "esp32p4rev3"),
               "a P4 of unknown revision is offered both lines");
     const wled = { targetChip: "esp32s3", ownFirmwareKey: null };   // a WLED board moving over: no MoonLight variant yet, the Device row narrows
     assert.ok(offersFirmware(wled, "esp32s3-n16r8") && offersFirmware(wled, "esp32s3-zero"));
