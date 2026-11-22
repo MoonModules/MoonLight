@@ -22,6 +22,8 @@ A Teensy firmware's manifest needs no build input: it is the flat image at offse
 
 import fnmatch
 import json
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -72,7 +74,7 @@ def _platform(firmware):
     return next(f["platform"] for f in _rows() if f["name"] == firmware)
 
 
-def _generate(firmware, tmp_path):
+def _generate(firmware, tmp_path, release_url="."):
     """Run generate_manifest.py for one firmware with a synthetic flasher_args; return the manifest."""
     args = []
     if _platform(firmware) == "esp32":
@@ -84,7 +86,7 @@ def _generate(firmware, tmp_path):
         [sys.executable, str(GENERATE),
          "--firmware", firmware,
          "--version", VERSION,
-         "--release-url", ".",          # relative paths, as the Pages installer needs
+         "--release-url", release_url,  # "." gives relative paths, as the Pages installer needs
          *args,
          "--out", str(out)],
         capture_output=True, text=True,
@@ -117,6 +119,27 @@ def test_manifest_parts_match_staged_file_globs(tmp_path):
                 f"{STAGED_GLOBS} — the installer would 404 fetching it. Either the deploy's "
                 f"download patterns or generate_manifest.py's output drifted."
             )
+
+
+def test_the_pages_staging_makes_every_release_asset_url_relative(tmp_path):
+    """A release uploads manifests with absolute github.com URLs, which a browser cannot fetch (no CORS),
+    so the deploy rewrites them before Pages serves them. Every URL the installer fetches is rewritten:
+    the parts and each layout's bootloader and table, which replace the parts on a measured flash size.
+    Runs the deploy's own jq expression, read from release.yml, on a manifest generated as the release does."""
+    jq = shutil.which("jq")
+    assert jq, "jq is needed to run the deploy's manifest rewrite"
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    rewrite = re.search(r"jq '(walk\(.+\))' \"\$M\"", workflow)
+    assert rewrite, "release.yml's manifest rewrite (jq 'walk(...)' \"$M\") not found"
+    release_url = "https://github.com/MoonModules/MoonLight/releases/download/latest"
+    for fw in _shipping_firmwares():
+        manifest = _generate(fw, tmp_path, release_url)
+        staged = json.loads(subprocess.run([jq, rewrite.group(1)], input=json.dumps(manifest),
+                                           capture_output=True, text=True, check=True).stdout)
+        build = staged["builds"][0]
+        urls = [p["path"] for p in build["parts"]]
+        urls += [layout[k] for layout in build.get("layouts", []) for k in ("bootloader", "partitionTable") if layout.get(k)]
+        assert all(u.startswith("./") and "/" not in u[2:] for u in urls), f"{fw}: not relative after staging: {urls}"
 
 
 def test_app_and_bootloader_carry_the_version(tmp_path):

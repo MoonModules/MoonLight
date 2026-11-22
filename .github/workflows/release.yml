@@ -884,11 +884,12 @@ jobs:
               --pattern 'MoonLight-*.dmg' \
               --pattern 'moonlight_*.deb' \
               || echo "  (skip $T — no matching assets)"
-            # Rewrite each manifest's part paths to relative basenames (strip the
-            # absolute release-asset URL); jq edits in place via a temp file.
+            # Rewrite every release-asset URL in each manifest (the parts' paths and the
+            # layouts' bootloader and table) to a relative basename, since a browser
+            # cannot fetch github.com downloads; jq edits in place via a temp file.
             for M in pages/install/releases/$T/manifest-*.json; do
               [ -f "$M" ] || continue
-              jq '.builds[].parts[].path |= (sub("^.*/"; "./"))' "$M" > "$M.tmp" && mv "$M.tmp" "$M"
+              jq 'walk(if type == "string" and test("^https://github\\.com/.+/releases/download/") then sub("^.*/"; "./") else . end)' "$M" > "$M.tmp" && mv "$M.tmp" "$M"
             done
             echo "Staged binaries + relative manifests into releases/$T"
           done

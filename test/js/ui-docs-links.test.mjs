@@ -12,8 +12,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ui = join(root, "src", "ui");
 const docs = join(root, "docs");
 
-// mkdocs' heading anchor: lowercase, punctuation dropped, spaces as hyphens.
-const slug = (heading) => heading.trim().toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+// mkdocs' heading anchor, Python-Markdown's toc slugify: punctuation dropped, lowercase, each run of spaces and hyphens one hyphen.
+const slug = (heading) => heading.replace(/[^\w\s-]/g, "").trim().toLowerCase().replace(/[-\s]+/g, "-");
 
 test("every docs link in the UI points at an existing page and heading", () => {
     const links = [];

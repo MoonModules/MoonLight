@@ -23,7 +23,7 @@ Audio-reactive lighting has a lineage (WLED-SR, WLED-MM, MoonLight). Frank (soft
 
 ### Troy (troyhacks)
 
-MoonModules: [his AudioReactive rewrite](https://github.com/troyhacks/WLED), branch `troy/hdmi-on-p4-experimental`, running on the bench's Olimex ESP32-P4-PC at 192.168.1.223 and checked against a hardware analyzer: 31 ISO 266 bands from two Butterworth filter banks and no FFT, the design step 1's bank follows.
+MoonModules: [his AudioReactive rewrite](https://github.com/troyhacks/WLED), branch `P4_Experimental_Dev`, running on the bench's Olimex ESP32-P4-PC at 192.168.1.223 and checked against a hardware analyzer: 31 ISO 266 bands from two Butterworth filter banks and no FFT, the design step 1's bank follows.
 
 - **A tempo tracker** (`ar_tempo.h`, commit `9b416ad3` of 2026-11-06): onsets from the 90 to 320 Hz energy of the 3 kHz stream, a phase-locked comb over the last 12 s that scores each candidate period from 90 to 175 BPM by how tightly the onsets cluster in phase, a PLL grid and a weak prior at 125 BPM; median hit rate 0.817 on a hundred house tracks. Prior art for step 6.
 

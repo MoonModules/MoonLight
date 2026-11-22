@@ -79,7 +79,7 @@ function urlParam(name) {
 const EXPERIMENTAL_FIRMWARES = new Set(["esp32p4rev3"]);
 
 // The one list of what the 4 MB tier (-lite) leaves out, which the picker links while a -lite firmware is picked.
-const LITE_TIER_URL = "https://moonmodules.org/MoonLight/reference/hardware/firmware-variants/#the-4-mb-tier-lite";
+const LITE_TIER_URL = "https://moonmodules.org/MoonLight/reference/hardware/firmware-variants.html#the-4-mb-tier-lite";
 
 // One picker instance per init() call. Each tracks its own state so multiple
 // pickers on a page (unused today but possible) don't fight over selections.

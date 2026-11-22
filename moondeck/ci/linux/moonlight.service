@@ -1,8 +1,8 @@
 # MoonLight as a service: installed and started by the .deb, run as its own user from a folder that user owns, so it installs its own
-# new version (POST /api/firmware/url) and restarts on it in place; Restart= brings it back after a crash. https://moonmodules.org/MoonLight/reference/installing-on-linux/
+# new version (POST /api/firmware/url) and restarts on it in place; Restart= brings it back after a crash. https://moonmodules.org/MoonLight/reference/installing-on-linux.html
 [Unit]
 Description=MoonLight
-Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux/
+Documentation=https://moonmodules.org/MoonLight/reference/installing-on-linux.html
 After=network-online.target
 Wants=network-online.target
 # Five starts in two minutes stop a program that keeps failing: an update's restart, its failed start and the rollback's start take three, so a second failure still fits before the limit.
