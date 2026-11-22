@@ -10,7 +10,7 @@ The build in the photo is @Gohnnyman's, who wrote the USB capture ([pull request
 
 ## The parts
 
-- **An ESP32-P4 board with a USB port it hosts**, such as the [Waveshare ESP32-P4-NANO](esp32-p4-eth.md), running the `esp32p4rev1-eth` firmware. The USB capture is in the P4 firmwares only.
+- **An ESP32-P4 board with a USB port it hosts**, such as the [Waveshare ESP32-P4-NANO](esp32-p4-eth.md), running the `esp32p4rev1` firmware. The USB capture is in the P4 firmwares only.
 - **An HDMI-to-USB grabber that streams MJPEG**, the common MS2109 dongles among them. Grabbers differ: one tested model tinted the picture green at times, and Hyperion's documentation warns about the same one.
 - **An HDMI splitter**, so the TV keeps its own picture while the grabber reads a copy. It decides which modes reach the TV: the one in the photo passes 4K at 120 Hz with HDCP, so streaming services play as before.
 - **A WS2812B strip** along the back of the TV, and a supply for the strip and the board; the photo's build takes both from a USB-C Power Delivery trigger.

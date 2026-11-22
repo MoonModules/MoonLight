@@ -1,4 +1,4 @@
-// The card decks: a catalog's modules drawn from help.json by the app's own help.js, so a card reads as the module's help does on a device, and the attribution catalog drawn from its own table.
+// The card decks: a catalog's modules drawn from help.json by the app's own help.js, so a card reads as the module's help does on a device; the attribution catalog and the device models are drawn from their own tables.
 // Mounted on every page that holds a `.mm-deck`, through Material's document$ so instant navigation mounts it too. A deck with a `data-page` holds that page's modules; one without holds the table inside it, which stays what search indexes and a reader without JavaScript sees.
 
 import { helpMarkdown, safeUrl, moduleHelp, controlHelp, walkLinks, emojiTagsFor, emojiChipRow, chipsMatch, typeDisplayName, EMOJI_LABEL, graphemes } from "./help.js";
@@ -21,7 +21,7 @@ const KIND_LABEL = {
 };
 
 // A playing card: the name and its emoji, a picture and a line on its face, and `back` under a fixed head on the other side, turned with a tap.
-function playingCard({id, name, emoji, labels, image, alt, line, back, text}) {
+function playingCard({id, name, emoji, labels, image, alt, line, back, text, glyph}) {
     const el = document.createElement("article");
     el.className = "mm-pcard";
     el.tabIndex = 0;
@@ -53,10 +53,10 @@ function playingCard({id, name, emoji, labels, image, alt, line, back, text}) {
         front.appendChild(img);
     } else {
         // No picture: the card's emoji stand in, so every face has the same shape.
-        const glyph = document.createElement("div");
-        glyph.className = "mm-pcard-glyph";
-        glyph.textContent = emoji.join("");
-        front.appendChild(glyph);
+        const face = document.createElement("div");
+        face.className = "mm-pcard-glyph";
+        face.textContent = glyph || emoji.join("");
+        front.appendChild(face);
     }
     const p = document.createElement("p");
     p.innerHTML = line;
@@ -162,13 +162,41 @@ function entryCard(cell) {
     });
 }
 
+// A device model's card from its table row: the device's picture and chip on the face, what it supports and plans, its firmwares and links on the back. The build wrote the row (device_models_markdown), the entry's anchor on its name, moved here to its card.
+function deviceCard(cell) {
+    const name = cell.name.firstChild.textContent.trim();
+    const chip = cell.chip.textContent.trim();
+    // The page's own picture, which the build wrote from the catalog, resolved against the page by the browser.
+    const image = cell.name.querySelector("img")?.src || null;
+    const mark = cell.name.querySelector("[data-anchor]");
+    const id = mark?.id;
+    mark?.removeAttribute("id");
+    const para = (label, td) => {
+        if (!td?.textContent.trim()) return null;
+        const p = document.createElement("p");
+        p.innerHTML = label ? `<strong>${label}</strong> ${td.innerHTML}` : td.innerHTML;
+        return p;
+    };
+    const line = document.createElement("p");
+    line.className = "mm-pcard-line";
+    line.textContent = `${chip}: ${cell.supported.textContent.trim()}`;
+    const back = [line, para("Firmwares", cell.firmwares), para("Planned", cell.planned), para("", cell.notes), cell.product?.querySelector("a")?.cloneNode(true)].filter(Boolean);
+    const card = playingCard({
+        id, name, emoji: [], labels: {}, image, alt: name, line: line.innerHTML, back, glyph: chip,
+        text: `${name} ${chip} ${cell.firmwares.textContent} ${cell.supported.textContent} ${cell.planned.textContent} ${cell.notes.textContent}`,
+    });
+    card._emoji = cell.firmwares.textContent.split(",").map(f => f.trim()).filter(Boolean);   // the deck's filter row picks devices by firmware
+    return card;
+}
+
 // The rows of a deck's table as cells named by their column's heading, so a column added later moves nothing.
 function tableEntries(table) {
     const heads = [...table.querySelectorAll("thead th")].map(th => th.textContent.trim().toLowerCase());
     const col = (label) => heads.indexOf(label);
     return [...table.querySelectorAll("tbody tr")].map(tr => {
         const td = tr.children;
-        return {name: td[col("name")], kind: td[col("kind")], known: td[col("known for")], by: td[col("attributed by")]};
+        return {name: td[col("name")], kind: td[col("kind")], known: td[col("known for")], by: td[col("attributed by")],
+            chip: td[col("chip")], firmwares: td[col("firmwares")], supported: td[col("supported")], planned: td[col("planned")], product: td[col("product")], notes: td[col("notes")]};
     });
 }
 
@@ -297,7 +325,7 @@ function navButtons(step, count) {
 }
 
 // The deck: search, the size slider, the ‹ › buttons, the filter chips and the fanned row of cards, the same for every kind of card.
-function mountDeck(host, cards, noun, chipOrder) {
+function mountDeck(host, cards, noun, chipOrder, labels = chipOrder ? KIND_LABEL : EMOJI_LABEL) {
     const search = document.createElement("input");
     search.type = "search";
     search.placeholder = `Search ${cards.length} ${noun}`;
@@ -324,7 +352,8 @@ function mountDeck(host, cards, noun, chipOrder) {
         align(deck, host);
         fan(deck);
     };
-    const chips = emojiChipRow(present, (a) => { active = a; refresh(); }, chipOrder ? KIND_LABEL : EMOJI_LABEL);
+    const chips = emojiChipRow(present, (a) => { active = a; refresh(); }, labels);
+    if (present.some(e => /[a-z]/i.test(e))) chips.classList.add("mm-deck-word-chips");   // words, such as firmware names, take the text size
 
     // One visible card and the gap after it, so a filtered deck moves a card at a time.
     const step = (dir) => {
@@ -363,7 +392,13 @@ async function mount(host) {
     const page = host.dataset.page;
     if (!page) {
         const table = host.querySelector("table");
-        if (table) mountDeck(host, tableEntries(table).map(entryCard), "entries", Object.keys(KIND_LABEL));
+        if (table && host.dataset.kind === "devices") {
+            // One deck of every device model, its firmwares the filter row, in the order the catalog first names them.
+            const cards = tableEntries(table).map(deviceCard);
+            const firmwares = [...new Set(cards.flatMap(c => c._emoji))];
+            mountDeck(host, cards, "devices", firmwares, Object.fromEntries(firmwares.map(f => [f, f])));
+        }
+        else if (table) mountDeck(host, tableEntries(table).map(entryCard), "entries", Object.keys(KIND_LABEL));
         else host.classList.add("mm-deck-ready");   // nothing to draw: what the build wrote shows
         return;
     }

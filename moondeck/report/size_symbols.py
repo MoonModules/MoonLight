@@ -116,7 +116,7 @@ def report(symbols: dict, top: int, before: dict | None) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--firmware", required=True, help="an ESP32 firmware (esp32, esp32s3-n16r8, …) or teensy41")
+    ap.add_argument("--firmware", required=True, help="an ESP32 firmware (esp32, esp32s3-opi, …) or teensy41")
     ap.add_argument("--top", type=int, default=30, help="how many symbols and changes to list (default 30)")
     args = ap.parse_args()
     bdir = build_dir(args.firmware)

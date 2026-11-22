@@ -36,11 +36,14 @@ TEST_CASE("SineEffect amplitude 0 yields a black buffer") {
 }
 
 TEST_CASE("SineEffect varies across the x axis (R channel follows x)") {
+    // The clock stands still, since the scroll phase moves both columns: at some phases two columns an eighth of a turn apart sit either side of the peak and read alike.
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    mm::platform::setTestNowMs(1);
     mm::Layouts layouts; mm::GridLayout grid; mm::Layer layer; mm::SineEffect sine;
-    sine.frequency = 8;   // a full wave across an 8-wide grid → adjacent columns differ
+    sine.frequency = 8;   // the angle steps 8 per column on the 256-step circle
     buildLayer(layouts, grid, layer, sine, 8, 1, 1);
     auto& buf = layer.buffer();
-    // R of column 0 vs column 4 should differ (half a wave apart at freq 8 on width 8).
+    // R of column 0 against column 4, 32 steps apart, which differ while the phase sits at the start.
     CHECK(buf.data()[0] != buf.data()[4 * 3]);
 }
 

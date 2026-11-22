@@ -43,7 +43,7 @@
       "description": "No browser on the board.",
       "op": "measure",
       "contract": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -51,7 +51,7 @@
           "set_by": "2026-10-22",
           "reason": "the internal RAM plan's floor: 100 KB free and a 50 KB block, and no task within 256 bytes of its stack's end, ESP-IDF's own ipc tasks running at about 500"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -61,7 +61,7 @@
         }
       },
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 11732,
             "p95": 12527,
@@ -85,7 +85,7 @@
           },
           "last_updated": "2026-10-22"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "tick_us": {
             "p50": 2168,
             "p95": 2168,
@@ -119,7 +119,7 @@
       "settle": 8,
       "measure": true,
       "contract": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -127,7 +127,7 @@
           "set_by": "2026-10-22",
           "reason": "the internal RAM plan's floor, with the UI open"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -137,7 +137,7 @@
         }
       },
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 11568,
             "p95": 12460,
@@ -161,7 +161,7 @@
           },
           "last_updated": "2026-10-22"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "tick_us": {
             "p50": 2077,
             "p95": 2077,
@@ -195,7 +195,7 @@
       "settle": 8,
       "measure": true,
       "contract": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -203,7 +203,7 @@
           "set_by": "2026-10-22",
           "reason": "the internal RAM plan's floor, through a refresh"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "free_internal": 102400,
           "max_alloc_block": 51200,
           "min_stack_free": 256,
@@ -213,7 +213,7 @@
         }
       },
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 11507,
             "p95": 13870,
@@ -237,7 +237,7 @@
           },
           "last_updated": "2026-10-22"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "tick_us": {
             "p50": 2076,
             "p95": 2076,
@@ -270,7 +270,7 @@
       "action": "close",
       "measure": true,
       "observed": {
-        "esp32s3-n16r8": {
+        "esp32s3-opi": {
           "tick_us": {
             "p50": 9530,
             "p95": 11758,
@@ -294,7 +294,7 @@
           },
           "last_updated": "2026-10-22"
         },
-        "esp32p4rev1-eth": {
+        "esp32p4rev1": {
           "tick_us": {
             "p50": 2070,
             "p95": 2070,

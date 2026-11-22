@@ -71,7 +71,7 @@ processes:
         given: [{ input: where, equals: ESP32 }]
         when: { process: install }
         detail: |
-          Pick `esp32s31`, `esp32p4rev1-eth-wifi` or `esp32s3-n16r8`. The panel link carries no IP, so WiFi serves the UI; a P4 needs the `-eth-wifi` variant. A classic ESP32 build has no PanelCard driver.
+          Pick `esp32s31`, `esp32p4rev1` or `esp32s3-opi`. The panel link carries no IP, so WiFi serves the UI; a P4 needs its C6, the radio on. A classic ESP32 build has no PanelCard driver.
       - id: npcap
         section: Allow raw Ethernet
         say: Install Npcap.

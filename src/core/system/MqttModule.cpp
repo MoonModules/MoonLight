@@ -5,113 +5,154 @@
 /// ## The topic identity is the MAC
 ///
 /// The prefix is derived live from a stable hardware id, `MoonLight/<last6-of-MAC>` in lowercase hex, so nothing is stored in a buffer.
-/// The MAC is fixed for the chip's life, so a rename never changes the topics and Homebridge or Home Assistant stay pinned.
-/// This is the WLED, Tasmota and HA-discovery convention, and the last 6 hex is the same short id WLED uses in `wled/<last6>`.
+///
+/// The MAC is fixed for the chip's life, so a rename keeps the topics and Homebridge or Home Assistant stay pinned. This is the WLED, Tasmota and HA-discovery convention, and the last 6 hex is the same short id WLED uses in `wled/<last6>`.
+///
 /// The friendly display name is a separate concern, published retained on the `name` topic and read from `deviceName()`.
+///
 /// That retained topic is the human-facing label a hub reads for its accessory title, the WLED `serverDescription` role, published on connect and on a rename.
+///
 /// SystemModule guarantees the name non-empty and per-device unique, falling back to `MM-<last4MAC>` rather than a shared literal, so N devices never collide as one name.
-/// A missing `systemModule_` is a wiring bug, so the publish is skipped rather than inventing a non-unique fallback.
-/// A rename is change-detected by a rolling djb2 signature, so no name buffer is stored.
+///
+/// A missing `systemModule_` is a wiring bug, so the publish is skipped rather than inventing a non-unique fallback. A rename is change-detected by a rolling djb2 signature, so no name buffer is stored.
+///
 /// The clientId is `MoonLight-<last6-of-MAC>`, slash-free because MQTT-3.1.3-5 allows only `[0-9a-zA-Z]` and a broker may reject a `/`.
 ///
 /// ## The discovery topics
 ///
-/// The config topic is independent of `topicPrefix()`: the discovery prefix is HA's `homeassistant`, not our `MoonLight` root.
-/// The object id carries the `MoonLight_` prefix so the id is unique across vendors on a shared broker.
-/// The update entity uses the same object id, so both components register under one HA device card: one device, two entities.
-/// Diverging the id would produce a second device card reading as "two MoonLights", which is the wrong grouping.
+/// The config topic is independent of `topicPrefix()`: the discovery prefix is HA's `homeassistant`, not our `MoonLight` root. The object id carries the `MoonLight_` prefix so the id is unique across vendors on a shared broker.
+///
+/// The update entity uses the same object id, so both components register under one HA device card: one device, two entities. Diverging the id would produce a second device card reading as "two MoonLights", which is the wrong grouping.
 ///
 /// ## The discovery payload
 ///
 /// The light is a JSON-schema MQTT light with HA's documented abbreviated keys. Brightness sits at the default 0-255 scale, so no scale key is needed, and `dev{}` groups the entity under a device card.
+///
 /// The entity's own `name` is null, HA's documented convention for "this entity IS the device, no sub-label", so the slug is `light.<device>` rather than the doubled `light.<device>_<device>`.
-/// Rename the device and `dev.name` follows on the next publish, `uniq_id` stays MAC-pinned, and the slug locked at creation is unchanged.
-/// Documented at https://www.home-assistant.io/integrations/mqtt/#name, where `name: null` is the recommended way.
+///
+/// Rename the device and `dev.name` follows on the next publish, `uniq_id` stays MAC-pinned, and the slug locked at creation is unchanged. Documented at https://www.home-assistant.io/integrations/mqtt/#name, where `name: null` is the recommended way.
+///
 /// The `deviceName` is user-editable, so a quote or backslash would produce invalid JSON: the shared `jsonEscape` doubles the 32-char name worst case.
+///
 /// The update entity's `device_class:"firmware"` makes HA render the label as `<device> Firmware` rather than the bare device name. The bare name collided visually with the light in HA's entity list, which the "two MM-P4 rows" bench symptom pinned.
+///
 /// It also picks the correct icon and the up-to-date versus update-available wording, and `entity_category:"diagnostic"` parks it in the diagnostic section of the device card, matching ESPHome and Tasmota.
 ///
 /// ## The effect list is looks only
 ///
-/// The `effect_list` is the light's menu of LOOKS, and only look-only presets appear (`ControlModule::isLookOnly`).
-/// One that also carries Drivers or Layouts would rewire pins or geometry. That must not be reachable from an automation or a voice command that believes it is choosing a color scheme.
+/// The `effect_list` is the light's menu of LOOKS, and only look-only presets appear (`ControlModule::isLookOnly`). One that also carries Drivers or Layouts would rewire pins or geometry.
+///
+/// That must not be reachable from an automation or a voice command that believes it is choosing a color scheme.
+///
 /// `applyLookByName` re-checks look-only, so a crafted message naming a hardware-carrying preset is refused at the entry point rather than merely hidden from the list.
+///
 /// The applied look rides the published state too, so HA's dropdown shows the look that is on, including a change made from the device's own pad grid.
+///
 /// It is therefore part of the change gate: applying a preset moves neither on, brightness nor palette, so without its signature a look-only change would never publish.
 ///
 /// ## The discovery scratch buffers
 ///
 /// Both buffers are allocated from the heap the first time discovery publishes and reported via `setDynamicBytes`, so the UI's per-module memory line accounts for them.
+///
 /// A device that never enables discovery never calls this, so it costs zero bytes; OOM returns false and the caller skips the publish rather than dereferencing a null.
-/// They are sized to what THIS device publishes: the fixed config plus the measured effect list.
-/// No cap on the preset count, because a cap would either reserve RAM a three-preset device never uses, or silently publish nothing once the list outgrew it.
+///
+/// They are sized to what THIS device publishes: the fixed config plus the measured effect list. No cap on the preset count, because a cap would either reserve RAM a three-preset device leaves idle, or silently drop the list once it outgrew the cap.
+///
 /// Saving or deleting a preset changes the required size, so they are reallocated when the revision moves rather than held at whatever the first announce needed.
-/// The light and update announces share the pair (448 + 320 bytes) because they run serially and are never in flight simultaneously.
-/// The update announce needs them at all because its ~300-byte payload plus framing exceeds the on-stack `kSendBufLen`.
-/// The effect list is built into `discoveryBuf_` as scratch, untouched until `buildMqttPublish` by which time the list is already consumed into the payload.
-/// It must NOT be a region of `discoveryPayload_`. Snprintf writing the payload while reading the list from inside its own destination tramples the list once the fixed prefix grows past the scratch offset.
+///
+/// The light and update announces share the pair (448 + 320 bytes) because they run serially, one in flight at a time. The update announce needs them at all because its ~300-byte payload plus framing exceeds the on-stack `kSendBufLen`.
+///
+/// The effect list is built into `discoveryBuf_` as scratch, untouched until `buildMqttPublish` by which time the list is already consumed into the payload. It must NOT be a region of `discoveryPayload_`.
+///
+/// Snprintf writing the payload while reading the list from inside its own destination tramples the list once the fixed prefix grows past the scratch offset.
 ///
 /// ## Availability and retract
 ///
 /// The Last Will is declared at CONNECT: retained "offline" on `<prefix>/status`, which the broker publishes on an ungraceful drop so HA's `avty_t` greys the entity out.
+///
 /// The retained "online" counterpart is published by the module itself once CONNACK lands, and must precede the discovery announce so HA sees the entity available the instant its config arrives.
+///
 /// A retract is an empty retained payload to the config topic, which removes the HA entity. It frames into a small LOCAL buffer, because a tombstone is topic plus empty body.
+///
 /// That local buffer matters because `discoveryBuf_` may already be freed, and the OFF path must not allocate under the "no memory when discovery is off" rule.
+///
 /// Disconnected there is nothing to send, so the retract is deferred to the next CONNACK, where the broker keeps the last retained config until then; freeing always runs either way.
+///
 /// CONNACK retracts when `haDiscovery_` is false, because a config retained from a session that turned discovery off while offline would otherwise keep HA's entity alive across the reconnect.
+///
 /// Both components are announced or retracted together by one gate, so HA sees both or neither, never a device card with a light beside a dangling stale update entity.
 ///
 /// ## The update entity
 ///
-/// `installed_version` is the compile-time `MM_VERSION`, and `latest_version` equals it today since there is no on-device release check yet, so HA shows up-to-date and disables Install.
-/// When the release-check component lands it becomes the caller of `publishUpdateState` with a fresher `latest_version`, and the wire shape does not change.
-/// `release_url` is the GitHub releases page, which HA renders as a "Release notes" link. It is retained and read by a person, so a card left behind by a rename is a dead link.
-/// The state block is written once at CONNACK and on a mid-session discovery turn-on: nothing is per-tick, because both versions are compile-time constants.
+/// `installed_version` is the compile-time `MM_VERSION`, and `latest_version` equals it since there is no on-device release check yet, so HA shows up-to-date and disables Install.
+///
+/// When the release-check component lands it becomes the caller of `publishUpdateState` with a fresher `latest_version`, and the wire shape does not change. `release_url` is the GitHub releases page, which HA renders as a "Release notes" link.
+///
+/// It is retained and read by a person, so a card left behind by a rename is a dead link. The state block is written once at CONNACK and on a mid-session discovery turn-on, outside the tick, because both versions are compile-time constants.
+///
 /// The install payload is the target version string via HA's `payload_install_template`, whose default `{{ latest_version }}` renders empty when no newer version is known.
+///
 /// An empty payload therefore means "install latest", falling back to this build's own version so the command re-installs the current release rather than silently doing nothing.
+///
 /// A leading `v` is stripped because the template can send either shape, and the URL is built from `kReleaseAssetUrlFormat` naming both repositories so a rename cannot strand it.
+///
 /// It hands off to `platform::http_fetch_to_ota`, the same OTA path `POST /api/firmware/url` takes, and `otaInFlight()` guards a second install mid-flash rather than corrupting the running task.
+///
 /// On host that platform call is a stub returning false, so the install safely reports failure via `g_otaStatus`, and HA polls the retained state rather than any reply.
 ///
 /// ## Sending never blocks the render loop
 ///
 /// `sendPacket` uses non-blocking `writeSome`: a control packet is at most 256 bytes, far under the socket send buffer, so a healthy socket accepts it all in one call.
+///
 /// A partial or zero write means the buffer is backing up (a zero-window or stalled broker), so it returns false and the caller resets rather than spin-retrying forever inside `tick1s`.
+///
 /// That is the hot-path violation a blocking `write()` would commit, and every path (ping, subscribe, state, discovery) shares the same "reset on a failed send" contract.
+///
 /// A partial write means a wedged socket, so dropping the connection beats leaving a truncated frame on the stream.
+///
 /// `resetConnection` is the single reset path, so every caller (reconfig, disable, timeout, protocol error, peer close) leaves the same clean Idle state.
+///
 /// State is stamped only on a SUCCESSFUL send, so `last*` and `havePublished_` are committed after every send succeeded. A failure then republishes after the reconnect, rather than leaving the hub stale forever.
+///
 /// The name signature follows the same rule, so a failed name publish is retried on the next tick rather than lost until the next reconnect.
-/// A test seam mirrors the outbound bytes into a capture buffer, null in production, because ctest has no live socket and `writeSome` returns -1 there.
-/// Capture mode always reports success so the connect and publish flow proceeds in tests.
+///
+/// A test seam mirrors the outbound bytes into a capture buffer, null in production, because ctest has no live socket and `writeSome` returns -1 there. Capture mode always reports success so the connect and publish flow proceeds in tests.
 ///
 /// ## Reconnect, keepalive and protocol errors
 ///
 /// Connecting is non-blocking throughout: `connectStart` kicks off getaddrinfo and connect and returns, and `tick1s` polls it in `ConnectingTcp` so an unreachable broker never stalls the render loop.
+///
 /// Failure is assumed until a full connect succeeds, and cleared only in the CONNACK-accepted path. Every failure route resets to Idle without clearing it, so the next attempt uses the longer backoff.
+///
 /// Backoff keeps a down broker from being hammered every tick. A prior failure, an unreachable broker or a bad hostname costing a synchronous getaddrinfo each try, backs off harder to keep that DNS stall rare.
-/// A broker that accepts TCP but never CONNACKs, the silent-broker wedge, is bounded by the same connect timeout.
-/// PINGREQ goes out at half the keepalive, and a broker silent past 1.5 times the keepalive is dropped.
+///
+/// A broker that accepts TCP and withholds its CONNACK, the silent-broker wedge, is bounded by the same connect timeout. PINGREQ goes out at half the keepalive, and a broker silent past 1.5 times the keepalive is dropped.
+///
 /// A malformed or oversize packet desyncs the byte stream for the connection's life, and MQTT 3.1.1 section 4.8 requires closing on a protocol violation. So it reconnects, rather than reading mid-body garbage as fixed headers.
+///
 /// A CONNACK body is `[session-present][return-code]` per section 3.2, so a short body is a violation treated as a failed connect rather than falling through and subscribing on a malformed accept.
+///
 /// A non-zero return code means the broker refused: bad auth, unavailable, and the rest.
 ///
 /// ## Inbound command routing
 ///
-/// The mqttthing set-topics are three explicit filters under `<prefix>/+/set`, one SUBSCRIBE each because that is simpler than a wildcard.
-/// `update/set` is checked before `ha/set` so the shared prefix parse fires exactly once.
+/// The mqttthing set-topics are three explicit filters under `<prefix>/+/set`, one SUBSCRIBE each because that is simpler than a wildcard. `update/set` is checked before `ha/set` so the shared prefix parse fires exactly once.
+///
 /// The HA-native JSON command is `{"state":"ON"|"OFF"[,"brightness":0-255]}`, parsed with the same flat `mm::json` helpers `HttpServerModule::applyWledState` uses: key-order-independent and whitespace-safe.
-/// It needs a bigger NUL-terminated buffer than the scalar `value[32]`, and its brightness is already 0-255 so no rescale, unlike the mqttthing `brightness/set` 0-100 path.
-/// HA sends exactly "ON" or "OFF" and only those are acted on. A malformed or truncated value is ignored rather than treated as OFF, so a bad payload never turns the light off.
+///
+/// It needs a bigger NUL-terminated buffer than the scalar `value[32]`, and its brightness is already 0-255 so no rescale, unlike the mqttthing `brightness/set` 0-100 path. HA sends exactly "ON" or "OFF" and only those are acted on.
+///
+/// A malformed or truncated value is ignored rather than treated as OFF, so a bad payload leaves the light as it is.
+///
 /// A short fixed payload is copied NUL-terminated so the `strcmp` and `atoi` parsers are safe on the non-terminated socket slice, and a malformed or oversized one is refused.
+///
 /// `hsv/set` is the mqttthing HSV shape `"h,s,v"`, hue 0-359 with sat and value 0-100. Hue and sat pick the nearest palette, and value maps to brightness so the color wheel's brightness ring still dims.
-/// `hsv/get` publishes the chosen palette's representative hue, full sat, and value as brightness percent.
-/// Subscriptions otherwise happen only at CONNACK, so a mid-session discovery turn-on subscribes as well as announcing.
+///
+/// `hsv/get` publishes the chosen palette's representative hue, full sat, and value as brightness percent. Subscriptions otherwise happen only at CONNACK, so a mid-session discovery turn-on subscribes as well as announcing.
 ///
 /// ## Palettes through the light output
 ///
-/// A HomeKit color picks the nearest palette through `LightOutput`, which the light domain implements, so this module includes no light header.
-/// It still drives the palette through `Scheduler::setControl` rather than a light object.
+/// A HomeKit color picks the nearest palette through `LightOutput`, which the light domain implements, so this module includes no light header. It still drives the palette through `Scheduler::setControl` rather than a light object.
 ///
 #include "core/util/format.h"   // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/MqttModule.h"
@@ -391,12 +432,12 @@ void MqttModule::handleUpdateInstall(const char* payload, size_t payloadLen) {
 
     char url[256];
     const int un = std::snprintf(url, sizeof(url), kReleaseAssetUrlFormat,
-                                 kReleaseRepo, v, kFirmwareName, v);
+                                 kReleaseRepo, v, kReleaseAssetPrefix, kFirmwareName, v);
     if (un <= 0 || static_cast<size_t>(un) >= sizeof(url)) return;
     // The repository's earlier name, tried where the address above does not answer (FirmwareUpdateModule names why both).
     char altUrl[256];
     const int an = std::snprintf(altUrl, sizeof(altUrl), kReleaseAssetUrlFormat,
-                                 kFallbackRepo, v, kFirmwareName, v);
+                                 kFallbackRepo, v, kReleaseAssetPrefix, kFirmwareName, v);
     const bool haveAlt = an > 0 && static_cast<size_t>(an) < sizeof(altUrl);
 
     // Seed the shared globals so the first WS push shows "starting" rather than a stale string from a prior URL-triggered OTA, same seed the HTTP path does.
@@ -688,7 +729,7 @@ void MqttModule::routePublish(const char* topic, const uint8_t* payload, size_t 
         if (json::hasKey(body, "state")) {
             char st[8] = "";
             json::parseString(body, "state", st, sizeof(st));
-            // Act only on the exact "ON"/"OFF" HA sends, so a bad payload never turns the light off. @xref{inbound-command-routing}
+            // Act only on the exact "ON"/"OFF" HA sends, so a bad payload leaves the light as it is. @xref{inbound-command-routing}
             if (std::strcmp(st, "ON") == 0)       setControlValue("on", "{\"value\":true}");
             else if (std::strcmp(st, "OFF") == 0) setControlValue("on", "{\"value\":false}");
         }

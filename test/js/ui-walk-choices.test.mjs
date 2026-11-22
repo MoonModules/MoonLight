@@ -15,15 +15,20 @@ test("a board is an ESP32 or a Teensy, a board target, with its own microphone",
     assert.equal(walkChoices(sys("i.MX RT1062", "")).platform, "Teensy");
 });
 
-test("a host build is named by its operating system, a container as Docker", () => {
-    assert.deepEqual(walkChoices(sys("arm64", "macos-arm64")),
-        { platform: "macOS", target: "Host", source: "The computer's audio on macOS" });
-    assert.equal(walkChoices(sys("x64", "windows-x64")).platform, "Windows");
-    assert.equal(walkChoices(sys("arm64", "linux-arm64")).platform, "Linux");
-    assert.equal(walkChoices(sys("x64", "docker")).source, "A PulseAudio server into the container");
-});
-
 test("a device that says nothing about itself preselects nothing", () => {
     assert.deepEqual(walkChoices(undefined), {});
     assert.deepEqual(walkChoices(sys("", "")), {});
+});
+
+const host = (firmware, deviceModel) => [{ name: "firmware", value: firmware }, { name: "deviceModel", value: deviceModel }];
+
+test("a host is named by its firmware key, whatever its device model says, and a container by its catalog name", () => {
+    assert.deepEqual(walkChoices(host("host-macos-arm64", "Generic macOS")),
+        { platform: "macOS", target: "Host", source: "The computer's audio on macOS" });
+    assert.equal(walkChoices(host("host-linux-x64", "Docker container")).source, "A PulseAudio server into the container");
+    assert.equal(walkChoices(host("host-windows-x64", "")).platform, "Windows");
+    assert.deepEqual(walkChoices(host("host-android-arm64", "Generic Android")), { platform: "Android", target: "Host" });
+    assert.equal(walkChoices(host("host-linux-arm64", "Raspberry Pi 5")).platform, "Linux");
+    assert.equal(walkChoices(host("host-linux-x64", "Docker container")).platform, "Docker");
+    assert.equal(walkChoices(host("esp32s3-opi", "Docker container")).platform, "Docker");
 });

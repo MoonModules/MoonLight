@@ -4,21 +4,20 @@
     "chip": "ESP32",
     "flashBaud": 460800,
     "firmwares": [
-      "esp32",
-      "esp32-eth"
+      "esp32-lite",
+      "esp32-ethonly"
     ],
     "image": "assets/deviceModels/esp32-olimex-gateway.png",
-    "description": "Ethernet takes 0, 17, 18, 19, 21, 22, 25, 26 and 27, so LED outputs go on 4, 13 and 14 (the microSD's pins, free while no SD card is used), 16, 32 or 33.",
+    "description": "Ethernet takes 0, 17, 18, 19, 21, 22, 25, 26 and 27, and the microSD takes 2, 14 and 15 (1-bit SDMMC), so LED outputs go on 4, 13, 16, 32 or 33. The SD card runs on esp32-ethonly; esp32-lite leaves it out to fit WiFi in 4 MB.",
     "url": "https://www.olimex.com/Products/IoT/ESP32/ESP32-GATEWAY/open-source-hardware",
     "supported": [
       "LEDs",
       "WiFi",
       "Ethernet",
-      "Buttons"
-    ],
-    "planned": [
+      "Buttons",
       "SD card"
     ],
+    "planned": [],
     "state": {
       "System": {
         "deviceModel": "Olimex ESP32-Gateway Rev G"
@@ -49,6 +48,10 @@
               "kind": "toggle"
             }
           ]
+        },
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Classic SDMMC (1-bit)"
         }
       }
     }
@@ -57,10 +60,10 @@
     "name": "LOLIN D32",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
     "flashBaud": 460800,
-    "image": "assets/deviceModels/esp32-lolin-d32.jpg",
+    "image": "assets/deviceModels/esp32-lolin-d32.png",
     "url": "https://www.wemos.cc/en/latest/d32/d32.html",
     "description": "WiFi at 8 dBm: the on-board regulator sags at full power and resets some boards.",
     "supported": [
@@ -94,9 +97,9 @@
     "name": "Generic ESP32 Dev",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
-    "image": "assets/deviceModels/esp32-generic-dev.jpg",
+    "image": "assets/deviceModels/esp32-generic-dev.png",
     "supported": [
       "LEDs",
       "WiFi"
@@ -118,7 +121,7 @@
     "name": "ESP32-WROVER",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-wrover"
+      "esp32-rev1-lite"
     ],
     "url": "https://www.espboards.dev/esp32/esp32wrover/",
     "image": "assets/deviceModels/esp32-wrover.jpg",
@@ -144,9 +147,9 @@
     "name": "QuinLED Dig-2-Go",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
-    "image": "assets/deviceModels/esp32-quinled-dig-2-go.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-2-go.png",
     "description": "Relay on 12 is an on-board switch in the LED power line, so the LEDs light only while it is closed.",
     "url": "https://quinled.info/quinled-dig2go/",
     "supported": [
@@ -192,9 +195,9 @@
     "name": "QuinLED Dig-Next-2",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-pico"
+      "esp32"
     ],
-    "image": "assets/deviceModels/esp32-pico-quinled-dig-next-2.jpg",
+    "image": "assets/deviceModels/esp32-pico-quinled-dig-next-2.png",
     "description": "Relays on 20, 21 and 22 are on-board switches, one per fused power output; 5 triggers an optional external relay board.",
     "url": "https://quinled.info/dig-next-2/",
     "supported": [
@@ -249,9 +252,9 @@
     "name": "QuinLED Dig-Uno V3",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
-    "image": "assets/deviceModels/esp32-quinled-dig-uno-v3.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-uno-v3.png",
     "url": "https://quinled.info/pre-assembled-quinled-dig-uno/",
     "supported": [
       "LEDs",
@@ -275,12 +278,81 @@
     }
   },
   {
-    "name": "QuinLED Dig-Quad V3",
+    "name": "QuinLED Dig-Uno V4",
     "chip": "ESP32",
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/esp32-quinled-dig-quad-v3.jpg",
+    "image": "assets/deviceModels/esp32-quinled-dig-uno-v4.png",
+    "description": "On the QuinLED ESP32 v4 module (ESP32-PICO-MINI-02-N8R2: 8 MB flash, 2 MB PSRAM) with a PDM microphone; Ethernet comes with the module's ABE variant (LAN8720, clock in on 0).",
+    "url": "https://quinled.info/quinled-dig-uno/",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Ethernet",
+      "Audio",
+      "Buttons"
+    ],
+    "planned": [
+      "Temperature",
+      "Relay"
+    ],
+    "flashBaud": 460800,
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Uno V4"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "2,4"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 1,
+          "ethPhyAddr": 0,
+          "ethRstGpio": -1,
+          "ethMdcGpio": 7,
+          "ethMdioGpio": 8,
+          "ethClockGpio": 0,
+          "ethClockExtIn": true
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "micMode": 1,
+          "wsPin": 5,
+          "sdPin": 38
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 37,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "QuinLED Dig-Quad V3",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32-lite"
+    ],
+    "image": "assets/deviceModels/esp32-quinled-dig-quad-v3.png",
     "description": "Relay on 15 is a 5 V trigger for an optional external relay, on pre-assembled boards.",
     "url": "https://quinled.info/pre-assembled-quinled-dig-quad/",
     "supported": [
@@ -322,13 +394,82 @@
     }
   },
   {
-    "name": "QuinLED An-DecaPenta",
+    "name": "QuinLED Dig-Quad V4",
     "chip": "ESP32",
     "firmwares": [
       "esp32"
     ],
+    "image": "assets/deviceModels/esp32-quinled-dig-quad-v4.png",
+    "description": "On the QuinLED ESP32 v4 module (ESP32-PICO-MINI-02-N8R2: 8 MB flash, 2 MB PSRAM) with a PDM microphone; Ethernet comes with the module's ABE variant (LAN8720, clock in on 0).",
+    "url": "https://quinled.info/quinled-dig-quad/",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Ethernet",
+      "Audio",
+      "Buttons"
+    ],
+    "planned": [
+      "Temperature",
+      "Relay"
+    ],
     "flashBaud": 460800,
-    "image": "assets/deviceModels/esp32-quinled-an-decapenta.jpg",
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Quad V4"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "2,4,12,14"
+        }
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 1,
+          "ethPhyAddr": 0,
+          "ethRstGpio": -1,
+          "ethMdcGpio": 7,
+          "ethMdioGpio": 8,
+          "ethClockGpio": 0,
+          "ethClockExtIn": true
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "micMode": 1,
+          "wsPin": 5,
+          "sdPin": 38
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 37,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "QuinLED An-DecaPenta",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32-lite"
+    ],
+    "flashBaud": 460800,
+    "image": "assets/deviceModels/esp32-quinled-an-decapenta.png",
     "url": "https://quinled.info/quinled-an-penta-deca/",
     "supported": [
       "LEDs",
@@ -403,9 +544,9 @@
     "name": "QuinLED An-Penta-Plus",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
-    "image": "assets/deviceModels/esp32-quinled-an-penta-plus.jpg",
+    "image": "assets/deviceModels/esp32-quinled-an-penta-plus.png",
     "description": "Relay on 13 cuts the power of the addressable-LED output.",
     "url": "https://quinled.info/quinled-an-penta-plus/",
     "supported": [
@@ -474,11 +615,11 @@
     "name": "QuinLED Dig-Octa 32-8L",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-16mb"
+      "esp32"
     ],
-    "image": "assets/deviceModels/esp32-16mb-quinled-dig-octa-32-8l.jpg",
+    "image": "assets/deviceModels/esp32-16mb-quinled-dig-octa-32-8l.png",
     "description": "Relay on 33 triggers an optional external relay board, best placed on the mains side of the power supply.",
-    "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
+    "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l-v2/",
     "supported": [
       "LEDs",
       "WiFi",
@@ -535,12 +676,85 @@
     "flashBaud": 460800
   },
   {
+    "name": "QuinLED Dig-Octa 32-8L V4",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32"
+    ],
+    "image": "assets/deviceModels/esp32-quinled-dig-octa-32-8l-v4.png",
+    "description": "Relay on 33 triggers an optional external relay board through a load switch. The SD card (SPI: clock 15, MOSI 16, MISO 36, CS 17) shares 17 with the microphone's WS by design, so it is one or the other: set Audio to a mode other than the local microphone, which frees 17, then add the SD card service.",
+    "url": "https://quinled.info/quinled-dig-octa-brainboard-32-8l/",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Ethernet",
+      "Audio",
+      "Buttons",
+      "Relay",
+      "SD card"
+    ],
+    "planned": [],
+    "flashBaud": 460800,
+    "state": {
+      "System": {
+        "deviceModel": "QuinLED Dig-Octa 32-8L V4"
+      },
+      "Network": {
+        "$patch": "replace",
+        "Ethernet": {
+          "type": "EthernetModule",
+          "ethBoard": "Custom",
+          "ethType": 1,
+          "ethPhyAddr": 0,
+          "ethRstGpio": -1,
+          "ethMdcGpio": 23,
+          "ethMdioGpio": 18,
+          "ethClockGpio": 0,
+          "ethClockExtIn": true
+        }
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "1,2,3,4,5,12,13,14"
+        },
+        "relayPins": "33"
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "micMode": 1,
+          "wsPin": 17,
+          "sdPin": 39
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 34,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            },
+            {
+              "pin": 35,
+              "activeLow": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
     "name": "Serg UniShield V5",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-16mb"
+      "esp32"
     ],
-    "image": "assets/deviceModels/esp32-16mb-serg-unishield-v5.jpg",
+    "image": "assets/deviceModels/esp32-16mb-serg-unishield-v5.png",
     "description": "Relay on 19 is an on-board relay the LEDs are powered through.",
     "url": "https://www.tindie.com/products/serg74/wled-shield-board-for-addressable-leds/",
     "supported": [
@@ -585,9 +799,9 @@
     "name": "Serg MiniShield",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-16mb"
+      "esp32"
     ],
-    "image": "assets/deviceModels/esp32-16mb-serg-minishield.jpg",
+    "image": "assets/deviceModels/esp32-16mb-serg-minishield.png",
     "description": "Relay on 19 is a header for an optional external 5 V relay module.",
     "url": "https://www.tindie.com/stores/serg74/",
     "supported": [
@@ -630,8 +844,9 @@
   {
     "name": "MHC V4.3",
     "chip": "ESP32",
+    "image": "assets/deviceModels/esp32-mhc-v43.png",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
     "supported": [
       "LEDs",
@@ -657,7 +872,7 @@
     "firmwares": [
       "esp32"
     ],
-    "image": "assets/deviceModels/esp32-mhc-v57-pro.jpg",
+    "image": "assets/deviceModels/esp32-mhc-v57-pro.png",
     "url": "https://shop.myhome-control.de/en/ABC-WLED-controller-PRO-V57-with-iMOSFET/HW10030",
     "supported": [
       "LEDs",
@@ -680,34 +895,11 @@
     }
   },
   {
-    "name": "Yves V4.8",
-    "chip": "ESP32",
-    "firmwares": [
-      "esp32"
-    ],
-    "supported": [
-      "LEDs",
-      "WiFi"
-    ],
-    "planned": [],
-    "state": {
-      "System": {
-        "deviceModel": "Yves V4.8"
-      },
-      "Drivers": {
-        "$patch": "replace",
-        "RmtLed": {
-          "type": "RmtLedDriver",
-          "pins": "3"
-        }
-      }
-    }
-  },
-  {
     "name": "Cube 2020-10",
     "chip": "ESP32",
+    "image": "assets/deviceModels/esp32-cube-2020-10.jpg",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
     "supported": [
       "LEDs",
@@ -732,8 +924,8 @@
     "chip": "ESP32",
     "flashBaud": 460800,
     "firmwares": [
-      "esp32",
-      "esp32-eth"
+      "esp32-lite",
+      "esp32-ethonly"
     ],
     "image": "assets/deviceModels/esp32-gledopto-gl-c-616wl.png",
     "description": "A relay cuts the LED power while the lights are off.",
@@ -797,12 +989,64 @@
     }
   },
   {
-    "name": "ESP32-S3 N16R8 Dev",
+    "name": "IoTorero LS-3PS",
+    "chip": "ESP32",
+    "firmwares": [
+      "esp32-lite"
+    ],
+    "image": "assets/deviceModels/esp32-iotorero-ls-3ps.png",
+    "description": "A USB-powered sound reactive LED controller on an ESP32-PICO-D2 with 4 MB flash, shipped with Athom's WLED: LEDs on 18, a PDM microphone with its clock on 23 and data on 19, and a button on 0.",
+    "supported": [
+      "LEDs",
+      "WiFi",
+      "Audio",
+      "Buttons"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "IoTorero LS-3PS"
+      },
+      "Drivers": {
+        "$patch": "replace",
+        "RmtLed": {
+          "type": "RmtLedDriver",
+          "pins": "18"
+        }
+      },
+      "Services": {
+        "$patch": "replace",
+        "Audio": {
+          "type": "AudioService",
+          "mode": 2,
+          "micMode": 1,
+          "wsPin": 23,
+          "sdPin": 19
+        },
+        "Buttons": {
+          "type": "ButtonService",
+          "buttons": [
+            {
+              "pin": 0,
+              "activeLow": true,
+              "target": "Control.switch1",
+              "kind": "toggle"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "ESP32-S3 DevKitC-1",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-qspi",
+      "esp32s3-opi",
+      "esp32s3-opi-oflash"
     ],
     "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
+    "url": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html",
     "supported": [
       "LEDs",
       "WiFi"
@@ -812,7 +1056,7 @@
     ],
     "state": {
       "System": {
-        "deviceModel": "ESP32-S3 N16R8 Dev"
+        "deviceModel": "ESP32-S3 DevKitC-1"
       },
       "Drivers": {
         "$patch": "replace",
@@ -831,38 +1075,10 @@
     }
   },
   {
-    "name": "ESP32-S3 N32R16V Dev",
-    "chip": "ESP32-S3",
-    "firmwares": [
-      "esp32s3-n32r16"
-    ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
-    "url": "https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.1.html",
-    "supported": [
-      "LEDs",
-      "WiFi"
-    ],
-    "planned": [
-      "RGB LED"
-    ],
-    "state": {
-      "System": {
-        "deviceModel": "ESP32-S3 N32R16V Dev"
-      },
-      "Drivers": {
-        "$patch": "replace",
-        "RmtLed": {
-          "type": "RmtLedDriver",
-          "pins": "18"
-        }
-      }
-    }
-  },
-  {
     "name": "Waveshare ESP32-S3-RGB-Matrix",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n32r16"
+      "esp32s3-opi-oflash"
     ],
     "image": "assets/deviceModels/esp32-s3-n32r16-waveshare-rgb-matrix.png",
     "url": "https://www.waveshare.com/esp32-s3-rgb-matrix.htm",
@@ -957,7 +1173,7 @@
     "name": "MIDI bridge",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
     "image": "assets/deviceModels/esp32-s3-n16r8-dev.png",
     "supported": [
@@ -989,9 +1205,9 @@
     "name": "MM testbench S3",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-testbench.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-testbench.png",
     "supported": [
       "LEDs",
       "WiFi",
@@ -1060,9 +1276,9 @@
     "name": "MM testbench ESP32-16MB",
     "chip": "ESP32",
     "firmwares": [
-      "esp32-16mb"
+      "esp32"
     ],
-    "image": "assets/deviceModels/esp32-16mb-testbench.jpg",
+    "image": "assets/deviceModels/esp32-16mb-testbench.png",
     "supported": [
       "LEDs",
       "WiFi"
@@ -1088,10 +1304,9 @@
     "name": "MM testbench P4",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth",
-      "esp32p4rev1-eth-wifi"
+      "esp32p4rev1"
     ],
-    "image": "assets/deviceModels/esp32-p4-testbench.jpg",
+    "image": "assets/deviceModels/esp32-p4-testbench.png",
     "supported": [
       "LEDs",
       "Ethernet",
@@ -1160,18 +1375,18 @@
     "name": "MM testbench classic olimex",
     "chip": "ESP32",
     "firmwares": [
-      "esp32",
-      "esp32-eth"
+      "esp32-lite",
+      "esp32-ethonly"
     ],
-    "image": "assets/deviceModels/esp32-olimex-testbench.jpg",
+    "image": "assets/deviceModels/esp32-olimex-testbench.png",
     "supported": [
       "LEDs",
       "WiFi",
-      "Ethernet"
+      "Ethernet",
+      "SD card"
     ],
     "planned": [
-      "Button",
-      "SD card"
+      "Button"
     ],
     "state": {
       "System": {
@@ -1206,6 +1421,12 @@
         "Layer": {
           "type": "Layer"
         }
+      },
+      "Services": {
+        "SdCard": {
+          "type": "SdCardService",
+          "board": "Classic SDMMC (1-bit)"
+        }
       }
     },
     "flashBaud": 460800
@@ -1214,7 +1435,7 @@
     "name": "LightCrafter 16",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n8r8"
+      "esp32s3-opi"
     ],
     "image": "assets/deviceModels/esp32-s3-n8r8-lightcrafter-16.jpg",
     "url": "https://www.limpkin.fr/",
@@ -1276,9 +1497,9 @@
     "name": "SE 16 V1",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n8r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n8r8-stephanelec-16p.jpg",
+    "image": "assets/deviceModels/esp32-s3-n8r8-stephanelec-16p.png",
     "url": "https://www.limpkin.fr/",
     "supported": [
       "LEDs",
@@ -1329,10 +1550,9 @@
     "name": "Waveshare ESP32-P4-NANO",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth",
-      "esp32p4rev1-eth-wifi"
+      "esp32p4rev1"
     ],
-    "image": "assets/deviceModels/esp32-p4-waveshare-nano.jpg",
+    "image": "assets/deviceModels/esp32-p4-waveshare-nano.png",
     "url": "https://www.waveshare.com/esp32-p4-nano.htm",
     "supported": [
       "LEDs",
@@ -1392,7 +1612,7 @@
     "name": "Waveshare ESP32-P4-ETH",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth"
+      "esp32p4rev1"
     ],
     "image": "assets/deviceModels/esp32-p4-waveshare-eth.png",
     "url": "https://www.waveshare.com/esp32-p4-eth.htm",
@@ -1421,11 +1641,15 @@
         "ParallelLed": {
           "type": "ParallelLedDriver",
           "peripheral": "Parlio",
-          "pins": "16,17,18,19,20,21,22,23"
+          "pins": "20,21,22,23"
         }
       },
       "Network": {
         "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
+          "radio": false
+        },
         "Ethernet": {
           "type": "EthernetModule",
           "ethBoard": "P4 RMII"
@@ -1454,7 +1678,7 @@
     "name": "Guition JC-ESP32P4-M3-DEV",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth"
+      "esp32p4rev1"
     ],
     "image": "assets/deviceModels/esp32-p4-guition-m3.jpg",
     "url": "https://devices.esphome.io/devices/guition-esp32-p4-m3-dev/",
@@ -1507,9 +1731,9 @@
     "name": "Olimex ESP32-P4-PC",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth"
+      "esp32p4rev1"
     ],
-    "image": "assets/deviceModels/esp32-p4-olimex-p4-pc.jpg",
+    "image": "assets/deviceModels/esp32-p4-olimex-p4-pc.png",
     "url": "https://www.olimex.com/Products/IoT/ESP32-P4/ESP32-P4-PC/open-source-hardware",
     "supported": [
       "LEDs",
@@ -1537,11 +1761,15 @@
         "ParallelLed": {
           "type": "ParallelLedDriver",
           "peripheral": "Parlio",
-          "pins": "14,15,16,17,18,19,46,47"
+          "pins": "46,47"
         }
       },
       "Network": {
         "$patch": "replace",
+        "WiFi": {
+          "type": "WiFiModule",
+          "radio": false
+        },
         "Ethernet": {
           "type": "EthernetModule",
           "ethBoard": "P4 RMII"
@@ -1571,10 +1799,9 @@
     "name": "MHC-WLED ESP32-P4 shield",
     "chip": "ESP32-P4",
     "firmwares": [
-      "esp32p4rev1-eth",
-      "esp32p4rev1-eth-wifi"
+      "esp32p4rev1"
     ],
-    "image": "assets/deviceModels/esp32-p4-mhc-wled-shield.jpg",
+    "image": "assets/deviceModels/esp32-p4-mhc-wled-shield.png",
     "url": "https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027",
     "supported": [
       "LEDs",
@@ -1695,10 +1922,10 @@
     "name": "Shelly",
     "chip": "ESP32",
     "firmwares": [
-      "esp32"
+      "esp32-lite"
     ],
     "flashBaud": 460800,
-    "image": "assets/deviceModels/esp32-shelly.jpg",
+    "image": "assets/deviceModels/esp32-shelly.png",
     "supported": [
       "LEDs",
       "WiFi",
@@ -1747,9 +1974,9 @@
     "name": "hpwit shift-register 48",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.png",
     "supported": [
       "LEDs",
       "WiFi"
@@ -1795,9 +2022,9 @@
     "name": "hpwit shift-register 15",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-hpwit-shift-register-board.png",
     "supported": [
       "LEDs",
       "WiFi"
@@ -1846,9 +2073,9 @@
     "name": "LILYGO T7-S3",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-lilygo-t7-s3.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-lilygo-t7-s3.png",
     "url": "https://lilygo.cc/products/t7-s3",
     "supported": [
       "LEDs",
@@ -1873,9 +2100,9 @@
     "name": "MoonHub75",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-n16r8"
+      "esp32s3-opi"
     ],
-    "image": "assets/deviceModels/esp32-s3-n16r8-moonhub75.jpg",
+    "image": "assets/deviceModels/esp32-s3-n16r8-moonhub75.png",
     "url": "https://moonmodules.org/projects/hardware/#moonhub75-pcb",
     "supported": [
       "LEDs",
@@ -1938,7 +2165,7 @@
     "name": "ESP32-S3-Zero (N4R2)",
     "chip": "ESP32-S3",
     "firmwares": [
-      "esp32s3-zero"
+      "esp32s3-qspi-lite"
     ],
     "image": "assets/deviceModels/esp32-s3-zero-pinout.png",
     "url": "https://www.waveshare.com/wiki/ESP32-S3-Zero",
@@ -1977,7 +2204,7 @@
     "chip": "ESP32-S3",
     "image": "assets/deviceModels/esp32-s3-n8r8-seeed-xiao-sense.png",
     "firmwares": [
-      "esp32s3-n8r8"
+      "esp32s3-opi"
     ],
     "url": "https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/",
     "description": "ESP32-S3R8 with 8 MB octal PSRAM and 8 MB flash, and the Sense board: a PDM microphone on 42 and 41, a camera, and a microSD slot that takes 7 to 9 and, in SPI mode, shares its chip select, 21, with the user LED; WiFi needs the u.FL antenna attached.",
@@ -2038,7 +2265,7 @@
     "chip": "ESP32-S3",
     "image": "assets/deviceModels/esp32-s3-n8r2-adafruit-matrixportal-pinout.jpg",
     "firmwares": [
-      "esp32s3-n8r2"
+      "esp32s3-qspi"
     ],
     "url": "https://www.adafruit.com/product/5778",
     "supported": [
@@ -2182,6 +2409,7 @@
   {
     "name": "Teensy 4.1",
     "chip": "Teensy 4.1",
+    "image": "assets/deviceModels/teensy-4-1.png",
     "firmwares": [
       "teensy41"
     ],
@@ -2213,6 +2441,7 @@
   {
     "name": "Teensy 4.1-NE + W5500",
     "chip": "Teensy 4.1",
+    "image": "assets/deviceModels/teensy-4-1.png",
     "firmwares": [
       "teensy41"
     ],
@@ -2238,6 +2467,136 @@
           "peripheral": "GPIO-DMA",
           "pins": "18"
         }
+      }
+    }
+  },
+  {
+    "name": "Raspberry Pi 5",
+    "chip": "Raspberry Pi",
+    "image": "assets/deviceModels/raspberry-pi-5.png",
+    "firmwares": [
+      "host-linux-arm64"
+    ],
+    "description": "A Raspberry Pi 5 running the Linux arm64 build; its RP1 PIO drives HUB75 panels from the 40-pin header.",
+    "url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Raspberry Pi 5"
+      }
+    }
+  },
+  {
+    "name": "Raspberry Pi 4",
+    "chip": "Raspberry Pi",
+    "image": "assets/deviceModels/raspberry-pi-4.png",
+    "firmwares": [
+      "host-linux-arm64"
+    ],
+    "description": "A Raspberry Pi 4 running the Linux arm64 build.",
+    "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Raspberry Pi 4"
+      }
+    }
+  },
+  {
+    "name": "Generic Linux",
+    "chip": "Linux",
+    "image": "assets/deviceModels/linux-nanopi-r76s.png",
+    "firmwares": [
+      "host-linux-x64",
+      "host-linux-arm64"
+    ],
+    "description": "Any Linux computer, installed from the .deb package or the archive.",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Generic Linux"
+      }
+    }
+  },
+  {
+    "name": "Generic macOS",
+    "chip": "macOS",
+    "image": "assets/deviceModels/macos-macintosh-128k.png",
+    "firmwares": [
+      "host-macos-arm64"
+    ],
+    "description": "A Mac, installed from the .dmg or the archive.",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Generic macOS"
+      }
+    }
+  },
+  {
+    "name": "Generic Windows",
+    "chip": "Windows",
+    "image": "assets/deviceModels/windows-logo.png",
+    "firmwares": [
+      "host-windows-x64"
+    ],
+    "description": "A Windows PC, installed from the setup program or the zip.",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Generic Windows"
+      }
+    }
+  },
+  {
+    "name": "Generic Android",
+    "chip": "Android",
+    "image": "assets/deviceModels/android-meta-quest-3.png",
+    "firmwares": [
+      "host-android-arm64"
+    ],
+    "description": "A phone, a tablet or a headset, installed from the .apk.",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Generic Android"
+      }
+    }
+  },
+  {
+    "name": "Docker container",
+    "chip": "Docker",
+    "image": "assets/deviceModels/docker-logo.png",
+    "firmwares": [
+      "host-linux-x64",
+      "host-linux-arm64"
+    ],
+    "description": "MoonLight in a container on a Linux host.",
+    "supported": [
+      "LEDs"
+    ],
+    "planned": [],
+    "state": {
+      "System": {
+        "deviceModel": "Docker container"
       }
     }
   }

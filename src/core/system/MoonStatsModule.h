@@ -171,7 +171,10 @@ inline void buildMoonStatsReport(JsonSink& sink,
                  static_cast<unsigned>(fps));
 
     // Facts about the board: the name and address sit in the same list and are deliberately absent.
+    field(sink, system, "firmware", "firmware", first);   // the build, which with the revision says whether boards run the one their silicon names
     field(sink, system, "chip", "chip", first);
+    field(sink, system, "chipRevision", "chipRevision", first);
+    field(sink, system, "chipPackage", "chipPackage", first);
     field(sink, system, "flash", "flash", first);
     field(sink, system, "psramType", "psram", first);
     field(sink, system, "sdk", "sdk", first);
@@ -196,7 +199,7 @@ inline void buildMoonStatsReport(JsonSink& sink,
 ///
 /// ## What it sends
 ///
-/// The report carries the chip, flash, PSRAM, SDK, device model, memory, light count, and which modules you added. It carries no device name, no addresses, no credentials and no text you typed.
+/// The report carries the firmware, the chip with its revision and package, flash, PSRAM, SDK, device model, memory, light count, and which modules you added. It carries no device name, no addresses, no credentials and no text you typed.
 ///
 /// The [privacy policy](https://moonmodules.org/MoonLight/legal/privacy-policy.html) states what is promised.
 ///
@@ -266,7 +269,7 @@ public:
         // A checkbox, since "not now" and "never" both mean nothing is sent.
         controls_.addControl("consent", consent_);
 
-        // Text with the readonly flag, since persistence refuses a read-only control.
+        // Text with the readonly flag, since persistence skips the display type addReadOnly makes and saves a text.
         controls_.addText("reportedVersion", reportedVersion_, sizeof(reportedVersion_));
         controls_.setReadOnly(controls_.count() - 1, true);
 

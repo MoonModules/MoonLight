@@ -70,7 +70,7 @@ def main():
     parser.add_argument("--port", required=True, help="Serial port")
     parser.add_argument("--baud", type=int, default=115200, help="Baud rate")
     parser.add_argument("--firmware", help="Firmware variant whose ELF decodes panic backtraces "
-                                           "(e.g. esp32s3-n16r8). Without it, addresses print raw.")
+                                           "(e.g. esp32s3-opi). Without it, addresses print raw.")
     args = parser.parse_args()
 
     tool = elf = elf_sha = None

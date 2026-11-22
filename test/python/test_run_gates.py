@@ -256,7 +256,7 @@ def test_a_gate_is_rerun_once_an_output_its_step_declares_is_deleted_or_replaced
 def test_the_host_builds_cmake_cache_is_a_declared_output_of_the_build_steps(tmp_path, monkeypatch):
     gates = {g["id"]: g for g in run_gates.gates("commit", run_gates.processes())}
     assert gates["commit-code/build-host"]["outputs"] == ["{host_build}/CMakeCache.txt"]
-    assert gates["commit-code/esp32-fresh"]["outputs"] == ["build/esp32-esp32s3-n16r8/*.bin"]
+    assert gates["commit-code/esp32-fresh"]["outputs"] == ["build/esp32-esp32s3-opi/*.bin"]
     monkeypatch.setattr(run_gates, "ROOT", tmp_path)
     sys.path.insert(0, str(ROOT / "moondeck" / "build"))
     import build_host

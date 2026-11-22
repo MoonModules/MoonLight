@@ -38,7 +38,7 @@ from pathlib import Path
 
 # The firmware registry is the one list of variants and their chips, on every platform.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_esp32 import APP_BIN  # noqa: E402
+from build_esp32 import APP_ASSET_PREFIX, APP_BIN  # noqa: E402
 from firmwares import FIRMWARES, chip_family  # noqa: E402
 
 # ESP-IDF writes a number of `<name>.bin` references in flasher_args.json,
@@ -52,8 +52,8 @@ from firmwares import FIRMWARES, chip_family  # noqa: E402
 # shared (uploaded once, every firmware's manifest points at the shared name).
 PART_NAME_MAP = {
     APP_BIN: "{prefix}.bin",
-    "bootloader.bin": "{prefix}-bootloader.bin",
-    "partition-table.bin": "{prefix}-partition-table.bin",
+    "bootloader.bin": "{prefix}-bootloader-{smallest}mb.bin",   # the smallest layout's, as the table
+    "partition-table.bin": "{prefix}-partition-table-{smallest}mb.bin",   # the smallest layout's; `layouts` names the rest
     "ota_data_initial.bin": "shared-ota-data.bin",
 }
 
@@ -62,7 +62,7 @@ PART_NAME_MAP = {
 CHIP_FAMILIES = {f: chip_family(f) for f in FIRMWARES}
 
 
-def parts_from_flasher_args(flasher_args: dict, prefix: str) -> list[dict]:
+def parts_from_flasher_args(flasher_args: dict, prefix: str, smallest: int = 4) -> list[dict]:
     """Convert IDF's flasher_args.json `flash_files` map into Web Tools parts.
 
     `prefix` names the per-firmware parts; the shared part ignores it.
@@ -79,7 +79,7 @@ def parts_from_flasher_args(flasher_args: dict, prefix: str) -> list[dict]:
             continue
         offset = int(offset_hex, 16) if isinstance(offset_hex, str) else int(offset_hex)
         parts.append({
-            "path": template.format(prefix=prefix),
+            "path": template.format(prefix=prefix, smallest=smallest),
             "offset": offset,
         })
     # Web Tools doesn't require a specific order, but sorted-by-offset is the
@@ -98,8 +98,8 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
 
-    # Per-firmware parts: firmware-<firmware>-v<version>{,-bootloader}.bin.
-    prefix = f"firmware-{args.firmware}-v{args.version}"
+    # Per-firmware parts: moonlight-<firmware>-v<version>{,-bootloader}.bin.
+    prefix = f"{APP_ASSET_PREFIX}-{args.firmware}-v{args.version}"
     base_url = args.release_url.rstrip("/")
 
     if FIRMWARES[args.firmware]["platform"] == "esp32":
@@ -121,6 +121,13 @@ def main() -> int:
     for p in parts:
         p["path"] = f"{base_url}/{p['path']}"
 
+    build = {"chipFamily": CHIP_FAMILIES[args.firmware], "parts": parts}
+    if FIRMWARES[args.firmware]["platform"] == "esp32":
+        # The bootloader and table per flash size; the installer swaps both for the default parts by the flash it measures (mooninstaller/flash-layout.js).
+        build["layouts"] = [{"flashSize": f"{size}MB", "bootloader": f"{base_url}/{prefix}-bootloader-{size}mb.bin",
+                             "partitionTable": f"{base_url}/{prefix}-partition-table-{size}mb.bin"}
+                            for size in FIRMWARES[args.firmware]["layouts"]]
+
     manifest = {
         "name": "MoonLight",
         "version": args.version,
@@ -129,12 +136,7 @@ def main() -> int:
         # unstable (avoids stale-state bugs across versions). Revisit when
         # the schema is locked.
         "new_install_prompt_erase": True,
-        "builds": [
-            {
-                "chipFamily": CHIP_FAMILIES[args.firmware],
-                "parts": parts,
-            }
-        ],
+        "builds": [build],
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -155,26 +157,25 @@ def esp32_parts(args, prefix: str) -> list[dict] | None:
         print(f"generate_manifest: {args.flasher_args} not valid JSON: {e}")
         return None
 
-    parts = parts_from_flasher_args(flasher_args, prefix)
+    parts = parts_from_flasher_args(flasher_args, prefix, min(FIRMWARES[args.firmware]["layouts"]))
 
-    # MoonBase firmwares: flasher_args stages the app at the first app partition: the factory
+    # flasher_args stages the app at the first app partition: the factory
     # slot, MoonBase's home: because IDF knows nothing about the two-image scheme. Remap the app
     # to ota_0, swap the blank ota-data for the slot-0 image (a blank one would boot MoonBase on
     # first start), and add MoonBase at the factory slot. Offsets come from the same partition CSV
     # the firmware builds with (moonbase_table_csv), so manifest and table cannot disagree.
     # release.yml stages the two shared-moonbase assets these paths point at.
     from build_esp32 import moonbase_table_csv, partition_offsets
-    spec = FIRMWARES[args.firmware]
-    if spec.get("moonbase"):
-        offs = partition_offsets(moonbase_table_csv(args.firmware))
-        for part in parts:
-            if part["path"] == f"{prefix}.bin":
-                part["offset"] = int(offs["ota_0"], 16)
-            elif part["path"] == "shared-ota-data.bin":
-                part["path"] = "shared-ota-data-slot0.bin"
-        parts.append({"path": f"shared-moonbase-{spec['chip']}.bin",
-                      "offset": int(offs["factory"], 16)})
-        parts.sort(key=lambda p: p["offset"])
+    offs = partition_offsets(moonbase_table_csv(args.firmware))
+    for part in parts:
+        if part["path"] == f"{prefix}.bin":
+            part["offset"] = int(offs["ota_0"], 16)
+        elif part["path"] == "shared-ota-data.bin":
+            part["path"] = "shared-ota-data-slot0.bin"
+    from build_esp32 import migration_family
+    parts.append({"path": f"shared-moonbase-{migration_family(args.firmware)}.bin",
+                  "offset": int(offs["factory"], 16)})
+    parts.sort(key=lambda p: p["offset"])
 
     return parts
 

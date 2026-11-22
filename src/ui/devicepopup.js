@@ -112,11 +112,11 @@ export function peerBase(row, home) {
     return row.url ? row.url.replace(/\/$/, "") : `http://${row.ip}${row.port ? `:${row.port}` : ""}`;
 }
 
-// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, firmware-<name>-v<version>.bin for
+// The image of release `rel` that installs `version` on a device, its address and the SHA-256 GitHub names for it, <assetPrefix>-<name>-v<version>.bin for
 // a board and a host alike. Null url for a device its host or its user updates, and for one older than its firmware name.
 function updateAsset(rel, dev, version) {
     const installs = !!dev.firmware && (!dev.update || dev.update === "self");
-    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version)) : { url: null, sha256: null };
+    return installs ? releaseAsset(rel, firmwareAssetName(dev.firmware, version, dev.assetPrefix || "firmware")) : { url: null, sha256: null };
 }
 
 // The release a device could move to from `releases` and the asset that installs it, by the same checks the update badge makes for this device.
@@ -125,9 +125,10 @@ export function peerUpdate(dev, releases) {
     return u ? { label: u.label, version: u.version, ...updateAsset(u.rel, dev, u.version) } : null;
 }
 
-// What a device reports, in the shape the update rules read: version, firmware (null while unnamed), how it is updated and its mode.
+// What a device reports, in the shape the update rules read: version, firmware (null while unnamed), how it is updated, its mode and its image prefix.
 export function deviceOf(fw) {
-    return { version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update: fw.summary?.update, mode: fw.summary?.mode };
+    return { version: fw.version, firmware: fw.firmware && fw.firmware !== "unknown" ? fw.firmware : null, update: fw.summary?.update, mode: fw.summary?.mode,
+             assetPrefix: fw.summary?.assetPrefix };
 }
 
 // Why an update `u` with no image is not installed from here: a container's host, a firmware too old to name its image, or the user's own hand.
@@ -469,6 +470,53 @@ async function applyDeviceDefaults(base, model) {
     }
 }
 
+// A device model's anchor on the docs' Device models page: the rule `device_slug` in moondeck/docs/gen_help.py writes the page with,
+// the name lowercased, each run outside a-z and 0-9 one hyphen, none at either end. The same sample names pin both.
+export function deviceSlug(name) {
+    return String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// A device model's card on the docs site's Device models page, which carries its picture, firmwares and product page.
+export function catalogUrl(name) {
+    return new URL(`../reference/device-models.html#${deviceSlug(name)}`, INSTALLER_URL).href;
+}
+
+// A device-model name as a link to its card, tagged with its control so a state change repoints it (setCatalogLink).
+export function catalogLink(name, mid, key) {
+    const link = document.createElement("a");
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.dataset.mid = mid;
+    link.dataset.key = key;
+    setCatalogLink(link, name);
+    return link;
+}
+
+// Point a catalog link at `name`'s card.
+export function setCatalogLink(link, name) {
+    link.href = catalogUrl(name);
+    if (link.textContent !== `${name} ↗`) link.textContent = `${name} ↗`;   // an unchanged name keeps its text, and a selection in it
+}
+
+// A device-model name on its own card (a control flagged `catalog`) offers the catalog's defaults to apply, as the popup does, behind a
+// button: the catalog comes from the docs site, so it loads on the click and after `consent()`, as help does. Offline, the name alone.
+export function attachCatalogField(container, name, consent) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "graph-popup-update";
+    btn.textContent = "Choose device model…";
+    btn.addEventListener("click", async () => {
+        if (!consent()) return;
+        btn.disabled = true;
+        const sys = await fetchWithin("/api/system", 3000, r => (r.ok ? r.json() : null));
+        btn.disabled = false;   // a failed request leaves the button to try again
+        if (!sys || !sys.firmware) return;
+        btn.remove();
+        await offerDeviceDefaults(container, "", { firmware: sys.firmware, summary: { board: name } });
+    });
+    container.append(btn);
+}
+
 // A running MoonLight takes a device model's defaults as a moved one does: the models its firmware runs on, the one it reports picked, pressed
 // twice since the defaults replace the modules they name. Offline, where the catalog does not load, the popup leaves the row out.
 async function offerDeviceDefaults(summary, base, fw) {
@@ -560,6 +608,7 @@ function buildPeerSummary(row, home) {
             offerDeviceDefaults(summary, base, fw);
         }
         line.textContent = `Firmware: ${fw.version} · ${fw.firmware || "unknown"}`;
+        suggestFirmware(box, fw);
         const update = fw.summary?.update;
         const releases = await loadReleases();   // null while the release feed has not loaded
         const u = releases && peerUpdate(deviceOf(fw), releases);
@@ -584,6 +633,21 @@ function buildPeerSummary(row, home) {
     return box;
 }
 
+// A line under the firmware when the board's own facts name another firmware than it runs (measuredFirmware), such as a 16 MB board on the
+// 4 MB tier; its Firmware card offers the move. Shown only for a device that reports its facts, with the installer site in reach.
+async function suggestFirmware(box, fw) {
+    const hw = fw.summary?.hardware;
+    if (!hw || !fw.firmware) return;
+    const ds = await loadMapDeviceSupport();
+    if (!ds?.measuredFirmware || !ds.factsFromDevice) return;
+    const suggested = ds.measuredFirmware(fw.summary.chip, ds.factsFromDevice(hw));
+    if (!suggested.firmware || suggested.firmware === fw.firmware) return;
+    const p = document.createElement("div");
+    p.className = "graph-popup-note";
+    p.textContent = `This board takes ${suggested.firmware} (${suggested.note.split(":")[0]}): its Firmware card offers the move.`;
+    box.appendChild(p);
+}
+
 // The image that brings a device's MoonBase level with its app, shared-moonbase-<chip>.bin of the release its app ships in, with the SHA-256 GitHub
 // names for it; a null url when that release carries none for the chip.
 function moonbaseAsset(rel, chip) {
@@ -597,7 +661,7 @@ function offerImageUpdates(box, base, fw, note, releases, lead) {
     const sys = fw.summary || {};
     const offers = [];
     if (sys.moonbaseMismatch) {
-        const a = moonbaseAsset(releaseOfVersion(releases, fw.version), sys.chip);
+        const a = moonbaseAsset(releaseOfVersion(releases, fw.version), sys.moonbase || sys.chip);
         if (a.url) offers.push({ label: "MoonBase", kind: "moonbase", source: { url: a.url, sha256: a.sha256 }, flag: "moonbaseMismatch" });
     }
     if (sys.coprocessorMismatch) offers.push({ label: "WiFi coprocessor", kind: "coprocessor", source: { url: "" }, flag: "coprocessorMismatch" });

@@ -344,19 +344,7 @@ bool arpLookup(const uint8_t ip[4], uint8_t mac[6]) {
 #endif
 }
 
-const char* macString() {
-    // The base MAC is fixed for the chip's life, so format it once into a static buffer the caller can point at (no per-module copy). Not called before the first use, single-threaded init.
-    static char buf[18] = {};
-    if (buf[0] == 0) {
-        uint8_t mac[6];
-        esp_efuse_mac_get_default(mac);
-        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
-                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-    return buf;
-}
-
-const char* hostPlatform() {
+const char* hostDeviceModel() {
     // Empty on a device: a board cannot self-identify, so `deviceModel` is injected by tooling from the catalog (MoonDeck, or the web installer over serial). Answering something here would overwrite a real board name with a guess.
     return "";
 }
@@ -377,6 +365,16 @@ const char* chipModel() {
         case CHIP_ESP32P4: return "ESP32-P4";
         default:           return "ESP32-?";
     }
+}
+
+const char* chipRevision() {
+    static char buf[12] = {};   // esp_chip_info's revision is major x 100 + minor, as esptool prints it
+    if (!buf[0]) {
+        esp_chip_info_t info;
+        esp_chip_info(&info);
+        std::snprintf(buf, sizeof(buf), "v%u.%u", static_cast<unsigned>(info.revision / 100), static_cast<unsigned>(info.revision % 100));
+    }
+    return buf;
 }
 
 uint32_t IRAM_ATTR cycleCount() { return esp_cpu_get_cycle_count(); }
@@ -428,9 +426,11 @@ const char* sdkVersion() {
 #endif
 
 const char* psramType() {
-    // The PSRAM interface mode and clock are compile-time (IDF has no runtime getter): CONFIG_SPIRAM_MODE_OCT is set only for octal parts (S3/S2 -R8), not classic quad WROVER. Empty when PSRAM is not compiled in.
+    // The PSRAM interface mode and clock are compile-time (IDF has no runtime getter): hex on the P4, octal on the S3 -R8 parts and the S31, quad on the rest. Empty when PSRAM is not compiled in.
 #if !defined(CONFIG_SPIRAM)
     return "";
+#elif defined(CONFIG_SPIRAM_MODE_HEX)
+    return "hex" MM_PSRAM_CLOCK;
 #elif defined(CONFIG_SPIRAM_MODE_OCT)
     return "octal" MM_PSRAM_CLOCK;
 #else
@@ -551,12 +551,16 @@ bool coprocessorConnect() {
     // 4 KB as the version query's caller needs; priority 5, as the install tasks.
     return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
 }
+void coprocessorShutdown() {
+    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort (Plan-20261121, step 2).
+}
 bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 #else
 bool wifiRadioReady() MM_NONBLOCKING { return true; }   // a native radio starts whenever asked
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 #endif
 
 const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }

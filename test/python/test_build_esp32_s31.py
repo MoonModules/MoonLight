@@ -56,7 +56,7 @@ def test_s31_gets_ethernet_not_MM_NO_ETH():
     )
     # Sanity anchor: a variant whose fragments enable an eth driver stays eth-enabled too,
     # and the mechanism (content-read) is exercised for a ".eth"-named fragment as well.
-    assert "-DMM_NO_ETH=1" not in firmware_cmake_args("esp32-eth")
+    assert "-DMM_NO_ETH=1" not in firmware_cmake_args("esp32-ethonly")
 
 
 def test_every_firmware_chip_has_a_family_label():

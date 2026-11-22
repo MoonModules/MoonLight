@@ -13,7 +13,7 @@ running image. Comparing timestamps answers the question the gate actually means
 binary include what is on disk right now?
 
 Usage:
-  uv run moondeck/check/check_esp32_built.py --firmware esp32s3-n16r8
+  uv run moondeck/check/check_esp32_built.py --firmware esp32s3-opi
   uv run moondeck/check/check_esp32_built.py --firmware esp32 --max-age-hours 24
 
 Exit codes: 0 fresh · 1 missing or stale (the message says which, and what to run).
@@ -164,7 +164,7 @@ def compiled_sources(firmware):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--firmware", required=True,
-                        help="Firmware variant, e.g. esp32s3-n16r8 (its build dir is "
+                        help="Firmware variant, e.g. esp32s3-opi (its build dir is "
                              "build/esp32-<firmware>/).")
     parser.add_argument("--max-age-hours", type=float, default=0,
                         help="Also fail if the binary is older than this many hours, even "
@@ -206,34 +206,32 @@ def check(args):
         print(f"  rebuild: {build_cmd}")
         return 1
 
-    # MoonBase firmwares carry a second image (built into build/moonbase-<chip>/ by the same
+    # Every firmware carries a second image, MoonBase (built into build/moonbase-<chip>/ by the same
     # build run): it must exist and be newer than every moonbase/ source, by the same
     # sources-not-clock rule as the app image.
-    spec = FIRMWARES.get(args.firmware, {})
-    if spec.get("moonbase"):
-        mb_bin = ROOT / "build" / f"moonbase-{spec['chip']}" / MOONBASE_BIN
-        if not mb_bin.exists():
-            record(args.firmware, [{"rule": "missing binary", "message": f"{args.firmware}: no MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
-            print(f"No MoonBase image for {args.firmware}.")
-            print(f"  expected: {mb_bin.relative_to(ROOT)}")
-            print(f"  build it: {build_cmd}")
-            return 1
-        mb_built = mb_bin.stat().st_mtime
-        # What MoonBase builds from: its own project, CMake files and defaults included, which no compiler reports, plus the headers it shares from src/, from its build's ninja database.
-        mb_deps = ninja_deps(mb_bin.parent) or set()
-        mb_files = [ROOT / d for d in mb_deps] + [f for f in (ROOT / "moonbase").rglob("*") if not f.is_relative_to(ROOT / "moonbase" / "migrate")]
-        mb_newest = max((f.stat().st_mtime for f in mb_files if f.is_file() and f.suffix in SOURCE_SUFFIXES
-                         and not SKIP_PARTS.intersection(f.relative_to(ROOT).parts)), default=0)
-        if mb_newest > mb_built:
-            record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a source MoonBase compiles is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
-            print(f"MoonBase image for {args.firmware} is STALE: a source it compiles is newer.")
-            print(f"  rebuild: {build_cmd}")
-            return 1
+    mb_bin = ROOT / "build" / f"moonbase-{FIRMWARES[args.firmware]['chip']}" / MOONBASE_BIN
+    if not mb_bin.exists():
+        record(args.firmware, [{"rule": "missing binary", "message": f"{args.firmware}: no MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
+        print(f"No MoonBase image for {args.firmware}.")
+        print(f"  expected: {mb_bin.relative_to(ROOT)}")
+        print(f"  build it: {build_cmd}")
+        return 1
+    mb_built = mb_bin.stat().st_mtime
+    # What MoonBase builds from: its own project, CMake files and defaults included, which no compiler reports, plus the headers it shares from src/, from its build's ninja database.
+    mb_deps = ninja_deps(mb_bin.parent) or set()
+    mb_files = [ROOT / d for d in mb_deps] + [f for f in (ROOT / "moonbase").rglob("*") if not f.is_relative_to(ROOT / "moonbase" / "migrate")]
+    mb_newest = max((f.stat().st_mtime for f in mb_files if f.is_file() and f.suffix in SOURCE_SUFFIXES
+                     and not SKIP_PARTS.intersection(f.relative_to(ROOT).parts)), default=0)
+    if mb_newest > mb_built:
+        record(args.firmware, [{"rule": "stale moonbase image", "message": f"{args.firmware}: a source MoonBase compiles is newer than the MoonBase image", "file": mb_bin.relative_to(ROOT).as_posix(), "level": "error"}])
+        print(f"MoonBase image for {args.firmware} is STALE: a source it compiles is newer.")
+        print(f"  rebuild: {build_cmd}")
+        return 1
 
     if args.max_age_hours and age_h > args.max_age_hours:
         record(args.firmware, [{"rule": "old binary", "message": f"{args.firmware}: built {age_h:.1f}h ago, over the {args.max_age_hours}h limit", "file": binary.relative_to(ROOT).as_posix(), "level": "error"}])
         print(f"Firmware for {args.firmware} is older than {args.max_age_hours}h "
-              f"({age_h:.1f}h) — no source is newer, but the age rule asks for a rebuild.")
+              f"({age_h:.1f}h): no source is newer, but the age rule asks for a rebuild.")
         print(f"  rebuild: {build_cmd}")
         return 1
 

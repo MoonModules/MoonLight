@@ -429,7 +429,7 @@ function buildListGraph(container, rows, details, opts) {
                 if (row.self) {
                     const node = nodes[index.get(key)];
                     // Only what the peer reports: an older one sends fewer fields, and a key with an undefined value shows as an empty line.
-                    const own = ["version", "firmware", "mode", "moonbaseMismatch", "coprocessorMismatch", "services", "outputs"].filter(k => row[k] !== undefined);
+                    const own = ["version", "firmware", "assetPrefix", "hardware", "moonbase", "mode", "moonbaseMismatch", "coprocessorMismatch", "services", "outputs"].filter(k => row[k] !== undefined);
                     node.row = Object.assign({}, node.row, Object.fromEntries(own.map(k => [k, row[k]])));
                 }
                 continue;

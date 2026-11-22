@@ -24,6 +24,8 @@ ESP32_DIR = ROOT / "esp32"
 
 # What ESP-IDF names each build's output, which is the `project()` name in esp32/CMakeLists.txt; MoonBase's, MOONBASE_BIN, lives with its builder in moonbase_images.py and is imported above. It is also stamped into the image descriptor a shipped device compares before it installs anything, so a rename is decided in src/core/util/FirmwareImage.h first. Every script reading a build imports these.
 APP_BIN = "MoonLight.bin"
+# The first word of every release app image name, `moonlight-<firmware>-v<version>.<ext>`, as the device asks for it (kReleaseAssetPrefix in src/core/system/FirmwareUpdateModule.h).
+APP_ASSET_PREFIX = "moonlight"
 APP_ELF = "MoonLight.elf"
 
 # Components to drop from an Ethernet-only build. ESP-IDF v6.x has no
@@ -36,32 +38,19 @@ APP_ELF = "MoonLight.elf"
 # NOTE: esp_phy is NOT excluded; it provides RF/clock init the ESP32 EMAC
 # (Ethernet RMII) depends on. Excluding it leaves Ethernet stuck "started"
 # with no link. Only the genuinely WiFi-side components are dropped.
-#
-# NOTE on the P4 co-processor components (esp_hosted / esp_wifi_remote / eppp_link):
-# the `rules: target == esp32p4` gate in main/idf_component.yml pulls them for ANY
-# esp32p4 build, including the WiFi-less esp32p4rev1-eth, because manifest rules can't
-# see our eth-only flag. EXCLUDE_COMPONENTS does NOT drop them (the component
-# manager resolves the managed dependency before the exclude applies). It's a
-# *build-time* cost only: the linker dead-strips the unused code, so they add ~0
-# bytes of flash to esp32p4rev1-eth (our coprocessorWifi() is the empty stub there, so
-# no esp_hosted symbol is referenced; confirmed: their .text size is 0x0 in the
-# .map). Left as-is rather than fought.
 ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 
-# Firmware catalogue. Each entry describes one shipping firmware variant.
-# Keys combine chip name + feature flags + (for SKU-sensitive chips) module:
-#   esp32:          ESP32 classic, WiFi + Ethernet (RMII; eth comes up only
-#                     when a PHY is present, pins per board from deviceModels.json)
-#   esp32-eth:      ESP32 classic, Ethernet only (WiFi compiled out; smaller)
-#   esp32s3-n16r8:  ESP32-S3 DevKitC-1 with the N16R8 module
-#                     (16 MB flash, 8 MB octal PSRAM). Other S3 SKUs (N8R2,
-#                     N8R8, …) get their own key; the sdkconfig fragment
-#                     encodes flash size + partition table + PSRAM mode,
-#                     which differ per SKU.
+# Firmware catalogue. Each entry describes one firmware: a firmware per thing the silicon forces (the chip, the
+# P4's revision line, the S3's PSRAM interface and octal flash, the classic cache workaround), a `-lite` tier
+# for 4 MB where a family's full build does not fit (CONFIG_MM_LITE), and `-ethonly`, the user's choice.
+# The naming rule and why: docs/work/Plan-20261121 - One firmware per chip and PSRAM mode.md.
 # The Ethernet driver is compiled into each chip's firmware (RMII EMAC for
 # classic/P4 via sdkconfig.defaults.eth, W5500 SPI for S3 via .eth-spi);
 # which PHY/pins a given board uses is runtime config (deviceModels.json →
 # NetworkModule → ethInit), so one binary per chip serves every board.
+#
+# `layouts`: the flash sizes in MB the firmware installs into, each with its table in LAYOUTS; the fragments
+# carry the smallest, since the flash size the app sees comes from the bootloader header, not the app's build.
 #
 # `panel_cards`: True links PanelCardDriver (panel receiver cards over raw Ethernet). Opt-in
 # because the cards need a gigabit link: the S31 has one, and the P4 is included to measure what
@@ -73,19 +62,49 @@ ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 # mooninstaller/firmwares.json, which the CI matrix, the ESP Web Tools manifest
 # loops, and MoonDeck all read (check_firmwares.py guards the projection).
 FIRMWARES: dict[str, dict] = {
-    # Default classic ESP32: WiFi AND Ethernet in one binary. The RMII Ethernet
-    # driver compiles in (the .eth fragment); whether Eth comes up, and on which
-    # pins/PHY, is runtime config (deviceModels.json → NetworkModule → ethInit). A
-    # WiFi-only board flashing this gets WiFi alone; ethInit() no-ops when no PHY
-    # responds, then the WiFi cascade takes over (no GPIO grab, no hang). This
-    # replaces the old separate `esp32` (WiFi-only) + `esp32-eth-wifi` keys.
+    # The classic ESP32 (docs/work/Plan-20261121): one image per tier for every revision and module. PSRAM is found at boot on
+    # every board and joins the heap where psramHeapSafe allows (revision 3 and up, or a build with the cache workaround).
+    # WiFi and Ethernet in one binary: the RMII driver compiles in (the .eth fragment), and whether Ethernet comes up, on which
+    # pins and PHY, is runtime config (deviceModels.json -> NetworkModule -> ethInit); a board with no PHY falls to the WiFi cascade.
     "esp32": {
         "chip": "esp32",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
+                      "sdkconfig.defaults.moonbase-8mb"],
+        "layouts": [8, 16],
         "eth_only": False,
-        "description": "ESP32 classic: WiFi + Ethernet (RMII; per-board pins/PHY "
-                       "from deviceModels.json, default LAN8720 pins).",
+        "description": "ESP32 classic with more than 4 MB flash, every revision: WiFi + Ethernet, every "
+                       "feature; PSRAM used on revision 3 and up.",
+        "ships": True,
+    },
+    "esp32-lite": {
+        "chip": "esp32",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
+                      "sdkconfig.defaults.lite", "sdkconfig.defaults.moonbase-4mb"],
+        "layouts": [4],
+        "eth_only": False,
+        "description": "ESP32 classic with 4 MB flash, every revision: WiFi + Ethernet, the 4 MB tier "
+                       "(no SD card); PSRAM used on revision 3 and up.",
+        "ships": True,
+    },
+    "esp32-ethonly": {
+        "chip": "esp32",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
+                      "sdkconfig.defaults.moonbase-4mb"],
+        "layouts": [4, 8, 16],
+        "eth_only": True,
+        "description": "ESP32 classic, every revision: Ethernet only (WiFi compiled out, so every feature "
+                       "fits 4 MB and more RAM stays free). Per-board pins/PHY from deviceModels.json.",
+        "ships": True,
+    },
+    # The tier on every layout: with the SD card the workaround's code is 7 KB over the 4 MB slot, and most revision 0 and 1 boards have 4 MB.
+    "esp32-rev1-lite": {
+        "chip": "esp32",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.psram-classic",
+                      "sdkconfig.defaults.psram-workaround", "sdkconfig.defaults.lite", "sdkconfig.defaults.moonbase-4mb"],
+        "layouts": [4, 8, 16],
+        "eth_only": False,
+        "description": "ESP32 classic revision 0 and 1 with PSRAM (the older WROVER modules): WiFi + "
+                       "Ethernet, the PSRAM cache workaround, PSRAM used, the 4 MB tier (no SD card).",
         "ships": True,
     },
     # The EMULATED board. Not silicon: QEMU has no radio and no Ethernet PHY, so this variant swaps
@@ -98,7 +117,7 @@ FIRMWARES: dict[str, dict] = {
     "qemu": {
         "chip": "esp32",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.qemu", "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
+        "layouts": [4],
         "eth_only": True,
         "description": "ESP32 classic under QEMU, emulated Ethernet (openeth), no WiFi. "
                        "Run with moondeck/qemu/run_qemu.py, not flashed to hardware.",
@@ -108,187 +127,97 @@ FIRMWARES: dict[str, dict] = {
         # entries are things a user can flash to a board.
         "installable": False,
     },
-    "esp32-16mb": {
-        "chip": "esp32",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.16mb",
-                      "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-16mb"],
-        "moonbase": True,   # MoonBase + ONE app slot; the freed 4 MB goes to the filesystem
-        "eth_only": False,
-        "description": "ESP32 classic with 16 MB flash: WiFi + Ethernet. Same silicon "
-                       "as `esp32`; this variant uses the extra flash for a big app slot "
-                       "+ an 11 MB filesystem (Serg boards, QuinLED Dig-Octa).",
-        "ships": True,
-    },
-    "esp32-wrover": {
-        "chip": "esp32",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth",
-                      "sdkconfig.defaults.wrover", "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
-        "eth_only": False,
-        "description": "ESP32-WROVER (classic ESP32, 4 MB flash + 4 MB quad PSRAM): WiFi + "
-                       "Ethernet. Same silicon as `esp32`; this variant enables PSRAM for "
-                       "the larger buffers (big grids, preview) the WROVER's extra RAM allows.",
-        "ships": True,
-    },
-    "esp32-pico": {
-        "chip": "esp32",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth",
-                      "sdkconfig.defaults.esp32-pico", "sdkconfig.defaults.moonbase-8mb"],
-        "moonbase": True,   # 8 MB: factory MoonBase + one app slot (see moonbase/)
-        "eth_only": False,
-        "description": "ESP32-PICO-V3-02 (classic ESP32 SiP: 8 MB embedded flash + 2 MB "
-                       "embedded quad PSRAM). WiFi + Ethernet, same silicon as `esp32`; its "
-                       "own variant because the flash is 8 MB where the base assumes 4 and "
-                       "PSRAM is on (QuinLED Dig-Next-2).",
-        "ships": True,
-    },
-    "esp32-eth": {
-        "chip": "esp32",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.eth", "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
-        "eth_only": True,
-        "description": "ESP32 classic: Ethernet only (WiFi compiled out; smaller "
-                       "image, more RAM). Per-board pins/PHY from deviceModels.json. The "
-                       "default `esp32` does WiFi+Ethernet: use this only to drop WiFi.",
-        "ships": True,
-    },
-    "esp32s3-n16r8": {
+    # The S3, one image per PSRAM interface (quad R2 modules, octal R8/R16V) and octal flash: an octal-mode
+    # image fails PSRAM init on a quad part, and an octal-flash board needs its flash mode in the bootloader.
+    # W5500 SPI Ethernet in the full images, its pins per board in deviceModels.json. `panel_cards`: W5500
+    # over SPI is 100 Mbit, under the gigabit the cards want, so a wall needs a gigabit switch between the
+    # S3 and the card; enabled because the S3 is the board most people already own.
+    "esp32s3-qspi": {
         "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n16r8",
-                      "sdkconfig.defaults.eth-spi"],
-        "eth_only": False,
-        "description": "ESP32-S3 DevKitC-1 (N16R8: 16 MB flash, 8 MB octal PSRAM): WiFi + "
-                       "W5500 SPI Ethernet (external module, pins per board in deviceModels.json)",
-        "ships": True,
-        # W5500 over SPI is 100 Mbit, well under the gigabit these cards want, so a wall of
-        # any size needs a gigabit switch between the S3 and the card to negotiate the link.
-        # Enabled anyway: the S3 is the board most people already own, and a small panel is a
-        # real way to try this before buying an S31.
-        "panel_cards": True,
-    },
-    "esp32s3-n32r16": {
-        "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n32r16",
-                      "sdkconfig.defaults.eth-spi"],
-        "eth_only": False,
-        "description": "ESP32-S3 WROOM-2 (N32R16V: 32 MB octal flash, 16 MB octal PSRAM, 1.8 V): WiFi + "
-                       "W5500 SPI Ethernet. Octal flash needs its own build: an N16R8 image only "
-                       "auto-detects the read mode and uses half the flash.",
-        "ships": True,
-        "panel_cards": True,
-    },
-    "esp32s3-n8r8": {
-        "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-n8r8",
-                      "sdkconfig.defaults.eth-spi"],
-        "eth_only": False,
-        "description": "ESP32-S3 (N8R8: 8 MB flash, 8 MB octal PSRAM): WiFi + W5500 SPI "
-                       "Ethernet. Half the flash of N16R8; the N16R8 binary overruns an "
-                       "8 MB board, so N8R8 boards (LightCrafter etc.) need this variant.",
-        "ships": True,
-        # W5500 over SPI is 100 Mbit, well under the gigabit these cards want, so a wall of
-        # any size needs a gigabit switch between the S3 and the card to negotiate the link.
-        # Enabled anyway: the S3 is the board most people already own, and a small panel is a
-        # real way to try this before buying an S31.
-        "panel_cards": True,
-    },
-    "esp32s3-zero": {
-        "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad",
-                      "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
-        "eth_only": False,
-        "description": "ESP32-S3-Zero (N4R2: 4 MB embedded flash, 2 MB embedded QUAD "
-                       "PSRAM) - WiFi only, no Ethernet. Its own variant because neither "
-                       "other S3 image can boot here: both assume 8/16 MB flash and set "
-                       "SPIRAM_MODE_OCT, and octal mode fails PSRAM init on this board's "
-                       "quad part. A thumbnail-sized board for small installations.",
-        "ships": True,
-        # No Ethernet fragment: the Zero breaks out no SPI header for a W5500, and its
-        # appeal is the size, so a variant carrying an unusable PHY would only cost flash
-        # on a part that has 48 KB to spare.
-        "panel_cards": False,
-    },
-    "esp32s3-n8r2": {
-        "chip": "esp32s3",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad", "sdkconfig.defaults.eth-spi",
                       "sdkconfig.defaults.moonbase-8mb"],
-        "moonbase": True,   # 8 MB: factory MoonBase + one app slot (see moonbase/)
+        "layouts": [8, 16],
         "eth_only": False,
-        "description": "ESP32-S3 (N8R2: 8 MB flash, 2 MB QUAD PSRAM) - WiFi only, no "
-                       "Ethernet. Its own variant because the N8R8/N16R8 images set "
-                       "SPIRAM_MODE_OCT, which fails PSRAM init on a quad part, and the "
-                       "S3-Zero image uses half the flash (Adafruit MatrixPortal S3).",
+        "description": "ESP32-S3 with quad PSRAM and more than 4 MB flash (N8R2, such as the Adafruit "
+                       "MatrixPortal S3): WiFi + W5500 SPI Ethernet, every feature.",
         "ships": True,
-        # No Ethernet fragment, as on the S3-Zero: the MatrixPortal breaks out no SPI header
-        # for a W5500.
+        "panel_cards": True,
+    },
+    "esp32s3-qspi-lite": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-quad", "sdkconfig.defaults.lite",
+                      "sdkconfig.defaults.moonbase-4mb"],
+        "layouts": [4],
+        "eth_only": False,
+        "description": "ESP32-S3 with quad PSRAM and 4 MB flash (N4R2, such as the ESP32-S3-Zero): WiFi, "
+                       "the 4 MB tier.",
+        "ships": True,
+        # No Ethernet fragment: the 4 MB boards break out no SPI header for a W5500, and the slot has no room for an unusable PHY.
         "panel_cards": False,
+    },
+    "esp32s3-opi": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-octal", "sdkconfig.defaults.eth-spi",
+                      "sdkconfig.defaults.moonbase-8mb"],
+        "layouts": [8, 16],
+        "eth_only": False,
+        "description": "ESP32-S3 with octal PSRAM, 8 MB flash and up (N8R8, N16R8): WiFi + W5500 SPI "
+                       "Ethernet, every feature.",
+        "ships": True,
+        "panel_cards": True,
+    },
+    "esp32s3-opi-oflash": {
+        "chip": "esp32s3",
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s3-octal", "sdkconfig.defaults.esp32s3-oflash",
+                      "sdkconfig.defaults.eth-spi"],
+        "layouts": [32],
+        "eth_only": False,
+        "description": "ESP32-S3 with octal PSRAM and octal flash (WROOM-2 N32R16V): WiFi + W5500 SPI "
+                       "Ethernet, every feature.",
+        "ships": True,
+        "panel_cards": True,
     },
     "esp32c3": {
         "chip": "esp32c3",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32c3",
                       "sdkconfig.defaults.moonbase-4mb"],
-        "moonbase": True,   # 4 MB: factory MoonBase + one big app slot (see moonbase/)
+        "layouts": [4],
         "eth_only": False,
         "description": "ESP32-C3 (4 MB flash, no PSRAM) - WiFi only, one RISC-V core at 160 MHz.",
         "ships": True,
         "panel_cards": False,
     },
-    "esp32p4rev1-eth": {
+    # The P4 by revision line, since each revision line's image boots on its own line alone: Ethernet (IP101/RMII, per-board pins
+    # from deviceModels.json) and WiFi over the on-board ESP32-C6 when it answers. A board with no C6 switches the radio off on its
+    # WiFi card, which keeps the network cascade off WiFi (docs/work/Plan-20261121, step 2).
+    "esp32p4rev1": {
         "chip": "esp32p4",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth"],
-        "eth_only": True,
-        "description": "Waveshare ESP32-P4-NANO: Ethernet only (IP101 PHY), for P4 "
-                       "revisions 0.x/1.x ONLY. The WiFi-less fallback; "
-                       "esp32p4rev1-eth-wifi adds the C6 radio.",
-        "ships": True,
-        "panel_cards": True,
-    },
-    "esp32p4rev1-eth-wifi": {
-        "chip": "esp32p4",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
-                      "sdkconfig.defaults.esp32p4rev1-eth-wifi"],
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4", "sdkconfig.defaults.esp32p4-wifi",
+                      "sdkconfig.defaults.moonbase-16mb"],
+        "layouts": [16],
         "eth_only": False,
         "coprocessor": "esp32c6",   # the radio chip, whose ESP-Hosted firmware is built beside the app (coprocessor_image.py)
-        "description": "Waveshare ESP32-P4-NANO: Ethernet + WiFi via the on-board ESP32-C6 over SDIO (esp_hosted), for P4 revisions 0.x/1.x "
-                       "ONLY. The C6 runs the ESP-Hosted release this firmware links, installed from the Firmware card's WiFi coproc tab.",
-        # CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in its fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, a mode this device stays out of.
+        "description": "ESP32-P4 revisions 0.x and 1.x: Ethernet, and WiFi over the on-board ESP32-C6 where the board has one.",
+        # CONFIG_PM_SLEEP_CLK_ICG_ENABLE=n in the WiFi fragment skips the allocation that aborted cpu_start, at the cost of peripheral clock gating during light sleep, a mode this device stays out of.
         "ships": True,
         "panel_cards": True,
     },
-    "esp32p4rev3-eth": {
+    "esp32p4rev3": {
         "chip": "esp32p4",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
-                      "sdkconfig.defaults.esp32p4rev3"],
-        "eth_only": True,
-        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet only (IP101 "
-                       "PHY), for P4 revisions 3.x (the CURRENT silicon). Identical to "
-                       "esp32p4rev1-eth apart from the chip revision, which the two "
-                       "generations cannot share. Published so someone with a v3 board "
-                       "can test it: both bench boards are v1.3, so this image has "
-                       "never been booted.",
-        # The board fragment is REUSED rather than copied: the two images differ only in
-        # CONFIG_ESP32P4_SELECTS_REV_LESS_V3 / REV_MIN, so duplicating the partition
-        # table, flash size and EMAC config would be the same fact in two places, and
-        # they would drift the first time the board config changed.
-        "ships": True,
-        "panel_cards": True,
-    },
-    "esp32p4rev3-eth-wifi": {
-        "chip": "esp32p4",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4rev1-eth",
-                      "sdkconfig.defaults.esp32p4rev1-eth-wifi",
-                      "sdkconfig.defaults.esp32p4rev3"],
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4", "sdkconfig.defaults.esp32p4-wifi",
+                      "sdkconfig.defaults.esp32p4rev3", "sdkconfig.defaults.moonbase-16mb"],
+        "layouts": [16],
         "eth_only": False,
-        "coprocessor": "esp32c6",   # the radio chip, whose ESP-Hosted firmware is built beside the app (coprocessor_image.py)
-        "description": "⚠️ UNTESTED, Waveshare ESP32-P4-NANO, Ethernet + WiFi via the on-board ESP32-C6 (esp_hosted), for P4 revisions 3.x "
-                       "(the CURRENT silicon). The rev1 build is bench-verified; this one differs only in the chip revision and is unbooted.",
+        "coprocessor": "esp32c6",
+        "description": "ESP32-P4 revisions 3.x, the current silicon: Ethernet, and WiFi over the on-board ESP32-C6 where the board has one. "
+                       "Differs from esp32p4rev1 only in the chip revision; no revision 3 board is on the bench.",
         "ships": True,
         "panel_cards": True,
     },
     "esp32s31": {
         "chip": "esp32s31",
-        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s31"],
+        "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32s31", "sdkconfig.defaults.moonbase-16mb"],
+        "layouts": [16],
         "eth_only": False,
         "description": "Espressif ESP32-S31 Function-CoreBoard-1: WiFi 6 + 1 Gbps "
                        "Ethernet LED control (RISC-V, 16 MB flash, PSRAM). The on-chip "
@@ -298,6 +227,17 @@ FIRMWARES: dict[str, dict] = {
         "ships": True,
         "panel_cards": True,
     },
+}
+
+# The partition table per chip and flash size, shared by every firmware of the chip: MoonBase plus one app slot,
+# the rest files, at every size (the product owner, 2026-11-21); the octal-flash S3's MoonBase is built for octal flash.
+LAYOUTS: dict[str, dict[int, str]] = {
+    "esp32":    {4: "partitions/4mb_moonbase.csv", 8: "partitions/8mb_moonbase.csv", 16: "partitions/16mb_moonbase.csv"},
+    "esp32s3":  {4: "partitions/4mb_moonbase.csv", 8: "partitions/8mb_moonbase.csv", 16: "partitions/16mb_moonbase.csv",
+                 32: "partitions/32mb_moonbase.csv"},
+    "esp32c3":  {4: "partitions/4mb_moonbase.csv"},
+    "esp32p4":  {16: "partitions/16mb_moonbase.csv"},
+    "esp32s31": {16: "partitions/16mb_moonbase.csv"},
 }
 
 # IDF target → chip-family label. ONE source for the family vocabulary, shared by:
@@ -325,7 +265,7 @@ PREVIEW_TARGETS = {"esp32s31"}
 # still pass --profile. Remove once external tooling has migrated.
 PROFILE_ALIASES = {
     "default": "esp32",
-    "eth-only": "esp32-eth",
+    "eth-only": "esp32-ethonly",
 }
 
 
@@ -357,6 +297,7 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     # the OTA path can pick the matching release asset (every release ships
     # one .bin per firmware key; see release.yml).
     args.append(f"-DMM_FIRMWARE_NAME={firmware}")   # bare: CMake adds the quotes, so idf.py's cache comparison matches
+    args.append(f"-DMM_MOONBASE_FAMILY={migration_family(firmware)}")   # the MoonBase image the board takes, which its Firmware card names
     # Burn the release-channel tag too, when the build pipeline supplies one.
     # Same -D mechanism; empty default left to build_info.cpp's #ifndef so a
     # local build needs no flag.
@@ -538,6 +479,11 @@ def fragment_paths(extra: list[str]) -> list[Path]:
     return [ESP32_DIR / name for name in frags.split(";") if name]
 
 
+def config_seed_paths(extra: list[str]) -> list[Path]:
+    """What a build's sdkconfig is generated from: its fragments and the project's own Kconfig, whose defaults (`default y if ...`) seed every option a fragment leaves unset."""
+    return fragment_paths(extra) + [ESP32_DIR / "main" / "Kconfig.projbuild"]
+
+
 def build_dir_for(firmware: str) -> Path:
     """Return the per-firmware build directory.
 
@@ -572,7 +518,7 @@ def idf_build(firmware: str, cmd: list[str], env: dict, args, action: str = "bui
     # A chip in PREVIEW_TARGETS needs `--preview` on idf.py itself, before the action, or set-target and reconfigure refuse it.
     preview = ["--preview"] if chip in PREVIEW_TARGETS else []
     digest = sdkconfig_fragments.refresh(cmd + preview + b_arg + extra, build_dir,
-                                         fragment_paths(extra), ESP32_DIR, env)
+                                         config_seed_paths(extra), ESP32_DIR, env)
 
     if not build_dir.exists():
         print(f"Setting target to {chip} (firmware: {firmware}, build dir: "
@@ -652,22 +598,25 @@ def main():
     idf_build(firmware, cmd, env, args)
     build_dir = build_dir_for(firmware)
 
+    # A bootloader and a table per flash size the firmware installs into, which the release carries and the installer picks by the flash it measures.
+    for size in FIRMWARES[firmware]["layouts"]:
+        layout_images(firmware, size, cmd[0], env)
+
     # The flash/RAM summary, read from the linker map: `idf.py size` builds again first, and the build stamp would relink the image a second time.
     subprocess.run([cmd[0], "-m", "esp_idf_size", str(build_dir / "MoonLight.map")], cwd=ESP32_DIR, env=env)
 
-    # The family's first firmware builds its migration image, which carries MoonBase and, beside each table, the bootloader of the variant that table comes from.
+    # The family's first firmware builds its migration image, which carries MoonBase and, beside each table, a bootloader of the family sized to that table.
     family = migration_family(firmware)
     builds_migration = firmware == family_members(family)[0]
     preview = ["--preview"] if chip in PREVIEW_TARGETS else []
-    if FIRMWARES[firmware].get("moonbase") or builds_migration:
-        build_moonbase(cmd + preview, env, chip, args.version, family)
+    build_moonbase(cmd + preview, env, chip, args.version, family)
     if FIRMWARES[firmware].get("coprocessor"):
         build_coprocessor(cmd, env, FIRMWARES[firmware]["coprocessor"])
     if builds_migration:
         entries = migration_tables(family)
-        for donor in dict.fromkeys(d for _, d in entries if d != firmware):
+        for donor in dict.fromkeys(d for _, d, _ in entries if d != firmware):
             idf_build(donor, cmd, env, args, "bootloader")
-        pairs = [(csv, build_dir_for(d) / "bootloader" / "bootloader.bin") for csv, d in entries]
+        pairs = [(csv, sized_bootloader(d, size, cmd[0], env)) for csv, d, size in entries]
         build_migrate(cmd + preview, env, chip, family, pairs)
         if args.migrate_pause:
             build_migrate(cmd + preview, env, chip, family, pairs, args.migrate_pause)
@@ -693,9 +642,10 @@ def fragment_value(fragments, key: str) -> str | None:
 
 
 def migration_family(firmware: str) -> str:
-    """The boards one migration image serves: the firmware's chip, and on the P4 its revision line, since an image for revision 3 and one for below it exclude each other."""
+    """The boards one MoonBase and one migration image serve: the firmware's chip, on the P4 its revision line, since an image for revision 3 and one for below it exclude each other, and octal flash, which a quad-flash image cannot run from."""
     spec = FIRMWARES[firmware]
-    return spec["chip"] + ("rev3" if fragment_value(spec["fragments"], "CONFIG_ESP32P4_REV_MIN_300") == "y" else "")
+    return (spec["chip"] + ("rev3" if fragment_value(spec["fragments"], "CONFIG_ESP32P4_REV_MIN_300") == "y" else "")
+            + ("oflash" if fragment_value(spec["fragments"], "CONFIG_ESPTOOLPY_OCT_FLASH") == "y" else ""))
 
 
 def family_members(family: str) -> list[str]:
@@ -703,18 +653,49 @@ def family_members(family: str) -> list[str]:
     return [k for k, v in FIRMWARES.items() if v.get("ships") and migration_family(k) == family]
 
 
-def migration_tables(family: str) -> list[tuple[Path, str]]:
-    """What the family's migration image carries: one table per flash size and flash type (quad or octal), each with the firmware whose bootloader goes beside it, the variant with MoonBase's own slot first where two share both."""
-    def rows(csv: Path) -> list[list[str]]:
-        return [[f.strip() for f in line.split(",")] for line in csv.read_text(encoding="utf-8").splitlines()
-                if line.strip() and not line.lstrip().startswith("#")]
-    chosen: dict[tuple[int, bool], tuple[Path, str]] = {}
-    members = family_members(family)
-    for fw in sorted(members, key=lambda k: (all(r[0] != "moonbase" for r in rows(table_from_fragments(FIRMWARES[k]["fragments"]))), members.index(k))):
-        csv = table_from_fragments(FIRMWARES[fw]["fragments"])
+def layouts_markdown() -> str:
+    """The partition sizes per layout as the Markdown table build-system.md carries, from LAYOUTS and the CSVs, so the page cannot drift from them (test_build_esp32_migration checks it)."""
+    import csv as _csv
+    tables: dict[str, list[str]] = {}
+    for chip, sizes in LAYOUTS.items():
+        for size, csv_name in sizes.items():
+            users = [fw for fw, spec in FIRMWARES.items() if spec["chip"] == chip and size in spec["layouts"] and spec.get("ships")]
+            tables.setdefault(csv_name, []).extend(f"`{fw}`" for fw in users if f"`{fw}`" not in tables.get(csv_name, []))
+    rows = ["| Layout | MoonBase | App | Files | Firmwares |", "|--|--|--|--|--|"]
+    for csv_name in sorted(tables, key=lambda n: int(Path(n).name.split("mb")[0])):
+        parts = {r[0].strip(): int(r[4].strip(), 0) // 1024 for r in _csv.reader((ESP32_DIR / csv_name).read_text(encoding="utf-8").splitlines())
+                 if r and not r[0].strip().startswith("#") and len(r) >= 5}
+        files = parts.get("littlefs", 0)
+        rows.append(f"| `{Path(csv_name).name}` | {parts.get('moonbase', 0)} KB | {parts.get('app', 0)} KB | {files} KB | {', '.join(tables[csv_name])} |")
+    return "\n".join(rows)
+
+
+def layout_table(firmware: str, size: int) -> Path:
+    """The partition table `firmware` installs with on `size` MB of flash (LAYOUTS)."""
+    return ESP32_DIR / LAYOUTS[FIRMWARES[firmware]["chip"]][size]
+
+
+def migration_tables(family: str) -> list[tuple[Path, str, int]]:
+    """What the family's migration image carries: one table per flash size and flash type (quad or octal), each with the firmware whose bootloader goes beside it and the size that bootloader's header takes."""
+    chosen: dict[tuple[int, bool], tuple[Path, str, int]] = {}
+    for fw in family_members(family):
         octal = fragment_value(FIRMWARES[fw]["fragments"], "CONFIG_ESPTOOLPY_OCT_FLASH") == "y"
-        chosen.setdefault((max(int(r[3], 0) + int(r[4], 0) for r in rows(csv)), octal), (csv, fw))
+        for size in FIRMWARES[fw]["layouts"]:
+            chosen.setdefault((size, octal), (layout_table(fw, size), fw, size))
     return [chosen[k] for k in sorted(chosen)]
+
+
+def sized_bootloader(firmware: str, size: int, python: str, env: dict) -> Path:
+    """The firmware's bootloader with `size` MB in its header, as esptool writes it with --flash-size (`merge-bin` patches the header and its digest): one bootloader per chip serves every layout."""
+    import json as _json
+    build_dir = build_dir_for(firmware)
+    offset = _json.loads((build_dir / "flasher_args.json").read_text(encoding="utf-8"))["bootloader"]["offset"]
+    out = build_dir / "bootloader" / f"bootloader-{size}mb.bin"
+    subprocess.run([python, "-m", "esptool", "--chip", FIRMWARES[firmware]["chip"], "merge-bin",
+                    "--flash-size", f"{size}MB", "--target-offset", offset, "-o", str(out),
+                    offset, str(build_dir / "bootloader" / "bootloader.bin")],
+                   cwd=ESP32_DIR, env=env, check=True)
+    return out
 
 
 def table_from_fragments(fragments) -> Path:
@@ -756,14 +737,28 @@ def otadata_slot0_bytes() -> bytes:
     return page + b"\xff" * 0x1000
 
 
-def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path]]:
+def layout_table_image(firmware: str, size: int, python: str, env: dict) -> Path:
+    """The partition-table image `firmware` installs with on `size` MB of flash, the table LAYOUTS names, made by ESP-IDF's own gen_esp32part beside the build's own."""
+    table = build_dir_for(firmware) / "partition_table" / f"partition-table-{size}mb.bin"
+    subprocess.run([python, str(Path(env["IDF_PATH"]) / "components" / "partition_table" / "gen_esp32part.py"),
+                    "--flash-size", f"{size}MB", str(layout_table(firmware, size)), str(table)],
+                   cwd=ESP32_DIR, env=env, check=True, capture_output=True)
+    return table
+
+
+def layout_images(firmware: str, size: int, python: str, env: dict) -> tuple[Path, Path]:
+    """The bootloader and partition-table images `firmware` installs with on `size` MB of flash."""
+    return sized_bootloader(firmware, size, python, env), layout_table_image(firmware, size, python, env)
+
+
+def moonbase_flash_files(firmware: str, build_dir: Path, layout: tuple[int, Path, Path] | None = None) -> list[tuple[str, Path]]:
     """The corrected (offset, file) write list for a MoonBase-table flash: IDF's flash_files with
     the app remapped to ota_0, the blank otadata replaced by the slot-0 image (written into the
-    build dir), and MoonBase added at the factory slot."""
+    build dir), and MoonBase added at the factory slot. `layout` (size, bootloader, table), from
+    layout_images, swaps in another flash size's layout; with none given, the one the build carries."""
     import json as _json
-    offs = partition_offsets(moonbase_table_csv(firmware))
-    chip = FIRMWARES[firmware]["chip"]
-    moonbase_bin = build_dir.parent / f"moonbase-{chip}" / MOONBASE_BIN
+    offs = partition_offsets(layout_table(firmware, layout[0]) if layout else moonbase_table_csv(firmware))
+    moonbase_bin = build_dir.parent / f"moonbase-{migration_family(firmware)}" / MOONBASE_BIN
     if not all(k in offs for k in ("factory", "ota_0", "ota")) or not moonbase_bin.exists():
         raise FileNotFoundError(
             f"MoonBase layout needs factory/ota_0/otadata offsets and a built image "
@@ -778,6 +773,10 @@ def moonbase_flash_files(firmware: str, build_dir: Path) -> list[tuple[str, Path
             writes.append((offs["ota_0"], build_dir / rel))
         elif name == "ota_data_initial.bin":
             writes.append((offs["ota"], otadata))
+        elif layout and name == "bootloader.bin":
+            writes.append((off, layout[1]))
+        elif layout and name == "partition-table.bin":
+            writes.append((off, layout[2]))
         else:
             writes.append((off, build_dir / rel))
     writes.append((offs["factory"], moonbase_bin))

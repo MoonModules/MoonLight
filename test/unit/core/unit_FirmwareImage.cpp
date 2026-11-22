@@ -186,6 +186,14 @@ TEST_CASE("an app image is accepted under the name it ships with and the name v6
     CHECK(std::string(kAppImageNames[0]) == "MoonLight");
 }
 
+TEST_CASE("the migration image is known by its own name, apart from the app and MoonBase") {
+    // An app slot takes it as an update, which moves a two-slot board to the MoonBase layout.
+    CHECK(isMigrateImage("MoonLight-migrate"));
+    CHECK_FALSE(isMigrateImage("MoonLight"));
+    CHECK_FALSE(isAppImage("MoonLight-migrate"));
+    CHECK_FALSE(isMoonBaseImage("MoonLight-migrate"));
+}
+
 TEST_CASE("a stranger's image is refused, however close its name") {
     CHECK_FALSE(isAppImage("WLED"));
     CHECK_FALSE(isAppImage(""));

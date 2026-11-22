@@ -4,7 +4,7 @@
 
 Pin maps and onboard features for the **LightCrafter 16**, a 16-output LED controller by Mathieu Stephan (limpkin) of Stephan Electronics SàRL, Switzerland.
 The board is the SE16 v2 ("SE16V2 / Lightcrafter16"), listed as `"LightCrafter 16"` in the device catalog.
-It runs the `esp32s3-n8r8` firmware.
+It runs the `esp32s3-opi` firmware.
 The pins below come from the catalog entry and from the maker's pull requests.
 
 **Sources**
@@ -18,7 +18,7 @@ The pins below come from the catalog entry and from the maker's pull requests.
 ## Module and firmware
 
 The chip is an ESP32-S3 with 8 MB flash and 8 MB octal PSRAM.
-The matching MoonLight firmware is `esp32s3-n8r8`.
+The matching MoonLight firmware is `esp32s3-opi`.
 The N16R8 image overruns the 8 MB flash.
 
 ## LED outputs

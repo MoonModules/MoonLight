@@ -1,0 +1,7 @@
+# The PSRAM cache workaround for revision 0 and 1 boards with PSRAM (esp32-rev1-lite).
+# Append after sdkconfig.defaults.psram-classic (later fragment wins).
+#
+# Revision 0 and 1 chips can lose a write to PSRAM through the cache; the workaround
+# (-mfix-esp32-psram-cache-issue) adds wait instructions after memory accesses in all code, so it
+# lives in this one build, and psramHeapSafe lets PSRAM serve the heap on every revision here.
+CONFIG_SPIRAM_CACHE_WORKAROUND=y

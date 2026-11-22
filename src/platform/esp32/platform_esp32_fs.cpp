@@ -6,12 +6,11 @@
 ///
 /// ## Two partition labels, tried in order
 ///
-/// The volume has always held LittleFS, and a table written from 2026-08 says so: the label and subtype both name it. An older table calls the same volume by the legacy misnomer, so both are tried and a device keeps its config across an update.
+/// The volume holds LittleFS, and every table MoonLight ships says so: the label and subtype both name it. A table from before 7.1.0 calls the same volume `spiffs`, a misnomer, and an update over the air keeps a device's table, so both are tried and the device keeps its config.
 ///
 /// ## Formatting is gated on the LAST EXISTING label
 ///
-/// A formatting mount against the wrong label would erase a volume the next label would have opened, taking the user's config with it.
-/// Gating it on the last entry in the array rather than the last one present left a fresh board unformatted, running with persistence disabled.
+/// A formatting mount against the wrong label would erase a volume the next label opens, and gating it on the last entry in the array rather than the last one present leaves a fresh board unformatted.
 
 #include "platform/platform.h"
 #include "platform_esp32_sdmmc.h"   // every /sd path dispatches here instead of LittleFS

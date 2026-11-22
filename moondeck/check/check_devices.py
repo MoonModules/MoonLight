@@ -9,7 +9,7 @@ The catalog is hand-maintained data three clients read alike, the web installer,
 
 The catalog's shape, its fields, their types and their vocabularies, is mooninstaller/deviceModels.schema.json, validated first. What a schema cannot know is checked here, per entry:
   - the name is unique
-  - chip is a family of the firmware registry, and every firmware is a registry firmware for that family
+  - chip is a family of the firmware registry, and every firmware is a registry firmware for that family; a host family (a computer) takes host firmwares
   - image (if set) resolves on disk
   - every state root is a top-level module the device boots with
   - the state's System.deviceModel value equals the entry `name`
@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from firmwares import FIRMWARES, TARGET_TO_FAMILY, chip_family  # noqa: E402
+from firmwares import FIRMWARES, HOST_FAMILIES, TARGET_TO_FAMILY, chip_family  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "check"))
 import _findings  # noqa: E402
 CATALOG = ROOT / "mooninstaller" / "deviceModels.json"
@@ -205,7 +205,7 @@ def main():
         # --- chip: the family the installer detects and the manifests name, and the one every firmware installs onto ---
         chip = e.get("chip")
         fws = e.get("firmwares")
-        families = set(TARGET_TO_FAMILY.values())
+        families = set(TARGET_TO_FAMILY.values()) | set(HOST_FAMILIES)
         # A string first: a list or an object is unhashable, and the set membership test would raise rather than report.
         if "chip" in e and (not isinstance(chip, str) or chip not in families):
             fail("unknown chip", f"{where}: chip {chip!r} is not a known family {sorted(families)}")
@@ -213,7 +213,9 @@ def main():
             for fw in fws:
                 if isinstance(fw, str) and fw not in FIRMWARES:
                     fail("unknown firmware", f"{where}: firmware {fw!r} is not in the firmware registry (moondeck/build/firmwares.py)")
-                elif isinstance(fw, str) and chip_family(fw) != chip:
+                elif isinstance(fw, str) and chip in HOST_FAMILIES and FIRMWARES[fw]["platform"] != "host":
+                    fail("chip mismatch", f"{where}: firmware {fw!r} is a {FIRMWARES[fw]['platform']} build, not a host build for {chip}")
+                elif isinstance(fw, str) and chip not in HOST_FAMILIES and chip_family(fw) != chip:
                     fail("chip mismatch", f"{where}: firmware {fw!r} installs onto {chip_family(fw)}, not {chip}")
 
         img = e.get("image")

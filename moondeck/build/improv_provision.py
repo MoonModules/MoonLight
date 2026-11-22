@@ -232,11 +232,10 @@ APPLY_OP_CHUNK_MAX = 128 - 3         # kImprovMaxPayload minus the [cmd][seq][la
 
 
 def is_eth_only(entry) -> bool:
-    """An entry whose firmware is an Ethernet-only build (`-eth`, not `-eth-wifi`) has WiFi
-    compiled out and no WIFI_SETTINGS RPC to answer: provisioning is plugging the cable in.
-    Mirrors install.js (`ethOnly = /-eth$/.test(firmware)`) so the two front ends agree."""
+    """An entry whose firmware is an Ethernet-only build (`-ethonly`) has WiFi compiled out and no WIFI_SETTINGS RPC to
+    answer: provisioning is plugging the cable in. Mirrors install.js (`ethOnly = /-ethonly$/.test(firmware)`) so the two front ends agree."""
     fws = entry.get("firmwares") if isinstance(entry, dict) else None
-    return bool(fws) and all(isinstance(f, str) and f.endswith("-eth") for f in fws)
+    return bool(fws) and all(isinstance(f, str) and f.endswith("-ethonly") for f in fws)
 
 
 def state_documents(entry) -> list:
@@ -346,7 +345,7 @@ def main() -> int:
                     help="Max seconds to wait for a final response (default: 45)")
     ap.add_argument("--device-model", dest="device_model", default=None, metavar="NAME",
                     help="deviceModel name from mooninstaller/deviceModels.json (e.g. "
-                         "'ESP32-S3 N16R8 Dev'). Resolves the deviceModel's TX-power cap "
+                         "'ESP32-S3 DevKitC-1'). Resolves the deviceModel's TX-power cap "
                          "(the WiFi entry's txPowerSetting) automatically and, after "
                          "provisioning, applies the entry's state document over "
                          "serial as APPLY_OP documents: the same config push the web installer "

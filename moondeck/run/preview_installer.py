@@ -17,14 +17,13 @@ import socketserver
 import subprocess
 import sys
 import shutil
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 # build_esp32.py is the single source of truth for firmware variants (same import generate_manifest.py and collect_kpi.py use).
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
-from build_esp32 import APP_BIN, FIRMWARES, MOONBASE_BIN  # noqa: E402
+from build_esp32 import APP_ASSET_PREFIX, APP_BIN, FIRMWARES, MOONBASE_BIN, migration_family  # noqa: E402
 import build_teensy  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "docs"))
 from gen_moonwalk import regenerate  # noqa: E402
@@ -102,7 +101,8 @@ def stage_install_page():
     shutil.copy(PICKER_JS, STAGE_INSTALL / "install-picker.js")
     shutil.copy(PICKER_DEVICES_JS, STAGE_INSTALL / "install-picker-devices.js")
     if library_json.exists():
-        shutil.copy(library_json, STAGE_INSTALL / "library.json")
+        import compute_version
+        compute_version.write_stamped_library(STAGE_INSTALL / "library.json")   # the exact version this checkout builds as
     _stage_referenced_board_images(STAGE_INSTALL)
 
     # --- root redirect / → /install/ (keeps the old entry point working) ---
@@ -113,7 +113,7 @@ def stage_install_page():
 
 
 def find_local_builds() -> list[Path]:
-    """Return every `build/esp32-*/` dir that has a flashable app image.
+    """Return every `build/esp32-*/` dir of a registry firmware that has a flashable app image; a folder a renamed or removed firmware left behind is skipped.
 
     Multiple firmware variants can coexist on disk (each in its own `build/esp32-<firmware>/` dir per build_esp32.py). We stage them all so the install-picker can offer the right one based on the device's reported firmware key during Improv probe, the same shape as production where every release publishes every variant.
     """
@@ -121,7 +121,7 @@ def find_local_builds() -> list[Path]:
         return []
     return sorted(
         p for p in BUILD_ROOT.glob("esp32-*")
-        if (p / APP_BIN).exists()
+        if (p / APP_BIN).exists() and p.name[len("esp32-"):] in FIRMWARES
     )
 
 
@@ -137,25 +137,25 @@ def stage_local_builds(builds: list[Path]) -> list[str]:
     for build_dir in builds:
         # build_dir.name is "esp32-<firmware>"; strip the prefix.
         firmware = build_dir.name[len("esp32-"):]
-        prefix = f"firmware-{firmware}-v{LOCAL_VERSION}"
+        prefix = f"{APP_ASSET_PREFIX}-{firmware}-v{LOCAL_VERSION}"
 
-        # The four .bin files that go alongside a firmware in the release. Mirrors release.yml's "Stage release artifacts" step: app, bootloader and partition table are per-firmware; ota-data is SHARED, matching the names generate_manifest.py emits so the preview's manifests resolve them.
+        # The four .bin files that go alongside a firmware in the release. Mirrors release.yml's "Stage release artifacts" step: app, bootloader and a partition table per flash size are per-firmware; ota-data is SHARED, matching the names generate_manifest.py emits so the preview's manifests resolve them.
         try:
             shutil.copy(build_dir / APP_BIN,
                         releases_dir / f"{prefix}.bin")
-            shutil.copy(build_dir / "bootloader" / "bootloader.bin",
-                        releases_dir / f"{prefix}-bootloader.bin")
-            shutil.copy(build_dir / "partition_table" / "partition-table.bin",
-                        releases_dir / f"{prefix}-partition-table.bin")
+            for size in FIRMWARES[firmware]["layouts"]:   # a bootloader and a table per flash size, as the release stages them
+                shutil.copy(build_dir / "bootloader" / f"bootloader-{size}mb.bin",
+                            releases_dir / f"{prefix}-bootloader-{size}mb.bin")
+                shutil.copy(build_dir / "partition_table" / f"partition-table-{size}mb.bin",
+                            releases_dir / f"{prefix}-partition-table-{size}mb.bin")
             shutil.copy(build_dir / "ota_data_initial.bin",
                         releases_dir / "shared-ota-data.bin")
-            # MoonBase firmwares also ship the shared maintenance image + the slot-0 otadata their manifests reference (same names release.yml stages).
-            if FIRMWARES.get(firmware, {}).get("moonbase"):
-                from build_esp32 import otadata_slot0_bytes
-                chip = FIRMWARES[firmware]["chip"]
-                shutil.copy(build_dir.parent / f"moonbase-{chip}" / MOONBASE_BIN,
-                            releases_dir / f"shared-moonbase-{chip}.bin")
-                (releases_dir / "shared-ota-data-slot0.bin").write_bytes(otadata_slot0_bytes())
+            # The shared maintenance image + the slot-0 otadata the manifests reference (same names release.yml stages).
+            from build_esp32 import otadata_slot0_bytes
+            family = migration_family(firmware)   # the MoonBase image the board takes: the chip, the P4's revision line, octal flash
+            shutil.copy(build_dir.parent / f"moonbase-{family}" / MOONBASE_BIN,
+                        releases_dir / f"shared-moonbase-{family}.bin")
+            (releases_dir / "shared-ota-data-slot0.bin").write_bytes(otadata_slot0_bytes())
         except FileNotFoundError as e:
             # Partial build (bootloader / partition-table missing): skip this firmware rather than half-stage it, the picker would offer it but Install would fail mid-flash.
             print(f"==> skip {firmware}: missing {e.filename}", file=sys.stderr)
@@ -198,7 +198,7 @@ def stage_teensy_builds() -> list[str]:
         if not image.exists():
             continue
         releases_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy(image, releases_dir / f"firmware-{firmware}-v{LOCAL_VERSION}.bin")
+        shutil.copy(image, releases_dir / f"{APP_ASSET_PREFIX}-{firmware}-v{LOCAL_VERSION}.bin")
         result = subprocess.run(
             ["uv", "run", "python", str(GENERATE_MANIFEST),
              "--firmware", firmware,
@@ -223,7 +223,7 @@ def write_local_firmwares_json(staged: list[str]):
         {
             "firmware": fw,
             "manifestUrl": f"./releases/{LOCAL_TAG}/manifest-{fw}.json",
-            "binaryUrl": f"./releases/{LOCAL_TAG}/firmware-{fw}-v{LOCAL_VERSION}.bin",
+            "binaryUrl": f"./releases/{LOCAL_TAG}/{APP_ASSET_PREFIX}-{fw}-v{LOCAL_VERSION}.bin",
         }
         for fw in staged
     ]}

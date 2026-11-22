@@ -264,7 +264,7 @@ The run: [Run a scenario against a live device](../moonwalk.md#run-live-scenario
 
 #### Several boards
 
-A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapped to a device by `--board NAME=HOST`; it is skipped while one is missing. A step with `"device": "<name>"` runs on that board, as an `apply_state`, a `set_control` or a `measure`. Every step's strings fill `{host}` and `{<name>}` with the boards' addresses, so a sender's `receivers` names the boards it feeds. Each board is restored from its own snapshot, before the device under test. `--keep` leaves the device under test as the last step set it, to watch or deploy what the scenario built. The observations are keyed by the whole combination, such as `host=esp32s3-n16r8 sender=esp32p4rev1-eth`, so a WiFi pair and an Ethernet pair keep apart.
+A scenario naming `"boards": ["sender", ...]` drives those boards too, each mapped to a device by `--board NAME=HOST`; it is skipped while one is missing. A step with `"device": "<name>"` runs on that board, as an `apply_state`, a `set_control` or a `measure`. Every step's strings fill `{host}` and `{<name>}` with the boards' addresses, so a sender's `receivers` names the boards it feeds. Each board is restored from its own snapshot, before the device under test. `--keep` leaves the device under test as the last step set it, to watch or deploy what the scenario built. The observations are keyed by the whole combination, such as `host=esp32s3-opi sender=esp32p4rev1`, so a WiFi pair and an Ethernet pair keep apart.
 
 A measuring step waits `--settle` seconds before it reads, or its own `settle`. A `measure` step's `read` list names extra values to report: `"Module.control"` from the state, `"Module.status[unit]"` for the number before that unit in a module's status, such as `"NetworkReceive.status[lost/s]"`, `"Module.tick"` for a module's tick time, or `"fps"`; `"<name>:"` in front reads another board, such as `"sender:fps"`. A step's `samples` reads them that many times a second apart and reports each number's median, for a value that swings from second to second. The run ends with one row per such step, which is what a sweep is read from.
 
@@ -318,7 +318,7 @@ The runner compares each measurement to the contract and fails if the device mis
 
 ```json
 "contract": {
-  "esp32-eth-wifi": {
+  "esp32-lite": {
     "tick_us": 90000,
     "free_heap": 105000,
     "set_by": "2026-06-02",
@@ -346,7 +346,7 @@ The runner compares each measurement to the contract and fails if the device mis
 - Both are **hand-set promises**, not auto-captured last readings. Renegotiating a contract requires `--update-contract --reason "..."`, see below.
 - `set_by` records when the contract was last (re)negotiated; `reason` records why. Both stamped automatically by `--update-contract`.
 
-Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-eth`, `esp32-eth-wifi`, `esp32s3-n16r8`, …) plus `host-macos` / `host-linux` / `host-windows` for host builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
+Target keys match `SystemModule.firmware` on a flashed device (`esp32`, `esp32-lite`, `esp32-ethonly`, `esp32s3-opi`, …) plus `host-macos` / `host-linux` / `host-windows` for host builds. The in-process runner picks the host OS automatically; the live runner reads the device's `firmware` control. (See [MoonInstaller, firmware vs deviceModel vs board](../explanation/architecture/mooninstaller.md#the-three-words) for the distinction.)
 
 **Tolerance** absorbs run-to-run jitter only, not "I don't care":
 
@@ -366,7 +366,7 @@ The scenario file carries a **summary** of the window, published on purpose: `--
 
 ```json
 "observed": {
-  "esp32-eth-wifi": {
+  "esp32-lite": {
     "tick_us":         {"p50": 84210, "p95": 89483, "min": 80649, "max": 91002, "n": 32},
     "free_heap":       {"p50": 104220, "p95": 110640, "min": 95528, "max": 110640, "n": 32},
     "max_alloc_block": {"p50": 53248, "p95": 53248, "min": 49152, "max": 53248, "n": 32},
@@ -418,7 +418,7 @@ Every `scenario_*.json` carries top-level metadata plus a `description` per step
       "op": "set_control", "id": "Grid", "key": "width", "value": 128,
       "measure": true,
       "contract": {
-        "esp32-eth-wifi": {
+        "esp32-lite": {
           "tick_us": 100000, "free_heap": 105000,
           "set_by": "2026-06-02", "reason": "initial contract"
         },

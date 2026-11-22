@@ -41,7 +41,7 @@ import check_clang_query  # noqa: E402  — the module→files resolver, one own
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_ELF  # noqa: E402
 
-DEFAULT_FW = "esp32s3-n16r8"
+DEFAULT_FW = "esp32s3-opi"   # the full S3 build: the most common board family, with nearly every module linked in, so most footprints are measurable there
 MAX_ROWS = 40
 
 # nm's symbol-type letters, grouped by the memory they occupy. Uppercase = global, lowercase =
@@ -155,8 +155,8 @@ def render(per, only, firmware):
         if only:
             return L + [f"  Not linked into {firmware}: compiled out of this variant by a "
                         f"per-firmware gate, so it costs nothing here.",
-                        f"  Measure it on a variant that includes it "
-                        f"(--firmware esp32s31 for the panel-card driver)."]
+                        "  Measure it on a variant that includes it "
+                        "(--firmware esp32s31 for the panel-card driver)."]
         return L + ["  Nothing attributed. Build the firmware, or the ELF carries no debug info."]
 
     # What the columns MEAN lives in MoonDeck.md, not in every run's output: it is reference text

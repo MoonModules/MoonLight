@@ -1,4 +1,4 @@
-// Which release image updates a device: firmware-<name>-v<version>.bin for a board and a host alike, with the digest GitHub names; a device its
+// Which release image updates a device: <its assetPrefix>-<name>-v<version>.bin for a board and a host alike, firmware- for one too old to report a prefix, with the digest GitHub names; a device its
 // host or its user updates gets a null address. Runs in node, on the function's own source.
 // Run: `node --test test/js/ui-update-asset.test.mjs`.
 
@@ -119,7 +119,7 @@ test("a chip is a family as the catalog and esptool name it and a key as firmwar
     assert.equal(chipFamilyOf("esp32s3"), "ESP32-S3");
     assert.equal(chipFamilyOf("esp32s31"), "ESP32-S31");          // its own family, as the build names it
     assert.equal(chipFamilyOf("esp32"), "ESP32");                  // the classic
-    assert.equal(chipFamilyOf(firmwareChip("esp32p4rev1-eth")), "ESP32-P4");
+    assert.equal(chipFamilyOf(firmwareChip("esp32p4rev1")), "ESP32-P4");
     assert.equal(chipFamilyOf(firmwareChip("host-macos-arm64")), "host");   // not an ESP32: as given
 });
 
@@ -129,4 +129,30 @@ test("MoonBase comes from the app's own release: latest counts only while it sti
     assert.equal(releaseOfVersion(releases, "7.1.0-rc1").tag_name, "v7.1.0-rc1", "a release candidate ships in its own release, not in latest");
     assert.equal(releaseOfVersion(releases, "7.1.0-dev.5").tag_name, "latest");
     assert.equal(releaseOfVersion(releases, "7.1.0-dev.4"), null);   // latest moved on: its MoonBase pairs with another app
+});
+
+
+// A release with the moonlight- images also carries firmware-<old name> copies, and the old full-flash name `esp32` is the new full build's name too.
+const renamed = {
+    assets: [
+        { name: "moonlight-esp32-v8.0.0.bin", browser_download_url: "https://x/full.bin", digest: "sha256:f1" },
+        { name: "moonlight-esp32-lite-v8.0.0.bin", browser_download_url: "https://x/lite.bin", digest: "sha256:l1" },
+        { name: "firmware-esp32-v8.0.0.bin", browser_download_url: "https://x/old-esp32.bin", digest: "sha256:o1" },
+        { name: "manifest-esp32.json", browser_download_url: "https://x/m-esp32.json" },
+        { name: "manifest-esp32-lite.json", browser_download_url: "https://x/m-lite.json" },
+    ],
+};
+
+test("a device reporting its asset prefix installs the image under that prefix", () => {
+    assert.equal(updateAsset(renamed, { firmware: "esp32", update: "self", assetPrefix: "moonlight" }, "8.0.0").url, "https://x/full.bin");
+    assert.equal(updateAsset(renamed, { firmware: "esp32-lite", update: "self", assetPrefix: "moonlight" }, "8.0.0").url, "https://x/lite.bin");
+});
+
+test("a device too old to report a prefix installs the copy under its old name, the 4 MB build for the old esp32", () => {
+    assert.equal(updateAsset(renamed, { firmware: "esp32", update: "self" }, "8.0.0").url, "https://x/old-esp32.bin");
+});
+
+test("the picker lists a release's moonlight- images and skips the old-name copies beside them", () => {
+    const listed = parseFirmwaresFromAssets(renamed.assets, "v8.0.0");
+    assert.deepEqual(listed.map(f => [f.firmware, f.binaryUrl]).sort(), [["esp32", "https://x/full.bin"], ["esp32-lite", "https://x/lite.bin"]]);
 });

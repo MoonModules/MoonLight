@@ -191,6 +191,8 @@ struct ControlDescriptor {
     bool hex : 1 = false;
     /// Whether a text holds an address or a list of receivers, so the UI names the boards it knows among them.
     bool receivers : 1 = false;
+    /// Whether a text names a device-model catalog entry, so the UI links it to that entry and offers the catalog's defaults.
+    bool catalog : 1 = false;
     /// What this surface control drives, one field because each kind drives exactly one thing.
     const char* surfaceTarget = nullptr;
     /// An optional check applied before every write, so the rule lives with the control.
@@ -411,6 +413,11 @@ public:
     /// Render a numeric as a number input, for an integer that is an identity not a magnitude.
     void setNumberField(uint8_t i, bool numberField = true) {
         if (i < count_) controls_[i].numberField = numberField;
+    }
+
+    /// Mark a text as a device-model catalog name, so the UI links it to that entry and offers the catalog's defaults.
+    void setCatalogField(uint8_t i) {
+        if (i < count_) controls_[i].catalog = true;
     }
 
     /// Mark a text as holding receivers, an address or a list of addresses and names, so the UI shows each known board's name beside its address.

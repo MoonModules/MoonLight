@@ -124,6 +124,8 @@ inline ImageInfo identify(const uint8_t* buf, size_t len) {
 inline constexpr const char* kAppImageNames[]      = {"MoonLight", "projectMM"};
 /// The same pair for the recovery image, which an app slot must never receive.
 inline constexpr const char* kMoonBaseImageNames[] = {"MoonLight-moonbase", "projectMM-moonbase"};
+/// The migration image (moonbase/migrate), which an app slot takes as an update: it moves the board to the MoonBase layout, a two-slot MoonLight board as a WLED one.
+inline constexpr const char* kMigrateImageNames[]  = {"MoonLight-migrate"};
 
 /// The version of the contract between the app and MoonBase: @xref{the-handoff-version}.
 inline constexpr uint32_t kHandoffVersion = 1;
@@ -131,6 +133,8 @@ inline constexpr uint32_t kHandoffVersion = 1;
 inline constexpr const char* kHandoffNvsNamespace = "moonbase";
 inline constexpr const char* kHandoffUrlKey       = "url";
 inline constexpr const char* kHandoffTriesKey     = "tries";
+/// Where the migration image leaves a board's NetworkModule.json, in that namespace, when the new layout's filesystem overlaps the image as it runs; MoonBase writes it into the volume it formats at its first boot.
+inline constexpr const char* kMigratedNetworkKey  = "net";
 /// Marks the handoff record, so only a record reads as a version, not the bytes after an older image's descriptor: "MMHO" read little-endian.
 inline constexpr uint32_t kHandoffMagic = 0x4F484D4D;
 /// The record MoonBase carries in `.rodata_custom_desc`.
@@ -168,6 +172,12 @@ inline bool namedAmong(const char* name, size_t cap, const char* const (&names)[
 
 /// Whether `name` is this project's app image.
 inline bool isAppImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kAppImageNames); }
+
+/// Whether `name` is this project's migration image.
+inline bool isMigrateImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kMigrateImageNames); }
+
+/// Whether an app slot takes `name` as an update: the app, or the migration image, which moves the board to the MoonBase layout from that slot.
+inline bool isUpdateImage(const char* name, size_t cap = 32) { return isAppImage(name, cap) || isMigrateImage(name, cap); }
 
 /// Whether `name` is this project's recovery image.
 inline bool isMoonBaseImage(const char* name, size_t cap = 32) { return namedAmong(name, cap, kMoonBaseImageNames); }

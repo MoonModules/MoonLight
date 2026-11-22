@@ -228,7 +228,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2853,
             "p95": 3234,
@@ -252,7 +252,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 64,
             "p95": 65,
@@ -276,7 +276,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2925,
             "p95": 3229,
@@ -300,7 +300,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 113,
             "p95": 1327,
@@ -324,7 +324,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2144,
             "p95": 2144,
@@ -348,7 +348,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2147,
             "p95": 2163,
@@ -397,7 +397,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2859,
             "p95": 2908,
@@ -421,7 +421,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 64,
             "p95": 68,
@@ -445,7 +445,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2746,
             "p95": 2831,
@@ -469,7 +469,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 71,
             "p95": 1209,
@@ -493,7 +493,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2154,
             "p95": 2154,
@@ -517,7 +517,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2150,
             "p95": 2155,
@@ -573,7 +573,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3296,
             "p95": 3391,
@@ -597,7 +597,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 101,
             "p95": 107,
@@ -621,7 +621,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2847,
             "p95": 3554,
@@ -645,7 +645,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 130,
             "p95": 2503,
@@ -669,7 +669,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2165,
             "p95": 2165,
@@ -693,7 +693,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2143,
             "p95": 2170,
@@ -742,7 +742,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2945,
             "p95": 3020,
@@ -766,7 +766,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 111,
             "p95": 120,
@@ -790,7 +790,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2927,
             "p95": 3209,
@@ -814,7 +814,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 69,
             "p95": 1060,
@@ -838,7 +838,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2146,
             "p95": 2146,
@@ -862,7 +862,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2142,
             "p95": 2155,
@@ -948,7 +948,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3462,
             "p95": 4383,
@@ -972,7 +972,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 107,
             "p95": 111,
@@ -996,7 +996,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3316,
             "p95": 4221,
@@ -1020,7 +1020,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 172,
             "p95": 2793,
@@ -1044,7 +1044,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2436,
             "p95": 2436,
@@ -1068,7 +1068,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2513,
             "p95": 2526,
@@ -1117,7 +1117,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3588,
             "p95": 3994,
@@ -1141,7 +1141,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 107,
             "p95": 113,
@@ -1165,7 +1165,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3355,
             "p95": 3714,
@@ -1189,7 +1189,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 129,
             "p95": 4492,
@@ -1213,7 +1213,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2433,
             "p95": 2433,
@@ -1237,7 +1237,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2502,
             "p95": 2505,
@@ -1293,7 +1293,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 5678,
             "p95": 5954,
@@ -1317,7 +1317,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 857,
             "p95": 1143,
@@ -1341,7 +1341,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 6268,
             "p95": 7297,
@@ -1365,7 +1365,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 1053,
             "p95": 14334,
@@ -1389,7 +1389,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2475,
             "p95": 2475,
@@ -1413,7 +1413,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2512,
             "p95": 2516,
@@ -1462,7 +1462,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 5924,
             "p95": 6309,
@@ -1486,7 +1486,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 1103,
             "p95": 1292,
@@ -1510,7 +1510,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 5816,
             "p95": 6237,
@@ -1534,7 +1534,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 85,
             "p95": 1936,
@@ -1558,7 +1558,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2544,
             "p95": 2544,
@@ -1582,7 +1582,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2502,
             "p95": 2600,
@@ -1668,7 +1668,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 5855,
             "p95": 8160,
@@ -1692,7 +1692,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 305,
             "p95": 1579,
@@ -1716,7 +1716,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 6464,
             "p95": 6632,
@@ -1740,7 +1740,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 1801,
             "p95": 21412,
@@ -1764,7 +1764,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2789,
             "p95": 2789,
@@ -1788,7 +1788,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 5022,
             "p95": 6680,
@@ -1837,7 +1837,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 5713,
             "p95": 5931,
@@ -1861,7 +1861,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 238,
             "p95": 1361,
@@ -1885,7 +1885,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 6798,
             "p95": 6800,
@@ -1909,7 +1909,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 1416,
             "p95": 18402,
@@ -1933,7 +1933,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2714,
             "p95": 2714,
@@ -1957,7 +1957,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2667,
             "p95": 9569,
@@ -2013,7 +2013,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 15141,
             "p95": 19005,
@@ -2037,7 +2037,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 220,
             "p95": 10027,
@@ -2061,7 +2061,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 17380,
             "p95": 17707,
@@ -2085,7 +2085,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 8406,
             "p95": 31505,
@@ -2109,7 +2109,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2806,
             "p95": 2806,
@@ -2133,7 +2133,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2695,
             "p95": 2888,
@@ -2182,7 +2182,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 14975,
             "p95": 17066,
@@ -2206,7 +2206,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 240,
             "p95": 11754,
@@ -2230,7 +2230,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 17814,
             "p95": 18405,
@@ -2254,7 +2254,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 186,
             "p95": 7290,
@@ -2278,7 +2278,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2573,
             "p95": 2573,
@@ -2302,7 +2302,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2340,
             "p95": 2489,
@@ -2373,7 +2373,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 15955,
             "p95": 17511,
@@ -2397,7 +2397,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2925,
             "p95": 7845,
@@ -2421,7 +2421,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 13197,
             "p95": 17495,
@@ -2445,7 +2445,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 8287,
             "p95": 32675,
@@ -2469,7 +2469,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2621,
             "p95": 2621,
@@ -2493,7 +2493,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2956,
             "p95": 3086,
@@ -2542,7 +2542,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 12343,
             "p95": 12684,
@@ -2566,7 +2566,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2926,
             "p95": 9864,
@@ -2590,7 +2590,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 11963,
             "p95": 14760,
@@ -2614,7 +2614,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 8064,
             "p95": 28646,
@@ -2638,7 +2638,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3402,
             "p95": 3402,
@@ -2662,7 +2662,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3086,
             "p95": 3187,
@@ -2718,7 +2718,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 27983,
             "p95": 29558,
@@ -2742,7 +2742,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 10036,
             "p95": 18778,
@@ -2766,7 +2766,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 26122,
             "p95": 29137,
@@ -2790,7 +2790,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 15438,
             "p95": 48065,
@@ -2814,7 +2814,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2623,
             "p95": 2623,
@@ -2838,7 +2838,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3268,
             "p95": 6608,
@@ -2887,7 +2887,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 30612,
             "p95": 33261,
@@ -2911,7 +2911,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 11930,
             "p95": 21562,
@@ -2935,7 +2935,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 37919,
             "p95": 38723,
@@ -2959,7 +2959,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 16042,
             "p95": 59786,
@@ -2983,7 +2983,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3346,
             "p95": 3346,
@@ -3007,7 +3007,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3137,
             "p95": 3255,
@@ -3118,7 +3118,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3261,
             "p95": 3393,
@@ -3142,7 +3142,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 106,
             "p95": 106,
@@ -3166,7 +3166,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3174,
             "p95": 3273,
@@ -3190,7 +3190,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 309,
             "p95": 3872,
@@ -3214,7 +3214,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2394,
             "p95": 2394,
@@ -3238,7 +3238,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2481,
             "p95": 2493,
@@ -3288,7 +3288,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3426,
             "p95": 3692,
@@ -3312,7 +3312,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 109,
             "p95": 116,
@@ -3336,7 +3336,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3350,
             "p95": 3472,
@@ -3360,7 +3360,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 291,
             "p95": 15212,
@@ -3384,7 +3384,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2139,
             "p95": 2139,
@@ -3408,7 +3408,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2417,
             "p95": 2440,
@@ -3458,7 +3458,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8": {
+        "host=esp32s3-opi sender=esp32s3-opi": {
           "tick_us": {
             "p50": 3357,
             "p95": 3490,
@@ -3482,7 +3482,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32s3-n16r8": {
+        "host=esp32p4rev1 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 109,
             "p95": 110,
@@ -3506,7 +3506,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32s3-n16r8 sender=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32p4rev1": {
           "tick_us": {
             "p50": 3461,
             "p95": 3495,
@@ -3530,7 +3530,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 679,
             "p95": 7244,
@@ -3554,7 +3554,7 @@
           },
           "last_updated": "2026-10-27"
         },
-        "host=teensy41 sender=esp32p4rev1-eth": {
+        "host=teensy41 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2490,
             "p95": 2490,
@@ -3578,7 +3578,7 @@
           },
           "last_updated": "2026-10-14"
         },
-        "host=teensy41 sender=esp32s3-n16r8": {
+        "host=teensy41 sender=esp32s3-opi": {
           "tick_us": {
             "p50": 2440,
             "p95": 2450,
@@ -3658,7 +3658,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 1748,
             "p95": 3966,
@@ -3707,7 +3707,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 175,
             "p95": 73537,
@@ -3756,7 +3756,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 173,
             "p95": 66923,
@@ -3835,7 +3835,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 2605,
             "p95": 8909,
@@ -3884,7 +3884,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 92530,
             "p95": 118426,
@@ -3933,7 +3933,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 429,
             "p95": 2052,
@@ -4012,7 +4012,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 4021,
             "p95": 14855,
@@ -4061,7 +4061,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 21044,
             "p95": 35856,
@@ -4110,7 +4110,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 19203,
             "p95": 38124,
@@ -4189,7 +4189,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 9149,
             "p95": 14100,
@@ -4238,7 +4238,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 9895,
             "p95": 13374,
@@ -4287,7 +4287,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 17221,
             "p95": 19173,
@@ -4366,7 +4366,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 12453,
             "p95": 15524,
@@ -4415,7 +4415,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 22197,
             "p95": 22676,
@@ -4464,7 +4464,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 18461,
             "p95": 21096,
@@ -4543,7 +4543,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 4767,
             "p95": 7748,
@@ -4591,7 +4591,7 @@
         "Preview.status"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 12361,
             "p95": 13012,
@@ -4644,7 +4644,7 @@
         "Drivers.tick"
       ],
       "observed": {
-        "host=esp32p4rev1-eth sender=esp32p4rev1-eth": {
+        "host=esp32p4rev1 sender=esp32p4rev1": {
           "tick_us": {
             "p50": 197,
             "p95": 454,

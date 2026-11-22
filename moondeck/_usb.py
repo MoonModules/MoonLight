@@ -155,8 +155,8 @@ def normalize_chip(detected: str) -> str:
 
 
 def firmware_to_chip(firmware: str) -> str:
-    """The ESP32 family of a firmware id: 'esp32s3-n8r8' is 'esp32-s3', 'esp32p4rev1-eth' 'esp32-p4', 'esp32' 'esp32 (classic)'. Pure."""
-    key = re.sub(r"rev\d+$", "", (firmware or "").lower().split("-")[0])   # esp32p4 from esp32p4rev1-eth, as the picker's firmwareChip
+    """The ESP32 family of a firmware id: 'esp32s3-opi' is 'esp32-s3', 'esp32p4rev1' 'esp32-p4', 'esp32' 'esp32 (classic)'. Pure."""
+    key = re.sub(r"rev\d+$", "", (firmware or "").lower().split("-")[0])   # esp32p4 from esp32p4rev1, as the picker's firmwareChip
     if not key.startswith("esp32"):
         return ""
     return normalize_chip("ESP32" + (f"-{key[5:].upper()}" if key[5:] else ""))

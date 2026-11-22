@@ -76,8 +76,8 @@ set(BUILD_INFO_DIR ${COMPONENT_DIR}/../../src/core/util)
 # binary variant; the physical "board" is a separate concept the device
 # cannot identify on its own.
 #
-# MM_FIRMWARE_NAME — the firmware variant key (`esp32`, `esp32-eth`,
-#                 `esp32-eth-wifi`, `esp32s3-n16r8`). Surfaced by
+# MM_FIRMWARE_NAME: the firmware variant key (`esp32`, `esp32-lite`,
+#                 `esp32-ethonly`, `esp32s3-opi`). Surfaced by
 #                 SystemModule.firmware on the device card and used by
 #                 FirmwareUpdateModule's release picker to filter to
 #                 OTA-compatible binaries. Cache variables in ESP-IDF reach
@@ -86,13 +86,13 @@ set(BUILD_INFO_DIR ${COMPONENT_DIR}/../../src/core/util)
 #                 build_info.cpp's `#ifndef` fallback kicks in and the device
 #                 reports "firmware: unknown".
 #
-# MM_ETH_ONLY  — set on `--firmware esp32-eth` (no WiFi compiled in).
+# MM_ETH_ONLY: set on `--firmware esp32-ethonly` (no WiFi compiled in).
 #                The script also passes EXCLUDE_COMPONENTS for the WiFi libs;
 #                this define gates the WiFi source paths in platform_esp32.cpp
 #                and the platform::hasWiFi compile-time flag.
 #
-# MM_NO_ETH    — set on firmwares that don't enable CONFIG_ETH_USE_ESP32_EMAC
-#                (today: `--firmware esp32`, `--firmware esp32s3-n16r8`).
+# MM_NO_ETH: set on firmwares with no Ethernet driver (no EMAC and no SPI PHY fragment)
+#                (today: `esp32s3-qspi-lite`, `esp32c3`).
 #                Without the EMAC headers, the on-chip Ethernet code in
 #                platform_esp32.cpp won't compile; this define stubs the
 #                eth* platform functions to return false/empty, mirroring
@@ -102,6 +102,10 @@ if(MM_FIRMWARE_NAME)
     # strips quotes from a -D value before comparing it with the cache, so a quoted value never
     # matched and re-ran CMake on every build.
     set_property(SOURCE ${BUILD_INFO_DIR}/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_FIRMWARE_NAME="${MM_FIRMWARE_NAME}")
+endif()
+if(MM_MOONBASE_FAMILY)
+    # The MoonBase image the board takes (build_esp32.py's migration_family), quoted here as MM_FIRMWARE_NAME above.
+    set_property(SOURCE ${BUILD_INFO_DIR}/build_info.cpp APPEND PROPERTY COMPILE_DEFINITIONS MM_MOONBASE_FAMILY="${MM_MOONBASE_FAMILY}")
 endif()
 if(MM_RELEASE)
     # Quoted here, as MM_FIRMWARE_NAME above. Release-channel tag (latest / vX.Y.Z); only the

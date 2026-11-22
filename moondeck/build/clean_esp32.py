@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Clean one or all ESP32 per-firmware build directories.
 
-Each firmware has its own ``build/esp32-<firmware>/`` (managed by ``build_esp32.py``), and a firmware that carries MoonBase also builds ``build/moonbase-<chip>/``, shared by every firmware for that chip.
+Each firmware has its own ``build/esp32-<firmware>/`` (managed by ``build_esp32.py``), and each also builds MoonBase into ``build/moonbase-<chip>/``, shared by every firmware for that chip.
 This script removes one firmware's directories, or every ``build/esp32-*/`` and ``build/moonbase-*/`` plus a stale legacy ``esp32/build/`` if present.
 
 The MoonBase directory goes with its firmware because a clean is for a cache that no longer matches the tree, a moved checkout or a changed toolchain, and the MoonBase cache goes stale in the same moment.
@@ -26,7 +26,7 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--firmware", choices=sorted(FIRMWARES),
                    help="Remove build/esp32-<firmware>/ for the named firmware, and its "
-                        "chip's build/moonbase-<chip>/ when the firmware carries MoonBase.")
+                        "chip's build/moonbase-<chip>/.")
     g.add_argument("--all", action="store_true",
                    help="Remove every build/esp32-*/ and build/moonbase-*/ directory, "
                         "plus the legacy esp32/build/ dir if it still exists.")
@@ -35,9 +35,7 @@ def main():
     targets: list[Path] = []
     if args.firmware:
         targets.append(build_dir_for(args.firmware))
-        spec = FIRMWARES[args.firmware]
-        if spec.get("moonbase"):
-            targets.append(BUILD_ROOT / f"moonbase-{spec['chip']}")
+        targets.append(BUILD_ROOT / f"moonbase-{FIRMWARES[args.firmware]['chip']}")
     else:
         if BUILD_ROOT.exists():
             targets.extend(sorted(BUILD_ROOT.glob("esp32-*")))

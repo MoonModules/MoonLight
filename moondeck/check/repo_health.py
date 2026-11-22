@@ -540,8 +540,8 @@ def _arrow(new, old, key, fmt=str, lower_is_better=True):
 # Columns of the scenario matrix, in fleet order. A fixed list rather than whatever the data
 # happens to carry: a new target should be a deliberate addition, and "unknown" (a scenario run
 # before targets were named) is a data defect, not a device.
-MATRIX_TARGETS = ("host-macos", "host-windows", "esp32", "esp32s3-n16r8",
-                  "esp32p4rev1-eth", "esp32s31", "esp32-eth", "esp32-eth-wifi", *TEENSY_FIRMWARES)
+MATRIX_TARGETS = ("host-macos", "host-windows", "esp32-lite", "esp32s3-opi",
+                  "esp32p4rev1", "esp32s31", "esp32-ethonly", *TEENSY_FIRMWARES)
 
 
 def reference_tag():

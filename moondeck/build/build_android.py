@@ -22,6 +22,7 @@ import tempfile
 from pathlib import Path
 
 from build_host import build_jobs  # the one bound on compile jobs
+from build_esp32 import APP_ASSET_PREFIX  # the release image names a device asks for
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 BUILD_DIR = "build/android-arm64"
@@ -127,8 +128,8 @@ def build_apk(version: str | None) -> int:
         (ROOT / "dist").mkdir(exist_ok=True)
         shutil.copy2(apk, ROOT / "dist" / f"MoonLight-android-arm64-v{version}.apk")
         # The same package as the program an Android device installs over itself, named as every host's own program is, which the Firmware card and the map look for.
-        shutil.copy2(apk, ROOT / "dist" / f"firmware-host-android-arm64-v{version}.bin")
-        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk and dist/firmware-host-android-arm64-v{version}.bin")
+        shutil.copy2(apk, ROOT / "dist" / f"{APP_ASSET_PREFIX}-host-android-arm64-v{version}.bin")
+        print(f"Staged dist/MoonLight-android-arm64-v{version}.apk and dist/{APP_ASSET_PREFIX}-host-android-arm64-v{version}.bin")
     return 0
 
 

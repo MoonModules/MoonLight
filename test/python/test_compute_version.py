@@ -105,3 +105,9 @@ def test_no_tag_fallback_counts_from_root(monkeypatch, tmp_path):
     # The fallback range must be HEAD (not <tag>..HEAD).
     rev_list = next(c for c in calls if "rev-list" in c)
     assert rev_list[-1] == "HEAD"
+
+
+def test_the_installer_shows_the_exact_version_this_checkout_builds_as(tmp_path):
+    out = tmp_path / "library.json"
+    cv.write_stamped_library(out)
+    assert json.loads(out.read_text())["version"] == cv.for_head()

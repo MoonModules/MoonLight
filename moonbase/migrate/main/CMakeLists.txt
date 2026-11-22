@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS "migrate_main.cpp"
-    # WledNetworks.h, the one header shared with the app's tree, so a host test runs the same network reader.
+    # WledNetworks.h and FirmwareImage.h, the headers shared with the app's tree: the same network reader a host test runs, and the NVS names MoonBase reads.
     PRIV_INCLUDE_DIRS "../../../src"
     EMBED_FILES "${MOONBASE_BIN}" "${TABLE_BIN}" "${BOOTLOADER_BIN}"
     REQUIRES esp_partition spi_flash app_update bootloader_support efuse nvs_flash joltwallet__littlefs)

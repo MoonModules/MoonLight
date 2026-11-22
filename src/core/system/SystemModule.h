@@ -106,9 +106,11 @@ public:
 
         // Text because that is what persistence saves, and seeded only when empty.
         if (deviceModel_[0] == 0) {
-            std::snprintf(deviceModel_, sizeof(deviceModel_), "%s", platform::hostPlatform());
+            std::snprintf(deviceModel_, sizeof(deviceModel_), "%s", platform::hostDeviceModel());
         }
         controls_.addText("deviceModel", deviceModel_, sizeof(deviceModel_), validateDeviceModel);
+        controls_.setReadOnly(controls_.count() - 1, true);   // set by the catalog's defaults, which tooling and the card's Apply write
+        controls_.setCatalogField(controls_.count() - 1);
 
         // Written from the constant each boot, and persisted only so the recovery image reads it.
         std::snprintf(firmwareVariant_, sizeof(firmwareVariant_), "%s", kFirmwareName);
@@ -152,8 +154,7 @@ public:
         // These never change at runtime, so each binds straight to the platform's own buffer.
         /// The hardware address, which tooling identifies the device by.
         controls_.addReadOnly("mac", const_cast<char*>(platform::macString()));
-        /// The chip model.
-        controls_.addReadOnly("chip", const_cast<char*>(platform::chipModel()));
+        addChipControls();
         /// The clock and core count.
         controls_.addReadOnly("cpu", const_cast<char*>(platform::cpuInfo()));
         /// The SDK version the firmware is built on.
@@ -169,6 +170,20 @@ public:
         controls_.setDeveloper(controls_.count() - 1);
 
         MoonModule::defineControls();
+    }
+
+    /// The chip, and on an ESP32 its revision and package, which pick its firmware.
+    void addChipControls() {
+        /// The chip model.
+        controls_.addReadOnly("chip", const_cast<char*>(platform::chipModel()));
+        if (const char* rev = platform::chipRevision(); rev[0]) {
+            /// The silicon revision; a classic ESP32 at v0 or v1 takes esp32-rev1-lite.
+            controls_.addReadOnly("chipRevision", const_cast<char*>(rev));
+        }
+        if (const char* pkg = platform::chipPackage(); pkg[0]) {
+            /// The chip's package: whether its flash and PSRAM sit inside it or beside it.
+            controls_.addReadOnly("chipPackage", const_cast<char*>(pkg));
+        }
     }
 
     /// Coerce the device name, then refresh every live reading.

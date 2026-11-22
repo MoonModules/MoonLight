@@ -588,6 +588,7 @@ void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor&
     if (c.numberField) sink.append(",\"numberField\":true");   // render a plain number input, not a slider
     if (c.hex) sink.append(",\"hex\":true");   // that number input reads and writes hexadecimal
     if (c.receivers) writeKnownReceivers(sink, static_cast<const char*>(c.ptr));
+    if (c.catalog) sink.append(",\"catalog\":true");   // a device-model catalog name: a link to its entry, and the catalog's defaults
     if (c.switchRow) sink.append(",\"switchRow\":true");
     if (c.displayStrip) sink.append(",\"displayStrip\":true");
     // The target rides with all three surface kinds, since a switch drives something too (switch1 is the global on/off) and its popup should say so.

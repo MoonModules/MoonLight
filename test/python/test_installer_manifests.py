@@ -5,7 +5,7 @@ The installer fetches, per release, one ESP Web Tools manifest per *shipping* fi
 parts to flash. Those parts MUST be files the release workflow actually stages onto Pages —
 the staging step (`.github/workflows/release.yml`) downloads them with these globs:
 
-    firmware-*.bin   shared-*.bin
+    moonlight-*.bin   shared-*.bin
 
 A manifest that references a filename outside those globs points at a file that never reaches
 Pages → the installer 404s at fetch-firmware. That exact mismatch (a manifest referencing a
@@ -35,13 +35,13 @@ GENERATE = ROOT / "moondeck" / "build" / "generate_manifest.py"
 # "Stage cumulative release content"). A manifest part must match one of these, or the
 # installer fetches a file that isn't there. Keep in lockstep with that step's --pattern list,
 # less its `partition-table-*.bin`, which only the releases up to v7.0.0 publish.
-STAGED_GLOBS = ["firmware-*.bin", "shared-*.bin"]
+STAGED_GLOBS = ["moonlight-*.bin", "shared-*.bin"]
 # shared-*.bin covers shared-ota-data.bin plus the MoonBase pair (shared-moonbase-<chip>.bin,
 # shared-ota-data-slot0.bin); the same glob appears in release.yml's upload files and the
 # Pages self-host download patterns, which is exactly the sync this test guards.
 
 # A minimal but realistic IDF flasher_args.json — the four files every MoonLight build emits.
-# generate_manifest.py maps these to the bundle names (firmware-<F>-v<ver>.bin, etc.).
+# generate_manifest.py maps these to the bundle names (moonlight-<F>-v<ver>.bin and its -bootloader and -partition-table parts).
 FLASHER_ARGS = {
     "flash_files": {
         "0x1000": "bootloader/bootloader.bin",
@@ -126,18 +126,25 @@ def test_app_and_bootloader_carry_the_version(tmp_path):
     fw = next(f for f in _shipping_firmwares() if _platform(f) == "esp32")
     manifest = _generate(fw, tmp_path)
     names = [p["path"].rsplit("/", 1)[-1] for p in manifest["builds"][0]["parts"]]
-    assert f"firmware-{fw}-v{VERSION}.bin" in names, f"{fw}: app part not named for firmware+version: {names}"
-    assert f"firmware-{fw}-v{VERSION}-bootloader.bin" in names, f"{fw}: bootloader part misnamed: {names}"
+    assert f"moonlight-{fw}-v{VERSION}.bin" in names, f"{fw}: app part not named for firmware+version: {names}"
+    smallest = int(manifest["builds"][0]["layouts"][0]["flashSize"].removesuffix("MB"))
+    assert f"moonlight-{fw}-v{VERSION}-bootloader-{smallest}mb.bin" in names, f"{fw}: bootloader part misnamed: {names}"
 
 
-def test_every_firmware_names_its_own_partition_table(tmp_path):
-    """Firmwares of one flash size still differ in layout (esp32-pico's MoonBase table puts the app at 0xF0000, esp32s3-n8r8's dual-OTA table at 0x10000), so each manifest names its own partition table: a name shared by flash size lets one firmware's table replace another's in the release, and the installer writes the wrong layout."""
-    tables = {}
+def test_every_firmware_names_its_own_bootloader_and_table_per_flash_size_with_the_smallest_as_default(tmp_path):
+    """Each manifest lists a bootloader and a table per flash size the firmware installs into, for the installer to pick by the flash it measures; the default parts are the smallest's, which boot on every board the firmware serves. Each firmware names its own, so each install writes the images built beside its own app, the bootloader's size and digest made at build time."""
     for fw in (f for f in _shipping_firmwares() if _platform(f) == "esp32"):
-        parts = _generate(fw, tmp_path)["builds"][0]["parts"]
-        tables[fw] = next(p["path"].rsplit("/", 1)[-1] for p in parts if p["offset"] == 0x8000)
-    assert len(set(tables.values())) == len(tables), f"firmwares share a partition-table file: {tables}"
-    assert all(name == f"firmware-{fw}-v{VERSION}-partition-table.bin" for fw, name in tables.items()), tables
+        build = _generate(fw, tmp_path)["builds"][0]
+        sizes = [int(layout["flashSize"].removesuffix("MB")) for layout in build["layouts"]]
+        assert sizes == sorted(sizes) and sizes, f"{fw}: layouts not listed smallest first: {sizes}"
+        named = [layout["partitionTable"].rsplit("/", 1)[-1] for layout in build["layouts"]]
+        assert named == [f"moonlight-{fw}-v{VERSION}-partition-table-{size}mb.bin" for size in sizes], named
+        default = next(p["path"].rsplit("/", 1)[-1] for p in build["parts"] if p["offset"] == 0x8000)
+        assert default == named[0], f"{fw}: default table {default} is not the smallest layout's"
+        loaders = [layout["bootloader"].rsplit("/", 1)[-1] for layout in build["layouts"]]
+        assert loaders == [f"moonlight-{fw}-v{VERSION}-bootloader-{size}mb.bin" for size in sizes], loaders
+        default_loader = build["parts"][0]["path"].rsplit("/", 1)[-1]
+        assert default_loader == loaders[0], f"{fw}: default bootloader {default_loader} is not the smallest layout's"
 
 
 def test_a_teensy_manifest_is_its_flat_image_at_offset_zero(tmp_path):
@@ -147,4 +154,4 @@ def test_a_teensy_manifest_is_its_flat_image_at_offset_zero(tmp_path):
     for fw in teensy:
         build = _generate(fw, tmp_path)["builds"][0]
         assert build["chipFamily"] == "Teensy 4.1"
-        assert [(p["path"].rsplit("/", 1)[-1], p["offset"]) for p in build["parts"]] == [(f"firmware-{fw}-v{VERSION}.bin", 0)]
+        assert [(p["path"].rsplit("/", 1)[-1], p["offset"]) for p in build["parts"]] == [(f"moonlight-{fw}-v{VERSION}.bin", 0)]

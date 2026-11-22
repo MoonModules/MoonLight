@@ -360,18 +360,11 @@ void getMacAddress(uint8_t mac[6]) {
 
 bool arpLookup(const uint8_t[4], uint8_t[6]) { return false; }   // QNEthernet keeps its lwIP table private
 
-const char* macString() {
-    static char buf[18] = {};
-    if (!buf[0]) {
-        uint8_t m[6];
-        getMacAddress(m);
-        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2], m[3], m[4], m[5]);
-    }
-    return buf;
-}
-
 const char* chipModel() { return "i.MX RT1062"; }
-const char* hostPlatform() { return ""; }
+const char* chipRevision() { return ""; }
+const char* chipPackage() { return ""; }
+size_t psramFoundBytes() { return 0; }
+const char* hostDeviceModel() { return ""; }
 // The board installs an image it is handed, uploaded, having no TLS to fetch one.
 UpdateMode updateMode() { return UpdateMode::Self; }
 bool imageAwaitsInstaller() { return false; }   // a board boots its own image
@@ -382,6 +375,7 @@ const char* coprocessorLine() MM_NONBLOCKING { return ""; }
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 bool wifiRadioReady() MM_NONBLOCKING { return true; }
 const char* wiredLinkName() MM_NONBLOCKING { return "Ethernet"; }
 const char* flashMode() { return "QIO"; }   // the boot data's FlexSPI read is command 0xEB, quad I/O, fixed at boot

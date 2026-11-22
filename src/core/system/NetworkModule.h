@@ -96,6 +96,9 @@ public:
     /// Keep the cascade ticking whatever the toggle says, or the device drops off the network.
     bool respectsEnabled() const MM_NONBLOCKING override { return false; }
 
+    /// Whether the radio is switched on, which it is where no WiFi card is wired.
+    bool radioWanted() const MM_NONBLOCKING { return !wifi_ || wifi_->radio(); }
+
     /// Bring-up runs once and is not re-entrant, so a restored config applies at the next boot.
     bool appliesConfigLive() const override { return false; }
 
@@ -109,13 +112,21 @@ public:
         if (ethernet_) ethernet_->syncConfig();
         // The system module's own buffer, so a rename shows in the links at once.
         if (wifi_) wifi_->setDeviceName(readDeviceName());
+        // Radio off: a WiFi co-processor shuts down here, before any driver claims its pins (the P4's call held back, platform_esp32.cpp).
+        if (!radioWanted()) platform::coprocessorShutdown();
         // Ethernet first, without blocking.
         if (platform::ethInit()) {
             state_ = State::WaitingEth;
             std::printf("NetworkModule: Ethernet init started\n");
         } else if constexpr (platform::hasWiFi) {
-            // No Ethernet, so fall back through WiFi to the access point.
-            beginSta(platform::millis());
+            if (radioWanted()) {
+                // No Ethernet, so fall back through WiFi to the access point.
+                beginSta(platform::millis());
+            } else {
+                state_ = State::Idle;
+                radioReady_ = false;   // so switching it on starts over on the next tick
+                setIdleStatus(false);
+            }
         } else {
             // No fallback here, so stay idle until a cable appears.
             state_ = State::Idle;
@@ -282,6 +293,7 @@ private:
     /// Waiting on the station: connected once it has an address, else the next known network or the fallback.
     void tickWaitingSta(uint32_t now, uint32_t elapsed) {
         if constexpr (!platform::hasWiFi) return;
+        if (radioSwitchedOff(now)) return;
         // Pinned during bring-up, since a network without a server fires no event.
         if (!staUp()) applyStaStatic();
         if (staUp()) { onStaJoined(now); return; }
@@ -296,6 +308,22 @@ private:
         }
         stopSta();
         beginSta(now, true);
+    }
+
+    /// The radio switched off under a running station: it stops and the fallback says why, true when it did.
+    bool radioSwitchedOff(uint32_t now) {
+        if (radioWanted()) return false;
+        restartMdns();
+        stopSta();
+        endRequestedJoin();
+        fallBack(now);
+        return true;
+    }
+
+    /// A join the card asked for ends with the radio, so only the station it starts carries it out.
+    void endRequestedJoin() {
+        if (wifi_ && wifi_->joinRequest()) wifi_->joinRefused("the radio is off");
+        startedSeq_ = 0;
     }
 
     /// The station has an address: adopt it, and send a phone that asked from the access point on to the new address.
@@ -336,6 +364,7 @@ private:
     /// WiFi carries the device: Ethernet takes over once it works, and a dropout gets its grace before the fallback.
     void tickConnectedSta(uint32_t now) {
         if constexpr (!platform::hasWiFi) return;
+        if (radioSwitchedOff(now)) return;
         if (ethernetTakesOver(now)) return;
         // Checked whatever the cable does, since the station is what carries the device here.
         if (staUp()) {
@@ -418,15 +447,20 @@ private:
         } else if (radioBecameReady()) {
             // The radio's chip answered after the cascade fell back for want of it: start over now rather than a retry interval later.
             std::printf("NetworkModule: WiFi radio ready, starting WiFi\n");
-            beginSta(now);
+            if (beginSta(now)) {
+                std::snprintf(statusBuf_, sizeof(statusBuf_), "WiFi STA: %s", wifi_->ssidAt(staIndex()));
+                setStatus(statusBuf_, Severity::Status);
+            }
         } else {
             retryKnown(now);
         }
     }
 
-    /// Whether the radio became ready since the last ask, as a WiFi coproc's does once its link is up.
+    /// Whether the radio is switched on and its chip answers.
+    bool radioUsable() const MM_NONBLOCKING { return radioWanted() && platform::wifiRadioReady(); }
+    /// Whether the radio became usable since the last ask, as a WiFi coproc's does once its link is up or the switch turns on.
     bool radioBecameReady() MM_NONBLOCKING {
-        const bool ready = platform::wifiRadioReady();
+        const bool ready = radioUsable();
         const bool became = ready && !radioReady_;
         radioReady_ = ready;
         return became;
@@ -436,7 +470,7 @@ private:
     bool hasKnown() const MM_NONBLOCKING { return wifi_ && wifi_->knownCount() > 0; }
     /// Join the first network in the join order not tried this round, a new round unless `next`, since a scan between attempts reorders what is left.
     bool startSta(uint32_t now, bool next = false) {
-        if (!wifi_) return false;
+        if (!wifi_ || !radioWanted()) return false;
         if (!next) triedCount_ = 0;
         uint8_t order[WiFiModule::kMaxKnown];
         const uint8_t n = wifi_->joinOrder(order, now);
@@ -455,6 +489,7 @@ private:
 
     /// Start joining `ssid` with the addressing of the network `staId_` names, Static or DHCP, so no earlier network's setting carries over. A pinned address stays on the station until DHCP is restored.
     bool joinNetwork(const char* ssid, const char* password) {
+        if (!radioWanted()) return false;
         if (!platform::wifiStaInit(ssid, password)) return false;
         wifi_->ipAt(staIndex()).applyLive(platform::NetIface::Sta);
         return true;
@@ -564,6 +599,17 @@ private:
         }
     }
 
+    /// Why the device is idle: the radio off, the radio not ready yet (a coproc whose link is down refuses every join), or the access point closed after the first setup.
+    void setIdleStatus(bool closed) {
+        const bool off = !radioWanted();
+        const bool waiting = !off && !radioReady_;
+        const char* why = off ? "No network: radio off and no cable"
+                        : waiting ? "No network: waiting for the WiFi radio"
+                        : closed ? "No network: retrying, the access point was for the first setup only" : "No network";
+        mm::formatTo(statusBuf_, sizeof(statusBuf_), "%s", why);
+        setStatus(statusBuf_, waiting || (closed && !off) ? Severity::Warning : Severity::Error);
+    }
+
     /// Nothing joined: open the access point, so a user can reach the device to configure it, unless it was for the first setup only.
     void fallBack(uint32_t now) {
         const bool closed = ap_ && ap_->opens(othersConfigured()) == AccessPointModule::Opens::FirstSetup;
@@ -575,12 +621,8 @@ private:
         } else {
             // Idle retries the known networks, so a device whose access point stays closed still rejoins.
             state_ = State::Idle;
-            radioReady_ = platform::wifiRadioReady();
-            // A radio that is not ready, a WiFi coproc whose link is not up, refuses every join, and the wait is the reason rather than a failure.
-            const bool waiting = !radioReady_;
-            mm::formatTo(statusBuf_, sizeof(statusBuf_), waiting ? "No network: waiting for the WiFi radio"
-                                                         : closed ? "No network: retrying, the access point was for the first setup only" : "No network");
-            setStatus(statusBuf_, waiting || closed ? Severity::Warning : Severity::Error);
+            radioReady_ = radioUsable();
+            setIdleStatus(closed);
         }
         stateChangeTime_ = now;
         // The status needs no rebuild, but the radio readouts' visibility does.
@@ -613,6 +655,7 @@ private:
     /// Open the access point beside whatever else runs, true once it is up.
     bool openAp() {
         if (apUp_) return true;
+        if (!radioWanted()) return false;
         const platform::WifiApConfig cfg = ap_ ? ap_->config(firstNetworkPassword())
                                                : platform::WifiApConfig{readDeviceName(), captive::kAddressText, ""};
         if (!platform::wifiApInit(cfg)) return false;
@@ -655,6 +698,13 @@ private:
     /// Open or close the access point by its `opens` rule, and re-open it when how it appears changed.
     void syncAccessPoint(uint32_t now) {
         if constexpr (!platform::hasWiFi) return;
+        // The radio switched off closes the access point, the default one included, which a device with no access point card opens.
+        if (apUp_ && !radioWanted()) {
+            closeAp();
+            endRequestedJoin();
+            if (state_ == State::AP) fallBack(now);
+            return;
+        }
         if (!ap_) return;
         const bool others = othersConfigured();
         const auto opens = ap_->opens(others);
@@ -685,7 +735,7 @@ private:
 
     /// Retry the known networks now and then from the fallback, while nobody is on the access point.
     void retryKnown(uint32_t now) {
-        if (!hasKnown() || now - stateChangeTime_ <= kApRetryStaMs) return;
+        if (!hasKnown() || !radioWanted() || now - stateChangeTime_ <= kApRetryStaMs) return;
         // A radio that is not ready refuses every join, and radioBecameReady() starts over the tick it answers, so no retry is spent on it.
         if (!platform::wifiRadioReady()) return;
         if (apUp_ && platform::wifiApClientCount() > 0) return;

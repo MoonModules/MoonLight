@@ -236,7 +236,7 @@
       ],
       "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on host.",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 2838,
             "p95": 2876,
@@ -275,7 +275,7 @@
       "description": "4096 lights split over two receivers by unicast DDP, 2048 each. Read on receiver2.",
       "device": "receiver2",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 81,
             "p95": 82,
@@ -359,7 +359,7 @@
       ],
       "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on host.",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 3847,
             "p95": 3980,
@@ -398,7 +398,7 @@
       "description": "12288 lights split over two receivers by unicast DDP, 6144 each. Read on receiver2.",
       "device": "receiver2",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 134,
             "p95": 135,
@@ -498,7 +498,7 @@
       ],
       "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on host.",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 3555,
             "p95": 3630,
@@ -537,7 +537,7 @@
       "description": "4096 lights to both receivers in one stream, Art-Net broadcast. Read on receiver2.",
       "device": "receiver2",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 108,
             "p95": 108,
@@ -591,7 +591,7 @@
       ],
       "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on host.",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 3206,
             "p95": 3249,
@@ -630,7 +630,7 @@
       "description": "4096 lights to both receivers in one stream, E1.31 multicast. Read on receiver2.",
       "device": "receiver2",
       "observed": {
-        "host=esp32s3-n16r8 sender=esp32s3-n16r8 receiver2=esp32p4rev1-eth": {
+        "host=esp32s3-opi sender=esp32s3-opi receiver2=esp32p4rev1": {
           "tick_us": {
             "p50": 100,
             "p95": 100,

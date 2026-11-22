@@ -103,11 +103,11 @@ def test_identify_probes_only_present_ports_and_remembers_the_mac_by_the_adapter
 
 
 def test_the_local_builds_are_the_esp32_images_on_disk_with_their_chip(monkeypatch, tmp_path):
-    (tmp_path / "esp32-esp32s3-n8r8").mkdir()
-    (tmp_path / "esp32-esp32s3-n8r8" / moondeck.APP_BIN).write_bytes(b"x" * 10)
+    (tmp_path / "esp32-esp32s3-opi").mkdir()
+    (tmp_path / "esp32-esp32s3-opi" / moondeck.APP_BIN).write_bytes(b"x" * 10)
     monkeypatch.setattr(moondeck, "build_dir_for", lambda fw: tmp_path / f"esp32-{fw}")
     builds = moondeck.local_builds()
-    assert [(b["firmware"], b["chip"], b["size"]) for b in builds] == [("esp32s3-n8r8", "esp32-s3", 10)]
+    assert [(b["firmware"], b["chip"], b["size"]) for b in builds] == [("esp32s3-opi", "esp32-s3", 10)]
 
 
 def _run(monkeypatch, tmp_path, params, ports):

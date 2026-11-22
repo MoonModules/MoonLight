@@ -175,7 +175,7 @@ One word per thing, so a reader never wonders whether two words mean two things.
 | **device** | one unit running MoonLight: its board plus everything that makes it usable, such as an enclosure, power input, terminals and level shifters; it has a `deviceName` and a `deviceModel` | a QuinLED Dig-2-Go on a shelf, the StadBeest's legs (`MM-StadBeest`) |
 | **deviceModel** | the product a device is one of, which the catalog describes and the installer sets up | `QuinLED Dig-Next-2`, `LightCrafter 16`, `MIDI bridge` |
 | **board** | the bare PCB, as in on-board LED and on-board peripherals | the ESP32-S3 DevKit |
-| **firmware** | the compiled binary for one chip | `esp32s3-n16r8` |
+| **firmware** | the compiled binary for one chip | `esp32s3-opi` |
 | **desk** | a hardware controller of faders, knobs and pads, which drives a device's control surface | the iCON QCon Pro G2 |
 | **installation** | several devices acting as one piece | the StadBeest: legs, two eyes and a MIDI bridge |
 

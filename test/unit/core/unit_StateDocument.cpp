@@ -76,6 +76,7 @@ void registerTypes() {
     mm::ModuleFactory::registerType<SdBox>("SdBox");
     mm::ModuleFactory::registerType<SdDriver>("SdDriver");
     mm::ModuleFactory::registerType<SdFixed>("SdFixed");
+    mm::ModuleFactory::registerCompiledOut("SdLeftOut");   // a type this build leaves out, as a -lite firmware does SdCardService
     done = true;
 }
 
@@ -378,6 +379,49 @@ TEST_CASE("a rebuild run at once satisfies the one the document requested") {
     const int after = static_cast<SdCount*>(t.find("Counter"))->prepares;
     t.s.tick();
     CHECK(static_cast<SdCount*>(t.find("Counter"))->prepares == after);
+}
+
+TEST_CASE("a type this firmware leaves out is skipped and named, and the rest of the document applies") {
+    Tree t;
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "A": {"type": "SdKnob", "value": 7}, "Card": {"type": "SdLeftOut"}}})");
+    CHECK(r.ok);
+    CHECK(r.skipped == 1);
+    CHECK(std::string(r.error) == "this firmware leaves the type out");
+    CHECK(std::string(r.where) == "Effects.Card");
+    CHECK(t.children(t.effects) == "A");
+    CHECK(valueOf(t.find("A")) == 7);
+}
+
+// A module re-typed to a type this firmware leaves out is skipped whole: what is under it stays, and so does its name.
+TEST_CASE("a re-type to a left-out type keeps the module, its children and its name") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"Box": {"type": "SdBox", "K": {"type": "SdKnob", "value": 3}}}})").ok);
+    auto r = t.apply(R"({"Effects": {"Box": {"type": "SdLeftOut", "$name": "Renamed"}}})");
+    CHECK(r.ok);
+    CHECK(r.skipped == 1);
+    CHECK(t.children(t.effects) == "Box");
+    REQUIRE(t.find("Box") != nullptr);
+    CHECK(t.children(t.find("Box")) == "K");
+    CHECK(valueOf(t.find("K")) == 3);
+}
+
+// The names a left-out re-type keeps are still taken, so a document creating one of them elsewhere is refused before anything changes.
+TEST_CASE("a left-out re-type keeps its children's names taken") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"Box": {"type": "SdBox", "K": {"type": "SdKnob", "value": 3}}}})").ok);
+    auto r = t.apply(R"({"Effects": {"Box": {"type": "SdLeftOut"}, "New": {"type": "SdBox", "K": {"type": "SdKnob"}}}})");
+    CHECK_FALSE(r.ok);
+    CHECK(t.children(t.effects) == "Box");
+    CHECK(t.children(t.find("Box")) == "K");
+}
+
+TEST_CASE("a type no build knows still refuses the whole document beside a left-out one") {
+    Tree t;
+    REQUIRE(t.apply(R"({"Effects": {"A": {"type": "SdKnob"}}})").ok);
+    auto r = t.apply(R"({"Effects": {"$patch": "replace", "Card": {"type": "SdLeftOut"}, "D": {"type": "NoSuchType"}}})");
+    CHECK_FALSE(r.ok);
+    CHECK(std::string(r.error) == "unknown type");
+    CHECK(t.children(t.effects) == "A");
 }
 
 TEST_CASE("a document that names an unknown type or container changes nothing, wherever it names it") {

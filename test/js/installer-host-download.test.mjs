@@ -141,11 +141,13 @@ test("a host is offered exactly one archive: the one built for its own OS", () =
     assert.equal(matched.length, 1, `expected exactly one match, got ${matched}`);
 });
 
-test("an ESP32 firmware and its ethernet variant remain mutually flashable", () => {
-    // Pre-existing rule, re-pinned here because the host branch sits in front of it.
-    assert.ok(isCompatible("esp32", "esp32-eth"));
-    assert.ok(isCompatible("esp32-eth-wifi", "esp32"));
-    assert.equal(isCompatible("esp32", "esp32s3-n16r8"), false);
+test("a classic ESP32 takes the builds that run on every classic board, and no other chip's", () => {
+    // Re-pinned here because the host branch sits in front of it.
+    assert.ok(isCompatible("esp32", "esp32-ethonly"));
+    assert.ok(isCompatible("esp32-lite", "esp32-ethonly"));
+    assert.ok(isCompatible("esp32-ethonly", "esp32-rev1-lite"));
+    assert.equal(isCompatible("esp32-lite", "esp32"), false);   // the 16 MB tier needs more flash than every classic has
+    assert.equal(isCompatible("esp32", "esp32s3-opi"), false);
 });
 
 // An OLDER release may ship only an archive where the newest ships an installer: v3.0.0 has a

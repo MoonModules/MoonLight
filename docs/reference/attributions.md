@@ -29,6 +29,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [DDP](http://www.3waylabs.com/ddp/) | 📜 | The Distributed Display Protocol, pixel data over UDP. |
 | Delphium | 🧑 | HUB75, OSC, HLS, RTSP, NDI, and Windows. |
 | [Demoscene](https://en.wikipedia.org/wiki/Demoscene) | 🎨 | The real-time art scene of the home-computer era, its water, vector balls and plasma among the tricks. |
+| [Docker](https://www.docker.com) | 🏢 | The whale logo on the Docker container device model card, Apache License 2.0. |
 | [DougHaber](https://github.com/DougHaber) | 🧑 | Doug Haber: nlife-color, Conway's Game of Life with color. |
 | [E1.31 / sACN](https://en.wikipedia.org/wiki/Architecture_for_Control_Networks) | 📜 | Streaming ACN, DMX over IP as ANSI standardizes it. |
 | Eric Marciniak | 🧑 | The car-lights fixture. |
@@ -42,8 +43,10 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Fisher-Yates shuffle](https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle) File:Durstenfeld_shuffle.svg | 🧮 | A uniform random permutation in one pass. |
 | [FPP / Falcon Player](https://github.com/FalconChristmas/fpp) | 🧰 | The show player that prompted [PanelCardDriver](../moonmodules/light/drivers.md#panelcard): if a Linux host can feed a wall of HUB75 panels, so can the board already rendering them. Its receiving-card protocols, and its FSEQ format is what a show file is. |
 | [Frank / softhack007](https://github.com/softhack007) | 🧑 | Main author of the WLED-MM audio-reactive usermod. The ideas behind [AudioService](../moonmodules/core/services.md#audio), including the adaptive noise gate analyzed with his permission, descend from years of collaboration, as do the AI principles and the care for code quality. |
+| [FriendlyElec](https://wiki.friendlyelec.com/wiki/index.php/NanoPi_R76S) | 🏢 | The NanoPi R76S photo on the Generic Linux device model card. |
 | [GLSL](https://en.wikipedia.org/wiki/OpenGL_Shading_Language) | 📜 | The OpenGL shading language, whose built-in function names the shader kernel keeps. |
 | Gomez | 🧑 | The demoscene water effect, 2000. |
+| [Grm wnr](https://commons.wikimedia.org/wiki/File:Macintosh_128k_transparency.png) | 🧑 | The Macintosh 128K photo on the Generic macOS device model card, CC BY-SA 3.0. |
 | [Harald Kubota](https://hkubota.wordpress.com/2022/01/31/winter-project-colorlight-5a-75b-protocol/) | 🧑 | An independent write-up of the ColorLight 5A-75B wire format. |
 | [Hendrik Schreiber and Meinard Müller / Schreiber and Müller](https://ismir2018.ismir.net/doc/pdfs/220_Paper.pdf) | 🧑 | The crowdsourced revision of GiantSteps Tempo's annotations (2018), and Acc1 and Acc2 as tempo studies use them. |
 | [HLS](https://www.rfc-editor.org/rfc/rfc8216) | 📜 | HTTP Live Streaming, RFC 8216: video as a playlist of short segments. |
@@ -57,6 +60,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [John Hart / Sphere tracing](https://en.wikipedia.org/wiki/Ray_marching) File:Visualization_of_SDF_ray_marching_algorithm.png | 🧑🧮 | Sphere tracing, the basis of raymarching. |
 | [Jos Stam / Stable Fluids](https://en.wikipedia.org/wiki/Jos_Stam) File:Jos_Stam_2005_-_by_Azam_Khan.jpg | 🧑🧮 | Stable Fluids, the solver behind the fluid effect. |
 | [Ken Perlin / Perlin noise](https://en.wikipedia.org/wiki/Perlin_noise) File:Perlin_noise_example.png | 🧑🧮 | Gradient noise, the field behind fire and clouds. |
+| [Laserlicht](https://commons.wikimedia.org/wiki/File:Raspberry_Pi_4_Model_B_-_Top.jpg) | 🧑 | The Raspberry Pi 4 photo on its device model card, CC BY-SA 4.0. |
 | [ldirko](https://github.com/ldirko) | 🧑 | The Distortion Waves effect. |
 | [librosa](https://librosa.org) | 🧰 | The log-normal tempo prior at 120 BPM the tempo harness's baseline uses. |
 | [Limpkin](https://github.com/limpkin) | 🧑 | The SE16 and LightCrafter boards, RGBW tuning. |
@@ -87,9 +91,11 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Robert Bridson / Curl noise](https://www.cs.ubc.ca/~rbridson/docs/bridson-siggraph2007-curlnoise.pdf) | 🧑🧮 | Curl noise, SIGGRAPH 2007. |
 | [RobWomp / wompslab](https://github.com/wompslab) | 🧑 | HUB75 drivers, and Linux on NanoPi and Pi 5. |
 | [Rotation matrix](https://en.wikipedia.org/wiki/Rotation_matrix) File:Counterclockwise_rotation.png | 🧮 | A rotation as a matrix product. |
+| [Roy Wonder Cohen](https://commons.wikimedia.org/wiki/File:Meta_Quest_3_front_View.jpg) | 🧑 | The Meta Quest 3 photo on the Generic Android device model card, CC BY-SA 4.0. |
 | [RTP](https://www.rfc-editor.org/rfc/rfc6184) | 📜 | The RTP payload format for H.264, RFC 6184: how a frame is cut into packets. |
 | [RTSP](https://www.rfc-editor.org/rfc/rfc2326) | 📜 | The Real Time Streaming Protocol, RFC 2326: a player pulls a live stream. |
 | [Semi-implicit Euler](https://en.wikipedia.org/wiki/Semi-implicit_Euler_method) | 🧮 | The integration the particle kernel runs on: velocity from the forces, then position from the new velocity. |
+| [SimonWaldherr](https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5_Board.jpg) | 🧑 | The Raspberry Pi 5 photo on its device model card, CC BY-SA 4.0. |
 | [Stefan Petrick](https://github.com/StefanPetrick) | 🧑 | The shader vocabulary of the LED world. Its generative fields come from [Animartrix](https://github.com/StefanPetrick/animartrix), [FunkyNoise](https://github.com/StefanPetrick/FunkyNoise) and [ColorTrails](https://github.com/StefanPetrick/ColorTrails). [Aurora](../moonmodules/light/effects.md#aurora), [PolarNoise](../moonmodules/light/effects.md#polarnoise), [Tunnel](../moonmodules/light/effects.md#tunnel) and [Trails](../moonmodules/light/effects.md#trails) sit in that tradition, written on the published algorithms underneath. |
 | [Stepko / St3p40](https://github.com/St3p40) | 🧑 | WLED's 2D effects, Soap and Octopus among them. |
 | [Sutaburosu](https://github.com/sutaburosu) | 🧑 | The fixed-point canvas demos. |

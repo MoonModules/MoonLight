@@ -67,18 +67,15 @@ def merged_flash(force: bool) -> str:
     idf_py = os.path.join(str(venv), "bin", "python") if venv else ""
     if not idf_py or not os.path.exists(idf_py):
         sys.exit("no ESP-IDF Python env found, source export.sh, or install the IDF tools")
-    # The qemu firmware carries MoonBase, and IDF's own flash_args stages the app at the factory
+    # The qemu firmware carries MoonBase like every firmware, and IDF's own flash_args stages the app at the factory
     # offset (MoonBase's slot): the same correction every flasher applies. moonbase_flash_files
     # is the one place that knows the corrected layout; the flat list it returns feeds merge_bin
     # directly instead of @flash_args.
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "build"))
-    from build_esp32 import FIRMWARES, moonbase_flash_files
-    if FIRMWARES["qemu"].get("moonbase"):
-        from pathlib import Path
-        writes = [str(x) for off, path in moonbase_flash_files("qemu", Path(BUILD))
-                  for x in (off, path)]
-    else:
-        writes = [f"@{args}"]
+    from build_esp32 import moonbase_flash_files
+    from pathlib import Path
+    writes = [str(x) for off, path in moonbase_flash_files("qemu", Path(BUILD))
+              for x in (off, path)]
     r = subprocess.run([idf_py, "-m", "esptool", "--chip", "esp32", "merge_bin",
                         "-o", out, "--fill-flash-size", "4MB"] + writes,
                        cwd=BUILD, capture_output=True, text=True)
@@ -120,7 +117,7 @@ def main() -> int:
 
     if args.erase:
         # Deleting the image is the erase: merged_flash rebuilds it from the bootloader, partition
-        # table and app alone, so every DATA partition (nvs, otadata, spiffs, where the module tree
+        # table and app alone, so every DATA partition (nvs, otadata, littlefs, where the module tree
         # and the .mlv scripts live) comes back blank. On a real board this is erase_flash_esp32.py;
         # here the whole "flash chip" is one file, so removing it is the same operation.
         img = os.path.join(BUILD, "qemu-flash.bin")

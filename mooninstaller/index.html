@@ -88,17 +88,18 @@
            touches) and preserves user state (WiFi credentials, device name)
            on LittleFS, which is what users usually want. Tick the box when:
              - switching firmware variants whose partition tables differ
-               (esp32 1.3MB app vs esp32s3-n16r8 16MB flash)
+               (esp32-lite 2.3MB app vs esp32s3-opi 16MB flash)
              - wiping persisted user state (a chip that already has saved
                WiFi boots into PROVISIONED and the installer can't speak
                Improv to it; erase first avoids that)
              - clean-slate testing
            Costs about 3 s of chip-erase time per MB of flash before the flash starts. -->
       <div class="erase-row" id="erase-row">
+        <p class="note"><strong>Back up first</strong> (see below) on a board coming from an older two-slot layout: this release moves its filesystem, so it starts with an empty one, erase ticked or not. Restore after.</p>
         <label>
           <input type="checkbox" id="erase-before-flash">
           Erase chip first
-          <span class="note erase-note">wipes saved WiFi + device, adds about 3 s per MB of flash. Tick when switching firmware variant, starting clean, or <strong>when a normal update fails</strong> or the device comes back without its settings: the partition layout can change between releases, and only an erase install applies the new one cleanly. Back up first (see below), restore after.</span>
+          <span class="note erase-note">wipes saved WiFi + device, adds about 3 s per MB of flash. Tick to start clean, or <strong>when a normal update fails</strong>.</span>
         </label>
         <label>
           <input type="checkbox" id="apply-device-defaults">
@@ -392,7 +393,7 @@
       </div>
 
       <!-- Needs-IP form: shown when the device didn't speak Improv back
-           (alreadyOnline branch, or an Improv-less firmware like esp32-eth).
+           (alreadyOnline branch, or an Improv-less firmware like esp32-ethonly).
            User types the IP/hostname so we can still add the device to
            "Your devices". (No serial config push happens on this path — the
            device-model defaults are applied later via MoonDeck on the LAN.)
@@ -404,7 +405,7 @@
       <div class="install-section" id="section-needs-ip">
         <div class="install-status" id="needs-ip-status">
           Flash done. The device didn't respond over USB — that's normal for
-          Ethernet-only firmware (e.g. <code>esp32-eth</code>) or when the
+          Ethernet-only firmware (e.g. <code>esp32-ethonly</code>) or when the
           device booted with previously-saved WiFi credentials.
         </div>
         <div class="install-status" id="needs-ip-retry-status" hidden>

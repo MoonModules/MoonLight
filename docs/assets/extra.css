@@ -64,6 +64,8 @@
 }
 .md-typeset .type-picker-chip:hover { border-color: var(--md-accent-fg-color); }
 .md-typeset .type-picker-chip.active { background: var(--md-accent-fg-color--transparent); border-color: var(--md-accent-fg-color); }
+/* Words rather than emoji, the device models deck's firmware names, at the size of the text around them. */
+.md-typeset .mm-deck-word-chips .type-picker-chip { font-size: 0.65rem; line-height: 1.4; padding: 1px 6px; }
 .md-typeset .type-picker-chip-sep { width: 1px; align-self: stretch; margin: 2px 3px; background: var(--md-default-fg-color--lightest); }
 
 /* The row of cards: scroll-snapped, centered, with room for the fan's lean and sink. */

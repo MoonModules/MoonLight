@@ -202,11 +202,19 @@ struct Applier {
         return fail("this module cannot be removed");
     }
 
+    // Whether a member naming `type` creates `child` or re-types it.
+    static bool creates(const MoonModule* child, const char* type) {
+        return type && (!child || std::strcmp(child->typeName(), type) != 0);
+    }
+    // Whether it does so as a type this firmware leaves out on purpose (ModuleFactory::isCompiledOut).
+    static bool leftOut(const MoonModule* child, const char* type) { return creates(child, type) && ModuleFactory::isCompiledOut(type); }
+
     bool validateMember(MoonModule* m, const JsonNode* member) {
         const size_t at = push(member->key);
         MoonModule* child = m ? childNamed(m, member->key) : nullptr;
         const char* type = typeOf(doc, member);
-        const bool fresh = type && (!child || std::strcmp(child->typeName(), type) != 0);
+        const bool fresh = creates(child, type);
+        if (leftOut(child, type)) { pop(at); return true; }   // the apply pass skips it
         if (fresh && !validateCreation(m, child, member, type)) return false;
         if (!fresh && !child) return fail("no such module, and no type to create it");
         // A child the document creates or re-types is new, so what goes under it is checked when it exists.
@@ -300,7 +308,8 @@ struct Applier {
         if (!listed) return !top && replacesChildren(obj) && c->userEditable() && !c->isWiredByCode();
         if (listed->type != JsonType::Object) return listed->type == JsonType::Null;
         const char* type = typeOf(doc, listed);
-        if (!target && type && std::strcmp(type, c->typeName()) != 0) return true;   // re-typed, so everything under it goes
+        // Re-typed, so everything under it goes, unless the new type is one this firmware leaves out: that member is skipped whole and keeps its subtree.
+        if (!target && type && std::strcmp(type, c->typeName()) != 0) return !leftOut(c, type);
         into = listed;
         return false;
     }
@@ -491,6 +500,9 @@ struct Applier {
         return ok;
     }
 
+    // A re-typed child that keeps what is under it: a wired one keeps its type, which applyChild reports, and a type this firmware leaves out is skipped.
+    bool keepsChildren(MoonModule* c, const char* newType) { return keepsWired(c) || leftOut(c, newType); }
+
     // Remove the child, empty a re-typed one, or walk into a kept one.
     bool pruneOne(MoonModule* m, MoonModule* c, const JsonNode* listed, bool replaceChildren) {
         if (!listed) return !(replaceChildren && c->userEditable() && !c->isWiredByCode()) || remove(m, c);
@@ -498,8 +510,8 @@ struct Applier {
         if (listed->type != JsonType::Object) return true;
         const char* newType = typeOf(doc, listed);
         if (!newType || std::strcmp(newType, c->typeName()) == 0) return prune(c, listed);
-        // A re-typed child is replaced in place, so everything under it goes now, freeing its names for elsewhere; a wired one keeps its type, which applyChild reports.
-        return keepsWired(c) || removeChildren(c);
+        // A re-typed child is replaced in place, so everything under it goes now, freeing its names for elsewhere.
+        return keepsChildren(c, newType) || removeChildren(c);
     }
 
     // Apply a module object's members to `m`, in document order, once prune() has removed what goes.
@@ -516,6 +528,7 @@ struct Applier {
         for (const JsonNode* member = first(obj); member; member = next(member)) {
             if (reserved(member->key) || member->type != JsonType::Object) continue;
             MoonModule* child = childNamed(m, member->key);
+            if (leftOut(child, typeOf(doc, member))) continue;   // a skipped member keeps its name too
             const size_t at = push(member->key);
             if (child && !rename(child, member) && !(stored() && skip())) return false;
             pop(at);
@@ -542,9 +555,11 @@ struct Applier {
     bool applyChild(MoonModule* m, const JsonNode* member) {
         MoonModule* child = childNamed(m, member->key);
         const char* type = typeOf(doc, member);
-        const bool retyped = child && type && std::strcmp(child->typeName(), type) != 0;
+        const bool retyped = child && creates(child, type);
         if (!child && !type) return fail("no such module, and no type to create it");
         if (retyped && keepsWired(child)) return fail("a module wired in code keeps its type");
+        // A type this firmware leaves out on purpose is skipped and named, so a catalog entry applies on every firmware the board takes.
+        if (leftOut(child, type)) { fail("this firmware leaves the type out"); return skip(); }
         if (!child) child = create(m, member->key, type);
         else if (retyped) child = replace(m, child, type);
         return child && apply(child, member);
@@ -713,6 +728,12 @@ StateDocumentResult applyStateDocument(Scheduler& scheduler, const char* text, S
 void writeStateResult(JsonSink& sink, const StateDocumentResult& r) {
     if (r.ok) {
         sink.appendf("{\"ok\":true,\"changes\":%u", static_cast<unsigned>(r.changes));
+        if (r.skipped) {   // what applied went on past members this build cannot place; the first says why
+            sink.appendf(",\"skipped\":%u,\"note\":", static_cast<unsigned>(r.skipped));
+            sink.writeJsonString(r.error);
+            sink.append(",\"at\":");
+            sink.writeJsonString(r.where);
+        }
     } else {
         sink.append("{\"error\":");
         sink.writeJsonString(r.error);

@@ -1,6 +1,6 @@
 # ESP32-P4 revision v3.x — the CURRENT silicon.
 #
-# Layered on top of sdkconfig.defaults.esp32p4rev1-eth, which carries the board config
+# Layered on top of sdkconfig.defaults.esp32p4, which carries the board config
 # (partition table, flash size, EMAC/RMII). This fragment overrides ONLY the chip
 # revision, because that is the entire difference between the two images: everything
 # about the board is the same.

@@ -1,0 +1,10 @@
+# 32 MB MoonBase table (the octal-flash S3): the factory recovery image, ONE 4 MB app slot, and the rest to the filesystem,
+# the 16 MB MoonBase layout with the second 16 MB given to files.
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x5000,
+otadata,    data, ota,      0xe000,    0x2000,
+moonbase,   app,  factory,  0x10000,   0xE0000,
+app,        app,  ota_0,    0xF0000,   0x400000,
+littlefs,   data, littlefs, 0x4F0000,  0x1B00000,
+coredump,   data, coredump, 0x1FF0000, 0x10000,

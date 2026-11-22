@@ -31,6 +31,39 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A host's device model is a catalog name
+
+**Action: *re-set a control*, on each host that should link to its device card.**
+
+A host seeds its `deviceModel` with the catalog's generic name for its system: `Generic macOS`, `Generic Windows`, `Generic Android`, `Generic Linux`, or `Docker container` in a container, where it said `macos-arm64` or `linux-x64`. The System card shows the name as a link to its [device model](device-models.md). A saved `deviceModel` is kept, so an existing host keeps its old string until you apply a device model on the map or the System card; a Raspberry Pi picks `Raspberry Pi 5` or `Raspberry Pi 4` there.
+
+### The firmwares take the names the silicon decides
+
+**Action: *update as usual*; the device finds its image under the old name.**
+
+A firmware exists per thing the silicon forces, and the release names its images `moonlight-<firmware>-v<version>.bin` ([firmware variants](hardware/firmware-variants.md)). A device from before these names updates as before: it asks for `firmware-<its name>-v<version>.bin`, which every release carries as the firmware that serves it now, and runs under the new name from then on. An Ethernet-only P4 then sets one control, as [the P4 entry below](#an-ethernet-only-p4-board-switches-its-radio-off) says.
+
+| Old name | New name |
+|---|---|
+| `esp32` (4 MB) | `esp32-lite` |
+| `esp32-16mb`, `esp32-pico` | `esp32` |
+| `esp32-eth` | `esp32-ethonly` |
+| `esp32-wrover` | `esp32-rev1-lite` |
+| `esp32s3-zero` | `esp32s3-qspi-lite` |
+| `esp32s3-n8r2` | `esp32s3-qspi` |
+| `esp32s3-n8r8`, `esp32s3-n16r8` | `esp32s3-opi` |
+| `esp32s3-n32r16` | `esp32s3-opi-oflash` |
+| `esp32p4rev1-eth`, `esp32p4rev1-eth-wifi` | `esp32p4rev1` |
+| `esp32p4rev3-eth`, `esp32p4rev3-eth-wifi` | `esp32p4rev3` |
+
+A board keeps its partition table through updates. The MoonBase layout of its flash size, with a larger filesystem on most boards, comes with a cable install or over the air, and both start the board on an empty filesystem where the new table moves it, as it does from every two-slot table: back up the files on the device's page first and restore them after. By cable, the installer says so above its Install button; over the air, upload the migration image as an update, which carries the networks across, then install the app through MoonBase ([build system](build-system.md#moonbase-and-the-partition-layout)). A script that downloads release images by name reads either prefix.
+
+### An Ethernet-only P4 board switches its radio off
+
+**Action: *re-set a control*, on a P4 board with no ESP32-C6 (Olimex ESP32-P4-PC, Waveshare ESP32-P4-ETH).**
+
+Both P4 builds carry the C6's WiFi, so a board with no C6 turns `radio` off on its WiFi card: no station and no access point to fall back to. A device model sets it at install; a P4 updated over the air from `esp32p4rev1-eth` or `esp32p4rev3-eth` sets it once by hand. The C6's driver sets GPIO 14 to 19 up at every start, and an LED driver routes its pin to itself when it claims it, which is how an LED output there keeps working; the Olimex ESP32-P4-PC runs this image on Ethernet at 26 fps.
+
 ### The devices keep one fleet clock, on UDP 65511
 
 **Action: allow UDP 65511 and the multicast group 239.255.77.80 where a firewall sits between devices.**

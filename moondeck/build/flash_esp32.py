@@ -23,7 +23,7 @@ ESP32_DIR = ROOT / "esp32"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_esp32 import FIRMWARES, build_dir_for, APP_BIN
-from idf_env import find_idf, idf_env, idf_cmd
+from idf_env import find_idf, idf_env
 sys.path.insert(0, str(ROOT / "moondeck"))
 import _usb  # noqa: E402
 
@@ -83,14 +83,35 @@ def _fmt_age(seconds: float) -> str:
     return f"{s // 86400}d"
 
 
-def _moonbase_flash_cmd(build_dir, firmware: str, port: str, baud: int, env: dict) -> list[str]:
+def _measured_flash_mb(port: str, py: str, env: dict) -> int | None:
+    """The board's flash size in MB as esptool reads it from the flash chip's ID, or None when the chip reports none."""
+    out = subprocess.run([py, "-m", "esptool", "--port", port, "flash-id"], capture_output=True, text=True, env=env)
+    m = re.search(r"Detected flash size:\s*(\d+)MB", out.stdout + out.stderr)
+    return int(m.group(1)) if m else None
+
+
+def layout_for(layouts: list[int], measured: int | None) -> tuple[int | None, str]:
+    """The layout size to install for a board measuring `measured` MB among the firmware's `layouts`, and a note for the log: the
+    measured size where the firmware has it, else the largest that fits; None when none fits. Unread flash takes the smallest."""
+    if measured is None:
+        return min(layouts), f"flash size unread: the smallest layout, {min(layouts)} MB"
+    if measured in layouts:
+        return measured, f"{measured} MB flash: the {measured} MB layout"
+    fitting = [s for s in layouts if s <= measured]
+    if not fitting:
+        return None, f"{measured} MB flash, and this firmware installs into {', '.join(map(str, layouts))} MB: a 4 MB board takes a -lite firmware"
+    return max(fitting), f"{measured} MB flash: the largest layout this firmware has, {max(fitting)} MB"
+
+
+def _moonbase_flash_cmd(build_dir, firmware: str, port: str, baud: int, env: dict, size: int) -> list[str]:
     """The explicit write list for a MoonBase-layout flash, moonbase_flash_files() is the one
     place that knows the corrected layout (app remapped to ota_0, slot-0 otadata so the fresh
-    flash boots the app, MoonBase at factory). idf.py flash cannot be used here: IDF's own
-    flash_args stages the app at the factory offset."""
-    from build_esp32 import moonbase_flash_files
+    flash boots the app, MoonBase at factory), here with the `size` MB layout's bootloader and
+    table. idf.py flash cannot be used here: IDF's own flash_args stages the app at the factory offset."""
+    from build_esp32 import layout_images, moonbase_flash_files
+    py = shutil.which("python", path=env.get("PATH", "")) or sys.executable
     try:
-        writes = moonbase_flash_files(firmware, build_dir)
+        writes = moonbase_flash_files(firmware, build_dir, (size, *layout_images(firmware, size, py, env)))
     except FileNotFoundError as e:
         print(f"MoonBase flash: {e}")
         sys.exit(1)
@@ -98,7 +119,6 @@ def _moonbase_flash_cmd(build_dir, firmware: str, port: str, baud: int, env: dic
     if not chip_m:
         print(f"MoonBase flash: no CONFIG_IDF_TARGET in {build_dir / 'sdkconfig'}; rebuild first.")
         sys.exit(1)
-    py = shutil.which("python", path=env.get("PATH", "")) or sys.executable
     cmd = [py, "-m", "esptool", "--chip", chip_m.group(1), "--port", port, "--baud", str(baud),
            "write_flash"]
     for off, path in writes:
@@ -127,6 +147,9 @@ def main():
                              "the baud resolve by the EXACT board so a per-model flashBaud "
                              "opt-down doesn't leak to firmware-siblings. Optional: omitted "
                              "flashes resolve by firmware then the fast default.")
+    parser.add_argument("--flash-size", dest="flash_size", type=int, choices=[4, 8, 16, 32], default=None,
+                        help="The board's flash in MB, for a board whose flash chip reports none. "
+                             "Omitted, esptool reads it from the flash chip's ID.")
     parser.add_argument("--mac", default=None,
                         help="The MAC of the board meant (MoonDeck passes it when it found the "
                              "port by that MAC). esptool reads the board's MAC before anything "
@@ -169,28 +192,21 @@ def main():
         sys.exit(1)
 
     env = idf_env(idf_path)
-    cmd = idf_cmd(idf_path)
-    # -B + -DSDKCONFIG mirror build_esp32.py so idf.py flash reads the
-    # per-firmware sdkconfig (the chip target lives in there). Without
-    # -DSDKCONFIG, idf.py reads esp32/sdkconfig at the project root,
-    # which may belong to a different firmware.
-    b_arg = [
-        "-B", str(build_dir),
-        "-DSDKCONFIG=" + str(build_dir / "sdkconfig"),
-    ]
-
-    # -b sets the esptool flash baud (idf.py's own default is also 460800).
-    # --baud 921600 matches the web installer for ~2x speed, but isn't the
+    # The esptool flash baud defaults to 460800; --baud 921600 matches the web installer for ~2x speed, but isn't the
     # default because some USB bridges can't sustain it (see --baud help).
     print(f"==> flash baud: {baud}")
-    # A MoonBase variant cannot use `idf.py flash`: with a factory + ota_0 table, IDF stages the
+    # `idf.py flash` cannot place a MoonBase layout: with a factory + ota_0 table, IDF stages the
     # application at the FACTORY offset (0x10000), which is MoonBase's slot and too small for it.
     # The parts are placed at explicit offsets instead, the same shape the mooninstaller manifest
     # uses, with each offset read from the built partition table rather than hardcoded.
-    if FIRMWARES.get(args.firmware, {}).get("moonbase"):
-        flash_cmd = _moonbase_flash_cmd(build_dir, args.firmware, args.port, baud, env)
-    else:
-        flash_cmd = cmd + b_arg + ["flash", "-p", args.port, "-b", str(baud)]
+    # The layout follows the board's flash, measured here, the build carrying its smallest: one app serves every layout it lists.
+    py = shutil.which("python", path=env.get("PATH", "")) or sys.executable
+    measured = args.flash_size or _measured_flash_mb(args.port, py, env)
+    size, note = layout_for(FIRMWARES[args.firmware]["layouts"], measured)
+    print(f"==> layout: {note}")
+    if size is None:
+        sys.exit(2)
+    flash_cmd = _moonbase_flash_cmd(build_dir, args.firmware, args.port, baud, env, size)
     sys.exit(subprocess.run(flash_cmd, cwd=ESP32_DIR, env=env).returncode)
 
 

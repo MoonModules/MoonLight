@@ -16,11 +16,10 @@ menu "MoonLight"
             present the P4's companion ESP32-C6 radio through the standard
             esp_wifi_* API over SDIO. The P4 has no native radio.
 
-            OFF by default so the Ethernet-only P4 firmware (esp32p4-eth) does
-            NOT compile or boot esp_hosted, which self-initializes at boot
-            and claims the default netif, which breaks the EMAC Ethernet DHCP
-            path on an eth-only build (link up but no IP). Only the WiFi build
-            (esp32p4-eth-wifi) sets this, via sdkconfig.defaults.esp32p4-eth-wifi.
+            Set by both P4 builds (esp32p4rev1, esp32p4rev3) through
+            sdkconfig.defaults.esp32p4-wifi. esp_hosted self-initializes at boot;
+            a board lacking a C6 switches the radio off on its WiFi card, which
+            keeps the network cascade off WiFi.
 
     config MM_HLS
         bool "HLS streaming via the hardware H.264 encoder (ESP32-P4 only)"
@@ -39,12 +38,13 @@ menu "MoonLight"
 
     config MM_USB_MIDI_HOST
         bool "USB MIDI host on the chip's own USB port"
+        default y if IDF_TARGET_ESP32S3 && !MM_LITE
         default n
         help
             Pulls the espressif/usb managed component and compiles the USB MIDI
             host, so a class-compliant MIDI desk plugged into the board drives the
-            MIDI service with no computer. Set by the S3 images with flash to spare
-            (n8r8, n16r8); the 4 MB S3-Zero leaves it off.
+            MIDI service with no computer. On for every S3 firmware outside the
+            4 MB tier (MM_LITE).
 
     config MM_HDMI
         bool "HDMI out through an LT8912B MIPI-DSI bridge (ESP32-P4 only)"
@@ -74,19 +74,31 @@ menu "MoonLight"
     config MM_AUDIO_CODEC
         bool "Audio codecs in front of a microphone (ES8311, ES7210)"
         default y if IDF_TARGET_ESP32P4 || IDF_TARGET_ESP32S31
+        default y if (IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32) && !MM_LITE
         default n
         help
             Pulls the esp_codec_dev managed component and compiles the codec
             bring-up, for the boards whose microphone sits behind an ES8311 or
-            ES7210. On for the chips whose boards carry one (the S31 CoreBoard,
-            P4 boards) and set by the Waveshare ESP32-S3-RGB-Matrix's image; a
-            board with an I2S microphone such as the INMP441 needs no codec.
+            ES7210, such as the S31 CoreBoard, P4 boards and the Waveshare
+            ESP32-S3-RGB-Matrix. On for those chips and the classic ESP32 outside
+            the 4 MB tier (MM_LITE); a board with an I2S microphone such as the INMP441 needs no codec.
 
     config MM_SD_CARD
         bool "microSD card support (SDMMC or SPI)"
+        default n if MM_LITE
         default y
         help
-            Compiles the FatFs SD card backend, on every chip with an SD host and
-            more than 4 MB of flash: the 4 MB layout's fragment sets it off.
+            Compiles the FatFs SD card backend, on every chip with an SD host,
+            outside the 4 MB tier (MM_LITE).
+
+    config MM_LITE
+        bool "The 4 MB tier (-lite firmwares)"
+        default n
+        help
+            Set by sdkconfig.defaults.lite for a firmware that fits a 4 MB board's
+            one 2496 KB app slot beside everything else. Every feature that does
+            not fit defaults off under it, so the tier is this one symbol. The list
+            of what it leaves out, one line per feature added under it, is in
+            docs/reference/hardware/firmware-variants.md, "The 4 MB tier".
 
 endmenu

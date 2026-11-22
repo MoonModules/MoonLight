@@ -643,17 +643,6 @@ size_t totalInternalHeap() {
     return 0; // Not meaningful on host
 }
 
-const char* macString() {
-    static char buf[18] = {};
-    if (buf[0] == 0) {
-        uint8_t mac[6];
-        getMacAddress(mac);
-        std::snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
-                      mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    }
-    return buf;
-}
-
 const char* chipModel() {
     // The real instruction set, not a category, so hosts stay distinguishable. Compile-time, since a binary is built for one architecture; an emulated one reports what runs.
 #if defined(__aarch64__) || defined(_M_ARM64)
@@ -668,6 +657,10 @@ const char* chipModel() {
     return "host";   // an architecture nobody has built for yet; better vague than wrong
 #endif
 }
+
+const char* chipRevision() { return ""; }   // ESP32-only: the revision picks a classic ESP32 firmware
+const char* chipPackage() { return ""; }
+size_t psramFoundBytes() { return 0; }
 
 bool httpsAvailable() MM_NONBLOCKING {
 #if defined(_WIN32) || defined(MM_HAVE_CURL)
@@ -914,27 +907,19 @@ bool inContainer() {
 #endif
 }
 
-const char* hostPlatform() {
-    // The release packaging's names, the system then the architecture, so a breakdown lines up with the downloads and counts the small arm boards apart from the PCs.
+const char* hostDeviceModel() {
+    // A device model of the catalog (mooninstaller/deviceModels.json), the generic one for the system, so the System card links to its card.
 #if defined(__ANDROID__)   // before Linux, which Android also defines: a phone, a tablet or a headset is its own deployment
-    const char* system = "android";
+    return "Generic Android";
 #elif defined(__linux__)
-    const char* system = inContainer() ? "docker" : "linux";   // a container reports as one, since that changes how it behaves
+    return inContainer() ? "Docker container" : "Generic Linux";   // a container reports as one, since that changes how it behaves
 #elif defined(__APPLE__)
-    const char* system = "macos";
+    return "Generic macOS";
 #elif defined(_WIN32)
-    const char* system = "windows";
+    return "Generic Windows";
 #else
-    const char* system = nullptr;
+    return "";
 #endif
-    constexpr bool arm64 =
-#if defined(__aarch64__) || defined(_M_ARM64)
-        true;
-#else
-        false;
-#endif
-    static const std::string label = system ? std::string(system) + (arm64 ? "-arm64" : "-x64") : std::string();
-    return label.c_str();
 }
 
 uint8_t currentCore() { return 0; }
@@ -1055,6 +1040,7 @@ const char* coprocessorLine() MM_NONBLOCKING { return ""; }
 const char* coprocessorHostVersion() { return ""; }
 bool coprocessorOutdated() MM_NONBLOCKING { return false; }
 bool coprocessorConnect() { return false; }
+void coprocessorShutdown() {}
 
 const char* psramType() {
     return "";   // host has no PSRAM

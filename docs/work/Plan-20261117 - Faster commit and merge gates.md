@@ -161,6 +161,18 @@ The change grew during the gates from 51 to 56 files: six generated (help.json a
 
 **Actions**, as steps below: 29 (the hook counts `-Wfunction-effects` per compiled file), 30 (a failing gate's findings kept whole), 31 (the last bench build includes the gate's firmware target), 32 (classified changes skip the firmware), 33 (a fix round carries no new behavior), 34 (the KPI tick measured every commit, or its skip named with its baseline).
 
+## A contributor's gates: Anjin's audit of his PRs (2026-11-21)
+
+Anjin measured his 21 merged PRs of 10-28 to 11-21 from GitHub's API, his Claude Code transcripts and the gate records, and shared the report with the product owner. The first measurement from a contributor's side of the gates.
+
+- **#258's gates, the one PR with gate records**: 13 `run_gates` runs, 58 min of wall time, about 4.4 min a run. The KPI gate took 27 min of it (47 %), the scenarios 12 min, the host tests 10 min. One failure in 13 runs: the prose check, on the first run.
+- **The KPI at about 2.1 min a run** sits near its 176 s before step 18, where this plan's own rounds read 16 to 24 s from the kept suite output since. Whether his runs predate step 18 or the cache missed on his branch is the question to settle first: the answer is either nothing to do or the KPI cache key, keyed on the diff today (first after-action review).
+- **Thirteen full runs for one PR** is the repeat the runner's cache targets: a run after a narrow fix reruns only the gates whose inputs moved.
+- **Gate records vanish with the worktree**: `run_gates.py` writes `build/gates/` inside the worktree, and his other PRs' worktrees kept none, so #258 is the only PR he could time per gate. A record that outlives the worktree, or travels with the PR, makes every contributor's round measurable.
+- **CI is not the bottleneck**: a median 6 min from PR open to the first green round, a round a median 4.2 min, 8 of 47 rounds failed (sanitizers, `checks`, Windows once).
+- **Review waiting is out of scope here**: a median 6.6 h from PR open to merge, across a 9-hour time difference, which the product owner judged fast for a review of every line.
+- **Limits**: agent minutes are estimates from transcripts, where parallel sessions overlap; foreground gate minutes are a floor, since a run sent to the background returns at once.
+
 ## The plan against the textbook (2026-11-19)
 
 The textbook shape is layered, each layer catching its class of defect at its cheapest moment: **shift left and fail fast** (Humble and Farley's commit stage: [under five minutes, never ten](https://www.oreilly.com/library/view/continuous-delivery-reliable/9780321670250/ch07.xhtml)), an **inner loop** of seconds on the file written and an **outer loop** of CI on the whole tree, every stage checking **only what changed** ([pre-commit](https://pre-commit.com/) on the staged files, [Nx affected](https://nx.dev/docs/features/ci-features/affected)), fed by **small batches** ([Google: about 100 lines a change](https://google.github.io/eng-practices/review/developer/small-cls.html); [DORA](https://dora.dev/guides/dora-metrics-four-keys/)). Agentic development adds that the agent needs a verification signal at every step ([Anthropic's best practices](https://code.claude.com/docs/en/best-practices)), that a guardrail must prove it is alive, since an agent cannot notice a missing check, and that the agent's memory and rule changes stay visible to the human.
