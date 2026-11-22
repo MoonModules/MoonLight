@@ -385,80 +385,52 @@ public:
     /// One control by index.
     const ControlDescriptor& operator[](uint8_t i) const { return controls_[i]; }
 
+    // The setters and grow live in Control.cpp, so every defineControls calls one copy rather than inlining its own.
+
     /// Hide or show the control last added, which persistence ignores so state survives.
-    void setHidden(uint8_t i, bool hidden) {
-        if (i < count_) controls_[i].hidden = hidden;
-    }
+    void setHidden(uint8_t i, bool hidden);
 
     /// Record what a control was born with, for one whose default the type cannot supply.
-    void setDefault(uint8_t i, int32_t def) {
-        if (i < count_) controls_[i].def = def;
-    }
+    void setDefault(uint8_t i, int32_t def);
 
     /// Render a control display-only, for a value tooling pushes rather than a user edits.
-    void setReadOnly(uint8_t i, bool readonly) {
-        if (i < count_) controls_[i].readonly = readonly;
-    }
+    void setReadOnly(uint8_t i, bool readonly);
 
     /// Mark a control expert-only, which the UI shows from expert mode up.
-    void setAdvanced(uint8_t i, bool advanced = true) {
-        if (i < count_) controls_[i].minMode = advanced ? kModeExpert : kModeUser;
-    }
+    void setAdvanced(uint8_t i, bool advanced = true);
 
     /// Mark a control developer-only: a number that diagnoses the firmware rather than the show.
-    void setDeveloper(uint8_t i) {
-        if (i < count_) controls_[i].minMode = kModeDeveloper;
-    }
+    void setDeveloper(uint8_t i);
 
     /// Render a numeric as a number input, for an integer that is an identity not a magnitude.
-    void setNumberField(uint8_t i, bool numberField = true) {
-        if (i < count_) controls_[i].numberField = numberField;
-    }
+    void setNumberField(uint8_t i, bool numberField = true);
 
     /// Mark a text as a device-model catalog name, so the UI links it to that entry and offers the catalog's defaults.
-    void setCatalogField(uint8_t i) {
-        if (i < count_) controls_[i].catalog = true;
-    }
+    void setCatalogField(uint8_t i);
 
     /// Mark a text as holding receivers, an address or a list of addresses and names, so the UI shows each known board's name beside its address.
-    void setReceiversField(uint8_t i) {
-        if (i < count_) controls_[i].receivers = true;
-    }
+    void setReceiversField(uint8_t i);
 
     /// Render a numeric as a hexadecimal number input, as `0x18`.
-    void setHexField(uint8_t i) {
-        if (i < count_) controls_[i].numberField = controls_[i].hex = true;
-    }
+    void setHexField(uint8_t i);
 
     /// Persist a Select by its label, for options enumerated fresh each boot.
-    void setPersistLabel(uint8_t i, bool persistLabel = true) {
-        if (i < count_) controls_[i].persistLabel = persistLabel;
-    }
+    void setPersistLabel(uint8_t i, bool persistLabel = true);
 
     /// Render a numeric as a vertical fader, for a level a user rides rather than sets once.
-    void setFader(uint8_t i, bool fader = true, const char* target = nullptr) {
-        if (i < count_) { controls_[i].fader = fader; controls_[i].surfaceTarget = target; }
-    }
+    void setFader(uint8_t i, bool fader = true, const char* target = nullptr);
 
     /// Render a numeric as a rotary encoder, the third surface affordance beside pads and faders.
-    void setEncoder(uint8_t i, bool encoder = true, const char* target = nullptr) {
-        if (i < count_) { controls_[i].encoder = encoder; controls_[i].surfaceTarget = target; }
-    }
+    void setEncoder(uint8_t i, bool encoder = true, const char* target = nullptr);
 
     /// Render a boolean in the switch strip, so each column is one channel across the surface.
-    void setSwitchRow(uint8_t i, bool switchRow = true, const char* target = nullptr) {
-        if (i < count_) { controls_[i].switchRow = switchRow; controls_[i].surfaceTarget = target; }
-    }
+    void setSwitchRow(uint8_t i, bool switchRow = true, const char* target = nullptr);
 
     /// Render a read-only text as the full-width readout, which shows whatever was last touched.
-    void setDisplayStrip(uint8_t i, bool strip = true) {
-        if (i < count_) controls_[i].displayStrip = strip;
-    }
+    void setDisplayStrip(uint8_t i, bool strip = true);
 
     /// Declare a control live state rather than configuration, so it is never written to flash.
-    void setLive(uint8_t i, bool live = true) {
-        if (i < count_) controls_[i].live = live;
-    }
+    void setLive(uint8_t i, bool live = true);
 
 private:
     ControlDescriptor* controls_ = nullptr;
@@ -466,20 +438,7 @@ private:
     uint8_t capacity_ = 0;
 
     /// Double the descriptor array when the next control would not fit, false when it cannot. The control `name` is then left out and the log says so, rather than a board out of memory aborting.
-    bool grow(const char* name) {
-        if (count_ < capacity_) return true;
-        const uint8_t newCap = capacity_ == 0 ? 4 : capacity_ >= 128 ? 255 : static_cast<uint8_t>(capacity_ * 2);
-        auto* newArr = count_ < 255 ? new (std::nothrow) ControlDescriptor[newCap] : nullptr;
-        if (!newArr) {
-            std::printf("controls: no room for %s\n", name ? name : "");
-            return false;
-        }
-        for (uint8_t i = 0; i < count_; i++) newArr[i] = controls_[i];
-        delete[] controls_;
-        controls_ = newArr;
-        capacity_ = newCap;
-        return true;
-    }
+    bool grow(const char* name);
 };
 
 // The serialization API, defined in Control.cpp, whose sink stays forward-declared here.
