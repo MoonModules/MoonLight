@@ -1,6 +1,6 @@
 # Audio sync format
 
-One board analyzes the music and the others follow it over UDP. A MoonLight board sends and reads two packets, defined here so another program can send to MoonLight or listen to it: the MoonLight format, which carries the whole analysis, and WLED's, which WLED and WLED-MM devices speak.
+One board analyzes the music and the others follow it over UDP. A MoonLight board sends and reads two packets, defined here so another program can send to MoonLight or listen to it: the MoonModules format, which carries the whole analysis, and WLED's, which WLED and WLED-MM devices speak.
 
 ## Transport
 
@@ -8,16 +8,18 @@ One board analyzes the music and the others follow it over UDP. A MoonLight boar
 |---|---|
 | Protocol | UDP, one datagram per packet |
 | Port | 11988 by default, the Audio card's `syncPort` |
-| Addressing | multicast, the MoonLight format to `239.0.0.2` and WLED's to `239.0.0.1`; or unicast to the Audio card's `receivers` |
+| Addressing | multicast, the MoonModules format to `239.0.0.2` and WLED's to `239.0.0.1`; or unicast to the Audio card's `receivers` |
 | Rate | at most one packet every 25 ms, about 40 a second |
 | Byte order | little-endian for every multi-byte field, as every chip it runs on and WLED's packet |
 | Size | at most 508 bytes, the UDP payload every IPv4 host accepts, so a packet never fragments and a receiver reads each one whole |
 
-A sending board sends the format the Audio card's `syncFormat` picks: MoonLight's, WLED's, or both for an installation that mixes WLED devices with MoonLight boards. Each format has its own multicast group, so a WLED device never receives a packet it cannot read. A receiver joins both groups and tells the formats apart by the first bytes: `"ML"` is the MoonLight format, `"00002"` WLED's. Anything else is ignored. A board sending both sends each frame twice, so a receiver ignores WLED's packet while MoonLight's keeps arriving, and takes WLED's after a second without it.
+A sending board sends the format the Audio card's `syncFormat` picks: the MoonModules format, WLED's, or both for an installation that mixes WLED devices with MoonLight boards. Each format has its own multicast group, so a WLED device receives only the packets it reads. A receiver joins both groups and tells the formats apart by the first bytes: `"MM"` is the MoonModules format, `"00002"` WLED's. Anything else is ignored. A board sending both sends each frame twice, so a receiver ignores WLED's packet while the MoonModules one keeps arriving, and takes WLED's once the MoonModules one has been quiet for a second.
 
 The hits of every analyzed frame between two packets ride in the next one: the strongest onset per range, and every band's and note's hit, so a receiver at 40 packets a second misses none of the 47 frames a second the analysis makes at 24 kHz.
 
-## The MoonLight format
+## The MoonModules format
+
+Named for the MoonModules projects it serves, MoonLight, WLED-MM and troyhacks' WLED, rather than for one of them.
 
 ### Header
 
@@ -25,7 +27,7 @@ Five bytes. It never grows: what a packet adds is a section.
 
 | Offset | Size | Field | Value |
 |---|---|---|---|
-| 0 | 2 | magic | `'M'`, `'L'` (0x4D 0x4C) |
+| 0 | 2 | magic | `'M'`, `'M'` (0x4D 0x4D) |
 | 2 | 1 | version | 1; a receiver refuses another version |
 | 3 | 2 | seq | the sender's frame number, uint16, wrapping |
 
@@ -40,6 +42,7 @@ After the header come the sections, in any order, to the end of the datagram. Ea
 | 2 | thirds | 1 + count + 4 | the sender measured third-octave bands |
 | 3 | harmony | 16 | the sender runs the notes |
 | 4 | notes | 1 + count + 30 | the sender runs the notes |
+| 5 | [beat](#beat) | 11 | the sender has a beat |
 
 A section is there when the sender measured what it holds, so an absent section means "not measured", never zeros: a sender with no smoothing, no thirds or no harmony leaves that section out.
 
@@ -95,7 +98,48 @@ A hit bit field is read least significant bit first: band or key *i* is bit `i %
 
 The sender keeps the notes once, so every receiver shows the notes it kept rather than deciding again from fewer frames: a packet carries the latest frame's kept keys and every kept key's strike since the last packet.
 
-A frame with every section is 225 bytes at a 48 kHz sample rate, 93 bytes without the notes, and 35 bytes with the core alone. The bass, mid and treble levels and the spectral flux do not travel: a receiver computes them from the thirds, or from the sixteen bands when no thirds came, as the sender did.
+A frame with every section is 239 bytes at a 48 kHz sample rate, 225 when the beat is left out, 93 with the core, the smoothed bands and the thirds, and 35 bytes with the core alone. The bass, mid and treble levels and the spectral flux do not travel: a receiver computes them from the thirds, or from the sixteen bands when no thirds came, as the sender did.
+
+### Beat
+
+Lights on the beat need the tempo and where the beat is now, which onsets alone do not give. A board that tracks the beat itself disagrees with its neighbor by a few milliseconds and, after a track change, by seconds; a board receiving WLED's packet has no beat at all. So one board decides the beat and every board follows it, through the beat section.
+
+A sending board takes its beat from the first source it has, in this order: a DJ deck or Ableton Live, which know the tempo and the bar exactly, then a MIDI clock or a tap, then the audio tracker, which hears the beat but not which beat starts the bar. A board that hears the decks itself reads them directly, since Pro DJ Link and StageLinq are broadcast already. The section carries the beat to the boards the decks' broadcast misses: those on another subnet, and those whose firmware speaks another protocol. It costs 14 bytes in a packet that goes out every frame anyway.
+
+**Beat**, 11 bytes:
+
+| Offset | Size | Field | Meaning |
+|---|---|---|---|
+| 0 | 2 | bpm | the tempo × 100, uint16, the unit Pro DJ Link uses: 12800 is 128 BPM |
+| 2 | 2 | beatCount | counts the beats since the source locked, uint16, wrapping; a change is a beat |
+| 4 | 1 | phase | how far the current beat has run when the packet leaves, 0..255 |
+| 5 | 1 | beatInBar | 0 for a beat whose place in the bar is unknown, else 1..4 |
+| 6 | 1 | source | 0 the audio tracker, 1 Pro DJ Link, 2 StageLinq, 3 Ableton Link, 4 a MIDI clock, 5 tap tempo |
+| 7 | 1 | confidence | 0..255: the tracker's lock score, 255 for a deck or a clock |
+| 8 | 1 | beatInPhrase | the beat in the phrase, 1..`phraseBeats`, 0 while there is no phrase |
+| 9 | 1 | phraseBeats | the phrase's length in beats, 32 for a deck's phrase of 8 bars, 0 while there is none |
+| 10 | 1 | flags | bit 0: `beatInBar` is the source's measured or marked bar, not a count from the lock; bit 1: the beat is in a fill, a deck's fill cue or a faked one |
+
+A sender sends the section while it has a tempo, so an absent section means "no beat", and a bpm it sends is always above 0. The source numbers 0 to 3 are those troyhacks' WLED gives its sources, so its beat goes out as it is. `beatInBar` 0 for a beat and 1 to 4 for a deck's position in the bar is WLED-MM's convention; the audio tracker sends 0 until it finds the downbeat. A Pioneer deck's phrase analysis says where its phrases and fills are; a source that has none sends `phraseBeats` 0, or a faked fill with bit 1 when its user asks for one.
+
+What a receiver does with it:
+
+- A change of `beatCount` is a beat: a receiver takes it once, by the number, the way it takes a frame's hits, and a jump of more than one counts the beats it missed.
+- Between packets a receiver runs its own beat clock: the phase advances by `bpm` and the time since the packet arrived, and each packet pulls it back toward the phase the packet carries, as a phase-locked loop does, which smooths WiFi's 5 to 20 ms of jitter.
+- `phase` holds when the packet leaves, so the sender compensates its source's delay. A Pro DJ Link beat packet reaches a board about 40 ms after the deck's audio plays (troyhacks measured it on a CDJ at 118 BPM), so a sender reading the decks moves the phase forward by that delay.
+- An 8-byte section, from a sender that predates the phrase, gives the beat with no phrase and no flags.
+
+#### Reading Pro DJ Link
+
+What a sender reads, from the packet analysis above and troyhacks's implementation in WLED-MM:
+
+| Port | Packet | What it gives |
+|---|---|---|
+| 50000 | keep-alive, type `0x06` | the devices on the network; a listener announces itself here every 1.5 s, as a device number of its own, so the decks send it their status |
+| 50001 | beat, type `0x28`, broadcast on each beat | the player at `0x21`; the track's tempo × 100 at `0x5A`, big-endian; the pitch as a speed factor at `0x54`, a big-endian uint32 where `0x100000` is 1.0; the beat in the bar, 1..4, at `0x5C` |
+| 50002 | status, type `0x0A` | the player at `0x21`; the master flag, bit `0x20` of `0x89` |
+
+The tempo is the track's tempo times the speed. Only the master deck's beats count; a beat packet's arrival time anchors the beat clock, which runs free between packets and stops 4 beats after the last one.
 
 ### What a receiver does
 
@@ -121,7 +165,7 @@ The version changes only for a change to the header, which none of these needs.
 A frame with `level` 100, `levelSmoothed` 50, `gate` 40 and open, a kick of strength 7, `peakHz` 1000, `peakMag` 25, the bands 0 to 15, nothing smoothed yet, `seq` 0x0102, and no thirds or harmony: 54 bytes.
 
 ```text
-4D 4C 01 02 01                               header: "ML", v1, seq 0x0102
+4D 4D 01 02 01                               header: "MM", v1, seq 0x0102
 00 1B 00                                     the core: type 0, length 27
 64 32 28 01                                  level, levelSmoothed, gate, gateOpen
 07 07 00 00                                  onset, onsetLow, onsetMid, onsetHigh
@@ -131,7 +175,7 @@ E8 03 19                                     peakHz 1000, peakMag 25
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00   bandsSmoothed
 ```
 
-Its source of truth is [MoonLightAudioSyncPacket.h](https://github.com/MoonModules/MoonLight/blob/main/src/core/util/MoonLightAudioSyncPacket.h), and the unit test `unit_MoonLightAudioSyncPacket.cpp` pins these bytes.
+Its source of truth is [MoonModulesAudioSyncPacket.h](https://github.com/MoonModules/MoonLight/blob/main/src/core/util/MoonModulesAudioSyncPacket.h), and the unit test `unit_MoonModulesAudioSyncPacket.cpp` pins these bytes.
 
 ## The WLED format
 
@@ -150,69 +194,20 @@ WLED's audio sync version 2, 44 bytes, defined by the `audioSyncPacket` struct i
 | 36 | 4 | `FFT_Magnitude`, float, up to about 4096 | the same | `peakMag` × 16 | ÷ 16, clamped to 255 |
 | 40 | 4 | `FFT_MajorPeak`, float, Hz | the same | `peakHz` | `peakHz` |
 
-WLED reads any nonzero `samplePeak` as a peak, so the drum bits are sent only beside bit 0, and a WLED device sees the peak it always saw. The price is a range heard a block after its drum's first range: its bit does not go out, so a MoonLight board receiving the WLED format can miss a kick whose hat came first. The MoonLight format carries every range's hit. Both upstream sources reserve `samplePeak` for a peak magnitude in a later version; a sender that adopts it would read in MoonLight as drum bits.
+WLED reads any nonzero `samplePeak` as a peak, so the drum bits are sent only beside bit 0, and a WLED device sees the peak it always saw. The price is a range heard a block after its drum's first range: its bit does not go out, so a MoonLight board receiving the WLED format can miss a kick whose hat came first. The MoonModules format carries every range's hit. Both upstream sources reserve `samplePeak` for a peak magnitude in a later version; a sender that adopts it would read in MoonLight as drum bits.
 
 ## The two side by side
 
-| | MoonLight | WLED |
+| | MoonModules | WLED |
 |---|---|---|
-| Size | 35 to 225 bytes | 44 bytes |
+| Size | 35 to 239 bytes | 44 bytes |
+| Beat | the tempo, the phase, the bar, the phrase and the fill, from a deck, a clock or a tracker | none |
 | Bands | the sixteen, the 31 third octaves, the 79 keys | the sixteen |
 | Hits | which drum, each band's and each key's | one peak flag |
 | Harmony | the pitch classes, the key, the tuning, the bass note | none |
 | Smoothing | the sender's, shared by every receiver | each receiver its own |
 | Order | `seq`, late and repeated frames dropped | `frameCounter` in WLED-MM |
 | Growth | new sections and fields, read by older and newer receivers alike | no spare byte |
-
-## A proposal: the beat section
-
-Lights on the beat need the tempo and where the beat is now, which onsets alone do not give. A board that tracks the beat itself disagrees with its neighbor by a few milliseconds and, after a track change, by seconds; a board receiving WLED's packet has no beat at all. So one board decides the beat and every board follows it, in section type 5 of the MoonLight format. The section is a proposal, to agree with WLED-MM before either side builds it.
-
-### Where the beat comes from
-
-A sending board takes its beat from the first source it has:
-
-1. **A Pioneer DJ deck**, over [Pro DJ Link](https://djl-analysis.deepsymmetry.org/djl-analysis/beats.html). The master deck knows the tempo and the beat in the bar exactly, since its track was analyzed beforehand.
-2. **A MIDI clock or tap tempo**, as the [audio plan's step 6](../work/Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(11%20of%2012).md#6-the-beat-lands-on-the-beat) lists them.
-3. **The audio tracker**, step 6 of the same plan, which hears the beat but not which beat starts the bar.
-
-A board that hears the decks itself reads them directly, since Pro DJ Link is broadcast already. The section carries the beat to every board that cannot hear the decks: WLED devices on the MoonLight format, boards on another subnet, and boards without a Pro DJ Link listener. It costs 8 bytes in a packet that goes out every frame anyway.
-
-### The section
-
-Type 5, 8 bytes:
-
-| Offset | Size | Field | Meaning |
-|---|---|---|---|
-| 0 | 2 | bpm | the tempo × 100, uint16, the unit Pro DJ Link uses: 12800 is 128 BPM |
-| 2 | 2 | beatCount | counts the beats since the source locked, uint16, wrapping; a change is a beat |
-| 4 | 1 | phase | how far the current beat has run when the packet leaves, 0..255 |
-| 5 | 1 | beatInBar | 0 for a beat whose place in the bar is unknown, else 1..4 |
-| 6 | 1 | source | 0 the audio tracker, 1 Pro DJ Link, 2 a MIDI clock, 3 tap tempo |
-| 7 | 1 | confidence | 0..255: the tracker's lock score, 255 for a deck or a clock |
-
-A sender without a tempo leaves the section out, so an absent section means "no beat", and a sender never sends a bpm of 0.
-
-`beatInBar` 0 for a beat and 1 to 4 for a deck's position in the bar is WLED-MM's convention. The audio tracker sends 0 until it finds the downbeat.
-
-### What a receiver does
-
-- A change of `beatCount` is a beat: a receiver takes it once, by the number, the way it takes a frame's hits, and a jump of more than one counts the beats it missed.
-- Between packets a receiver runs its own beat clock: the phase advances by `bpm` and the time since the packet arrived, and each packet pulls it back toward the phase the packet carries, as a phase-locked loop does, which smooths WiFi's 5 to 20 ms of jitter.
-- `phase` holds when the packet leaves, so the sender compensates its source's delay. A Pro DJ Link beat packet reaches a board about 40 ms after the deck's audio plays (troyhacks measured it on a CDJ at 118 BPM), so a sender reading the decks moves the phase forward by that delay.
-- Fields appended later, such as the beat in the phrase, reach a receiver that reads the first 8 bytes, which ignores them.
-
-### Reading Pro DJ Link
-
-What a sender reads, from the packet analysis above and troyhacks's implementation in WLED-MM:
-
-| Port | Packet | What it gives |
-|---|---|---|
-| 50000 | keep-alive, type `0x06` | the devices on the network; a listener announces itself here every 1.5 s, as a device number of its own, so the decks send it their status |
-| 50001 | beat, type `0x28`, broadcast on each beat | the player at `0x21`; the track's tempo × 100 at `0x5A`, big-endian; the pitch as a speed factor at `0x54`, a big-endian uint32 where `0x100000` is 1.0; the beat in the bar, 1..4, at `0x5C` |
-| 50002 | status, type `0x0A` | the player at `0x21`; the master flag, bit `0x20` of `0x89` |
-
-The tempo is the track's tempo times the speed. Only the master deck's beats count; a beat packet's arrival time anchors the beat clock, which runs free between packets and stops after 4 beats without one.
 
 ## A proposal for WLED
 
@@ -227,18 +222,18 @@ WLED's packet has served a large installed base for years, and a WLED device lis
 - **Every receiver smooths on its own.** `sampleSmth` is shared, but the bands' smoothing is each receiver's, so two devices on one sender drift apart visually. Sending the sender's smoothed bands makes every device show the same frame.
 - **Floats carry bytes.** `sampleRaw` and `sampleSmth` hold 0..255 values in 4-byte floats. In bytes, everything v2 carries plus the gate and which drum fits a 35-byte packet, against v2's 44, and reads the same on every platform.
 - **Sixteen bands is a ceiling.** Third octaves (31 bands) and semitones (79 keys) open note-accurate effects; the sixteen stay for every effect written against them.
-- **It stays small.** A full frame is 225 bytes, and every packet stays within 508, so it never fragments.
+- **It stays small.** A full frame is 239 bytes, and every packet stays within 508, so each one travels whole.
 - **One format for one community.** WLED, WLED-MM and MoonLight all come from the same sound-reactive lineage. One packet lets any of them drive any other with nothing lost.
 
 ### The proposal: one block format, shared
 
-WLED-MM plans its next audio sync as TLV appendices on block level under a new packet ID, each block a type that maps to a plain struct, which is how the MoonLight format already works. The proposal makes the two one format:
+WLED-MM plans its next audio sync as TLV appendices on block level under a new packet ID, each block a type that maps to a plain struct, which is how the MoonModules format already works. The proposal makes the two one format:
 
 1. **Blocks as above:** a type byte, a 16-bit length, then a struct whose fields come in a fixed order; a receiver reads the fields it knows and skips an unknown block by its length. A block grows only at its end, and a change a field cannot absorb is a new type.
-2. **The header is the packet's ID and the frame number, with no version byte.** Blocks carry every addition, so the ID is the version: a header that ever had to change would take a new ID. MoonLight's `'M' 'L'` and version byte give way to the shared ID.
+2. **The header is the packet's ID and the frame number, with no version byte.** Blocks carry every addition, so the ID is the version: a header that ever had to change would take a new ID. The MoonModules format's `'M' 'M'` and version byte give way to the shared ID.
 3. **The frame number counts per sender,** 16 bits, as RTP counts per source: a sender's own late or repeated frame is dropped, another sender's numbers never judge it, and a number far behind or a second of silence starts that sender afresh. Several senders and a restarted one need no special case, so the number is always there; 16 bits wrap every 27 minutes at 40 frames a second, where a byte wraps every 6.
 4. **Type numbers in ranges,** so both projects add blocks without asking each other first: 0 to 63 shared, 64 to 127 MoonLight, 128 to 191 WLED-MM, 192 to 255 experimental. The blocks above move to their range as the registry is agreed.
 5. **A priority per sender,** as sACN carries one: a receiver follows the highest priority, the first heard on a tie, and falls back when it goes silent. MoonLight receivers already follow the first sender heard, every sender at sACN's default of 100 until the priority travels in a block or the header.
 6. **v2 stays as it is** on `239.0.0.1` for every device that reads only it; a sender sends it beside the shared format while such devices listen.
 
-Every packet stays within 508 bytes, under the 1460 at which ESP-IDF splits a UDP message, and a full frame is 225. The stream stays on UDP: one multicast packet serves every receiver, where TCP needs a connection per receiver and holds every frame back behind a lost one, and a late frame is worth less to the lights than the next one; discovery and configuration can use TCP.
+Every packet stays within 508 bytes, under the 1460 at which ESP-IDF splits a UDP message, and a full frame is 239. The stream stays on UDP: one multicast packet serves every receiver, where TCP needs a connection per receiver and holds every frame back behind a lost one, and a late frame is worth less to the lights than the next one; discovery and configuration can use TCP.

@@ -4664,7 +4664,7 @@
      "line": "Send the local analysis as audio-sync packets."
     },
     "syncFormat": {
-     "line": "What a sending board sends: MoonLight's whole frame, WLED's packet, or both.",
+     "line": "What a sending board sends: the MoonModules format's whole frame, WLED's, or both.",
      "more": "Receivers read either. WLED feeds only WLED devices; both feeds MoonLight boards too."
     },
     "addressing": {

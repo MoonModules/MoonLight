@@ -193,10 +193,10 @@ public:
     /// @guide A group's members are found by MAC each second, so a new address follows.
     char     receivers[64] = {};
     /// The packet formats `syncFormat` picks from, in its option order.
-    enum SyncFormat : uint8_t { kFormatMoonLight, kFormatWled, kFormatBoth, kFormatCount };
-    /// What a sending board sends: MoonLight's whole frame, WLED's packet, or both.
+    enum SyncFormat : uint8_t { kFormatMoonModules, kFormatWled, kFormatBoth, kFormatCount };
+    /// What a sending board sends: the MoonModules format's whole frame, WLED's, or both.
     /// @guide Receivers read either. WLED feeds only WLED devices; both feeds MoonLight boards too.
-    uint8_t  syncFormat = kFormatMoonLight;
+    uint8_t  syncFormat = kFormatMoonModules;
 
     /// Each option's rate in hertz.
     static constexpr uint16_t kSampleRates[kSampleRateCount] = {8000, 16000, 22050, 24000, 44100, 48000};
@@ -261,7 +261,7 @@ public:
         if constexpr (platform::hasNetwork) {
             controls_.addControl("send audio", send);
             controls_.setHidden(controls_.count() - 1, !localMode);
-            static constexpr const char* kFormatNames[] = {"MoonLight", "WLED", "both"};
+            static constexpr const char* kFormatNames[] = {"MoMo", "WLED", "both"};   // MoMo: MoonModules, short for the card
             controls_.addSelect("syncFormat", syncFormat, kFormatNames, kFormatCount);
             controls_.setHidden(controls_.count() - 1, !localMode || !send);
             // Multicast first, the WLED-compatible default; unicast reaches a few MoonLight boards faster on WiFi.
@@ -338,7 +338,7 @@ public:
         analysisOn_ = analysisWanted();
         if (mode == kLocalMode && inited_ && notesOn_ != harmonyApplied_) switchHarmony();
     }
-    /// Whether anything reads the notes: a module's demand, or this board sending the MoonLight format, whose receivers show them.
+    /// Whether anything reads the notes: a module's demand, or this board sending the MoonModules format, whose receivers show them.
     bool notesWanted() const {
         if (sync() == AudioSync::kSend && syncFormat != kFormatWled) return true;
         const Scheduler* tree = Scheduler::instance();
@@ -426,7 +426,7 @@ public:
         if (s == AudioSync::kReceive) { if (open) syncReceive(); }   // with no socket yet, still never runs the local mic
         else if (const bool fresh = produceFrame(); open) {
             if (fresh) sync_.addHits(frame_);
-            sync_.send(frame_, syncFormat != kFormatWled, syncFormat != kFormatMoonLight, unicast, syncPort);
+            sync_.send(frame_, syncFormat != kFormatWled, syncFormat != kFormatMoonModules, unicast, syncPort);
         }
         chords_.name(frame_, platform::millis());   // from whichever source made the frame, so a receiving board names the chord too
     }
@@ -585,7 +585,7 @@ public:
 
     /// The audio sync's port, sender or destinations, as AudioSync reports them.
     void reportNetworkUse(NetworkUse& use) const override {
-        sync_.reportNetworkUse(use, sync(), syncFormat != kFormatWled, syncFormat != kFormatMoonLight,
+        sync_.reportNetworkUse(use, sync(), syncFormat != kFormatWled, syncFormat != kFormatMoonModules,
                                addressing == kAddressUnicast, syncPort);
     }
 

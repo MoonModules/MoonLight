@@ -11,6 +11,24 @@ constexpr uint8_t kAudioNoteKeys = 79;
 /// The block an input is read and analyzed in, a power of two: about 21 ms at 24 kHz, a frame of bands each; 256 leaves the notes' latency as it is and lets a third more attack flashes through (bench_notes).
 inline constexpr size_t kAudioBlock = 512;
 
+/// Where a beat comes from, the MoonModules format's numbering: the tracker, the decks and Ableton as troyhacks' WLED numbers them, then a MIDI clock and a tap.
+enum BeatSource : uint8_t { kBeatTracker, kBeatProLink, kBeatStageLinq, kBeatAbletonLink, kBeatMidiClock, kBeatTap };
+
+/// The beat one board decided and every board follows, as the MoonModules format's beat section carries it: [Audio sync format](https://moonmodules.org/MoonLight/reference/audio-sync.html#beat).
+struct AudioBeat {
+    uint16_t bpm100 = 0;               ///< the tempo × 100, the unit Pro DJ Link uses: 12800 is 128 BPM; 0 for no beat
+    uint16_t count = 0;                ///< the beats since the source locked, wrapping; a change is a beat
+    uint8_t  phase = 0;                ///< how far the current beat has run when the packet leaves, 0..255
+    uint8_t  inBar = 0;                ///< the beat in the bar, 1..4, or 0 while its place in the bar is unknown
+    uint8_t  source = kBeatTracker;    ///< a BeatSource
+    uint8_t  confidence = 0;           ///< 0..255: the tracker's lock, 255 for a deck or a clock
+    uint8_t  inPhrase = 0;             ///< the beat in the phrase, 1..`phraseBeats`, or 0 while there is no phrase
+    uint8_t  phraseBeats = 0;          ///< the phrase's length in beats, 32 for a deck's, or 0 while there is none
+    uint8_t  flags = 0;                ///< kBeatDownbeatKnown and kBeatFill
+    static constexpr uint8_t kBeatDownbeatKnown = 1;   ///< `inBar` is the source's measured or marked bar, not a count from the lock
+    static constexpr uint8_t kBeatFill = 2;            ///< the beat is in a fill, a deck's fill cue or a faked one
+};
+
 /// The whole contract between the audio analysis and the effects that react to it.
 ///
 /// @technical
@@ -42,7 +60,7 @@ inline constexpr size_t kAudioBlock = 512;
 ///
 /// `onset` is a drum heard on this block: the kick, the snare or a hat from the range hits, `onsetLow`, `onsetMid` and `onsetHigh`, the ranges one drum reaches within the bass's delay counted once. An effect flashing on it catches the drum within a block, 21 ms at 24 kHz.
 ///
-/// A frame synced in the MoonLight format carries the sender's hits; one in the WLED format carries WLED's `samplePeak` as `onset`, and the ranges' hits when a MoonLight board sent it. A simulated frame's onset is the song's own kick. Landing on the beat needs a tempo tracker, the audio plan's step 6.
+/// A frame synced in the MoonModules format carries the sender's hits; one in the WLED format carries WLED's `samplePeak` as `onset`, and the ranges' hits when a MoonLight board sent it. A simulated frame's onset is the song's own kick. Landing on the beat needs `beat`.
 struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint16_t level = 0;                ///< this block's level, 0..255 through its dynamics window, 0 while gated: @xref{raw-against-smoothed}
     uint16_t levelSmoothed = 0;        ///< `level` through a peak meter's ballistic
@@ -76,6 +94,7 @@ struct AudioFrame {   // @xref{where-a-frame-comes-from}
     uint8_t  notesKept[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per note the core keeps: outlasting an attack, neither an overtone nor a neighbor's leakage, the `no overtones` of the note effects
     uint8_t  notesKeptHits[(kAudioNoteKeys + 7) / 8] = {};   ///< a bit per kept note, set on the block its strike counts: a strike heard a block before its key is kept is carried to that block
     uint16_t seq = 0;                  ///< counts the frames its source produced, so a consumer that reads one frame on two ticks takes its hits once
+    AudioBeat beat;                    ///< the beat, from a sync packet's beat section; bpm100 0 while no board has one
 
     /// Whether there is sound to show: the gate where one was measured, else, on a synced or simulated frame, a smoothed level over the room's hiss.
     constexpr bool heard() const { return gate ? gateOpen : levelSmoothed >= kHeardLevel; }

@@ -240,6 +240,15 @@
         <a href="https://web.esphome.io/" target="_blank" rel="noopener">ESPHome</a>.
         A board moved to MoonLight over the network needs the cable too: it carries MoonBase, which installs MoonLight only.
       </p>
+      <p class="note">
+        The list below writes them and troyhacks' WLED itself, each from its own project's site, on the USB port picked above.
+        Detect the board first: the list then shows only the builds for its chip, flash size and PSRAM.
+      </p>
+      <div class="control-row">
+        <select id="other-firmware-select" class="rp-select" aria-label="Other firmware"></select>
+        <button type="button" class="secondary" id="other-firmware-install">Install</button>
+        <a id="other-firmware-home" target="_blank" rel="noopener">about it</a>
+      </div>
     </div>
 
     <div class="card">
@@ -436,7 +445,7 @@
         <!-- The exchange, not a favour: a fresh install is exactly when the aggregate is worth
              something, and the device cannot ask until someone opens it. Both halves are named, so
              reading this is not how someone discovers that consenting also shares. -->
-        <div class="install-done-note">Turn on MoonCloud stats: see what everyone else is running for ideas, so we know what to build next.</div>
+        <div class="install-done-note" id="done-cloud">Turn on MoonCloud stats: see what everyone else is running for ideas, so we know what to build next.</div>
         <div class="install-actions">
           <button type="button" class="primary" id="done-close">Close</button>
         </div>

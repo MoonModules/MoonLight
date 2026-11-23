@@ -18,6 +18,7 @@
 import { installPicker, mirrorUrl, chipFamilyOf, firmwareChip } from "./install-picker.js";
 import { myDevices }    from "./devices.js";
 import { installer, ESPTOOL_JS_VERSION } from "./install-orchestrator.js";
+import { resolveOtherFirmwares, otherFirmwareOptions } from "./other-firmwares.js";
 import { TEENSY_FAMILY, requestHalfKay, requestTeensySerial } from "./teensy-writer.js";
 // Device catalog + chip detection: mooninstaller only, kept out of the
 // firmware-embedded install-picker.js and injected here via deviceSupport.
@@ -37,6 +38,9 @@ async function openWalk() {
 document.getElementById("walk-open")?.addEventListener("click", openWalk);
 
 // Vouch for what an install did: kept on this site, whose docs map shares it, and best effort, since a map that cannot load must not get in an install's way.
+
+
+
 function vouch(ids) {
   import(WALK).then((walk) => walk.markDone(ids)).catch(() => {});
 }
@@ -611,6 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleSuccess({ url, mdns, device, applyDefaults = true, defaultsApplied = false, viaHttp, alreadyOnline, ethOnlyNoLink }) {
       vouch(WALKED);   // every successful install counts, the Ethernet one waiting for its cable and the one without an address included
       disarmUnloadGuard();
+      document.getElementById("done-cloud").hidden = false;   // a MoonLight install, after another firmware's in the same session
       // Clear the amber notice styling from any prior install in this session — only the
       // eth-only-no-link branch re-adds it, so every other outcome shows the plain note.
       document.getElementById("done-defaults").classList.remove("install-done-note--notice");
@@ -1134,7 +1139,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // claims it, same as the install path. detect() keeps the port open
         // afterwards so the following Install reuses it.
         if (_monitor.port) await closeMonitor();
-        return await installer.detect({ port: pickedPort, onLog: appendLog });
+        try {
+          const detected = await installer.detect({ port: pickedPort, onLog: appendLog });
+          const facts = typeof detected === "string" ? null : deviceSupport.factsFromEsptool(detected.facts);
+          renderOtherFirmwares({ family: typeof detected === "string" ? detected : detected.family,
+                                 flashMB: facts ? facts.flashMB : 0, psramMode: facts ? facts.psramMode : "" });
+          return detected;
+        } catch (e) {
+          renderOtherFirmwares(null);   // detection did not land: every other firmware again
+          throw e;
+        }
       },
       onInstall: async (firmware, manifestUrl, binaryUrl, entry, release) => {
         // A host archive is handed to the browser to download; there is no chip to flash
@@ -1232,6 +1246,79 @@ document.addEventListener('DOMContentLoaded', () => {
           const note = document.getElementById("done-defaults");
           note.textContent = `Applied ${device} defaults. They take effect at once; no restart needed.`;
           note.hidden = false;
+        },
+        onError: handleError,
+        onLog: appendLog,
+      });
+    });
+
+    // Other projects' firmwares, from other-firmwares.json beside index.html, offered for the board the last Detect found.
+    let otherCatalog = [];
+    let otherOptions = [];
+    let detectedBoard = null;   // { family, flashMB, psramMode } from the last Detect, named in the install title
+    const otherSelect = document.getElementById("other-firmware-select");
+    const otherHome = document.getElementById("other-firmware-home");
+    const pickedOther = () => (otherSelect.value === "" ? null : otherOptions[Number(otherSelect.value)]);
+    function showOtherHome() {
+      const option = pickedOther();
+      otherHome.hidden = !option;
+      if (option) otherHome.href = option.home;
+    }
+    function renderOtherFirmwares(board) {
+      detectedBoard = board;
+      otherOptions = otherFirmwareOptions(otherCatalog, board);
+      otherSelect.replaceChildren(...otherOptions.map((option, i) => new Option(option.label, option.source ? String(i) : "")));
+      if (!otherOptions.length) otherSelect.append(new Option(board ? `none for ${board.family}` : "none", ""));
+      showOtherHome();
+    }
+    otherSelect.addEventListener("change", showOtherHome);
+    async function loadOtherFirmwares() {
+      return resolveOtherFirmwares(await (await fetch("./other-firmwares.json")).json());
+    }
+    loadOtherFirmwares()
+      .then((list) => { otherCatalog = list; renderOtherFirmwares(detectedBoard); })
+      .catch((e) => { console.warn("[install] other-firmwares.json:", e); renderOtherFirmwares(null); });
+
+    document.getElementById("other-firmware-install").addEventListener("click", async () => {
+      const entry = pickedOther();
+      if (!entry) return;
+      if (_monitor.port) await closeMonitor();
+      // The same title a MoonLight install has: what, which version, onto which device.
+      const target = installPicker.getSelectedDevice() || (detectedBoard && detectedBoard.family) || "the board on the picked port";
+      openModal(`Installing ${entry.name}${entry.version ? ` ${entry.version}` : ""} on ${target}`);
+      showSection("connecting");
+      document.getElementById("connecting-detail").textContent = "";
+      await installer.start({
+        port: pickedPort,
+        ...entry.source,
+        otherFirmware: true,
+        eraseBefore: document.getElementById("erase-before-flash").checked,
+        onProgress: handleProgress,
+        uiWaitForCreds,
+        uiWaitForPortRetry,
+        onSuccess: ({ url, joined }) => {
+          disarmUnloadGuard();
+          showSection("done");
+          const a = document.getElementById("done-url");
+          document.getElementById("done-url-mdns").hidden = true;
+          document.getElementById("done-cloud").hidden = true;   // MoonCloud stats are MoonLight's
+          const note = document.getElementById("done-defaults");
+          if (url) {
+            document.getElementById("done-status").textContent = `${entry.name} is online`;
+            a.href = url;
+            a.textContent = url;
+            note.hidden = true;
+          } else {
+            document.getElementById("done-status").textContent = joined ? `${entry.name} joined your WiFi` : `${entry.name} flashed`;
+            a.removeAttribute("href");
+            a.textContent = "";
+            // Joined and named no address (ESPHome's first-use firmware), or did not answer Improv on this port: a firmware with
+            // WiFi saved then joins on its own, and a fresh one opens its own access point.
+            const ap = entry.accessPoint ? ` (${entry.accessPoint})` : "";
+            note.textContent = joined ? "It names no address: find it on your network, by its name or in your router's list."
+              : `It is starting. With WiFi saved it joins your network on its own; otherwise join the access point it opens${ap} and set the WiFi there.`;
+            note.hidden = false;
+          }
         },
         onError: handleError,
         onLog: appendLog,

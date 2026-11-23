@@ -40,19 +40,20 @@ def test_frame_layout():
     assert frame[7] == 0x03, "type"
     assert frame[8] == 1, "length"
     assert frame[9] == 0x01, "payload"
-    assert len(frame) == 11, "9 header + 1 payload + 1 checksum"
+    assert frame[11] == 0x0A, "newline, as ESP Web Tools' Improv SDK ends every packet and Tasmota's parser waits for"
+    assert len(frame) == 12, "9 header + 1 payload + 1 checksum + 1 newline"
 
 
 def test_golden_vector_g1():
     # Shared with test/js G1. Hand-verified checksum 0xe3.
     frame = ip.build_frame(0x03, bytes([0x01]))
-    assert frame.hex(" ") == "49 4d 50 52 4f 56 01 03 01 01 e3"
+    assert frame.hex(" ") == "49 4d 50 52 4f 56 01 03 01 01 e3 0a"
 
 
 def test_checksum_covers_header_through_payload():
     payload = bytes([0xAA, 0xBB, 0xCC])
     frame = ip.build_frame(0x03, payload)
-    assert frame[-1] == sum(frame[:-1]) & 0xFF
+    assert frame[-2] == sum(frame[:-2]) & 0xFF
 
 
 # --- device-model config push: the slicer mirrors stateFrames in improv-frame.js, the framing the device ---
@@ -96,14 +97,14 @@ def test_empty_or_malformed_entry_yields_no_documents():
 def test_a_document_is_one_frame_when_it_fits_and_chunks_in_order_when_it_does_not():
     small = encode_apply_op_frames({"System": {"deviceModel": "x"}})
     assert len(small) == 1
-    payload = small[0][9:-1]          # envelope: 'IMPROV'(6) ver(1) type(1) len(1) ... csum(1)
+    payload = small[0][9:-2]          # envelope: 'IMPROV'(6) ver(1) type(1) len(1) ... csum(1) newline(1)
     assert payload[0] == IMPROV_CMD_APPLY_OP and payload[1] == 0 and payload[2] == 1
     big = {"Drivers": {"RmtLed": {"type": "RmtLedDriver", "pins": ",".join(str(i) for i in range(120))}}}
     frames = encode_apply_op_frames(big)
     assert len(frames) > 1
     seqs, lasts, body = [], [], b""
     for f in frames:
-        pl = f[9:-1]
+        pl = f[9:-2]
         assert pl[0] == IMPROV_CMD_APPLY_OP
         assert len(pl) - 3 <= APPLY_OP_CHUNK_MAX
         seqs.append(pl[1]); lasts.append(pl[2]); body += pl[3:]

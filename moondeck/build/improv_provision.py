@@ -63,9 +63,10 @@ def checksum(buf: bytes) -> int:
 
 
 def build_frame(msg_type: int, payload: bytes) -> bytes:
-    """Wrap a payload in the Improv framing (magic + version + type + len + checksum)."""
+    """Wrap a payload in the Improv framing (magic + version + type + len + checksum + newline), as ESP Web Tools' Improv SDK
+    writes every packet; Tasmota's parser waits for the newline before it acts on a frame."""
     body = HEADER + bytes([VERSION, msg_type, len(payload)]) + payload
-    return body + bytes([checksum(body)])
+    return body + bytes([checksum(body)]) + b"\n"
 
 
 def rpc_strings(body: bytes) -> list[str]:
@@ -182,7 +183,7 @@ def self_test() -> int:
     side; this covers the host-CLI side. Re-runnable: `uv run
     moondeck/build/improv_provision.py --self-test`.
     """
-    # Frame builder produces magic + version + type + len + payload + checksum.
+    # Frame builder produces magic + version + type + len + payload + checksum + newline.
     frame = build_frame(TYPE_RPC, b"\x42")
     assert frame.startswith(HEADER), "frame must start with IMPROV"
     assert frame[6] == VERSION, "version byte"
@@ -190,10 +191,11 @@ def self_test() -> int:
     assert frame[8] == 1, "length byte"
     assert frame[9] == 0x42, "payload byte"
     assert frame[10] == checksum(frame[:10]), "checksum byte"
+    assert frame[11] == 0x0A, "newline"
 
     # Zero-length payload.
     f0 = build_frame(TYPE_CURRENT_STATE, b"")
-    assert len(f0) == 6 + 1 + 1 + 1 + 1, "zero-payload frame length"
+    assert len(f0) == 6 + 1 + 1 + 1 + 1 + 1, "zero-payload frame length"
     assert f0[8] == 0, "zero-length byte"
 
     # WIFI_SETTINGS payload shape.

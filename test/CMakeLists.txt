@@ -36,7 +36,7 @@ add_executable(mm_tests
     unit/core/unit_I2cBusModule.cpp
     unit/core/unit_SdCardService.cpp
     unit/core/unit_AudioService_sync.cpp
-    unit/core/unit_MoonLightAudioSyncPacket.cpp
+    unit/core/unit_MoonModulesAudioSyncPacket.cpp
     unit/core/unit_HarmonicSieve.cpp
     unit/core/unit_AudioChords.cpp
     unit/core/unit_WledAudioSyncPacket.cpp

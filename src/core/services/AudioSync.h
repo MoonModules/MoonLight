@@ -13,7 +13,7 @@
 #include "core/util/ReceiverList.h"         // the boards a unicast send goes to
 #include "core/util/NameResolver.h"     // a named board's address, looked up off the render thread, and formatPeer: the sender by its board's name
 #include "core/util/AudioFrame.h"
-#include "core/util/MoonLightAudioSyncPacket.h"   // the MoonLight audio-sync format
+#include "core/util/MoonModulesAudioSyncPacket.h"   // the MoonModules audio-sync format
 #include "core/util/WLEDAudioSyncPacket.h"        // WLED's audio-sync format
 
 namespace mm {
@@ -87,9 +87,9 @@ private:
 ///
 /// ## Audio sync, one packet a frame
 ///
-/// A sending board sends its frame in `syncFormat`: MoonLight's whole frame, WLED's packet, or both for an installation that mixes the two. Each format multicasts to its own group, so a WLED device never wakes for a packet it cannot read. The hits of the frames between two packets ride in the next, so the throttle drops none.
+/// A sending board sends its frame in `syncFormat`: the MoonModules format's whole frame, WLED's packet, or both for an installation that mixes the two. Each format multicasts to its own group, so a WLED device wakes only for a packet it reads. The hits of the frames between two packets ride in the next, so the throttle drops none.
 ///
-/// A receiving board joins both groups and tells the formats by their header. A board sending both sends each frame twice, so MoonLight's packet outranks WLED's while it arrives. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and one without, a WLED frame among them, gets the bands' ballistic here; a late or repeated MoonLight frame number is dropped.
+/// A receiving board joins both groups and tells the formats by their header. A board sending both sends each frame twice, so the MoonModules packet outranks WLED's while it arrives. A frame with the sender's smoothed bands keeps them, so every board shows the same frame, and a WLED frame or another that lacks them gets the ballistic here; a late or repeated MoonModules frame number is dropped.
 class AudioSync {
 public:
     /// What the socket does: nothing, send the local analysis, or receive a peer's.
@@ -107,14 +107,14 @@ public:
         if constexpr (!platform::hasNetwork) return;
         close();                           // ensureOpen() re-opens per role when the net is up
         lastOpenFailMs_ = 0;               // a mode change retries bring-up immediately (no stale backoff)
-        lastRecvMs_ = mlHeardMs_ = 0;
+        lastRecvMs_ = mmHeardMs_ = 0;
         std::memset(peer_, 0, sizeof(peer_));
         hits_ = {};
         rxHits_ = {};
         order_.clear();
         selection_.clear();
         // The receive buffer is taken here, where allocating is allowed, and only for receiving.
-        if (role == kReceive) rx_.reset(new (std::nothrow) uint8_t[kMlSyncMaxDatagram]);
+        if (role == kReceive) rx_.reset(new (std::nothrow) uint8_t[kMmSyncMaxDatagram]);
         // Only when there IS a socket to wait for.
         if (role == kSend)         owner_.setStatus("send: waiting for network");
         else if (role == kReceive) owner_.setStatus("receive: waiting for network");
@@ -154,8 +154,8 @@ public:
     /// Take a new frame's hits, which the next packet carries.
     void addHits(const AudioFrame& f) { hits_.add(f); }
 
-    /// Send `frame` in MoonLight's format, WLED's or both, with the hits since the last packet, throttled to ~40/s: @xref{audio-sync-one-packet-a-frame}.
-    void send(const AudioFrame& frame, bool moonLight, bool wled, bool unicast, uint16_t port) {
+    /// Send `frame` in the MoonModules format, WLED's or both, with the hits since the last packet, throttled to ~40/s: @xref{audio-sync-one-packet-a-frame}.
+    void send(const AudioFrame& frame, bool moonModules, bool wled, bool unicast, uint16_t port) {
         if constexpr (!platform::hasNetwork) return;
         const uint32_t now = platform::millis();
         if (now - lastSendMs_ < kSendIntervalMs) return;
@@ -163,8 +163,8 @@ public:
         frame_ = frame;
         hits_.applyTo(frame_);
         hits_ = {};
-        uint8_t pkt[kMlSyncMaxPacket];
-        if (moonLight) sendPacket(pkt, buildMoonLightAudioSync(pkt, frame_), kGroups[0].ip, unicast, port);
+        uint8_t pkt[kMmSyncMaxPacket];
+        if (moonModules) sendPacket(pkt, buildMoonModulesAudioSync(pkt, frame_), kGroups[0].ip, unicast, port);
         if (wled) sendPacket(pkt, buildWledAudioSync(pkt, frame_), kGroups[1].ip, unicast, port);
         sendCount_++;
     }
@@ -177,15 +177,15 @@ public:
         uint8_t srcIp[4] = {};
         bool fresh = false;
         for (int i = 0; i < kMaxRecvPerTick; i++) {
-            const int n = sock_.recvFrom(pkt, kMlSyncMaxDatagram, srcIp);
+            const int n = sock_.recvFrom(pkt, kMmSyncMaxDatagram, srcIp);
             if (n <= 0) break;                     // -1 = nothing pending
             uint16_t sections = 0;
-            const bool ml = parseMoonLightAudioSync(pkt, static_cast<size_t>(n), frame_, &sections);
-            if (!ml && (mlHeardMs_ != 0 && platform::millis() - mlHeardMs_ < kFallbackMs)) continue;   // the same frame again, from a board sending both
+            const bool ml = parseMoonModulesAudioSync(pkt, static_cast<size_t>(n), frame_, &sections);
+            if (!ml && (mmHeardMs_ != 0 && platform::millis() - mmHeardMs_ < kFallbackMs)) continue;   // the same frame again, from a board sending both
             if (!ml && !parseWledAudioSync(pkt, static_cast<size_t>(n), frame_)) continue;   // a v1 / foreign packet
             if (!selection_.follows(srcIp, SourceSelection::kDefaultPriority, platform::millis(), kFallbackMs)) continue;   // another sender while the followed one plays
             if (!take(ml, srcIp)) continue;
-            smoothHere = !(sections & (1u << kMlSectionSmoothed));   // WLED's packet, or a sender that does not smooth
+            smoothHere = !(sections & (1u << kMmSectionSmoothed));   // WLED's packet, or a sender that does not smooth
             if (smoothHere) std::memcpy(frame_.bandsSmoothed, frame.bandsSmoothed, sizeof(frame_.bandsSmoothed));   // the ballistic run here lives across packets
             frame = frame_;
             rxWled_ = !ml;
@@ -219,7 +219,7 @@ public:
         // Named, because "receiving" alone cannot tell a rig taking the right source from one locked.
         char peer[NameResolver::kPeerChars];
         NameResolver::formatPeer(peer, sizeof(peer), peer_);
-        mm::formatTo(status_, sizeof(status_), "receiving %s from %s%s", rxWled_ ? "WLED" : "MoonLight", peer,
+        mm::formatTo(status_, sizeof(status_), "receiving %s from %s%s", rxWled_ ? "WLED" : "MoMo", peer,
                      selection_.othersIgnored(platform::millis(), kFallbackMs) ? ", ignoring another sender" : "");
         owner_.setStatus(status_);
     }
@@ -236,7 +236,7 @@ public:
     }
 
     /// What the sync offers and exchanges: the port it receives on and the sender it follows, or each format's group or each receiver it sends to.
-    void reportNetworkUse(NetworkUse& use, Role role, bool moonLight, bool wled, bool unicast, uint16_t port) const {
+    void reportNetworkUse(NetworkUse& use, Role role, bool moonModules, bool wled, bool unicast, uint16_t port) const {
         if (!open_) return;
         if (role == kReceive) {
             use.service("audio sync", port);
@@ -248,7 +248,7 @@ public:
         const auto report = [&](const char* group) {
             return [&, group](const uint8_t ip[4]) { use.flow("audio sync", true, ip, sendsPerS_, "/s", isGroupAddress(ip) ? group : nullptr); };
         };
-        if (moonLight) forEachDestination(kGroups[0].ip, unicast, report("MoonLight audio"));
+        if (moonModules) forEachDestination(kGroups[0].ip, unicast, report("MoMo audio"));
         if (wled) forEachDestination(kGroups[1].ip, unicast, report("WLED audio"));
     }
     /// How many sends have gone out.
@@ -279,18 +279,18 @@ private:
     uint32_t sendsPerS_ = 0, takesPerS_ = 0;           // the rates it found
     uint32_t lastOpenFailMs_ = 0;    // the last failed open, 0 for none: the bring-up backoff
     uint32_t lastRecvMs_ = 0;        // the last packet taken
-    uint32_t mlHeardMs_ = 0;         // the last MoonLight packet, which outranks WLED's while it arrives
+    uint32_t mmHeardMs_ = 0;         // the last MoonModules packet, which outranks WLED's while it arrives
     SenderOrder order_;              // each MoonLight sender's last frame number, so a late or repeated one is dropped
     SourceSelection selection_;      // the one sender followed while it plays
     bool     rxWled_ = false;        // whether the last frame taken came in WLED's format, for the status line
     bool     open_ = false;          // the socket is open for the current role
     uint8_t  peer_[4] = {};          // the last packet's sender, for the status line
-    char     status_[sizeof("receiving MoonLight from , ignoring another sender") + NameResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)", and whether another sender is passed over
+    char     status_[sizeof("receiving MoMo from , ignoring another sender") + NameResolver::kPeerChars] = {};   // "receiving <format> from <board> (<ip>)", and whether another sender is passed over
 
-    /// Take the packet just parsed into `frame_` from `srcIp`, its hits kept; false for a late or repeated MoonLight frame, whose hits the next frame carries.
+    /// Take the packet parsed into `frame_` from `srcIp`, its hits kept; false for a late or repeated MoonModules frame, whose hits the next frame carries.
     bool take(bool ml, const uint8_t (&srcIp)[4]) {
         lastRecvMs_ = platform::millis();
-        if (ml) mlHeardMs_ = lastRecvMs_;
+        if (ml) mmHeardMs_ = lastRecvMs_;
         std::memcpy(peer_, srcIp, sizeof(peer_));   // whose audio this is
         const SenderOrder::Order o = ml ? order_.judge(srcIp, frame_.seq, lastRecvMs_, kFallbackMs) : SenderOrder::Order::New;   // judged by its own sender's numbers
         if (o != SenderOrder::Order::Repeat) rxHits_.add(frame_);   // a late frame's hits went in no other packet, so the next frame carries them

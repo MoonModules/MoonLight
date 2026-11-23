@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// **The packet.** Forty-four bytes, hand-serialized rather than trusted to struct packing. Each offset, what WLED and WLED-MM put there, and what MoonLight sends and reads: [Audio sync format](https://moonmodules.org/MoonLight/reference/audio-sync.html#the-wled-format).
 ///
-/// **The network.** WLED's multicast group is 239.0.0.1 on port 11988, the MoonLight format's 239.0.0.2 on the same port; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
+/// **The network.** WLED's multicast group is 239.0.0.1 on port 11988, the MoonModules format's 239.0.0.2 on the same port; AudioService also sends unicast to listed boards and takes another `syncPort`, which WLED does not hear.
 ///
 /// See [IGMP snooping](https://moonmodules.org/MoonLight/explanation/architecture/moonlight.html#multicast-and-igmp-snooping).
 ///
@@ -67,7 +67,7 @@ inline size_t buildWledAudioSync(uint8_t out[WLED_SYNC_PACKET_SIZE], const Audio
 inline bool parseWledAudioSync(const uint8_t* pkt, size_t len, AudioFrame& out) {
     if (!pkt || len != WLED_SYNC_PACKET_SIZE) return false;
     if (std::memcmp(pkt, WLED_SYNC_HEADER, 6) != 0) return false;
-    out = AudioFrame{};   // the thirds, the keys and the harmony a MoonLight packet left in a reused frame are not this one's
+    out = AudioFrame{};   // the thirds, the keys and the harmony a MoonModules packet left in a reused frame are not this one's
     out.level         = wledFloatToU16(wledGetFloatLE(pkt + 8));
     out.levelSmoothed = wledFloatToU16(wledGetFloatLE(pkt + 12));
     const uint8_t peak = pkt[16];   // samplePeak, with the ranges when a MoonLight board sent it

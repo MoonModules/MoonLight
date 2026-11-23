@@ -83,8 +83,8 @@ SECTION_EXEMPT = ("docs/work/", "docs/friend-repos/", "docs/reference/metrics/",
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
-def section_findings(text: str) -> list:
-    """(rule, message, line) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS."""
+def long_sections(text: str) -> list:
+    """(title, line, words) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS."""
     sections, fence, current = [], False, None   # each: [level, title, line, words]
     for n, line in enumerate(text.split("\n"), 1):
         if line.lstrip().startswith(("```", "~~~")):
@@ -96,8 +96,14 @@ def section_findings(text: str) -> list:
             sections.append(current)
         elif current and not fence and not line.lstrip().startswith(("|", "<", "![", ">")):
             current[3] += len(re.findall(r"[A-Za-z0-9][\w'\u2019-]*", line))
+    return [(title, n, words) for _, title, n, words in sections if words > MAX_SECTION_WORDS]
+
+
+def section_findings(text: str, before: str = "") -> list:
+    """(rule, message, line) for each long section of one page; with `before`, the page at HEAD, only the sections it lengthened."""
+    was = {title: words for title, _, words in long_sections(before)}
     return [(SECTION_RULE, f"Section '{title}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
-            for _, title, n, words in sections if words > MAX_SECTION_WORDS]
+            for title, n, words in long_sections(text) if words > was.get(title, 0)]
 
 
 def section_rows() -> list:
@@ -211,7 +217,7 @@ def vale_findings(by_path: dict) -> tuple[list, int]:
 
 
 def files_main(paths) -> int:
-    """`--files`: the named files' added lines alone, findings printed, nothing recorded: the write-time hook's view."""
+    """`--files`: the named files' added lines and the sections they lengthened, findings printed, nothing recorded: the write-time hook's view."""
     if shutil.which("vale") is None:
         return 0
     by_path = {}
@@ -223,7 +229,9 @@ def files_main(paths) -> int:
     findings, errors = vale_findings(by_path)
     for path in sorted(by_path):
         if path.endswith(".md") and not path.startswith(SECTION_EXEMPT) and os.path.exists(path):
-            findings += [f"{path}: warning {rule}: {msg}  [line {n}]" for rule, msg, n in section_findings(open(path, encoding="utf-8").read())]
+            # A section this change lengthened, the rule's ratchet: a one-word edit to a page whose long sections it left as long passes.
+            head = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=ROOT, capture_output=True, text=True).stdout
+            findings += [f"{path}: warning {rule}: {msg}  [line {n}]" for rule, msg, n in section_findings(open(path, encoding="utf-8").read(), head)]
     for f in findings:
         print(f"  {f}")
     return 1 if errors else 0
