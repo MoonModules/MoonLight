@@ -2,97 +2,44 @@
 /// @also NoiseEffect
 
 #include "doctest.h"
-#include "light/layouts/Layouts.h"
 #include "light/effects/PlasmaEffect.h"
 #include "light/effects/NoiseEffect.h"
-#include "light/layouts/GridLayout.h"
+#include "golden_frame.h"   // LayerFixture and ScopedTestClock: the layer off the stack, one known moment of the plasma
 
-// One tick on an 8×8 grid produces at least one non-zero byte.
+using mm::golden::cornersDiffer;
+using mm::golden::litLights;
+
+// One tick on an 8×8 grid leaves at least one light lit.
 TEST_CASE("PlasmaEffect writes non-zero RGB data to buffer") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 8;
-    grid.height = 8;
-    grid.depth = 1;
-    layouts.addChild(&grid);
-
-    mm::Layer layer;
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-
-    mm::PlasmaEffect plasma;
-    layer.addChild(&plasma);
-
-    layer.applyState();
-    layer.tick();
-
-    auto& buf = layer.buffer();
-    REQUIRE(buf.data() != nullptr);
-
-    bool hasNonZero = false;
-    for (size_t i = 0; i < buf.bytes(); i++) {
-        if (buf.data()[i] != 0) { hasNonZero = true; break; }
-    }
-    CHECK(hasNonZero);
+    mm::golden::ScopedTestClock clock(500);   // this file's fixed moment, the same frame on every run
+    mm::golden::LayerFixture fx(8, 8);
+    fx.add(fx.own<mm::PlasmaEffect>());
+    fx.layer.tick();
+    CHECK(litLights(fx.frame()) > 0);
 }
 
 // Opposite corners of a 16×16 grid differ in color (the plasma is not flat-filling).
 TEST_CASE("PlasmaEffect produces spatial variation") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 16;
-    grid.height = 16;
-    grid.depth = 1;
-    layouts.addChild(&grid);
-
-    mm::Layer layer;
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-
-    mm::PlasmaEffect plasma;
-    layer.addChild(&plasma);
-
-    layer.applyState();
-    layer.tick();
-
-    auto* data = layer.buffer().data();
-    uint8_t r0 = data[0], g0 = data[1], b0 = data[2];
-    size_t lastIdx = (16 * 16 - 1) * 3;
-    uint8_t r1 = data[lastIdx], g1 = data[lastIdx + 1], b1 = data[lastIdx + 2];
-    CHECK((r0 != r1 || g0 != g1 || b0 != b1));
+    mm::golden::ScopedTestClock clock(500);   // 500 where the suite uses 1000: the corners match at 1024-1031 ms of each 2,000 ms cycle, 24 ms past 1000
+    mm::golden::LayerFixture fx(16, 16);
+    fx.add(fx.own<mm::PlasmaEffect>());
+    fx.layer.tick();
+    CHECK(cornersDiffer(fx.frame()));
 }
 
-// Plasma and Noise produce visibly different frames on the same grid (sanity check that they're distinct algorithms).
+// Plasma and Noise produce visibly different frames on 8×8 grids at one moment (sanity check that they're distinct algorithms).
 TEST_CASE("PlasmaEffect produces different output than NoiseEffect") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 8;
-    grid.height = 8;
-    grid.depth = 1;
-    layouts.addChild(&grid);
+    mm::golden::ScopedTestClock clock(500);   // both frames at one moment
+    mm::golden::LayerFixture plasmaFx(8, 8);
+    plasmaFx.add(plasmaFx.own<mm::PlasmaEffect>());
+    plasmaFx.layer.tick();
 
-    mm::Layer layer1;
-    layer1.setLayouts(&layouts);
-    layer1.setChannelsPerLight(3);
-    mm::PlasmaEffect plasma;
-    layer1.addChild(&plasma);
-    layer1.applyState();
-    layer1.tick();
+    mm::golden::LayerFixture noiseFx(8, 8);
+    noiseFx.add(noiseFx.own<mm::NoiseEffect>());
+    noiseFx.layer.tick();
 
-    mm::Layer layer2;
-    layer2.setLayouts(&layouts);
-    layer2.setChannelsPerLight(3);
-    mm::NoiseEffect noise;
-    layer2.addChild(&noise);
-    layer2.applyState();
-    layer2.tick();
-
-    bool differs = false;
-    for (size_t i = 0; i < layer1.buffer().bytes(); i++) {
-        if (layer1.buffer().data()[i] != layer2.buffer().data()[i]) {
-            differs = true;
-            break;
-        }
-    }
-    CHECK(differs);
+    const auto plasma = plasmaFx.frame();
+    const auto noise = noiseFx.frame();
+    REQUIRE(plasma.size() == noise.size());
+    CHECK(plasma != noise);
 }

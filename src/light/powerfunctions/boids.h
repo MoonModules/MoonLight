@@ -9,6 +9,7 @@
 #include "light/powerfunctions/draw.h"        // Canvas, fade, blendPixel, pixel, get, bar
 #include "light/powerfunctions/particles.h"   // FrameTime
 #include "light/util/light_types.h"           // lengthType, and the platform's MM_HEAVY_COMPUTE
+#include "platform/noinline.h"                // MM_NOINLINE: the trail copy, one for Flock, MoonFlock and Swirl
 #include "platform/platform.h"                // millis(), MM_NONBLOCKING
 
 #include <algorithm>
@@ -288,8 +289,8 @@ struct Plane {
     /// The same fade, keeping `keep` of every channel: a trail whose length is a control.
     void fade(uint8_t keep) const { draw::fade(cv, static_cast<uint8_t>(255 - keep)); }
 
-    /// Copy the colors into `layer`, a canvas of the same size, leaving its other channels as they are.
-    void copyColorsTo(const draw::Canvas& layer) const {
+    /// Copy the colors into `layer`, a canvas of the same size, leaving its other channels as they are; one copy for the three effects that hold a trail plane, run once a frame.
+    MM_NOINLINE void copyColorsTo(const draw::Canvas& layer) const {
         const size_t lights = static_cast<size_t>(w()) * h();
         for (size_t i = 0; i < lights; i++) draw::pixel(layer, i, draw::get(cv, i));
     }

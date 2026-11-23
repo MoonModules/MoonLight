@@ -9,6 +9,7 @@
 #include "light/effects/LavaLampEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "platform/platform.h"
+#include "golden_frame.h"   // cornersDiffer, the suite's one corner check
 
 namespace {
 
@@ -35,12 +36,11 @@ struct Ctx {
     }
 
     bool cornersDiffer() {
-        auto* data = layer.buffer().data();
-        size_t last = (static_cast<size_t>(grid.width) * grid.height - 1) * 3;
-        return data[0] != data[last] || data[1] != data[last + 1] || data[2] != data[last + 2];
+        auto& buf = layer.buffer();
+        return mm::golden::cornersDiffer(std::vector<uint8_t>(buf.data(), buf.data() + buf.bytes()));
     }
 
-    // For effects with localised features (e.g. ripples): scan all pixels for at least two distinct RGB triplets.
+    // For effects with localized features (e.g. ripples): scan all pixels for at least two distinct RGB triplets.
     bool hasTwoDistinctColors() {
         auto* data = layer.buffer().data();
         size_t pixels = static_cast<size_t>(grid.width) * grid.height;
@@ -78,7 +78,7 @@ struct Ctx {
 // SpiralEffect renders non-zero pixels and shows spatial variation (corners differ).
 STATELESS_EFFECT_TEST(SpiralEffect)
 
-// LavaLampEffect has localised blob features that can land on identical corner palette indices at some t values (corner-pair check is too strict). Scan the whole buffer for any two distinct pixels instead, same approach as RingsEffect below. LavaLamp paints at least one non-zero byte (effect actually renders).
+// LavaLampEffect has localized blob features that can land on identical corner palette indices at some t values (corner-pair check is too strict). Scan the whole buffer for any two distinct pixels instead, same approach as RingsEffect below. LavaLamp paints at least one non-zero byte (the effect renders).
 TEST_CASE("LavaLampEffect writes non-zero RGB") {
     Ctx ctx(16, 16);
     mm::LavaLampEffect effect;
@@ -108,7 +108,7 @@ TEST_CASE("LavaLampEffect spatial variation") {
     CHECK(varied);
 }
 
-// RingsEffect has localised features (thin rings); corner-pair check is too strict, so we scan for any two distinct pixels instead. Rings paints at least one non-zero byte (effect actually renders).
+// RingsEffect has localized features (thin rings); corner-pair check is too strict, so we scan for any two distinct pixels instead. Rings paints at least one non-zero byte (the effect renders).
 TEST_CASE("RingsEffect writes non-zero RGB") {
     Ctx ctx(16, 16);
     mm::RingsEffect effect;
@@ -118,7 +118,7 @@ TEST_CASE("RingsEffect writes non-zero RGB") {
     CHECK(ctx.hasNonZero());
 }
 
-// At least two distinct pixels exist somewhere in the buffer (rings are localised, so corner-pair would be too strict).
+// At least two distinct pixels exist somewhere in the buffer (rings are localized, so corner-pair would be too strict).
 TEST_CASE("RingsEffect spatial variation") {
     Ctx ctx(32, 32);
     mm::RingsEffect effect;

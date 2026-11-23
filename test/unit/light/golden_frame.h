@@ -142,6 +142,13 @@ inline size_t litLights(const std::vector<uint8_t>& frame) {
     return lit;
 }
 
+/// Whether the first and last lights of an RGB frame differ in color, for a test that asks whether an effect varies across the grid.
+inline bool cornersDiffer(const std::vector<uint8_t>& frame) {
+    if (frame.size() < 6) return false;
+    const size_t last = frame.size() - 3;
+    return frame[0] != frame[last] || frame[1] != frame[last + 1] || frame[2] != frame[last + 2];
+}
+
 /// Check a render against its golden, and on mismatch print the value to paste back in, the workflow when a divergence is @xref{what-a-golden-is-not|intended and reviewed}.
 inline void checkGolden(const char* name, uint64_t actual, uint64_t expected) {
     if (actual != expected) {
