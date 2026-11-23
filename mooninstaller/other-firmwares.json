@@ -1,6 +1,6 @@
 [
   {
-    "name": "Troy's WLED (Olimex ESP32-P4-PC, Ethernet)",
+    "name": "troyhacks' WLED",
     "home": "https://github.com/troyhacks/WLED",
     "manifest": "https://troyhacks.github.io/WLED/latest/manifest.json"
   },

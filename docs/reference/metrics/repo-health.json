@@ -1,10 +1,10 @@
 {
-  "commit": "0e9bf8ba5",
+  "commit": "13946d716",
   "flash": {
     "esp32": 2496944,
     "esp32s31": 2887824,
     "qemu": 1383648,
-    "host-macos": 2917600,
+    "host-macos": 2917664,
     "host-windows": 1925120,
     "esp32c3": 2486480,
     "host-linux": 2548000,
@@ -756,8 +756,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 25,
-      "fps": 40000,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -797,16 +797,16 @@
     }
   },
   "loc": {
-    "core": 41967,
+    "core": 41961,
     "light": 38876,
     "platform": 30758,
     "ui": 15552,
-    "test": 102191,
-    "moondeck": 36843
+    "test": 102216,
+    "moondeck": 36859
   },
   "comments": {
     "core": {
-      "lines": 8000,
+      "lines": 8001,
       "ratio": 0.212
     },
     "light": {
@@ -822,21 +822,21 @@
       "ratio": 0.258
     },
     "test": {
-      "lines": 8668,
+      "lines": 8669,
       "ratio": 0.097
     },
     "moondeck": {
-      "lines": 4226,
+      "lines": 4227,
       "ratio": 0.133
     }
   },
   "tests": {
-    "cases": 3924,
+    "cases": 3925,
     "scenarios": 37
   },
   "docs": {
     "md_files": 130,
-    "md_lines": 20935,
+    "md_lines": 20933,
     "plans_files": 18,
     "backlog_lines": 2910,
     "lessons_lines": 458,

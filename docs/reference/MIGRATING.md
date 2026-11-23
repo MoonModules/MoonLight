@@ -38,7 +38,7 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 MoonLight's own audio-sync format is now the MoonModules format, shared with troyhacks' WLED and proposed to WLED-MM, and its packets start with `MM` where they started with `ML`. A board on the previous firmware ignores the new packets and the other way round, so a sender and its receivers update together; WLED's format, which WLED and WLED-MM devices read, is unchanged. The Audio card's `syncFormat` choice is named `MoMo`, short for MoonModules, and a saved choice keeps its place ([audio sync format](audio-sync.md#the-moonmodules-format)).
 
 ### `audioBeat()` fires on the beat
-**Action: *none*, or re-check a script that should flash on every drum: it now uses `audioOnset(0)` or the frame's onset.**
+**Action: *none*, or re-check a script that should flash on every drum: it now reads `audioOnset(0)`, `audioOnset(1)` and `audioOnset(2)`, the kick, the mids and the treble.**
 
 MoonLive's `audioBeat()` is true on the tick a beat starts, from the beat a sender states over the MoonModules format or the simulated song's, where it was true on every frame a drum was heard. While no beat runs it still answers the drum, so a board with only its own microphone behaves as before. `audioBpm()`, `audioBeatPhase()` and `audioBeatInBar()` are new ([MoonLive's builtins](../moonmodules/light/moonlive.md)).
 

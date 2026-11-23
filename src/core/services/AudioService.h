@@ -451,7 +451,8 @@ public:
         }
         const uint32_t now = platform::millis();
         chords_.name(frame_, now);   // from whichever source made the frame, so a receiving board names the chord too
-        if (fresh) beatClock_.take(frame_.beat, now);   // a frame with no beat section changes nothing, so the clock runs on until it goes stale
+        // A frame with no beat section leaves the clock running until it goes stale; a simulated frame's beat is anchored at its sample time, which the block grid can hold behind now.
+        if (fresh) beatClock_.take(frame_.beat, mode == kSimMode && s != AudioSync::kReceive ? simPrevMs_ : now);
         beatNow_ = beatClock_.tick(now);
     }
 

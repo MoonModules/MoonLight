@@ -65,7 +65,7 @@ public:
         if (w < 1 || h < 1) return;
         const AudioFrame* f = AudioService::latestFrame();
         const uint32_t ms = elapsed();
-        presence_ = presenceAfter(presence_, f->heard(), ms - lastMs_);
+        presence_ = presenceAfter(presence_, f->heard(), ms - lastMs_);   // in 1/256ths, so a 1 ms frame still steps
         lastMs_ = ms;
         const BeatNow& beat = AudioService::beatNow();
         const Sweep s = sweepAt(beat, ms);
@@ -74,7 +74,7 @@ public:
         const int32_t tail = (static_cast<int32_t>(w) * trail) / 512;
         for (lengthType x = 0; x < w; x++) {
             const uint8_t band = static_cast<uint8_t>((static_cast<uint32_t>(x) * 16u) / static_cast<uint32_t>(w));
-            const uint8_t light = scale8(lightAt(x - pos, s.forward, half, tail), presence_);
+            const uint8_t light = scale8(lightAt(x - pos, s.forward, half, tail), static_cast<uint8_t>(presence_ >> 8));
             const uint8_t hue = static_cast<uint8_t>(band * 16u + (s.downbeat && downbeat ? 128u : 0u));
             drawColumn(cv, x, h, f->bands[band], light, hue);
         }
@@ -101,7 +101,7 @@ public:
         uint32_t through;    // how far through it, 0..65535
         if (beat.live()) {
             const uint32_t inBar = beat.inBar ? beat.inBar - 1u : beat.count % 4u;
-            crossing = cycle == kBar ? beat.count / 4u : beat.count;
+            crossing = cycle == kBar ? (beat.count + 65536u - inBar) / 4u : beat.count;   // the bar's first beat, so the direction turns with the sender's bar
             through = cycle == kBar ? (inBar * 256u + beat.phase) * 64u : beat.phase * 256u;
         } else {
             const uint64_t beats256 = static_cast<uint64_t>(ms) * tempo * 256u / 60000u;   // beats since the start, in 1/256ths
@@ -122,11 +122,11 @@ public:
         return static_cast<uint8_t>(255 - ((behind - half) * 255) / (tail + 1));
     }
 
-    /// How lit the light is after `dtMs` more of sound or silence: back within about 120 ms when sound returns, out over about 500 ms in silence.
-    static uint8_t presenceAfter(uint8_t presence, bool heard, uint32_t dtMs) {
-        const uint32_t step = (dtMs > 500u ? 500u : dtMs) * 255u / (heard ? 120u : 500u);
-        return heard ? static_cast<uint8_t>(presence + step > 255u ? 255u : presence + step)
-                     : static_cast<uint8_t>(presence > step ? presence - step : 0u);
+    /// How lit the light is, 0..65535, after `dtMs` more of sound or silence: back within about 120 ms when sound returns, out over about 500 ms in silence.
+    static uint16_t presenceAfter(uint16_t presence, bool heard, uint32_t dtMs) {
+        const uint32_t step = (dtMs > 500u ? 500u : dtMs) * 65535u / (heard ? 120u : 500u);
+        return heard ? static_cast<uint16_t>(presence + step > 65535u ? 65535u : presence + step)
+                     : static_cast<uint16_t>(presence > step ? presence - step : 0u);
     }
 
 private:
@@ -141,7 +141,7 @@ private:
         }
     }
 
-    uint8_t  presence_ = 0;   ///< how lit the light is, following sound and silence
+    uint16_t presence_ = 0;   ///< how lit the light is, 0..65535, following sound and silence
     uint32_t lastMs_ = 0;     ///< the last frame's time, which the fade steps from
 };
 

@@ -48,6 +48,9 @@ TEST_CASE("on bar, a crossing takes four beats and lands with the bar's end") {
     CHECK(third < 33500);
     CHECK(e.sweepAt(beatAt(4, 0, 1), 0).downbeat);
     CHECK_FALSE(e.sweepAt(beatAt(5, 0, 2), 0).downbeat);
+    // A source whose count is not a multiple of four at the bar's start: the direction still turns with its bar.
+    CHECK(e.sweepAt(beatAt(3, 255, 3), 0).forward == e.sweepAt(beatAt(4, 0, 4), 0).forward);
+    CHECK(e.sweepAt(beatAt(4, 0, 4), 0).forward != e.sweepAt(beatAt(5, 0, 1), 0).forward);
 }
 
 TEST_CASE("with no beat the light crosses at the effect's own tempo") {
@@ -84,11 +87,14 @@ TEST_CASE("in silence the light goes out, so a stopped song is dark") {
 }
 
 TEST_CASE("the light comes back quickly with sound and fades slowly in silence") {
-    CHECK(BeatSweepEffect::presenceAfter(0, true, 120) == 255);
-    CHECK(BeatSweepEffect::presenceAfter(0, true, 60) > 100);
-    CHECK(BeatSweepEffect::presenceAfter(255, false, 100) > 180);   // a fifth of the way out after 100 ms
-    CHECK(BeatSweepEffect::presenceAfter(255, false, 500) == 0);
-    CHECK(BeatSweepEffect::presenceAfter(255, false, 60000) == 0);   // a long gap clamps, no wrap
+    CHECK(BeatSweepEffect::presenceAfter(0, true, 120) == 65535);
+    CHECK(BeatSweepEffect::presenceAfter(0, true, 60) > 25000);
+    CHECK(BeatSweepEffect::presenceAfter(65535, false, 100) > 46000);   // a fifth of the way out after 100 ms
+    CHECK(BeatSweepEffect::presenceAfter(65535, false, 500) == 0);
+    CHECK(BeatSweepEffect::presenceAfter(65535, false, 60000) == 0);    // a long gap clamps, no wrap
+    uint16_t p = 65535;
+    for (int i = 0; i < 500; i++) p = BeatSweepEffect::presenceAfter(p, false, 1);   // 1 ms frames
+    CHECK(p < 300);   // still fades out in about 500 ms
 }
 
 TEST_CASE("the beat's text names the tempo and the beat in the bar") {

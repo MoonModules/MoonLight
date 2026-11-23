@@ -84,18 +84,23 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
 def long_sections(text: str) -> list:
-    """((title, k), line, words) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS;
-    k counts the earlier sections of the same title, so two `### Setup` under different parents stay two sections."""
-    sections, fence, current, seen = [], False, None, {}   # each: [key, line, words]
+    """((ancestry, title, k), line, words) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS;
+    the key is the section's headings from the top, k counting earlier sections of the same title under the same ones, so two
+    `### Setup` under different parents stay two sections and deleting one leaves the other its own."""
+    sections, fence, current, seen, path = [], False, None, {}, []   # each: [key, line, words]; path: (level, title) from the top
     for n, line in enumerate(text.split("\n"), 1):
         if line.lstrip().startswith(("```", "~~~")):
             fence = not fence
             continue
         m = None if fence else _HEADING_RE.match(line)
         if m:
-            title = m.group(2)
-            current = [(title, seen.get(title, 0)), n, 0]
-            seen[title] = seen.get(title, 0) + 1
+            level, title = len(m.group(1)), m.group(2)
+            path = [(lv, t) for lv, t in path if lv < level]
+            ancestry = tuple(t for _, t in path)
+            k = seen.get((ancestry, title), 0)
+            seen[(ancestry, title)] = k + 1
+            current = [(ancestry, title, k), n, 0]
+            path.append((level, title))
             sections.append(current)
         elif current and not fence and not line.lstrip().startswith(("|", "<", "![", ">")):
             current[2] += len(re.findall(r"[A-Za-z0-9][\w'\u2019-]*", line))
@@ -105,7 +110,7 @@ def long_sections(text: str) -> list:
 def section_findings(text: str, before: str = "") -> list:
     """(rule, message, line) for each long section of one page; with `before`, the page at HEAD, only the sections it lengthened."""
     was = {key: words for key, _, words in long_sections(before)}
-    return [(SECTION_RULE, f"Section '{key[0]}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
+    return [(SECTION_RULE, f"Section '{key[1]}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
             for key, n, words in long_sections(text) if words > was.get(key, 0)]
 
 
@@ -240,6 +245,14 @@ def files_main(paths) -> int:
     return 1 if errors else 0
 
 
+def base_ref(base: str) -> str:
+    """The commit a diff base names: a three-dot range's merge base, or the ref itself."""
+    if "..." not in base:
+        return base
+    left, right = base.split("...", 1)
+    return subprocess.run(["git", "merge-base", left, right or "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip() or "HEAD"
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--files":
         return files_main(sys.argv[2:])
@@ -265,10 +278,13 @@ def main():
 
     findings, errors = vale_findings(by_path)
 
-    # A section is measured whole on every page the change touches, since its length is the section's and not one line's.
+    # A section is measured whole on every page the change touches, since its length is the section's and not one line's, and
+    # counts when the change lengthened it against the base, as the write-time hook counts it.
+    ref = base_ref(base)
     for path in sorted(by_path):
         if path.endswith(".md") and not path.startswith(SECTION_EXEMPT) and os.path.exists(path):
-            for rule, msg, n in section_findings(open(path, encoding="utf-8").read()):
+            before = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=ROOT, capture_output=True, text=True).stdout
+            for rule, msg, n in section_findings(open(path, encoding="utf-8").read(), before):
                 findings.append(f"{path}: warning {rule}: {msg}  [line {n}]")
 
     # Pages the sweep has finished are checked WHOLE, not by diff: .vale.ini lists them with every

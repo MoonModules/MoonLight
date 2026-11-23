@@ -135,3 +135,20 @@ TEST_CASE("the phrase counts on from the packet and wraps at its length") {
     CHECK(n.inPhrase == 1);        // the next phrase
     CHECK(n.phraseBeats == 32);
 }
+
+TEST_CASE("a new tempo one beat behind shows the new count at once, and its next beat starts") {
+    BeatClock c;
+    AudioBeat b = at120(5000);   // beat 10
+    c.take(b, 5000);
+    c.tick(5000);
+    b.bpm100 = 14000;            // a new track at 140 BPM, its count one behind
+    b.count = 9;
+    b.phase = 0;
+    c.take(b, 5010);
+    BeatNow n = c.tick(5010);
+    CHECK(n.count == 9);
+    CHECK_FALSE(n.onBeat);
+    n = c.tick(5010 + 430);      // a beat at 140 BPM is 429 ms
+    CHECK(n.onBeat);
+    CHECK(n.count == 10);
+}

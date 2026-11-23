@@ -70,6 +70,8 @@ def test_against_the_page_at_head_only_a_section_the_change_lengthened_is_a_find
     assert [n for _, _, n in c.section_findings(two(long + 1, long + 200), two(long, long + 200))] == [5], "two sections of one title count apart: the first grew"
     assert c.section_findings(two(long + 200, long), two(long, long + 200)) != [], "their counts swapped is a growth, not a match"
     assert c.section_findings(two(long, long + 200), two(long, long + 200)) == [], "both unchanged is none"
+    only_b = lambda b: "# T\n\n## B\n\n### Setup\n\n" + " ".join(["w"] * b) + "\n"
+    assert len(c.section_findings(only_b(long + 1), two(long + 200, long))) == 1, "A deleted, B grown by a word: B compares with its own count"
 
 def test_the_section_count_reads_a_page_whose_name_holds_spaces_and_skips_one_deleted_but_tracked(tmp_path, monkeypatch):
     import sys

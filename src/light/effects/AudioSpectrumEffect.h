@@ -179,9 +179,9 @@ private:
 
     /// The tempo in whole BPM at the left of row `y`, under the note names.
     void drawTempo(const draw::Canvas& cv, uint32_t bpm, lengthType y) MM_NONBLOCKING {
-        char digits[4] = {};
-        for (int i = 2; i >= 0; i--) { digits[i] = static_cast<char>('0' + bpm % 10u); bpm /= 10u; }
-        draw::text(cv, fonts::kFont4x6, digits[0] == '0' ? digits + 1 : digits, 0, y, RGB{255, 255, 255});
+        char digits[6];
+        mm::formatTo(digits, sizeof(digits), "%u", static_cast<unsigned>(bpm));
+        draw::text(cv, fonts::kFont4x6, digits, 0, y, RGB{255, 255, 255});
     }
 
     /// The level meter on the rows from `top` down: the raw level across the palette, as a lag is wrong for judging response, and a square per range's hit, with a fourth part for the beat while one runs.

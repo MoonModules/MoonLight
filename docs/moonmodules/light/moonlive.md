@@ -276,7 +276,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `audioLevel()`, `audioSmooth()` | how loud the room is: the raw level, and the one that swells |
 | `audioBand(i)` | one of sixteen third-octave band magnitudes, bass at 0 and treble at 15 |
 | `audioPeakHz()` | the dominant frequency |
-| `audioBeat()` | true on the tick a beat starts, from the beat a sender or the simulated song states; while none runs, on the frame a drum is heard |
+| `audioBeat()` | true on the tick a beat starts, from the beat a sender or the simulated song states; while none runs, on the frame's onset: a drum, or a WLED sender's peak |
 | `audioBpm()`, `audioBeatPhase()`, `audioBeatInBar()` | the tempo in whole BPM, how far the current beat has run (0..255), and the beat in the bar (1 to 4, 0 unknown); each 0 while no beat runs |
 | `audioChroma(i)`, `audioChordChange()` | one of the twelve pitch classes, C at 0 to B at 11, and true on the frame the chord changed |
 | `audioKey()` | the key over the last 15 s: 0 none yet, 1 to 12 C to B major, 13 to 24 C to B minor |

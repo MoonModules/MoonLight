@@ -7,17 +7,8 @@
 
 namespace mm {
 
-/// The beat as an effect reads it on one tick: the beat section's fields with the phase run forward to now, and whether a beat started since the tick before.
-struct BeatNow {
-    uint16_t bpm100 = 0;        ///< the tempo × 100, 12800 for 128 BPM; 0 while no beat runs
-    uint16_t count = 0;         ///< the beats since the source locked, wrapping; it steps forward once a beat
-    uint8_t  phase = 0;         ///< how far the current beat has run, 0..255
-    uint8_t  inBar = 0;         ///< the beat in the bar, 1..4, or 0 while its place in the bar is unknown
-    uint8_t  source = 0;        ///< a BeatSource
-    uint8_t  confidence = 0;    ///< 0..255: the tracker's lock, 255 for a deck or a clock
-    uint8_t  inPhrase = 0;      ///< the beat in the phrase, 1..`phraseBeats`, or 0 while there is no phrase
-    uint8_t  phraseBeats = 0;   ///< the phrase's length in beats, or 0 while there is none
-    uint8_t  flags = 0;         ///< AudioBeat's kBeatDownbeatKnown and kBeatFill
+/// The beat as an effect reads it on one tick: the beat section's fields, its phase, bar and phrase run forward to now and its count stepping forward once a beat, and whether a beat started since the tick before.
+struct BeatNow : AudioBeat {
     bool     onBeat = false;    ///< true on the tick a beat started
     /// Whether a beat runs.
     constexpr bool live() const { return bpm100 != 0; }
@@ -43,7 +34,8 @@ public:
     void take(const AudioBeat& b, uint32_t nowMs) {
         if (b.bpm100 == 0) return;
         const float packetFrac = static_cast<float>(b.phase) / 256.0f;
-        if (!live_ || tempoMoved(b.bpm100)) {
+        set_ = !live_ || tempoMoved(b.bpm100);
+        if (set_) {
             beats_ = b.count;   // the count extended past 16 bits from here on
             frac_ = packetFrac;
         } else {
@@ -52,7 +44,8 @@ public:
             const uint32_t predicted = beats_ + static_cast<uint32_t>(static_cast<int32_t>(whole));
             const int16_t ahead = static_cast<int16_t>(static_cast<uint16_t>(b.count - static_cast<uint16_t>(predicted)));
             const float err = static_cast<float>(ahead) + packetFrac - (rel - whole);
-            const float moved = (std::fabs(err) > 0.5f ? err : err * kPull) + (rel - whole);
+            set_ = std::fabs(err) > 0.5f;
+            const float moved = (set_ ? err : err * kPull) + (rel - whole);
             const float step = std::floor(moved);
             beats_ = predicted + static_cast<uint32_t>(static_cast<int32_t>(step));
             frac_ = moved - step;
@@ -71,26 +64,25 @@ public:
         const float rel = relAt(nowMs);
         const float whole = std::floor(rel);
         BeatNow n;
+        static_cast<AudioBeat&>(n) = last_;
         n.phase = show(beats_ + static_cast<uint32_t>(static_cast<int32_t>(whole)), static_cast<uint8_t>((rel - whole) * 256.0f), n.onBeat);
-        n.bpm100 = last_.bpm100;
         n.count = static_cast<uint16_t>(shownBeats_);
         const int32_t since = static_cast<int32_t>(shownBeats_ - packetBeats_);
         n.inBar = last_.inBar ? static_cast<uint8_t>(wrap(last_.inBar - 1 + since, 4) + 1) : 0;
         n.inPhrase = last_.inPhrase && last_.phraseBeats ? static_cast<uint8_t>(wrap(last_.inPhrase - 1 + since, last_.phraseBeats) + 1) : 0;
         n.phraseBeats = last_.inPhrase ? last_.phraseBeats : 0;
-        n.source = last_.source;
-        n.confidence = last_.confidence;
-        n.flags = last_.flags;
         return n;
     }
 
 private:
-    /// Report the clock's beat `at` with its `phase`: `onBeat` when it passed the beat shown last, the phase held at that beat's start when a pull took it one beat back, the beat taken as it is on a lock or a source that moved further back.
+    /// Report beat `at` with its `phase`: `onBeat` past the beat shown last, the phase held at 0 after a pull one beat back, the beat taken as it is on a lock, a set, or a longer step back.
     uint8_t show(uint32_t at, uint8_t phase, bool& onBeat) {
         const int32_t ahead = static_cast<int32_t>(at - shownBeats_);
-        const bool restart = !shown_ || ahead < -1;   // a pull reaches one beat back at most, so further is the source's own move
+        const bool lock = !shown_;
+        const bool moved = ahead < -1 || (set_ && ahead < 0);   // a pull reaches one beat back at most; a set or a longer step is the source's own
         shown_ = true;
-        if (restart || ahead > 0) { onBeat = !restart; shownBeats_ = at; return phase; }
+        set_ = false;
+        if (lock || moved || ahead > 0) { onBeat = !lock && ahead > 0; shownBeats_ = at; return phase; }
         return ahead < 0 ? 0 : phase;
     }
     /// The beats since the anchor's whole beat, at `nowMs`.
@@ -112,6 +104,7 @@ private:
     uint32_t shownBeats_ = 0;   ///< the beat the last tick reported, so a beat is taken once
     bool     live_ = false;
     bool     shown_ = false;
+    bool     set_ = false;          ///< the last packet set the clock outright, so its count is shown as it is
 };
 
 }  // namespace mm
