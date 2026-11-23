@@ -64,7 +64,7 @@ Three aids get a weak board through, the first that works being enough:
 
 A board that resets this way after MoonLight runs starts in [safe mode](troubleshooting.md#the-device-rebooted-on-its-own), its lights held dark, and needs a restart from its page once its power is solid.
 
-Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only. The installer writes WLED, WLED-MM, Tasmota, ESPHome and Troy's WLED back from Chrome or Edge, each from its own project's site and with its WiFi given over Improv where the firmware takes it, under [Going back to another firmware](https://moonmodules.org/MoonLight/install/#other-firmware); each firmware's own web installer works as well.
+Going back to the old firmware also needs a USB cable, since MoonBase installs MoonLight only. The installer writes WLED, WLED-MM, Tasmota, ESPHome and Troy's WLED back from Chrome or Edge, each from its own project's site and with its WiFi given over Improv where the firmware takes it, under [Install another firmware](https://moonmodules.org/MoonLight/install/#other-firmware); each firmware's own web installer works as well.
 
 **The migration is at your own risk.**
 It is tested on the devices named above, and another device can differ from them in ways the image cannot check.

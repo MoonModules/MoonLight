@@ -44,6 +44,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <initializer_list>   // the braced list below; clang pulls it in transitively, GCC does not
 
 using namespace mm;
@@ -652,7 +653,7 @@ TEST_CASE("AudioService Local+send: turning send off clears the sending status")
     a.release();
 }
 
-// A MoonModules-format sender without the smoothed bands gets them smoothed here, as a WLED one does, so the bars rise rather than read zero.
+// A MoonModules-format sender that leaves out the smoothed bands gets them smoothed here, as a WLED one does, so the bars rise rather than read zero.
 TEST_CASE("AudioService Receive: a MoonModules packet without the smoothed bands is smoothed here") {
     FrozenClock clk(1);
     AudioService a;
@@ -730,4 +731,51 @@ TEST_CASE("audio sync follows one sender: the first heard, a higher priority, or
     CHECK_FALSE(sel.follows(a, kP, 50, 1000));
     CHECK(sel.follows(b, kP, 1100, 1000));       // c silent past a second: the next sender heard takes over
     CHECK_FALSE(sel.othersIgnored(2200, 1000));  // nothing passed over lately
+}
+
+// A sender's beat section reaches the effects: a receiving board runs it as its beat, so a beat effect follows a deck or a tracker on another device.
+TEST_CASE("AudioService Receive: a MoonModules packet's beat becomes the board's beat") {
+    FrozenClock clk(1);
+    AudioService a;
+    openReceiver(a);
+    REQUIRE(a.syncOpenForTest());
+    CHECK_FALSE(a.audioBeat().live());
+    AudioFrame peer;
+    peer.level = 77; peer.seq = 10;
+    peer.beat.bpm100 = 12800; peer.beat.count = 41; peer.beat.inBar = 2; peer.beat.source = kBeatProLink; peer.beat.confidence = 255;
+    uint8_t pkt[kMmSyncMaxPacket];
+    REQUIRE(sendUntil(a, pkt, buildMoonModulesAudioSync(pkt, peer), [&] { return a.audioFrame()->level == 77; }));
+    const BeatNow& b = a.audioBeat();
+    CHECK(b.live());
+    CHECK(b.bpm100 == 12800);
+    CHECK(b.count == 41);
+    CHECK(b.inBar == 2);
+    CHECK(b.source == kBeatProLink);
+}
+
+// The simulated song states its beat, so a beat effect moves on a desktop with no sender.
+TEST_CASE("AudioService Simulate: the song's beat is the board's beat, at 100 BPM") {
+    FrozenClock clk(1000);
+    AudioService a;
+    a.mode = AudioService::kSimMode;
+    a.applyState();
+    a.tick();
+    CHECK(a.audioBeat().live());
+    CHECK(a.audioBeat().bpm100 == 10000);
+    CHECK(a.audioBeat().inBar >= 1);
+    a.release();
+}
+
+// The Audio card names the beat the effects follow, and says so when there is none.
+TEST_CASE("AudioService's beat readout names the tempo, the bar, the source and its confidence") {
+    char out[48];
+    AudioService::formatBeat(out, sizeof(out), BeatNow{});
+    CHECK(std::string(out) == "none");
+    BeatNow b;
+    b.bpm100 = 12849; b.inBar = 3; b.source = kBeatProLink; b.confidence = 255;
+    AudioService::formatBeat(out, sizeof(out), b);
+    CHECK(std::string(out) == "128 BPM, beat 3 of 4, Pro DJ Link 100%");
+    b.inBar = 0; b.source = kBeatTracker; b.confidence = 128;
+    AudioService::formatBeat(out, sizeof(out), b);
+    CHECK(std::string(out) == "128 BPM, tracker 50%");
 }

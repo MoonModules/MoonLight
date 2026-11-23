@@ -648,10 +648,17 @@ extern "C" inline uint32_t mm_light_noteOnset(const uintptr_t* args, uint32_t, c
 extern "C" inline uint32_t mm_light_chordChange(const uintptr_t*, uint32_t, const uint8_t*) {
     return AudioService::latestFrame()->harmonyChange ? 1 : 0;
 }
-/// True on the frame a drum is heard, the frame's `onset`, so a beat means one thing across the project.
+/// True on the tick a beat starts, from the beat a source states; while none runs, on the frame a drum is heard, the frame's `onset`.
 extern "C" inline uint32_t mm_light_onBeat(const uintptr_t*, uint32_t, const uint8_t*) {
-    return AudioService::latestFrame()->onset ? 1 : 0;
+    const BeatNow& b = AudioService::beatNow();
+    return (b.live() ? b.onBeat : AudioService::latestFrame()->onset != 0) ? 1 : 0;
 }
+/// The tempo in whole BPM, 0 while no beat runs.
+extern "C" inline uint32_t mm_light_bpm(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::beatNow().bpm(); }
+/// How far the current beat has run, 0..255, 0 while no beat runs.
+extern "C" inline uint32_t mm_light_beatPhase(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::beatNow().phase; }
+/// The beat in the bar, 1..4, or 0 while no beat runs or its place in the bar is unknown.
+extern "C" inline uint32_t mm_light_beatInBar(const uintptr_t*, uint32_t, const uint8_t*) { return AudioService::beatNow().inBar; }
 
 /// The one body all five motion builtins share, differing only in the axis they name. ByteArg rather than a raw widen, since an aim below zero would clamp to the opposite extreme.
 inline uint32_t motionWrite(MotionAxis axis, const uintptr_t* args) {
@@ -910,7 +917,10 @@ inline const BuiltinTable& lightBuiltins() {
     t.add({"audioSmooth", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_levelSmooth, {}});
     t.add(demanding(Builtin{"audioBand", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_band, {}}, kBandsDemand));
     t.add(demanding(Builtin{"audioPeakHz", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_peakHz, {}}, kBandsDemand));
-    t.add(demanding(Builtin{"audioBeat", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_onBeat, {}}, kBandsDemand));
+    t.add(demanding(Builtin{"audioBeat", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_onBeat, {}}, kBandsDemand));   // the onset it falls back to reads the analysis
+    t.add({"audioBpm", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_bpm, {}});
+    t.add({"audioBeatPhase", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_beatPhase, {}});
+    t.add({"audioBeatInBar", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_beatInBar, {}});
     t.add(demanding(Builtin{"audioChroma", 1, /*returns*/ true, BuiltinKind::Call, &mm_light_chroma, {}}, kNotesDemand));
     t.add(demanding(Builtin{"audioChordChange", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_chordChange, {}}, kNotesDemand));
     t.add(demanding(Builtin{"audioKey", 0, /*returns*/ true, BuiltinKind::Call, &mm_light_key, {}}, kNotesDemand));

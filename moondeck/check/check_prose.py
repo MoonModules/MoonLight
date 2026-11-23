@@ -84,26 +84,29 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
 def long_sections(text: str) -> list:
-    """(title, line, words) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS."""
-    sections, fence, current = [], False, None   # each: [level, title, line, words]
+    """((title, k), line, words) for each leaf section of one page, the text from a heading to the next, past MAX_SECTION_WORDS;
+    k counts the earlier sections of the same title, so two `### Setup` under different parents stay two sections."""
+    sections, fence, current, seen = [], False, None, {}   # each: [key, line, words]
     for n, line in enumerate(text.split("\n"), 1):
         if line.lstrip().startswith(("```", "~~~")):
             fence = not fence
             continue
         m = None if fence else _HEADING_RE.match(line)
         if m:
-            current = [len(m.group(1)), m.group(2), n, 0]
+            title = m.group(2)
+            current = [(title, seen.get(title, 0)), n, 0]
+            seen[title] = seen.get(title, 0) + 1
             sections.append(current)
         elif current and not fence and not line.lstrip().startswith(("|", "<", "![", ">")):
-            current[3] += len(re.findall(r"[A-Za-z0-9][\w'\u2019-]*", line))
-    return [(title, n, words) for _, title, n, words in sections if words > MAX_SECTION_WORDS]
+            current[2] += len(re.findall(r"[A-Za-z0-9][\w'\u2019-]*", line))
+    return [(key, n, words) for key, n, words in sections if words > MAX_SECTION_WORDS]
 
 
 def section_findings(text: str, before: str = "") -> list:
     """(rule, message, line) for each long section of one page; with `before`, the page at HEAD, only the sections it lengthened."""
-    was = {title: words for title, _, words in long_sections(before)}
-    return [(SECTION_RULE, f"Section '{title}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
-            for title, n, words in long_sections(text) if words > was.get(title, 0)]
+    was = {key: words for key, _, words in long_sections(before)}
+    return [(SECTION_RULE, f"Section '{key[0]}' runs {words} words, past {MAX_SECTION_WORDS}: cut it, since a split adds a heading and leaves the words.", n)
+            for key, n, words in long_sections(text) if words > was.get(key, 0)]
 
 
 def section_rows() -> list:

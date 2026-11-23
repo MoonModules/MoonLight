@@ -104,7 +104,7 @@ A frame with every section is 239 bytes at a 48 kHz sample rate, 225 when the be
 
 Lights on the beat need the tempo and where the beat is now, which onsets alone do not give. A board that tracks the beat itself disagrees with its neighbor by a few milliseconds and, after a track change, by seconds; a board receiving WLED's packet has no beat at all. So one board decides the beat and every board follows it, through the beat section.
 
-A sending board takes its beat from the first source it has, in this order: a DJ deck or Ableton Live, which know the tempo and the bar exactly, then a MIDI clock or a tap, then the audio tracker, which hears the beat but not which beat starts the bar. A board that hears the decks itself reads them directly, since Pro DJ Link and StageLinq are broadcast already. The section carries the beat to the boards the decks' broadcast misses: those on another subnet, and those whose firmware speaks another protocol. It costs 14 bytes in a packet that goes out every frame anyway.
+A sender takes its beat from the first source it has, in this order: a DJ deck or Ableton Live, which know the tempo and the bar exactly, then a MIDI clock or a tap, then the audio tracker, which hears the beat but not which beat starts the bar. A board that hears the decks itself reads them directly, since Pro DJ Link and StageLinq are broadcast already. The section carries the beat to the boards the decks' broadcast misses: those on another subnet, and those whose firmware speaks another protocol. It costs 14 bytes in a packet that goes out every frame anyway. troyhacks' WLED sends it, from its decks, Ableton Link or its tracker. MoonLight runs the rules below as its beat clock, which BeatSweep, BeatRipples' `beat` trigger and MoonLive's `audioBeat()` follow, and its simulated song states a beat at 100 BPM.
 
 **Beat**, 11 bytes:
 
@@ -122,9 +122,9 @@ A sending board takes its beat from the first source it has, in this order: a DJ
 
 A sender sends the section while it has a tempo, so an absent section means "no beat", and a bpm it sends is always above 0. The source numbers 0 to 3 are those troyhacks' WLED gives its sources, so its beat goes out as it is. `beatInBar` 0 for a beat and 1 to 4 for a deck's position in the bar is WLED-MM's convention; the audio tracker sends 0 until it finds the downbeat. A Pioneer deck's phrase analysis says where its phrases and fills are; a source that has none sends `phraseBeats` 0, or a faked fill with bit 1 when its user asks for one.
 
-What a receiver does with it:
+What the format asks of a receiver:
 
-- A change of `beatCount` is a beat: a receiver takes it once, by the number, the way it takes a frame's hits, and a jump of more than one counts the beats it missed.
+- A change of `beatCount` is a beat: a receiver takes it once, by the number, and a jump of more than one is one beat start, the count taking the source's, so an effect reading the count sees how many it missed.
 - Between packets a receiver runs its own beat clock: the phase advances by `bpm` and the time since the packet arrived, and each packet pulls it back toward the phase the packet carries, as a phase-locked loop does, which smooths WiFi's 5 to 20 ms of jitter.
 - `phase` holds when the packet leaves, so the sender compensates its source's delay. A Pro DJ Link beat packet reaches a board about 40 ms after the deck's audio plays (troyhacks measured it on a CDJ at 118 BPM), so a sender reading the decks moves the phase forward by that delay.
 - An 8-byte section, from a sender that predates the phrase, gives the beat with no phrase and no flags.

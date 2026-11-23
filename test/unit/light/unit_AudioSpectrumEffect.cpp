@@ -375,3 +375,18 @@ TEST_CASE("barsOf falls back to the next coarser scale a frame does not carry") 
     CHECK(mm::barsOf(local, mm::kBandsNotes).n == mm::kAudioNoteKeys);
     CHECK(mm::barsOf(local, mm::kBandsNotes).hits == local.notesHits);
 }
+
+// The simulated song states its beat, so the square's last column flashes on each beat while the drums keep the rest.
+TEST_CASE("AudioSpectrumEffect's square gives its last column to the beat while one runs") {
+    constexpr int GW = 32, GH = 8;
+    Spectrum s(GW, GH, mm::AudioSpectrumEffect::kColorPerBand, true);
+    bool flashed = false;
+    for (uint32_t t = 1000; t < 2300 && !flashed; t += 20) {   // past the song's beats at 1200 and 1800 ms
+        mm::platform::setTestNowMs(t);
+        s.audio.tick();
+        s.layer.tick();
+        flashed = mm::AudioService::beatNow().onBeat && lit(s.px(GW - 1, GH - 1));
+    }
+    CHECK(flashed);
+    CHECK(mm::AudioService::beatNow().live());
+}

@@ -29,10 +29,10 @@
        modal is hidden by default, so the toggle happens off-screen and
        there's no flash-of-visible-content concern. -->
   <main>
-    <h1>MoonLight Installer <span class="version-chip" id="version-chip" hidden></span>
+    <h1>MoonLight Installer
       <a class="help-link" href="https://moonmodules.org/MoonLight/moonwalk.html#install"
          target="_blank" rel="noopener" title="Installer help (opens the docs in a new tab)">?</a></h1>
-    <p class="tag">Plug in your ESP32. Pick a release + device. Flash. Get the device on your network. Open it in a browser.</p>
+    <p class="tag">Plug in your board, pick its port and Install. The installer reads the board and picks the firmware.</p>
     <p class="note">Not sure which way to install? <button type="button" class="link-button" id="walk-open">MoonWalk</button> shows every way, an ESP32, a desktop, a Linux board or a container, and what each takes.</p>
 
     <div class="card browser-warning" id="browser-warning">
@@ -44,12 +44,9 @@
     </div>
 
     <div class="card">
-      <strong>Step 1 — Pick a release + device and flash.</strong>
+      <strong>Install MoonLight</strong>
       <p class="note" style="margin-top: 4px">
-        The picker shows stable releases, release candidates (<code>v…-rc…</code>),
-        and a <code>latest</code> build published on every merge to main — all flagged
-        <em>(beta)</em> except stables. Newest stable is the default; pick
-        <code>latest</code> to try the newest unreleased changes.
+        The newest stable release is the default; release candidates and <code>latest</code>, the build of every merge, are marked <em>(beta)</em>.
       </p>
       <!-- Port picker — optional pre-pick, matching the install-picker
            dropdown shape. Populated from navigator.serial.getPorts() (ports
@@ -95,7 +92,7 @@
              - clean-slate testing
            Costs about 3 s of chip-erase time per MB of flash before the flash starts. -->
       <div class="erase-row" id="erase-row">
-        <p class="note"><strong>Back up first</strong> (see below) on a board coming from an older two-slot layout: this release moves its filesystem, so it starts with an empty one, erase ticked or not. Restore after.</p>
+        <p class="note"><strong><a href="#backup">Back up first</a></strong> on a board coming from an older two-slot layout: this release moves its filesystem, so it starts with an empty one, erase ticked or not. Restore after.</p>
         <label>
           <input type="checkbox" id="erase-before-flash">
           Erase chip first
@@ -175,87 +172,53 @@
 
 
       <p class="note">
-        Ethernet works out of the box for the device you pick — its PHY type and
-        pins come from the catalog, no rebuild. Devices without Ethernet just use
-        WiFi.
+        WiFi is set right after the install; Ethernet works out of the box for the device you pick. No WiFi set? The board opens its own access point <code>MM-XXXX</code>: join it and open <code>http://4.3.2.1</code>.
+        Updating? The <a href="https://moonmodules.org/MoonLight/reference/MIGRATING.html" target="_blank" rel="noopener">migration notes</a> name any setting a release asks you to re-set.
       </p>
     </div>
 
-    <div class="card">
-      <strong>Step 2 — Get the device on your network.</strong>
-      <ul>
-        <li><strong>Already configured</strong> (Ethernet cable, or WiFi set on a previous flash) — nothing to do. The device joins on boot and appears under "Your devices" below automatically.</li>
-        <li><strong>New, over WiFi</strong> — the installer's <em>Configure Wi-Fi</em> step opens right after flashing: enter SSID + password, click <strong>Connect</strong>.</li>
-        <li><strong>Skipped that step?</strong> The device boots a SoftAP <code>MM-XXXX</code> (4 hex digits from the chip MAC). Join it, open <code>http://4.3.2.1</code>, enter your WiFi credentials, or restore a config backup there instead, which carries them (see "Back up a device's config first" below).</li>
-      </ul>
-    </div>
-
-    <div class="card">
-      <strong>Your devices</strong>
-      <p class="note" style="margin-top: 4px">
-        Devices you've provisioned via this page are remembered in this
-        browser. <em>Clear browser data</em> wipes the list.
-      </p>
+    <details class="card">
+      <summary><strong>Your devices</strong></summary>
+      <p class="note">The devices this page installed, remembered in this browser; clearing its data clears the list.</p>
       <div id="devices-mount"></div>
-    </div>
+    </details>
 
-    <div class="card">
-      <strong>Back up a device's config first</strong>
-      <p class="note" style="margin-top: 4px">
-        Erasing or migrating a device wipes its WiFi credentials and module config, so
-        save it all first. Backup + restore is also the answer when an update misbehaves.
-        An on-device update that fails, or a device that comes back without its settings,
-        usually means the partition layout changed between releases (right now: 4&nbsp;MB
-        classic devices updating to v4.0+). Back up, erase install, restore. One <code>.json</code> bundle holds everything; keep it
-        private, it contains the WiFi password. Two ways to make one:
+    <details class="card" id="backup">
+      <summary><strong>Back up a device</strong></summary>
+      <p class="note">
+        One <code>.json</code> bundle holds a device's WiFi and every module's settings; keep it private, it holds the WiFi password. Back up before an erase, a layout change or an update that misbehaves, then restore in the new firmware's File Manager (⟲).
       </p>
       <ul>
-        <li><strong>Current firmware</strong>: open the device's own page and press
-        <strong>Backup (⤓)</strong> in the File Manager. That is the whole story.</li>
-        <li><strong>Older firmware</strong> (no Backup button yet; any release since
-        v3.0.0, July 2026), or as a browser-side alternative: drag
-        <a id="backup-bookmarklet" href="#">Backup MoonLight config</a> to your bookmarks
-        bar, open the device's own page, click the bookmark. No bookmarks bar?
-        <button id="backup-copy" type="button">Copy the snippet</button> and paste it into
-        the browser console (F12) on the device's page. Safari can't drag bookmarklets:
-        copy the snippet into a bookmark's address by hand, typing <code>javascript:</code>
-        in front of it, or use Chrome/Edge (flashing needs them anyway).</li>
+        <li><strong>Current firmware</strong>: <strong>Backup (⤓)</strong> in the device's File Manager.</li>
+        <li><strong>Firmware without that button</strong> (any release since v3.0.0): drag
+        <a id="backup-bookmarklet" href="#">Backup MoonLight config</a> to your bookmarks bar, open the device's page and click it, or
+        <button id="backup-copy" type="button">copy the snippet</button> into the browser console (F12) on the device's page.</li>
       </ul>
-      <p class="note">
-        After flashing, restore the bundle via the new firmware's File Manager (⟲). The
-        bundle carries the WiFi credentials, so you can even skip the Configure Wi-Fi
-        step: join the device's <code>MM-XXXX</code> access point, open
-        <code>http://4.3.2.1</code>, restore, take the offered restart, and the device
-        comes back on your network.
-      </p>
-    </div>
+      <p class="note">The bundle carries the WiFi, so a restore through the device's access point (<code>http://4.3.2.1</code>) brings it back on your network.</p>
+    </details>
 
-    <div class="card" id="other-firmware">
-      <strong>Going back to another firmware</strong>
-      <p class="note" style="margin-top: 4px">
-        This page writes MoonLight. Each firmware's own installer writes it back over USB, from Chrome or Edge:
-        <a href="https://install.wled.me/" target="_blank" rel="noopener">WLED</a>,
-        <a href="https://moonmodules.org/WLED-WebInstaller/" target="_blank" rel="noopener">WLED-MM</a>,
-        <a href="https://tasmota.github.io/install/" target="_blank" rel="noopener">Tasmota</a> and
-        <a href="https://web.esphome.io/" target="_blank" rel="noopener">ESPHome</a>.
-        A board moved to MoonLight over the network needs the cable too: it carries MoonBase, which installs MoonLight only.
-      </p>
+    <details class="card" id="other-firmware">
+      <summary><strong>Install another firmware</strong></summary>
       <p class="note">
-        The list below writes them and troyhacks' WLED itself, each from its own project's site, on the USB port picked above.
-        Detect the board first: the list then shows only the builds for its chip, flash size and PSRAM.
+        WLED, WLED-MM, troyhacks' WLED, Tasmota or ESPHome, each from its own project's site, on the port picked above; the list shows the builds for the detected board.
+        A board moved to MoonLight over the network needs the cable for this: it carries MoonBase, which installs MoonLight only.
       </p>
       <div class="control-row">
         <select id="other-firmware-select" class="rp-select" aria-label="Other firmware"></select>
         <button type="button" class="secondary" id="other-firmware-install">Install</button>
         <a id="other-firmware-home" target="_blank" rel="noopener">about it</a>
       </div>
-    </div>
+      <p class="note">
+        Or each project's own installer:
+        <a href="https://install.wled.me/" target="_blank" rel="noopener">WLED</a>,
+        <a href="https://moonmodules.org/WLED-WebInstaller/" target="_blank" rel="noopener">WLED-MM</a>,
+        <a href="https://tasmota.github.io/install/" target="_blank" rel="noopener">Tasmota</a>,
+        <a href="https://web.esphome.io/" target="_blank" rel="noopener">ESPHome</a>.
+      </p>
+    </details>
 
     <div class="card">
-      <strong>Step 3 — Control your device: browser, phone app, or smart home.</strong>
-      <p class="note">
-        Open the device's own web interface in a browser — at its mDNS name or its IP:
-      </p>
+      <strong>Control your device: browser, phone app or smart home</strong>
       <div class="app-badges">
         <span class="browser-badge">
           <svg class="browser-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -265,15 +228,6 @@
           </svg>
           <span>Open the web UI</span>
         </span>
-      </div>
-      <ul>
-        <li><code>http://&lt;devicename&gt;.local</code> — the mDNS hostname tracks the device's name. Out of the box that's <code>MM-XXXX</code> (same 4 hex digits as the SoftAP / the name Improv reports), so <code>http://MM-XXXX.local</code>. Rename the device in its UI and the hostname updates to match. Works on most home networks.</li>
-        <li>or its DHCP-assigned IP, visible in your router's client list.</li>
-      </ul>
-      <p class="note">
-        Prefer your phone, or your smart home? Control it from <strong>WLED Native</strong> or <strong>Home Assistant</strong>: see <a href="https://moonmodules.org/MoonLight/reference/control-surface.html#a-phone-with-wled-native" target="_blank" rel="noopener">WLED Native</a> and <a href="https://moonmodules.org/MoonLight/reference/home-automation.html" target="_blank" rel="noopener">home automation</a>.
-      </p>
-      <div class="app-badges">
         <a href="https://apps.apple.com/us/app/wled-native/id6446207239" target="_blank" rel="noopener" title="WLED Native on the App Store">
           <img src="assets/app-store-badge.svg" alt="Download WLED Native on the App Store" class="store-badge">
         </a>
@@ -286,11 +240,8 @@
         </a>
       </div>
       <p class="note">
-        <strong>Updating an existing device?</strong> Check the <a href="https://moonmodules.org/MoonLight/reference/MIGRATING.html" target="_blank" rel="noopener">migration notes</a> for any breaking change: most updates need nothing, but a few ask you to re-set or re-add a control.
-      </p>
-      <p class="note">
-        Source code and releases:
-        <a href="https://github.com/MoonModules/MoonLight" target="_blank" rel="noopener">github.com/MoonModules/MoonLight</a>.
+        A device's own page is at <code>http://MM-XXXX.local</code>, the name following the device's name once you rename it, or at the address your router lists.
+        On a phone, <a href="https://moonmodules.org/MoonLight/reference/control-surface.html#a-phone-with-wled-native" target="_blank" rel="noopener">WLED Native</a> finds it; in a smart home, <a href="https://moonmodules.org/MoonLight/reference/home-automation.html" target="_blank" rel="noopener">Home Assistant</a> does.
       </p>
     </div>
   </main>
@@ -298,6 +249,7 @@
   <!-- Credits / acknowledgements. Loaded as CDN ES modules straight from
        unpkg — pinned versions in install-orchestrator.js. -->
   <footer class="credits">
+    <p class="note"><span id="installer-build" hidden></span> Source and releases: <a href="https://github.com/MoonModules/MoonLight" target="_blank" rel="noopener">github.com/MoonModules/MoonLight</a>.</p>
     <p class="note">
       Powered by
       <a href="https://github.com/espressif/esptool-js" target="_blank" rel="noopener">esptool-js</a><span id="esptool-version" class="dep-version"></span>

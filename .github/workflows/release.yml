@@ -821,6 +821,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0   # the tags and history compute_version counts the dev number from
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@v3

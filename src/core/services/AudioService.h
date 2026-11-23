@@ -5,6 +5,7 @@
 #include "core/module/MoonModule.h"
 #include "core/util/ActiveInstance.h"   // the one-active-mic election (the seat + its RAII vacate)
 #include "core/util/AudioFrame.h"
+#include "core/util/BeatClock.h"     // the beat between packets, as an effect reads it
 #include "core/util/SpscRing.h"     // the audio task's frames to the render tick
 #include "core/services/AudioLevel.h"
 #include "core/services/AudioBands.h"
@@ -299,6 +300,8 @@ public:
         controls_.addReadOnly("key", keyStr_, sizeof(keyStr_));
         /// The bass, mids and treble on the bands' scale, as the effects read them.
         controls_.addReadOnly("ranges", rangesStr_, sizeof(rangesStr_));
+        /// The beat the effects follow: its tempo, bar, source and confidence.
+        controls_.addReadOnly("beat", beatStr_, sizeof(beatStr_));
         MoonModule::defineControls();
     }
 
@@ -363,6 +366,16 @@ public:
 
     /// The latest analyzed frame, always valid, so a consumer without a mic reads silence.
     const AudioFrame* audioFrame() const { return &frame_; }
+    /// This instance's beat this tick, as beatNow() hands it the effects while it is the active one.
+    const BeatNow& audioBeat() const { return beatNow_; }
+    /// The beat readout: "106 BPM, beat 3 of 4, tracker 50%", or "none" while no beat runs.
+    static void formatBeat(char* out, size_t n, const BeatNow& b) {
+        if (!b.live()) { mm::formatTo(out, n, "none"); return; }
+        const char* source = b.source < kBeatSourceCount ? kBeatSourceNames[b.source] : "another source";
+        const unsigned bpm = b.bpm(), sure = b.confidence * 100u / 255u;
+        if (b.inBar) mm::formatTo(out, n, "%u BPM, beat %u of 4, %s %u%%", bpm, static_cast<unsigned>(b.inBar), source, sure);
+        else mm::formatTo(out, n, "%u BPM, %s %u%%", bpm, source, sure);
+    }
     /// The frame effects read, writable so a test draws a state no source produces on the host.
     AudioFrame& frameForTest() { return frame_; }
     /// The analysis for the selected rate, from silence, as opening the input starts it.
@@ -413,6 +426,13 @@ public:
         AudioService* a = ActiveInstance<AudioService>::active();
         return a ? &a->frame_ : &kSilence;
     }
+    /// What a consumer reads with no beat.
+    static constexpr BeatNow kNoBeat{};
+    /// The beat this tick, from whichever source states one: a sync packet's beat section, or the simulated song.
+    static const BeatNow& beatNow() MM_NONBLOCKING {
+        AudioService* a = ActiveInstance<AudioService>::active();
+        return a ? a->beatNow_ : kNoBeat;
+    }
 
     /// Produce this tick's frame, from the network, a synthesizer, or the local input.
     void tick() MM_NONBLOCKING override {
@@ -423,12 +443,16 @@ public:
         const Sync s = sync();
         const bool unicast = addressing == kAddressUnicast;
         const bool open = sync_.ensureOpen(s, syncPort, unicast);   // lazy-open once the network is up
-        if (s == AudioSync::kReceive) { if (open) syncReceive(); }   // with no socket yet, still never runs the local mic
-        else if (const bool fresh = produceFrame(); open) {
+        bool fresh = false;
+        if (s == AudioSync::kReceive) { if (open) fresh = syncReceive(); }   // with no socket yet, the local mic stays off
+        else if (fresh = produceFrame(); open) {
             if (fresh) sync_.addHits(frame_);
             sync_.send(frame_, syncFormat != kFormatWled, syncFormat != kFormatMoonModules, unicast, syncPort);
         }
-        chords_.name(frame_, platform::millis());   // from whichever source made the frame, so a receiving board names the chord too
+        const uint32_t now = platform::millis();
+        chords_.name(frame_, now);   // from whichever source made the frame, so a receiving board names the chord too
+        if (fresh) beatClock_.take(frame_.beat, now);   // a frame with no beat section changes nothing, so the clock runs on until it goes stale
+        beatNow_ = beatClock_.tick(now);
     }
 
     /// This tick's frame from the synthesizer or the local input, true when one is new.
@@ -613,6 +637,7 @@ public:
         char keyName[12];
         formatKey(frame_.key, keyName, sizeof(keyName));
         mm::formatTo(keyStr_, sizeof(keyStr_), "%s, tuned %+d cents", keyName, static_cast<int>(frame_.tuning));   // the frame's, so a receiver shows the sender's
+        formatBeat(beatStr_, sizeof(beatStr_), beatNow_);
         mm::formatTo(rangesStr_, sizeof(rangesStr_), "bass %u, mid %u, treble %u", static_cast<unsigned>(frame_.bass),
                      static_cast<unsigned>(frame_.mid), static_cast<unsigned>(frame_.treble));
         if (mode == kLocalMode)
@@ -718,6 +743,7 @@ private:
     char notesStr_[32] = {};   // all twelve names fit
     char keyStr_[32] = {};
     char rangesStr_[32] = {};
+    char beatStr_[48] = {};
     std::atomic<uint8_t> levelPeak_{0};   // peak level across the current 1 s display window (UI only)
 
     /// Mic-health tallies over the 1 s window (see the read path and the tick1s diagnosis).
@@ -726,6 +752,8 @@ private:
     bool     micStatusStale_ = false;
 
     ChordTracker chords_;   ///< the chord named from each frame's pitch classes
+    BeatClock beatClock_;   ///< the beat a frame states, run between frames
+    BeatNow beatNow_;       ///< this tick's beat, which beatNow() hands the effects
     AudioSync sync_{*this};   ///< the audio sync, sending the frame or receiving a peer's in either format, as AudioSync.h describes
     uint32_t simPrevMs_ = 0;             ///< the last simulated frame's time, so the song's kick reads once
     static constexpr const char* kInitFailMsg = "mic init failed, check pins / rate";
@@ -896,17 +924,18 @@ private:
         return true;
     }
 
-    /// A peer's frame, either format, as the effects read it: its bands derived here, numbered by this board, and its level in the readout's peak.
-    void syncReceive() {
+    /// A peer's frame, either format, as the effects read it: its bands derived here, numbered by this board, and its level in the readout's peak; true when one arrived.
+    bool syncReceive() {
         const uint16_t seq = static_cast<uint16_t>(frame_.seq + 1);   // the receiver numbers its frames, so a consumer reading one on two ticks takes its hits once
         bool smoothHere = false;
-        if (!sync_.receive(frame_, smoothHere)) return;
+        if (!sync_.receive(frame_, smoothHere)) return false;
         if (smoothHere) finishBands(frame_);
         else deriveFromBands(frame_);              // the sender's smoothed bands kept, so every board shows the same frame
         frame_.seq = seq;
         // Feed the peer level into the same 1 s peak window the local mic uses, so the "level RMS".
         if (frame_.level > levelPeak_.load(std::memory_order_relaxed))
             levelPeak_.store(static_cast<uint8_t>(frame_.level > 255 ? 255 : frame_.level), std::memory_order_relaxed);
+        return true;
     }
 };
 

@@ -8,7 +8,9 @@ export async function resolveOtherFirmwares(list) {
   await Promise.all(list.map(async (entry) => {
     try {
       if (entry.manifest) {
-        const manifest = await (await fetch(entry.manifest)).json();
+        const res = await fetch(entry.manifest);
+        if (!res.ok) throw new Error(`${new URL(entry.manifest).host} answered ${res.status}`);
+        const manifest = await res.json();
         entry.builds = (manifest.builds || []).filter((build) => Array.isArray(build.parts) && build.parts.length);
         entry.version = otherFirmwareVersion(entry, manifest);
       } else if (entry.release) {

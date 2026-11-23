@@ -66,6 +66,10 @@ def test_against_the_page_at_head_only_a_section_the_change_lengthened_is_a_find
     assert len(c.section_findings(page(long + 1), page(long))) == 1, "a long section grown by a word is"
     assert len(c.section_findings(page(long), page(10))) == 1, "a section the change took past the cap is"
     assert c.section_findings(page(long - 50), page(long)) == [], "a long section cut but still long is not"
+    two = lambda a, b: "# T\n\n## A\n\n### Setup\n\n" + " ".join(["w"] * a) + "\n\n## B\n\n### Setup\n\n" + " ".join(["w"] * b) + "\n"
+    assert [n for _, _, n in c.section_findings(two(long + 1, long + 200), two(long, long + 200))] == [5], "two sections of one title count apart: the first grew"
+    assert c.section_findings(two(long + 200, long), two(long, long + 200)) != [], "their counts swapped is a growth, not a match"
+    assert c.section_findings(two(long, long + 200), two(long, long + 200)) == [], "both unchanged is none"
 
 def test_the_section_count_reads_a_page_whose_name_holds_spaces_and_skips_one_deleted_but_tracked(tmp_path, monkeypatch):
     import sys

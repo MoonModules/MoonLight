@@ -15,9 +15,10 @@ constexpr uint32_t kSimFrameMs = kAudioBlock * 1000u / 24000u;
 /// Whether a simulated frame is due at `now`, the last made at `prevMs`, 0 before the first.
 constexpr bool simFrameDue(uint32_t now, uint32_t prevMs) { return prevMs == 0 || now - prevMs >= kSimFrameMs; }
 
-/// AudioService's `simulate` signal at time `t`, so a device shows sound before anything is wired: the bands, thirds, level and peak, and the kick as an onset when a beat starts after `prevT`.
+/// AudioService's `simulate` signal at time `t`, so a device shows sound before anything is wired: the bands, thirds, level and peak, the kick as an onset when a beat starts after `prevT`, and the song's beat.
 inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep, uint32_t prevT) {
     f.onset = f.onsetLow = 0;
+    f.beat = AudioBeat{};
     if (sweep) {
         // One band lit at a time, stepping bass to treble every 250 ms and wrapping.
         const uint8_t pos = static_cast<uint8_t>((t / 250u) % 16u);
@@ -31,6 +32,13 @@ inline void simulateAudio(AudioFrame& f, uint32_t t, bool sweep, uint32_t prevT)
     }
     // A plausible song: a beat every kSimBeatMs lifting the bass, each band its own oscillator; the song knows its kick, so it states it.
     if (prevT != 0 && t / kSimBeatMs != prevT / kSimBeatMs) f.onset = f.onsetLow = 200;   // a first frame, prevT 0, starts the count
+    // The song knows its beat as a clock does: the tempo, the phase and the bar, so a beat effect follows it with no sender.
+    f.beat.bpm100 = static_cast<uint16_t>(6000000u / kSimBeatMs);
+    f.beat.count = static_cast<uint16_t>(t / kSimBeatMs);
+    f.beat.phase = static_cast<uint8_t>((t % kSimBeatMs) * 256u / kSimBeatMs);
+    f.beat.inBar = static_cast<uint8_t>((t / kSimBeatMs) % 4u + 1u);
+    f.beat.confidence = 255;
+    f.beat.flags = AudioBeat::kBeatDownbeatKnown;
     const uint8_t beat = (t % kSimBeatMs < 90u) ? static_cast<uint8_t>(triwave8(static_cast<uint8_t>((t % kSimBeatMs) * 255u / 90u))) : 0;
     uint16_t sum = 0;
     for (uint8_t b = 0; b < 16; b++) {

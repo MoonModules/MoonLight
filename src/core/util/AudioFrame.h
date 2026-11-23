@@ -12,7 +12,9 @@ constexpr uint8_t kAudioNoteKeys = 79;
 inline constexpr size_t kAudioBlock = 512;
 
 /// Where a beat comes from, the MoonModules format's numbering: the tracker, the decks and Ableton as troyhacks' WLED numbers them, then a MIDI clock and a tap.
-enum BeatSource : uint8_t { kBeatTracker, kBeatProLink, kBeatStageLinq, kBeatAbletonLink, kBeatMidiClock, kBeatTap };
+enum BeatSource : uint8_t { kBeatTracker, kBeatProLink, kBeatStageLinq, kBeatAbletonLink, kBeatMidiClock, kBeatTap, kBeatSourceCount };
+/// Each BeatSource's name, as a readout shows it.
+inline constexpr const char* kBeatSourceNames[kBeatSourceCount] = {"tracker", "Pro DJ Link", "StageLinq", "Ableton Link", "MIDI clock", "tap"};
 
 /// The beat one board decided and every board follows, as the MoonModules format's beat section carries it: [Audio sync format](https://moonmodules.org/MoonLight/reference/audio-sync.html#beat).
 struct AudioBeat {

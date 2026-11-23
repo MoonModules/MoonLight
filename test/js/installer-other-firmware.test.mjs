@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { chipFamily, patchBootloaderFlashSize } from "../../mooninstaller/manifest.js";
-import { releaseManifests, otherFirmwareOptions, otherFirmwareVersion } from "../../mooninstaller/other-firmwares.js";
+import { releaseManifests, otherFirmwareOptions, otherFirmwareVersion, resolveOtherFirmwares } from "../../mooninstaller/other-firmwares.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const installer = join(ROOT, "mooninstaller");
@@ -61,7 +61,7 @@ test("the dropdown offers what fits the detected board, and before a Detect list
     assert.deepEqual(names(null), ["A · for ESP32, ESP32-S3: Detect the board first", "B · for ESP32-P4: Detect the board first",
         "C · for its chips: Detect the board first", "W · for ESP32, ESP32-C3, ESP32-S3: Detect the board first",
         "X · did not load (GitHub answered 403): reload the page later"]);
-    assert.ok(otherFirmwareOptions(catalog, null).every((o) => !o.source), "before a Detect nothing is installable");
+    assert.ok(otherFirmwareOptions(catalog, null).every((o) => !o.source), "before a Detect every entry is a label, none installable");
     assert.deepEqual(names({ family: "ESP32-S3", flashMB: 8, psramMode: "octal" }), ["A", "X · did not load (GitHub answered 403): reload the page later"]);
     assert.deepEqual(names({ family: "ESP32", flashMB: 4, psramMode: "" }), ["A", "W v16.0.1 · ESP32",
         "X · did not load (GitHub answered 403): reload the page later"], "an entry that did not load stays listed with its reason");
@@ -152,4 +152,18 @@ test("the build is picked before anything is fetched, and another firmware goes 
         "another firmware that joins and names no address (ESPHome's first-use firmware) is a join, not an error");
     assert.ok(at("Date.now() + (otherFirmware ? 10000 : 0)") < at("await initializeImprov()"),
         "another firmware's Improv is asked for until it answers, since reopening the port can reset the board into a boot that takes a second");
+});
+
+test("an entry whose manifest or release answers an HTTP error is listed with the status, not as a chipless entry", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = async () => ({ ok: false, status: 404, json: async () => ({ message: "Not Found" }) });
+    try {
+        const [manifest, release] = await resolveOtherFirmwares([{ name: "M", manifest: "https://example.org/latest/manifest.json" },
+                                                                 { name: "R", release: { repo: "o/r" } }]);
+        assert.match(manifest.error, /example\.org answered 404/);
+        assert.match(release.error, /GitHub answered 404/);
+        assert.deepEqual(manifest.builds, []);
+    } finally {
+        globalThis.fetch = real;
+    }
 });

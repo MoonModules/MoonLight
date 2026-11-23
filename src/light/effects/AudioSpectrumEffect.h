@@ -9,7 +9,7 @@ namespace mm {
 ///
 /// The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.
 ///
-/// `readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter and a square for each drum's hit, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the three strongest classes at the top left, "C E G", and the key with its tuning at the right, "Am +12".
+/// `readouts` draws the rest of the frame with the bars: the peak, the gate, the three ranges, a level meter with a square per drum and a column for the beat, and the twelve pitch classes: @xref{the-readouts}. `noteNames` writes the strongest classes top left, "C E G", the key at the right, "Am +12", and the tempo under them, "128".
 ///
 /// @attribution Andrew Tuline, troyhacks
 ///
@@ -98,10 +98,12 @@ public:
         if (f->harmonyChange) changeUntilMs_ = ms + kChangeFlashMs;
         const uint8_t rangeHits[3] = {f->onsetLow, f->onsetMid, f->onsetHigh};
         for (uint8_t r = 0; r < 3; r++) if (rangeHits[r]) rangeUntilMs_[r] = ms + kOnsetFlashMs;
+        const BeatNow& beat = AudioService::beatNow();
+        if (beat.onBeat) { beatUntilMs_ = ms + kOnsetFlashMs; downbeat_ = beat.inBar == 1; }
         // Each bar's own hit, where the bars are the bands that carry them.
         const uint8_t* hits = !readouts || h == 1 ? nullptr : bars.hits;
         if (hits) markBarHits(hits, n, ms);
-        if (levelRows) drawLevelMeter(cv, *f, specH, ms);
+        if (levelRows) drawLevelMeter(cv, *f, specH, ms, beat.live());
         if (pitchRows) drawPitchClasses(cv, f->chroma, pitchRows, ms < changeUntilMs_);
 
         // The bars sit on the level meter, or on the floor without one.
@@ -132,6 +134,7 @@ public:
             if (f->peakHz && (f->gate == 0 || f->gateOpen)) drawPeak(cv, f->peakHz, scale, n, barW, pitchRows);
         }
         if (noteNames) draw::noteNames(cv, *f, w, pitchRows);
+        if (noteNames && beat.live()) drawTempo(cv, beat.bpm(), static_cast<lengthType>(pitchRows + fonts::kFont4x6.height + 1));
     }
 
     /// Where `hz` sits across `n` bars, in bars: the key from A0, the third-octave index, or that mapped between the sixteen when only those show.
@@ -159,6 +162,8 @@ private:
     static constexpr uint32_t kChangeFlashMs = 100;
     uint32_t changeUntilMs_ = 0;  ///< until when the row shows the last change
     uint32_t rangeUntilMs_[3] = {};   ///< until when each range's line shows its last hit
+    uint32_t beatUntilMs_ = 0;        ///< until when the beat's square shows the last beat
+    bool     downbeat_ = false;       ///< whether that beat was the bar's first
     uint8_t barHitTick_[kAudioNoteKeys] = {};     ///< when each bar's last hit came, in 4 ms ticks: a byte a bar, checked every frame so it never wraps unseen
     uint8_t barsLit_[10] = {};        ///< a bit per bar while it shows its hit
 
@@ -172,8 +177,15 @@ private:
         }
     }
 
-    /// The level meter on the rows from `top` down: the raw level across the palette, as a lag is wrong for judging response, and a square per range's hit.
-    void drawLevelMeter(const draw::Canvas& cv, const AudioFrame& f, lengthType top, uint32_t ms) MM_NONBLOCKING {
+    /// The tempo in whole BPM at the left of row `y`, under the note names.
+    void drawTempo(const draw::Canvas& cv, uint32_t bpm, lengthType y) MM_NONBLOCKING {
+        char digits[4] = {};
+        for (int i = 2; i >= 0; i--) { digits[i] = static_cast<char>('0' + bpm % 10u); bpm /= 10u; }
+        draw::text(cv, fonts::kFont4x6, digits[0] == '0' ? digits + 1 : digits, 0, y, RGB{255, 255, 255});
+    }
+
+    /// The level meter on the rows from `top` down: the raw level across the palette, as a lag is wrong for judging response, and a square per range's hit, with a fourth part for the beat while one runs.
+    void drawLevelMeter(const draw::Canvas& cv, const AudioFrame& f, lengthType top, uint32_t ms, bool beat) MM_NONBLOCKING {
         const lengthType side = static_cast<lengthType>(height() - top);
         const lengthType w = width() > side ? static_cast<lengthType>(width() - side) : 0;   // the meter stops short of the square
         const lengthType litW = static_cast<lengthType>(static_cast<uint32_t>(f.level > 255 ? 255 : f.level) * w / 255u);
@@ -182,10 +194,13 @@ private:
             draw::bar(cv, 0, y, litW, draw::Grow::Right, [w](lengthType x) {
                 return colorFromPalette(*Palettes::active(), static_cast<uint8_t>(static_cast<uint32_t>(x) * 255u / (w > 1 ? w : 1)), 255);
             });
-            // The square in three, the kick, the snare and the hats left to right, each lit while its range's hit shows.
+            // The square in three, the kick, the snare and the hats left to right, each lit while its range's hit shows; while a beat runs its last column is the beat's, white, the downbeat in the palette.
+            const lengthType hitsW = beat && sq > 1 ? static_cast<lengthType>(sq - 1) : sq;
             for (lengthType x = 0; x < sq; x++) {
-                const uint8_t r = static_cast<uint8_t>(static_cast<uint32_t>(x) * 3u / static_cast<uint32_t>(sq));
-                if (ms < rangeUntilMs_[r]) draw::pixel(cv, {static_cast<lengthType>(w + x), y, 0}, kHitColors[r]);
+                const lengthType at = static_cast<lengthType>(w + x);
+                if (x >= hitsW) { if (ms < beatUntilMs_) draw::pixel(cv, {at, y, 0}, downbeat_ ? colorFromPalette(*Palettes::active(), 0, 255) : RGB{255, 255, 255}); continue; }
+                const uint8_t r = static_cast<uint8_t>(static_cast<uint32_t>(x) * 3u / static_cast<uint32_t>(hitsW));
+                if (ms < rangeUntilMs_[r]) draw::pixel(cv, {at, y, 0}, kHitColors[r]);
             }
         }
     }

@@ -89,19 +89,39 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// A link to a folded row opens it, since browsers open a <details> for a fragment inside it and not for the <details>
+// itself. An in-page link ("Back up first") opens and scrolls with the address left alone, and a link arriving from
+// another site (the docs' #other-firmware) opens its row once and drops the fragment, so a reload starts folded.
+function openRow(id) {
+  const row = id && document.getElementById(id);
+  if (!row || row.tagName !== "DETAILS") return null;
+  row.open = true;
+  return row;
+}
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest('a[href^="#"]');
+  const row = a && openRow(decodeURIComponent(a.getAttribute("href").slice(1)));
+  if (!row) return;
+  e.preventDefault();
+  row.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+document.addEventListener("DOMContentLoaded", () => {
+  if (openRow(decodeURIComponent(location.hash.slice(1)))) history.replaceState(null, "", location.pathname + location.search);
+});
 
-    // Show the exact version next to the heading, such as 7.1.0-dev.170: preview_installer.py and
-    // release_stage.py pages-site stage library.json with the computed version (compute_version.for_head).
-    // Fetched silently: a missing file leaves the chip hidden, not a "?".
+
+    // Name the page's own build in the footer, such as 7.1.0-dev.170, so a report ties to it: the page deploys on every
+    // merge while the firmware it installs follows the release picker. preview_installer.py and release_stage.py pages-site
+    // stage library.json with the computed version (compute_version.for_head). Fetched silently: a missing file hides the line.
     (async () => {
         try {
             const res = await fetch("./library.json");
             if (!res.ok) return;
             const lib = await res.json();
             if (!lib || !lib.version) return;
-            const chip = document.getElementById("version-chip");
-            chip.textContent = `v${lib.version}`;
-            chip.hidden = false;
+            const line = document.getElementById("installer-build");
+            line.textContent = `Installer build ${lib.version}`;
+            line.hidden = false;
         } catch (_) { /* silent: cosmetic-only */ }
     })();
 
@@ -442,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // form's submit event; the Skip button bypasses WiFi (the device
     // falls back to its AP). Skip resolves with empty creds — the
     // orchestrator's provision() with empty SSID will fail fast and the
-    // user falls back to the AP flow as documented in Step 2.
+    // user falls back to the access point the install card names.
     function uiWaitForCreds() {
       return new Promise((resolve) => {
         const form = document.getElementById("wifi-form");
@@ -921,6 +941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // the fresh detect lands.
         await installer.clearDetected();
         installPicker.clearDetectedChip();
+        renderOtherFirmwares(null);   // the old board's builds go with it, until the fresh detect lists the new board's
       } catch (_) {
         // User canceled the picker, so keep whatever was picked before.
       } finally {

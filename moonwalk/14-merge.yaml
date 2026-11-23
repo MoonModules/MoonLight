@@ -5,7 +5,7 @@ processes:
   - id: contribute-pr
     title: Contribute a pull request
     actor: contributor
-    goal: One topic, at most 400 changed lines and ten files, based on main, its checks passed.
+    goal: One topic, at most 400 changed lines and ten files, based on main, its checks run once and reported.
     page: contributing/index.md
     intro: |
       What a review would otherwise ask, met before the pull request opens: four outside pull requests each spent a review round on these points.
@@ -29,8 +29,10 @@ processes:
 
           A larger topic lands as steps, each its own pull request, which may build on the step before it and is reviewed once that one merges.
       - id: checks
-        say: Run the commit checks the branch triggers.
+        say: Run the commit checks once.
         when: { process: commit }
+        detail: |
+          One run of `moondeck/check/run_gates.py`, its summary line pasted into the pull request. A failure may stay open, named with what is unclear; the rounds after the first are the maintainer's, in the maintainer commit. With Claude Code, the checked-in write-time hook checks each file as it is written, so the one run mostly comes out clean.
       - id: generated
         say: Leave the generated files out.
         when: { manual: "docs/reference/metrics/ and a scenario's observation blocks." }
@@ -44,6 +46,7 @@ processes:
           - What it changes, and why.
           - What an agent wrote.
           - What you tested, and on which hardware.
+          - The gate run's summary, and any failure left open.
         detail: |
           Push first, and allow edits by maintainers.
 
@@ -51,8 +54,10 @@ processes:
 
           With edits allowed, a maintainer makes the mechanical fixes, a dropped generated file or a platform stub, rather than asking for another round.
       - id: ci
-        say: Wait for CI to pass.
+        say: Read CI's result.
         when: { process: ci-on-pr }
+        detail: |
+          A failure the contributor understands is theirs to fix; the rest the maintainer commit takes.
       - id: findings
         say: Answer every review finding.
         when: { process: review-finding }
@@ -210,8 +215,8 @@ processes:
     steps:
       - id: blocking
         section: Read it
-        say: Check the four blocking items.
-        when: { manual: "One topic, CI green, new behavior pinned by a test, and nothing unsafe: a crash, a write past a buffer, a security hole. Nothing else blocks." }
+        say: Check the three blocking items.
+        when: { manual: "One topic, new behavior pinned by a test, and nothing unsafe: a crash, a write past a buffer, a security hole. Nothing else blocks; CI green is the merge's condition, reached by the contributor or by the maintainer commit." }
       - id: history
         say: Check the contributor's earlier pull requests.
         when: { run: { command: "gh pr list --author <login> --state all" } }
@@ -235,7 +240,7 @@ processes:
           Thank them first, then name each blocking item with what fixes it, and whether the contributor or a maintainer commit follows up. Link [MoonWalk](https://moonmodules.org/MoonLight/moonwalk.html) for the processes behind the review. An agent drafts the comment; the product owner reads it and posts.
       - id: take-over
         say: Take over the easy fixes when it helps.
-        when: { manual: "On the second round, when the contributor goes quiet, or sooner when the case calls for it." }
+        when: { manual: "After the contributor's one gate run: every round after it, and anything left when the contributor goes quiet." }
         detail: |
           Forks allow maintainer edits, so a fix lands as your commit on their branch, after theirs. One maintainer commit per round: run every check CI runs before it, so no follow-up commit is needed. Commit only once it is tested: the host tests always, and an ESP32 build and the bench when the change reaches the platform layer or hardware. With maintainer edits allowed, `gh pr checkout` sets the branch to push to the fork while it tracks origin. An editor's sync that ignores the push setting pushes to origin and creates a stray branch here, so after a push compare `gh pr view <n> --json headRefOid` with `HEAD`.
       - id: conventions
