@@ -269,7 +269,7 @@ Four things MoonLight sends to more than one listener. Every one goes through on
 
 | | modes | why |
 |---|---|---|
-| Audio sync | multicast `239.0.0.2` for the MoonLight format and `239.0.0.1` for WLED's, or unicast to `receivers` | WLED's usermod sends and receives on its group, and the MoonLight format has its own, so a WLED device wakes only for packets it can read; unicast reaches a few MoonLight boards faster on WiFi |
+| Audio sync | multicast `239.0.0.2` for the MoonModules format and `239.0.0.1` for WLED's, or unicast to `receivers` | WLED's usermod sends and receives on its group, and the MoonModules format has its own, so a WLED device wakes only for packets it can read; unicast reaches a few MoonLight boards faster on WiFi |
 | Device discovery | multicast `239.255.77.77` plus broadcast by default | WLED announces and listens on the discovery port by broadcast |
 | OSC feedback | unicast to `receivers`, multicast, multicast plus broadcast | one desk driving several boards |
 | Art-Net, E1.31, DDP output | unicast; E1.31 multicast; Art-Net broadcast | multicast is sACN's native mode, broadcast Art-Net's legacy one |

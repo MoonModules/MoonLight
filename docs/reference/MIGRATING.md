@@ -31,6 +31,17 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### Audio sync is the MoonModules format, its header `MM`
+
+**Action: *update as usual*, every board that sends or receives audio sync in the same round.**
+
+MoonLight's own audio-sync format is now the MoonModules format, shared with troyhacks' WLED and proposed to WLED-MM, and its packets start with `MM` where they started with `ML`. A board on the previous firmware ignores the new packets and the other way round, so a sender and its receivers update together; WLED's format, which WLED and WLED-MM devices read, is unchanged. The Audio card's `syncFormat` choice is named `MoMo`, short for MoonModules, and a saved choice keeps its place ([audio sync format](audio-sync.md#the-moonmodules-format)).
+
+### `audioBeat()` fires on the beat
+**Action: *none*, or re-check a script that should flash on every drum: it now reads `audioOnset(0)`, `audioOnset(1)` and `audioOnset(2)`, the kick, the mids and the treble.**
+
+MoonLive's `audioBeat()` is true on the tick a beat starts, from the beat a sender states over the MoonModules format or the simulated song's, where it was true on every frame a drum was heard. While no beat runs it still answers the drum, so a board with only its own microphone behaves as before. `audioBpm()`, `audioBeatPhase()` and `audioBeatInBar()` are new ([MoonLive's builtins](../moonmodules/light/moonlive.md)).
+
 ### A host's device model is a catalog name
 
 **Action: *re-set a control*, on each host that should link to its device card.**
@@ -193,13 +204,13 @@ The audio level, which volume-driven effects and AudioSpectrum's meter read, now
 
 **Action: *none*: a saved `harmony` is ignored.**
 
-The Audio card's `harmony` switch is gone: the notes, the pitch classes, the key and the chord run while something reads them, a note effect, a bar effect showing the keys, AudioSpectrum's pitch classes or note names, an effect script calling a note builtin, or this board sending the MoonLight format. A board showing none of them saves the semitone bank's share of a core, 6 to 15% depending on the chip.
+The Audio card's `harmony` switch is gone: the notes, the pitch classes, the key and the chord run while something reads them, a note effect, a bar effect showing the keys, AudioSpectrum's pitch classes or note names, an effect script calling a note builtin, or this board sending the MoonModules format. A board showing none of them saves the semitone bank's share of a core, 6 to 15% depending on the chip.
 
-### Audio sync sends the whole frame, in MoonLight's own format
+### Audio sync sends the whole frame, in the MoonModules format
 
 **Action: *re-set a control*: `syncFormat` to `WLED` on the Audio card of a board whose audio feeds only WLED devices, or to `both` when it feeds MoonLight boards too.**
 
-A sending board now sends the MoonLight format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. The MoonLight format multicasts to its own group, `239.0.0.2`, and WLED's stays on `239.0.0.1`. WLED does not read the MoonLight format, so a board feeding WLED devices picks `WLED` or `both`; WLED's packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
+A sending board now sends the MoonModules format by default: the whole frame, with the third octaves, the drums, the harmony and the keys, which a receiving MoonLight board shows as the sender does. The MoonModules format multicasts to its own group, `239.0.0.2`, and WLED's stays on `239.0.0.1`. WLED and WLED-MM read only WLED's format, troyhacks' WLED reads both, so a board feeding WLED or WLED-MM devices picks `WLED` or `both`; WLED's packet now also carries which drum was hit. A receiving board reads either format and needs no setting.
 
 ### Keyboard and Strings show the notes a player could play
 

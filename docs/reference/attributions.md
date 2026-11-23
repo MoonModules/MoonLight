@@ -107,7 +107,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [troyhacks](https://github.com/troyhacks) | 🧑 | Reworked the WLED-MM audio DSP, onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT and then onto third-octave filter banks, the idea AudioService's `FractionalOctaveBank` builds on, and WLED-MM's Art-Net, WLED effects, P4 tuning, and the P4's HDMI clock rule with its 720p timing. |
 | [Waveshare](https://www.waveshare.com) | 🏢 | The ESP32-S3 RGB Matrix board and its HUB75 pin map. |
 | [wladi / myhome-control](https://shop.myhome-control.de) | 🧑🏢 | Designer of the [MHC-WLED ESP32-P4 shield](https://shop.myhome-control.de/en/ABC-WLED-ESP32-P4-shield/HW10027), and the source of the pinout details that got its line-in audio working. |
-| [WLED](https://github.com/wled/WLED) | 🧰 | MoonLight is born out of WLED and takes the usermod idea further, where everything is a module. A MoonLight device also acts as a WLED device and talks to WLED devices. |
+| [WLED](https://github.com/wled/WLED) | 🧰 | MoonLight is born out of WLED and takes the usermod idea further, where everything is a module. A MoonLight device also acts as a WLED device and talks to WLED devices. [WLED's web installer](https://github.com/wled/WLED-WebInstaller) re-flags a bootloader for another flash size in the browser, as the installer's other firmwares do. |
 | [WLED-MM](https://github.com/MoonModules/WLED) | 🧰 | The MoonModules fork of WLED, which MoonLight is born out of with WLED. |
 | WS2812 / WS2811 / SK6812 | 📜 | The LED timing specs, from the datasheets. |
 | [Xiaolin Wu](https://en.wikipedia.org/wiki/Xiaolin_Wu%27s_line_algorithm) File:LineXiaolinWu.gif | 🧮 | Anti-aliased lines. |

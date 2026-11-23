@@ -1,0 +1,312 @@
+[
+  {
+    "name": "troyhacks' WLED",
+    "home": "https://github.com/troyhacks/WLED",
+    "manifest": "https://troyhacks.github.io/WLED/latest/manifest.json"
+  },
+  {
+    "name": "Tasmota",
+    "home": "https://tasmota.github.io/docs/",
+    "release": {
+      "repo": "arendst/Tasmota"
+    },
+    "builds": [
+      {
+        "chipFamily": "ESP32",
+        "parts": [
+          {
+            "path": "https://tasmota.github.io/install/firmware/release/tasmota32.factory.bin",
+            "offset": 0
+          }
+        ]
+      },
+      {
+        "chipFamily": "ESP32-S3",
+        "parts": [
+          {
+            "path": "https://tasmota.github.io/install/firmware/release/tasmota32s3.factory.bin",
+            "offset": 0
+          }
+        ]
+      },
+      {
+        "chipFamily": "ESP32-C3",
+        "parts": [
+          {
+            "path": "https://tasmota.github.io/install/firmware/release/tasmota32c3.factory.bin",
+            "offset": 0
+          }
+        ]
+      }
+    ],
+    "accessPoint": "tasmota-<chip id> at 192.168.4.1"
+  },
+  {
+    "name": "ESPHome, ready for Home Assistant",
+    "home": "https://esphome.io/guides/getting_started_hassio/",
+    "manifest": "https://firmware.esphome.io/esphome-web/manifest.json"
+  },
+  {
+    "name": "WLED",
+    "home": "https://kno.wled.ge/",
+    "release": {
+      "repo": "wled/WLED"
+    },
+    "download": "https://download.wled.me",
+    "boot": "https://install.wled.me/bin/boot/",
+    "bootSets": {
+      "esp32": {
+        "bootloader": [
+          "bootloaders/esp32/bootloader_esp32_8m.bin",
+          4096,
+          "8MB"
+        ],
+        "partitions": {
+          "4MB": "partitions/partitions_c3_4m.bin",
+          "8MB": "partitions/partitions_esp32_8m.bin",
+          "16MB": "partitions/partitions_esp32_16m.bin"
+        }
+      },
+      "esp32-c3": {
+        "bootloader": [
+          "bootloaders/esp32-c3/bootloader_c3_8m.bin",
+          0,
+          "8MB"
+        ],
+        "partitions": {
+          "4MB": "partitions/partitions_c3_4m.bin",
+          "8MB": "partitions/partitions_c3_8m.bin",
+          "16MB": "partitions/partitions_c3_16m.bin"
+        }
+      },
+      "esp32-c3-qio": {
+        "bootloader": [
+          "bootloaders/esp32-c3/bootloader_c3_8m_qio.bin",
+          0,
+          "8MB"
+        ],
+        "partitions": {
+          "4MB": "partitions/partitions_c3_4m.bin",
+          "8MB": "partitions/partitions_c3_8m.bin",
+          "16MB": "partitions/partitions_c3_16m.bin"
+        }
+      },
+      "esp32-s3": {
+        "bootloader": [
+          "bootloaders/esp32-s3/bootloader_s3.bin",
+          0,
+          "8MB"
+        ],
+        "partitions": {
+          "4MB": "partitions/partitions_s3_4m.bin",
+          "8MB": "partitions/partitions_s3_8m.bin",
+          "16MB": "partitions/partitions_s3_16m.bin"
+        }
+      },
+      "hd-wf2": {
+        "bootloader": [
+          "bootloaders/esp32-s3/bootloader_s3.bin",
+          0,
+          "4MB"
+        ],
+        "partitions": {
+          "4MB": "partitions/partitions_s3_hdwf2.bin"
+        }
+      },
+      "esp32-s3-opi": {
+        "bootloader": [
+          "bootloaders/esp32-s3/bootloader_s3_opi.bin",
+          0,
+          "8MB"
+        ],
+        "partitions": {
+          "32MB": "partitions/partitions_s3_32m.bin"
+        }
+      }
+    },
+    "assets": [
+      {
+        "match": "_ESP32\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_WROVER\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_Ethernet\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_audioreactive\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_V4\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_DEBUG\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      },
+      {
+        "match": "_ESP32_HUB75\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32",
+        "flash": "4MB"
+      },
+      {
+        "match": "_ESP32_HUB75_forum_pinout\\.bin$",
+        "chipFamily": "ESP32",
+        "boot": "esp32",
+        "flash": "4MB"
+      },
+      {
+        "match": "_ESP32-C3\\.bin$",
+        "chipFamily": "ESP32-C3",
+        "boot": "esp32-c3"
+      },
+      {
+        "match": "_ESP32-C3-QIO\\.bin$",
+        "chipFamily": "ESP32-C3",
+        "boot": "esp32-c3-qio"
+      },
+      {
+        "match": "_ESP32-S3_4M_qspi\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "4MB"
+      },
+      {
+        "match": "_ESP32-S3_8MB_none\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "8MB"
+      },
+      {
+        "match": "_ESP32-S3_8MB_qspi\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "8MB",
+        "psram": "quad"
+      },
+      {
+        "match": "_ESP32-S3_8MB_opi\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "8MB",
+        "psram": "octal"
+      },
+      {
+        "match": "_ESP32-S3_16MB_opi\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "16MB",
+        "psram": "octal"
+      },
+      {
+        "match": "_ESP32-S3_16MB_opi_HUB75\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "16MB",
+        "psram": "octal"
+      },
+      {
+        "match": "_ESP32-S3_Adafruit_Matrixportal\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "8MB"
+      },
+      {
+        "match": "_ESP32-S3_HD-WF2\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "hd-wf2",
+        "flash": "4MB"
+      },
+      {
+        "match": "_ESP32-S3_Waveshare_HUB75\\.bin$",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3-opi",
+        "flash": "32MB",
+        "psram": "octal"
+      }
+    ],
+    "accessPoint": "WLED-AP"
+  },
+  {
+    "name": "WLED-MM",
+    "home": "https://mm.kno.wled.ge/",
+    "release": {
+      "repo": "MoonModules/WLED-MM"
+    },
+    "download": "https://download.wled.me",
+    "boot": "https://moonmodules.org/WLED-WebInstaller/bin/boot/",
+    "bootSets": {
+      "esp32": {
+        "parts": [
+          [
+            "esp32_bootloader_v4.bin",
+            0
+          ]
+        ]
+      },
+      "esp32-c3": {
+        "parts": [
+          [
+            "esp32-c3_bootloader_v2.bin",
+            0
+          ]
+        ]
+      },
+      "esp32-s3": {
+        "parts": [
+          [
+            "bootloader_s3.bin",
+            0
+          ],
+          [
+            "partitions_s3_8m.bin",
+            32768
+          ]
+        ]
+      }
+    },
+    "assets": [
+      {
+        "match": "_esp32S3_WROOM-2",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "32MB",
+        "psram": "octal"
+      },
+      {
+        "match": "_matrixportal",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3",
+        "flash": "8MB"
+      },
+      {
+        "match": "_(esp32S3|esp32s3|matrixportal)",
+        "chipFamily": "ESP32-S3",
+        "boot": "esp32-s3"
+      },
+      {
+        "match": "_(esp32c3|seeed_esp32c3)",
+        "chipFamily": "ESP32-C3",
+        "boot": "esp32-c3"
+      },
+      {
+        "match": "_(esp32_|ESP32_|athom_music_esp32|abc_wled)",
+        "chipFamily": "ESP32",
+        "boot": "esp32"
+      }
+    ],
+    "accessPoint": "WLED-AP"
+  }
+]

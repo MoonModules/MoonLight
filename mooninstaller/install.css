@@ -40,7 +40,7 @@
     }
     .help-link:hover { border-color: var(--accent); }
 
-    /* App-store / smart-home badges under Step 3. Official badges display at a fixed
+    /* App-store / smart-home badges on the control card. Official badges display at a fixed
        height (Apple/Google guidelines size by height, not width); the HA link is a
        small icon+text chip since HA's wordmark logo is dark-on-transparent. */
     .app-badges {
@@ -73,9 +73,7 @@
     }
     .ha-badge:hover { border-color: var(--accent); }
     .ha-icon { height: 24px; width: 24px; display: block; }
-    /* The browser option has no single URL (the address is per-device — <name>.local or
-       its DHCP IP, spelled out below), so it's a non-clickable label chip, same shape as
-       .ha-badge for a consistent row. A globe is the vendor-neutral "open in a browser" glyph. */
+    /* The browser has no single URL (each device has its own), so its chip is a label in .ha-badge's shape. */
     .browser-badge {
       display: inline-flex;
       align-items: center;
@@ -89,18 +87,6 @@
       font-size: 14px;
     }
     .browser-icon { height: 22px; width: 22px; display: block; color: var(--accent); }
-    .version-chip {
-      display: inline-block;
-      margin-left: 8px;
-      padding: 2px 8px;
-      background: var(--card);
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 13px;
-      font-weight: normal;
-      vertical-align: middle;
-    }
     h1 {
       margin: 0 0 8px;
       font-size: 28px;
@@ -114,6 +100,9 @@
       padding: 20px;
       margin-bottom: 16px;
     }
+    /* An occasional task folds to one line, the native disclosure: the install stays the page's one task in view. */
+    details.card > summary { cursor: pointer; }
+    details.card[open] > summary { margin-bottom: 8px; }
     label { display: block; font-weight: 600; margin-bottom: 6px; }
     select {
       width: 100%;

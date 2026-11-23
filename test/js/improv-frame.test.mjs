@@ -25,28 +25,29 @@ import {
 const hex = (u8) => Array.from(u8).map((b) => b.toString(16).padStart(2, "0")).join(" ");
 const bytes = (s) => Array.from(new TextEncoder().encode(s));
 
-test("frame layout: magic, version, type, length, payload, checksum", () => {
+test("frame layout: magic, version, type, length, payload, checksum, newline", () => {
     const frame = buildImprovFrame(IMPROV_FRAME_TYPE_RPC, new Uint8Array([0x01]));
     assert.deepEqual(Array.from(frame.subarray(0, 6)), IMPROV_MAGIC, "magic");
     assert.equal(frame[6], 0x01, "version");
     assert.equal(frame[7], IMPROV_FRAME_TYPE_RPC, "type");
     assert.equal(frame[8], 1, "length");
     assert.equal(frame[9], 0x01, "payload");
-    assert.equal(frame.length, 11, "total = 9 header + 1 payload + 1 checksum");
+    assert.equal(frame[11], 0x0a, "newline, as ESP Web Tools' Improv SDK ends every packet and Tasmota's parser waits for");
+    assert.equal(frame.length, 12, "total = 9 header + 1 payload + 1 checksum + 1 newline");
 });
 
 test("checksum is sum-mod-256 of the first 9+length bytes", () => {
     const payload = new Uint8Array([0xAA, 0xBB, 0xCC]);
     const frame = buildImprovFrame(IMPROV_FRAME_TYPE_RPC, payload);
     let sum = 0;
-    for (let i = 0; i < frame.length - 1; i++) sum = (sum + frame[i]) & 0xff;
-    assert.equal(frame[frame.length - 1], sum);
+    for (let i = 0; i < frame.length - 2; i++) sum = (sum + frame[i]) & 0xff;
+    assert.equal(frame[frame.length - 2], sum);
 });
 
 test("golden vector G1: buildImprovFrame(RPC, [0x01])", () => {
     // Shared with test/python G1. Hand-verified checksum 0xe3.
     const frame = buildImprovFrame(IMPROV_FRAME_TYPE_RPC, new Uint8Array([0x01]));
-    assert.equal(hex(frame), "49 4d 50 52 4f 56 01 03 01 01 e3");
+    assert.equal(hex(frame), "49 4d 50 52 4f 56 01 03 01 01 e3 0a");
 });
 
 test("golden vector G2: a small state document is a single APPLY_OP frame", () => {
@@ -159,7 +160,7 @@ test("a reply split across two reads is kept until it is whole", () => {
 
 test("a frame whose checksum fails is skipped and the next one still read", () => {
     const bad = ack();
-    bad[bad.length - 1] ^= 0xff;
+    bad[bad.length - 2] ^= 0xff;   // the checksum, before the newline
     const { frames } = parseImprovFrames(join(bad, refusal()));
     assert.deepEqual(frames.map(applyOpReply), ["refused"]);
 });

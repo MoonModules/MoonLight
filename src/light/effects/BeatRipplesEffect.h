@@ -7,7 +7,7 @@ namespace mm {
 /// Every beat is a stone dropped in water.
 /// @card BeatRipplesEffect.gif
 ///
-/// `trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit.
+/// `trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit; on `beat` it drops one on each beat a source states, a deck's or the simulated song's, and on the kick while none runs.
 ///
 /// A real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.
 ///
@@ -34,8 +34,8 @@ public:
     /// How strongly the slope lights the surface.
     uint8_t shine     = 150;
     /// What drops a stone, in option order.
-    enum Trigger : uint8_t { kAnyHit, kKick, kTriggerCount };
-    /// Every hit, or only the kick, the bass's own onset.
+    enum Trigger : uint8_t { kAnyHit, kKick, kBeat, kTriggerCount };
+    /// Every hit, only the kick, the bass's own onset, or the beat.
     uint8_t trigger   = kAnyHit;
 
     /// Publish the damping, the stone's depth, the idle rain, the slope's brightness and what drops a stone.
@@ -44,7 +44,7 @@ public:
         controls_.addControl("drop", drop, 0, 255);
         controls_.addControl("rain", rain, 0, 255);
         controls_.addControl("shine", shine, 0, 255);
-        static constexpr const char* kTriggerOptions[] = {"any hit", "kick"};
+        static constexpr const char* kTriggerOptions[] = {"any hit", "kick", "beat"};
         controls_.addSelect("trigger", trigger, kTriggerOptions, kTriggerCount);
     }
 
@@ -76,7 +76,10 @@ public:
         const AudioFrame* f = AudioService::latestFrame();
         const bool fresh = f->seq != lastSeq_;   // once a frame, by its number
         lastSeq_ = f->seq;
-        if (fresh && (trigger == kKick ? f->onsetLow != 0 : f->onset != 0)) {
+        const BeatNow& beat = AudioService::beatNow();
+        const bool followsBeat = trigger == kBeat && beat.live();
+        const uint8_t hitOf = trigger == kAnyHit ? f->onset : f->onsetLow;   // the beat's stone falls as deep as the kick's, and the kick stands in while no beat runs
+        if (followsBeat ? beat.onBeat : (fresh && hitOf != 0)) {
             // The loudest band picks the radius, and the angle walks so successive hits spread out.
             uint8_t loudest = 0, best = 0;
             for (uint8_t b = 0; b < 16; b++) if (f->bands[b] > best) { best = f->bands[b]; loudest = b; }
@@ -86,7 +89,7 @@ public:
             const lengthType sx = static_cast<lengthType>(w / 2 + (static_cast<int32_t>(cos16(a)) * r) / 32768);
             const lengthType sy = static_cast<lengthType>(h / 2 + (static_cast<int32_t>(sin16(a)) * r) / 32768);
             // The onset scales the stone, with a floor that keeps a weak hit visible.
-            const int32_t hit = 96 + (static_cast<int32_t>(trigger == kKick ? f->onsetLow : f->onset) * 159) / 255;
+            const int32_t hit = 96 + (static_cast<int32_t>(followsBeat ? 200 : hitOf) * 159) / 255;
             splash(sx, sy, static_cast<int16_t>(-(static_cast<int32_t>(drop) * kSplashScale / 255) * hit / 255));
             seq_++;
         }

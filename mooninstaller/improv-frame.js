@@ -33,7 +33,8 @@ export const IMPROV_FRAME_TYPE_RPC = 0x03;
 export const IMPROV_MAGIC = [0x49, 0x4d, 0x50, 0x52, 0x4f, 0x56];
 
 // Wrap a payload in Improv framing. Returns a Uint8Array:
-//   IMPROV + version(1) + type + length + payload + checksum(sum-mod-256).
+//   IMPROV + version(1) + type + length + payload + checksum(sum-mod-256) + newline, as ESP Web Tools' Improv SDK writes every packet
+//   and Tasmota's parser waits for.
 export function buildImprovFrame(type, payload) {
     const len = payload.length;
     // The length is a single byte on the wire — a payload over 255 would truncate
@@ -41,7 +42,7 @@ export function buildImprovFrame(type, payload) {
     // the device's 128-byte kImprovMaxPayload, so this never fires in practice; it
     // guards a future caller, matching ImprovFrame.h's oversize-payload rejection.)
     if (len > 255) throw new Error(`Improv payload length ${len} exceeds 255 (one-byte length field)`);
-    const frame = new Uint8Array(6 + 1 + 1 + 1 + len + 1);
+    const frame = new Uint8Array(6 + 1 + 1 + 1 + len + 1 + 1);
     frame.set(IMPROV_MAGIC, 0);
     frame[6] = 0x01;   // version
     frame[7] = type;
@@ -50,6 +51,7 @@ export function buildImprovFrame(type, payload) {
     let sum = 0;
     for (let i = 0; i < 9 + len; i++) sum = (sum + frame[i]) & 0xff;
     frame[9 + len] = sum;
+    frame[10 + len] = 0x0a;
     return frame;
 }
 

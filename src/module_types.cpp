@@ -80,6 +80,7 @@
 #include "light/effects/RadialSpectrumEffect.h"
 #include "light/effects/VuMetersEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
+#include "light/effects/BeatSweepEffect.h"
 #include "light/effects/DrumKitEffect.h"
 #include "light/effects/KeyboardEffect.h"
 #include "light/effects/AudioSpectrumEffect.h"
@@ -255,6 +256,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::RadialSpectrumEffect>("RadialSpectrumEffect", "light/effects.md#radialspectrum");
     mm::ModuleFactory::registerType<mm::VuMetersEffect>("VuMetersEffect", "light/effects.md#vumeters");
     mm::ModuleFactory::registerType<mm::BeatRipplesEffect>("BeatRipplesEffect", "light/effects.md#beatripples");
+    mm::ModuleFactory::registerType<mm::BeatSweepEffect>("BeatSweepEffect", "light/effects.md#beatsweep");
     mm::ModuleFactory::registerType<mm::DrumKitEffect>("DrumKitEffect", "light/effects.md#drumkit");
     mm::ModuleFactory::registerType<mm::KeyboardEffect>("KeyboardEffect", "light/effects.md#keyboard");
     mm::ModuleFactory::registerType<mm::StringsEffect>("StringsEffect", "light/effects.md#strings");

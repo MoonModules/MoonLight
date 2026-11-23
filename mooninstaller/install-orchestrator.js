@@ -85,48 +85,21 @@ import {
 } from "./teensy-writer.js";
 import { layoutFor } from "./flash-layout.js";
 import { bootLogIp, bootLogDevice } from "./boot-log.js";
+import { chipFamily, parseManifest, patchBootloaderFlashSize } from "./manifest.js";
 
 // ---------------------------------------------------------------------------
 // Manifest parser
 // ---------------------------------------------------------------------------
 
-// Fetches an ESP Web Tools manifest and returns the flashable parts as
-// { chipFamily, parts: [{ url, offset }] }. Validates the shape so a
-// missing builds[] or parts[] errors here rather than confusing
-// esptool-js with undefined data.
-//
-// Manifest shape (single build per file — MoonLight generates one per
-// firmware variant; see moondeck/build/generate_manifest.py):
-//   { name, version, builds: [{ chipFamily, parts: [{ path, offset }] }] }
+
+
+// Fetch a manifest and parse its builds. The URL is resolved against the document, so a relative path like
+// "./releases/latest/manifest-esp32.json" (what mirrorUrl returns on the Pages-hosted setup) becomes the absolute base its parts resolve against.
 async function fetchManifest(manifestUrl) {
-    // Resolve the manifest URL against the document so a relative path like
-    // "./releases/latest/manifest-esp32.json" (what mirrorUrl returns on the
-    // preview/Pages-hosted setup) becomes absolute. Without this, the
-    // `new URL(".", manifestUrl)` below would throw "Invalid base URL" since
-    // URL's two-arg form needs the second arg to be absolute.
     const absManifestUrl = new URL(manifestUrl, document.baseURI).toString();
     const res = await fetch(absManifestUrl);
     if (!res.ok) throw new Error(`manifest HTTP ${res.status}`);
-    const m = await res.json();
-    if (!m || !Array.isArray(m.builds) || m.builds.length === 0) {
-        throw new Error("manifest missing builds[]");
-    }
-    const build = m.builds[0];
-    if (!Array.isArray(build.parts) || build.parts.length === 0) {
-        throw new Error("manifest build missing parts[]");
-    }
-    // Resolve part paths against the (now absolute) manifest URL.
-    const base = new URL(".", absManifestUrl);
-    return {
-        chipFamily: build.chipFamily,
-        parts: build.parts.map(p => ({
-            url: new URL(p.path, base).toString(),
-            offset: p.offset,
-        })),
-        // The bootloader and table per flash size (generate_manifest.py), the default parts being the smallest's; absent in a release from before it.
-        layouts: (build.layouts || []).map(l => ({ flashSize: l.flashSize, partitionTable: new URL(l.partitionTable, base).toString(),
-                                                   bootloader: l.bootloader && new URL(l.bootloader, base).toString() })),
-    };
+    return parseManifest(await res.json(), new URL(".", absManifestUrl));
 }
 
 // Where every ESP32 layout keeps its partition table (ESP-IDF's CONFIG_PARTITION_TABLE_OFFSET default).
@@ -401,33 +374,6 @@ function normalizeDeviceUrl(input) {
 // sometimes needs a second go on the RTS/DTR pulse). The connect()/runStub()/
 // changeBaud() signatures are identical across 0.4.7→0.6.0; when the pin bumps,
 // re-verify they still match upstream.
-// esptool's getChipDescription() reports the specific silicon (e.g.
-// "ESP32-D0WD-V3", "ESP32-S3 (QFN56) (revision v0.2)", "ESP32-C6 (revision v0.0)"),
-// but the picker compares against deviceModels.json's coarse `chip` FAMILY — the same
-// vocabulary build_esp32's TARGET_TO_FAMILY defines and the ESP Web Tools manifest
-// carries as `chipFamily` ("ESP32", "ESP32-S3", "ESP32-P4", and any future
-// S2/C3/C6/… as MoonLight grows to support every ESP32-family chip). Without
-// normalizing, a classic ESP32 matches NO device
-// (filter) and the flash guard false-warns on a correct flash.
-//
-// Normalize by KEEPING the family token and dropping the package/revision tail:
-// not by collapsing distinct chips. A bare "ESP32-<X>…" keeps "ESP32-<X>"; classic
-// silicon (ESP32-D0WD*, ESP32-PICO-*, ESP32-U4WDH — no second family token) maps to
-// plain "ESP32". This is forward-proof: a new ESP32-C5 needs no code change here.
-//
-// The ESP32 token is matched ANYWHERE in the string, not anchored at the start:
-// esptool-js prefixes "unknown " when it doesn't fully recognize a chip (newer
-// silicon than the bundled esptool — observed: "unknown ESP32-P4 (revision v1.3)"),
-// and anchoring on ^ESP32 would let that prefix defeat the match and pass the raw
-// string through (→ no device matches, false "flash anyway?" warning).
-function chipFamily(chipName) {
-    const s = String(chipName || "").trim();
-    // ESP32-<LETTER+DIGITS> is a sub-family (S3/P4/S2/C3/C6/C5/H2/…).
-    const sub = s.match(/ESP32-([A-Z]\d+)\b/);
-    if (sub) return "ESP32-" + sub[1];
-    if (/ESP32\b/.test(s)) return "ESP32";   // classic — no sub-family token
-    return s;                                // truly unrecognized: pass through so it's visible
-}
 
 // Hard-reset the chip after flashing by toggling DTR/RTS — the standard ESP32
 // auto-reset pulse. In our pinned esptool-js, hardReset lives on a `HardReset`
@@ -617,6 +563,13 @@ export const installer = {
      *   already online from the boot log we SKIP the WiFi-credentials step (which would
      *   otherwise send WIFI_SETTINGS and get UNKNOWN_RPC_COMMAND) and report a clear
      *   "connect an Ethernet cable" outcome instead.
+     * @param {object} [opts.manifest] - an ESP Web Tools manifest object, in place of
+     *   manifestUrl: another project's entry from mooninstaller/other-firmwares.json.
+     * @param {boolean} [opts.otherFirmware=false] - another project's firmware: after
+     *   the flash it tries Improv as ESP Web Tools does, so a firmware that answers gets
+     *   the WiFi form and reports its URL, and one that does not ends with
+     *   onSuccess({ url: "" }) (the host omits uiWaitForIp). MoonLight's boot-log
+     *   address, TX power and device defaults are MoonLight's and stay off.
      * @param {(stage: string, detail?: object) => void} opts.onProgress
      *   Stages: request-port, connect-flash, fetch-firmware, erase,
      *   flash, reboot, connect-improv, set-tx-power, wifi-creds-form,
@@ -687,7 +640,7 @@ export const installer = {
      *   resolving with the board's port, or null when the user skips.
      */
     async start({ manifestUrl, device, applyDefaults = true, txPower = null, eraseBefore = false,
-                   ethOnly = false,
+                   ethOnly = false, manifest: givenManifest, otherFirmware = false,
                    port: prePickedPort,
                    onProgress, uiWaitForCreds, uiWaitForIp, uiShowNeedsIpRetrying,
                    uiWaitForPortRetry, uiGrantBootloader, uiFindBoard,
@@ -748,10 +701,10 @@ export const installer = {
 
         try {
             // The manifest's chip family picks the writer, before anything touches the device.
-            const manifest = await fetchManifest(manifestUrl);
-            if (manifest.chipFamily === TEENSY_FAMILY) {
+            const builds = givenManifest ? parseManifest(givenManifest, document.baseURI) : await fetchManifest(manifestUrl);
+            if (builds[0].chipFamily === TEENSY_FAMILY) {
                 if (_detected) await releaseDetected();
-                await installTeensy({ manifest, port: prePickedPort, device, applyDefaults, eraseBefore, trackProgress,
+                await installTeensy({ manifest: builds[0], port: prePickedPort, device, applyDefaults, eraseBefore, trackProgress,
                                       onProgress, onLog, uiGrantBootloader, uiFindBoard, onSuccess });
                 return;
             }
@@ -785,9 +738,10 @@ export const installer = {
             // skip the probe-open + Transport + connect entirely and jump
             // straight to fetch/flash. Consumed here — start() now owns teardown
             // (the finally block disconnects transport + closes port as usual).
+            let chipName;
             if (_detected) {
                 ({ port, transport, esploader } = _detected);
-                const chipName = _detected.chipName;
+                chipName = _detected.chipName;
                 _detected = null;
                 // detect() left the loader connected at its baudrate (before the device was
                 // known). If this device's catalog flashBaud differs, re-negotiate now, so a
@@ -867,20 +821,26 @@ export const installer = {
                 romBaudrate: 115200,
                 terminal: espTerminal,
             });
-            const chipName = await connectAndDescribeChip(esploader);
+            chipName = await connectAndDescribeChip(esploader);
             trackProgress("connect-flash", { chipName });
             } // end of detect()-reuse else branch
+
+            // An image boots only on the chip family it was built for, so the install takes the connected chip's build, before anything is fetched or erased.
+            const build = builds.find(b => b.chipFamily === chipFamily(chipName));
+            if (!build) {
+                throw new Error(`this firmware has no build for the connected ${chipName} (it has ${builds.map(b => b.chipFamily).join(", ")})`);
+            }
 
             // Fetch the manifest + all part binaries before erasing flash.
             // Failing here (CDN issue, bad manifest) leaves the device
             // intact — better than mid-flash failure with an erased chip.
             // The layout follows the measured flash: its bootloader, the size in its header and its digest made at build time, and its table
             // replace the default (smallest) ones, written as they are. A board smaller than every layout is refused here, before anything is erased.
-            let parts = manifest.parts;
-            if (manifest.layouts.length) {
+            let parts = build.parts;
+            if (build.layouts.length) {
                 let measured;
                 try { measured = await esploader.detectFlashSize(); } catch (_) { /* unread: the smallest layout */ }
-                const { layout, note } = layoutFor(manifest.layouts, measured);
+                const { layout, note } = layoutFor(build.layouts, measured);
                 if (onLog) onLog(`[orchestrator] layout: ${note}`);
                 if (!layout) throw new Error(note);
                 const bootloaderOffset = esploader.chip.BOOTLOADER_FLASH_OFFSET;
@@ -899,7 +859,7 @@ export const installer = {
                 // be the required shape (it iterated with .charCodeAt()), and passing one now
                 // corrupts the image instead of flashing it (upstream #266).
                 fileArray.push({
-                    data: new Uint8Array(buf),
+                    data: part.flashSize ? await patchBootloaderFlashSize(buf, part.flashSize) : new Uint8Array(buf),
                     address: part.offset,
                 });
             }
@@ -1017,7 +977,8 @@ export const installer = {
             // inside the 60 s and covers DHCP variance (measured ~7 s on the P4-NANO)
             // without making the fresh-device fallback feel slow.
             trackProgress("connect-improv");
-            const { ip: bootIp, mdns: bootMdns } = await readBootIp(port, 12000);
+            // MM_IP is MoonLight's boot line, so another project's firmware goes straight to Improv.
+            const { ip: bootIp, mdns: bootMdns } = otherFirmware ? { ip: "", mdns: "" } : await readBootIp(port, 12000);
 
             let deviceUrl = "";
             let deviceMdns = "";   // "<deviceName>.local" from the boot log, "" if unknown
@@ -1025,6 +986,7 @@ export const installer = {
             let needsIp = false;
             let alreadyOnline = false;
             let defaultsApplied = false;   // true once the serial config push actually ran
+            let joined = false;            // true once Improv provisioning succeeded; deviceUrl holds the address when the firmware names one
 
             if (bootIp) {
                 // Device is already online at boot — typically an Ethernet device (eth
@@ -1109,8 +1071,23 @@ export const installer = {
                     || msg.includes("PortNotReady")
                     || msg.includes("locked");
             };
+            // Another project's firmware has no boot line to wait for, and reopening the port can reset a board behind a USB-serial
+            // bridge, so its Improv is asked for up to 10 s, a fresh client per try, until the booted firmware answers (WLED: about 1 s).
+            const initializeImprov = async () => {
+                const deadline = Date.now() + (otherFirmware ? 10000 : 0);
+                for (;;) {
+                    try {
+                        return await improvClient.initialize();
+                    } catch (e) {
+                        if (!isImprovNotDetected(e) || Date.now() >= deadline) throw e;
+                        try { await improvClient.close(); } catch (_) { /* ignore */ }
+                        await new Promise(r => setTimeout(r, 250));
+                        improvClient = new ImprovSerial(port, improvLogger);
+                    }
+                }
+            };
             try {
-                await improvClient.initialize();
+                await initializeImprov();
             } catch (e) {
                 if (isImprovNotDetected(e)) {
                     needsIp = true;
@@ -1257,9 +1234,11 @@ export const installer = {
                     }
                 }
                 deviceUrl = improvClient.nextUrl;
-                if (!deviceUrl) {
+                // Another project's firmware may join and name no address (ESPHome's first-use firmware), which is still a join.
+                if (!deviceUrl && !otherFirmware) {
                     throw new Error("provision succeeded but no device URL returned");
                 }
+                joined = true;
                 // The Improv WIFI_SETTINGS result carries only the bare-IP URL (the SDK
                 // keeps just the first URL of the list). But the device already told us
                 // its name in the GET_DEVICE_INFO response that `initialize()` fetched —
@@ -1279,6 +1258,7 @@ export const installer = {
 
             trackProgress("done");
             onSuccess({
+                joined,
                 url: deviceUrl,
                 mdns: deviceMdns,   // "<deviceName>.local" from the boot serial, "" if unknown
                 device: device || "",

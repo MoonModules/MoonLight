@@ -90,8 +90,8 @@ TEST_CASE("a demand on one provider never counts for another, whatever bit each 
     scheduler.release();
 }
 
-// The notes are about half the analysis: AudioService runs them only while a reader needs them, or while it sends the MoonLight format, whose receivers show them.
-TEST_CASE("AudioService wants the notes while a reader demands them or it sends the MoonLight format, and not otherwise") {
+// The notes are about half the analysis: AudioService runs them only while a reader needs them, or while it sends the MoonModules format, whose receivers show them.
+TEST_CASE("AudioService wants the notes while a reader demands them or it sends the MoonModules format, and not otherwise") {
     Scheduler scheduler;
     auto* audio = new AudioService();
     audio->setName("Audio");
@@ -109,7 +109,7 @@ TEST_CASE("AudioService wants the notes while a reader demands them or it sends 
     reader->release();
     CHECK_FALSE(audio->notesWanted());
     audio->mode = AudioService::kLocalMode;
-    audio->send = true;   // sending the MoonLight format, whose receivers show the notes
+    audio->send = true;   // sending the MoonModules format, whose receivers show the notes
     CHECK(audio->notesWanted());
     audio->syncFormat = AudioService::kFormatWled;   // WLED's packet carries none
     CHECK_FALSE(audio->notesWanted());

@@ -717,7 +717,7 @@
   },
   "AudioSpectrumEffect": {
    "line": "The mic's frequency bands spread across X, the sixteen, every third octave it measures or the piano's keys, each column lit bottom-up by its magnitude.",
-   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the dominant frequency, the gate, the bass, mids and treble, a level meter and a square for each drum's hit, and the twelve pitch classes: the-readouts. `noteNames` writes the three strongest classes at the top left, \"C E G\", and the key with its tuning at the right, \"Am +12\".",
+   "summary": "The classic equalizer display. The bands scale to any width, so a wide grid gives each several columns and a narrow one samples. On a single row the bars collapse to per-column brightness.\n\n`readouts` draws the rest of the frame with the bars: the peak, the gate, the three ranges, a level meter with a square per drum and a column for the beat, and the twelve pitch classes: the-readouts. `noteNames` writes the strongest classes top left, \"C E G\", the key at the right, \"Am +12\", and the tempo under them, \"128\".",
    "attribution": "[Andrew Tuline](https://moonmodules.org/MoonLight/reference/attributions.html#andrew-tuline), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "guide": [
     {
@@ -807,7 +807,7 @@
   },
   "BeatRipplesEffect": {
    "line": "Every beat is a stone dropped in water.",
-   "summary": "`trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
+   "summary": "`trigger` on `kick` drops a stone only on the bass's own onset, so the ripples follow the kick drum rather than every hit; on `beat` it drops one on each beat a source states, a deck's or the simulated song's, and on the kick while none runs.\n\nA real wave simulation, which gives what a drawn expanding circle cannot: ripples pass through each other, reflect off the walls and interfere into standing patterns. The loudest band decides where the stone lands, a bass hit near the center and a treble hit out at the rim, and its strength sets how deep.",
    "attribution": "[Gomez](https://moonmodules.org/MoonLight/reference/attributions.html#gomez)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatRipplesEffect.gif",
    "controls": {
@@ -824,7 +824,7 @@
      "line": "How strongly the slope lights the surface."
     },
     "trigger": {
-     "line": "Every hit, or only the kick, the bass's own onset."
+     "line": "Every hit, only the kick, the bass's own onset, or the beat."
     }
    },
    "role": "effect",
@@ -833,6 +833,44 @@
    "doc": "light/effects.md#beatripples",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BeatRipplesEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatrippleseffect"
+  },
+  "BeatSweepEffect": {
+   "line": "A bar of light crosses the layout once a beat, or once a bar, over the sixteen bands.",
+   "summary": "It follows the beat a source states: a deck or Ableton Link over the [MoonModules format](https://moonmodules.org/MoonLight/reference/audio-sync.html#beat), a tracker, or the simulated song. While no beat runs it crosses at its own `tempo`, and in silence the light fades out, so a stopped song goes dark.\n\nThe bands stand behind it as bars, the light takes the color of the band it is over, `downbeat` gives the bar's first beat the palette's other half, and `beatInfo` writes the tempo and the beat in the bar at the top left, \"106 3/4\".",
+   "attribution": "[troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatSweepEffect.gif",
+   "controls": {
+    "cycle": {
+     "line": "A crossing per beat or per bar."
+    },
+    "bounce": {
+     "line": "Every other crossing comes back rather than starting over."
+    },
+    "glow": {
+     "line": "The light's width, 255 a quarter of the layout."
+    },
+    "trail": {
+     "line": "How far the light's tail reaches behind it."
+    },
+    "bands": {
+     "line": "How bright the bands behind the light stand."
+    },
+    "tempo": {
+     "line": "The crossings' tempo while no beat runs, in BPM."
+    },
+    "downbeat": {
+     "line": "The bar's first beat in the palette's other half."
+    },
+    "beatInfo": {
+     "line": "The tempo and the beat in the bar at the top left."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🎶",
+   "dim": 2,
+   "doc": "light/effects.md#beatsweep",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/BeatSweepEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatsweepeffect"
   },
   "DrumKitEffect": {
    "line": "A drum kit seen from the audience, each drum lighting as it is played: the bass drum on the kick, the snare, the hi-hat with stars over the top, and three rack toms and a floor tom by their pitch, so a drum solo plays across the kit.",
@@ -4664,7 +4702,7 @@
      "line": "Send the local analysis as audio-sync packets."
     },
     "syncFormat": {
-     "line": "What a sending board sends: MoonLight's whole frame, WLED's packet, or both.",
+     "line": "What a sending board sends: the MoonModules format's whole frame, WLED's, or both.",
      "more": "Receivers read either. WLED feeds only WLED devices; both feeds MoonLight boards too."
     },
     "addressing": {
@@ -4705,6 +4743,9 @@
     },
     "ranges": {
      "line": "The bass, mids and treble on the bands' scale, as the effects read them."
+    },
+    "beat": {
+     "line": "The beat the effects follow: its tempo, bar, source and confidence."
     }
    },
    "role": "service",

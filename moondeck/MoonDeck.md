@@ -1252,6 +1252,18 @@ Exit codes: `0` = all checks passed, `1` = device-side failure (probe or provisi
 
 Pair with `preview_installer`'s flash-ready mode (above) for a complete dev-environment proof that the install flow works before deploying to GitHub Pages.
 
+### install_other_firmware
+
+Install another project's firmware on a board over USB, the web installer's other-firmware list for agents and tests: WLED, WLED-MM, Tasmota, ESPHome or Troy's WLED, then the WiFi over Improv. People install from the installer page; this script is for what drives no browser.
+
+```bash
+uv run moondeck/build/install_other_firmware.py --port /dev/cu.usbserial-XXXX --firmware WLED --list
+uv run moondeck/build/install_other_firmware.py --port /dev/cu.usbserial-XXXX --firmware WLED --build ESP32
+uv run moondeck/build/install_other_firmware.py --port /dev/cu.usbserial-XXXX --firmware Tasmota
+```
+
+The installer's own modules decide the files, run by `other_firmware_parts.mjs`: [other-firmwares.json](../mooninstaller/other-firmwares.json) with [other-firmwares.js](../mooninstaller/other-firmwares.js) and [manifest.js](../mooninstaller/manifest.js). The script reads the board with esptool, downloads the parts into `build/other-firmware/`, writes them with esptool, whose `--flash-size` re-flags a bootloader built for another size, and provisions with [improv_provision](#improv_provision). It exits 0 online, 1 when the firmware did not answer Improv, and 2 when it stopped before writing.
+
 ### wled_migration_test
 
 Test the over-the-air migration from WLED to MoonLight on a bench board, with a power cut at every step. [Migrating a device to MoonLight over the air](../docs/reference/migrating-over-the-air.md) describes the migration itself. It rewrites the whole flash of the board on the port.
@@ -1262,7 +1274,7 @@ uv run moondeck/build/wled_migration_test.py --port /dev/cu.usbmodemXXXX
 uv run moondeck/build/wled_migration_test.py --port /dev/cu.usbmodemXXXX --rounds ship,3
 ```
 
-Each round puts the board back as a WLED device ships: WLED 0.15.0, its bootloader and [its partition table](../esp32/partitions/wled_4mb_1mb_fs.csv), downloaded once into `build/wled-migration-test/<chip>/`. It joins the board to the WiFi over Improv, uploads a migration image through WLED's update page, and passes when the board then answers as MoonBase.
+Each round installs the latest WLED as the web installer does, through [install_other_firmware](#install_other_firmware): its bootloader, its partition table, an empty app choice and filesystem. It joins the board to the WiFi over Improv, uploads a migration image through WLED's update page, and passes when the board then answers as MoonBase.
 
 The rounds are `ship`, `move` and `1` to `5`. `ship` uploads the shipped image, and `move` uploads the rehearsal image after a WLED self-update, so it has to move itself aside. `1` to `5` reset the board in that pause of the rehearsal image. Run it before a release that changes `moonbase/migrate/`.
 
