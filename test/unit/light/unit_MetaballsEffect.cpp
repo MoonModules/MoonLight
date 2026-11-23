@@ -1,61 +1,26 @@
 /// @module MetaballsEffect
 
 #include "doctest.h"
-#include "light/layouts/Layouts.h"
 #include "light/effects/MetaballsEffect.h"
-#include "light/layouts/GridLayout.h"
+#include "golden_frame.h"   // LayerFixture and ScopedTestClock: the layer off the stack, one known moment of the orbit
 
-// One tick on a 16×16 grid leaves at least one non-zero byte in the layer buffer (proves the effect rendered).
+using mm::golden::cornersDiffer;
+using mm::golden::litLights;
+
+// One tick on a 16×16 grid leaves at least one light lit (proves the effect rendered).
 TEST_CASE("MetaballsEffect writes non-zero RGB data to buffer") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 16;
-    grid.height = 16;
-    grid.depth = 1;
-    layouts.addChild(&grid);
-
-    mm::Layer layer;
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-
-    mm::MetaballsEffect metaballs;
-    layer.addChild(&metaballs);
-
-    layer.applyState();
-    layer.tick();
-
-    auto& buf = layer.buffer();
-    REQUIRE(buf.data() != nullptr);
-
-    bool hasNonZero = false;
-    for (size_t i = 0; i < buf.bytes(); i++) {
-        if (buf.data()[i] != 0) { hasNonZero = true; break; }
-    }
-    CHECK(hasNonZero);
+    mm::golden::ScopedTestClock clock(1000);   // the suite's fixed moment, the same frame on every run
+    mm::golden::LayerFixture fx(16, 16);
+    fx.add(fx.own<mm::MetaballsEffect>());
+    fx.layer.tick();
+    CHECK(litLights(fx.frame()) > 0);
 }
 
 // Pixels at opposite corners of a 32×32 grid differ in color (the effect is not flat-filling the buffer).
 TEST_CASE("MetaballsEffect produces spatial variation") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 32;
-    grid.height = 32;
-    grid.depth = 1;
-    layouts.addChild(&grid);
-
-    mm::Layer layer;
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-
-    mm::MetaballsEffect metaballs;
-    layer.addChild(&metaballs);
-
-    layer.applyState();
-    layer.tick();
-
-    auto* data = layer.buffer().data();
-    uint8_t r0 = data[0], g0 = data[1], b0 = data[2];
-    size_t lastIdx = (32 * 32 - 1) * 3;
-    uint8_t r1 = data[lastIdx], g1 = data[lastIdx + 1], b1 = data[lastIdx + 2];
-    CHECK((r0 != r1 || g0 != g1 || b0 != b1));
+    mm::golden::ScopedTestClock clock(1000);   // the corners match at a few moments of the orbit, so the test picks one where they differ
+    mm::golden::LayerFixture fx(32, 32);
+    fx.add(fx.own<mm::MetaballsEffect>());
+    fx.layer.tick();
+    CHECK(cornersDiffer(fx.frame()));
 }
