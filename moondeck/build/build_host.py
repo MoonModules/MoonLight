@@ -129,6 +129,9 @@ def main():
     ap.add_argument("--configure", action="store_true",
                     help="configure the tree and generate build_id.h, without compiling: what check_code and "
                          "check_docgen read, as CI's findings job runs them")
+    ap.add_argument("--build-dir", metavar="DIR",
+                    help="build into DIR instead of this host's tree: a container build of the same checkout, "
+                         "whose CMake cache records another source path, keeps its own")
     args = ap.parse_args()
 
     bdir = host_build_dir()
@@ -150,9 +153,11 @@ def main():
         bdir = "build/nojit"
         extra += ["-DMM_MOONLIVE_NO_HOST_JIT=ON"]
         print("Forcing MM_MOONLIVE_HAS_HOST_JIT=0: the x86-64 host's view.")
+    if args.build_dir:
+        bdir = args.build_dir
     what = "test binaries" if args.tests else "host target"
     print(f"Configuring {bdir}/ and generating build_id.h ..." if args.configure else f"Building {what} into {bdir}/ ...")
-    # CMAKE_BUILD_TYPE is honoured by single-config generators (Ninja, Make).
+    # CMAKE_BUILD_TYPE is honored by single-config generators (Ninja, Make).
     # Visual Studio is multi-config and ignores it — we pass --config Release at
     # build time below. Setting CMAKE_BUILD_TYPE on multi-config is harmless.
     r = subprocess.run(

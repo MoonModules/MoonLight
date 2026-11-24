@@ -167,6 +167,8 @@ constexpr bool hasEthernet = true;
 
 /// True when the firmware carries an IP stack at all, which is what UDP interop gates on.
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
+/// The threads that may run a frame's layers at once: one, the render loop on the first core, since the second carries the drivers, the network and the audio.
+constexpr uint8_t renderThreads = 1;
 
 /// False: the controls follow the hardware, so a board without Ethernet shows nothing to configure.
 constexpr bool previewsHardwareControls = false;

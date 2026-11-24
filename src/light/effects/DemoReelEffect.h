@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// It hosts one live child at a time, created from the registry and parented to this Layer. The child runs the normal lifecycle against this Layer's buffer, extents and clock. The child's own controls stay at their defaults.
+/// It hosts one live child at a time, created from the registry and parented to this Layer. The tick that advances only chooses the next effect, and `applyPending` swaps it in on the render loop. The child runs the normal lifecycle against this Layer's buffer, extents and clock. The child's own controls stay at their defaults.
 class DemoReelEffect : public EffectBase {
 public:
     /// Catalog tags: the demo reel.
@@ -43,8 +43,10 @@ public:
     /// List every eligible effect and stand the first one up.
     void prepare() override {
         buildEligibleList();
-        // A rebuild re-creates the child, whose buffers were sized to the old grid.
-        swapTo(cursor_ < eligibleCount_ ? cursor_ : 0);
+        // A rebuild re-creates the child, whose buffers were sized to the old grid; a swap the tick chose takes its place here.
+        const uint8_t which = swapDue_ != kNoSwap ? swapDue_ : cursor_;
+        swapDue_ = kNoSwap;
+        swapTo(which < eligibleCount_ ? which : 0);
     }
 
     /// Advance on the interval, run the hosted child, extrude it, then draw the name.
@@ -75,6 +77,14 @@ public:
         EffectBase::release();
     }
 
+    /// Stand up the effect tick chose, on the render loop before the next frame.
+    void applyPending() override {
+        if (swapDue_ == kNoSwap) return;
+        const uint8_t next = swapDue_;
+        swapDue_ = kNoSwap;
+        swapTo(next);
+    }
+
     /// Delete the hosted child with the reel.
     ~DemoReelEffect() override { destroyCurrent(); }
 
@@ -83,13 +93,15 @@ public:
     /// Test seam: the type name of the effect currently playing.
     const char* currentTypeForTest() const { return current_ ? current_->typeName() : nullptr; }
     /// Test seam: advance the reel without waiting out the interval.
-    void advanceForTest() { advance(); }
+    void advanceForTest() { advance(); applyPending(); }
 
 private:
-    /// The eligible list's ceiling: a byte per effect, so it stays inline.
-    static constexpr uint8_t kMaxEligible = 64;
+    /// The eligible list's ceiling, above the registry's effect count so every effect plays: a byte per effect, so it stays inline.
+    static constexpr uint8_t kMaxEligible = 128;
     uint8_t eligible_[kMaxEligible] = {};   ///< registry indices of every Effect-role type but this one
     uint8_t eligibleCount_ = 0;          ///< how many of those were found
+    static constexpr uint8_t kNoSwap = 0xFF;   ///< no swap is waiting
+    uint8_t swapDue_ = kNoSwap;          ///< the entry tick chose, which applyPending stands up
     uint8_t cursor_ = 0;                 ///< which entry of `eligible_` is playing
     MoonModule* current_ = nullptr;      ///< the live hosted effect, owned and deleted on swap
     Dim currentDim_ = Dim::D3;           ///< the child's dimensionality, cached to drive the extrude
@@ -118,8 +130,8 @@ private:
             next = static_cast<uint8_t>((cursor_ + 1) % eligibleCount_);
         }
         // This overrides the global palette while the reel runs, which a later rebuild restores.
-        if (randomPalette && palettes::kCount > 0) Palettes::setActive(rng_.below(palettes::kCount));
-        swapTo(next);
+        if (randomPalette && palettes::kCount > 0) Palettes::request(rng_.below(palettes::kCount));   // applied before the next frame's layers
+        swapDue_ = next;   // the swap itself waits for applyPending: tick may run on a worker, and create and setParent touch shared state
     }
 
     /// Tear the current child down and stand up the one at `which`, wired to our Layer.

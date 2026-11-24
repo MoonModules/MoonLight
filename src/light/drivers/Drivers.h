@@ -652,7 +652,7 @@ public:
         EffectBase* const wired = outputBuffer_.data() && srcLayer ? srcLayer->wiringSource() : nullptr;
         composite(srcLayer, wired);
         wiredLast_ = wired != nullptr;
-        // A socket write still lands in lwIP on core 0, so core 1 builds and core 0 sends.
+        // Split: the encode task ticks the drivers, and the other children tick here.
         if (renderSplitActive_) {
             encodeDone_.store(false, std::memory_order_release);
             platform::notifyTask(encodeTask_);

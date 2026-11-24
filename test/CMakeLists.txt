@@ -31,6 +31,7 @@ add_executable(mm_tests
     unit/core/unit_FractionalOctaveBank.cpp
     unit/core/unit_AudioOnsets.cpp
     unit/core/unit_BeatClock.cpp
+    unit/core/unit_WorkerPool.cpp
     unit/core/unit_AudioDynamics.cpp
     unit/core/unit_AudioHarmony.cpp
     unit/core/unit_PictureService.cpp
@@ -274,6 +275,7 @@ add_executable(mm_tests
     unit/light/unit_MoonLiveModifier.cpp
     unit/light/unit_MoonLiveDrawing.cpp
     unit/light/unit_MoonLiveParticles.cpp
+    unit/light/unit_MoonLiveSinks.cpp
     unit/light/unit_MoonLiveLayout.cpp
     unit/light/unit_MoonLiveScripts.cpp
     unit/light/unit_MoonLiveScripts_ir_golden.cpp

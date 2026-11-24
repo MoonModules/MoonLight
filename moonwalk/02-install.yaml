@@ -392,9 +392,9 @@ processes:
         say: Write a Debian-based OS image to the card.
         when: { manual: "Use Raspberry Pi Imager or balenaEtcher, with an 8 GB card or larger." }
         detail: |
-          For a Raspberry Pi, [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/): the desktop build leaves less memory for the compile. For a NanoPi, the Debian image from the board's [FriendlyELEC wiki page](https://wiki.friendlyelec.com/wiki/index.php/NanoPi_R28S#Flashing_the_OS_to_the_microSD_card), under `01_Official images/01_SD card images`. Skip FriendlyWrt: it is router firmware with a different package manager. [Armbian](https://www.armbian.com/download/) covers many boards from one project.
+          For a Raspberry Pi, [Raspberry Pi OS Lite](https://www.raspberrypi.com/software/): the desktop leaves less memory for the compile. For a NanoPi, the Debian 13 `trixie` image from its [FriendlyELEC wiki page](https://wiki.friendlyelec.com/wiki/index.php/NanoPi_R28S#Flashing_the_OS_to_the_microSD_card), under `01_Official images/01_SD card images`. Skip FriendlyWrt, the router firmware, and the Debian 11 `bullseye` images, below the package's glibc floor. The file name starts with the chip, `rk3528` for an R28S, `rk3566` for an R3S, `rk3568` for an R5S; another chip's image stops at the logo. [Armbian](https://www.armbian.com/download/) covers many boards from one project.
 
-          On a Raspberry Pi, open Imager's settings before writing: set the username, hostname and WiFi, and enable SSH. Raspberry Pi OS ships with SSH off and no default user, so a card written without those boots to a machine you cannot reach.
+          On a Raspberry Pi, open Imager's settings before writing: set the username, hostname and WiFi, and enable SSH. Raspberry Pi OS ships with SSH off and no user, so a card written without them is unreachable.
       - id: boot
         say: Insert the card, connect the cable, power on.
         when: { manual: "Give it 10 to 20 minutes." }
@@ -426,6 +426,13 @@ processes:
       - id: update
         say: Update the system.
         when: { run: { command: "sudo apt update && sudo apt upgrade -y" } }
+        detail: |
+          A FriendlyELEC Debian image lists Debian's security updates but not `trixie-updates`, its urgent fixes between point releases; add that line from the mirror the others use, then update again: `echo "deb https://mirrors.aliyun.com/debian trixie-updates main contrib non-free non-free-firmware" | sudo tee /etc/apt/sources.list.d/trixie-updates.list`.
+      - id: unattended
+        say: Let the security updates install themselves.
+        when: { run: { command: "sudo apt install -y unattended-upgrades && sudo dpkg-reconfigure -plow unattended-upgrades" } }
+        detail: |
+          Debian's security fixes then install daily on their own. MoonLight updates apart from them: the package from the Devices map, a container by pulling its image.
       - id: build
         say: Or build MoonLight from source.
         when: { process: host-build-test }

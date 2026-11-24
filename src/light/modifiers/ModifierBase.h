@@ -5,6 +5,7 @@
 #include "core/module/MoonModule.h"
 #include "light/util/light_types.h" // lengthType, nrOfLightsType, Dim
 #include "core/util/math8.h"        // sin8/cos8, integer trig for a rotate modifier
+#include "core/util/math16.h"       // sin16/cos16, the finer trig a live rotation steps with
 
 #include <cmath>              // std::sqrt, sin, cos: float trig for circle folds
 #include <cstdint>           // fixed-width ints
@@ -13,9 +14,32 @@
 
 namespace mm {
 
+/// A live map from a destination light to the source it samples, as an affine transform in 16.16 fixed point: `src = (a·x + b·y + c, d·x + e·y + f)`.
+///
+/// A rotation, a zoom, a shear and a pan are each one, and so is any chain of them, so the Layer warps a frame by stepping the source along each row, two additions a light, the textbook incremental affine warp.
+struct LiveAffine {
+    int32_t a = 65536, b = 0, c = 0;   ///< the source x: per destination x, per destination y, and the offset
+    int32_t d = 0, e = 65536, f = 0;   ///< the source y, likewise
+    /// This map applied after `first`: a chain of live modifiers composes into one.
+    LiveAffine after(const LiveAffine& first) const {
+        const auto mul = [](int32_t p, int32_t q) { return static_cast<int32_t>((static_cast<int64_t>(p) * q) >> 16); };
+        return {mul(a, first.a) + mul(b, first.d), mul(a, first.b) + mul(b, first.e), mul(a, first.c) + mul(b, first.f) + c,
+                mul(d, first.a) + mul(e, first.d), mul(d, first.b) + mul(e, first.e), mul(d, first.c) + mul(e, first.f) + f};
+    }
+    /// Where light (x, y) samples, rounded to the nearest source light.
+    void apply(lengthType& x, lengthType& y) const {
+        const int64_t sx = static_cast<int64_t>(a) * x + static_cast<int64_t>(b) * y + c;
+        const int64_t sy = static_cast<int64_t>(d) * x + static_cast<int64_t>(e) * y + f;
+        x = static_cast<lengthType>((sx + 0x8000) >> 16);
+        y = static_cast<lengthType>((sy + 0x8000) >> 16);
+    }
+};
+
 /// A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.
 ///
 /// Modifiers compose: a @ref Layer folds its static modifiers in child order, each reshaping the result of the one below, into its mapping at rebuild. A dynamic modifier instead runs a pass every frame after all effects, on the logical buffer the static mapping then carries to the lights, whatever its place, and an animated one rebuilds its static fold on its own clock.
+///
+/// A chain of live maps composes in child order into one map that warps the frame and rounds once.
 ///
 /// A modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 ///
@@ -50,6 +74,9 @@ public:
 
     /// Whether this modifier does per-frame work, which gates the live pass.
     virtual bool hasModifyLive() const { return false; }
+
+    /// This frame's live map as one affine transform over a `logical` box, false for a map that is none; when every live modifier answers, the Layer warps the frame incrementally rather than per light through modifyLive.
+    virtual bool liveAffine(LiveAffine& /*out*/, const Coord3D& /*logical*/) const { return false; }
 
     /// Whether this modifier's mapping changed and wants a rebuild, clearing the flag; polled once per frame across every enabled modifier, so several coalesce into one rebuild.
     virtual bool consumeNeedsRebuild() { return false; }

@@ -393,6 +393,8 @@ const char* cpuInfo() {
     return buf;
 }
 
+uint8_t cpuCores() { return 1; }
+
 // The reset status register keeps its bits across a warm reset, so it is read once and cleared for the next boot.
 namespace {
 // The cause the reset status register latched, the most specific first.

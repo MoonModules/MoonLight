@@ -135,7 +135,7 @@ def main() -> int:
     # `realtime` is the runtime half of the hot-path check: MM_NONBLOCKING marks the tick methods, -Wfunction-effects proves what it can at compile time, and RTSan catches what reaches blocking through virtual dispatch. It needs Clang 20, so CI names clang-20 through CC and CXX.
     ap.add_argument("--kind", choices=["address", "thread", "realtime", "both"], default="both")
     # The concurrency suites are the point of this gate; the full suite is available but slower.
-    ap.add_argument("--filter", default="render-split*,worker seam*,TryLock*",
+    ap.add_argument("--filter", default="render-split*,worker seam*,TryLock*,a pool*,render workers*",
                     help="doctest -tc filter; pass '' for the whole suite")
     ap.add_argument("--junit", type=Path, help="write the unit results as JUnit here, for CI's annotations")
     args = ap.parse_args()

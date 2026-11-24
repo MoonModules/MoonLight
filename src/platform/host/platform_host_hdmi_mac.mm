@@ -163,6 +163,9 @@ bool up(uint32_t display, const HdmiMode& want, HdmiMode& running) {
 
 Surface back() { return {m.pixels.data(), static_cast<uint32_t>(m.width) * 4, m.width, m.height}; }
 
+// The window scales the screen-sized buffer already, so the loop fills it as before.
+bool presentScaled(const uint8_t*, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t) { return false; }
+
 void present() {
     if (m.framePending.exchange(true)) return;   // the main thread has not shown the last one yet: @xref{a-frame-is-an-image-the-layer-shows|replaced}
     CFDataRef data = CFDataCreate(nullptr, m.pixels.data(), static_cast<CFIndex>(m.pixels.size()));

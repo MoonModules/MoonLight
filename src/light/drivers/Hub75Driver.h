@@ -46,7 +46,7 @@ inline Hub75Output* asHub75Output(NoPiOutput& /*output*/) { return nullptr; }
 ///
 /// **One driver per peripheral.** A second driver that asks for LCD_CAM, Parlio or a Pi's header while another holds it stays idle with a status naming why, whichever of the two prepares first keeping it. This applies to the ESP32 too: a HUB75 driver yields to a strip driver holding LCD_CAM, and the strip driver to it.
 ///
-/// **Outputs.** The driver corrects the layout into one RGB frame in light order for a Hub75Output. The bus output reads a row-major raster; a Pi output's canvas is a stack of lanes of panels, so it places its lights first (Hub75Canvas.h) and hands the frame to the seam. All three are held by value, so the driver's size and memory readout count them; the Pi outputs are empty where no Pi runs.
+/// **Outputs.** The driver corrects the layout into one 3-channel frame for a Hub75Output, in light order and the fixture profile's color order. The bus output reads a row-major raster; a Pi output's canvas stacks lanes of panels, so it places its lights first (Hub75Canvas.h). All three are held by value, so the driver's memory readout counts them; the Pi outputs are empty off a Pi.
 ///
 /// **Continuous output.** A HUB75 panel is lit only while clocked, so on an ESP32 the platform re-sends one buffer forever and the bus output writes the next frame into it between scans, while tick() starts no transfer; a Pi output hands each frame to its seam, which hands it to the engine's threads.
 ///
@@ -71,6 +71,7 @@ public:
 
     /// Bind every output to this driver, which they read their settings through.
     Hub75Driver() : pioOutput_(*this), gpioOutput_(*this) {
+        setDefaultFixtureName("RGB");
         busOutput_.attach(this);
         if (Hub75Output* pio = asHub75Output(pioOutput_)) pio->attach(this);
         if (Hub75Output* gpio = asHub75Output(gpioOutput_)) gpio->attach(this);
@@ -177,8 +178,12 @@ public:
         // A layout with fewer lights than the panel's box leaves the rest of the panel dark.
         const nrOfLightsType have = sourceBuffer_->count() < lights ? sourceBuffer_->count() : lights;
 
-        // A plane reads (x, r) and the pixel half a panel below in one pass, so correct first.
-        correctFrameToRgb(sourceBuffer_->data(), srcCh, wire_, have);
+        // A plane reads (x, r) and the pixel half a panel below in one pass, so correct first: a 3-channel profile in its own order, the panel's lines, a wider one to its red, green and blue.
+        if (outCh == 3)
+            for (nrOfLightsType i = 0; i < have; i++)
+                correction_.apply(sourceBuffer_->data() + static_cast<size_t>(i) * srcCh, wire_ + static_cast<size_t>(i) * 3, srcCh);
+        else
+            correctFrameToRgb(sourceBuffer_->data(), srcCh, wire_, have);
         std::memset(wire_ + static_cast<size_t>(have) * 3, 0, static_cast<size_t>(lights - have) * 3);
 
         // Brightness is the planes' lit time, read each frame so the slider applies on the next one.

@@ -1,17 +1,17 @@
 {
  "#define used as a constant": 1,
- "(duplicated lines)": 3552,
- "(total)": 1718,
+ "(duplicated lines)": 3437,
+ "(total)": 1691,
  "blocking call on the render path": 203,
  "complex function": 282,
  "deeply nested": 100,
- "duplicated block": 812,
+ "duplicated block": 792,
  "large file": 24,
  "large stack frame": 33,
  "long function": 44,
  "long parameter list": 33,
  "module type in the UI": 90,
- "mutable static state": 45,
+ "mutable static state": 38,
  "name spread": 23,
  "raw allocation in light": 28
 }

@@ -221,8 +221,8 @@ struct SinkSlot { std::atomic<uintptr_t> owner{0}; AddLightSink sink; draw::Canv
                   FlowSink flow;             ///< the trail planes this run may advect
                   TrailSizeSink trailSize;   ///< where trail(1) asks for a plane
                 };
-/// Two slots, constinit rather than function-local statics, whose thread-safe guard is a lock.
-inline constinit SinkSlot gSinkSlots[2]{};
+/// A slot for each thread that may render layers at once, and one for a script compiled or tested off the render path; constinit rather than function-local statics, whose thread-safe guard is a lock.
+inline constinit SinkSlot gSinkSlots[platform::renderThreads + 1]{};
 /// Permanently empty, so a third concurrent runner's addLight calls no-op; never installed into, since a shared sink would let two overflow threads alias each other.
 inline const AddLightSink& sinkOverflow() { static const AddLightSink s; return s; }
 /// The canvas twin of sinkOverflow, whose data stays null.
@@ -249,7 +249,7 @@ inline const AddLightSink& addLightSink() {
 /// The fade sink for this thread, or an empty one; reading claims no slot.
 inline const FadeSink& fadeSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit FadeSink none{};
+    static constexpr FadeSink none{};
     return s ? s->fade : none;
 }
 
@@ -264,7 +264,7 @@ inline void setFadeSink(FadeFn fn, void* ctx) MM_NONBLOCKING {
 /// The coordinate sink for this thread, or an empty one; reading claims no slot.
 inline const CoordSink& coordSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit CoordSink none{};
+    static constexpr CoordSink none{};
     return s ? s->coord : none;
 }
 
@@ -279,7 +279,7 @@ inline void setCoordSink(CoordFn fn, void* ctx) MM_NONBLOCKING {
 /// The palette sink for this thread, or an empty one; reading claims no slot.
 inline const PalSink& palSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit PalSink none{};
+    static constexpr PalSink none{};
     return s ? s->pal : none;
 }
 
@@ -294,7 +294,7 @@ inline void setPalSink(PalFn fn, void* ctx) MM_NONBLOCKING {
 /// The motion sink for this thread, or an empty one; reading claims no slot.
 inline const MotionSink& motionSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit MotionSink none{};
+    static constexpr MotionSink none{};
     return s ? s->motion : none;
 }
 
@@ -309,7 +309,7 @@ inline void setMotionSink(MotionFn fn, void* ctx) MM_NONBLOCKING {
 /// The pool sizing sink for this thread, or an empty one; reading claims no slot.
 inline const PoolSizeSink& poolSizeSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit PoolSizeSink none{};
+    static constexpr PoolSizeSink none{};
     return s ? s->poolSize : none;
 }
 
@@ -324,7 +324,7 @@ inline void setPoolSizeSink(PoolSizeFn fn, void* ctx) {
 /// The live pool for this thread, or an empty handle; reading claims no slot.
 inline const PoolSink& poolSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit PoolSink none{};
+    static constexpr PoolSink none{};
     return s ? s->pool : none;
 }
 
@@ -339,7 +339,7 @@ inline void setPoolSink(particles::Pool* pool, uint32_t scale) MM_NONBLOCKING {
 /// Where trail() asks for its plane, during defineControls only.
 inline const TrailSizeSink& trailSizeSink() MM_NONBLOCKING {
     detail::SinkSlot* s = detail::ownedSlot(false);
-    static constinit TrailSizeSink none{};
+    static constexpr TrailSizeSink none{};
     return s ? s->trailSize : none;
 }
 
@@ -701,13 +701,6 @@ extern "C" inline uint32_t mm_light_pool(const uintptr_t* args, uint32_t, const 
 
 // --- The particle vocabulary -------------------------------------------------------------------
 
-/// A moving seed for the emitters, since a fixed one throws identical sparks every frame; atomic for the reason random16 is.
-inline uint32_t nextEmitSeed() MM_NONBLOCKING {
-    // `constinit` ASSERTS the constant initialization rather than creating it: the constructor is already constexpr, and this fails the build if an edit ever changes that.
-    static constinit std::atomic<uint32_t> seed{0x9E3779B9u};
-    return seed.fetch_add(0x9E3779B9u, std::memory_order_relaxed);
-}
-
 /// Throw a number of particles from a point, at an angle, speed, life and hue. The cone and the seed belong to the binding, so a fountain and a burst are one call.
 extern "C" inline uint32_t mm_light_emit(const uintptr_t* args, uint32_t, const uint8_t*) {
     const PoolSink& p = poolSink();
@@ -722,7 +715,7 @@ extern "C" inline uint32_t mm_light_emit(const uintptr_t* args, uint32_t, const 
                       static_cast<uint16_t>(uint32_t(args[5])),
                       static_cast<uint8_t>(uint32_t(args[6])),
                       // Moves per call, since a fixed seed emits the same trajectories.
-                      /*seed*/ nextEmitSeed());
+                      /*seed*/ p.pool->nextSeed());
     return 0;
 }
 
@@ -771,7 +764,7 @@ extern "C" inline uint32_t mm_light_collide(const uintptr_t* args, uint32_t, con
     const PoolSink& p = poolSink();
     if (!p.pool || !p.pool->valid()) return 0;
     p.pool->collide(draw::toSub(static_cast<lengthType>(uint32_t(args[0]))),
-                    /*restitution*/ 200, nextEmitSeed());
+                    /*restitution*/ 200, p.pool->nextSeed());
     return 0;
 }
 

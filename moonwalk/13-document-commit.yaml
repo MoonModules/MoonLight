@@ -172,7 +172,7 @@ processes:
         cores: all
         outputs: ["build/esp32-esp32s3-opi/*.bin"]
         say: Check the S3 firmware is up to date.
-        given: [{ changed: [src/**, "!src/platform/host/**"] }]
+        given: [{ changed: [src/**, "!src/platform/host/**", "!src/platform/rpi/**"] }]
         when: { run: { script: moondeck/check/check_esp32_built.py, args: "--firmware esp32s3-opi --build" } }
         detail: |
           It compares the binary with every source it compiles, which catches an edit the binary lacks, and rebuilds a stale one once, then checks again, before the KPI reads its size. One firmware is the gate, the S3, since it compiles the most of the light domain (the panel cards and the LCD drivers the classic leaves out) and the release workflow builds every shipped variant. A change to an sdkconfig fragment, the executable-memory path or host-ISA code needs one firmware per chip family built, the variant that layers the changed fragments; the rest wait for the release workflow.

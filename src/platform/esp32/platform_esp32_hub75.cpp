@@ -28,7 +28,7 @@
 ///
 /// Right after start that failure can appear once or twice while the engine hands the descriptors back; the interrupt then restarts the list, which already holds this frame, so the panel loses nothing.
 ///
-/// The refill task outranks the encode task, since a refill that lost the processor for a scan leaves the panel dark that long; it never deletes itself, so teardown deletes it by handle without racing.
+/// The refill task runs on the core that allocated the LCD interrupt, since a wake from the other core cost 17% of the refresh rate, measured on a Waveshare board; it outranks the encode task, since a refill that lost the processor for a scan leaves the panel dark that long, and it stays alive until teardown deletes it by its handle.
 ///
 /// ## Both control lines must be real pins
 ///
@@ -409,7 +409,7 @@ bool hub75Start(Hub75Handle& h) {
         ok = st->io && esp_lcd_panel_io_tx_color(st->io, -1, st->frame, st->frameBytes) == ESP_OK;
         if (ok) {
             st->refillParked.store(false, std::memory_order_release);
-            ok = xTaskCreate(&hub75RefillTask, "mmHub75", 4096, st, 6, &st->refill) == pdPASS;
+            ok = xTaskCreatePinnedToCore(&hub75RefillTask, "mmHub75", 4096, st, 6, &st->refill, xPortGetCoreID()) == pdPASS;   // the core hub75Init ran on, which holds the LCD interrupt
             if (!ok) st->refill = nullptr;
         }
 #endif

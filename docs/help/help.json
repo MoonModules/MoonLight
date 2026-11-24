@@ -835,8 +835,8 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#beatrippleseffect"
   },
   "BeatSweepEffect": {
-   "line": "A bar of light crosses the layout once a beat, or once a bar, over the sixteen bands.",
-   "summary": "It follows the beat a source states: a deck or Ableton Link over the [MoonModules format](https://moonmodules.org/MoonLight/reference/audio-sync.html#beat), a tracker, or the simulated song. While no beat runs it crosses at its own `tempo`, and in silence the light fades out, so a stopped song goes dark.\n\nThe bands stand behind it as bars, the light takes the color of the band it is over, `downbeat` gives the bar's first beat the palette's other half, and `beatInfo` writes the tempo and the beat in the bar at the top left, \"106 3/4\".",
+   "line": "A bar of light crosses the layout once a beat, or once a bar.",
+   "summary": "It follows the beat a source states: a deck or Ableton Link over the [MoonModules format](https://moonmodules.org/MoonLight/reference/audio-sync.html#beat), a tracker, or the simulated song. While no beat runs it crosses at its own `tempo`, and in silence the light fades out, so a stopped song goes dark.\n\nThe light takes the palette's color at its place across the layout, `downbeat` gives the bar's first beat the palette's other half, and `beatInfo` writes the tempo and the beat in the bar at the top left, \"106 3/4\".",
    "attribution": "[troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/BeatSweepEffect.gif",
    "controls": {
@@ -851,9 +851,6 @@
     },
     "trail": {
      "line": "How far the light's tail reaches behind it."
-    },
-    "bands": {
-     "line": "How bright the bands behind the light stand."
     },
     "tempo": {
      "line": "The crossings' tempo while no beat runs, in BPM."
@@ -3583,12 +3580,22 @@
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#ripplexzmodifier"
   },
   "RotateModifier": {
-   "line": "Turns the 2D image around its center, continuously, at the speed you set.",
-   "attribution": "[Brandon502](https://moonmodules.org/MoonLight/reference/attributions.html#brandon502), [Rotation matrix](https://moonmodules.org/MoonLight/reference/attributions.html#rotation-matrix)",
+   "line": "Turns the 2D image around its center, continuously at the speed you set, or a step a beat.",
+   "summary": "`sync` on `beat` turns a step on each beat a source states, so `beats` 8 lands on 0, 45, 90 … 315° and back at 0 every eight beats, after troyhacks' idea; `ease` makes each step speed up and slow down into the beat rather than turn at one speed. With no beat running, or in silence, it holds still, as Beat Sweep goes dark.",
+   "attribution": "[Brandon502](https://moonmodules.org/MoonLight/reference/attributions.html#brandon502), [Rotation matrix](https://moonmodules.org/MoonLight/reference/attributions.html#rotation-matrix), [troyhacks](https://moonmodules.org/MoonLight/reference/attributions.html#troyhacks)",
    "image": "https://moonmodules.org/MoonLight/assets/light/modifiers/RotateModifier.gif",
    "controls": {
+    "sync": {
+     "line": "A free turn, or a step on each beat."
+    },
     "speed": {
-     "line": "How fast the image turns."
+     "line": "How fast the image turns on `free`."
+    },
+    "beats": {
+     "line": "The beats a turn takes on `beat`: 8 is 45° a beat."
+    },
+    "ease": {
+     "line": "How each step speeds up and slows down: 0 even, 255 a pause a beat."
     }
    },
    "role": "modifier",
@@ -3991,6 +3998,10 @@
     {
      "title": "Connect the monitor",
      "text": "A monitor plugged in or woken later is picked up within a second. Set its input to HDMI, not automatic, which some monitors leave for another input. Noise after a cold start: reset the board."
+    },
+    {
+     "title": "Who scales",
+     "text": "On Linux the display controller scales the layer, and the log names which path runs."
     },
     {
      "title": "Status line",
@@ -5939,7 +5950,7 @@
    "title": "Modifiers",
    "base": "ModifierBase",
    "line": "A modifier sits between an [effect](https://moonmodules.org/MoonLight/moonmodules/light/effects.html) and the output: it reshapes where the pixels land, or masks them, without changing what the effect draws.",
-   "summary": "Modifiers compose: a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) folds its static modifiers in child order, each reshaping the result of the one below, into its mapping at rebuild. A dynamic modifier instead runs a pass every frame after all effects, on the logical buffer the static mapping then carries to the lights, whatever its place, and an animated one rebuilds its static fold on its own clock.\n\nA modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains."
+   "summary": "Modifiers compose: a [Layer](https://moonmodules.org/MoonLight/moonmodules/light/supporting.html#layer) folds its static modifiers in child order, each reshaping the result of the one below, into its mapping at rebuild. A dynamic modifier instead runs a pass every frame after all effects, on the logical buffer the static mapping then carries to the lights, whatever its place, and an animated one rebuilds its static fold on its own clock.\n\nA chain of live maps composes in child order into one map that warps the frame and rounds once.\n\nA modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains."
   },
   "light/layouts.md": {
    "title": "Layouts",

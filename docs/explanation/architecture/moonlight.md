@@ -92,7 +92,7 @@ Multiple layouts can live in one Layouts container. Each layout describes one li
 
 ## Effects and Layer
 
-**Effects** (a MoonModule) is the top-level container for one or more layers. Each layer renders independently into its own buffer; the Drivers container composes those buffers downstream.
+**Effects** (a MoonModule) is the top-level container for one or more layers. Each layer renders independently into its own buffer, side by side on a computer's spare cores ([parallelism](moonmodule.md#parallelism)); the Drivers container composes those buffers downstream.
 
 **Multi-layer composition.** The container composes more than one Layer's buffer into the shared output. Each enabled Layer renders into its own buffer, and the Drivers container's blend and map step composites them bottom to top in container order into the physical buffer. That is why it is a *blend* buffer in [Memory strategy](#memory-strategy). Each Layer carries a `blendMode` (alpha-over or additive) and an `opacity`, inert parameters the Layer never acts on; Drivers reads them and the container child order, and blends bottom→top. The bottom layer lies over black: a plain overwrite at full opacity, faded below it, and skipped at opacity 0 like any other. Each layer above blends onto the accumulated frame per its mode and opacity. With a single enabled Layer this is the degenerate case: a thin pass-through that hands the driver the Layer's buffer directly (no composite), byte-for-byte the single-layer pipeline. The blend math is integer-only per the hot-path rule (8-bit alpha-over `(src·α + dst·(255−α))/255`, additive sum-with-clamp); cost scales with the enabled-layer count.
 

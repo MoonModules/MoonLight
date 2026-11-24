@@ -23,7 +23,7 @@ Three boards have published pin maps, which the `board` select fills in:
 A published map hides the pin rows, since those lines are soldered; they stay bound and still drive the panel. The generic per-chip sets and Custom show them. A line on a pin the chip wires to flash or PSRAM is refused before init, with the line named. Free pins per chip: [GPIO usage](gpio-usage.md).
 
 !!! tip "The one naming trap"
-    A panel's ribbon names its color lines R1/G1/B1 (upper half) and R2/G2/B2 (lower half). Some board docs call the same pairs R0/G0/B0 and R1/G1/B1. A panel that lights every pixel in the wrong hue has its color lines in another order: swap the pins, not the panel.
+    A panel's ribbon names its color lines R1/G1/B1 (upper half) and R2/G2/B2 (lower half). Some board docs call the same pairs R0/G0/B0 and R1/G1/B1. A panel that lights every pixel in the wrong hue has its color lines in another order: pick the matching `fixture` profile, BGR for a panel showing red as blue.
 
 ## Which panel
 
@@ -36,6 +36,7 @@ Steps: [Set up a driver or service for the hardware](../../moonwalk.md#driver-se
 - **`scanRate`** is read off the panel's label or listing, not calculated: two panels of the same size can scan differently. A 1/32-scan panel needs the `e` line; on 1/16 that pin is free.
 - **`peripheral`** matters on a P4, which has one LCD_CAM and one Parlio: a board already driving LED strips from one needs the panel on the other.
 - **`clockEdge`**: every pixel one column over means the other edge.
+- **`fixture`** names the panel's color order: a panel showing red as blue takes the BGR profile. A new driver starts on RGB, and a wider profile gives its red, green and blue.
 
 ## Depth, refresh and brightness
 

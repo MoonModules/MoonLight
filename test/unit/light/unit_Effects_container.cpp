@@ -7,12 +7,16 @@
 #include "light/layouts/GridLayout.h"
 #include "light/effects/RainbowEffect.h"
 #include "light/effects/SpiralEffect.h"
+#include "light/effects/DemoReelEffect.h"
 #include "light/effects/FireEffect.h"   // heap-holding effect — the cascade-release probe
 #include "light/modifiers/MultiplyModifier.h"
+#include "light/modifiers/ModifierBase.h"
 #include "light/drivers/Drivers.h"
 #include "platform/platform.h"
 
+#include <atomic>
 #include <cstring>
+#include <thread>
 #include <vector>
 
 // RAII guard that restores the platform test clock on scope exit even if a REQUIRE/CHECK throws, without this, a mid-test failure would leave the global setTestNowMs override in place and pollute later test cases.
@@ -20,13 +24,11 @@ struct ClockGuard {
     ~ClockGuard() { mm::platform::setTestNowMs(0); }
 };
 
-// The Effects container is a thin pass-through with one child Layer: behavior must match what a bare Layer produced before the shape change. These tests pin that, anyone changing Effects::tick() will know immediately if the single-child path stops being a no-op.
-//
-// Composition (alpha-blend across multiple Effects) is not yet wired, the second test exercises the multi-Layer path enough to confirm each child Layer's loop runs and writes a populated buffer. Once composition lands, add a third test asserting the composed output blends as documented.
+// Effects renders its layers and Drivers composites them: one layer matches a bare Layer byte for byte; several each render their own buffer, on the render workers where a computer has them.
 
 // A Effects container with one child Layer must produce the same output as that Layer used directly (no-op container).
 TEST_CASE("Effects with one Layer produces the same output as a bare Layer") {
-    // Pin virtual time so both Layer paths read the same elapsed value from RainbowEffect's platform::millis() phase. Without this, the two tick() calls land microseconds apart on the real clock and Rainbow's hue rotates between them, making byte-exact comparison impossible (the structural compare this test used to do hid the actual contract).
+    // Pinned time, so both paths read the same millis() and Rainbow's hue sits still between the two ticks, which byte-exact comparison needs.
     mm::platform::setTestNowMs(1000);
     ClockGuard clockGuard;  // restores setTestNowMs(0) even if a REQUIRE below fails
 
@@ -102,7 +104,7 @@ TEST_CASE("Effects with two Effects: each child Layer's tick runs and writes its
     effectsContainer.applyState();
     effectsContainer.tick();
 
-    // Both child Layer buffers must be populated, each Layer renders its own buffer here; the Drivers composite of those buffers is pinned by the "Drivers composites two enabled Layers" case below. (Checkerboard with default controls writes a checker pattern; Rainbow writes a hue gradient.)
+    // Each layer renders its own buffer (Spiral a spiral, Rainbow a hue gradient); the composite of the two is pinned by "Drivers composites two enabled Layers" below.
     auto& bufA = layerA.buffer();
     auto& bufB = layerB.buffer();
     REQUIRE(bufA.bytes() == static_cast<size_t>(8 * 8 * 3));
@@ -112,7 +114,7 @@ TEST_CASE("Effects with two Effects: each child Layer's tick runs and writes its
     for (size_t i = 0; i < bufA.bytes(); i++) if (bufA.data()[i] != 0) { aHasNonZero = true; break; }
     for (size_t i = 0; i < bufB.bytes(); i++) if (bufB.data()[i] != 0) { bHasNonZero = true; break; }
     CHECK_MESSAGE(aHasNonZero, "Layer A (Rainbow) wrote no pixels");
-    CHECK_MESSAGE(bHasNonZero, "Layer B (Checkerboard) wrote no pixels");
+    CHECK_MESSAGE(bHasNonZero, "Layer B (Spiral) wrote no pixels");
 }
 
 // A minimal driver that just records the source buffer it's handed each tick, so a test can inspect the composited output without a real network/LED sink.
@@ -147,7 +149,7 @@ struct TwoLayers {
     void frame() { effects.tick(); drivers.tick(); }
 };
 
-// Multi-layer composition: Drivers blends ≥2 enabled Layers into its own output buffer and hands THAT to drivers (not a single Layer's buffer). Bottom layer overwrites; top layer blends per its blendMode/opacity. This is the end-to-end pin for the composite loop in Drivers::tick.
+// Drivers blends two or more enabled layers into its own output buffer and hands that to the drivers: the bottom overwrites, the top blends per its mode and opacity. The end-to-end pin for Drivers::tick's composite.
 TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -155,7 +157,7 @@ TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
     layouts.addChild(&grid);
 
     mm::Effects effectsContainer;
-    // Bottom layer: a checkerboard base.
+    // Bottom layer: a spiral base.
     mm::Layer bottom; bottom.setChannelsPerLight(3);
     mm::SpiralEffect base; bottom.addChild(&base);
     // Top layer: rainbow, additive at full opacity → bottom + top, clamped.
@@ -168,7 +170,7 @@ TEST_CASE("Drivers composites two enabled Layers into one output buffer") {
     effectsContainer.addChild(&top);
     effectsContainer.setLayouts(&layouts);
 
-    // The driver is declared BEFORE its container ON PURPOSE: stack objects destruct in reverse declaration order, so this puts ~Drivers() (which stops the core-1 encode worker) ahead of ~CaptureDriver(). The other way round, the worker can still be inside the driver's tick() when its vtable is torn down, a vptr race TSan flags. Production is safe by a different route (release()/removeChild() quiesce before any delete); a stack test has only declaration order.
+    // Declared before its container on purpose: ~Drivers() stops the encode worker before ~CaptureDriver() runs, or the worker can be inside the driver's tick() as its vtable goes, a race TSan flags.
     CaptureDriver cap;
     mm::Drivers drivers;
     drivers.addChild(&cap);
@@ -214,7 +216,7 @@ TEST_CASE("Drivers composition drops to single layer when one is disabled") {
     REQUIRE(rig.cap.src_->bytes() == static_cast<size_t>(4 * 3));
 }
 
-// Drivers' composition/output-buffer allocation contract (architecture.md § Adaptive allocation). The driver output buffer exists ONLY when the pipeline must blend into physical space; otherwise the lone layer's buffer is handed to drivers directly (zero-copy). dynamicBytes() reflects outputBuffer_.bytes(), so it's 0 ⇔ no buffer. Pins all three cases in one place: 1. one identity (no-LUT) layer  → NO output buffer (zero-copy), WITH multicore off 2. two enabled Layers           → output buffer (must composite) 3. one layer WITH a LUT         → output buffer (must map logical→physical) The multicore render↔encode split adds a fourth reason to own a buffer: it is the frame core 1 reads while core 0 renders the next one, so with the split ON the identity case DOES allocate one (case 1b). That is the documented cost of multicore; turning it off (or failing to allocate) restores the zero-copy profile exactly.
+// The output buffer exists only to composite, to map through a LUT, or for the multicore split (the frame core 1 reads); a lone identity layer hands its own buffer to the drivers. dynamicBytes() is 0 exactly when there is none.
 TEST_CASE("Drivers allocates the output buffer only when compositing or mapping is needed") {
     // --- Case 1: a single identity (dense-grid, no-LUT) layer, multicore OFF → no output buffer ---
     {
@@ -303,7 +305,7 @@ TEST_CASE("Drivers allocates the output buffer only when compositing or mapping 
     }
 
     // --- Case 4: a live layer is DISABLED → drivers transition to idle, no stale buffer ---
-    // The real-world sequence: a frame is published with the layer enabled, then the user disables it and the pipeline rebuilds. activeLayer() still surfaces the (now disabled) layer so geometry stays queryable, but output selection must use the *enabled* source, with none, the driver's source buffer goes null so it emits nothing instead of re-sending the last frame off the disabled layer.
+    // A frame published, then the layer disabled and rebuilt: activeLayer() still answers for geometry, but the driver's source goes null, so it emits no stale frame of the disabled layer.
     {
         mm::Layouts layouts; mm::GridLayout grid;
         grid.width = 8; grid.height = 8; grid.depth = 1;
@@ -380,7 +382,7 @@ TEST_CASE("Effects::firstEnabledLayer returns first enabled child, nullptr when 
 
 // If the container holds only non-Layer children, activeLayer() returns nullptr (the role-guard skips, never miscasts).
 TEST_CASE("Effects::activeLayer returns nullptr when no child has role Layer") {
-    // The role-guard in activeLayer (and setLayouts) skips non-Layer children rather than miscasting. Today the UI's acceptsChildren mapping keeps non-Layer children out, but the engine doesn't enforce it, so the engine must degrade gracefully. Pin the contract: a Effects container populated only with non-Layer children returns nullptr from activeLayer(), not a miscast pointer.
+    // activeLayer() and setLayouts() skip children that are not layers rather than miscast them, since the engine does not enforce the UI's child roles: a container of such children answers nullptr.
     struct GenericChild : public mm::MoonModule {};
 
     mm::Effects effects;
@@ -390,7 +392,7 @@ TEST_CASE("Effects::activeLayer returns nullptr when no child has role Layer") {
     CHECK(effects.activeLayer() == nullptr);             // skipped, not miscast
 }
 
-// The disable cascade: disabling a PARENT releases every descendant's resources, because applyState() routes each node by its own effectivelyEnabled(), which is false for a child whose ancestor is disabled. This is the core guarantee of the unified lifecycle: a disabled subtree holds nothing (memory or hardware). FireEffect is the probe, its heat buffer's dynamicBytes() is host-observable, standing in for any per-module resource.
+// Disabling a parent releases every descendant's resources, since applyState() routes each node by its effectivelyEnabled(); FireEffect's heat buffer, visible as dynamicBytes(), stands in for any module's resource.
 TEST_CASE("Disabling a parent Layer cascades release to its effects (effectivelyEnabled)") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -410,7 +412,7 @@ TEST_CASE("Disabling a parent Layer cascades release to its effects (effectively
     REQUIRE(fire.effectivelyEnabled());     // and no ancestor disabled
     CHECK(fire.dynamicBytes() > 0);         // heat buffer allocated
 
-    // Disable the PARENT layer (the effect's own flag stays true) and re-sweep, as the Scheduler does after an enabled-toggle. The effect is now effectively-disabled (ancestor off) → its applyState routes to release → heap freed, even though fire.enabled() is still true.
+    // The parent disabled and swept again, as the Scheduler does: the effect is effectively disabled, so its applyState releases and frees the heap while fire.enabled() stays true.
     layer.setEnabled(false);
     effects.applyState();
     CHECK(fire.enabled());                  // the effect's OWN flag is untouched
@@ -423,7 +425,7 @@ TEST_CASE("Disabling a parent Layer cascades release to its effects (effectively
     CHECK(fire.effectivelyEnabled());
     CHECK(fire.dynamicBytes() > 0);         // re-acquired
 
-    // Effects-specific: an effect builds against the LAYER's LUT/buffer, so the router must run the Layer's prepare() (rebuild the LUT) BEFORE recursing into the effect (applyState visits the parent, then children). Prove the re-enabled effect actually RENDERS, a stale/zero-size buffer would leave the frame black. A tick after re-enable must write non-zero pixels.
+    // The layer's prepare() rebuilds the LUT before the effect builds on it, so the re-enabled effect renders: a tick writes lit pixels, where a stale buffer would leave the frame black.
     layer.tick();                           // ticks the effect through the Layer
     const uint8_t* buf = layer.buffer().data();
     bool anyLit = false;
@@ -524,4 +526,146 @@ TEST_CASE("a faded bottom layer keeps its motion bytes, and a faded top layer bl
     const uint8_t mixed = panAfter(128, 128);
     CHECK(mixed > 200);                // the top, half faded, adds half its aim, additive being its default mode
     CHECK(mixed < 255);
+}
+
+// Four layers of time-driven effects over a 16x16 grid, as a frame's work for the render workers.
+struct FourLayers {
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    mm::Effects effects;
+    mm::Layer layers[4];
+    mm::RainbowEffect rainbowA, rainbowB;
+    mm::SpiralEffect spiralA, spiralB;
+    FourLayers() {
+        grid.width = 16; grid.height = 16; grid.depth = 1;
+        layouts.addChild(&grid);
+        mm::MoonModule* fx[4] = {&rainbowA, &spiralA, &rainbowB, &spiralB};
+        for (int i = 0; i < 4; i++) {
+            layers[i].setChannelsPerLight(3);
+            layers[i].addChild(fx[i]);
+            effects.addChild(&layers[i]);
+        }
+        effects.setLayouts(&layouts);
+    }
+};
+
+TEST_CASE("render workers render a frame's layers byte for byte as the render loop alone does") {
+    ClockGuard clockGuard;
+    FourLayers alone, pooled;
+    mm::platform::setTestSpawnFails(true);
+    alone.effects.setup();   // no worker starts: the render loop renders every layer
+    mm::platform::setTestSpawnFails(false);
+    pooled.effects.setup();
+    const uint8_t want = static_cast<uint8_t>(mm::platform::cpuCores() - 1);
+    CHECK(alone.effects.renderWorkers() == 0);
+    CHECK(pooled.effects.renderWorkers() == (want < mm::WorkerPool::kMaxWorkers ? want : mm::WorkerPool::kMaxWorkers));
+    alone.effects.applyState();
+    pooled.effects.applyState();
+    for (uint32_t frame = 0; frame < 20; frame++) {
+        mm::platform::setTestNowMs(1000 + frame * 16);
+        alone.effects.tick();
+        pooled.effects.tick();
+        for (int i = 0; i < 4; i++) {
+            const mm::Buffer& a = alone.layers[i].buffer();
+            const mm::Buffer& p = pooled.layers[i].buffer();
+            REQUIRE(a.bytes() == p.bytes());
+            CHECK(std::memcmp(a.data(), p.data(), a.bytes()) == 0);
+        }
+    }
+}
+
+// A modifier that asks for a rebuild every frame and counts the folds of each rebuild, and those off the render loop's thread.
+class RebuildProbe : public mm::ModifierBase {
+public:
+    std::thread::id renderThread = std::this_thread::get_id();
+    mutable std::atomic<int> folds{0}, elsewhere{0};
+    bool modifyLogical(mm::Coord3D&) const override {
+        folds.fetch_add(1);
+        if (std::this_thread::get_id() != renderThread) elsewhere.fetch_add(1);
+        return true;
+    }
+    bool consumeNeedsRebuild() override { return true; }
+};
+
+TEST_CASE("render workers leave a modifier's rebuild to the render loop, one layer at a time") {
+    // Layers share the layout a rebuild places lights through, so a rebuild on a worker would run beside another layer's.
+    ClockGuard clockGuard;
+    RebuildProbe probes[4];
+    FourLayers rig;
+    for (int i = 0; i < 4; i++) rig.layers[i].addChild(&probes[i]);
+    rig.effects.setup();
+    rig.effects.applyState();
+    int built[4];
+    for (int i = 0; i < 4; i++) built[i] = probes[i].folds.load();   // the folds applyState made
+    for (uint32_t frame = 0; frame < 2; frame++) {   // frame 0 asks, frame 1 applies
+        mm::platform::setTestNowMs(1000 + frame * 16);
+        rig.effects.tick();
+    }
+    for (int i = 0; i < 4; i++) {
+        CHECK(probes[i].folds.load() > built[i]);   // a rebuild the frames asked for, beyond applyState's
+        CHECK(probes[i].elsewhere.load() == 0);
+    }
+}
+
+// A hosted effect that records the thread it is created on, as a stand-in the reel can pick.
+struct HostedProbe : mm::RainbowEffect {
+    static inline std::thread::id renderThread = std::this_thread::get_id();
+    static inline std::atomic<bool> armed{false};
+    static inline std::atomic<int> created{0}, createdElsewhere{0};
+    HostedProbe() {
+        if (!armed.load()) return;   // registerType builds a probe instance too
+        created.fetch_add(1);
+        if (std::this_thread::get_id() != renderThread) createdElsewhere.fetch_add(1);
+    }
+};
+
+TEST_CASE("render workers leave a demo reel's effect swap to the render loop") {
+    // Create and setParent write state every layer shares (the factory's name buffer, the last-enabled effect), so two reels advancing side by side swap on the render loop.
+    ClockGuard clockGuard;
+    mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
+    mm::ModuleFactory::registerType<mm::SpiralEffect>("SpiralEffect");
+    mm::ModuleFactory::registerType<HostedProbe>("HostedProbeEffect");
+    mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect");
+
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 8; grid.height = 8; grid.depth = 1;
+    layouts.addChild(&grid);
+    mm::Effects effects;
+    mm::Layer layers[2];
+    mm::DemoReelEffect reels[2];
+    for (int i = 0; i < 2; i++) {
+        layers[i].setChannelsPerLight(3);
+        reels[i].interval = 1;
+        reels[i].randomPalette = false;
+        layers[i].addChild(&reels[i]);
+        effects.addChild(&layers[i]);
+    }
+    effects.setLayouts(&layouts);
+    effects.setup();
+    if (effects.renderWorkers() == 0) return;   // a one-core host renders on the render loop alone, where the swap already is
+    effects.applyState();
+    const int n = reels[0].eligibleCountForTest();
+    REQUIRE(n >= 2);
+    HostedProbe::created = 0;
+    HostedProbe::createdElsewhere = 0;
+    HostedProbe::armed = true;
+    // Each frame is past the interval: the tick decides a swap and the next frame's serial phase applies it, so a lap of n effects fits in n + 2 frames.
+    const int frames = 2 * (n + 2);
+    const char* previous[2] = {reels[0].currentTypeForTest(), reels[1].currentTypeForTest()};
+    int moved[2] = {0, 0};
+    for (int frame = 0; frame < frames; frame++) {
+        mm::platform::setTestNowMs(1000 + static_cast<uint32_t>(frame) * 1001);
+        effects.tick();
+        for (int i = 0; i < 2; i++) {
+            const char* now = reels[i].currentTypeForTest();
+            REQUIRE(now != nullptr);
+            if (std::strcmp(now, previous[i]) != 0) moved[i]++;
+            previous[i] = now;
+        }
+    }
+    HostedProbe::armed = false;
+    for (int i = 0; i < 2; i++) CHECK(moved[i] > 0);   // each reel moved on
+    CHECK(HostedProbe::created.load() > 0);            // the probe was picked and created
+    CHECK(HostedProbe::createdElsewhere.load() == 0);  // on the render loop, as the swap runs there
 }

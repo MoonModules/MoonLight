@@ -97,6 +97,35 @@ processes:
         when: { run: { command: "curl -s http://<device>/api/modules/Firmware" } }
         detail: |
           The `build` control names the commit and the date.
+  - id: linux-board-build
+    title: Build for a Linux board on your computer
+    actor: contributor
+    goal: Your change running on a Pi or NanoPi, built on your computer in minutes rather than on the board.
+    systems: [MoonCore]
+    dependsOn: [host-build-test]
+    intro: |
+      A small board builds MoonLight slowly: an R3S's four A55 cores take ten times an M2's two. A Debian container builds the program for the board's processor on your computer instead, natively on an Apple silicon Mac or an arm64 Linux machine, and the board takes it as an update. The container's Debian matches the board's, so the program finds the same libraries.
+    steps:
+      - id: docker
+        say: Start Docker.
+        when: { run: { command: "open -a Docker" } }
+        detail: |
+          On macOS, Docker Desktop; on Linux, `sudo systemctl start docker`. `docker info` answers once it is up.
+      - id: build
+        say: Build the program in a Debian container.
+        when: { run: { command: "docker run --rm -v \"$PWD\":/src -w /src debian:trixie bash -c 'apt-get update -qq && apt-get install -y -qq cmake g++ python3 curl ca-certificates git && curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=/root/.local/bin:$PATH && git config --global --add safe.directory /src && python3 moondeck/build/build_host.py --build-dir build/debian'" } }
+        detail: |
+          From the repository's root. It writes `build/debian/MoonLight`, an arm64 program on an Apple silicon Mac, in a tree of its own, since its CMake cache records the container's `/src` and a native Linux build keeps `build/linux`. Use the image of the board's Debian, `debian:trixie` for Debian 13. The first run pulls the image and the tools, about two minutes; the build itself took 83 s on an M2.
+      - id: install
+        say: Send it to the board as an update.
+        when: { run: { command: "curl --data-binary @build/debian/MoonLight -H \"Content-Type: application/octet-stream\" http://<board>:8080/api/firmware/upload" } }
+        detail: |
+          The service checks the program is for its processor, keeps the running one as `MoonLight.prev` and restarts on the new one with its settings: [the service](reference/installing-on-linux.md#the-service). It answers `{"ok":true}` and is back within seconds.
+      - id: confirm
+        say: Read the new build back.
+        when: { run: { command: "curl -s http://<board>:8080/api/system" } }
+        detail: |
+          `build` names the commit, with a `+` for a working tree that differs from it.
   - id: provision-board
     title: Provision a freshly flashed board
     actor: contributor

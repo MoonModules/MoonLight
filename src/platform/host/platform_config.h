@@ -123,6 +123,8 @@ constexpr bool hasEncoderChoice = true;
 constexpr bool hasFsSegments = true;
 /// Whether any IP stack is present, which is what UDP interop gates on.
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
+/// The threads that may run a frame's layers at once: a computer's cores, up to eight.
+constexpr uint8_t renderThreads = 8;
 
 /// False: a host has no Ethernet to fix, so nothing overrides a catalog-supplied PHY type.
 constexpr bool ethPhyIsFixed = false;

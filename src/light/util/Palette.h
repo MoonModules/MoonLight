@@ -4,6 +4,7 @@
 #include "core/util/JsonSink.h" // paletteOptions emits the dropdown {name,colors} objects
 
 #include <cstddef>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>    // snprintf: the seam copies the names it is handed
 
@@ -210,7 +211,16 @@ public:
 
     /// Expand built-in `index` into the active palette, off the hot path, on selection: @xref{gradients-expand-once}.
     static void setActive(uint8_t index) {
+        requested_.store(0, std::memory_order_relaxed);   // a direct set supersedes a pending request, which would otherwise land over it next frame
         active_ = fromBuiltin(index);
+    }
+
+    /// Ask for built-in `index` from inside a layer's tick, applied before the next frame's layers render, so no layer reads a palette another is writing.
+    static void request(uint8_t index) MM_NONBLOCKING { requested_.store(static_cast<uint16_t>(index + 1), std::memory_order_relaxed); }
+    /// Apply the palette a layer asked for, at the start of a frame, before any layer renders: Effects for its layers, a bare layer for itself.
+    static void applyRequest() MM_NONBLOCKING {
+        const uint16_t r = requested_.exchange(0, std::memory_order_relaxed);
+        if (r) setActive(static_cast<uint8_t>(r - 1));
     }
 
     /// Build the 16-entry palette for built-in `index` (rainbow generated via hsvToRgb, the rest expanded from their gradient stops).
@@ -269,10 +279,10 @@ public:
 private:
     /// Default to a full rainbow (index 0).
     static inline Palette active_ = fromBuiltin(0);
+    static inline std::atomic<uint16_t> requested_{0};   ///< a palette a layer asked for, plus one, 0 for none
 };
 
-/// How many SCRIPTED palettes the picker offers, and their names: every catalog palette at its place in the catalog, held or not, then the user's own `.mlp` files. Set by Drivers, because Palette.h knows nothing about the filesystem and must not learn.
-/// This is the same one-pointer seam `Palettes::active()` is.
+/// How many scripted palettes the picker offers and their names, the catalog's at their places, then the user's `.mlp` files; Drivers sets them, as Palette.h holds no filesystem, the seam `Palettes::active()` is too.
 ///
 /// They come AFTER the built-ins, whose indices the WLED API and a knob stepping through the list rely on, so adding a script renumbers only the scripted tail.
 struct LivePalettes {

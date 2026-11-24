@@ -152,6 +152,7 @@
 #endif
 #include <array>    // the test USB desk's packets
 #include <vector>   // HostBus frame buffers: the memory-backed parallel bus
+#include <system_error>
 #include <thread>
 #include <deque>     // encoder frame queue between the render tick and the writer thread
 #include <mutex>
@@ -546,8 +547,14 @@ bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* use
     if (testSpawnFails.load(std::memory_order_relaxed)) return false;
     auto* w = new (std::nothrow) HostWorker();
     if (!w) return false;
-    t.impl = w;
-    w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
+    t.impl = w;   // before the thread starts, which waits on it at once
+    try {
+        w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
+    } catch (const std::system_error&) {   // the thread limit: the pool degrades on false
+        t.impl = nullptr;
+        delete w;
+        return false;
+    }
     return true;
 }
 
@@ -935,8 +942,13 @@ const char* cpuInfo() {
     // Cores only: the host's clock speed has no portable query (and boosts dynamically anyway).
     static char buf[16] = {};
     if (!buf[0])
-        std::snprintf(buf, sizeof(buf), "%u cores", std::thread::hardware_concurrency());
+        std::snprintf(buf, sizeof(buf), "%u cores", static_cast<unsigned>(cpuCores()));
     return buf;
+}
+
+uint8_t cpuCores() {
+    const unsigned n = std::thread::hardware_concurrency();   // 0 where the count is unknown
+    return static_cast<uint8_t>(n == 0 ? 1 : n > 255 ? 255 : n);
 }
 
 #ifndef _WIN32

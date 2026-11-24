@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-/// What the Pi 5 PIO engine and the Pi 3/4 GPIO engine share: the engine base with its open sequence and its two threads, the option-rule table, the lane geometry, the triple buffers, the refresh-rate window and the repack's default-layout constants and color scatter.
+/// What the Pi 5 PIO engine builds on: the engine base with its open sequence and its two threads, the option-rule table, the lane geometry, the triple buffers, the refresh-rate window and the repack's default-layout constants and color scatter.
 ///
-/// The pin numbers both engines use are in hub75_board_pins.h, and this header is MoonLight's own shared code (@xref{open-sequence|open sequence}, @xref{threads|threads}, @xref{option-rules|option rules}, @xref{triple-buffer|triple buffer}, @xref{default-layout|default layout}).
+/// The pin numbers it uses are in hub75_board_pins.h, and this header is MoonLight's own shared code (@xref{open-sequence|open sequence}, @xref{threads|threads}, @xref{option-rules|option rules}, @xref{triple-buffer|triple buffer}, @xref{default-layout|default layout}).
 ///
 /// @technical
 ///

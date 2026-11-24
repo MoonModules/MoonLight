@@ -592,7 +592,7 @@ jobs:
 
       # The Open Stage Control surface, so someone who owns a device can download it beside the
       # firmware instead of being sent to a path inside the repo. It is a plain session file with
-      # no build step: copied, not generated. The module help beside it is the one this release's app shows, so a device reads the help of the firmware it runs (a newer file names controls it lacks); deploy-pages mirrors it beside the release's binaries, where the device's page can read it.
+      # no build step: copied, not generated. The module help beside it is the one this release's app shows, so a device reads the help of the firmware it runs (a newer file names controls it lacks); stage-pages mirrors it beside the release's binaries, where the device's page can read it.
       - name: Stage the control-surface session and the module help
         run: uv run moondeck/ci/release_stage.py extras
 
@@ -614,7 +614,7 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: uv run moondeck/ci/release_stage.py version --tag "$TAG"
 
-      # Absolute GitHub release-asset URLs, uploaded as release assets and read by the on-device OTA picker (the device fetches the .bin directly, no CORS). The Pages-relative manifests are generated in the deploy-pages job, where the web installer (CORS-bound) consumes them. The shipping list is the mooninstaller/firmwares.json the build matrix reads, so manifests and builds cannot drift.
+      # Absolute GitHub release-asset URLs, uploaded as release assets and read by the on-device OTA picker (the device fetches the .bin directly, no CORS). The Pages-relative manifests are generated in the stage-pages job, where the web installer (CORS-bound) consumes them. The shipping list is the mooninstaller/firmwares.json the build matrix reads, so manifests and builds cannot drift.
       - name: Generate the installer manifests (release-asset URLs)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -800,24 +800,19 @@ jobs:
             org.opencontainers.image.description=Drive large LED installations and DMX fixtures
             org.opencontainers.image.licenses=GPL-3.0
 
-  # Deploy the web installer to GitHub Pages. Separate from `release` because
-  # the `github-pages` environment's protection rule allows only `main` and `v*`
-  # tags, so this job is gated to those and carries the environment, while
-  # `release` (which runs on any ref) stays free of it. A tag deploys in its own
-  # run, so a release reaches the installer with its binaries. The cumulative-
-  # content step restages the last 5 stable + 5 prerelease releases on every run.
-  deploy-pages:
+  # Stage the web installer and the docs for GitHub Pages. Separate from `release`
+  # because the `github-pages` environment's protection rule allows only `main`,
+  # so the staging and the deploy after it are gated to main, while `release`
+  # (which runs on any ref) stays free of it. A tag reaches Pages through
+  # restage-pages-for-tag's dispatch on main. The cumulative-content step
+  # restages the last 5 stable + 5 prerelease releases on every run.
+  stage-pages:
     # After a release, or alone on a pages-only dispatch: the site is staged from the published releases, never from this run's builds.
-    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && (needs.release.result == 'success' || inputs.pages_only) }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.release.result == 'success' || inputs.pages_only) }}
     needs: [release]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write        # actions/deploy-pages needs this
-      id-token: write     # actions/deploy-pages needs this (OIDC for Pages)
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy-pages.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -926,6 +921,18 @@ jobs:
         with:
           path: pages
 
+  # The deploy in a job of its own, GitHub's Pages layout: the artifact is listed by the time this job starts, and a re-run of a failed deploy deploys the one artifact the staging job uploaded.
+  deploy-pages:
+    if: ${{ !cancelled() && needs.stage-pages.result == 'success' }}
+    needs: [stage-pages]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write        # actions/deploy-pages needs this
+      id-token: write     # actions/deploy-pages needs this (OIDC for Pages)
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy-pages.outputs.page_url }}
+    steps:
       - id: deploy-pages
         uses: actions/deploy-pages@v4
 
