@@ -74,13 +74,17 @@ TEST_CASE("Hub75GpioOptions: the LSB time and the slowdown take their bounds, 50
     }
 }
 
-TEST_CASE("Hub75GpioOptions: Stripe drives rows/4 address steps, so a 32-high panel is 1/8 and a direct 1/16 is refused") {
+TEST_CASE("Hub75GpioOptions: Stripe drives rows/4 address steps, so a 32-high panel is 1/8, and a direct 1/16 or a height past 4 times the scan is refused") {
     std::string error;
     mm::platform::Hub75GpioOptions o = stripePanel();
     CHECK(mm::platform::hub75GpioCheckOptions(o, error));
     o.scanRate = 16;   // the direct scan of the same rows
     CHECK_FALSE(mm::platform::hub75GpioCheckOptions(o, error));
     CHECK(error.find("Stripe drives rows/4 address steps") != std::string::npos);
+    o = stripePanel();
+    o.rows = 33;   // rows/4 truncates to the panel's 1/8 and the driven lane stays 16 high, yet row 32 maps past it
+    CHECK_FALSE(mm::platform::hub75GpioCheckOptions(o, error));
+    CHECK(error.find("rows must be 4 times scanRate") != std::string::npos);
     o = stripePanel();
     o.rows = 64;
     o.scanRate = 16;   // a 64-high Stripe panel is 1/16
@@ -134,7 +138,7 @@ TEST_CASE("Hub75GpioOptions: the recorder refuses the same options, so a build w
 TEST_CASE("Hub75GpioOptions: a wall whose buffers pass the 256 MiB ceiling is refused with its figure and the limit, and one at the ceiling is taken") {
     std::string error;
     mm::platform::Hub75GpioOptions o = wall();
-    REQUIRE(mm::refusesPastCeiling(o, mm::platform::hub75GpioBufferBytes, mm::platform::hub75GpioCheckOptions, mm::platform::kGpioMaxBufferBytes, error));
+    REQUIRE(mm::refusesPastCeiling(o, mm::platform::hub75GpioBufferBytes, mm::platform::hub75GpioCheckOptions, mm::platform::kHub75MaxBufferBytes, error));
     CHECK(error.find("the wall's buffers exceed the engine's memory limit") != std::string::npos);
     CHECK(error.find("the limit is 256 MB") != std::string::npos);
 }

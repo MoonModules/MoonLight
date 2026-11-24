@@ -8,13 +8,11 @@
 ///
 /// A check is a table of rows, each a predicate over the options and the reason it gives, with an optional detail that adds the figures; the first row that holds refuses. The five rows every Pi engine shares are `kHub75CommonRules` (hub75_pio_options.h), and this engine adds its own after them: the multiplexing, the LSB time, the slowdown, the driven geometry and the memory limit.
 ///
+/// The memory limit is `kHub75MaxBufferBytes` (hub75_pio_options.h), the one both engines share.
+///
 /// ## Driven geometry
 ///
 /// The encoder validates the DRIVEN lane, which is the logical one except under Stripe, where the panel is driven as half the rows and double the columns (hub75_gpio_multiplex.h). A 32-high panel at 1/32 scan fails here, and a 32-high Stripe panel drives 16 rows at 1/8.
-///
-/// ## Limits
-///
-/// `kGpioMaxBufferBytes` is 256 MiB, the same figure as the PIO engine's. The smallest Pi 3 has 1 GB, and the figure is about 150 times the 1.8 MiB a 256 x 192 wall at 8 bits takes.
 
 #pragma once
 
@@ -27,9 +25,6 @@
 #include "platform/rpi/hub75_pio_options.h"      // OptionRule, hub75OptionsPass, kHub75CommonRules: the rule table both engines use
 
 namespace mm::platform {
-
-/// The most bytes the wall's buffers may total, 256 MiB, the one home of the memory limit (@xref{limits|limits}).
-constexpr uint64_t kGpioMaxBufferBytes = 256ull * 1024 * 1024;
 
 /// One lane's driven width: the logical lane, doubled under Stripe (@xref{driven-geometry|driven geometry}); 64 bits, so a width past 16 bits reads as it is and the rule refuses it.
 inline int64_t hub75GpioDrivenWidth(const Hub75GpioOptions& o) {

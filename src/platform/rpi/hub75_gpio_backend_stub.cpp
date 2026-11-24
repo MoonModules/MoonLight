@@ -26,9 +26,9 @@
 ///
 /// The capture is one frame's worth of GPIO words and one frame's dump stream, process-wide, since the engine owns one backend at a time.
 ///
-/// A wall frame is 192 KiB at 6-bit (196,608 bytes); the cap holds the largest frame the engine can build (3 lanes of 512x64 at 6-bit is under 600 KiB). The dump stream is about 3 events a column plus the per-group steps, so a wall frame is under 600k events, 8 bytes each.
+/// A wall frame is 192 KiB at 6-bit (196,608 bytes); the 1 MiB cap holds the largest frame the engine can build (3 lanes of 512x64 at 6-bit is under 600 KiB). The dump stream is about 3 events a column plus the per-group steps, 8 bytes each, and the recorder keeps the first 131,072, the same 1 MiB: the sign's whole frame, a wall's first part.
 ///
-/// submitFrame() builds the stream locally outside the lock and swaps it in whole, so a test reading it always sees one complete frame.
+/// submitFrame() builds the stream locally outside the lock and swaps it in whole, so a test reading it always sees one frame's stream.
 
 #include "platform/rpi/hub75_gpio_backend.h"
 #include "platform/rpi/hub75_gpio_backend_stub.h"
@@ -36,6 +36,7 @@
 #include "platform/rpi/hub75_rpi_common.h"   // hub75CopyCapturedWords: the read-back both stubs share
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -52,22 +53,29 @@ constexpr size_t kCaptureMaxBytes = 1024 * 1024;
 std::mutex captureMu_;
 std::vector<uint32_t> capture_;
 std::vector<GpioDumpEvent> stream_;
+/// The stream cap in events, the capture's bytes again, so a wall of any size records a bounded stream.
+constexpr size_t kStreamMaxEvents = kCaptureMaxBytes / sizeof(GpioDumpEvent);
 uint64_t submitted_ = 0;
 std::string setupLog_;
+std::atomic<uint32_t> failingWaits_{0};   // the OE pulse waits the timeout hook still fails
 
-/// The dump loop's recording sink: every write and pulser step lands in the stream, in order; the LEV reads are the slowdown delays, timing rather than signal, so the sink skips them.
+/// The dump loop's recording sink: every write and pulser step lands in the stream, in order, up to the cap; the LEV reads are the slowdown delays, timing rather than signal, so the sink skips them.
 struct RecordSink {
     std::vector<GpioDumpEvent>* stream = nullptr;
-    void writeSet(uint32_t mask) { stream->push_back({GpioDumpEvent::Kind::Set, mask}); }
-    void writeClr(uint32_t mask) { stream->push_back({GpioDumpEvent::Kind::Clr, mask}); }
+    void record(GpioDumpEvent::Kind kind, uint32_t value) {
+        if (stream->size() < kStreamMaxEvents) stream->push_back({kind, value});
+    }
+    void writeSet(uint32_t mask) { record(GpioDumpEvent::Kind::Set, mask); }
+    void writeClr(uint32_t mask) { record(GpioDumpEvent::Kind::Clr, mask); }
     uint32_t readLev() { return 0; }
+    /// Completes, unless the timeout hook still fails a wait, as a wedged PWM does on hardware.
     bool waitPulseFinished() {
-        stream->push_back({GpioDumpEvent::Kind::PulseWait, 0});
-        return true;
+        record(GpioDumpEvent::Kind::PulseWait, 0);
+        uint32_t n = failingWaits_.load();
+        while (n != 0 && !failingWaits_.compare_exchange_weak(n, n - 1)) {}
+        return n == 0;
     }
-    void sendPulse(uint8_t plane) {
-        stream->push_back({GpioDumpEvent::Kind::PulseFire, plane});
-    }
+    void sendPulse(uint8_t plane) { record(GpioDumpEvent::Kind::PulseFire, plane); }
 };
 
 void logStep(const char* step) {
@@ -106,8 +114,7 @@ class StubBackend : public GpioBackend {
         std::vector<GpioDumpEvent> stream;
         if (words != nullptr) {
             RecordSink sink{&stream};
-            uint64_t timeouts = 0;   // the recorder's pulse wait always completes
-            (void)hub75GpioDumpFrame(sink, config_, words, wordCount, slowdown_, timeouts);
+            (void)hub75GpioDumpFrame(sink, config_, words, wordCount, slowdown_, pulseTimeouts_);
         }
         {
             std::lock_guard<std::mutex> lock(captureMu_);
@@ -141,9 +148,10 @@ class StubBackend : public GpioBackend {
 
     uint32_t plldHz() const override { return hub75GpioPlldHz(PiSoc::Other); }
     int resolvedSlowdown() const override { return slowdown_; }
-    uint64_t pulseTimeouts() const override { return 0; }
+    uint64_t pulseTimeouts() const override { return pulseTimeouts_; }
 
   private:
+    uint64_t pulseTimeouts_ = 0;   // the OE waits that timed out, as the hardware backend counts them (the refresh thread's)
     bool opened_ = false;
     bool started_ = false;
     GpioSubmitConfig config_{};
@@ -184,6 +192,9 @@ void gpioStubResetCapture() {
     stream_.clear();
     submitted_ = 0;
     setupLog_.clear();
+    failingWaits_.store(0);
 }
+
+void gpioStubTimeOutPulseWaits(uint32_t n) { failingWaits_.store(n); }
 
 }  // namespace mm::platform

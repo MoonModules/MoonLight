@@ -301,10 +301,10 @@ class Hub75EngineBase {
     uint64_t submitErrors() const MM_NONBLOCKING { return submitErrors_.load(); }
     /// The last encode duration in microseconds (the encode thread writes it).
     uint64_t lastEncodeUs() const { return lastEncodeUs_.load(); }
-    /// The bytes the engine's frame buffers hold: 0 once shut down.
+    /// The bytes the engine's buffers hold, its own included: 0 once shut down.
     size_t heapBytes() const {
         return rgb_.heapBytes() + encoded_.heapBytes() + blank_.capacity() * sizeof(uint32_t) +
-               (slots_[0].capacity() + slots_[1].capacity() + slots_[2].capacity()) * sizeof(uint16_t);
+               (slots_[0].capacity() + slots_[1].capacity() + slots_[2].capacity()) * sizeof(uint16_t) + extrasHeapBytes();
     }
     /// Whether both threads have ended: false while the engine runs and while shutdown found the refresh thread stuck.
     bool threadsJoined() const { return !encodeThread_.joinable() && !refreshThread_.joinable(); }
@@ -353,8 +353,12 @@ class Hub75EngineBase {
     virtual bool startBackend(bool useStubBackend, std::string& error) = 0;
     /// Joins the encode thread, then the refresh thread within the deadline, stops the backend and frees the buffers; false when the refresh thread stayed stuck, which leaves the backend and the buffers kept.
     virtual bool shutdown() = 0;
-    /// Resets the counters only the engine keeps, before the threads start; an engine with none leaves this default.
+    /// Resets the counters only the engine keeps, before the threads start; empty by default.
     virtual void resetExtras() {}
+    /// Frees the buffers only the engine keeps, with the frame buffers; empty by default.
+    virtual void releaseExtras() {}
+    /// The bytes the buffers only the engine keeps hold, which heapBytes() counts; 0 by default.
+    virtual size_t extrasHeapBytes() const { return 0; }
     /// Runs on the opening thread once both threads run, before open() returns true: an engine whose threads report something the open needs, such as the refresh thread's scheduling answer, waits here for it.
     virtual void threadsStarted() {}
     /// Whether the encode thread encodes on this pass, `fresh` saying a new RGB frame was published; an engine that re-encodes the held frame, as a carrying dither does, overrides it.
@@ -405,6 +409,7 @@ class Hub75EngineBase {
         encoded_.release();
         for (auto& lane : slots_) std::vector<uint16_t>().swap(lane);
         std::vector<uint32_t>().swap(blank_);
+        releaseExtras();
         fps_.store(0);
         frameSlots_ = 0;
     }

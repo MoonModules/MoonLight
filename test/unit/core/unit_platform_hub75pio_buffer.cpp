@@ -383,7 +383,7 @@ TEST_CASE("Hub75PioBuffer: the options' buffer total is what the engine allocate
     deep.bitDepth = 8;
     const uint64_t deepTotal = mm::platform::hub75PioBufferBytes(deep);
     CHECK(deepTotal == 1884160);   // and at 8 bits
-    CHECK(mm::platform::kPioMaxBufferBytes / deepTotal >= 100);   // the ceiling's margin over the wall the bench runs
+    CHECK(mm::platform::kHub75MaxBufferBytes / deepTotal >= 100);   // the ceiling's margin over the wall the bench runs
     CHECK(engine.shutdown());
     CHECK(engine.heapBytes() == 0);
     mm::platform::stubBackendReset();

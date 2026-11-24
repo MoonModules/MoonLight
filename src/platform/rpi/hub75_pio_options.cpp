@@ -34,12 +34,8 @@ std::string pixelClockFloorDetail(const Hub75PioOptions&) {
     return " (it must be at least " + std::to_string(kPioMinPixelClockHz) + " Hz, which keeps a 64 KiB chunk inside the 6.12 kernel's 1 s wait)";
 }
 
-// The ceiling rule's figures: what the wall needs and the limit, in MB, the need rounded up.
-std::string bufferCeilingDetail(const Hub75PioOptions& o) {
-    constexpr uint64_t kMegabyte = 1024 * 1024;
-    return " (this wall's buffers need " + std::to_string((hub75PioBufferBytes(o) + kMegabyte - 1) / kMegabyte) + " MB, the limit is " +
-           std::to_string(kPioMaxBufferBytes / kMegabyte) + " MB)";
-}
+// The ceiling rule's figures for this wall.
+std::string bufferCeilingDetail(const Hub75PioOptions& o) { return hub75BufferCeilingDetail(hub75PioBufferBytes(o)); }
 
 // The options the engine refuses beyond the rules both engines share, in the order they are checked.
 constexpr OptionRule<Hub75PioOptions> kPioRules[] = {
@@ -49,7 +45,7 @@ constexpr OptionRule<Hub75PioOptions> kPioRules[] = {
      "the panels form a canvas wider than 65,535"},
     {laneGeometryInvalid,
      "invalid lane geometry: height must be a multiple of the scan rate with an even rows-per-scan (e.g. 64-high at 1/32, 32-high at 1/16)"},
-    {[](const Hub75PioOptions& o) { return pioBufferBytesExceedCeiling(hub75PioBufferBytes(o)); }, "the wall's buffers exceed the engine's memory limit", bufferCeilingDetail},
+    {[](const Hub75PioOptions& o) { return hub75BufferBytesExceedCeiling(hub75PioBufferBytes(o)); }, "the wall's buffers exceed the engine's memory limit", bufferCeilingDetail},
 };
 
 }  // namespace

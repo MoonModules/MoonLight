@@ -159,6 +159,17 @@ void Hub75GpioEngine::resetExtras() {
     realtimeState_.store(kRealtimeUnknown);
 }
 
+void Hub75GpioEngine::releaseExtras() {
+    std::vector<uint8_t>().swap(strip_);
+    for (auto& lane : remainder_) std::vector<uint8_t>().swap(lane);
+}
+
+size_t Hub75GpioEngine::extrasHeapBytes() const {
+    size_t bytes = strip_.capacity();
+    for (const auto& lane : remainder_) bytes += lane.capacity();
+    return bytes;
+}
+
 bool Hub75GpioEngine::shutdown() {
     if (!running_ && threadsJoined() && !backend_) return true;   // a fresh engine, or one already shut down
     const bool joined = stopThreads();
@@ -219,16 +230,18 @@ void Hub75GpioEngine::refreshLoop() {
         const int rc = backend_->submitFrame(encoded_.current(), frameSlots_);
         submitEnteredMs_.store(0);
         lastSubmitUs_ = hub75MicrosSince(t0);
-        pulseTimeouts_ = backend_->pulseTimeouts();
-        if (rc == 0) {
+        const uint64_t timeouts = backend_->pulseTimeouts();
+        // A frame an OE pulse timed out in showed degraded, so it counts as failed and the status line shows it.
+        const bool timedOut = timeouts != pulseTimeouts_.exchange(timeouts);
+        if (rc == 0 && !timedOut) {
             framesSubmitted_++;
             window.count(fps_);
         } else {
-            // Don't spin on a wedged backend: count it, let the window see the miss so the rate falls to 0, pause briefly, retry.
             submitErrors_++;
             window.count(fps_, false);
-            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
+        // Don't spin on a wedged backend: let the window see the miss so the rate falls to 0, pause briefly, retry.
+        if (rc != 0) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 

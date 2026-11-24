@@ -114,16 +114,17 @@ uint8_t hub75GpioScanRate(uint8_t multiplexing, uint8_t rows) { return hub75Gpio
 
 bool hub75GpioRowsDriveScan(uint8_t multiplexing, uint8_t rows) {
     const uint8_t scan = hub75GpioMultiplexScanRate(multiplexing, rows);
-    const bool whole = scan * hub75GpioMultiplexEntry(multiplexing).scanDivisor == rows;
-    return whole && (scan == 8 || scan == 16 || scan == 32);
+    return hub75GpioMultiplexScanCoversRows(multiplexing, rows, scan) && (scan == 8 || scan == 16 || scan == 32);
 }
 
 uint32_t hub75GpioDrivenCols(uint8_t multiplexing, uint16_t cols) { return hub75GpioMultiplexDrivenCols(multiplexing, cols); }
 
 uint16_t hub75GpioPredictedColumnTimeNs(int slowdown) { return hub75GpioColumnTimeNs(slowdown); }
 
+namespace {
+
 // Why the real backend is not opened here, or null when it may be: the test binary's closed gate, a build outside Linux aarch64, or a host that is no Pi 3 or 4 (hub75GpioRefusal). A reopened gate leaves the decision to createGpioBackend.
-static const char* realOpenRefusal() {
+const char* realOpenRefusal() {
     if (!gateOpen()) return kGpioTestRefusal;
 #ifndef MM_HUB75_GPIO_HAVE_HW
     return kGpioNoBackendRefusal;
@@ -131,6 +132,8 @@ static const char* realOpenRefusal() {
     return hub75GpioRefusal();
 #endif
 }
+
+}  // namespace
 
 bool hub75GpioOpen(const Hub75GpioOptions& o) {
     hub75GpioClose();

@@ -4,7 +4,7 @@
 ///
 /// The test reads back golden words, pins the dump sequence the hardware backend would drive, and pins the dark-first setup order; all accessors take the capture lock, since the refresh thread submits while the test reads.
 ///
-/// The dump stream is every GPIO write and pulser step the shared dump loop made, in order (@xref{dump-stream|Dump stream}); the setup log is the steps open() and start() ran (@xref{setup-log|Setup log}).
+/// The dump stream is every GPIO write and pulser step the shared dump loop made, in order, up to the capture's cap (@xref{dump-stream|Dump stream}); the setup log is the steps open() and start() ran (@xref{setup-log|Setup log}).
 ///
 /// @technical
 ///
@@ -38,7 +38,9 @@ size_t gpioStubCopyLastDumpStream(GpioDumpEvent* out, size_t capEvents);
 /// The setup steps the stub's open() and start() ran, in order, comma separated (@xref{setup-log|Setup log}).
 std::string gpioStubSetupLog();
 
-/// Drops the capture, the count and the setup log.
+/// Drops the capture, the count, the setup log and the timeouts still pending.
 void gpioStubResetCapture();
+/// Times out the next `n` OE pulse waits, as a wedged PWM does on hardware; the dump goes on and counts each.
+void gpioStubTimeOutPulseWaits(uint32_t n);
 
 }  // namespace mm::platform

@@ -122,6 +122,11 @@ inline uint8_t hub75GpioMultiplexScanRate(uint8_t multiplexing, uint8_t rows) {
     return rows >= divisor ? static_cast<uint8_t>(rows / divisor) : 1;
 }
 
+/// Whether `scanRate` address steps cover all `rows` under `multiplexing`: the scan times the divisor is the panel's height, so every row maps inside the driven panel.
+inline bool hub75GpioMultiplexScanCoversRows(uint8_t multiplexing, uint8_t rows, uint8_t scanRate) {
+    return static_cast<int>(scanRate) * hub75GpioMultiplexEntry(multiplexing).scanDivisor == rows;
+}
+
 /// The driven panel's height: the rows, or half of them under Stripe.
 inline uint8_t hub75GpioMultiplexDrivenRows(uint8_t multiplexing, uint8_t rows) {
     return static_cast<uint8_t>(rows / hub75GpioMultiplexEntry(multiplexing).stretch);

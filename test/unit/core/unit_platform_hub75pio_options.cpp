@@ -73,12 +73,12 @@ TEST_CASE("Hub75PioOptions: the pixel clock floor is 50 kHz, refusing one hertz 
 TEST_CASE("Hub75PioOptions: a wall whose buffers pass the 256 MiB ceiling is refused with its figure and the limit, and one at the ceiling is taken") {
     std::string error;
     mm::platform::Hub75PioOptions o = wall();
-    REQUIRE(mm::refusesPastCeiling(o, mm::platform::hub75PioBufferBytes, mm::platform::hub75PioCheckOptions, mm::platform::kPioMaxBufferBytes, error));
+    REQUIRE(mm::refusesPastCeiling(o, mm::platform::hub75PioBufferBytes, mm::platform::hub75PioCheckOptions, mm::platform::kHub75MaxBufferBytes, error));
     const uint64_t need = (mm::platform::hub75PioBufferBytes(o) + 1024 * 1024 - 1) / (1024 * 1024);
     CHECK(error == "the wall's buffers exceed the engine's memory limit (this wall's buffers need " + std::to_string(need) + " MB, the limit is 256 MB)");
 }
 
 TEST_CASE("Hub75PioOptions: a buffer total exactly at the ceiling passes, and one byte over is refused") {
-    CHECK_FALSE(mm::platform::pioBufferBytesExceedCeiling(mm::platform::kPioMaxBufferBytes));
-    CHECK(mm::platform::pioBufferBytesExceedCeiling(mm::platform::kPioMaxBufferBytes + 1));
+    CHECK_FALSE(mm::platform::hub75BufferBytesExceedCeiling(mm::platform::kHub75MaxBufferBytes));
+    CHECK(mm::platform::hub75BufferBytesExceedCeiling(mm::platform::kHub75MaxBufferBytes + 1));
 }

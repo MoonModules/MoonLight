@@ -16,19 +16,15 @@ Hub75Geometry drivenGeometry(const Hub75GpioOptions& o) {
 // Whether the driven lane breaks the encoder's contract: height a multiple of the scan rate with an even rows-per-scan (each address step drives an upper and a lower row together).
 bool laneGeometryInvalid(const Hub75GpioOptions& o) { return !drivenGeometry(o).valid(); }
 
-// The ceiling rule's figures: what the wall needs and the limit, in MB, the need rounded up.
-std::string bufferCeilingDetail(const Hub75GpioOptions& o) {
-    constexpr uint64_t kMegabyte = 1024 * 1024;
-    return " (this wall's buffers need " + std::to_string((hub75GpioBufferBytes(o) + kMegabyte - 1) / kMegabyte) + " MB, the limit is " +
-           std::to_string(kGpioMaxBufferBytes / kMegabyte) + " MB)";
-}
+// The ceiling rule's figures for this wall.
+std::string bufferCeilingDetail(const Hub75GpioOptions& o) { return hub75BufferCeilingDetail(hub75GpioBufferBytes(o)); }
 
 // The options the engine refuses beyond the rules both engines share, in the order they are checked.
 constexpr OptionRule<Hub75GpioOptions> kGpioRules[] = {
     {[](const Hub75GpioOptions& o) { return o.multiplexing >= kHub75MultiplexCount; }, "multiplexing must be 0 (normal) or 1 (Stripe)"},
-    // Stripe drives the halved panel, so its scan is the driven panel's, rows/4 and not rows/2 (a 32-high Stripe panel is 1/8, a 64-high one 1/16); a direct scan would address rows the panel lacks.
-    {[](const Hub75GpioOptions& o) { return o.multiplexing == kHub75MultiplexStripe && o.scanRate != hub75GpioMultiplexScanRate(o.multiplexing, o.rows); },
-     "Stripe drives rows/4 address steps (a 32-high panel at 1/8, a 64-high one at 1/16): scanRate must be rows/4"},
+    // Stripe drives the halved panel at its scan, rows/4 (a 32-high panel at 1/8, a 64-high one at 1/16): a direct scan addresses rows the panel lacks, and a taller panel maps rows past the driven one.
+    {[](const Hub75GpioOptions& o) { return o.multiplexing == kHub75MultiplexStripe && !hub75GpioMultiplexScanCoversRows(o.multiplexing, o.rows, o.scanRate); },
+     "Stripe drives rows/4 address steps (a 32-high panel at 1/8, a 64-high one at 1/16): rows must be 4 times scanRate"},
     {[](const Hub75GpioOptions& o) { return hub75Outside(o.pwmLsbNs, kHub75GpioPwmLsbMinNs, kHub75GpioPwmLsbMaxNs); }, "pwmLsbNs must be 50..3000 ns"},
     {[](const Hub75GpioOptions& o) { return hub75Outside(o.slowdown, -1, kHub75GpioSlowdownMax); }, "slowdown must be -1 (auto) or 0..4"},
     {[](const Hub75GpioOptions& o) { return hub75GpioDrivenWidth(o) > 65535; },
@@ -37,7 +33,7 @@ constexpr OptionRule<Hub75GpioOptions> kGpioRules[] = {
      "invalid Stripe lane geometry: the driven panel (rows/2 high, cols*2 wide) must be a multiple of the scan rate with an even rows-per-scan (e.g. 32-high at 1/8, 64-high at 1/16)"},
     {laneGeometryInvalid,
      "invalid lane geometry: height must be a multiple of the scan rate with an even rows-per-scan (e.g. 64-high at 1/32, 32-high at 1/16)"},
-    {[](const Hub75GpioOptions& o) { return hub75GpioBufferBytes(o) > kGpioMaxBufferBytes; }, "the wall's buffers exceed the engine's memory limit", bufferCeilingDetail},
+    {[](const Hub75GpioOptions& o) { return hub75BufferBytesExceedCeiling(hub75GpioBufferBytes(o)); }, "the wall's buffers exceed the engine's memory limit", bufferCeilingDetail},
 };
 
 }  // namespace

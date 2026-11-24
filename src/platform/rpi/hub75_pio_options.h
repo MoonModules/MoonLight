@@ -10,11 +10,11 @@
 ///
 /// ## Limits
 ///
-/// The rules hold the PIO engine's two stated limits, one constant each, and both figures are proposals to the maintainer.
+/// The rules hold two stated limits, one constant each.
 ///
 /// `kPioMinPixelClockHz` is 50 kHz. One word takes one pixel clock (the program spends 5 PIO cycles on it), so a 64 KiB chunk of 16,384 words takes the 6.12 kernel's 1 s wait at 16.4 kHz, and below that a transfer can return 0 with the frame cut short. 50 kHz keeps three times the margin.
 ///
-/// `kPioMaxBufferBytes` is 256 MiB, the one home of the memory limit. The smallest Pi 5 has 2 GB, and the figure is about 140 times the 1,884,160 bytes (1.80 MiB) a 256 x 192 wall at 8 bits takes.
+/// `kHub75MaxBufferBytes` is 256 MiB, the one home of the memory limit both engines share. The smallest Pi 5 has 2 GB and the smallest Pi 3 1 GB, and the figure is about 140 times the 1,884,160 bytes (1.80 MiB) a 256 x 192 wall at 8 bits takes on the PIO.
 
 #pragma once
 
@@ -76,15 +76,22 @@ Hub75Geometry hub75LaneGeometry(const Options& o, int width, int height, uint8_t
 /// The lowest pixel clock the engine takes, 50 kHz, so a 64 KiB chunk fits the 6.12 kernel's 1 s wait with margin (@xref{limits|limits}).
 constexpr uint32_t kPioMinPixelClockHz = 50'000;
 
-/// The most bytes the wall's buffers may total, 256 MiB, the one home of the memory limit (@xref{limits|limits}).
-constexpr uint64_t kPioMaxBufferBytes = 256ull * 1024 * 1024;
+/// The most bytes the wall's buffers may total on either engine, 256 MiB, the one home of the memory limit (@xref{limits|limits}).
+constexpr uint64_t kHub75MaxBufferBytes = 256ull * 1024 * 1024;
 
 /// The DMA bounce buffer size the engine asks for at most, 64 KiB, and how many it asks for, the kernel's limit of 4.
 constexpr uint32_t kPioXferBufSize = 65536;
 constexpr uint32_t kPioXferBufCount = 4;   ///< the kernel's limit of DMA bounce buffers
 
 /// Whether `bytes` of buffers pass the ceiling: exactly the ceiling is allowed.
-constexpr bool pioBufferBytesExceedCeiling(uint64_t bytes) { return bytes > kPioMaxBufferBytes; }
+constexpr bool hub75BufferBytesExceedCeiling(uint64_t bytes) { return bytes > kHub75MaxBufferBytes; }
+
+/// The ceiling rule's figures for a wall that needs `bytes`: the need and the limit, in MB, the need rounded up.
+inline std::string hub75BufferCeilingDetail(uint64_t bytes) {
+    constexpr uint64_t kMegabyte = 1024 * 1024;
+    return " (this wall's buffers need " + std::to_string((bytes + kMegabyte - 1) / kMegabyte) + " MB, the limit is " +
+           std::to_string(kHub75MaxBufferBytes / kMegabyte) + " MB)";
+}
 
 /// The bytes the wall's buffers total for `o`: the RGB and encoded triple buffers, each lane's slots and the ring-deep blank; the engine allocates this much, and the ceiling rule reads it. Valid for options that pass the geometry rule.
 uint64_t hub75PioBufferBytes(const Hub75PioOptions& o);

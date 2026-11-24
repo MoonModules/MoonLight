@@ -137,6 +137,8 @@ class Hub75GpioEngine final : public Hub75EngineBase<Hub75GpioOptions> {
     void allocate() override;
     bool startBackend(bool useStubBackend, std::string& error) override;
     void resetExtras() override;
+    void releaseExtras() override;
+    size_t extrasHeapBytes() const override;
     bool encodeDue(bool fresh) override;
     /// Takes the brightness and carry bits the seam last set, reseeding the remainders and rebuilding the table on a change; true when either changed.
     bool adoptCorrection();

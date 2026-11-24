@@ -192,8 +192,10 @@ bool hub75PioAvailable() {
 #endif
 }
 
+namespace {
+
 // Why the real backend is not opened here, or null when it may be: the test binary's closed gate, a build outside Linux aarch64, or a kernel that stalls a PIO reopen (hub75PioRefusal). A reopened gate leaves the decision to createPioBackend.
-static const char* realOpenRefusal() {
+const char* realOpenRefusal() {
     if (!gateOpen()) return kPioTestRefusal;
 #ifndef MM_HUB75_PIO_HAVE_RP1
     return kPioNoBackendRefusal;
@@ -201,6 +203,8 @@ static const char* realOpenRefusal() {
     return hub75PioRefusal();
 #endif
 }
+
+}  // namespace
 
 bool hub75PioOpen(const Hub75PioOptions& o) {
     hub75PioClose();

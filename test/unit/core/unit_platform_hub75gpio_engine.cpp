@@ -594,6 +594,40 @@ TEST_CASE("Hub75GpioEngine: the stub backend logs the setup steps, dark values f
     engine.shutdown();
 }
 
+TEST_CASE("Hub75GpioEngine: an open engine holds the bytes the options total, and a shut-down or failed one holds 0") {
+    mm::platform::gpioStubResetCapture();
+    mm::platform::Hub75GpioEngine engine;
+    std::string error;
+    REQUIRE(engine.open(gpioSmall(), error, true));
+    CHECK(engine.heapBytes() == mm::platform::hub75GpioBufferBytes(gpioSmall()));   // the strip and the remainders counted with the frame buffers
+    engine.shutdown();
+    CHECK(engine.heapBytes() == 0);
+    engine.failAllocations(true);
+    CHECK_FALSE(engine.open(gpioSmall(), error, true));
+    CHECK(engine.heapBytes() == 0);
+    engine.failAllocations(false);
+    engine.failEncodes(-1);   // the first frame's encode fails, after the buffers were taken
+    CHECK_FALSE(engine.open(gpioSmall(), error, true));
+    CHECK(engine.heapBytes() == 0);
+    engine.failEncodes(0);
+}
+
+TEST_CASE("Hub75GpioEngine: a frame an OE pulse timed out in counts as a failed submit, and the refresh goes on") {
+    mm::platform::gpioStubResetCapture();
+    mm::platform::Hub75GpioEngine engine;
+    std::string error;
+    REQUIRE(engine.open(gpioSmall(), error, true));
+    mm::test::publishBlackFrame(engine);
+    CHECK(engine.submitErrors() == 0);
+    mm::platform::gpioStubTimeOutPulseWaits(1);
+    REQUIRE(mm::test::waitUntil([&] { return engine.submitErrors() == 1; }));
+    CHECK(engine.pulseTimeouts() == 1);
+    const uint64_t shown = engine.framesSubmitted();
+    CHECK(mm::test::waitUntil([&] { return engine.framesSubmitted() > shown; }));   // the next frame shows straight away
+    CHECK(engine.submitErrors() == 1);
+    engine.shutdown();
+}
+
 TEST_CASE("Hub75GpioEngine: a second open is refused, and shutdown is idempotent and leaves a blank frame last") {
     mm::platform::gpioStubResetCapture();
     mm::platform::Hub75GpioEngine engine;

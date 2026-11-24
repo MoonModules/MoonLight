@@ -212,7 +212,7 @@ class GpioBackend {
     virtual uint32_t plldHz() const = 0;
     /// The slowdown start() resolved (auto by model, else as asked), valid after a successful start().
     virtual int resolvedSlowdown() const = 0;
-    /// OE pulses whose finish wait timed out (the PWM wedged): the dump proceeded anyway, so this counts a degraded panel, not a hung one.
+    /// OE pulses whose finish wait timed out (the PWM wedged): the dump proceeded anyway, so this counts a degraded panel, not a hung one, and the engine counts each refresh frame that adds one as a failed submit.
     virtual uint64_t pulseTimeouts() const = 0;
 };
 
