@@ -828,3 +828,21 @@ TEST_CASE("Hub75PioBuffer: a submit that never returns reads as a stall, the rat
     CHECK(mm::test::waitUntil([&] { return !run.engine.stalled(); }, 2000));
     CHECK(run.engine.fps() > 0);    // the window's own figure speaks again
 }
+
+TEST_CASE("Hub75PioBuffer: the triple buffer says a frame waits from its publish to the reader's take, and a superseded frame leaves one waiting") {
+    mm::platform::TripleBuffer<uint32_t> t;
+    t.reset(4);
+    CHECK_FALSE(t.pending());   // a fresh buffer holds no frame
+    t.publishWritten();
+    CHECK(t.pending());
+    CHECK(t.take());
+    CHECK_FALSE(t.pending());   // taken: the reader holds it
+    t.publishWritten();
+    t.publishWritten();         // the second supersedes the first, and one still waits
+    CHECK(t.pending());
+    CHECK(t.take());
+    CHECK_FALSE(t.pending());   // not two: a count of publishes would still read one behind
+    CHECK(t.published() == 3);
+    t.reset(4);
+    CHECK_FALSE(t.pending());   // a reset forgets a waiting frame
+}

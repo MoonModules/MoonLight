@@ -97,12 +97,7 @@ TEST_CASE("Hub75Pio: an open keeps the options") {
     o.clockFallingEdge = true;
     REQUIRE(mm::platform::hub75PioOpen(o));
     const auto& kept = mm::platform::hub75PioTestPort().options;
-    CHECK(kept.rows == 32);
-    CHECK(kept.cols == 64);
-    CHECK(kept.panelsPerLane == 1);
-    CHECK(kept.parallel == 1);
-    CHECK(kept.scanRate == 16);
-    CHECK(kept.bitDepth == 2);
+    mm::checkWallOptions(kept, 32, 64, 1, 1, 16, 2);
     CHECK(kept.pixelClockHz == 5000000);
     CHECK(kept.latchBlankWords == 3);
     CHECK(kept.clockFallingEdge);

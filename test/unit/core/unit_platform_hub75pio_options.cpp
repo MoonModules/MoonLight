@@ -73,24 +73,7 @@ TEST_CASE("Hub75PioOptions: the pixel clock floor is 50 kHz, refusing one hertz 
 TEST_CASE("Hub75PioOptions: a wall whose buffers pass the 256 MiB ceiling is refused with its figure and the limit, and one at the ceiling is taken") {
     std::string error;
     mm::platform::Hub75PioOptions o = wall();
-    o.parallel = 3;
-    o.rows = 240;
-    o.scanRate = 8;
-    o.cols = 2047;
-    o.bitDepth = 8;
-    // Panels per lane grow the wall one 2,047-pixel step at a time: the last that fits, and the first that does not.
-    int fits = 0;
-    for (int panels = 1; panels <= mm::platform::kHub75PanelsPerLaneMax; panels++) {
-        o.panelsPerLane = static_cast<uint8_t>(panels);
-        if (mm::platform::hub75PioBufferBytes(o) > mm::platform::kPioMaxBufferBytes) break;
-        fits = panels;
-    }
-    REQUIRE(fits > 0);
-    REQUIRE(fits < mm::platform::kHub75PanelsPerLaneMax);
-    o.panelsPerLane = static_cast<uint8_t>(fits);
-    CHECK(mm::platform::hub75PioCheckOptions(o, error));
-    o.panelsPerLane = static_cast<uint8_t>(fits + 1);
-    CHECK_FALSE(mm::platform::hub75PioCheckOptions(o, error));
+    REQUIRE(mm::refusesPastCeiling(o, mm::platform::hub75PioBufferBytes, mm::platform::hub75PioCheckOptions, mm::platform::kPioMaxBufferBytes, error));
     const uint64_t need = (mm::platform::hub75PioBufferBytes(o) + 1024 * 1024 - 1) / (1024 * 1024);
     CHECK(error == "the wall's buffers exceed the engine's memory limit (this wall's buffers need " + std::to_string(need) + " MB, the limit is 256 MB)");
 }

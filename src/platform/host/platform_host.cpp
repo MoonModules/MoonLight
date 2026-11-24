@@ -126,6 +126,7 @@
 
 #include "platform/platform.h"
 #include "platform/Hub75Pio.h"          // the PIO seam answers its backend's availability
+#include "platform/Hub75Gpio.h"         // and so does the GPIO seam's
 #include "platform/Hub75Bus.h"          // the HUB75 test port sizes its frame as the ESP32 port does
 #include "platform/usbvideo_frames.h"   // areaMean: the shrink the device backend also uses
 #include "core/util/FirmwareImage.h"  // identify/moonBaseRejection: shared image vetting
@@ -3038,6 +3039,7 @@ std::vector<uint8_t> hub75TestFrame_;
 const char* hub75LastError() { return hub75TestOpen_ ? nullptr : "HUB75 needs an ESP32-S3, P4 or S31"; }
 bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes) {
     if (backend == Hub75Backend::Pio) return hub75PioAvailable();   // the Pi 5's PIO answers through its own seam
+    if (backend == Hub75Backend::Gpio) return hub75GpioAvailable();   // the Pi 3/4's GPIO likewise
     hub75TestPort_.offeredBytes = frameBytes;
     return hub75TestOpen_ && (backend == Hub75Backend::LcdCam || hub75TestParlio_);
 }

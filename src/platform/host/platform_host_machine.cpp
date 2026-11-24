@@ -13,17 +13,24 @@ namespace {
 
 int testMachine_ = -1;       // the test lever: -1 the host answers, else the Machine it names
 int restMachine_ = -1;       // what the lever returns to: -1 the host, else the Machine a test binary rests at
+int testPiSoc_ = -1;         // the test lever: -1 the host answers, else the PiSoc it names
+
+// What the board is, read once: the kind and the SoC come from the same source.
+struct Board {
+    Machine machine = Machine::Other;
+    PiSoc soc = PiSoc::Other;
+};
 
 #if defined(__linux__)
 // The device tree answers when it can be read, whatever it names. A host that cannot read it, such as a container that masks it, falls to /proc/cpuinfo's Model line.
-Machine readHost() {
+Board readHost() {
     char data[512];
     size_t n = 0;
     if (FILE* f = std::fopen("/proc/device-tree/compatible", "rb")) {
         n = std::fread(data, 1, sizeof(data), f);
         std::fclose(f);
     }
-    if (n > 0) return machineFromCompatible(data, n);
+    if (n > 0) return {machineFromCompatible(data, n), piSocFromCompatible(data, n)};
     // cpuinfo lists a core's lines per CPU and the board's Model last, so the whole file is read, up to a bound.
     static char text[32768];
     size_t len = 0;
@@ -31,11 +38,16 @@ Machine readHost() {
         len = std::fread(text, 1, sizeof(text), f);
         std::fclose(f);
     }
-    return machineFromCpuinfo(text, len);
+    return {machineFromCpuinfo(text, len), piSocFromCpuinfo(text, len)};
 }
 #else
-Machine readHost() { return Machine::Other; }
+Board readHost() { return {}; }
 #endif
+
+const Board& hostBoard() {
+    static const Board host = readHost();   // once: the board does not change under a running program
+    return host;
+}
 
 }  // namespace
 
@@ -61,6 +73,30 @@ Machine machineFromModel(const std::string& model) {
     return five ? Machine::Pi5 : Machine::PiGpio;
 }
 
+// The SoC the model's words name: a 4, a 400 or a compute module 4 carry the BCM2711, a 3, a Zero 2 or a compute module 3 the BCM2837, and any other board `Other`.
+PiSoc socFromModel(const std::string& model) {
+    if (model.rfind("Raspberry Pi", 0) != 0) return PiSoc::Other;
+    const std::string rest = model.substr(12);
+    for (const char* name : {" 4", " Compute Module 4"})
+        if (rest.rfind(name, 0) == 0) return PiSoc::Bcm2711;
+    for (const char* name : {" 3", " Compute Module 3", " Zero 2"})
+        if (rest.rfind(name, 0) == 0) return PiSoc::Bcm2837;
+    return PiSoc::Other;
+}
+
+// The Model line of a cpuinfo text, empty when it has none.
+std::string cpuinfoModel(const char* text, size_t length) {
+    for (size_t at = 0; text != nullptr && at < length;) {
+        const char* line = text + at;
+        size_t len = 0;
+        while (at + len < length && line[len] != '\n') len++;
+        at += len + 1;
+        size_t valueLen = 0;
+        if (const char* value = modelValue(line, len, valueLen)) return std::string(value, valueLen);
+    }
+    return {};
+}
+
 // The device tree's compatible strings that name a Pi 5 (the first match wins) and those that name any other Pi.
 constexpr const char* kPi5Compatible[] = {"raspberrypi,5", "brcm,bcm2712"};
 constexpr const char* kPiCompatible[] = {"raspberrypi,", "brcm,bcm27", "brcm,bcm28"};
@@ -76,36 +112,59 @@ bool startsWithAny(const char* s, size_t len, const char* const (&prefixes)[N]) 
 
 }  // namespace
 
-Machine machineFromCpuinfo(const char* text, size_t length) {
-    for (size_t at = 0; text != nullptr && at < length;) {
-        const char* line = text + at;
-        size_t len = 0;
-        while (at + len < length && line[len] != '\n') len++;
-        at += len + 1;
-        size_t valueLen = 0;
-        if (const char* value = modelValue(line, len, valueLen)) return machineFromModel(std::string(value, valueLen));
-    }
-    return Machine::Other;
-}
+Machine machineFromCpuinfo(const char* text, size_t length) { return machineFromModel(cpuinfoModel(text, length)); }
 
-Machine machineFromCompatible(const char* data, size_t length) {
-    bool pi = false;
+PiSoc piSocFromCpuinfo(const char* text, size_t length) { return socFromModel(cpuinfoModel(text, length)); }
+
+namespace {
+
+// Calls `visit` with each NUL-separated string of a compatible property, in order, until it answers true.
+template <class Visit>
+void forEachCompatible(const char* data, size_t length, Visit visit) {
     for (size_t at = 0; data != nullptr && at < length;) {
         const char* s = data + at;
         const size_t room = length - at;
         size_t len = 0;
         while (len < room && s[len] != '\0') len++;
-        if (startsWithAny(s, len, kPi5Compatible)) return Machine::Pi5;
-        pi = pi || startsWithAny(s, len, kPiCompatible);
+        if (visit(s, len)) return;
         at += len + 1;
     }
-    return pi ? Machine::PiGpio : Machine::Other;
 }
 
-Machine hostMachine() {
-    static const Machine host = readHost();   // once: the board does not change under a running program
-    return host;
+// Whether the string `s` of `len` bytes is exactly `name`.
+bool isCompatible(const char* s, size_t len, const char* name) { return len == std::strlen(name) && std::strncmp(s, name, len) == 0; }
+
+}  // namespace
+
+Machine machineFromCompatible(const char* data, size_t length) {
+    bool pi5 = false;
+    bool pi = false;
+    forEachCompatible(data, length, [&](const char* s, size_t len) {
+        pi5 = startsWithAny(s, len, kPi5Compatible);
+        pi = pi || startsWithAny(s, len, kPiCompatible);
+        return pi5;
+    });
+    return pi5 ? Machine::Pi5 : pi ? Machine::PiGpio : Machine::Other;
 }
+
+PiSoc piSocFromCompatible(const char* data, size_t length) {
+    PiSoc soc = PiSoc::Other;
+    forEachCompatible(data, length, [&](const char* s, size_t len) {
+        if (isCompatible(s, len, "brcm,bcm2711")) soc = PiSoc::Bcm2711;
+        else if (isCompatible(s, len, "brcm,bcm2837")) soc = PiSoc::Bcm2837;
+        return soc != PiSoc::Other;
+    });
+    return soc;
+}
+
+Machine hostMachine() { return hostBoard().machine; }
+
+PiSoc piSoc() {
+    if (testPiSoc_ >= 0) return static_cast<PiSoc>(testPiSoc_);
+    return hostBoard().soc;
+}
+
+void setTestPiSoc(PiSoc soc) { testPiSoc_ = static_cast<int>(soc); }
 
 Machine machine() {
     if (testMachine_ >= 0) return static_cast<Machine>(testMachine_);

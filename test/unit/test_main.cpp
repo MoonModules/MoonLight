@@ -7,11 +7,12 @@
 #include <cstdio>
 
 #include "core/util/ClockSync.h"   // FleetTime: the fleet clock, back to the local clock per case
+#include "platform/Hub75Gpio.h"   // setTestHub75GpioGateOpen: no case opens the real GPIO; hub75GpioTestRealOpens: the count the run ends on
 #include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on
 #include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case and subcase rerun starts on the real clock and its own local time, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
+// Every test case and rerun starts on the real clock and its own local time, the HDMI stand-in and a multicast that skips the host's network, on a machine and a SoC that are `Other` whatever the board, and with the real PIO and GPIO out of reach.
 struct FreshFixturesPerTest : doctest::IReporter {
     explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
     static void reset() {
@@ -21,7 +22,9 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::platform::setTestJoin(mm::platform::TestJoin::Succeed);
         mm::FleetTime::reset();   // the process-wide fleet time, which a case's Devices tree may have claimed
         mm::platform::setTestMachineRest(mm::platform::Machine::Other);
+        mm::platform::setTestPiSoc(mm::platform::PiSoc::Other);
         mm::platform::setTestHub75PioGateOpen(false);
+        mm::platform::setTestHub75GpioGateOpen(false);
     }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }
@@ -38,7 +41,7 @@ struct FreshFixturesPerTest : doctest::IReporter {
 };
 REGISTER_LISTENER("fresh fixtures per test", 1, FreshFixturesPerTest);
 
-// The suite's main: safe defaults, the run, then the proof that no case opened the real PIO. The check follows run(), so a JUnit report is always written whole, and the exit status carries the failure.
+// The suite's main: safe defaults, the run, then the proof that no case opened the real PIO or GPIO. The check follows run(), so a JUnit report is always written whole, and the exit status carries the failure.
 int main(int argc, char** argv) {
     FreshFixturesPerTest::reset();
     doctest::Context context(argc, argv);
@@ -47,6 +50,11 @@ int main(int argc, char** argv) {
     if (const uint32_t opens = mm::platform::hub75PioTestRealOpens()) {
         // A case that made the real backend got past the closed gate (hub75_pio_backend.h, Real-backend gate).
         std::fprintf(stderr, "FAIL: %u case(s) opened the real PIO backend (/dev/pio0)\n", static_cast<unsigned>(opens));
+        result = 1;
+    }
+    if (const uint32_t opens = mm::platform::hub75GpioTestRealOpens()) {
+        // The same proof for the GPIO, whose real open would light the panels of the Pi the suite runs on (hub75_gpio_backend.h, Real-backend gate).
+        std::fprintf(stderr, "FAIL: %u case(s) opened the real GPIO backend (/dev/mem)\n", static_cast<unsigned>(opens));
         result = 1;
     }
     return result;

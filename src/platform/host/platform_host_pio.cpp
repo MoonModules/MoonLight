@@ -74,24 +74,9 @@ void setGateOpen(bool open) { setPioBackendGateOpen(open); }
 uint32_t realOpensNow() { return pioBackendRealOpens(); }
 #else
 // A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
-struct NoEngine {
-    bool open(const Hub75PioOptions&, std::string& error, bool) {
-        error = "this build has no PIO engine";
-        return false;
-    }
-    bool shutdown() { return true; }
-    const char* shutdownError() const { return ""; }
-    uint16_t width() const { return 0; }
-    uint16_t height() const { return 0; }
-    uint64_t framesPublished() const { return 0; }
-    uint64_t submitErrors() const { return 0; }
-    uint16_t fps() const { return 0; }
-    bool stalled() const { return false; }
-    void publishRgb(const uint8_t*) {}
+struct NoEngine : Hub75NoEngine<Hub75PioOptions> {
+    NoEngine() : Hub75NoEngine("this build has no PIO engine") {}
     void setBrightness(uint8_t) {}
-    void setStallMs(uint64_t) {}
-    void setJoinDeadlineMs(int) {}
-    void failEncodes(int) {}
     void delayEncodes(uint32_t) {}
     void pauseEncodes(bool) {}
 };
@@ -99,9 +84,8 @@ NoEngine& engine_ = *new NoEngine;
 constexpr uint64_t kHub75StallMs = 0;
 constexpr int kHub75JoinDeadlineMs = 0;
 void stubBackendReset() {}
-bool noEngineGateOpen_ = true;   // no real backend exists here, so the gate is moot; it answers for the seam's early refusal
-bool gateOpen() { return noEngineGateOpen_; }
-void setGateOpen(bool open) { noEngineGateOpen_ = open; }
+bool gateOpen() { return engine_.gateOpen(); }
+void setGateOpen(bool open) { engine_.setGateOpen(open); }
 uint32_t realOpensNow() { return 0; }
 #endif
 std::atomic<bool> realOpen_{false};   // whether the engine, rather than the recorder, holds the panels
@@ -276,13 +260,12 @@ bool hub75PioStalled() MM_NONBLOCKING {
 }
 
 uint32_t hub75PioSubmitErrors() MM_NONBLOCKING {
-    if (realOpen_.load(std::memory_order_acquire)) return static_cast<uint32_t>(std::min<uint64_t>(engine_.submitErrors(), UINT32_MAX));
-    return rec_.width() != 0 ? testSubmitErrors_ : 0;   // the recorder's count, while it holds panels
+    return hub75SeamSubmitErrors(realOpen_.load(std::memory_order_acquire), engine_, rec_, testSubmitErrors_);
 }
 
 // A closed seam holds no memory: the frames go back, the recorded options to their defaults.
 void hub75PioClose() {
-    if (realOpen_.load() || rec_.width() != 0) closes_++;
+    if (hub75SeamHoldsPanels(realOpen_.load(), rec_)) closes_++;
     realOpen_.store(false, std::memory_order_release);   // before the shutdown, so no push reaches an engine that is stopping
     // The engine stops with the panel dark; harmless on an engine that is not open. A refresh thread stuck in a submit, a stop that failed or a note on a dark panel leaves its text here, whether the shutdown finished or not; a clean stop leaves none.
     engine_.shutdown();

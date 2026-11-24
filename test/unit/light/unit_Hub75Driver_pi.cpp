@@ -15,6 +15,7 @@
     #include <chrono>
     #include <thread>
 #endif
+#include "platform/rpi/hub75_gpio_backend.h"   // kGpioTestRefusal: what a closed gate says
 #include "hub75_pi_bench.h"
 
 #include <cstring>
@@ -183,20 +184,22 @@ TEST_CASE("Hub75Driver on a Pi 5 whose PIO refuses shows the refusal as its stat
     CHECK(std::string(r->driver.status()).find("HUB75 needs an ESP32") == std::string::npos);   // the PIO's reason, not the bus's
 }
 
-TEST_CASE("Hub75Driver on an earlier Pi shows the Pi card and a refusal, and keeps every setting") {
-    mm::MachineGuard pi4(mm::platform::Machine::PiGpio);
+TEST_CASE("Hub75Driver on an earlier Pi keeps the GPIO output when the engine refuses, shows why, and keeps every setting") {
+    mm::GpioPortGuard pi4(mm::platform::Hub75GpioMode::Off);   // a Pi 3 or 4 whose GPIO the seam refuses, the test binary keeping the real backend closed
     auto booted = std::make_unique<Booted>();
     REQUIRE(booted->apply(kSavedPioCard));
-    CHECK(std::string(mm::platform::hub75BackendLabel(booted->driver->selectedBackend())) == "Pi PIO");   // the Pi card's output, named none in the select
-    CHECK(textOfSelect(*booted->driver, "peripheral") == "(none)");
+    CHECK(std::string(mm::platform::hub75BackendLabel(booted->driver->selectedBackend())) == "Pi GPIO");   // the Pi card's output, offered whether or not it opens
+    CHECK(textOfSelect(*booted->driver, "peripheral") == "Pi GPIO");
     CHECK(mm::isVisible(*booted->driver, "rows"));
+    CHECK(mm::isHidden(*booted->driver, "pixelClock"));   // the PIO's clock and blanking, which the GPIO output ignores, so its card hides them
+    CHECK(mm::isHidden(*booted->driver, "latchBlank"));
     CHECK(booted->driver->bitDepth == 8);
     const std::string saved = booted->saved();
     for (const char* kept : {"\"rows\":32", "\"cols\":64", "\"panelsPerLane\":1", "\"pixelClock\":20000", "\"latchBlank\":2", "\"bitDepth\":8"}) {
         CAPTURE(kept);
         CHECK(has(saved, kept));
     }
-    // A layout for it to prepare on: the refusal, not an open.
+    // A layout for it to prepare on: the seam's refusal, not an open.
     auto bench = std::make_unique<mm::Hub75Bench>();
     bench->grid.width = 16;
     bench->grid.height = 32;
@@ -209,7 +212,7 @@ TEST_CASE("Hub75Driver on an earlier Pi shows the Pi card and a refusal, and kee
     bench->driver.panelsPerLane = 1;
     bench->open();
     CHECK(bench->driver.severity() == mm::MoonModule::Severity::Error);
-    CHECK(std::string(bench->driver.status()) == "HUB75 in this build needs a Pi 5's PIO");
+    CHECK(std::string(bench->driver.status()) == mm::platform::kGpioTestRefusal);   // the GPIO's reason, not the PIO's or the bus's
     CHECK(bench->driver.hwBlock() == mm::LedHwBlock::None);
 }
 

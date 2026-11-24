@@ -214,7 +214,7 @@ bool buildPinOrder(const Hub75Pins& p, uint8_t scanRate, gpio_num_t* out) {
 const char* hub75LastError() { return g_lastError; }
 
 bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes) {
-    if (backend == Hub75Backend::Pio) return false;   // the Pi 5's PIO backend: no RP1 PIO block on an ESP32, and this guard keeps a Pio ask out of the Parlio branch below
+    if (backend == Hub75Backend::Pio || backend == Hub75Backend::Gpio) return false;   // the Pi backends: no RP1 PIO block and no Pi header on an ESP32, and this guard keeps their ask out of the Parlio branch below
     if (backend == Hub75Backend::LcdCam) {
 #if MM_HUB75_LCDCAM
         // LCD_CAM has no transfer-size cap of its own: the frame size is a memory question (internal DRAM first, see the allocation in hub75Init).
@@ -238,8 +238,8 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     hub75Deinit(h);
     g_lastError = nullptr;
 
-    if (backend == Hub75Backend::Pio) {
-        g_lastError = "Pi PIO drives a Raspberry Pi's header, not an ESP32";
+    if (backend == Hub75Backend::Pio || backend == Hub75Backend::Gpio) {
+        g_lastError = "Pi PIO and Pi GPIO drive a Raspberry Pi's header, not an ESP32";
         return false;
     }
 

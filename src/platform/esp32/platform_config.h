@@ -200,6 +200,9 @@ constexpr bool hasNdi = false;
 /// False: no RP1 PIO block on an ESP32.
 constexpr bool hasHub75Pio = false;
 
+/// False: no Pi header on an ESP32.
+constexpr bool hasHub75Gpio = false;
+
 // True on the P4 alone, mirroring the build symbol, so flag and dependency cannot disagree.
 #if defined(CONFIG_MM_HLS)
 constexpr bool hasHls = true;

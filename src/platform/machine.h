@@ -35,6 +35,19 @@ enum class Machine : uint8_t {
 /// The machine the `Model` line of a `/proc/cpuinfo` text names: `text` is `length` bytes, null or empty for none. Pure, so a test reads every case.
 Machine machineFromCpuinfo(const char* text, size_t length);
 
+/// The SoC of a Pi 3 or 4, which the GPIO output drives through its registers: the peripherals sit at another base, the PWM clock runs at another rate and the GPIO wants another slowdown on each.
+enum class PiSoc : uint8_t {
+    Other,     ///< not a Pi 3 or 4: another board, a Pi 5, or a Pi older than the 3
+    Bcm2837,   ///< a Pi 3, a Pi Zero 2 or a compute module 3
+    Bcm2711,   ///< a Pi 4, a Pi 400 or a compute module 4
+};
+
+/// The SoC a device tree's `compatible` property names, as machineFromCompatible takes it. Pure, so a test reads every case.
+PiSoc piSocFromCompatible(const char* data, size_t length);
+
+/// The SoC a `/proc/cpuinfo` text's `Model` line names, where the device tree cannot be read. Pure, so a test reads every case.
+PiSoc piSocFromCpuinfo(const char* text, size_t length);
+
 /// The machine a device tree's `compatible` property names: `data` is `length` bytes of NUL-separated strings, null or empty for none. Pure, so a test reads every case.
 Machine machineFromCompatible(const char* data, size_t length);
 
@@ -46,6 +59,10 @@ constexpr Machine machine() { return Machine::Esp32; }
 Machine machine();
 /// The real host, read once from the device tree or cpuinfo, whatever a test set: a test that wants the machine it runs on asks for it here.
 Machine hostMachine();
+/// The SoC of this host: what a test set, else the real host's, which the device tree or cpuinfo names with the machine.
+PiSoc piSoc();
+/// Make piSoc() answer `soc`, whatever the host is; a test binary rests it at `Other`, as it rests the machine.
+void setTestPiSoc(PiSoc soc);
 /// Make machine() answer `kind`, whatever the host is, until clearTestMachine().
 void setTestMachine(Machine kind);
 /// Return machine() to its resting answer: the real host, or the kind setTestMachineRest() named.
