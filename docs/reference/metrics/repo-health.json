@@ -1,10 +1,10 @@
 {
-  "commit": "b88cdf5f0",
+  "commit": "84769c65",
   "flash": {
     "esp32": 2496944,
     "esp32s31": 2887824,
     "qemu": 1383648,
-    "host-macos": 2988896,
+    "host-macos": 3006880,
     "host-windows": 1925120,
     "esp32c3": 2486480,
     "host-linux": 2548000,
@@ -756,8 +756,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 14,
-      "fps": 71428,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -801,7 +801,7 @@
     "light": 39228,
     "platform": 33829,
     "ui": 15552,
-    "test": 105233,
+    "test": 105237,
     "moondeck": 36864
   },
   "comments": {
@@ -836,7 +836,7 @@
   },
   "docs": {
     "md_files": 135,
-    "md_lines": 21275,
+    "md_lines": 21263,
     "plans_files": 22,
     "backlog_lines": 2911,
     "lessons_lines": 458,

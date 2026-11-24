@@ -157,6 +157,9 @@ TEST_CASE("Hub75PioBuffer: the submits keep their cadence while an encode runs")
     mm::test::forBothQueueModels([](StubQueueModel model) {
         mm::test::PioRun run(slowSmall(), model);
         REQUIRE(mm::test::waitFirstSubmit(run.engine));
+        const uint64_t idleFrom = run.engine.framesSubmitted();   // the pace with no encode running, on this machine as loaded now
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        const uint64_t idle = run.engine.framesSubmitted() - idleFrom;
         run.engine.delayEncodes(150000);   // each encode takes 150 ms longer
         run.engine.publishRgb(uniform(kSmallRgb, 50).data());
         std::this_thread::sleep_for(std::chrono::milliseconds(20));   // the encode thread is inside the encode
@@ -165,8 +168,9 @@ TEST_CASE("Hub75PioBuffer: the submits keep their cadence while an encode runs")
         std::this_thread::sleep_for(std::chrono::milliseconds(80));
         const uint64_t during = run.engine.framesSubmitted() - before;
         CHECK(run.engine.framesEncoded() == encoded);   // still encoding
-        // A 2 ms frame gives about 40 submits in 80 ms; an engine that encoded in the submit loop would give none.
-        CHECK(during >= 20);
+        // The bar is relative to the idle pace, as load slows both windows alike: an engine that keeps its cadence gives about the idle count, one that encoded in the submit loop gives none.
+        INFO("idle " << idle << ", during " << during);
+        CHECK(during >= (idle / 2 > 4 ? idle / 2 : 4));
         CHECK(mm::test::waitUntil([&] { return run.engine.framesEncoded() > encoded; }, 3000));
     });
 }
