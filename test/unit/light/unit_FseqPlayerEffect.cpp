@@ -526,7 +526,7 @@ TEST_CASE("a zlib file declaring no compression blocks is refused by name, befor
 TEST_CASE("a scanned name past kPathCap is skipped, not truncated into a different file, with a named warning") {
     SdFixture sd;
     sd.writeFseq("/sd/good.fseq", makeFseqV1Bytes(10, 2));
-    const std::string longName(200, 'x');   // past kPathCap (192)
+    const std::string longName(188, 'x');   // "/sd/" + name + ".fseq" is 197 bytes, past kPathCap (192) yet under Windows' 260-character path limit with the temp folder and ".tmp" added
     sd.writeFseq(("/sd/" + longName + ".fseq").c_str(), makeFseqV1Bytes(10, 2));
 
     Scene s;

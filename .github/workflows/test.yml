@@ -98,6 +98,21 @@ jobs:
       - name: restore a flat backup onto it
         run: uv run moondeck/scenario/run_restore_live.py --launch --bundle test/fixtures/backup-flat-2026-09-30.json --readers 2
 
+  # The unit suite on Windows, built with clang-cl as build_host.py does: the code under `#ifdef _WIN32` and Windows' own
+  # behavior (an open file cannot be deleted, a path stops at 260 characters, multicast loops back to its sender) run
+  # on no other host, so a test that assumes otherwise fails here and not on a bench machine weeks later.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - name: build the unit tests
+        run: uv run moondeck/build/build_host.py --tests
+      - name: run the unit tests
+        run: uv run moondeck/test/test_host.py
+
   # The Teensy 4.1 firmwares, built on every PR: a change to a platform seam the Teensy must implement fails here, not on the bench.
   # The HEX images are kept as an artifact, so a PR's build can be flashed and tried before it merges.
   teensy:

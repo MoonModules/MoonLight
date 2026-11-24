@@ -19,18 +19,6 @@ namespace spritecast {
 enum : uint8_t { kFish = 0, kSlim, kTiny, kMoonMan, kGhost, kToaster, kToast,
                  kSquid, kCrab, kOcto, kLuna, kMomo, kKindCount };
 
-/// A fish's palette, built from the active one so a borrowed sprite recolors with the show.
-inline void fishPalette(RGB (&pal)[fishart::kPaletteCount], uint8_t entry) {
-    const RGB body = colorFromPalette(*Palettes::active(), entry);
-    pal[fishart::kClear] = RGB{0, 0, 0};
-    pal[fishart::kBody]  = body;
-    pal[fishart::kDark]  = blend(body, RGB{0, 0, 0}, 150);
-    pal[fishart::kLight] = blend(body, RGB{255, 255, 255}, 120);
-    pal[fishart::kFin]   = blend(body, RGB{255, 255, 255}, 60);
-    pal[fishart::kEye]   = RGB{20, 20, 24};
-    pal[fishart::kBand]  = blend(body, RGB{255, 255, 255}, 200);
-}
-
 /// Center the sprite and draw it: art hanging below and right of the physics reads as lag.
 inline void blit(const draw::Canvas& cv, const draw::sprites::Sprite& s, uint8_t frame,
                  lengthType px, lengthType py, uint8_t sc, bool flip) {
@@ -60,21 +48,21 @@ inline void draw(const draw::Canvas& cv, uint8_t kind, uint8_t entry,
     switch (kind) {
         case kFish: {
             RGB pal[fishart::kPaletteCount];
-            fishPalette(pal, entry);
+            fishart::fishPalette(pal, entry);
             blit(cv, {fishart::kFish, pal, fishart::W, fishart::H, fishart::F,
                       fishart::kPaletteCount}, beat % fishart::F, px, py, sc, flip);
             break;
         }
         case kSlim: {
             RGB pal[fishart::kPaletteCount];
-            fishPalette(pal, entry);
+            fishart::fishPalette(pal, entry);
             blit(cv, {fishart::kSlim, pal, fishart::SW, fishart::SH, fishart::SF,
                       fishart::kPaletteCount}, beat % fishart::SF, px, py, sc, flip);
             break;
         }
         case kTiny: {
             RGB pal[fishart::kPaletteCount];
-            fishPalette(pal, entry);
+            fishart::fishPalette(pal, entry);
             blit(cv, {fishart::kTiny, pal, fishart::TW, fishart::TH, 1,
                       fishart::kPaletteCount}, 0, px, py, sc, flip);
             break;

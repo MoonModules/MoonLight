@@ -79,6 +79,10 @@ constexpr bool hasHls = false;
 constexpr bool hasHdmi = false;
 /// False: no HDMI, so no bridge.
 constexpr bool hasHdmiBridge = false;
+/// No HDMI, so no mode to start in.
+constexpr uint8_t hdmiDefaultMode = 0;
+/// False: no HDMI, so no desktop to cover.
+constexpr bool hasHdmiOwnScreen = false;
 /// No RTSP server.
 constexpr bool hasRtsp = false;
 /// No USB MIDI host.

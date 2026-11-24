@@ -584,7 +584,7 @@ void ndiTestClearFrames();
 
 // --- HDMI out, gated by `hasHdmi`: a display mode, a frame, and hot-plug ------------------------
 
-/// One display mode the HDMI output runs.
+/// One display mode the HDMI output runs; all zero is the display's own mode, which a computer offers so the display stays as it is.
 struct HdmiMode {
     uint16_t width;    ///< active pixels across
     uint16_t height;   ///< active lines
@@ -594,8 +594,8 @@ struct HdmiMode {
 /// The modes this platform offers, in the order the driver's `mode` control lists them; 0 where it has none.
 size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING;
 
-/// Start the output in mode `index`, replacing a running one; false where the platform or board has none, such as no I2C bus open for the bridge.
-bool hdmiOpen(uint8_t index);
+/// Start the output in mode `index`, replacing a running one; false where the platform or board has none, such as no I2C bus open for the bridge. `ownScreen` lets a computer with one display show on it, where `hasHdmiOwnScreen`.
+bool hdmiOpen(uint8_t index, bool ownScreen);
 
 /// Stop the output and free its framebuffer; safe when closed.
 void hdmiClose();
@@ -614,6 +614,9 @@ bool hdmiActiveMode(HdmiMode& out) MM_NONBLOCKING;
 
 /// The connected monitor's EDID, reduced to this platform's modes in `hdmiModes` order; false until one is read after the monitor connected, or where the monitor gives none.
 bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING;
+
+/// Whether Esc was pressed on the host's own screen while the output covered it, once per press: the driver gives the desktop back.
+bool hdmiTakeDismiss() MM_NONBLOCKING;
 
 /// The bridge's own view of the stream it sends.
 struct HdmiBridgeState {
@@ -637,6 +640,10 @@ void setTestHdmiBridge(const HdmiBridgeState& state);
 void setTestHdmiActiveMode(const HdmiMode& mode);
 /// The mode the output was opened in, -1 while closed.
 int hdmiTestOpenMode();
+/// Whether the output was opened with the host's own screen allowed.
+bool hdmiTestOwnScreen();
+/// Report Esc pressed on the host's own screen.
+void setTestHdmiDismiss();
 /// How many frames were handed over since the last clear.
 size_t hdmiTestFrameCount();
 /// The last frame's width.

@@ -299,6 +299,7 @@ public:
             const uint8_t* src = sourceBuffer_->data();
             const uint8_t srcCh = sourceBuffer_->channelsPerLight();
             uint8_t* dst = corrected_.data();
+            if (frameLayoutChanged()) corrected_.clear();   // once per profile change: a channel with no role sends 0
             for (nrOfLightsType i = 0; i < nLights; i++) {
                 // The source stride lets a wide light hand its motion channels through.
                 correction_.apply(src + (winStart + i) * srcCh, dst + i * outCh, srcCh);
@@ -603,6 +604,7 @@ private:
         const bool wasSending = sendTask_.impl != nullptr;
         stopSendTask();
         corrected_.allocate(n, ch);
+        frameReplaced();
         if (wasSending) startSendTask();
     }
     uint32_t taskStarts_ = 0;   ///< send-task starts, for taskStartsForTest

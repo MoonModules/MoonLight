@@ -44,8 +44,8 @@ Binary sizes:
 
 | Target | Size | Build |
 |--------|------|-------|
-| macOS arm64 | 358 KB | debug-arm64 (release-strip is smaller) |
-| Windows x64 | 432 KB | MSVC Release, static CRT |
+| macOS arm64 | 3.0 MB | Release (2026-11-24) |
+| Windows x64 | 3.0 MB | clang-cl Release, static CRT (2026-11-24) |
 
 ### Kernel micro-bench (host)
 

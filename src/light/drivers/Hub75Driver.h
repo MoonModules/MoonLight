@@ -179,6 +179,7 @@ public:
         const nrOfLightsType have = sourceBuffer_->count() < lights ? sourceBuffer_->count() : lights;
 
         // A plane reads (x, r) and the pixel half a panel below in one pass, so correct first: a 3-channel profile in its own order, the panel's lines, a wider one to its red, green and blue.
+        if (frameLayoutChanged()) std::memset(wire_, 0, wireCap_);   // once per profile change: a line the profile gives no color stays dark
         if (outCh == 3)
             for (nrOfLightsType i = 0; i < have; i++)
                 correction_.apply(sourceBuffer_->data() + static_cast<size_t>(i) * srcCh, wire_ + static_cast<size_t>(i) * 3, srcCh);

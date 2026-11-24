@@ -14,6 +14,7 @@ the ~130-file test suite (and vice-versa).
 
 import argparse
 import platform
+import re
 import shutil
 import os
 import subprocess
@@ -73,11 +74,36 @@ def test_binary(name, build_dir=None):
     return root / "test" / exe
 
 
+TOOLSET = "ClangCL"   # Visual Studio's Clang toolset
+
+
+def toolset_args():
+    """The CMake arguments naming this host's compiler toolset: clang-cl on Windows, so every host compiles with Clang or GCC and the hot loops vectorize alike; none elsewhere.
+
+    A toolset belongs to the Visual Studio generators, so a `CMAKE_GENERATOR` naming another, such as Ninja, gets none and takes its compiler from `CC` and `CXX`."""
+    generator = os.environ.get("CMAKE_GENERATOR", "")
+    if platform.system() != "Windows" or (generator and not generator.startswith("Visual Studio")):
+        return []
+    return ["-T", TOOLSET]
+
+
+def drop_other_toolset(bdir):
+    """Remove a build directory configured with another toolset, which CMake refuses to reconfigure, and say so; a directory on this one, or on no toolset, stays."""
+    cache = ROOT / bdir / "CMakeCache.txt"
+    if not toolset_args() or not cache.exists():
+        return
+    was = re.search(r"^CMAKE_GENERATOR_TOOLSET:INTERNAL=(.*)$", cache.read_text(encoding="utf-8", errors="replace"), re.M)
+    if was and was.group(1) != TOOLSET:
+        print(f"{bdir} was configured with {was.group(1) or 'MSVC'}, and CMake keeps a directory's toolset: removing it for a clean {TOOLSET} configure.")
+        shutil.rmtree(ROOT / bdir)
+
+
 def build_target(name, quiet=False):
     """Configure this host's tree as Release and build the one target `name`, as the bench scripts do; the exit code of the step that failed, or 0."""
     bdir = str(ROOT / host_build_dir())
+    drop_other_toolset(host_build_dir())
     out = subprocess.DEVNULL if quiet else None
-    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"],
+    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *toolset_args()],
                 ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
         rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
         if rc != 0:
@@ -160,8 +186,9 @@ def main():
     # CMAKE_BUILD_TYPE is honored by single-config generators (Ninja, Make).
     # Visual Studio is multi-config and ignores it — we pass --config Release at
     # build time below. Setting CMAKE_BUILD_TYPE on multi-config is harmless.
+    drop_other_toolset(bdir)
     r = subprocess.run(
-        ["cmake", "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *extra],
+        ["cmake", "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *toolset_args(), *extra],
         cwd=ROOT,
     )
     if r.returncode != 0:

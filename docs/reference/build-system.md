@@ -34,7 +34,7 @@ Each host writes into its own build directory: `build/macos/`, `build/linux/` or
 
 A firmware key that changes its feature set would otherwise keep its old `MM_NO_ETH` or `MM_ETH_ONLY` in `CMakeCache.txt`. CMake writes a `-D` flag to the cache, and omitting it later does not clear it. `build_esp32.py` compares the cached feature flags with what the firmware wants and wipes the directory for a clean configure on a mismatch, printing the reason.
 
-On Windows the default generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_host.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well.
+On Windows the compiler is clang-cl, Visual Studio's Clang toolset, which `build_host.py` and `package_host.py` select with `-T ClangCL`: every host then compiles with Clang or GCC, and the per-light loops vectorize on Windows as they do elsewhere. CMake refuses a build directory configured with another toolset, so `build_host.py` removes one left by an MSVC build and says so. The generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_host.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well; a `CMAKE_GENERATOR` naming it gets no toolset and takes its compiler from `CC` and `CXX`.
 
 ## The compiler cache
 

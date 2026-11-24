@@ -194,6 +194,7 @@ public:
         const uint8_t* src = sourceBuffer_->data();
         const uint8_t srcCh = sourceBuffer_->channelsPerLight();
         // The bit expansion happens on the way out, so this buffer is outCh bytes per light.
+        if (frameLayoutChanged()) std::memset(frame_, 0, frameCap_);   // once per profile change: a channel with no role sends 0
         for (nrOfLightsType i = 0; i < n; i++) {
             correction_.apply(src + (winStart_ + i) * srcCh, frame_ + static_cast<size_t>(i) * outCh, srcCh);
         }
@@ -360,6 +361,7 @@ private:
         frame_ = static_cast<uint8_t*>(platform::allocInternal(need));
         if (!frame_) frame_ = static_cast<uint8_t*>(platform::alloc(need));
         frameCap_ = frame_ ? need : 0;
+        frameReplaced();
         // A failed or PSRAM allocation must SAY so, or the strip freezes under a healthy status.
         frameUnusable_ = !frame_ || platform::ptrIsPsram(frame_);
         if (frameUnusable_) {

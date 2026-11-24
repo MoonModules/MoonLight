@@ -17,7 +17,7 @@ namespace mm {
 ///
 /// One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).
 ///
-/// ESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.
+/// ESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux console's HDMI port, such as a Raspberry Pi's; a Mac or Windows PC's second display, or its only one.
 ///
 /// @attribution Espressif, Olimex
 /// @card HdmiDriver.png
@@ -38,8 +38,8 @@ namespace mm {
 /// |---|---|
 /// | `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |
 /// | `output did not come up, retrying` | No bridge answers, or a desktop holds it |
-/// | `no monitor connected` | Plug one in: a second, on a computer |
-/// | `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |
+/// | `no monitor connected` | Plug one in, or set `ownScreen` |
+/// | `<w>x<h> on <mode>` | Live; orange when the display lacks that size |
 class HdmiDriver : public DriverBase {
 public:
     /// The catalog tag this driver carries.
@@ -61,15 +61,19 @@ public:
         modeCount_ = static_cast<uint8_t>(platform::hdmiModes(&modes));
         if (modeCount_ > kMaxModes) modeCount_ = kMaxModes;
         for (uint8_t i = 0; i < modeCount_; i++) {
-            std::snprintf(modeNames_[i], sizeof(modeNames_[i]), "%ux%u %u Hz",
-                          static_cast<unsigned>(modes[i].width), static_cast<unsigned>(modes[i].height),
-                          static_cast<unsigned>(modes[i].hz));
+            if (modes[i].width == 0) std::snprintf(modeNames_[i], sizeof(modeNames_[i]), "display's own");
+            else std::snprintf(modeNames_[i], sizeof(modeNames_[i]), "%ux%u %u Hz",
+                               static_cast<unsigned>(modes[i].width), static_cast<unsigned>(modes[i].height),
+                               static_cast<unsigned>(modes[i].hz));
             modeOptions_[i] = modeNames_[i];
         }
-        if (mode >= modeCount_) mode = modeCount_ > kDefaultMode ? kDefaultMode : 0;
+        if (mode >= modeCount_) mode = modeCount_ > platform::hdmiDefaultMode ? platform::hdmiDefaultMode : 0;
         controls_.addSelect("mode", mode, modeOptions_, modeCount_);
+        controls_.setPersistLabel(controls_.count() - 1);   // by name, since the list differs per platform: a size this one lacks keeps its default
         controls_.addSelect("scaling", scaling, kScalingOptions, kScalingCount);
         controls_.addControl("fps", fps, 1, 60);
+        controls_.addControl("ownScreen", ownScreen);
+        controls_.setHidden(controls_.count() - 1, !platform::hasHdmiOwnScreen);   // a board or a Linux console has no desktop to cover
         /// What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.
         controls_.addReadOnly("monitor", monitorStr_, sizeof(monitorStr_));
         /// The bridge's synthesizer word against the one programmed, and the sync it measures.
@@ -78,22 +82,23 @@ public:
         controls_.setHidden(controls_.count() - 1, !platform::hasHdmiBridge);   // a platform without a bridge has nothing to read back
     }
 
-    /// A mode change rebuilds the output; a geometry change resizes the frame.
+    /// A mode or screen change rebuilds the output; a geometry change resizes the frame.
     bool affectsPrepare(const char* name) const override {
-        return std::strcmp(name, "mode") == 0 || isWindowControl(name) || isCorrectionControl(name);
+        return std::strcmp(name, "mode") == 0 || std::strcmp(name, "ownScreen") == 0 || isWindowControl(name) || isCorrectionControl(name);
     }
 
-    /// Start the output in the chosen mode and size the staging buffers for the current geometry; a re-prepare in the same mode keeps the output running, since every tree sweep reaches here and a monitor takes seconds to lock onto a restarted signal.
+    /// Start the output in the chosen mode and size the staging for the geometry; a re-prepare in the same mode on the same screen keeps the output, since every tree sweep reaches here and a monitor takes seconds to lock onto a restarted signal.
     void prepare() override {
         if (!layer_) { release(); return; }
-        if (open_ && openMode_ != mode) { platform::hdmiClose(); open_ = false; }   // the output alone; the staging is resized below
+        if (open_ && (openMode_ != mode || openOwnScreen_ != ownScreen)) { platform::hdmiClose(); open_ = false; }   // the output alone; the staging is resized below
         if (!open_) {
-            if (!platform::hdmiOpen(mode)) {
+            if (!platform::hdmiOpen(mode, ownScreen)) {
                 setStatus("no HDMI output on this board", Severity::Error);
                 return;
             }
             open_ = true;   // set BEFORE the staging, so release owns the output from the moment it exists
             openMode_ = mode;
+            openOwnScreen_ = ownScreen;
             activeKnown_ = false;   // a new output reports its display's mode afresh
         }
         // The window's lights, framed to where they sit, decide the frame's size, else the whole face.
@@ -119,6 +124,10 @@ public:
         const size_t count = platform::hdmiModes(&modes);
         if (mode >= count) { mm::formatTo(statusBuf_, sizeof(statusBuf_), "unknown mode"); return; }
         const platform::HdmiMode& shown = activeKnown_ ? active_ : modes[mode];
+        if (shown.width == 0) {   // the display's own mode, before the display reported what it runs
+            mm::formatTo(statusBuf_, sizeof(statusBuf_), "%ux%u%s", static_cast<unsigned>(width_), static_cast<unsigned>(height_), picture_.note());
+            return;
+        }
         char rate[12] = "";
         if (shown.hz) mm::formatTo(rate, sizeof(rate), " %u Hz", static_cast<unsigned>(shown.hz));   // a panel may name no rate
         if (sizeMatches())
@@ -148,6 +157,12 @@ public:
                 if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);
             }
             return;
+        }
+        // Esc on the host's own screen switches the control off, so the card shows what the screen does.
+        if (platform::hdmiTakeDismiss() && ownScreen) {
+            ownScreen = false;
+            markDirty();
+            if (Scheduler* s = Scheduler::instance()) s->requestPrepare(this);
         }
         edid::Monitor m;
         const bool read = platform::hdmiMonitor(m);
@@ -179,18 +194,19 @@ public:
         platform::hdmiWrite(dst, static_cast<uint16_t>(width_), static_cast<uint16_t>(height_), scaling == kScalingFit);
     }
 
-    /// The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.
-    uint8_t mode    = kDefaultMode;
+    /// `display's own` keeps the display's mode; a fixed size suits a sending card.
+    uint8_t mode    = platform::hdmiDefaultMode;
     /// The ways `scaling` places the layer, in option order.
     enum Scaling : uint8_t { kScalingFit, kScalingStretch, kScalingCount };
     /// Fit keeps the grid's shape with black bars, stretch fills the screen.
     uint8_t scaling = kScalingFit;
     /// Frame-rate ceiling; the screen refreshes on its own.
     uint8_t fps     = 30;
+    /// Cover the computer's only screen; Esc gives it back.
+    bool ownScreen  = false;
 
 private:
-    static constexpr uint8_t kMaxModes = 8;
-    static constexpr uint8_t kDefaultMode = 2;   // 1280x720 at 60 Hz in the platform's list
+    static constexpr uint8_t kMaxModes = 9;
     static constexpr uint8_t kRetrySeconds = 5;  // between tries to open a refused output
     static constexpr const char* kScalingOptions[kScalingCount] = {"fit", "stretch"};
 
@@ -211,11 +227,15 @@ private:
     bool sizeMatches() const MM_NONBLOCKING {
         const platform::HdmiMode* modes = nullptr;
         const size_t count = platform::hdmiModes(&modes);
-        return !activeKnown_ || mode >= count || (active_.width == modes[mode].width && active_.height == modes[mode].height);
+        return !activeKnown_ || mode >= count || modes[mode].width == 0 || (active_.width == modes[mode].width && active_.height == modes[mode].height);   // the display's own mode is whatever it runs
     }
 
     /// Whether the monitor lists the mode; true while nothing is known, so an unread EDID raises no warning.
-    bool modeListed() const MM_NONBLOCKING { return !monitorRead_ || (monitor_.lists >> mode) & 1; }
+    bool modeListed() const MM_NONBLOCKING {
+        const platform::HdmiMode* modes = nullptr;
+        const size_t count = platform::hdmiModes(&modes);
+        return !monitorRead_ || (mode < count && modes[mode].width == 0) || (monitor_.lists >> mode) & 1;   // a monitor lists its own mode by running it
+    }
 
     /// The bridge readout, as the platform last read it, or empty while there is nothing to read.
     void formatBridgeLine() MM_NONBLOCKING {
@@ -246,6 +266,7 @@ private:
     lengthType     height_ = 0;
     bool           open_   = false;
     uint8_t        openMode_ = 0;         ///< the mode the output runs in, so a re-prepare in that mode keeps it
+    bool           openOwnScreen_ = false;   ///< whether the running output may cover the host's own screen
     platform::HdmiLink lastLink_ = platform::HdmiLink::NoMonitor;   ///< the link the status line describes
     platform::HdmiMode active_{};         ///< the mode the display runs, as the status line describes it
     bool           activeKnown_ = false;  ///< whether active_ holds one

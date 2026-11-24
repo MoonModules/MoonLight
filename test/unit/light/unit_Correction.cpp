@@ -769,3 +769,22 @@ TEST_CASE("Correction gain: a copied correction reads its own tables") {
     CHECK(out[1] == 100);   // the gain survives the copy, read through the copy's own curve
     CHECK(out[2] == 200);
 }
+
+TEST_CASE("Correction counts a rebuild that moves, drops or adds a role, and no other") {
+    const R rgb[3] = {R::Red, R::Green, R::Blue};
+    const R grb[3] = {R::Green, R::Red, R::Blue};
+    const R redGreen[3] = {R::Red, R::Green, R::None};
+    const R rgbw[4] = {R::Red, R::Green, R::Blue, R::White};
+    mm::Correction c;
+    c.rebuild(255, rgb, 3);
+    const uint8_t start = c.layoutGen;
+    c.rebuild(40, rgb, 3);
+    CHECK(c.layoutGen == start);   // a brightness is no layout
+    c.rebuild(255, grb, 3);
+    CHECK(c.layoutGen == static_cast<uint8_t>(start + 1));   // moved
+    c.rebuild(255, redGreen, 3);
+    CHECK(c.layoutGen == static_cast<uint8_t>(start + 2));   // dropped
+    c.rebuild(255, rgbw, 4);
+    CHECK(c.layoutGen == static_cast<uint8_t>(start + 3));   // added
+    for (int i = 0; i < 600; i++) { c.rebuild(255, i % 2 ? rgbw : rgb, i % 2 ? 4 : 3); CHECK(c.layoutGen != 255); }   // 255 is a fresh frame's mark
+}

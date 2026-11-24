@@ -11,6 +11,8 @@
 #include "correction_presets.h"
 #include "light/drivers/Drivers.h"
 #include "light/layers/Buffer.h"
+#include <chrono>
+#include <thread>
 
 // prepare sizes the correction-applied buffer to source-count × out-channels. The size matches what tick() needs on its first send. Calling tick() after prepare must not reallocate, pin the data pointer + shape.
 TEST_CASE("NetworkSendDriver sizes corrected_ in prepare, not in tick") {
@@ -113,4 +115,32 @@ TEST_CASE("NetworkSendDriver keeps its send task running through a prepare that 
     driver.applyState();
     CHECK(driver.taskStartsForTest() == 3);
     driver.release();
+}
+
+// A frame the driver keeps is corrected into, not rebuilt: a channel the new profile gives no role would keep the old profile's byte.
+TEST_CASE("NetworkSendDriver sends 0 on a channel the profile gives no role, whatever the profile before it sent there") {
+    mm::Buffer source;
+    REQUIRE(source.allocate(4, 3));
+    std::memset(source.data(), 255, 4 * 3);
+    mm::NetworkSendDriver driver;
+    driver.setSourceBuffer(&source);
+    mm::rebuildFromPreset(driver.correctionForTest(), 255, mm::PresetOrder::RGB);
+    std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.1");   // a destination, since a driver with none idles
+    driver.applyState();
+    mm::platform::setTestNowMs(1000);
+    driver.tick();
+    REQUIRE(driver.correctedBuffer().data()[2] == 255);   // blue, lit
+    const mm::ChannelRole redGreen[3] = {mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::None};
+    driver.correctionForTest().rebuild(255, redGreen, 3);
+    driver.onCorrectionChanged();
+    bool dark = false;
+    for (uint32_t i = 1; i <= 200 && !dark; i++) {   // a tick is skipped while the send task still holds the last frame
+        mm::platform::setTestNowMs(1000 + 100 * i);
+        driver.tick();
+        dark = driver.correctedBuffer().data()[2] == 0;
+        if (!dark) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(dark);                                          // no role, so dark
+    CHECK(driver.correctedBuffer().data()[0] == 255);
+    mm::platform::setTestNowMs(0);
 }

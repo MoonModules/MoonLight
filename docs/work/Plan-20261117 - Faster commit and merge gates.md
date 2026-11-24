@@ -317,6 +317,8 @@ Measured on 2026-11-17: the PR runs of #255 and `hub75-encoder` and the main pus
 
 ## Backlog
 
+- **A Windows compile gate on the Mac (2026-11-24).** Windows builds with clang-cl since 2026-11-24, and Clang cross-compiles: `clang-cl` and `lld-link` on macOS or in a Linux container, against the Windows SDK and Microsoft's C++ library that `xwin` downloads from Microsoft (used, not redistributed, so no public image carries them), through a CMake toolchain file and Ninja. It compiles and links, and runs nothing, so the tests and the released build stay on Windows. It would have caught both Windows-only errors clang-cl found that day (an unused capture and three unused variables in `platform_host.cpp`) before any Windows machine built, in minutes against 27 on the mini PC. A spike first, after CI has built with clang-cl once: install `xwin`, write the toolchain file, link the app target. A gate triggered by Windows-guarded code if the spike holds.
+- **One warning list for every compiler (2026-11-24).** Windows' clang-cl takes `/W4 /WX` alone; the five tier-zero warnings and the nonblocking check (`-Wfunction-effects`, `-Wframe-larger-than`) are added on Clang and GCC, so code under `#ifdef _WIN32` is held to less. clang-cl accepts those flags, so the two branches of `CMakeLists.txt` can share one list. After the cross-compile above, which makes each round of build, read and fix a matter of minutes where the mini PC takes 27.
 
 ## What it removes
 

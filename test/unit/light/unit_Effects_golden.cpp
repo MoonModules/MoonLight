@@ -80,7 +80,7 @@ TEST_CASE("time-driven effects render byte-identical frames (migration guard)") 
     SUBCASE("two color fields trade places pixel by pixel")        { DissolveEffect e;        golden::checkGolden("DissolveEffect", golden::renderHash(e, 16, 16, 1), 0x2ad6b1d52b19d4dbull); }
     SUBCASE("shells rise, stall at their apex and burst into falling sparks")       { FireworksEffect e;       golden::checkGolden("FireworksEffect", golden::renderHash(e, 16, 16, 1), 0x7636d32bfb3f4b2bull); }
     SUBCASE("balls fall, pile up and shove each other aside")         { BallpitEffect e;         golden::checkGolden("BallpitEffect", golden::renderHash(e, 16, 16, 1), 0xdd4efe1ccba2a4b2ull); }
-    SUBCASE("fish swim across the tank, each its own color from the palette")  { FishTankEffect e;  golden::checkGolden("FishTankEffect", golden::renderHash(e, 16, 16, 1), 0xb6f0d0b269ff7004ull); }
+    SUBCASE("fish swim across the tank, each its own color from the palette")  { FishTankEffect e;  golden::checkGolden("FishTankEffect", golden::renderHash(e, 16, 16, 1), 0xcc97636cd9e45f08ull); }
     SUBCASE("MoonMan and the invaders cross the wall, each invader its own color")  { MoonManEffect e;  golden::checkGolden("MoonManEffect", golden::renderHash(e, 16, 16, 1), 0x61a8334144208811ull); }
     // The hash moved 2026-08-28: launch() draws its speed span with next16() instead of an 8-bit value, which the old draw clamped at large sprite scales. Per-toaster velocities change, so the frame does; the effect is correct, the golden was re-recorded.
     SUBCASE("toasters flap and drift diagonally, toast trails along")  { FlyingToastersEffect e;  golden::checkGolden("FlyingToastersEffect", golden::renderHash(e, 16, 16, 1), 0x8958d378f86b9e3bull); }

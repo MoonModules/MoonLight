@@ -3992,7 +3992,7 @@
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
-   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux console's HDMI port, such as a Raspberry Pi's; a Mac or Windows PC's second display, or its only one.",
    "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
    "guide": [
     {
@@ -4005,7 +4005,7 @@
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in: a second, on a computer |\n| `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |"
+     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in, or set `ownScreen` |\n| `<w>x<h> on <mode>` | Live; orange when the display lacks that size |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
@@ -4034,7 +4034,7 @@
      "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "mode": {
-     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.",
+     "line": "`display's own` keeps the display's mode; a fixed size suits a sending card.",
      "tests": [
       {
        "title": "HdmiDriver shows the layer on the monitor",
@@ -4047,6 +4047,9 @@
     },
     "fps": {
      "line": "Frame-rate ceiling; the screen refreshes on its own."
+    },
+    "ownScreen": {
+     "line": "Cover the computer's only screen; Esc gives it back."
     },
     "monitor": {
      "line": "What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.",

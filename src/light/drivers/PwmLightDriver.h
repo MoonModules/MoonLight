@@ -81,7 +81,7 @@ public:
         windowSlice(sourceBuffer_->count(), winStart, winLen);
         const uint8_t lights = winLen < lights_ ? static_cast<uint8_t>(winLen) : lights_;
         uint16_t out[kMaxPins] = {};   // a fine role's pin stays dark: the wide path carries the whole value on the coarse pin
-        uint8_t narrow[kMaxPins];
+        uint8_t narrow[kMaxPins] = {};   // a pin whose channel has no role stays dark
         for (uint8_t l = 0; l < lights; l++) {
             const uint8_t* src = sourceBuffer_->data() + static_cast<size_t>(winStart + l) * srcCh;
             // Without its table (an allocation that failed) the light stays 8-bit, widened.

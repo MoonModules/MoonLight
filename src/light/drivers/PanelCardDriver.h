@@ -200,6 +200,7 @@ public:
             const uint8_t* src = sourceBuffer_->data();
             const uint8_t srcCh = sourceBuffer_->channelsPerLight();
             uint8_t* dst = corrected_.data();
+            if (frameLayoutChanged()) corrected_.clear();   // once per profile change: a channel with no role sends 0
             for (nrOfLightsType i = 0; i < nLights; i++) {
                 // srcCh carries a wide light's motion channels through, as NetworkSendDriver does.
                 correction_.apply(src + (winStart + i) * srcCh, dst + i * outCh, srcCh);
@@ -376,6 +377,7 @@ private:
         if (n == 0 || ch == 0) return;
         if (corrected_.count() >= n && corrected_.channelsPerLight() >= ch) return;
         corrected_.allocate(n, ch);
+        frameReplaced();
     }
 
     /// The shared frame this driver reads its window from; borrowed, not owned.

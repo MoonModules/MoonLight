@@ -91,6 +91,8 @@ struct CorrectionData {
     bool hasFine = false;
     /// Whether the fixture carries red, green and blue alone, resolved at rebuild so a plain strip skips every optional role per light.
     bool plainRgb = true;
+    /// Counts the rebuilds that moved, dropped or added a role, 0 to 254: a change is when a frame a driver keeps holds bytes the new profile leaves unwritten.
+    uint8_t layoutGen = 0;
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
 };
@@ -186,6 +188,13 @@ struct Correction : CorrectionData {
         return false;
     }
 
+    /// The channel count and each role's offset as one number (FNV-1a), for telling whether a rebuild changed any.
+    static uint32_t layoutOf(const Correction& c, const uint8_t Correction::* const* offsetOf, size_t roles) {
+        uint32_t hash = 2166136261u ^ c.outChannels;
+        for (size_t r = 0; r < roles; r++) hash = (hash ^ (offsetOf[r] ? c.*offsetOf[r] : kAbsent)) * 16777619u;
+        return hash;
+    }
+
     /// Refresh the LUT and derive each channel offset from the role array (cold path): a role at channel i sets offset i, an absent role stays absent.
     void rebuild(uint8_t brightness, const ChannelRole* roles, uint8_t nChannels) {
         // The offset each role sets, in ChannelRole order; None sets nothing.
@@ -197,6 +206,7 @@ struct Correction : CorrectionData {
             &Correction::offWhiteFine, &Correction::offWarmWhiteFine, &Correction::offPanFine, &Correction::offTiltFine,
             &Correction::offDimmerFine};
         static_assert(sizeof(kOffsetOf) / sizeof(kOffsetOf[0]) == kChannelRoleCount, "one offset per ChannelRole, in enum order");
+        const uint32_t was = layoutOf(*this, kOffsetOf, kChannelRoleCount);
         for (auto m : kOffsetOf) if (m) this->*m = kAbsent;
         for (uint8_t i = 0; i < nChannels; i++) {
             const uint8_t r = static_cast<uint8_t>(roles[i]);
@@ -206,6 +216,7 @@ struct Correction : CorrectionData {
         hasFine = anyPresent({offRedFine, offGreenFine, offBlueFine, offWhiteFine, offWarmWhiteFine, offDimmerFine});
         plainRgb = !hasMotion && !hasFine && offDimmer == kAbsent && !anyPresent({offWhite, offWarmWhite, offYellow, offUV});
         outChannels = nChannels;
+        if (layoutOf(*this, kOffsetOf, kChannelRoleCount) != was) layoutGen = static_cast<uint8_t>((layoutGen + 1) % 255);
         // After the offsets: whether the 16-bit table is filled depends on hasFine.
         rebuildBrightness(brightness);
     }

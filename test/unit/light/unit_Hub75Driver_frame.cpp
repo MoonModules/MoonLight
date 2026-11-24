@@ -165,6 +165,20 @@ TEST_CASE("Hub75Driver puts a BGR panel's colors on the lines its profile names"
     CHECK(firstDifference(onePixel(0, 0, 50, 100, 200)) == -1);
 }
 
+TEST_CASE("Hub75Driver leaves a line dark when the profile gives it no color, whatever the profile before it lit") {
+    mm::PortGuard guard;
+    auto r = rig();
+    r->open();
+    for (mm::nrOfLightsType i = 0; i < static_cast<mm::nrOfLightsType>(kWidth) * kHeight; i++) r->paint(i, 255, 255, 255);
+    r->driver.tick();   // a full white frame on RGB, so every slot of the kept frame holds light
+    const mm::ChannelRole redGreen[3] = {mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::None};
+    rewire(*r, redGreen, 3);
+    std::memset(r->source.data(), 0, static_cast<size_t>(kWidth) * kHeight * 3);
+    r->paint(0, 200, 100, 50);
+    r->driver.tick();
+    CHECK(firstDifference(onePixel(0, 0, 200, 100, 0)) == -1);
+}
+
 TEST_CASE("Hub75Driver shows a white-first profile's colors, not its white") {
     mm::PortGuard guard;
     auto r = rig();

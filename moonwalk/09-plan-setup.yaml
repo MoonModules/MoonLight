@@ -109,9 +109,9 @@ processes:
       - id: windows
         say: Install CMake and the Visual Studio Build Tools.
         given: [{ input: platform, equals: Windows }]
-        when: { run: { command: "winget install Kitware.CMake; winget install astral-sh.uv; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
+        when: { run: { command: "winget install Kitware.CMake; winget install astral-sh.uv; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Llvm.Clang --add Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset --includeRecommended\"" } }
         detail: |
-          Visual Studio 2022 with the MSVC v143 workload and the Windows 11 SDK, from an elevated terminal.
+          Visual Studio 2022 with the MSVC v143 workload, the clang-cl compiler MoonLight builds with, and the Windows 11 SDK, from an elevated terminal.
 
           Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`.
       - id: moondeck

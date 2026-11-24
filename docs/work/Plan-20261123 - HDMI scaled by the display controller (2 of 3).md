@@ -26,6 +26,7 @@ Plan of 2026-11-23, a Feature, for approval. **Goal: the HDMI output costs no CP
 
 ## Open questions
 
+- **Effects reads unsteady on the Windows mini PC (Intel N100, measured 2026-11-24, five layers at 640×360, the clang-cl build).** With the HDMI driver off Effects takes 4.3 ms and MoonFlock's layer 4.1 ms; with it on, which adds work, Effects takes 2.9 ms and that layer 2.2 ms. The MSVC build showed the same: Effects 2.3 ms beside a 4.3 ms composite, 4.9 ms with Drivers disabled. A hypothesis, untested: Windows' Balanced power plan clocks the cores down while the frame leaves them idle. To test: the same run on the High performance plan, and the per-core frequency beside the layer times.
 - ~~Whether the hardware scaler softens the lights.~~ On the R3S the picture looks as sharp as the software path's (product owner, 2026-11-23), so no `sharp` control.
 - Whether the plane's buffer can be the layer's buffer itself, skipping even the one write, for a layer stored as XRGB8888.
 

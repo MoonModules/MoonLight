@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
-from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
+from build_host import build_jobs, toolset_args  # noqa: E402  the one bound on compile jobs, and the one compiler toolset
 from build_esp32 import APP_ASSET_PREFIX  # noqa: E402  the release image names a device asks for
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -261,9 +261,9 @@ def configure_and_build_windows(version: str = "") -> Path:
     run([
         "cmake", "-B", bdir,
         "-DCMAKE_BUILD_TYPE=Release",
-    ] + version_args(version))
+    ] + toolset_args() + version_args(version))
     run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
-    # MSVC multi-config places binaries under <build-dir>/Release/.
+    # Visual Studio's multi-config generator places binaries under <build-dir>/Release/.
     binary = BUILD_DIR_WIN / "Release" / "MoonLight.exe"
     if not binary.exists():
         # Some generators drop it directly under the build dir.

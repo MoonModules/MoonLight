@@ -107,3 +107,99 @@ TEST_CASE("the audio fountain throws one sprite per drum hit, once however many 
     CHECK(fx.e.inFlightForTest() == 3);
     audio.release();
 }
+
+namespace {
+// One sprite frame drawn on a canvas of its own size, each palette index as its own red value, so a pixel reads back as its index.
+struct Drawn {
+    Buffer buf;
+    draw::Canvas cv;
+    Drawn(const draw::sprites::Sprite& s, uint8_t frame, bool flip) {
+        buf.allocate(static_cast<nrOfLightsType>(s.w) * s.h, 3);
+        buf.clear();
+        cv = draw::Canvas::of(buf, s.w, s.h, 1);
+        draw::sprite(cv, s, frame, 0, 0, 1, flip);
+    }
+    uint8_t at(int x, int y) const { return buf.data()[(static_cast<size_t>(y) * cv.dims.x + x) * 3]; }
+};
+
+// How many pupil edges the frame shows with the white of the eye beside them, on the side `whiteDx` names; -1 when a pupil has something else there.
+int pupilsBeside(const draw::sprites::Sprite& s, uint8_t frame, bool flip, uint8_t pupil, uint8_t white, int whiteDx) {
+    const Drawn d(s, frame, flip);
+    int n = 0;
+    for (int y = 0; y < s.h; y++)
+        for (int x = 0; x < s.w; x++) {
+            if (d.at(x, y) != pupil) continue;
+            const int wx = x + whiteDx;
+            if (wx < 0 || wx >= s.w) return -1;
+            if (d.at(wx, y) == pupil) continue;   // a wider pupil's own pixel
+            if (d.at(wx, y) != white) return -1;
+            n++;
+        }
+    return n;
+}
+
+// A palette whose every entry reads back as its index.
+template <size_t N>
+void indexPalette(RGB (&pal)[N]) {
+    for (size_t i = 0; i < N; i++) pal[i] = RGB{static_cast<uint8_t>(i), 0, 0};
+}
+}  // namespace
+
+TEST_CASE("An invader and a ghost look where they travel: the pupil leads, the white of the eye behind it") {
+    RGB inv[invart::kPaletteCount], ghost[moonart::kPaletteCount];
+    indexPalette(inv);
+    indexPalette(ghost);
+    struct Member { draw::sprites::Sprite sprite; uint8_t pupil, white; int edges; };
+    const Member cast[] = {
+        {{invart::kSquid, inv, invart::W, invart::H, invart::F, invart::kPaletteCount}, invart::kPupil, invart::kEye, 2},
+        {{invart::kCrab, inv, invart::CW, invart::CH, invart::CF, invart::kPaletteCount}, invart::kPupil, invart::kEye, 2},
+        {{invart::kOcto, inv, invart::OW, invart::OH, invart::OF, invart::kPaletteCount}, invart::kPupil, invart::kEye, 2},
+        {{moonart::kGhostSmall, ghost, moonart::SW, moonart::SH, moonart::SF, moonart::kPaletteCount}, moonart::kPupil, moonart::kEye, 2},
+        {{moonart::kGhost, ghost, moonart::GW, moonart::GH, moonart::GF, moonart::kPaletteCount}, moonart::kPupil, moonart::kEye, 4},   // two eyes, each pupil two rows high
+    };
+    for (const Member& m : cast)
+        for (uint8_t f = 0; f < m.sprite.frames; f++) {
+            CHECK(pupilsBeside(m.sprite, f, false, m.pupil, m.white, -1) == m.edges);   // traveling right: the white on the left
+            CHECK(pupilsBeside(m.sprite, f, true, m.pupil, m.white, +1) == m.edges);    // traveling left: mirrored
+        }
+}
+
+TEST_CASE("A fish looks where it swims with one white-and-pupil eye, and closes it at rest") {
+    RGB idx[fishart::kPaletteCount];
+    indexPalette(idx);
+    const draw::sprites::Sprite fish[] = {
+        {fishart::kFish, idx, fishart::W, fishart::H, fishart::F, fishart::kPaletteCount},
+        {fishart::kSlim, idx, fishart::SW, fishart::SH, fishart::SF, fishart::kPaletteCount},
+    };
+    for (const auto& s : fish)
+        for (uint8_t f = 0; f < s.frames; f++) {
+            CHECK(pupilsBeside(s, f, false, fishart::kEye, fishart::kEyeWhite, -1) == 1);   // swimming right: the white behind the pupil
+            CHECK(pupilsBeside(s, f, true, fishart::kEye, fishart::kEyeWhite, +1) == 1);    // swimming left: mirrored
+        }
+    RGB pal[fishart::kPaletteCount];
+    fishart::fishPalette(pal, 40, /*moving=*/true);
+    CHECK(pal[fishart::kEyeWhite].r == 255);
+    CHECK(pal[fishart::kEye].r < 40);
+    fishart::fishPalette(pal, 40, /*moving=*/false);
+    CHECK(pal[fishart::kEyeWhite].r == pal[fishart::kEye].r);   // at rest the whole eye is the pupil's dark
+}
+
+TEST_CASE("FishTank's fish open their eyes while they swim and close them in a tank at rest") {
+    struct ClockGuard { ~ClockGuard() { platform::setTestNowMs(0); } } guard;
+    const auto whites = [](const EffectOnGrid<FishTankEffect>& t) {
+        int n = 0;
+        for (int y = 0; y < 48; y++)
+            for (int x = 0; x < 96; x++) n += t.ch(x, y, 0) == 255 && t.ch(x, y, 1) == 255 && t.ch(x, y, 2) == 255;
+        return n;
+    };
+    platform::setTestNowMs(1000);
+    EffectOnGrid<FishTankEffect> swimming(96, 48);
+    swimming.layer.tick();
+    CHECK(whites(swimming) > 0);
+    EffectOnGrid<FishTankEffect> resting(96, 48);
+    resting.e.speed = 0;
+    resting.e.onControlChanged("speed");
+    resting.layer.applyState();
+    resting.layer.tick();
+    CHECK(whites(resting) == 0);
+}

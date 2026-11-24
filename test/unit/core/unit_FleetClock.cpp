@@ -165,3 +165,12 @@ TEST_CASE("FleetClock: a rebooted lowest device takes the fleet's time from a be
     REQUIRE(ref.own.synced());
     CHECK(ref.own.fleetAt(ref.local) == 3600000000);
 }
+
+TEST_CASE("FleetClock: a device's own beacon, looped back by the network, is not another device's time") {
+    TestClock ref;
+    ref.choose(30, {});   // alone, and it knows its id
+    ref.local = 2000000;
+    ref.hear(30, 3600000000);   // its own id, as Windows delivers a multicast send back to its sender
+    ref.ask(ref.local);
+    CHECK_FALSE(ref.own.synced());   // still listening: nobody else was heard
+}

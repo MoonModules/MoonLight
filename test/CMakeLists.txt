@@ -341,7 +341,7 @@ add_custom_target(effect_sweep_gen ALL
     VERBATIM
 )
 
-# The PIO engine's tests drive the engine and its stub backend, which MSVC does not build (the root CMakeLists.txt, MM_HUB75_PIO_ENGINE).
+# The PIO engine's tests drive the engine and its stub backend, which Windows does not build (the root CMakeLists.txt, MM_HUB75_PIO_ENGINE).
 if(MM_HUB75_PIO_ENGINE)
     target_sources(mm_tests PRIVATE
         unit/core/unit_platform_hub75pio.cpp
@@ -350,7 +350,7 @@ if(MM_HUB75_PIO_ENGINE)
         unit/core/unit_platform_hub75pio_stub.cpp
         unit/core/unit_platform_hub75pio_rp1.cpp)
 endif()
-# The GPIO engine's tests drive the engine and its stub backend, which MSVC does not build (the root CMakeLists.txt, MM_HUB75_GPIO_ENGINE).
+# The GPIO engine's tests drive the engine and its stub backend, which Windows does not build (the root CMakeLists.txt, MM_HUB75_GPIO_ENGINE).
 if(MM_HUB75_GPIO_ENGINE)
     target_sources(mm_tests PRIVATE
         unit/core/unit_platform_hub75gpio.cpp

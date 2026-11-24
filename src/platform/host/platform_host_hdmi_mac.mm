@@ -1,7 +1,7 @@
 #include "screen.h"
 #include "main_thread.h"
 
-/// The macOS screen for the HDMI output: a borderless window covering a second display, in the mode the driver picks.
+/// The macOS screen for the HDMI output: a borderless window covering a second display, or the Mac's own where it is asked to, in the mode the driver picks.
 ///
 /// The code gates read C++ alone, so this Objective-C++ file holds the screen and nothing more: the loop, the scaler and the handover it serves live in platform_host_hdmi.cpp, where they are measured.
 ///
@@ -18,6 +18,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <IOKit/IOKitLib.h>
+#import <IOKit/pwr_mgt/IOPMLib.h>
 #import <QuartzCore/QuartzCore.h>
 
 #include <atomic>
@@ -37,6 +38,9 @@ struct Mac {
     std::vector<uint8_t> pixels;
     uint16_t width = 0, height = 0;
     std::atomic<bool> framePending{false};
+    IOPMAssertionID awake = kIOPMNullAssertionID;   // holds the display awake while the output shows
+    std::atomic<bool> own{false};         // the display is the Mac's own
+    std::atomic<bool> dismissed{false};   // Esc pressed on it, until the loop takes it
 };
 Mac& m = *new Mac;   // never destroyed: exit() runs static destructors while the main queue may still run a block reading it
 
@@ -62,6 +66,18 @@ CGDisplayModeRef pickMode(CGDirectDisplayID display, const HdmiMode& want) {
 
 }  // namespace
 
+}  // namespace mm::platform
+
+/// The output's window: borderless, yet able to take the keyboard, so Esc on the Mac's own display reaches it.
+@interface MoonLightOutputWindow : NSWindow
+@end
+@implementation MoonLightOutputWindow
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (void)cancelOperation:(id)sender { mm::platform::m.dismissed.store(mm::platform::m.own.load()); }   // Esc
+@end
+
+namespace mm::platform {
+
 void runMainThread(const std::atomic<bool>& appDone) {
     while (!appDone.load()) {
         @autoreleasepool {
@@ -82,17 +98,20 @@ bool open() { return true; }
 
 void close() {}
 
-// A display beside the main one, the one shown kept first.
-uint32_t find(uint32_t current) {
+// The display `screen::pick` chooses among the active ones, a mirror left out.
+uint32_t find(uint32_t current, bool own) {
     CGDirectDisplayID displays[16];
     uint32_t count = 0;
     if (CGGetActiveDisplayList(16, displays, &count) != kCGErrorSuccess) return 0;
-    uint32_t found = 0;
+    Display list[16];
+    size_t n = 0;
     for (uint32_t i = 0; i < count; i++) {
-        if (CGDisplayIsMain(displays[i]) || CGDisplayMirrorsDisplay(displays[i]) != kCGNullDirectDisplay) continue;   // the host's own display is never covered
-        if (!found || displays[i] == current) found = displays[i];
+        if (CGDisplayMirrorsDisplay(displays[i]) != kCGNullDirectDisplay) continue;   // a mirror shows what another display does
+        list[n++] = {displays[i], CGDisplayIsMain(displays[i]) != 0};
     }
-    return found;
+    const uint32_t id = pick(list, n, current, own);
+    m.own.store(id && CGDisplayIsMain(id));
+    return id;
 }
 
 // The display's EDID, which the I/O registry keeps on the display's port, found by the vendor and product codes Core Graphics reads from it. The built-in panel has none.
@@ -145,7 +164,7 @@ bool up(uint32_t display, const HdmiMode& want, HdmiMode& running) {
         for (NSScreen* s in [NSScreen screens])
             if ([s.deviceDescription[@"NSScreenNumber"] unsignedIntValue] == display) target = s;
         if (!target) return;
-        NSWindow* window = [[NSWindow alloc] initWithContentRect:target.frame styleMask:NSWindowStyleMaskBorderless
+        NSWindow* window = [[MoonLightOutputWindow alloc] initWithContentRect:target.frame styleMask:NSWindowStyleMaskBorderless
                                                          backing:NSBackingStoreBuffered defer:NO];
         window.level = NSScreenSaverWindowLevel;   // above the menu bar a second display may carry
         window.backgroundColor = NSColor.blackColor;
@@ -154,9 +173,16 @@ bool up(uint32_t display, const HdmiMode& want, HdmiMode& running) {
         window.contentView.layer.contentsGravity = kCAGravityResize;
         window.contentView.layer.magnificationFilter = kCAFilterNearest;
         [window setFrame:target.frame display:YES];
-        [window orderFrontRegardless];
+        if (m.own.load()) {   // Esc gives the desktop back, which needs the keyboard here
+            [NSApp activateIgnoringOtherApps:YES];
+            [window makeKeyAndOrderFront:nil];
+        }
+        else [window orderFrontRegardless];
         m.window = window;
     });
+    // A show has no keyboard to keep the screen saver and display sleep away; down() gives them back.
+    if (IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep, kIOPMAssertionLevelOn, CFSTR("MoonLight HDMI output"), &m.awake) != kIOReturnSuccess)
+        m.awake = kIOPMNullAssertionID;
     std::printf("HDMI: %ux%u window on display %u\n", static_cast<unsigned>(m.width), static_cast<unsigned>(m.height), display);
     return true;
 }
@@ -190,6 +216,7 @@ void present() {
 }
 
 void down() {
+    if (m.awake != kIOPMNullAssertionID) { IOPMAssertionRelease(m.awake); m.awake = kIOPMNullAssertionID; }
     dispatch_async(dispatch_get_main_queue(), ^{
         [m.window orderOut:nil];
         m.window = nil;
@@ -203,6 +230,8 @@ void down() {
 }
 
 void pump() {}
+
+bool takeDismiss() { return m.dismissed.exchange(false); }
 
 }  // namespace screen
 

@@ -23,18 +23,25 @@ struct HdmiSeamGuard {
     ~HdmiSeamGuard() { mm::platform::hdmiTestClear(); mm::platform::setTestNowMs(0); }
 };
 
-// A 4x2 wall with its source buffer and driver, the correction on RGB, as every case starts.
+// A 4x2 wall with its source buffer and driver, the correction on RGB, on 1280x720 as a board starts, as every case starts.
 struct Bench {
     HdmiSeamGuard seam;
     mm::Buffer source;
     mm::HdmiDriver driver;
     mm::Wall wall{4, 2};
-    Bench() { mm::wire(driver, source, wall, 8); }
+    Bench() { driver.mode = 2; mm::wire(driver, source, wall, 8); }
 };
+
+// A driver's control by name, once its controls are defined; null where it has none by that name.
+const mm::ControlDescriptor* control(mm::HdmiDriver& driver, const char* name) {
+    for (uint8_t i = 0; i < driver.controls().count(); i++)
+        if (std::strcmp(driver.controls()[i].name, name) == 0) return &driver.controls()[i];
+    return nullptr;
+}
 
 }  // namespace
 
-TEST_CASE("HdmiDriver offers the platform's modes and starts in 1280x720 at 60 Hz") {
+TEST_CASE("HdmiDriver opens the mode chosen, 1280x720 at 60 Hz being the platform's third") {
     Bench b;
     b.driver.prepare();
     CHECK(mm::platform::hdmiTestOpenMode() == 2);
@@ -264,10 +271,8 @@ TEST_CASE("HdmiDriver names the monitor and its preferred size from the EDID, an
     m.lists = 0b01011;   // 800x600, 1024x768, 1280x800: no 720p
     mm::platform::setTestHdmiMonitor(m);
     b.driver.tick1s();
-    const char* readout = nullptr;
-    for (uint8_t i = 0; i < b.driver.controls().count(); i++)
-        if (std::strcmp(b.driver.controls()[i].name, "monitor") == 0) readout = static_cast<const char*>(b.driver.controls()[i].ptr);
-    REQUIRE(readout != nullptr);
+    REQUIRE(control(b.driver, "monitor"));
+    const char* readout = static_cast<const char*>(control(b.driver, "monitor")->ptr);
     CHECK(std::string(readout) == "DELL U2412M, prefers 1920x1200, does not list 1280x720");
     CHECK(std::string(b.driver.status()).find("4x2 on 1280x720 60 Hz") != std::string::npos);
     CHECK(b.driver.severity() == mm::MoonModule::Severity::Warning);
@@ -294,6 +299,82 @@ TEST_CASE("HdmiDriver keeps the output through a re-prepare in the same mode, an
     CHECK(mm::platform::hdmiTestOpenMode() == 1);
 }
 
+TEST_CASE("On a computer HdmiDriver starts in the display's own mode, and its status names the mode the display runs, plainly") {
+    HdmiSeamGuard seam;
+    mm::Buffer source;
+    mm::HdmiDriver driver;   // as added, before any choice
+    mm::Wall wall{4, 2};
+    mm::wire(driver, source, wall, 8);
+    REQUIRE(driver.mode == mm::platform::hdmiDefaultMode);
+    const mm::platform::HdmiMode* modes = nullptr;
+    REQUIRE(mm::platform::hdmiModes(&modes) > driver.mode);
+    REQUIRE(modes[driver.mode].width == 0);   // the host's default is the display's own mode
+    driver.defineControls();
+    REQUIRE(control(driver, "mode"));
+    CHECK(std::string(reinterpret_cast<const char* const*>(control(driver, "mode")->aux)[driver.mode]) == "display's own");
+    driver.prepare();
+    mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Monitor);
+    mm::platform::setTestHdmiActiveMode({2940, 1912, 60});   // a MacBook panel, in none of the fixed sizes
+    mm::edid::Monitor m;
+    m.lists = 0;   // and it lists none of them either
+    mm::platform::setTestHdmiMonitor(m);
+    driver.tick1s();
+    CHECK(std::string(driver.status()) == "4x2 on 2940x1912 60 Hz");
+    CHECK(driver.severity() == mm::MoonModule::Severity::Status);   // the display runs its own mode, which is the one chosen
+}
+
+TEST_CASE("HdmiDriver saves its mode by name, so a size this platform lacks keeps the mode it has") {
+    Bench b;   // on 1280x720
+    b.driver.defineControls();
+    const mm::ControlDescriptor* mode = control(b.driver, "mode");
+    REQUIRE(mode);
+    CHECK(mode->persistLabel);
+    CHECK(mm::applyControlValue(*mode, "{\"mode\":\"1920x1080 60 Hz\"}", "mode", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(b.driver.mode == 4);
+    CHECK(mm::applyControlValue(*mode, "{\"mode\":\"1920x1080 30 Hz\"}", "mode", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);   // an ESP32's name for its 1080p
+    CHECK(b.driver.mode == 4);   // kept, rather than clamped onto another size
+    CHECK(mm::applyControlValue(*mode, "{\"mode\":\"display's own\"}", "mode", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);
+    CHECK(b.driver.mode == mm::platform::hdmiDefaultMode);
+    CHECK(mm::applyControlValue(*mode, "{\"mode\":2}", "mode", mm::ApplyPolicy::Clamp) == mm::ApplyResult::Ok);   // a number, as a file saved before names
+    CHECK(b.driver.mode == 2);
+}
+
+TEST_CASE("HdmiDriver leaves the computer's own screen alone until ownScreen is set, and restarts the output when it changes") {
+    Bench b;
+    b.driver.prepare();
+    CHECK_FALSE(mm::platform::hdmiTestOwnScreen());
+    mm::platform::setTestNowMs(1000);
+    b.driver.tick();
+    REQUIRE(mm::platform::hdmiTestFrameCount() == 1);
+    b.driver.ownScreen = true;
+    b.driver.prepare();
+    CHECK(mm::platform::hdmiTestFrameCount() == 0);   // a closed output keeps no frames, so the output was opened again
+    CHECK(mm::platform::hdmiTestOwnScreen());
+    CHECK(mm::platform::hdmiTestOpenMode() == 2);
+}
+
+TEST_CASE("HdmiDriver switches ownScreen off when Esc is pressed on the covered screen, so the desktop comes back") {
+    Bench b;
+    b.driver.ownScreen = true;
+    b.driver.prepare();
+    REQUIRE(mm::platform::hdmiTestOwnScreen());
+    b.driver.tick1s();
+    CHECK(b.driver.ownScreen);   // no key, no change
+    mm::platform::setTestHdmiDismiss();
+    b.driver.tick1s();
+    CHECK_FALSE(b.driver.ownScreen);
+    CHECK(b.driver.dirty());     // the switch is saved off, so a restart leaves the desktop alone
+    b.driver.prepare();          // the rebuild tick1s asked for
+    CHECK_FALSE(mm::platform::hdmiTestOwnScreen());
+}
+
+TEST_CASE("HdmiDriver offers ownScreen only where a desktop can be covered") {
+    Bench b;
+    b.driver.defineControls();
+    REQUIRE(control(b.driver, "ownScreen"));
+    CHECK(control(b.driver, "ownScreen")->hidden == !mm::platform::hasHdmiOwnScreen);
+}
+
 TEST_CASE("HdmiDriver shows the bridge's synthesizer word against the programmed one, and the sync it measures") {
     Bench b;
     b.driver.defineControls();
@@ -301,10 +382,8 @@ TEST_CASE("HdmiDriver shows the bridge's synthesizer word against the programmed
     mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Monitor);
     mm::platform::setTestHdmiBridge({0x571e, 0x5555, 18001, 741});
     b.driver.tick1s();
-    const char* readout = nullptr;
-    for (uint8_t i = 0; i < b.driver.controls().count(); i++)
-        if (std::strcmp(b.driver.controls()[i].name, "bridge") == 0) readout = static_cast<const char*>(b.driver.controls()[i].ptr);
-    REQUIRE(readout != nullptr);
+    REQUIRE(control(b.driver, "bridge"));
+    const char* readout = static_cast<const char*>(control(b.driver, "bridge")->ptr);
     CHECK(std::string(readout) == "DDS 571e, wants 5555, sync 18001/741");
     mm::platform::setTestHdmiLink(mm::platform::HdmiLink::Down);
     b.driver.tick1s();
@@ -314,10 +393,8 @@ TEST_CASE("HdmiDriver shows the bridge's synthesizer word against the programmed
 TEST_CASE("HdmiDriver hides the bridge readout on a platform without a bridge to read back") {
     Bench b;
     b.driver.defineControls();
-    bool found = false;
-    for (uint8_t i = 0; i < b.driver.controls().count(); i++)
-        if (std::strcmp(b.driver.controls()[i].name, "bridge") == 0) { found = true; CHECK(b.driver.controls()[i].hidden == !mm::platform::hasHdmiBridge); }
-    CHECK(found);
+    REQUIRE(control(b.driver, "bridge"));
+    CHECK(control(b.driver, "bridge")->hidden == !mm::platform::hasHdmiBridge);
 }
 
 TEST_CASE("HdmiDriver closes the output on release, so the screen goes dark") {

@@ -200,3 +200,20 @@ def test_a_repository_relative_path_is_spelled_with_forward_slashes_as_git_lists
     from pathlib import PureWindowsPath
     monkeypatch.setattr(hook, "REPO", PureWindowsPath("C:/repo"))
     assert hook._rel(PureWindowsPath("C:/repo/src/Foo.cpp")) == "src/Foo.cpp"
+
+
+def _clone(a, b):
+    return {"firstFile": {"name": a, "start": 1, "end": 6}, "secondFile": {"name": b, "start": 11, "end": 16}}
+
+
+def test_a_clone_counts_as_created_only_where_its_pair_of_files_holds_more_than_at_head():
+    art = _clone("src/art.h", "src/art.h")          # two animation frames sharing rows, there before the change
+    copy = _clone("test/a.cpp", "test/a.cpp")       # a block the change pasted
+    assert hook.clones_created([art, copy], now=[art, copy], head=[art]) == [copy]
+    assert hook.clones_created([art], now=[art], head=[art]) == []          # an edit inside an existing clone creates none
+    assert hook.clones_created([copy], now=[copy], head=[]) == [copy]
+
+
+def test_every_touched_clone_counts_when_head_could_not_be_scanned():
+    copy = _clone("test/a.cpp", "src/b.h")
+    assert hook.clones_created([copy], now=[copy], head=None) == [copy]

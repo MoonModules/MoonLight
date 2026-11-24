@@ -105,13 +105,21 @@ constexpr bool hasHdmi = false;
 /// False: Android gives no app a raw socket (CAP_NET_RAW), which a ColorLight panel card's frames need.
 constexpr bool hasRawEthernet = false;
 #else
-/// True: Linux drives a card's HDMI port through DRM/KMS, and macOS and Windows cover a second display with a full-screen window.
+/// True: Linux drives a card's HDMI port through DRM/KMS, and macOS and Windows cover a second display with a full-screen window, or their own when asked (`hasHdmiOwnScreen`).
 constexpr bool hasHdmi = true;
 /// True: a host sends a ColorLight panel card's raw Ethernet frames through the adapter it names.
 constexpr bool hasRawEthernet = true;
 #endif
 /// False: a host's display has no bridge chip to read back, so the driver hides its readout.
 constexpr bool hasHdmiBridge = false;
+/// The HDMI driver's starting mode, its place in `hdmiModes`: the display's own, since a computer's screen already runs the mode it is best in.
+constexpr uint8_t hdmiDefaultMode = 8;
+/// True on Windows and macOS, where the output is a window that can cover the one display a desktop runs on; false on Linux, whose output is the console's screen already.
+#if defined(_WIN32) || defined(__APPLE__)
+constexpr bool hasHdmiOwnScreen = true;
+#else
+constexpr bool hasHdmiOwnScreen = false;
+#endif
 
 /// False: a desk on the computer reaches the MIDI service through the browser.
 constexpr bool hasUsbMidiHost = false;

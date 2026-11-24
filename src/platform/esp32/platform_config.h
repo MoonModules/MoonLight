@@ -223,6 +223,10 @@ constexpr bool hasHdmi = false;
 /// False: no HDMI, so no bridge.
 constexpr bool hasHdmiBridge = false;
 #endif
+/// The HDMI driver's starting mode, its place in `hdmiModes`: 1280x720 at 60 Hz, which the bridge's two lanes carry and a 1080p monitor scales by exactly 1.5.
+constexpr uint8_t hdmiDefaultMode = 2;
+/// False: a board's HDMI port carries no desktop to cover.
+constexpr bool hasHdmiOwnScreen = false;
 
 // True on the images that set the build symbol, mirroring it so flag and dependency cannot disagree.
 #if defined(CONFIG_MM_USB_MIDI_HOST)

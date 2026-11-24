@@ -11,8 +11,7 @@ Plan of 2026-10-30, a Feature, rewritten on 2026-11-16 for the native route the 
 
 ## What exists
 
-- **On main**: the shared encoder (`src/platform/Hub75Encode.h`), the output strategy and the Pi 5 PIO output (PRs 1 to 3).
-- **`moonpi`**, the fork's branch: the Pi 3/4 GPIO output and engine with the carry, which PR 4 brings.
+- **On main**: the shared encoder (`src/platform/Hub75Encode.h`), the output strategy, the Pi 5 PIO output, and the Pi 3/4 GPIO output and engine with the carry (PRs 1 to 4).
 - **On the bench:** the Pi 5 wall (256x192, six 128x64 panels) on PIO and the Pi 4 sign (96x64, Stripe) on GPIO, readings in the bench record.
 
 ## Steps
@@ -23,7 +22,7 @@ Plan of 2026-10-30, a Feature, rewritten on 2026-11-16 for the native route the 
 4. ✅ **PR 1, the shared encoder, alone** ([#254](https://github.com/MoonModules/MoonLight/pull/254)): merged (upstream 38db7ed9). `Hub75Encode.h` moved to `platform/`, so that platform code can encode (no platform file includes light, and the Pi engines that encode from `platform/rpi` arrive in PR 3); hold words let a narrow row's lowest plane light a whole word, with exact binary weights on a stretched row and the rounding of the pass on a wider one, up to 8 planes. The ESP32 port keeps its 6-bit cap, for the reason beside `kHub75PortMaxBitDepth` in `Hub75Bus.h`; 8 bits on an ESP32 stays with the card "Repeated planes: full top brightness and 8-bit depth", which this PR names as its next step. Verified on an S3 with 16- and 32-column layouts at 6 bits (ewowi's MoonHub75 can run it too), with the cost of 33 words a pass instead of 16 on a 16-column row at 6 bits measured there; a 32-column row is unchanged. Docs: hub75-refresh.md (the plane weights and the hold words).
 5. ✅ **PR 2, the output strategy** ([#257](https://github.com/MoonModules/MoonLight/pull/257)): merged 2026-11-18 (upstream 58804494). `Hub75Driver` drives its panels through an output strategy, the ESP32 bus output its first, picked by backend, which is where the Pi outputs plug in. Frames byte-identical on the S3.
 6. ✅ **PR 3, the Pi 5 PIO output**, in two: the engine ([#258](https://github.com/MoonModules/MoonLight/pull/258), merged 2026-11-20, upstream c9b8baf4), which issues `/dev/pio0`'s ioctls itself, so every Linux aarch64 build has it with no library, submodule or package; and `Hub75PioOutput` ([#260](https://github.com/MoonModules/MoonLight/pull/260), merged 2026-11-21, upstream cdf7ff1d). On 2026-11-23 TheRiderMan ran it on a Pi 5 with the triple bonnet, six layers on 128x64 panels, up to 150 fps.
-7. ⏳ **PR 4, the Pi 3/4 GPIO output:** `Hub75GpioOutput` and its engine with Stripe, credited to hzeller's design. The carry (`carryBits`, a first-order temporal dither) is an addition this PR names, with its own tests. In this PR's files: the British spellings (`kColourSlotBits`, `kGpioColourMask`, the `colour` members), the GPIO engine's literal stretch factor and the GPIO stub's literal 500 fixed. The sign. Docs: hub75-panels.md (the Pi 3/4 section), hub75-bench.md (the Pi 4 readings), hub75-test-pattern.md, attributions.md.
+7. ✅ **PR 4, the Pi 3/4 GPIO output** ([#267](https://github.com/MoonModules/MoonLight/pull/267)): merged 2026-11-24 (upstream 2f33caa6). `Hub75GpioOutput` and its engine with Stripe, credited to hzeller's design. The carry (`carryBits`, a first-order temporal dither) is an addition this PR names, with its own tests. In this PR's files: the British spellings (`kColourSlotBits`, `kGpioColourMask`, the `colour` members), the GPIO engine's literal stretch factor and the GPIO stub's literal 500 fixed. The sign. Docs: hub75-panels.md (the Pi 3/4 section), hub75-bench.md (the Pi 4 readings), hub75-test-pattern.md, attributions.md.
 
 ## Benchmarks each PR brings
 
