@@ -2,13 +2,15 @@
 
 Plan of 2026-11-23, a Feature, for approval. **Goal: a Raspberry Pi 3, 4 or 5 drives WS2812 strips from its own header, straight or through the 74HCT595 pin expander, with the parallel LED driver ESP32 and Teensy boards use; and HUB75 on every one of them.** The backlog card "LED output from a Raspberry Pi's own pins" (robwomp, 2026-10-11) asked for the strips.
 
+**Starts once [HUB75 on a Raspberry Pi](Plan-20261030%20-%20HUB75%20on%20a%20Raspberry%20Pi.md) is complete** (product owner, 2026-11-24): the Pi 5 route builds on its PIO engine, which opens `/dev/pio0` and issues the kernel's ioctls itself ([#258](https://github.com/MoonModules/MoonLight/pull/258)), and the Pi 3/4 route on its GPIO backend's `/dev/mem` mapping and Pi detection ([#267](https://github.com/MoonModules/MoonLight/pull/267)).
+
 ## What exists
 
 - **`ParallelLedDriver` drives parallel WS2812 through one backend chosen at runtime** (`LedPeripheral`, the Strategy pattern): i80, Parlio and LCD-MM on an ESP32, GPIO DMA on a Teensy. The driver owns the controls, the correction and the encode (`ParallelSlots.h`): each WS2812 bit becomes three slots, transposed so one slot carries a bit of every lane. A backend only brings the bus up, hands back its buffer, sends it and waits.
 - **The pin expander is part of that encode.** With `pinExpander` on, each data line feeds a chain of '595 shift registers, eight strands per line; the slot stream gains the shift clocks, and `latchPin` is a data lane. Strands top out at 64, since the active-strand mask is a `uint64_t` (`kMaxStrands`).
 - **On an ESP32 the expander's frame is the limit:** above about 96 lights per strand it no longer fits internal RAM, which the S3's DMA needs at 20–26.67 MHz (`ParallelLedDriver.h`, "Expander limits").
 - **A Pi 5 drives HUB75 through the RP1 chip's PIO** (`src/platform/rpi/`): `Rp1Backend` loads a PIO program through the kernel's `/dev/pio0`, sets pins and clock, and feeds whole frames by DMA; `StubBackend` runs the same engine on a machine with no Pi. The card's prerequisite, a `src/platform/rpi/` backend, therefore exists.
-- **HUB75 on a Pi 3 or 4** is [Plan-20261030 - HUB75 on a Raspberry Pi](Plan-20261030%20-%20HUB75%20on%20a%20Raspberry%20Pi.md), step 7: a CPU bit-bang engine with a PWM-timed OE, credited to hzeller's design, waiting on the fork's `moonpi` branch with the Pi 4 sign on the bench. Today a Pi 4 shows the Pi card and a refusal.
+- **HUB75 on a Pi 3 or 4** is [Plan-20261030 - HUB75 on a Raspberry Pi](Plan-20261030%20-%20HUB75%20on%20a%20Raspberry%20Pi.md), step 7: a CPU bit-bang engine with a PWM-timed OE, credited to hzeller's design, in review as [#267](https://github.com/MoonModules/MoonLight/pull/267), read on the Pi 4 sign.
 - **`LedHwBlock::PiHeader`** names the Pi's header as one peripheral block, so a strip driver and a HUB75 driver on one Pi refuse to share it.
 
 ## The routes

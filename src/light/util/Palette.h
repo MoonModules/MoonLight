@@ -211,6 +211,7 @@ public:
 
     /// Expand built-in `index` into the active palette, off the hot path, on selection: @xref{gradients-expand-once}.
     static void setActive(uint8_t index) {
+        requested_.store(0, std::memory_order_relaxed);   // a direct set supersedes a pending request, which would otherwise land over it next frame
         active_ = fromBuiltin(index);
     }
 

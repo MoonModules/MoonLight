@@ -3,6 +3,7 @@
 /// What parallel layers rely on: a script's sinks per thread for every render thread at once, a particle pool's own emit seed, and a palette a layer asks for applied between frames.
 
 #include "doctest.h"
+#include <cstring>
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include "light/powerfunctions/particles.h"
 #include "light/util/Palette.h"
@@ -56,5 +57,16 @@ TEST_CASE("a palette a layer asks for applies at the frame's start, not under th
     CHECK(Palettes::active()->entry[15].b == two.entry[15].b);
     Palettes::applyRequest();     // nothing asked: it stays
     CHECK(Palettes::active()->entry[15].b == two.entry[15].b);
+    Palettes::setActiveDirect(before);
+}
+
+TEST_CASE("a palette set directly supersedes a request still pending") {
+    const Palette before = *Palettes::active();
+    Palettes::request(2);      // a layer asked, to be applied at the next frame's start
+    Palettes::setActive(5);    // then the user picked another
+    Palettes::applyRequest();
+    const Palette five = Palettes::fromBuiltin(5);
+    CHECK(std::memcmp(Palettes::active()->entry, five.entry, sizeof(five.entry)) == 0);
+    CHECK(std::memcmp(five.entry, Palettes::fromBuiltin(2).entry, sizeof(five.entry)) != 0);   // the two differ, so the check tells them apart
     Palettes::setActiveDirect(before);
 }

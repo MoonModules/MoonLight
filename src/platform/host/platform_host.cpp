@@ -151,6 +151,7 @@
 #endif
 #include <array>    // the test USB desk's packets
 #include <vector>   // HostBus frame buffers: the memory-backed parallel bus
+#include <system_error>
 #include <thread>
 #include <deque>     // encoder frame queue between the render tick and the writer thread
 #include <mutex>
@@ -545,8 +546,14 @@ bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* use
     if (testSpawnFails.load(std::memory_order_relaxed)) return false;
     auto* w = new (std::nothrow) HostWorker();
     if (!w) return false;
-    t.impl = w;
-    w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
+    t.impl = w;   // before the thread starts, which waits on it at once
+    try {
+        w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
+    } catch (const std::system_error&) {   // the thread limit: the pool degrades on false
+        t.impl = nullptr;
+        delete w;
+        return false;
+    }
     return true;
 }
 

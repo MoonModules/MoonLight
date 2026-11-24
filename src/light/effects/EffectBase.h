@@ -43,6 +43,9 @@ public:
     /// Copy that wiring-order frame into the output, all of it when `force` says the output holds something else.
     virtual void copyWiringFrame(uint8_t* /*out*/, size_t /*bytes*/, bool /*force*/) {}
 
+    /// Structural work this effect's tick decided on, run on the render loop before the next frame renders: create, destroy and reparent belong to a serial phase, so they wait for the render loop.
+    virtual void applyPending() {}
+
     /// The parent, always a Layer, defined in Layer.h once Layer is complete.
     Layer* layer() const;
 

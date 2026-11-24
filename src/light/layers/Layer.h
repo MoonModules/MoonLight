@@ -98,6 +98,8 @@ public:
 
     /// Cold path: size the box from the layouts, build the mapping, and clear the buffer.
     void prepare() override {
+        // Decided here, on the cold path, so the tick tests a bool: a bare layer and one under a non-container parent apply their own pending work.
+        selfApplies_ = !parent() || !parent()->acceptsRole(ModuleRole::Layer);
         // Restart discards the elapsed gap, so the first tick after a re-prepare cannot jump a trail.
         fadeTime_.reset();
         frameStarted_ = false;
@@ -150,6 +152,8 @@ public:
 
     /// Apply the frame's fade, then tick each enabled effect into the layer's buffer.
     void tick() MM_NONBLOCKING override {
+        // The serial phase belongs to whoever ticks: a layer container runs it before dispatch, and a layer ticked directly applies its own.
+        if (selfApplies_) applyPending();
         // Gated per child here because the layer iterates its own children, not through the Scheduler.
         const uint32_t local = platform::millis();
         elapsed_ = static_cast<uint32_t>(local + FleetTime::offsetUs() / 1000);   // fleet time: devices side by side show one moment
@@ -198,18 +202,21 @@ public:
             m->tick();
             rebuild |= m->consumeNeedsRebuild();
         }
-        // One rebuild however many modifiers asked, applied before the next frame renders: on the render loop, never on a worker, since layers share the layout a rebuild places lights through.
+        // One rebuild however many modifiers asked, applied on the render loop before the next frame renders, since layers share the layout a rebuild places lights through.
         if (rebuild) { rebuildPending_ = true; return; }
 
         // Skipped when nothing is live, so a static-only chain pays nothing for this.
         if (hasGrid && hasLive_) { applyLivePass(); bufferGen_++; }
     }
 
-    /// Rebuild the mapping a modifier asked for in the last frame, before this one renders: Effects calls it on the render loop, one layer at a time.
-    void applyPendingRebuild() {
-        if (!rebuildPending_) return;
-        rebuildPending_ = false;
-        applyState();
+    /// The structural work last frame's tick decided on, applied before this frame renders: a modifier's rebuild, then each effect's own. Effects calls it on the render loop, one layer at a time.
+    void applyPending() {
+        if (rebuildPending_) {
+            rebuildPending_ = false;
+            applyState();
+        }
+        for (uint8_t i = 0; i < childCount(); i++)
+            if (child(i)->role() == ModuleRole::Effect) static_cast<EffectBase*>(child(i))->applyPending();
     }
 
     /// Size the live-pass snapshot to the current buffer, or free it when nothing is live, so the render path only copies and never allocates.
@@ -272,8 +279,9 @@ public:
     /// The enabled live modifiers' maps composed in child order into `t`; false when one is not affine.
     bool composeLive(LiveAffine& t, const Coord3D& logical) const {
         for (uint8_t i = 0; i < childCount(); i++) {
+            if (child(i)->role() != ModuleRole::Modifier || !child(i)->enabled()) continue;
             const auto* m = static_cast<const ModifierBase*>(child(i));
-            if (child(i)->role() != ModuleRole::Modifier || !child(i)->enabled() || !m->hasModifyLive()) continue;
+            if (!m->hasModifyLive()) continue;
             LiveAffine mi;
             if (!m->liveAffine(mi, logical)) return false;
             t = mi.after(t);
@@ -562,6 +570,7 @@ private:
     lengthType width_ = 0;  // logical (what effects see)
     lengthType height_ = 0;
     lengthType depth_ = 0;
+    bool selfApplies_ = true;   ///< this layer runs its own pending work: bare, or under a parent that is no layer container
     uint32_t elapsed_ = 0;
     uint32_t frameMs_ = 0;       // this frame's length in local milliseconds, 0 on the first
     uint32_t lastLocalMs_ = 0;   // the local clock at the previous frame
@@ -573,7 +582,7 @@ private:
     uint32_t bufferGen_ = 0;   // bumped by every write to buffer_; see bufferGen()
     char statusBuf_[20] = {};  // "999×999×999" fits; owned (setStatus borrows the pointer)
     bool     hasLive_ = false;          // any enabled modifier animates per frame (gates the live pass)
-    bool     rebuildPending_ = false;   // a modifier asked for a rebuild, which the next frame applies first
+    bool     rebuildPending_ = false;   // a modifier asked for a rebuild, which applyPending applies before the next frame
     uint8_t  staticCount_ = 0;          // enabled modifiers folded into the mapping at build time
     uint8_t* liveScratch_ = nullptr;    // snapshot for the live pass; allocated only when hasLive_
     size_t   liveScratchBytes_ = 0;

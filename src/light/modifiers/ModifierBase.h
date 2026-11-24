@@ -39,6 +39,8 @@ struct LiveAffine {
 ///
 /// Modifiers compose: a @ref Layer folds its static modifiers in child order, each reshaping the result of the one below, into its mapping at rebuild. A dynamic modifier instead runs a pass every frame after all effects, on the logical buffer the static mapping then carries to the lights, whatever its place, and an animated one rebuilds its static fold on its own clock.
 ///
+/// A chain of live maps composes in child order into one map that warps the frame and rounds once.
+///
 /// A modifier folds coordinates rather than drawing, so it uses little of the shared [power functions](https://moonmodules.org/MoonLight/moonmodules/light/power-functions.html). Each card's emoji are its tags, as the [tag emoji legend](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend) explains.
 ///
 /// @technical

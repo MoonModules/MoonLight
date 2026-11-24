@@ -8,7 +8,7 @@
 ///
 /// ## Linux: straight to the kernel
 ///
-/// DRM/KMS through the kernel's own ioctls and uapi headers, the stable ABI libdrm wraps, so neither the build nor the package gains a library: the no-SDK rule the audio and NDI paths follow. Every list the kernel returns comes in two calls, the counts first and then the arrays, as libdrm does it.
+/// DRM/KMS through the kernel's own ioctls and uapi headers, the stable ABI libdrm wraps, so the build and the package stay library-free: the no-SDK rule the audio and NDI paths follow. Every list the kernel returns comes in two calls, the counts first and then the arrays, as libdrm does it.
 ///
 /// The first connected HDMI connector is shown, drawn into the back one of two buffers that flip on the vertical blank; a driver where the flip fails draws into the shown buffer instead, tearing rather than going dark.
 ///
@@ -16,13 +16,13 @@
 ///
 /// ## Linux: the console takes the screen back
 ///
-/// Without a host the first program to open the card sets its mode, and closing the card hands the screen back to the text console. With a host running, the host holds the screen and the link reports Down, retried each second.
+/// On a bare console the first program to open the card sets its mode, and closing the card hands the screen back to the text console. With a host running, the host holds the screen and the link reports Down, retried each second.
 ///
 /// ## The display scales
 ///
 /// A display controller scales a plane between its source and screen rectangles, as video players use it. The frame goes on the primary plane in a buffer the size of the layer, the CRTC's black background around it forming the bars: one pass over the frame a frame.
 ///
-/// The primary is the plane sure to scale: an overlay may be a window without a scaler, as the RK3566's Smart windows are, which takes the setting and shows nothing; its primary, Esmart0-win0, scales.
+/// The primary is the plane sure to scale: an overlay may be a window that lacks a scaler, as the RK3566's Smart windows are, which takes the setting and stays dark; its primary, Esmart0-win0, scales.
 ///
 /// A new frame size keeps the replaced buffers until one of the new size is on the plane, since removing the shown buffer turns the display off.
 ///
@@ -90,6 +90,7 @@ struct Kms {
     Scanout buf[2];
     int shown = 0;                   // the buffer on screen
     bool flips = true;               // false once a flip failed: draw into the shown buffer
+    bool rebindFailed = false;       // the busy-CRTC rebind failed and was logged; a success clears it
     bool flipPending = false;        // a flip asked for whose event has not been read
 };
 Kms k;
@@ -105,7 +106,7 @@ int drmIoctl(int fd, unsigned long request, void* arg) {
 template <typename T>
 uint64_t ptr(T* p) { return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(p)); }
 
-// The card's CRTCs and connectors; false for a card without mode setting, such as the Pi's 3D engine.
+// The card's CRTCs and connectors; false for a render-only card, such as the Pi's 3D engine.
 bool resources(int fd, std::vector<uint32_t>& crtcs, std::vector<uint32_t>& connectors) {
     for (int attempt = 0; attempt < 3; attempt++) {   // a monitor plugged in between the two calls grows the counts
         drm_mode_card_res res{};
@@ -455,13 +456,21 @@ Surface back() {
     return {s.map, s.pitch, k.timing.hdisplay, k.timing.vdisplay};
 }
 
-// Read the flip's event within `ms`: only flip events are asked for, so their content says nothing more.
+// Read the flip's event within `ms`: only flip events are asked for, so the event's arrival is the whole answer.
 void awaitFlip(int ms) {
     pollfd pfd{k.fd, POLLIN, 0};
     if (poll(&pfd, 1, ms) <= 0) return;
     char events[256];
     (void)!read(k.fd, events, sizeof(events));
     k.flipPending = false;
+}
+
+// Bind the shown buffer to the CRTC again, logging the first failure of a run of them.
+void rebindShown() {
+    if (setCrtc(k.shown)) { k.rebindFailed = false; return; }
+    if (k.rebindFailed) return;
+    k.rebindFailed = true;
+    std::printf("HDMI: binding the shown buffer again failed (errno %d)\n", errno);
 }
 
 void present() {
@@ -474,7 +483,11 @@ void present() {
     flip.fb_id = k.buf[target].fb;
     flip.flags = DRM_MODE_PAGE_FLIP_EVENT;
     if (drmIoctl(k.fd, DRM_IOCTL_MODE_PAGE_FLIP, &flip) != 0) {
-        if (errno == EBUSY) return;   // a flip still queued, so the next frame tries again
+        if (errno == EBUSY) {
+            // With the last flip done, a busy CRTC has lost its framebuffer, as a dropped plane whose modeset failed leaves it: bind the shown buffer again, and the flips go on.
+            rebindShown();
+            return;
+        }
         k.flips = false;   // @xref{linux-straight-to-the-kernel|tearing rather than dark}
         if (setCrtc(target)) k.shown = target;
         return;

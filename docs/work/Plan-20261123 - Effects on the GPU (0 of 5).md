@@ -5,7 +5,17 @@ Plan of 2026-11-23, a Feature, for discussion. **Goal: a 1080p screen at full fr
 ## What exists
 
 - **Every effect runs on the CPU, light by light**, the design that suits an ESP32 and tens of thousands of lights. Measured on a NanoPi R3S on 2026-11-23: 1920×1080 at 4 fps, 1280×720 at 10, 640×360 at 38, each one layer; about 120 ns a light a frame on one A55 core.
-- **The boards MoonLight runs on carry GPUs**: the R3S a Mali-G52 (OpenGL ES 3.1 or newer through Mesa's Panfrost), a Pi 5 a VideoCore VII (OpenGL ES 3.1), Intel and AMD mini PCs and every Mac and Windows PC one. projectM, which belrik's milk-ddp streams into MoonLight over DDP, renders Milkdrop presets on them at 60 fps, 128×128 on 40% of one NanoPi core.
+- **The boards MoonLight runs on carry GPUs**, each with a Mesa driver on Linux:
+
+  | Board | GPU | Mesa driver | API |
+  |--|--|--|--|
+  | Pi 1 to 3, Zero 2 | VideoCore IV | vc4 | OpenGL ES 2.0 |
+  | Pi 4 | VideoCore VI | v3d | OpenGL ES 3.1, Vulkan |
+  | Pi 5 | VideoCore VII | v3d | OpenGL ES 3.1, Vulkan |
+  | NanoPi R3S (RK3566), R5S (RK3568) | Mali-G52 | Panfrost | OpenGL ES 3.1 or newer, Vulkan in newer Mesa |
+  | NanoPi R28S (RK3528) | Mali-450 | Lima | OpenGL ES 2.0 |
+
+  Intel and AMD mini PCs and every Mac and Windows PC carry one too, which ANGLE reaches as OpenGL ES over Metal on macOS and Direct3D on Windows (step 2), so one shader source runs on all of them. Their CPUs already render on every core, through the render workers ([Layers rendered in parallel](Plan-20261123%20-%20Layers%20rendered%20in%20parallel%20(3%20of%204).md)). projectM, which belrik's milk-ddp streams into MoonLight over DDP, renders Milkdrop presets on them at 60 fps, 128×128 on 40% of one NanoPi core.
 - **An ESP32 has no shader GPU**; the P4's PPA is a 2D blitter. This plan is for the host platform alone.
 
 ## End state
@@ -19,7 +29,7 @@ Plan of 2026-11-23, a Feature, for discussion. **Goal: a 1080p screen at full fr
 1. ⏳ **A spike on the R3S**: EGL and GBM, no X, a plasma shader into a 1920×1080 texture, read back with `glReadPixels`; measure the frame rate and the readback's share. It decides whether readback is cheap enough for every driver or HDMI wants the direct path.
 2. ⏳ **The platform seam**: `platform::gpu` opens a context and runs a fragment shader into a buffer the size of a layer; Linux through EGL, macOS and Windows through ANGLE's OpenGL ES; a board without one reports it and the effect shows its status.
 3. ⏳ **ShaderEffect**: the shader source as a control or a file, the uniforms filled each frame, the output read into the layer. A unit test runs a constant-color shader on the host and checks the layer.
-4. ⏳ **The direct path to HDMI**: a layer that only HDMI shows renders into the scanout buffer of [HDMI scaled by the display controller](Plan-20261123%20-%20HDMI%20scaled%20by%20the%20display%20controller%20(1%20of%203).md), no readback.
+4. ⏳ **The direct path to HDMI**: a layer that only HDMI shows renders into the scanout buffer of [HDMI scaled by the display controller](Plan-20261123%20-%20HDMI%20scaled%20by%20the%20display%20controller%20(2%20of%203).md), no readback.
 5. ⏳ **A first catalog**: a handful of effects as shaders (plasma, noise, a tunnel), side by side with their CPU versions on the R3S, and the shader page in the docs.
 
 ## Open questions

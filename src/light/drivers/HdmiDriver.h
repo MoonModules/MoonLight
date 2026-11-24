@@ -28,6 +28,10 @@ namespace mm {
 ///
 /// A monitor plugged in or woken later is picked up within a second. Set its input to HDMI, not automatic, which some monitors leave for another input. Noise after a cold start: reset the board.
 ///
+/// ## Who scales
+///
+/// On Linux the display controller scales the layer, and the log names which path runs.
+///
 /// ## Status line
 ///
 /// | It says | It means |

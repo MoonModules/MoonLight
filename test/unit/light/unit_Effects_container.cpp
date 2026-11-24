@@ -7,6 +7,7 @@
 #include "light/layouts/GridLayout.h"
 #include "light/effects/RainbowEffect.h"
 #include "light/effects/SpiralEffect.h"
+#include "light/effects/DemoReelEffect.h"
 #include "light/effects/FireEffect.h"   // heap-holding effect — the cascade-release probe
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/ModifierBase.h"
@@ -594,12 +595,77 @@ TEST_CASE("render workers leave a modifier's rebuild to the render loop, one lay
     for (int i = 0; i < 4; i++) rig.layers[i].addChild(&probes[i]);
     rig.effects.setup();
     rig.effects.applyState();
-    for (uint32_t frame = 0; frame < 20; frame++) {
+    int built[4];
+    for (int i = 0; i < 4; i++) built[i] = probes[i].folds.load();   // the folds applyState made
+    for (uint32_t frame = 0; frame < 2; frame++) {   // frame 0 asks, frame 1 applies
         mm::platform::setTestNowMs(1000 + frame * 16);
         rig.effects.tick();
     }
-    for (const RebuildProbe& p : probes) {
-        CHECK(p.folds.load() > 0);
-        CHECK(p.elsewhere.load() == 0);
+    for (int i = 0; i < 4; i++) {
+        CHECK(probes[i].folds.load() > built[i]);   // a rebuild the frames asked for, beyond applyState's
+        CHECK(probes[i].elsewhere.load() == 0);
     }
+}
+
+// A hosted effect that records the thread it is created on, as a stand-in the reel can pick.
+struct HostedProbe : mm::RainbowEffect {
+    static inline std::thread::id renderThread = std::this_thread::get_id();
+    static inline std::atomic<bool> armed{false};
+    static inline std::atomic<int> created{0}, createdElsewhere{0};
+    HostedProbe() {
+        if (!armed.load()) return;   // registerType builds a probe instance too
+        created.fetch_add(1);
+        if (std::this_thread::get_id() != renderThread) createdElsewhere.fetch_add(1);
+    }
+};
+
+TEST_CASE("render workers leave a demo reel's effect swap to the render loop") {
+    // Create and setParent write state every layer shares (the factory's name buffer, the last-enabled effect), so two reels advancing side by side swap on the render loop.
+    ClockGuard clockGuard;
+    mm::ModuleFactory::registerType<mm::RainbowEffect>("RainbowEffect");
+    mm::ModuleFactory::registerType<mm::SpiralEffect>("SpiralEffect");
+    mm::ModuleFactory::registerType<HostedProbe>("HostedProbeEffect");
+    mm::ModuleFactory::registerType<mm::DemoReelEffect>("DemoReelEffect");
+
+    mm::Layouts layouts;
+    mm::GridLayout grid;
+    grid.width = 8; grid.height = 8; grid.depth = 1;
+    layouts.addChild(&grid);
+    mm::Effects effects;
+    mm::Layer layers[2];
+    mm::DemoReelEffect reels[2];
+    for (int i = 0; i < 2; i++) {
+        layers[i].setChannelsPerLight(3);
+        reels[i].interval = 1;
+        reels[i].randomPalette = false;
+        layers[i].addChild(&reels[i]);
+        effects.addChild(&layers[i]);
+    }
+    effects.setLayouts(&layouts);
+    effects.setup();
+    CHECK(effects.renderWorkers() > 0);
+    effects.applyState();
+    const int n = reels[0].eligibleCountForTest();
+    REQUIRE(n >= 2);
+    HostedProbe::created = 0;
+    HostedProbe::createdElsewhere = 0;
+    HostedProbe::armed = true;
+    // Each frame is past the interval: the tick decides a swap and the next frame's serial phase applies it, so a lap of n effects fits in n + 2 frames.
+    const int frames = 2 * (n + 2);
+    const char* previous[2] = {reels[0].currentTypeForTest(), reels[1].currentTypeForTest()};
+    int moved[2] = {0, 0};
+    for (int frame = 0; frame < frames; frame++) {
+        mm::platform::setTestNowMs(1000 + static_cast<uint32_t>(frame) * 1001);
+        effects.tick();
+        for (int i = 0; i < 2; i++) {
+            const char* now = reels[i].currentTypeForTest();
+            REQUIRE(now != nullptr);
+            if (std::strcmp(now, previous[i]) != 0) moved[i]++;
+            previous[i] = now;
+        }
+    }
+    HostedProbe::armed = false;
+    for (int i = 0; i < 2; i++) CHECK(moved[i] > 0);   // each reel moved on
+    CHECK(HostedProbe::created.load() > 0);            // the probe was picked and created
+    CHECK(HostedProbe::createdElsewhere.load() == 0);  // on the render loop, as the swap runs there
 }

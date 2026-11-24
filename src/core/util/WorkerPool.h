@@ -16,7 +16,7 @@ namespace mm {
 ///
 /// ## One word claims an item
 ///
-/// Workers and the caller take items from one shared counter, the textbook work queue for equal jobs. The counter holds the batch's number and its item count beside the next index, and an item is claimed by compare-and-swap: a worker still leaving the last batch finds the number changed and takes nothing of the new one, where a bare index would hand it an item with the old batch's function.
+/// Workers and the caller take items from one shared counter, the textbook work queue for equal jobs. The counter holds the batch's number and its item count beside the next index, and an item is claimed by compare-and-swap: a worker still leaving the last batch finds the number changed and leaves the new one to the others, where a bare index would hand it an item with the old batch's function.
 class WorkerPool {
 public:
     /// What runs one item: `ctx` is the batch's, `item` its index.

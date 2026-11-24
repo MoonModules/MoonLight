@@ -23,7 +23,7 @@ processes:
         actor: agent
         when: { manual: "The architect shapes it and the researcher maps the prior art." }
         detail: |
-          The spec holds enough to build from, checked against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). It lives on the topic's card until a plan absorbs it, and a long investigation is a [design study](design/index.md) the card cites. When in doubt on a spec, ask.
+          The spec holds enough to build from, checked against the README, CLAUDE.md and the [architecture](explanation/architecture/index.md). It lives on the topic's card, when it has one, until a plan absorbs it, and a long investigation is a [design study](design/index.md) the card cites. When in doubt on a spec, ask.
       - id: end-states
         say: Name two to four end states.
         actor: agent

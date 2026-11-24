@@ -153,7 +153,7 @@ TEST_CASE("Layer coalesces rebuilds from two dynamic modifiers") {
     CHECK(beforeOk);   // the composed two-permutation mapping is itself a bijection
 
     // Advance past a beat boundary in small ticks (both modifiers tick each frame).
-    for (uint32_t t = 1000; t <= 2500; t += 50) { mm::platform::setTestNowMs(t); layer.applyPendingRebuild(); layer.tick(); }   // as Effects runs a frame
+    for (uint32_t t = 1000; t <= 2500; t += 50) { mm::platform::setTestNowMs(t); layer.tick(); }
     mm::platform::setTestNowMs(0);
 
     auto [after, afterOk] = mapping();

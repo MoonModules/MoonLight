@@ -61,9 +61,9 @@ public:
         // First, so every layer this frame samples the same entries: Drivers ticks too late for it.
         Palettes::applyRequest();
         MoonLivePalette::tickActive(platform::millis());
-        // A rebuild a modifier asked for runs here, one layer at a time, before the layers render side by side.
+        // A rebuild a modifier asked for, and an effect's own structural work, run here, one layer at a time, before the layers render side by side.
         for (uint8_t i = 0; i < childCount(); i++)
-            if (MoonModule* c = child(i); c && c->role() == ModuleRole::Layer) static_cast<Layer*>(c)->applyPendingRebuild();
+            if (MoonModule* c = child(i); c && c->role() == ModuleRole::Layer) static_cast<Layer*>(c)->applyPending();
         composited_ = enabledLayerCount() > 1;
         pool_.run(childCount(), &tickChild, this);   // returns once every layer has rendered, so the composite reads finished buffers
     }
