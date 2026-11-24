@@ -90,22 +90,12 @@ TEST_CASE("Hub75PioEngine: a frame publishes and submits, and the geometry reads
     mm::platform::Hub75PioEngine engine;
     std::string error;
     REQUIRE(engine.open(pioSmall(), error, true));
-    CHECK(engine.isRunning());
-    CHECK(std::string(engine.backendName()) == "stub (no hardware)");
-    CHECK(engine.width() == 64);
-    CHECK(engine.height() == 32);
-    CHECK(engine.lanes() == 1);
-    CHECK(engine.frameSlots() == 2048);
+    mm::test::checkSmallEngine(engine);
     CHECK(engine.pixelClockHz() == 10000000);   // a 4.0 divider, exact
     CHECK(std::abs(engine.refreshHz() - 10000000.0f / 2048.0f) < 1.0f);
     CHECK(engine.dmaBytesPerSecond() == 40000000);
 
-    std::vector<uint8_t> frame(64 * 32 * 3, 0);
-    engine.publishRgb(frame.data());
-    CHECK(mm::test::waitFirstSubmit(engine));
-    CHECK(mm::test::waitUntil([&] { return engine.framesEncoded() > 0; }));   // the refresh thread takes the published frame after its first submit
-    CHECK(engine.framesPublished() == 1);
-    CHECK(engine.submitErrors() == 0);
+    mm::test::publishBlackFrame(engine);
     engine.shutdown();
     CHECK_FALSE(engine.isRunning());
 }
@@ -196,11 +186,11 @@ TEST_CASE("Hub75PioEngine: a second open is refused, and shutdown is idempotent 
     std::string error;
     REQUIRE(engine.open(pioSmall(), error, true));
     CHECK_FALSE(engine.open(pioSmall(), error, true));
-    CHECK(error == "PIO engine already running");
+    CHECK(error == "the engine is already running");
     mm::platform::Hub75PioOptions invalid = pioSmall();
     invalid.parallel = 9;
     CHECK_FALSE(engine.open(invalid, error, true));
-    CHECK(error == "PIO engine already running");   // the engine's state is refused before the options are read
+    CHECK(error == "the engine is already running");   // the engine's state is refused before the options are read
 
     std::vector<uint8_t> frame(64 * 32 * 3, 255);   // all white, so the blank after it is unmistakable
     engine.publishRgb(frame.data());

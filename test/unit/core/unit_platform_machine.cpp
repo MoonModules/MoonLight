@@ -87,6 +87,45 @@ TEST_CASE("Machine: a Raspberry Pi 5 reads from cpuinfo's Model line where the d
     CHECK(mm::platform::machineFromCpuinfo(x86, sizeof(x86) - 1) == Machine::Other);
 }
 
+TEST_CASE("Machine: the SoC of a Pi 3 or 4 reads from the device tree's compatible list, and any other board, a Pi 5 included, is Other") {
+    using mm::platform::PiSoc;
+    const auto soc = [](const char* list, size_t length) { return mm::platform::piSocFromCompatible(list, length); };
+    static const char pi4[] = "raspberrypi,4-model-b\0brcm,bcm2711";
+    static const char pi400[] = "raspberrypi,400\0brcm,bcm2711";
+    static const char cm4[] = "raspberrypi,4-compute-module\0brcm,bcm2711";
+    static const char pi3[] = "raspberrypi,3-model-b-plus\0brcm,bcm2837";
+    static const char zero2[] = "raspberrypi,model-zero-2-w\0brcm,bcm2837";
+    static const char pi5[] = "raspberrypi,5-model-b\0brcm,bcm2712";
+    static const char pi1[] = "raspberrypi,model-b\0brcm,bcm2835";
+    static const char rock[] = "radxa,rock-pi-4\0rockchip,rk3399";
+    CHECK(soc(pi4, sizeof(pi4)) == PiSoc::Bcm2711);
+    CHECK(soc(pi400, sizeof(pi400)) == PiSoc::Bcm2711);
+    CHECK(soc(cm4, sizeof(cm4)) == PiSoc::Bcm2711);
+    CHECK(soc(pi3, sizeof(pi3)) == PiSoc::Bcm2837);
+    CHECK(soc(zero2, sizeof(zero2)) == PiSoc::Bcm2837);
+    CHECK(soc(pi5, sizeof(pi5)) == PiSoc::Other);
+    CHECK(soc(pi1, sizeof(pi1)) == PiSoc::Other);
+    CHECK(soc(rock, sizeof(rock)) == PiSoc::Other);
+    CHECK(soc(nullptr, 0) == PiSoc::Other);
+    CHECK(soc("brcm,bcm27110", 13) == PiSoc::Other);   // a name that only begins like the SoC's
+}
+
+TEST_CASE("Machine: the SoC of a Pi 3 or 4 reads from cpuinfo's Model line where the device tree cannot be read") {
+    using mm::platform::PiSoc;
+    const auto soc = [](const char* model) { const std::string t = std::string("Hardware\t: BCM2711\nRevision\t: c03115\nModel\t\t: ") + model + "\n"; return mm::platform::piSocFromCpuinfo(t.data(), t.size()); };
+    CHECK(soc("Raspberry Pi 4 Model B Rev 1.2") == PiSoc::Bcm2711);
+    CHECK(soc("Raspberry Pi 400 Rev 1.0") == PiSoc::Bcm2711);
+    CHECK(soc("Raspberry Pi Compute Module 4 Rev 1.0") == PiSoc::Bcm2711);
+    CHECK(soc("Raspberry Pi 3 Model B Plus Rev 1.3") == PiSoc::Bcm2837);
+    CHECK(soc("Raspberry Pi Compute Module 3 Rev 1.0") == PiSoc::Bcm2837);
+    CHECK(soc("Raspberry Pi Zero 2 W Rev 1.0") == PiSoc::Bcm2837);
+    CHECK(soc("Raspberry Pi 5 Model B Rev 1.0") == PiSoc::Other);
+    CHECK(soc("Raspberry Pi 500 Rev 1.0") == PiSoc::Other);
+    CHECK(soc("Raspberry Pi Zero W Rev 1.1") == PiSoc::Other);
+    CHECK(soc("ASUS Tinker Board") == PiSoc::Other);
+    CHECK(mm::platform::piSocFromCpuinfo(nullptr, 0) == PiSoc::Other);
+}
+
 #ifndef ESP_PLATFORM
 TEST_CASE("Machine: a test starts on a machine that is Other whatever board runs the suite, and the lever returns there") {
     // The test binary's listener rests the lever at Other, so no case takes the path of the Pi it happens to run on.
@@ -98,6 +137,13 @@ TEST_CASE("Machine: a test starts on a machine that is Other whatever board runs
     mm::platform::setTestMachine(Machine::Pi5);
     mm::platform::clearTestMachine();
     CHECK(mm::platform::machine() == Machine::Other);   // the resting answer, not the host's
+}
+
+TEST_CASE("Machine: a test starts on a SoC that is Other whatever board runs the suite, and the lever moves it") {
+    CHECK(mm::platform::piSoc() == mm::platform::PiSoc::Other);
+    mm::platform::setTestPiSoc(mm::platform::PiSoc::Bcm2711);
+    CHECK(mm::platform::piSoc() == mm::platform::PiSoc::Bcm2711);
+    mm::platform::setTestPiSoc(mm::platform::PiSoc::Other);   // as the listener leaves it
 }
 
 TEST_CASE("Machine: the real host is asked for by name, and is read once") {

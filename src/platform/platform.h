@@ -1503,14 +1503,16 @@ struct Hub75Pins {
 /// One running HUB75 port.
 struct Hub75Handle { void* impl = nullptr; };
 
-/// What drives a HUB75 port: an ESP32's LCD_CAM or Parlio block clocking bus words, or a Pi 5's RP1 PIO through the `hub75Pio*` seam.
-enum class Hub75Backend : uint8_t { LcdCam = 0, Parlio = 1, Pio = 2 };
+/// What drives a HUB75 port: an ESP32's LCD_CAM or Parlio block clocking bus words, a Pi 5's RP1 PIO through the `hub75Pio*` seam, or a Pi 3/4's GPIO through the `hub75Gpio*` seam.
+enum class Hub75Backend : uint8_t { LcdCam = 0, Parlio = 1, Pio = 2, Gpio = 3 };
 
 /// Is this backend present on this silicon and able to carry a frame of `frameBytes`?
 bool hub75BackendAvailable(Hub75Backend backend, size_t frameBytes);
 
 /// The label this backend shows in the UI, the same on every build so a saved choice finds it.
-inline const char* hub75BackendLabel(Hub75Backend backend) { return backend == Hub75Backend::Pio ? "Pi PIO" : backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM"; }
+inline const char* hub75BackendLabel(Hub75Backend backend) {
+    return backend == Hub75Backend::Gpio ? "Pi GPIO" : backend == Hub75Backend::Pio ? "Pi PIO" : backend == Hub75Backend::Parlio ? "Parlio" : "LCD_CAM";
+}
 
 /// Bring up a HUB75 port on `backend` and allocate its frame buffer.
 bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,

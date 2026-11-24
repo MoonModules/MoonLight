@@ -1,0 +1,25 @@
+// Hub75TestPattern: a white flash, then one red row stepping down the panel and one green column stepping across, one a second, to check its mapping.
+
+class Hub75TestPattern {
+
+  int dimensions() { return 2; }
+
+  string tags() { return "💫"; }
+
+  void tick() {
+    int loopLen = 2 + height + width;   // seconds: 2 flash, height rows, width columns
+    int s = mod(t / 1000, loopLen);     // the second within the loop; t is milliseconds since boot
+    if (s < 2) {
+      fill(255, 255, 255);   // the flash: the loop starts here, unmissable
+    } else {
+      fill(0, 0, 0);
+      if (s < 2 + height) {
+        int y = s - 2;   // row y, top to bottom, red
+        for (int x = 0; x < width; x = x + 1) { setRGB(y * width + x, 255, 0, 0); }
+      } else {
+        int x = s - 2 - height;   // column x, left to right, green
+        for (int y = 0; y < height; y = y + 1) { setRGB(y * width + x, 0, 255, 0); }
+      }
+    }
+  }
+}

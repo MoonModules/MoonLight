@@ -9,6 +9,7 @@
 
 #include "platform/nonblocking.h"   // MM_NONBLOCKING
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -95,6 +96,61 @@ private:
     uint8_t readSlot_ = 2;
     std::atomic<size_t> frames_{0};   // written by the producer, read by the consumer
     Shared* const shared_ = new Shared;
+};
+
+/// The failed submits a seam answers: the engine's count, saturated to 32 bits, while the engine holds the panels, else the `recorded` count a test set while the recorder holds them.
+template <class Engine>
+uint32_t hub75SeamSubmitErrors(bool engineHolds, const Engine& engine, const Hub75Recorder& rec, uint32_t recorded) MM_NONBLOCKING {
+    if (engineHolds) return static_cast<uint32_t>(std::min<uint64_t>(engine.submitErrors(), UINT32_MAX));
+    return rec.width() != 0 ? recorded : 0;
+}
+
+/// Whether a seam holds panels, the engine or the recorder: the state whose close counts.
+inline bool hub75SeamHoldsPanels(bool engineHolds, const Hub75Recorder& rec) { return engineHolds || rec.width() != 0; }
+
+/// The engine of a build that omits it (MSVC): every open refuses with `why`, every count is 0 and every call lands harmlessly, so a seam keeps one code path. A seam derives its own to take the calls only it makes.
+template <class Options>
+class Hub75NoEngine {
+  public:
+    /// An engine whose every open refuses with `why`.
+    explicit Hub75NoEngine(const char* why) : why_(why) {}
+    /// Refuses with the reason.
+    bool open(const Options&, std::string& error, bool) {
+        error = why_;
+        return false;
+    }
+    /// Stops at once, since no engine runs.
+    bool shutdown() { return true; }
+    /// A clean stop.
+    const char* shutdownError() const { return ""; }
+    /// No canvas.
+    uint16_t width() const { return 0; }
+    /// No canvas.
+    uint16_t height() const { return 0; }
+    /// No frame is published.
+    uint64_t framesPublished() const { return 0; }
+    /// No submit fails.
+    uint64_t submitErrors() const { return 0; }
+    /// No refresh runs.
+    uint16_t fps() const { return 0; }
+    /// No submit is in flight.
+    bool stalled() const { return false; }
+    /// The frame goes nowhere.
+    void publishRgb(const uint8_t*) {}
+    /// The stall time has no engine to set.
+    void setStallMs(uint64_t) {}
+    /// The join deadline has no engine to set.
+    void setJoinDeadlineMs(int) {}
+    /// No encode runs to fail.
+    void failEncodes(int) {}
+    /// Whether the real-backend gate is open: moot where no real backend exists, so it remembers what a test set, which the seam's early refusal reads.
+    bool gateOpen() const { return gateOpen_; }
+    /// Closes the gate, or opens it again.
+    void setGateOpen(bool open) { gateOpen_ = open; }
+
+  private:
+    const char* why_;
+    bool gateOpen_ = true;
 };
 
 /// Stand in for the panels `o` wires once the seam's `check` accepts them, keeping the options in `kept`; false leaves the reason in `error`.

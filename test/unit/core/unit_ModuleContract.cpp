@@ -72,7 +72,7 @@ const std::vector<Known> kTooBig = {
     {"PanelCardDriver", "the packet_ frame buffer sits inline, sized to the largest card frame", false, mm::platform::hasRawEthernet},
     {"ParallelLedDriver", "the pin and strand text fields and the in-flight state sit inline"},
     {"HttpServerModule", "the eight WebSocket client connections sit inline"},
-    {"Hub75Driver", "the Pi 5's PIO output sits inline beside the bus output, with its 512-byte status text", true},
+    {"Hub75Driver", "the Pi 5's PIO output and the Pi 3/4's GPIO output sit inline beside the bus output, each with its 512-byte status text", true},
     {"ControlModule", "the surface, touch and resend tables sit inline"},
     {"PinsModule", "the 64-claim snapshot table sits inline"},
     {"FseqPlayerEffect", "its playlist of tracks sits inline, close enough to the budget that a host's layout decides which side it lands on", true},

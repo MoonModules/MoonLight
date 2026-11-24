@@ -1,4 +1,4 @@
-/// What the HUB75 engine tests share: waits on a stub backend's submits and the walls the PIO engine's tests open it with.
+/// What the HUB75 engine tests share: waits on a stub backend's submits and the walls the PIO and GPIO engines' tests open them with.
 
 #pragma once
 
@@ -11,7 +11,10 @@
 #include <vector>
 
 #include "doctest.h"
+#include "platform/Hub75Gpio.h"
 #include "platform/Hub75Pio.h"
+#include "platform/rpi/hub75_gpio_backend_stub.h"
+#include "platform/rpi/hub75_gpio_engine.h"
 #include "platform/rpi/hub75_pio_backend_stub.h"
 #include "platform/rpi/hub75_pio_engine.h"
 #include "platform/rpi/hub75_pio_pins.h"
@@ -85,6 +88,19 @@ struct PioRun {
     }
 };
 
+/// The GPIO engine opened on the stub backend with its recorders cleared, shut down however the case ends.
+struct GpioRun {
+    mm::platform::Hub75GpioEngine engine;   ///< the engine under test
+    std::string error;                      ///< what a refused open said
+    /// Clear the stub's recorders and open the engine on `o`; the open must succeed.
+    explicit GpioRun(const mm::platform::Hub75GpioOptions& o) {
+        mm::platform::gpioStubResetCapture();
+        REQUIRE(engine.open(o, error, true));
+    }
+    /// Stop the engine; a second shutdown is a no-op.
+    ~GpioRun() { engine.shutdown(); }
+};
+
 /// Call `body` once under each queue model the stub has, with the model's name captured for the report.
 template <class Body>
 void forBothQueueModels(Body body) {
@@ -133,6 +149,28 @@ inline size_t litWords(const std::vector<uint32_t>& frame) {
     return lit;
 }
 
+/// What a one-panel 64x32 engine opened on the stub reads back: running, on the stub, one lane, 2,048 slots a frame.
+template <class Engine>
+void checkSmallEngine(const Engine& engine) {
+    CHECK(engine.isRunning());
+    CHECK(std::string(engine.backendName()) == "stub (no hardware)");
+    CHECK(engine.width() == 64);
+    CHECK(engine.height() == 32);
+    CHECK(engine.lanes() == 1);
+    CHECK(engine.frameSlots() == 2048);
+}
+
+/// Publish one black frame to the small engine and wait for its threads: submitted and encoded, one frame published, no failed submit.
+template <class Engine>
+void publishBlackFrame(Engine& engine) {
+    const std::vector<uint8_t> frame(64 * 32 * 3, 0);
+    engine.publishRgb(frame.data());
+    CHECK(waitFirstSubmit(engine));
+    CHECK(waitUntil([&] { return engine.framesEncoded() > 0; }));   // the encode thread encodes the published frame beside the refresh thread
+    CHECK(engine.framesPublished() == 1);
+    CHECK(engine.submitErrors() == 0);
+}
+
 /// Call `check` with the slots of every color combination on each of the three lanes, the other lanes dark.
 template <class Check>
 void forEveryLaneColor(Check check) {
@@ -163,6 +201,35 @@ inline mm::platform::Hub75PioOptions pioSmall() {
     o.scanRate = 16;
     o.bitDepth = 2;
     o.pixelClockHz = 10000000;
+    return o;
+}
+
+/// One 32x64 panel at 1/16 scan, 2-bit: 2 planes x 16 rows x 64 columns, 2,048 slots a frame.
+inline mm::platform::Hub75GpioOptions gpioSmall() {
+    mm::platform::Hub75GpioOptions o;
+    o.rows = 32;
+    o.cols = 64;
+    o.panelsPerLane = 1;
+    o.parallel = 1;
+    o.scanRate = 16;
+    o.bitDepth = 2;
+    o.pwmLsbNs = 130;
+    o.slowdown = -1;   // auto: the stub resolves it to 1
+    return o;
+}
+
+/// The sign's options (BENCH-V6): 3 parallel lanes of one 32x64 panel, Stripe, 6-bit, 160 ns LSB, true slowdown 2, a 64x96 frame of 6,144 words; the calibration is in hub75_gpio_backend.h (Calibration).
+inline mm::platform::Hub75GpioOptions gpioSignOptions() {
+    mm::platform::Hub75GpioOptions o;
+    o.rows = 32;
+    o.cols = 64;
+    o.panelsPerLane = 1;
+    o.parallel = 3;
+    o.scanRate = 8;
+    o.multiplexing = mm::platform::kHub75MultiplexStripe;
+    o.bitDepth = 6;
+    o.pwmLsbNs = 160;
+    o.slowdown = 2;
     return o;
 }
 

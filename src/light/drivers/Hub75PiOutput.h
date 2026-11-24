@@ -156,7 +156,7 @@ protected:
     /// The frames the panels showed in the last second.
     char shownStr_[16] = "";
 
-    /// The lane canvas is `owner`'s memory, counted in its readout and freed on its release; `label` names the seam in the status ("PIO").
+    /// The lane canvas is `owner`'s memory, counted in its readout and freed on its release; `label` names the seam in the status and its warnings ("PIO", "GPIO").
     Hub75PiOutput(MoonModule& owner, const char* label) : label_(label), canvas_(owner) {}
 
     /// Whether `name` is in `list`, for the controls that reopen the panels.
@@ -244,8 +244,8 @@ private:
         const char* sep = baseLen_ ? "; " : "";
         char* at = message_ + baseLen_;
         const size_t room = sizeof(message_) - baseLen_;
-        if (stalled) mm::formatTo(at, room, "%sthe PIO is stalled: a submit has not returned, and the panels hold their last frame", sep);
-        else if (failing) mm::formatTo(at, room, "%sthe PIO is failing: %u submits failed since it opened, and the panels may be dark", sep, static_cast<unsigned>(errors));
+        if (stalled) mm::formatTo(at, room, "%sthe %s is stalled: a submit has not returned, and the panels hold their last frame", sep, label_);
+        else if (failing) mm::formatTo(at, room, "%sthe %s is failing: %u submits failed since it opened, and the panels may be dark", sep, label_, static_cast<unsigned>(errors));
     }
 
     /// The first driven panel, counted from 0, whose lights leave plain rows, or PanelWalk::kNone; lights past the last whole panel are the count's.
@@ -295,7 +295,7 @@ private:
     uint16_t lastShown_ = 0xFFFF;   // 0xFFFF, so the first real 0 still publishes
     uint32_t lastErrors_ = 0;   ///< the failed submits counted at the last tick
     uint32_t shownErrors_ = 0;   ///< the count the warning shows
-    char     status_[32] = {};   ///< the canvas and the depth, at most "65535x65535, 8-bit, PIO"
+    char     status_[32] = {};   ///< the canvas and the depth, at most "65535x65535, 8-bit, GPIO"
     Placed   placed_;
     ScratchBuffer<uint8_t> canvas_;   ///< the placed frame of lanes of several panels, empty for one panel per lane, whose lights are already a raster
 };

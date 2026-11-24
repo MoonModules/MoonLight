@@ -23,10 +23,6 @@ namespace {
 
 using Rig = mm::PiRig<mm::PioSeam>;
 
-constexpr auto pixel = &mm::PioSeam::pixel;
-
-constexpr uint8_t kLinear = static_cast<uint8_t>(mm::Correction::Curve::Linear);   // the curve select indexes Curve
-
 }  // namespace
 
 TEST_CASE("Hub75Driver on a Pi 5 offers Pi PIO and drives it through the PIO output") {
@@ -60,12 +56,7 @@ TEST_CASE("Hub75PioOutput starts from the seam's own defaults") {
     const mm::platform::Hub75PioOptions defaults{};
     auto driver = piDriver();
     const auto o = optionsOf(*driver);
-    CHECK(o.rows == defaults.rows);
-    CHECK(o.cols == defaults.cols);
-    CHECK(o.panelsPerLane == defaults.panelsPerLane);
-    CHECK(o.parallel == 1);   // the layout decides it in open(), not the default
-    CHECK(o.scanRate == 32);   // 64 rows, the default, derive 1/32
-    CHECK(o.bitDepth == defaults.bitDepth);
+    mm::checkWallOptions(o, defaults.rows, defaults.cols, defaults.panelsPerLane, 1, 32, defaults.bitDepth);   // the layout decides the lanes in open(); 64 rows, the default, derive 1/32
     CHECK(o.pixelClockHz == defaults.pixelClockHz);
     CHECK(o.latchBlankWords == defaults.latchBlankWords);
     CHECK(o.clockFallingEdge == defaults.clockFallingEdge);
@@ -79,20 +70,6 @@ TEST_CASE("Hub75PioOutput derives the scan from the panel's rows: 64 rows is 1/3
     CHECK(optionsOf(*driver).scanRate == 16);
     driver->panelRows = 16;
     CHECK(optionsOf(*driver).scanRate == 8);
-}
-
-TEST_CASE("Hub75PioOutput refuses a rows count other than 16, 32 or 64, in rows rather than in the scan rate the card hides") {
-    mm::PioPortGuard guard;
-    for (const uint8_t rows : {uint8_t{40}, uint8_t{17}, uint8_t{33}, uint8_t{8}}) {   // 17 and 33 halve, in whole numbers, to the scans 8 and 16
-        CAPTURE(static_cast<int>(rows));
-        auto r = Rig::raster(24, rows);
-        r->driver.panelRows = rows;
-        r->driver.panelCols = 24;
-        r->open();
-        CHECK(r->driver.severity() == mm::MoonModule::Severity::Error);
-        CHECK(std::string(r->driver.status()) == "the scan is half the panel's rows, so rows must be 16, 32 or 64");
-        CHECK(mm::platform::hub75PioWidth() == 0);
-    }
 }
 
 TEST_CASE("Hub75Driver on Pi PIO opens at 8-bit when set, and the status names it") {
@@ -116,30 +93,11 @@ TEST_CASE("Hub75PioOutput opens the wall with its controls: three lanes of two 1
     r->open();
 
     const auto& o = mm::platform::hub75PioTestPort().options;
-    CHECK(o.rows == 64);
-    CHECK(o.cols == 128);
-    CHECK(o.panelsPerLane == 2);
-    CHECK(o.parallel == 3);
-    CHECK(o.scanRate == 32);
-    CHECK(o.bitDepth == 4);
+    mm::checkWallOptions(o, 64, 128, 2, 3, 32, 4);
     CHECK(o.pixelClockHz == 20000000);
     CHECK(o.latchBlankWords == 2);
     CHECK(o.clockFallingEdge);
     CHECK(std::string(r->driver.status()) == "256x192, 4-bit, PIO");
-}
-
-TEST_CASE("Hub75PioOutput dims by lit time and leaves the curve to the correction, the values kept whole") {
-    mm::PioPortGuard guard;
-    auto r = Rig::raster(16, 32);
-    r->open();
-    REQUIRE(mm::setControlValue(r->driver, "curve", kLinear));
-    r->driver.rebuildCorrection(128);
-
-    r->paint(0, 200, 200, 200);
-    r->driver.tick();
-
-    CHECK(mm::platform::hub75PioTestPort().brightness == 128);
-    CHECK(pixel(0, 0)[0] == 200);   // the engine dims it by time, not the value
 }
 
 TEST_CASE("Hub75PioOutput reopens the panels on every PIO option and on nothing else") {

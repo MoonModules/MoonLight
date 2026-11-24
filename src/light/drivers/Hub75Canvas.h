@@ -50,6 +50,7 @@ struct PanelSpec {
     uint16_t latchTenthsNs = 5000;     ///< the latch per row in tenths of a nanosecond: the page's 0.5 us, or 0 where the latch rides the last pixel clock
     uint8_t  pairs = 1;                ///< color passes per address step the encoder shifts together (rowsPerScan / 2): 1 where a row is one shift; the hold's trigger counts laneWidth * pairs
     bool     encoderHold = false;      ///< the frame is the in-tree encoder's, whose hold words stretch a narrow row, and this output clocks them as shift: the rate counts them
+    uint16_t rateCols = 0;             ///< the columns the rate counts per panel, 0 meaning cols: Stripe counts the driven double width, while the canvas stays the logical one
 };
 
 /// A `laneWidth` lane clocked as `panel` says: its predicted refresh in Hz by docs/reference/hardware/hub75-refresh.md, per plane the longer of one row's shift and its lit time, times the scan rows (@xref{predicted-refresh|predicted refresh}).
@@ -82,14 +83,15 @@ struct Arrangement {
     uint16_t hz = 0;         ///< the predicted refresh
 };
 
-/// The arrangement of `panelsPerLane` panels on each of `parallel` lanes, with its canvas and rate.
+/// The arrangement of `panelsPerLane` panels on each of `parallel` lanes, with its canvas and rate. The canvas is the logical one; the rate counts the driven width (`rateCols` where set), since a Stripe panel shifts twice the columns a row.
 inline Arrangement makeArrangement(uint16_t panelsPerLane, uint16_t parallel, const PanelSpec& panel) {
     Arrangement a;
     a.panelsPerLane = panelsPerLane;
     a.parallel = parallel;
     a.width = static_cast<uint32_t>(panel.cols) * panelsPerLane;
     a.height = static_cast<uint32_t>(panel.rows) * parallel;
-    a.hz = hub75PredictedHz(a.width, panel);
+    const uint32_t rateWidth = static_cast<uint32_t>(panel.rateCols ? panel.rateCols : panel.cols) * panelsPerLane;
+    a.hz = hub75PredictedHz(rateWidth, panel);
     return a;
 }
 
