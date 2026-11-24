@@ -152,7 +152,7 @@ inline uint64_t hub75GpioPredictedFrameNs(uint16_t scanRows, uint32_t columnsPer
     uint64_t frameNs = 0;
     for (uint8_t p = 0; p < bitDepth; p++) {
         const uint64_t shiftNs = static_cast<uint64_t>(columnsPerGroup) * columnNs + kHub75GpioDarkIntervalNs;
-        const uint64_t oeNs = static_cast<uint64_t>(lsbNs) * (1u << p);
+        const uint64_t oeNs = static_cast<uint64_t>(lsbNs) << p;
         frameNs += static_cast<uint64_t>(scanRows) * (oeNs > shiftNs ? oeNs : shiftNs);
     }
     return frameNs;
