@@ -46,7 +46,7 @@ inline Hub75Output* asHub75Output(NoPiOutput& /*output*/) { return nullptr; }
 ///
 /// **One driver per peripheral.** A second driver that asks for LCD_CAM, Parlio or a Pi's header while another holds it stays idle with a status naming why, whichever of the two prepares first keeping it. This applies to the ESP32 too: a HUB75 driver yields to a strip driver holding LCD_CAM, and the strip driver to it.
 ///
-/// **Outputs.** The driver corrects the layout into one 3-channel frame in light order for a Hub75Output. The bus output reads a row-major raster; a Pi output's canvas is a stack of lanes of panels, so it places its lights first (Hub75Canvas.h) and hands the frame to the seam. All three are held by value, so the driver's size and memory readout count them; the Pi outputs are empty where no Pi runs.
+/// **Outputs.** The driver corrects the layout into one 3-channel frame for a Hub75Output, in light order and the fixture profile's color order. The bus output reads a row-major raster; a Pi output's canvas stacks lanes of panels, so it places its lights first (Hub75Canvas.h). All three are held by value, so the driver's memory readout counts them; the Pi outputs are empty off a Pi.
 ///
 /// **Continuous output.** A HUB75 panel is lit only while clocked, so on an ESP32 the platform re-sends one buffer forever and the bus output writes the next frame into it between scans, while tick() starts no transfer; a Pi output hands each frame to its seam, which hands it to the engine's threads.
 ///

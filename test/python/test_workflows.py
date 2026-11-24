@@ -17,7 +17,7 @@ EXEMPT = {
     ("release.yml", "build-linux-x64", "Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the build tools and library the job declares",
     ("release.yml", "build-linux-arm64", "Install cmake, g++-12 and libcurl (MoonCloud, only used once consent is given in the app)"): "runner plumbing: apt installs the build tools and library the job declares",
     ("release.yml", "release", "Re-create the `latest` release fresh"): "publishing: the `latest` tag force-push and the release deletion are GitHub's own",
-    ("release.yml", "deploy-pages", "Stage cumulative release content"): "publishing: it downloads the kept releases' assets through GitHub's release API",
+    ("release.yml", "stage-pages", "Stage cumulative release content"): "publishing: it downloads the kept releases' assets through GitHub's release API",
     ("release.yml", "restage-pages-for-tag", "Dispatch a main-context Pages deploy for this tag"): "publishing: it dispatches a GitHub workflow run",
 }
 # One script call and its arguments, nothing chained after it; a `${{ }}` expression is GitHub's, evaluated before the shell sees the line.

@@ -305,7 +305,8 @@ uint32_t findPrimary() {
 // Put the screen-sized buffer back on the primary plane and free the frame-sized ones.
 void dropPlane() {
     Plane& pl = k.plane;
-    if (pl.shown) setCrtc(k.shown);   // the software path draws into these from here on
+    // The software path draws into the screen's buffers from here on; a bind that fails is made again by the next frame's flip (rebindShown).
+    if (pl.shown && !setCrtc(k.shown)) std::printf("HDMI: the screen's buffer did not bind (errno %d), the next frame binds it again\n", errno);
     for (Scanout& s : pl.buf) destroyScanout(s);
     for (Scanout& s : pl.old) destroyScanout(s);
     pl = Plane{};

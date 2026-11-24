@@ -800,15 +800,15 @@ jobs:
             org.opencontainers.image.description=Drive large LED installations and DMX fixtures
             org.opencontainers.image.licenses=GPL-3.0
 
-  # Deploy the web installer to GitHub Pages. Separate from `release` because
-  # the `github-pages` environment's protection rule allows only `main` and `v*`
-  # tags, so this job is gated to those and carries the environment, while
-  # `release` (which runs on any ref) stays free of it. A tag deploys in its own
-  # run, so a release reaches the installer with its binaries. The cumulative-
-  # content step restages the last 5 stable + 5 prerelease releases on every run.
+  # Stage the web installer and the docs for GitHub Pages. Separate from `release`
+  # because the `github-pages` environment's protection rule allows only `main`,
+  # so the staging and the deploy after it are gated to main, while `release`
+  # (which runs on any ref) stays free of it. A tag reaches Pages through
+  # restage-pages-for-tag's dispatch on main. The cumulative-content step
+  # restages the last 5 stable + 5 prerelease releases on every run.
   stage-pages:
     # After a release, or alone on a pages-only dispatch: the site is staged from the published releases, never from this run's builds.
-    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) && (needs.release.result == 'success' || inputs.pages_only) }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (needs.release.result == 'success' || inputs.pages_only) }}
     needs: [release]
     runs-on: ubuntu-latest
     permissions:

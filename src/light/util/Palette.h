@@ -217,7 +217,7 @@ public:
 
     /// Ask for built-in `index` from inside a layer's tick, applied before the next frame's layers render, so no layer reads a palette another is writing.
     static void request(uint8_t index) MM_NONBLOCKING { requested_.store(static_cast<uint16_t>(index + 1), std::memory_order_relaxed); }
-    /// Apply the palette a layer asked for, at the start of a frame, before any layer renders.
+    /// Apply the palette a layer asked for, at the start of a frame, before any layer renders: Effects for its layers, a bare layer for itself.
     static void applyRequest() MM_NONBLOCKING {
         const uint16_t r = requested_.exchange(0, std::memory_order_relaxed);
         if (r) setActive(static_cast<uint8_t>(r - 1));

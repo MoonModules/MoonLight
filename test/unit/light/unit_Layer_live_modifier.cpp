@@ -117,6 +117,17 @@ TEST_CASE("Layer live pass: a disabled live modifier does not run") {
 }
 
 // COALESCED REBUILD: two beat-driven modifiers (RandomMap) on one Layer both ask for a rebuild on a beat; the Layer keeps ONE pending rebuild, which the next frame applies before it renders, and stays valid.
+TEST_CASE("a layer with no container applies a requested palette at its next tick") {
+    mm::golden::LayerFixture fx(8, 8);
+    fx.add(fx.own<GradientEffect>());
+    fx.layouts.applyState();
+    fx.layer.applyState();
+    mm::Palettes::request(5);
+    fx.layer.tick();
+    const mm::Palette five = mm::Palettes::fromBuiltin(5);
+    CHECK(std::memcmp(mm::Palettes::active()->entry, five.entry, sizeof(five.entry)) == 0);
+}
+
 TEST_CASE("Layer coalesces rebuilds from two dynamic modifiers") {
     mm::Layouts layouts;
     mm::GridLayout grid;

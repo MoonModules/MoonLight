@@ -153,7 +153,7 @@ public:
     /// Apply the frame's fade, then tick each enabled effect into the layer's buffer.
     void tick() MM_NONBLOCKING override {
         // The serial phase belongs to whoever ticks: a layer container runs it before dispatch, and a layer ticked directly applies its own.
-        if (selfApplies_) applyPending();
+        if (selfApplies_) { Palettes::applyRequest(); applyPending(); }
         // Gated per child here because the layer iterates its own children, not through the Scheduler.
         const uint32_t local = platform::millis();
         elapsed_ = static_cast<uint32_t>(local + FleetTime::offsetUs() / 1000);   // fleet time: devices side by side show one moment
