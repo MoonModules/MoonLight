@@ -153,13 +153,16 @@ TEST_CASE("Hub75Driver shows a wide profile's red, green and blue, wherever the 
     CHECK(paintAndShow(*r, 0, 0, 0) == -1);
 }
 
-TEST_CASE("Hub75Driver shows a green-first profile's red as red") {
+TEST_CASE("Hub75Driver puts a BGR panel's colors on the lines its profile names") {
+    // The panel is the light: its blue LEDs sit on the red line, so the profile's order is the order on the wires.
     mm::PortGuard guard;
     auto r = rig();
     r->open();
-    const mm::ChannelRole grb[3] = {mm::ChannelRole::Green, mm::ChannelRole::Red, mm::ChannelRole::Blue};
-    rewire(*r, grb, 3);
-    CHECK(paintAndShow(*r, 0, 0, 0) == -1);
+    const mm::ChannelRole bgr[3] = {mm::ChannelRole::Blue, mm::ChannelRole::Green, mm::ChannelRole::Red};
+    rewire(*r, bgr, 3);
+    r->paint(0, 200, 100, 50);
+    r->driver.tick();
+    CHECK(firstDifference(onePixel(0, 0, 50, 100, 200)) == -1);
 }
 
 TEST_CASE("Hub75Driver shows a white-first profile's colors, not its white") {
@@ -238,4 +241,11 @@ TEST_CASE("Hub75Driver packs the frame the encoder makes at 1/8, 1/16 and 1/32 s
             }
         }
     }
+}
+
+// A HUB75 panel's lines carry red, green and blue in that order unless its profile says otherwise, so a new driver starts there.
+TEST_CASE("A HUB75 driver starts on the RGB profile") {
+    mm::Hub75Driver drv;
+    REQUIRE(drv.defaultFixtureName() != nullptr);
+    CHECK(std::string(drv.defaultFixtureName()) == "RGB");
 }

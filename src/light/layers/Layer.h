@@ -12,6 +12,7 @@
 #include "light/powerfunctions/particles.h"   // particles::FrameTime, the elapsed-to-scale conversion
 #include "platform/platform.h"
 
+#include <cstdint>  // INT32_MAX: the bound on the warp's 16.16 steps
 #include <cstdio>
 #include <cstring>  // std::memcpy in extrude()
 
@@ -197,11 +198,18 @@ public:
             m->tick();
             rebuild |= m->consumeNeedsRebuild();
         }
-        // One rebuild per frame however many modifiers asked, and never from inside a tick.
-        if (rebuild) { applyState(); return; }
+        // One rebuild however many modifiers asked, applied before the next frame renders: on the render loop, never on a worker, since layers share the layout a rebuild places lights through.
+        if (rebuild) { rebuildPending_ = true; return; }
 
         // Skipped when nothing is live, so a static-only chain pays nothing for this.
         if (hasGrid && hasLive_) { applyLivePass(); bufferGen_++; }
+    }
+
+    /// Rebuild the mapping a modifier asked for in the last frame, before this one renders: Effects calls it on the render loop, one layer at a time.
+    void applyPendingRebuild() {
+        if (!rebuildPending_) return;
+        rebuildPending_ = false;
+        applyState();
     }
 
     /// Size the live-pass snapshot to the current buffer, or free it when nothing is live, so the render path only copies and never allocates.
@@ -225,6 +233,7 @@ public:
         std::memcpy(liveScratch_, buf, bytes);   // snapshot the source frame
 
         const Coord3D logical{width_, height_, depth_};
+        if (warpAffine(logical)) return;   // a chain of rotations, stepped per row
         for (lengthType z = 0; z < depth_; z++) {
             for (lengthType y = 0; y < height_; y++) {
                 for (lengthType x = 0; x < width_; x++) {
@@ -246,6 +255,54 @@ public:
                     }
                 }
             }
+        }
+    }
+
+    /// Warp the frame through the live modifiers' composed affine map, stepping the source along each row; false when one of them is not affine, or a source lies past 16.16 steps in int32, so the per-light pass runs.
+    bool warpAffine(const Coord3D& logical) {
+        LiveAffine t;
+        if (!composeLive(t, logical) || !stepsFit(t)) return false;
+        const size_t slice = static_cast<size_t>(width_) * height_ * channelsPerLight_;
+        for (lengthType z = 0; z < depth_; z++)
+            for (lengthType y = 0; y < height_; y++)
+                warpRow(t, y, liveScratch_ + static_cast<size_t>(z) * slice, buffer_.data() + static_cast<size_t>(z) * slice);
+        return true;
+    }
+
+    /// The enabled live modifiers' maps composed in child order into `t`; false when one is not affine.
+    bool composeLive(LiveAffine& t, const Coord3D& logical) const {
+        for (uint8_t i = 0; i < childCount(); i++) {
+            const auto* m = static_cast<const ModifierBase*>(child(i));
+            if (child(i)->role() != ModuleRole::Modifier || !child(i)->enabled() || !m->hasModifyLive()) continue;
+            LiveAffine mi;
+            if (!m->liveAffine(mi, logical)) return false;
+            t = mi.after(t);
+        }
+        return true;
+    }
+
+    /// Whether every 16.16 source the row steps reach, one past each row's end included, fits int32: the map is linear, so the box's corners bound it.
+    bool stepsFit(const LiveAffine& t) const {
+        constexpr int64_t kLimit = INT32_MAX - 0x8000;   // the rounding is added to the start
+        for (const int64_t x : {int64_t{0}, int64_t{width_}})
+            for (const int64_t y : {int64_t{0}, int64_t{height_}}) {
+                const int64_t sx = t.a * x + t.b * y + t.c, sy = t.d * x + t.e * y + t.f;
+                if (sx > kLimit || sx < -kLimit || sy > kLimit || sy < -kLimit) return false;
+            }
+        return true;
+    }
+
+    /// Row `y` of one slice: the source steps by the map's column terms, two additions a light, a source off the box reading dark.
+    void warpRow(const LiveAffine& t, lengthType y, const uint8_t* src, uint8_t* slice) const {
+        const size_t cpl = channelsPerLight_;
+        uint8_t* dst = slice + static_cast<size_t>(y) * width_ * cpl;
+        int32_t sx = static_cast<int32_t>(int64_t{t.b} * y + t.c + 0x8000), sy = static_cast<int32_t>(int64_t{t.e} * y + t.f + 0x8000);   // the row's first source, rounding folded in
+        for (lengthType x = 0; x < width_; x++, sx += t.a, sy += t.d, dst += cpl) {
+            const int32_t ix = sx >> 16, iy = sy >> 16;
+            if (ix < 0 || ix >= width_ || iy < 0 || iy >= height_) { std::memset(dst, 0, cpl); continue; }
+            const uint8_t* from = src + (static_cast<size_t>(iy) * width_ + ix) * cpl;
+            if (cpl == 3) { dst[0] = from[0]; dst[1] = from[1]; dst[2] = from[2]; }
+            else std::memcpy(dst, from, cpl);
         }
     }
 
@@ -516,6 +573,7 @@ private:
     uint32_t bufferGen_ = 0;   // bumped by every write to buffer_; see bufferGen()
     char statusBuf_[20] = {};  // "999×999×999" fits; owned (setStatus borrows the pointer)
     bool     hasLive_ = false;          // any enabled modifier animates per frame (gates the live pass)
+    bool     rebuildPending_ = false;   // a modifier asked for a rebuild, which the next frame applies first
     uint8_t  staticCount_ = 0;          // enabled modifiers folded into the mapping at build time
     uint8_t* liveScratch_ = nullptr;    // snapshot for the live pass; allocated only when hasLive_
     size_t   liveScratchBytes_ = 0;

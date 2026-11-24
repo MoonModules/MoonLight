@@ -118,7 +118,7 @@ private:
             next = static_cast<uint8_t>((cursor_ + 1) % eligibleCount_);
         }
         // This overrides the global palette while the reel runs, which a later rebuild restores.
-        if (randomPalette && palettes::kCount > 0) Palettes::setActive(rng_.below(palettes::kCount));
+        if (randomPalette && palettes::kCount > 0) Palettes::request(rng_.below(palettes::kCount));   // applied before the next frame's layers
         swapTo(next);
     }
 

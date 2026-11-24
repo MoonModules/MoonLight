@@ -934,8 +934,13 @@ const char* cpuInfo() {
     // Cores only: the host's clock speed has no portable query (and boosts dynamically anyway).
     static char buf[16] = {};
     if (!buf[0])
-        std::snprintf(buf, sizeof(buf), "%u cores", std::thread::hardware_concurrency());
+        std::snprintf(buf, sizeof(buf), "%u cores", static_cast<unsigned>(cpuCores()));
     return buf;
+}
+
+uint8_t cpuCores() {
+    const unsigned n = std::thread::hardware_concurrency();   // 0 where the count is unknown
+    return static_cast<uint8_t>(n == 0 ? 1 : n > 255 ? 255 : n);
 }
 
 #ifndef _WIN32

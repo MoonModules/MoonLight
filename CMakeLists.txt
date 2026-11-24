@@ -191,6 +191,7 @@ add_library(mm_platform
     src/platform/host/platform_host.cpp
     src/platform/host/platform_host_audio.cpp
     src/platform/host/platform_host_hdmi.cpp
+    src/platform/host/platform_host_hdmi_linux.cpp
     src/platform/host/platform_host_update.cpp
     src/platform/host/platform_host_machine.cpp
     src/platform/host/platform_host_pio.cpp

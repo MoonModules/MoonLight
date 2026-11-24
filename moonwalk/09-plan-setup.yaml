@@ -13,7 +13,7 @@ processes:
       properties:
         kind: { type: string, enum: [Feature, Restructure], description: "Does the topic add to the system, or reshape it?" }
     intro: |
-      A topic is one module, effect, driver or capability, picked from [the Project](https://github.com/users/MoonModules/projects/5): a card the product owner accepts moves from Backlog to Next and becomes an issue through the card's own Convert to issue, which an agent may pick up (a doc links an issue, the item's own or the tracking issue listing its card, since GitHub keeps an issue's address and not a card's), and moves to In progress when work starts. The plan is the contract for the branch. It absorbs the cards on its topic, which are deleted, so one topic has one home while it is being built and the Project keeps only what no plan covers.
+      A topic is one module, effect, driver or capability, picked from [the Project](https://github.com/users/MoonModules/projects/5): a card the product owner accepts moves from Backlog to Next and becomes an issue through the card's own Convert to issue, which an agent may pick up (a doc links an issue, the item's own or the tracking issue listing its card, since GitHub keeps an issue's address and not a card's), and moves to In progress when work starts. The plan is the contract for the branch. It absorbs the cards on its topic, which are deleted, so one topic has one home while it is being built and the Project keeps only what no plan covers. A topic the product owner picks directly starts as a plan the same way, with no card before it: a card is the backlog, a plan is the work.
     steps:
       - id: pick
         say: Name one module, effect, driver or capability.
@@ -47,12 +47,13 @@ processes:
         actor: agent
         when: { manual: "When a step of a plan is ✅, and again for a plan that is finished." }
         detail: |
-          What the system now is, how it works, why, and the measured facts worth keeping move to the page that owns them: a reason to the explanation, a fact to a reference page, a lesson to the lessons. What the page already says stays where it is. The step keeps its title, its status, one line of what is done and a link with an anchor to where it lives; who tested what when stays in git. A finished plan is then only references, and [closing it](moonwalk.md#pick-spec-plan) is a small step.
-      - id: close
-        say: Close the shipped plan as an issue.
-        when: { manual: "In the pull request that ships it, once every step is built and verified, the judgment steps included, or once it is stopped: the product owner's call." }
+          What the system now is, how it works, why, and the measured facts worth keeping move to the page that owns them: a reason to the explanation, a fact to a reference page, a lesson to the lessons. What the page already says stays where it is. The step keeps its title, its status, one line of what is done and a link with an anchor to where it lives; who tested what when stays in git. A finished plan is then only references, and [deleting it](moonwalk.md#pick-spec-plan) is a small step.
+      - id: delete
+        say: Delete the finished plan.
+        actor: product-owner
+        when: { manual: "Once every step is built and verified, the judgment steps included, or once it is stopped, and the product owner says the docs hold everything: their call, never the agent's." }
         detail: |
-          First, what only the plan holds and no step has moved yet goes home: a reason to the explanation, a fact to a reference page, a lesson to the lessons, analysis an open plan uses to a [design study](design/index.md). Then the plan becomes a closed issue labeled `plan` and its file is deleted. The body keeps what no commit holds: the goal, the outcome, the decisions with the rejected alternatives and why, where its knowledge lives, one line per step, and the plan and close dates. A shipped plan closes as completed; one that did not ship closes as not planned, saying cancelled, superseded or reverted. Its remaining backlog returns to the Project as cards, decided item by item.
+          A finished plan may stay in `docs/work/` a while. Before it goes, what only the plan holds goes home: a reason, a decision with its rejected alternatives, to the explanation; a fact to a reference page; a lesson to the lessons; analysis an open plan uses to a [design study](design/index.md). Its remaining backlog returns to the Project as cards, decided item by item. Then the file is deleted, with plain `rm`, and git keeps its history: `git log --diff-filter=D -- docs/work/` lists every deleted plan.
   - id: branch
     title: Branch and work on it
     actor: product-owner

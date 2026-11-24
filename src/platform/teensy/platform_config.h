@@ -89,6 +89,8 @@ constexpr bool hasEncoderChoice = false;
 constexpr bool hasFsSegments = false;
 /// Whether any IP stack is present, which is what UDP interop gates on.
 constexpr bool hasNetwork = hasWiFi || hasEthernet;
+/// One core, so one thread runs the layers.
+constexpr uint8_t renderThreads = 1;
 
 /// True: the firmware finds the interface at boot, the board's own PHY or else a W5500, so the wiring is not a setting.
 constexpr bool ethPhyIsFixed = true;

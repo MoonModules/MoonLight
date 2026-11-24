@@ -36,6 +36,7 @@ Steps: [Set up a driver or service for the hardware](../../moonwalk.md#driver-se
 - **`scanRate`** is read off the panel's label or listing, not calculated: two panels of the same size can scan differently. A 1/32-scan panel needs the `e` line; on 1/16 that pin is free.
 - **`peripheral`** matters on a P4, which has one LCD_CAM and one Parlio: a board already driving LED strips from one needs the panel on the other.
 - **`clockEdge`**: every pixel one column over means the other edge.
+- **`fixture`** names the panel's color order: a panel showing red as blue takes the BGR profile. A new driver starts on RGB.
 
 ## Depth, refresh and brightness
 

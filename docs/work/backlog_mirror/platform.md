@@ -350,12 +350,13 @@ The rev-3 image exists: `esp32/sdkconfig.defaults.esp32p4rev3` sets `CONFIG_ESP3
 
 Kind: Feature · Platform: Pi · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287086230)
 
-Suggested on Discord after the Teensy port: a Pi runs MoonLight today as the Linux desktop build, so its LEDs are reached only through the network drivers.
-Driving a strip from the Pi's own header needs the platform backend that does not exist yet (`src/platform/rpi/`, the same prerequisite as the sensor item below), and a `LedPeripheral` behind it.
-The routes differ by model: on a Pi 4 and earlier, DMA through the PWM, PCM or SPI peripheral, the way rpi_ws281x does; on a Pi 5 the header sits behind the RP1 chip, whose PIO blocks are the route.
-SPI is the one path every model shares, one lane per SPI bus with each WS2812 bit encoded in SPI bits, and the place to start.
-Portable GPIO libraries (WiringPi, libgpiod) are too slow for LED timing, so they serve buttons and relays, not this.
-On a Pi 5, own PIO programs reach the hardware through the kernel's PIO driver, which piolib shows; Adafruit's PioMatter proves HUB75 that way, and HUB75 on a Pi is a second backend once this one exists.
+Suggested on Discord after the Teensy port: a Pi drives WS2812 strips from its own header, as an ESP32 or a Teensy does.
+The prerequisite exists: `src/platform/rpi/` drives HUB75 on a Pi 5 through the RP1's PIO (`/dev/pio0`, frames fed by DMA), and `LedHwBlock::PiHeader` already guards the header against two drivers.
+The strips go behind `ParallelLedDriver` as two more `LedPeripheral` backends, so the correction, the encode and the 74HCT595 pin expander (up to 64 strands) are reused byte for byte:
+- Pi 5: a PIO program clocking the slot stream out of 8 or 16 header pins, the expander's shift clock as side-set.
+- Pi 3 and 4: SMI, the Broadcom chip's DMA-fed parallel bus (the i80 counterpart), its write strobe as the shift clock; iosoft's rpi_pixleds is the study material.
+HUB75 on a Pi 3 or 4 is Plan-20261030's step 7 (the GPIO engine).
+The steps, starting with measuring each bus's rate: docs/work/Plan-20261123 - LEDs from a Pi's own pins.
 The research, with sources: [the LED-driver analysis](../../design/leddriver.md).
 
 ### LightCrafter 16: questions for the maker (2026-10-07)

@@ -119,6 +119,10 @@ struct Pool {
     uint16_t     count = 0;        ///< how many slots the arrays hold
     uint32_t     ageCarry_ = 0;    ///< sub-frame aging remainder (see age())
     int64_t      gCarry_ = 0;      ///< sub-unit gravity remainder (see gravity())
+    uint32_t     seed_ = 0x9E3779B9u;   ///< the emitters' moving seed, the pool's own, so each layer's sparks are the same on any number of render threads
+
+    /// The next emit seed, a golden-ratio step from the last, since a fixed one throws identical sparks every frame.
+    uint32_t nextSeed() { return seed_ += 0x9E3779B9u; }
 
     /// Whether every lane is allocated and the pool holds room for at least one particle.
     bool valid() const { return x && y && vx && vy && ttl && hue && count > 0; }

@@ -40,7 +40,7 @@ namespace mm::platform {
 
 /// The signals fanned out to all three lanes: each is a GPIO, with its 40-pin header pin in the trailing comment (@xref{shared-signals|Shared signals}).
 namespace shared {
-constexpr uint8_t kOe  = 18;   ///< header pin 12, active low (panel OE-); PWM0-capable (ALT5), which the GPIO engine's OE pulser needs
+constexpr uint8_t kOe  = 18;   ///< header pin 12, active low (panel OE-); PWM0-capable (ALT5)
 constexpr uint8_t kClk = 17;   ///< header pin 11, pixel clock (the PIO engine's side-set pin)
 constexpr uint8_t kStb = 4;    ///< header pin 7, strobe / latch
 constexpr uint8_t kA   = 22;   ///< header pin 15, row address bit 0

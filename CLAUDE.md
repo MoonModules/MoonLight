@@ -104,7 +104,7 @@ An agent reads the process before acting on it, and its memory points to the pro
 
 ### Main and branch
 
-**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Closing the plan, as a closed issue labeled `plan`, is the product owner's call**, because "the code is written" is not "the plan is realized".
+**The product owner creates every branch**, and main stays releasable: [the branch](docs/moonwalk.md#branch). A change goes from [a spec and a plan](docs/moonwalk.md#pick-spec-plan) to a pull request the plan describes. **Deleting a finished plan is the product owner's call**, because "the code is written" is not "the plan is realized".
 
 **A contributed pull request follows [Contribute a pull request](docs/moonwalk.md#contribute-pr)**. The contributor vouches for every line, agent-written or not, answers reviewers in their own words, and says what an agent wrote and what was tested. **A contribution is reviewed and finished as [Review and finish a contribution](docs/moonwalk.md#review-contribution) describes**.
 
@@ -136,4 +136,4 @@ On "run pre-release": [Release](docs/moonwalk.md#release). Every commit and merg
 
 Published at [moonmodules.org/MoonLight](https://moonmodules.org/MoonLight/); sources under `docs/`, laid out in [the documentation hierarchy](docs/contributing/documentation-standards.md#the-hierarchy). Docs describe the system as it is; git is the history; specs precede implementation.
 
-`docs/work/` is the exemption to present tense: it holds the plans being built and `backlog_mirror/`, the generated copy of [the Project](https://github.com/users/MoonModules/projects/5)'s cards, where the backlog lives; design studies are in [docs/design/](docs/design/index.md). A shipped or stopped plan is a [closed issue labeled `plan`](https://github.com/MoonModules/MoonLight/issues?q=label%3Aplan%20is%3Aclosed), and hard-won lessons are in [lessons.md](docs/contributing/lessons.md). Agents read the work when planning, on request, and it shrinks under mandatory subtraction like everything else.
+`docs/work/` is the exemption to present tense: it holds the plans being built and `backlog_mirror/`, the generated copy of [the Project](https://github.com/users/MoonModules/projects/5)'s cards, where the backlog lives; design studies are in [docs/design/](docs/design/index.md). A finished or stopped plan stays until the product owner deletes it, git keeping its history, and hard-won lessons are in [lessons.md](docs/contributing/lessons.md). Agents read the work when planning, on request, and it shrinks under mandatory subtraction like everything else.

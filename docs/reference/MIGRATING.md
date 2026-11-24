@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A HUB75 driver's fixture profile sets the panel's color order
+
+**Action: *re-set a control*, on a HUB75 driver whose `fixture` is not RGB.**
+
+The HUB75 driver puts a 3-channel profile's colors on the panel's lines in the profile's order, as the LED strip drivers do, so a BGR panel shows true colors on the BGR profile, where every 3-channel profile showed as RGB. A new driver starts on RGB; one saved on another 3-channel profile now shows that order, so set it to RGB, or to the panel's own order ([HUB75 panels](hardware/hub75-panels.md#settings-the-panel-cannot-tell-you)).
+
 ### Audio sync is the MoonModules format, its header `MM`
 
 **Action: *update as usual*, every board that sends or receives audio sync in the same round.**

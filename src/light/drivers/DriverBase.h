@@ -169,6 +169,9 @@ public:
     /// Whether this driver's motion is currently parked.
     bool motionHeld() const { return correction_.motionHeld; }
 
+    /// The profile a new driver of this type starts on, by name, or null for none.
+    const char* defaultFixtureName() const { return defaultFixture_; }
+
 protected:
     Layer* layer_ = nullptr;
 

@@ -7,11 +7,12 @@
 #include <cstdio>
 
 #include "core/util/ClockSync.h"   // FleetTime: the fleet clock, back to the local clock per case
+#include "light/util/Palette.h"    // Palettes: each case starts on the default palette
 #include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on
 #include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
 #include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
 
-// Every test case and subcase rerun starts on the real clock and its own local time, the HDMI stand-in and a multicast that skips the host's network, on a machine that is `Other` whatever the board, and with the real PIO out of reach.
+// Every case and subcase rerun starts on the real clock and its own local time, the HDMI stand-in, a multicast off the host's network, an `Other` machine, the real PIO out of reach and the default palette.
 struct FreshFixturesPerTest : doctest::IReporter {
     explicit FreshFixturesPerTest(const doctest::ContextOptions&) {}
     static void reset() {
@@ -22,6 +23,8 @@ struct FreshFixturesPerTest : doctest::IReporter {
         mm::FleetTime::reset();   // the process-wide fleet time, which a case's Devices tree may have claimed
         mm::platform::setTestMachineRest(mm::platform::Machine::Other);
         mm::platform::setTestHub75PioGateOpen(false);
+        mm::Palettes::applyRequest();   // a request a case's DemoReel left pending, taken here rather than inside the next case's first frame
+        mm::Palettes::setActive(0);     // and the default palette back
     }
     void test_case_start(const doctest::TestCaseData&) override { reset(); }
     void test_case_reenter(const doctest::TestCaseData&) override { reset(); }

@@ -385,13 +385,17 @@ const char* cpuInfo() {
     // Frequency from the running clock (esp_rom_get_cpu_ticks_per_us == MHz), not the sdkconfig macro, so a config/hardware mismatch shows up. Cores from esp_chip_info, same source chipModel uses.
     static char buf[24] = {};
     if (!buf[0]) {
-        esp_chip_info_t info;
-        esp_chip_info(&info);
         std::snprintf(buf, sizeof(buf), "%u MHz, %u cores",
                       static_cast<unsigned>(esp_rom_get_cpu_ticks_per_us()),
-                      static_cast<unsigned>(info.cores));
+                      static_cast<unsigned>(cpuCores()));
     }
     return buf;
+}
+
+uint8_t cpuCores() {
+    esp_chip_info_t info;
+    esp_chip_info(&info);
+    return info.cores;
 }
 
 const char* deviceIp() {

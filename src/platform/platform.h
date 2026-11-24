@@ -290,6 +290,8 @@ const char* sdkVersion();
 
 /// CPU frequency and core count, read from the running hardware so a downclock is visible in the UI.
 const char* cpuInfo();
+/// The cores this machine runs code on, at least one.
+uint8_t cpuCores();
 
 /// PSRAM interface type and clock, such as "octal, 80 MHz", and empty where this build has no PSRAM.
 const char* psramType();

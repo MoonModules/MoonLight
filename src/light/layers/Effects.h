@@ -1,7 +1,8 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "core/module/Scheduler.h"   // topOfType: the Layouts it finds when nothing injected one
+#include "core/module/Scheduler.h"   // topOfType: the Layouts it finds by type, when unset
+#include "core/util/WorkerPool.h"    // the layers rendered side by side
 #include "light/moonlive/MoonLivePalette.h"   // the scripted palette, run before the layers
 #include "light/layers/Layer.h"
 #include "light/layouts/Layouts.h"
@@ -39,27 +40,32 @@ public:
 
     /// Re-wire the children before they build, so a layer added through the API is wired too.
     void prepare() override {
-        // Found by type when nothing injected it, so a tree built from a document needs no wiring.
+        // Found by type when unset, so a tree built from a document wires itself.
         if (!layouts_)
             if (Scheduler* s = Scheduler::instance()) layouts_ = static_cast<Layouts*>(s->topOfType("Layouts"));
         setLayouts(layouts_);
     }
 
-    /// Tick every enabled layer child, in container order; role-filtered, since a stray child ticked here would run at the wrong depth.
+    /// Start the render workers: one thread a core, the render loop among them.
+    void setup() override {
+        MoonModule::setup();
+        // The stack, priority and core a FreeRTOS worker would take, under the drivers, audio and network on the second core; no board starts one yet (renderThreads 1).
+        pool_.start(static_cast<uint8_t>(platform::cpuCores() - 1), 12288, 4, 1);
+    }
+
+    /// How many render workers run beside the render loop: a computer's cores less one, none on a device.
+    uint8_t renderWorkers() const { return pool_.workers(); }
+
+    /// Tick every enabled layer child, side by side on the render workers; role-filtered, since a stray child ticked here would run at the wrong depth.
     void tick() MM_NONBLOCKING override {
         // First, so every layer this frame samples the same entries: Drivers ticks too late for it.
+        Palettes::applyRequest();
         MoonLivePalette::tickActive(platform::millis());
-        // An invisible layer of a composite shows nothing, so it renders nothing; a lone layer is read as it is, so it always renders.
-        const bool composited = enabledLayerCount() > 1;
-        for (uint8_t i = 0; i < childCount(); i++) {
-            MoonModule* c = child(i);
-            if (!c || c->role() != ModuleRole::Layer) continue;
-            if (c->respectsEnabled() && !c->enabled()) continue;
-            if (composited && !static_cast<Layer*>(c)->contributes()) continue;
-            uint32_t start = platform::micros();
-            c->tick();
-            c->addAccumUs(platform::micros() - start);
-        }
+        // A rebuild a modifier asked for runs here, one layer at a time, before the layers render side by side.
+        for (uint8_t i = 0; i < childCount(); i++)
+            if (MoonModule* c = child(i); c && c->role() == ModuleRole::Layer) static_cast<Layer*>(c)->applyPendingRebuild();
+        composited_ = enabledLayerCount() > 1;
+        pool_.run(childCount(), &tickChild, this);   // returns once every layer has rendered, so the composite reads finished buffers
     }
 
     /// The first enabled layer, which `Drivers` reads for the physical dimensions; falls back to a disabled layer so geometry stays queryable while everything is off.
@@ -107,7 +113,22 @@ public:
     }
 
 private:
+    /// Render child `i` when it is a layer due this frame, timing it.
+    static void tickChild(void* ctx, uint8_t i) MM_NONBLOCKING {
+        const auto& self = *static_cast<const Effects*>(ctx);
+        MoonModule* c = self.child(i);
+        if (!c || c->role() != ModuleRole::Layer) return;
+        if (c->respectsEnabled() && !c->enabled()) return;
+        // An invisible layer of a composite is skipped; a lone layer is read as it is, so it always renders.
+        if (self.composited_ && !static_cast<Layer*>(c)->contributes()) return;
+        const uint32_t start = platform::micros();
+        c->tick();
+        c->addAccumUs(platform::micros() - start);
+    }
+
     Layouts* layouts_ = nullptr;
+    WorkerPool pool_;           ///< the render workers beside the render loop
+    bool composited_ = false;   ///< whether this frame blends several layers, set before they render
 };
 
 } // namespace mm

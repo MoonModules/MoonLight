@@ -188,7 +188,7 @@ Effects on the measured notes, each gaining from every change step 11 scores, si
 
 ## After action review (2026-11-09)
 
-Kept here for the plan's closed issue; its lessons are in [lessons.md](../contributing/lessons.md#lessons-from-the-audio-plans-measured-steps-notes-and-drums-november-2026) and its stop rule in [the plan process](../moonwalk.md#pick-spec-plan).
+Kept here until the plan is deleted; its lessons are in [lessons.md](../contributing/lessons.md#lessons-from-the-audio-plans-measured-steps-notes-and-drums-november-2026) and its stop rule in [the plan process](../moonwalk.md#pick-spec-plan).
 
 - **Planned:** one descriptor a step, each landing in `AudioSpectrumEffect` and a showcase, judged on the bench before the next.
 - **Happened:** steps 1 to 5 in a week from the textbook; step 6 to Anjin's team with the tempo harness; steps 7 to 10 and 12 built and waiting for the product owner's look; step 11 added on 2026-11-07, grown to eleven items and closed at its plateau on 2026-11-08; beside them SheetMusic, Soap, the sectioned sync format and Demand.

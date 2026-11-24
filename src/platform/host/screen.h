@@ -32,6 +32,8 @@ bool up(uint32_t display, const HdmiMode& want, HdmiMode& running);
 Surface back();
 /// Show the buffer `back` handed out.
 void present();
+/// Show a `w` × `h` RGB frame scaled by the display itself onto the screen's rectangle at (`x0`, `y0`), `outW` × `outH`, the bars around it black; false where the display cannot, so the loop scales it into `back` instead.
+bool presentScaled(const uint8_t* rgb, uint16_t w, uint16_t h, uint16_t x0, uint16_t y0, uint16_t outW, uint16_t outH);
 /// Release the display, giving it back its own mode.
 void down();
 /// Handle the platform's own events for the output, once each loop.

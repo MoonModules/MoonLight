@@ -10,16 +10,17 @@
 #include "light/modifiers/RandomMapModifier.h"
 #include "light/effects/EffectBase.h"
 #include "platform/platform.h"
+#include "golden_frame.h"   // LayerFixture, the shared grid and layer
 
 #include <vector>
 #include <utility>
 #include <cstring>
 
-// The live (per-frame) modifier seam: Layer::tick() applies a live modifier's modifyLive remap to the rendered buffer every frame WITHOUT a mapping rebuild, and runs that pass ONLY when an enabled modifier reports hasModifyLive(), a static-only Layer pays nothing (the pay-for-what-you-use guarantee). These pin both: the pass runs and remaps when a Rotate is present, and is skipped otherwise.
+// The live modifier seam: a live modifier remaps the rendered buffer every frame with no rebuild, and a Layer with static modifiers alone skips that pass.
 
 namespace {
 
-// A tiny effect that writes a fixed position-dependent gradient into the buffer (R = x, G = y), so a coordinate remap (rotation) visibly rearranges the bytes. Deterministic per frame, no time dependence, so any frame-to-frame change is the live pass, not the effect animating itself.
+// A fixed gradient (R = x, G = y), the same every frame, so a rotation visibly rearranges the bytes and any change between frames is the live pass.
 class GradientEffect : public mm::EffectBase {
 public:
     void tick() MM_NONBLOCKING override {
@@ -47,22 +48,24 @@ std::vector<uint8_t> frameAt(mm::Layer& layer, uint32_t t) {
     return out;
 }
 
+// A w x h grid showing the gradient through a RotateModifier turning at `speed`, on the suite's shared layer fixture.
+struct RotatingGradient {
+    mm::golden::LayerFixture fx;
+    mm::Layer& layer = fx.layer;
+    mm::RotateModifier& rot = fx.own<mm::RotateModifier>();
+    RotatingGradient(mm::lengthType w, mm::lengthType h, uint8_t speed) : fx(w, h) {
+        fx.add(fx.own<GradientEffect>());
+        rot.speed = speed;
+        fx.add(rot);
+    }
+};
+
 } // namespace
 
 // With a Rotate present, the live pass rotates the gradient each frame as the angle advances, so two frames at different times differ. A static GradientEffect alone would produce identical frames, so any difference is the live remap.
 TEST_CASE("Layer live pass: Rotate remaps the buffer per frame") {
-    mm::Layouts layouts;
-    mm::GridLayout grid;
-    grid.width = 16; grid.height = 16; grid.depth = 1;
-    layouts.addChild(&grid);
-    mm::Layer layer;
-    layer.setLayouts(&layouts);
-    layer.setChannelsPerLight(3);
-    GradientEffect fx; layer.addChild(&fx);
-    mm::RotateModifier rot; rot.speed = 200;   // fast enough to cross several angle steps
-    layer.addChild(&rot);
-    layouts.applyState();
-    layer.applyState();
+    RotatingGradient r(16, 16, 200);   // fast enough to cross several angle steps
+    mm::Layer& layer = r.layer;
 
     auto f0 = frameAt(layer, 1000);
     auto f1 = frameAt(layer, 1000);   // same time → same angle → identical frame
@@ -113,7 +116,7 @@ TEST_CASE("Layer live pass: a disabled live modifier does not run") {
     mm::platform::setTestNowMs(0);
 }
 
-// COALESCED REBUILD: two beat-driven modifiers (RandomMap) on one Layer both ask for a rebuild on a beat; Layer::tick() must rebuild ONCE (not re-enter prepare per modifier) and the Layer must stay valid, the composed mapping changes, no crash.
+// COALESCED REBUILD: two beat-driven modifiers (RandomMap) on one Layer both ask for a rebuild on a beat; the Layer keeps ONE pending rebuild, which the next frame applies before it renders, and stays valid.
 TEST_CASE("Layer coalesces rebuilds from two dynamic modifiers") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -150,10 +153,33 @@ TEST_CASE("Layer coalesces rebuilds from two dynamic modifiers") {
     CHECK(beforeOk);   // the composed two-permutation mapping is itself a bijection
 
     // Advance past a beat boundary in small ticks (both modifiers tick each frame).
-    for (uint32_t t = 1000; t <= 2500; t += 50) { mm::platform::setTestNowMs(t); layer.tick(); }
+    for (uint32_t t = 1000; t <= 2500; t += 50) { mm::platform::setTestNowMs(t); layer.applyPendingRebuild(); layer.tick(); }   // as Effects runs a frame
     mm::platform::setTestNowMs(0);
 
     auto [after, afterOk] = mapping();
     CHECK(afterOk);            // still a valid bijection after the coalesced rebuild
     CHECK(before != after);    // a beat actually reshuffled the composed mapping
+}
+
+// The incremental warp the Layer runs for an affine live map draws the same frame as mapping each light through modifyLive.
+TEST_CASE("Layer live pass: the stepped affine warp matches the per-light map") {
+    RotatingGradient r(20, 12, 37);
+    mm::Layer& layer = r.layer;
+    mm::RotateModifier& rot = r.rot;
+    mm::platform::setTestNowMs(1000);
+    layer.tick();
+    const auto frame = frameAt(layer, 1777);   // some angle part way round
+    const mm::Coord3D box{20, 12, 1};
+    int differ = 0;
+    for (mm::lengthType y = 0; y < 12; y++)
+        for (mm::lengthType x = 0; x < 20; x++) {
+            mm::Coord3D src{x, y, 0};
+            rot.modifyLive(src, box);
+            const bool in = src.x >= 0 && src.x < 20 && src.y >= 0 && src.y < 12;
+            const uint8_t* p = frame.data() + (static_cast<size_t>(y) * 20 + x) * 3;
+            const uint8_t wantR = in ? static_cast<uint8_t>(src.x) : 0, wantG = in ? static_cast<uint8_t>(src.y) : 0;
+            if (p[0] != wantR || p[1] != wantG) differ++;
+        }
+    CHECK(differ == 0);   // the stepped sum and the per-light product are the same integers
+    mm::platform::setTestNowMs(0);
 }
