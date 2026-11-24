@@ -1,7 +1,7 @@
 /// @module Hub75PiOutput
 /// @also Hub75Driver, Correction
 
-/// What the Raspberry Pi outputs share, pinned on the Pi PIO output, on a desktop, no panels attached; a case only one output has lives in its own file.
+/// What the Raspberry Pi outputs share, pinned on each, the Pi PIO output and the Pi GPIO output, on a desktop, no panels attached; a case only one output has lives in its own file.
 
 #include "doctest.h"
 #include "light/drivers/Correction.h"
@@ -23,7 +23,7 @@ void checkPlainPanelStatus(mm::Hub75Driver& driver) {
     CHECK(std::string(driver.status()) == std::string("16x32, 6-bit, ") + S::label);
 }
 
-TEST_CASE_TEMPLATE("Hub75Driver on a Pi output starts its one bitDepth at 6 and hands it over as the engine's depth", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75Driver on a Pi output starts its one bitDepth at 6 and hands it over as the engine's depth", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 32);
@@ -34,7 +34,7 @@ TEST_CASE_TEMPLATE("Hub75Driver on a Pi output starts its one bitDepth at 6 and 
     CHECK(std::string(r->driver.status()) == std::string("16x32, 4-bit, ") + S::label);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput offers 2 to 8 bits, and a depth outside them is the engine's refusal, in the status", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput offers 2 to 8 bits, and a depth outside them is the engine's refusal, in the status", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 32);
@@ -55,7 +55,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput offers 2 to 8 bits, and a depth outside them i
     CHECK(S::options().bitDepth == 8);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput hands light i to canvas pixel i, row by row", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput hands light i to canvas pixel i, row by row", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 32);
@@ -71,7 +71,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput hands light i to canvas pixel i, row by row", 
     CHECK(S::pixel(5, 3)[0] == 40); CHECK(S::pixel(5, 3)[1] == 50); CHECK(S::pixel(5, 3)[2] == 60);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput refuses a layout smaller than one panel, in full, and opens nothing", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput refuses a layout smaller than one panel, in full, and opens nothing", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(4, 2);   // 8 lights, a panel is 16 by 32
@@ -81,7 +81,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput refuses a layout smaller than one panel, in fu
     CHECK(S::width() == 0);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput takes a layout of the canvas turned on its side as a match, since the layout owns rotation", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput takes a layout of the canvas turned on its side as a match, since the layout owns rotation", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = std::make_unique<Rig>(1, 1, 32, 16, uint8_t{1}, false);   // one panel 32 across and 16 down, its rows walked down the columns
@@ -91,7 +91,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput takes a layout of the canvas turned on its sid
     checkPlainPanelStatus<S>(r->driver);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput follows two stacked layouts: two panels' worth of lights make two outputs, and the status says so", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput follows two stacked layouts: two panels' worth of lights make two outputs, and the status says so", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     mm::GridLayout second;   // outlives the rig, whose Layouts holds it
@@ -108,7 +108,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput follows two stacked layouts: two panels' worth
     CHECK(S::options().parallel == 2);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput shows as many of a larger layout's lights as the panels hold", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput shows as many of a larger layout's lights as the panels hold", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(20, 40);
@@ -121,7 +121,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput shows as many of a larger layout's lights as t
     CHECK(S::pixel(15, 31)[0] == 1); CHECK(S::pixel(15, 31)[2] == 3);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput joins a light count other than the canvas's with the walk's panel, so none hides another", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput joins a light count other than the canvas's with the walk's panel, so none hides another", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(20, 40);   // a raster wider than the 16x32 panel: another light count, and panel 1 leaves plain rows
@@ -132,7 +132,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput joins a light count other than the canvas's wi
           "the layout's panel 1 does not run in plain rows of 16: lay the panels out in cabling order, each in plain rows with snake off");
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput warns of lights past the last whole panel, and judges only the panels it drives", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput warns of lights past the last whole panel, and judges only the panels it drives", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     mm::GridLayout extra;   // 8 lights after one 16x32 panel in plain rows; outlives the rig, whose Layouts holds it
@@ -148,19 +148,19 @@ TEST_CASE_TEMPLATE("Hub75PiOutput warns of lights past the last whole panel, and
     CHECK(std::string(r->driver.status()) == "layout 520 lights, panels 512");
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput shows a wide profile's red, green and blue, wherever the profile puts them", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput shows a wide profile's red, green and blue, wherever the profile puts them", S, mm::PioSeam, mm::GpioSeam) {
     typename S::RecordGuard guard;
     const mm::WideProfile wide;
     mm::showsColorsThrough<S>(wide.roles, 32);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput shows a white-first profile's colors, not its white", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput shows a white-first profile's colors, not its white", S, mm::PioSeam, mm::GpioSeam) {
     typename S::RecordGuard guard;
     const mm::ChannelRole wrgb[4] = {mm::ChannelRole::White, mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::Blue};
     mm::showsColorsThrough<S>(wrgb, 4);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput hands over a layout with fewer lights than its box, the rest dark", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput hands over a layout with fewer lights than its box, the rest dark", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 32, 20);   // a ring or any shape short of its box
@@ -172,7 +172,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput hands over a layout with fewer lights than its
     CHECK(S::pixel(4, 1)[0] == 0);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput refuses panels another driver drives, and leaves them to it", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput refuses panels another driver drives, and leaves them to it", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto first = Rig::raster(16, 32);
@@ -189,7 +189,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput refuses panels another driver drives, and leav
     CHECK(S::width() == 16);   // still the first driver's
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput's lane canvas counts in the driver's memory while the panels run, and goes with them", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput's lane canvas counts in the driver's memory while the panels run, and goes with them", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::cabled(2, 1, 16, 32);   // two 16x32 panels in cabling order, one lane: a 1024-light canvas
@@ -209,7 +209,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput's lane canvas counts in the driver's memory wh
     CHECK(r->driver.dynamicBytes() < 1024 * 3 * 2);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput's memory readout is the frame, the canvas and the light scratch while the panels run, and 0 after a release, for a wiring of 32 channels", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput's memory readout is the frame, the canvas and the light scratch while the panels run, and 0 after a release, for a wiring of 32 channels", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::cabled(2, 1, 16, 32);   // two 16x32 panels in one lane: a 1024-light canvas
@@ -226,7 +226,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput's memory readout is the frame, the canvas and 
     CHECK(r->driver.dynamicBytes() == 0);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput closes the panels on release", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput closes the panels on release", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 32);
@@ -244,32 +244,32 @@ std::unique_ptr<mm::PiRig<S>> openedRaster() {
     return r;
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput shows a stall that is already there at the first second after a reopen", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput shows a stall that is already there at the first second after a reopen", S, mm::PioSeam, mm::GpioSeam) {
     typename S::RecordGuard guard;
     auto r = openedRaster<S>();
-    mm::platform::setTestHub75PioStalled(true);
+    S::setStalled(true);
     r->driver.tick1s();
-    REQUIRE(std::string(r->driver.status()).find("the PIO is stalled") != std::string::npos);
+    REQUIRE(std::string(r->driver.status()).find(std::string("the ") + S::label + " is stalled") != std::string::npos);
 
     r->driver.prepare();   // the seam is still stalled
     r->driver.tick1s();
-    CHECK(std::string(r->driver.status()).find("the PIO is stalled") != std::string::npos);
+    CHECK(std::string(r->driver.status()).find(std::string("the ") + S::label + " is stalled") != std::string::npos);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput counts a reopened panel's failed submits from that open", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput counts a reopened panel's failed submits from that open", S, mm::PioSeam, mm::GpioSeam) {
     typename S::RecordGuard guard;
     auto r = openedRaster<S>();
-    mm::platform::setTestHub75PioSubmitErrors(3);
+    S::setSubmitErrors(3);
     r->driver.tick1s();
     REQUIRE(r->driver.severity() == mm::MoonModule::Severity::Warning);
 
-    mm::platform::setTestHub75PioSubmitErrors(0);   // the next open's seam counts from 0
+    S::setSubmitErrors(0);   // the next open's seam counts from 0
     r->driver.prepare();
     r->driver.tick1s();
     checkPlainPanelStatus<S>(r->driver);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput places lights by the panels as opened, whatever a control reads before the reopen", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput places lights by the panels as opened, whatever a control reads before the reopen", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(32, 32);   // two 16 by 32 panels in one lane
@@ -286,7 +286,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput places lights by the panels as opened, whateve
 
 // Lights run panel by panel in cabling order, so a Pi output puts each where its panel sits on the lane canvas; the expected cells are the placement rule by hand.
 
-TEST_CASE_TEMPLATE("Hub75Driver on a Pi output puts the second panel of a lane to the right of the first", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75Driver on a Pi output puts the second panel of a lane to the right of the first", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(32, 32);   // 1024 lights: two 16 by 32 panels
@@ -307,7 +307,7 @@ TEST_CASE_TEMPLATE("Hub75Driver on a Pi output puts the second panel of a lane t
     CHECK(S::pixel(31, 31)[1] == 200);
 }
 
-TEST_CASE_TEMPLATE("Hub75Driver on a Pi output stacks the lanes: six panels, two to a lane on three lanes, make a 32 by 96 canvas", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75Driver on a Pi output stacks the lanes: six panels, two to a lane on three lanes, make a 32 by 96 canvas", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(32, 96);   // 3072 lights: six 16 by 32 panels
@@ -324,7 +324,7 @@ TEST_CASE_TEMPLATE("Hub75Driver on a Pi output stacks the lanes: six panels, two
     CHECK(S::pixel(31, 95)[2] == 200);
 }
 
-TEST_CASE_TEMPLATE("Hub75Driver on a Pi output leaves a lane of one panel as it was: light i is canvas pixel i", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75Driver on a Pi output leaves a lane of one panel as it was: light i is canvas pixel i", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(16, 96);   // three 16 by 32 panels, one to a lane
@@ -337,7 +337,7 @@ TEST_CASE_TEMPLATE("Hub75Driver on a Pi output leaves a lane of one panel as it 
 
 // The panels follow the layout; Hub75Fit's cases pin the geometry text, these that the output shows it whole and leaves the panels closed.
 
-TEST_CASE_TEMPLATE("Hub75PiOutput derives the parallel lanes from the layout, and the card has no such control", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput derives the parallel lanes from the layout, and the card has no such control", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::cabled(2, 3, 16, 32);   // six 16 by 32 panels
@@ -348,7 +348,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput derives the parallel lanes from the layout, an
     CHECK(std::string(r->driver.status()) == std::string("32x96, 6-bit, ") + S::label);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput names the fix in full for panels that do not cable into the lane, and opens nothing", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput names the fix in full for panels that do not cable into the lane, and opens nothing", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(112, 32);   // seven 16 by 32 panels
@@ -363,7 +363,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput names the fix in full for panels that do not c
     CHECK(S::width() == 0);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput says how many lanes the board drives when the layout needs more", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput says how many lanes the board drives when the layout needs more", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(64, 32);   // four 16 by 32 panels, one to a lane: four outputs
@@ -375,7 +375,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput says how many lanes the board drives when the 
 }
 
 // A raster across panels in series matches every count, so only the walk catches it: the wall shows bands.
-TEST_CASE_TEMPLATE("Hub75PiOutput warns when a raster layout feeds panels in series, naming the panel and the fix, and the panels still run", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput warns when a raster layout feeds panels in series, naming the panel and the fix, and the panels still run", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::raster(256, 64);   // one raster across two 128 by 64 panels
@@ -389,7 +389,7 @@ TEST_CASE_TEMPLATE("Hub75PiOutput warns when a raster layout feeds panels in ser
     CHECK(S::width() == 256);
 }
 
-TEST_CASE_TEMPLATE("Hub75PiOutput warns when a Panels layout snakes inside its panels, the Panels layout's default", S, mm::PioSeam) {
+TEST_CASE_TEMPLATE("Hub75PiOutput warns when a Panels layout snakes inside its panels, the Panels layout's default", S, mm::PioSeam, mm::GpioSeam) {
     using Rig = mm::PiRig<S>;
     typename S::RecordGuard guard;
     auto r = Rig::cabled(2, 1, 16, 32, true);
@@ -397,4 +397,28 @@ TEST_CASE_TEMPLATE("Hub75PiOutput warns when a Panels layout snakes inside its p
     r->open();
     CHECK(r->driver.severity() == mm::MoonModule::Severity::Warning);
     CHECK(std::string(r->driver.status()).rfind("the layout's panel 1 does not run in plain rows of 16", 0) == 0);
+}
+
+TEST_CASE_TEMPLATE("Hub75PiOutput applies brightness in the engine and leaves the curve to the correction, the values kept whole", S, mm::PioSeam, mm::GpioSeam) {
+    using Rig = mm::PiRig<S>;
+    typename S::RecordGuard guard;
+    auto r = Rig::raster(16, 32);
+    mm::showGrayAt(*r, 128, 200);
+    CHECK(S::brightness() == 128);
+    CHECK(S::pixel(0, 0)[0] == 200);   // the engine dims it by time or scales the code, not the correction's value
+}
+
+TEST_CASE_TEMPLATE("Hub75PiOutput refuses a rows count other than 16, 32 or 64, in rows rather than in the scan rate the card hides", S, mm::PioSeam, mm::GpioSeam) {
+    using Rig = mm::PiRig<S>;
+    typename S::RecordGuard guard;
+    for (const uint8_t rows : {uint8_t{40}, uint8_t{17}, uint8_t{33}, uint8_t{8}}) {   // 17 and 33 halve, in whole numbers, to the scans 8 and 16
+        CAPTURE(static_cast<int>(rows));
+        auto r = Rig::raster(24, rows);
+        r->driver.panelRows = rows;
+        r->driver.panelCols = 24;
+        r->open();
+        CHECK(r->driver.severity() == mm::MoonModule::Severity::Error);
+        CHECK(std::string(r->driver.status()) == "the scan is half the panel's rows, so rows must be 16, 32 or 64");
+        CHECK(S::width() == 0);
+    }
 }

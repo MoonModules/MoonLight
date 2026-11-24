@@ -3,6 +3,7 @@
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/Hub75BusOutput.h"   // the output that drives the LCD_CAM and Parlio backends
 #include "light/drivers/Hub75Fit.h"         // kGeometryMessageMax: the longest status the Pi output writes
+#include "light/drivers/Hub75GpioOutput.h"  // the output that drives the Pi 3/4's GPIO backend
 #include "light/drivers/Hub75Output.h"      // the strategy that takes the corrected frame to the panel
 #include "light/drivers/Hub75PioOutput.h"   // the output that drives the Pi 5's PIO backend
 #include "light/layers/Layer.h"
@@ -15,16 +16,18 @@
 
 namespace mm {
 
-/// What the driver holds in the PIO output's place where no Pi 5 can have one: an empty type, so an ESP32 image carries none of it.
-struct NoPioOutput {
-    /// Takes the driver as the PIO output does, and discards it.
-    explicit NoPioOutput(MoonModule& /*owner*/) {}
+/// What the driver holds in a Pi output's place where no Pi can have one: an empty type, so an ESP32 image carries none of it.
+struct NoPiOutput {
+    /// Takes the driver as a Pi output does, and discards it.
+    explicit NoPiOutput(MoonModule& /*owner*/) {}
 };
 
 /// `output` as a Hub75Output: the PIO output itself.
 inline Hub75Output* asHub75Output(Hub75PioOutput& output) { return &output; }
-/// Where no PIO output exists there is no output to give.
-inline Hub75Output* asHub75Output(NoPioOutput& /*output*/) { return nullptr; }
+/// `output` as a Hub75Output: the GPIO output itself.
+inline Hub75Output* asHub75Output(Hub75GpioOutput& output) { return &output; }
+/// Where no Pi output exists there is no output to give.
+inline Hub75Output* asHub75Output(NoPiOutput& /*output*/) { return nullptr; }
 
 /// Drives HUB75 LED panels straight from the board's own pins, with no receiving card in between.
 /// @card Hub75Driver.png
@@ -43,34 +46,35 @@ inline Hub75Output* asHub75Output(NoPioOutput& /*output*/) { return nullptr; }
 ///
 /// **One driver per peripheral.** A second driver that asks for LCD_CAM, Parlio or a Pi's header while another holds it stays idle with a status naming why, whichever of the two prepares first keeping it. This applies to the ESP32 too: a HUB75 driver yields to a strip driver holding LCD_CAM, and the strip driver to it.
 ///
-/// **Colors.** The panel is the light, so a 3-channel fixture profile's order is the order on the panel's color lines: a BGR panel takes the BGR profile, and a new driver starts on RGB. A wider profile gives its red, green and blue.
+/// **Outputs.** The driver corrects the layout into one 3-channel frame in light order for a Hub75Output. The bus output reads a row-major raster; a Pi output's canvas is a stack of lanes of panels, so it places its lights first (Hub75Canvas.h) and hands the frame to the seam. All three are held by value, so the driver's size and memory readout count them; the Pi outputs are empty where no Pi runs.
 ///
-/// **Outputs.** The driver corrects the layout into one 3-channel frame in light order for a Hub75Output. The bus output reads a row-major raster; the PIO output's canvas is a stack of lanes of panels, so it places its lights first (Hub75Canvas.h) and hands the frame to the seam. Both are held by value, so the driver's size and memory readout count them; the PIO output is empty where no Pi 5 runs.
-///
-/// **Continuous output.** A HUB75 panel is lit only while clocked, so on an ESP32 the platform re-sends one buffer forever and the bus output writes the next frame into it between scans, while tick() starts no transfer; the PIO output hands each frame to the seam, which hands it to the engine's threads.
+/// **Continuous output.** A HUB75 panel is lit only while clocked, so on an ESP32 the platform re-sends one buffer forever and the bus output writes the next frame into it between scans, while tick() starts no transfer; a Pi output hands each frame to its seam, which hands it to the engine's threads.
 ///
 /// **Brightness.** Binary coded modulation lights plane `p` for 2^p time units. Each plane is stored once, not 2^p times: `Hub75Geometry::frameSlots()` has the sizes.
 ///
 /// **The output follows the machine** (platform/machine.h), a case tree with one case per kind and no default. An ESP32 takes the bus output and the backends it offers, LCD_CAM and Parlio per chip. A Pi 5 takes the PIO output, which stays selected when the PIO is refused and shows the reason as its status.
 ///
-/// An earlier Pi shows the Pi card and a refusal. Any other host takes the bus output and its refusal, or the test port's backends.
+/// An earlier Pi takes the GPIO output, which likewise stays selected when the engine refuses. Any other host takes the bus output and its refusal, or the test port's backends.
 ///
-/// **The Pi's settings** (rows, columns and panels per lane, the pixel clock and the latch blank) live on the driver, bound on every host and shown only on the Pi card, so a saved card keeps them, the 8-bit depth included, through a boot where the PIO refuses.
+/// **The Pi's settings** (rows, columns and panels per lane, the pixel clock and the latch blank) live on the driver, bound on every host and shown on the Pi card, the clock and the blank on the PIO's alone, so a saved card keeps them through a boot where the PIO refuses.
+///
+/// The GPIO output keeps its own controls (multiplexing, the carry, the LSB time, the slowdown) on itself.
 ///
 /// **Swapping outputs.** A machine that changes, which a test makes, quiesces the render worker, which reads the output in tick(), closes the running output and points the driver at the other, moving the depth into its range. The change reaches prepare() as a whole-tree re-prepare, the default prepare scope, which joins the encode worker before the output closes.
 ///
 /// **Pins.** The first definition fills them from the chip's first board; the members stay -1, since a blind guess lands on octal PSRAM, USB, UART0 or a strapping pin. WLED's pin array ends `...LAT,OE,CLK`, so a map transcribed as `...CLK,LAT,OE` swaps three lines silently.
 class Hub75Driver : public DriverBase, public Hub75Settings {
 public:
-    /// The silicon block that drives the panel: LCD_CAM, Parlio or a Pi 5's PIO.
+    /// What drives the panel: LCD_CAM, Parlio, a Pi 5's PIO or a Pi 3/4's GPIO.
     /// @guide A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round.
     uint8_t peripheralSel_ = 0;
 
-    /// Bind both outputs to this driver, which they read their settings through.
-    Hub75Driver() : pioOutput_(*this) {
+    /// Bind every output to this driver, which they read their settings through.
+    Hub75Driver() : pioOutput_(*this), gpioOutput_(*this) {
         setDefaultFixtureName("RGB");
         busOutput_.attach(this);
         if (Hub75Output* pio = asHub75Output(pioOutput_)) pio->attach(this);
+        if (Hub75Output* gpio = asHub75Output(gpioOutput_)) gpio->attach(this);
     }
 
     /// Test-only: the output the driver calls through, which a test reads, or replaces with a counting double before the card is defined; a swap here skips selectOutput()'s quiesce and clamp, and defineControls() reverts it.
@@ -102,7 +106,7 @@ public:
     void defineDriverControls() override {
         buildBackendOptions();
         selectOutput();
-        if constexpr (platform::hasHub75Pio) addPanelControls();
+        if constexpr (platform::hasHub75Pio || platform::hasHub75Gpio) addPanelControls();
         output_->addWiringControls(controls_);
         controls_.addSelect("peripheral", peripheralSel_, backendOptions_, backendOptionCount_);
         output_->addControls(controls_);
@@ -132,10 +136,6 @@ public:
         stopScan();   // a reinit keeps the correction scratch, which release() frees
         if (!layer_) {
             setStatus("no layer", Severity::Warning);
-            return;
-        }
-        if (const char* why = machineRefusal()) {
-            setStatus(why, Severity::Error);
             return;
         }
         // One block per peripheral, so a sibling holding it means idle with a status rather than fight, the first to prepare keeping it.
@@ -226,21 +226,13 @@ private:
         running_ = false;
     }
 
-    /// Why this machine refuses the HUB75 output, or null; an earlier Pi's reason names the Pi 5's PIO. One case per machine.
-    static const char* machineRefusal() {
-        switch (platform::machine()) {
-            case platform::Machine::PiGpio: return "HUB75 in this build needs a Pi 5's PIO";
-            case platform::Machine::Esp32: return nullptr;
-            case platform::Machine::Pi5: return nullptr;   // the PIO refuses for itself, with its reason
-            case platform::Machine::Other: return nullptr;   // the bus output refuses for itself
-        }
-        return nullptr;
-    }
-
-    /// The output a backend drives: the Pi's has its own, and LCD_CAM and Parlio share the bus output.
+    /// The output a backend drives: each Pi's has its own, and LCD_CAM and Parlio share the bus output.
     Hub75Output* outputFor(platform::Hub75Backend backend) {
         if (backend == platform::Hub75Backend::Pio) {
             if (Hub75Output* pio = asHub75Output(pioOutput_)) return pio;
+        }
+        if (backend == platform::Hub75Backend::Gpio) {
+            if (Hub75Output* gpio = asHub75Output(gpioOutput_)) return gpio;
         }
         return &busOutput_;
     }
@@ -260,6 +252,7 @@ private:
     /// Add the Pi's panel and clock settings, hidden while another output runs: they stay bound, so a saved card keeps them.
     void addPanelControls() {
         const bool shown = output_->hwBlock() == LedHwBlock::PiHeader;
+        const bool clockShown = shown && selectedBackend() == platform::Hub75Backend::Pio;   // the PIO's clock and blanking: the GPIO output has its own timing controls
         controls_.addControl("rows", panelRows, 16, 64);      // 16 rows scan at 1/8, the fewest the engine drives; 64 is the panel the board is built for
         controls_.setHidden(controls_.count() - 1, !shown);
         controls_.addControl("cols", panelCols, 16, 512);     // 16 is the narrowest panel; 512 by kPanelsPerLaneMax keeps the canvas width, 16,384, inside 16 bits
@@ -267,9 +260,9 @@ private:
         controls_.addControl("panelsPerLane", panelsPerLane, 1, kPanelsPerLaneMax);
         controls_.setHidden(controls_.count() - 1, !shown);
         controls_.addControl("pixelClock", pixelClockKhz, 1000, 40000);   // 1 to 40 MHz: below 1 MHz the wall crawls, above 40 the divider bottoms out
-        controls_.setHidden(controls_.count() - 1, !shown);
+        controls_.setHidden(controls_.count() - 1, !clockShown);
         controls_.addControl("latchBlank", latchBlankWords, 0, 8);   // extra dark words before each latch, for a panel that ghosts
-        controls_.setHidden(controls_.count() - 1, !shown);
+        controls_.setHidden(controls_.count() - 1, !clockShown);
     }
 
     /// Offer the backends the machine has, one case per machine: re-pointing by label, so a dropped backend cannot select another.
@@ -281,10 +274,8 @@ private:
             case platform::Machine::Pi5:   // the PIO is offered whether or not it opens, so a refused boot keeps its card
                 offer(platform::Hub75Backend::Pio);
                 break;
-            case platform::Machine::PiGpio:   // no output: the Pi card, labeled as none
-                backendOptions_[0] = "(none)";
-                backendIndex_[0] = platform::Hub75Backend::Pio;
-                backendOptionCount_ = 1;
+            case platform::Machine::PiGpio:   // the GPIO is offered whether or not it opens, for the same reason
+                offer(platform::Hub75Backend::Gpio);
                 break;
             case platform::Machine::Esp32:
             case platform::Machine::Other:
@@ -335,9 +326,10 @@ private:
     platform::Hub75Backend backendIndex_[kBackendCount + 1] = {};
     uint8_t backendOptionCount_ = 0;
 
-    /// The two outputs, held by value so the driver's size and memory readout count them; the PIO output is an empty type where `hasHub75Pio` is false.
+    /// The three outputs, held by value so the driver's size and memory readout count them; a Pi output is an empty type where its `hasHub75*` is false.
     Hub75BusOutput busOutput_;
-    std::conditional_t<platform::hasHub75Pio, Hub75PioOutput, NoPioOutput> pioOutput_;
+    std::conditional_t<platform::hasHub75Pio, Hub75PioOutput, NoPiOutput> pioOutput_;
+    std::conditional_t<platform::hasHub75Gpio, Hub75GpioOutput, NoPiOutput> gpioOutput_;
     Hub75Output* output_ = &busOutput_;   // the strategy every call goes through
     Buffer* sourceBuffer_ = nullptr;
     size_t lights_ = 0;   ///< the output's lights() as prepare() read it, the length of the frame tick() hands over

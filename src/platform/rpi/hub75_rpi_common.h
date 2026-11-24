@@ -22,13 +22,19 @@
 ///
 /// A frame whose encode fails is dropped and the last good frame keeps submitting: a stale picture beats a torn one.
 ///
+/// The encode thread encodes a fresh RGB frame, and an engine whose output changes between two encodes of one frame, as the GPIO engine's dither does, says so through `encodeDue` and has the held frame encoded again.
+///
 /// The refresh thread blocks the stop signals (SIGINT, SIGTERM, SIGHUP) as it starts, so a service stop lands outside every transfer and each frame keeps its progress; the main thread takes the signal and ends the run.
 ///
 /// ## Shutdown
 ///
-/// shutdown order is fixed: stop publishing, join the encode thread, join the refresh thread, stop the backend, free the buffers. The refresh thread blanks the panels itself as it leaves its loop, and it is joined with a deadline, because a submit blocked in the kernel for good would otherwise hang the join.
+/// shutdown order is fixed: stop publishing, join the encode thread, join the refresh thread, stop the backend, free the buffers. The refresh thread is joined with a deadline, because a submit blocked in the kernel for good would otherwise hang the join.
 ///
-/// When the deadline passes the engine stops the backend at once, which darkens the panel when the stop's calls succeed, reports the thread stuck, keeps every buffer and the backend, since the stuck thread still reads them, and refuses a new open until a later shutdown finds the thread gone.
+/// The PIO engine's refresh thread blanks the panels itself as it leaves its loop, and the GPIO engine's closing thread dumps the blank once the thread is joined.
+///
+/// When the deadline passes the engine reports the thread stuck, keeps every buffer and the backend, since the stuck thread still reads them, and refuses a new open until a later shutdown finds the thread gone.
+///
+/// The PIO engine first stops its backend at once, which darkens the panel when the stop's calls succeed.
 ///
 /// publishRgb counts itself in flight, and shutdown waits for the count to reach zero before it frees the RGB slots, so every publish writes into live memory.
 ///
@@ -149,6 +155,9 @@ class TripleBuffer {
         publishWritten();
     }
 
+    /// Whether a frame waits for the consumer: published since its last take, so the consumer has not taken it.
+    bool pending() const MM_NONBLOCKING { return (ready_.load(std::memory_order_acquire) & kFresh) != 0; }
+
     /// Takes the freshest frame as the consumer's when the producer published one since the last take, and says whether it did.
     bool take() {
         if (!(ready_.load(std::memory_order_acquire) & kFresh)) return false;
@@ -235,7 +244,7 @@ class Hub75EngineBase {
     /// Refuses a running or wedged engine, checks options, sizes the wall, allocates, opens the backend, starts the threads; every failure fills `error`; one after the two refusals also stops the engine and frees the buffers unless a thread is stuck.
     bool open(const Options& o, std::string& error, bool useStubBackend = false) {
         if (running_.load()) {
-            error = "PIO engine already running";
+            error = "the engine is already running";
             return false;
         }
         if (wedged_.load()) {
@@ -292,10 +301,10 @@ class Hub75EngineBase {
     uint64_t submitErrors() const MM_NONBLOCKING { return submitErrors_.load(); }
     /// The last encode duration in microseconds (the encode thread writes it).
     uint64_t lastEncodeUs() const { return lastEncodeUs_.load(); }
-    /// The bytes the engine's frame buffers hold: 0 once shut down.
+    /// The bytes the engine's buffers hold, its own included: 0 once shut down.
     size_t heapBytes() const {
         return rgb_.heapBytes() + encoded_.heapBytes() + blank_.capacity() * sizeof(uint32_t) +
-               (slots_[0].capacity() + slots_[1].capacity() + slots_[2].capacity()) * sizeof(uint16_t);
+               (slots_[0].capacity() + slots_[1].capacity() + slots_[2].capacity()) * sizeof(uint16_t) + extrasHeapBytes();
     }
     /// Whether both threads have ended: false while the engine runs and while shutdown found the refresh thread stuck.
     bool threadsJoined() const { return !encodeThread_.joinable() && !refreshThread_.joinable(); }
@@ -344,8 +353,16 @@ class Hub75EngineBase {
     virtual bool startBackend(bool useStubBackend, std::string& error) = 0;
     /// Joins the encode thread, then the refresh thread within the deadline, stops the backend and frees the buffers; false when the refresh thread stayed stuck, which leaves the backend and the buffers kept.
     virtual bool shutdown() = 0;
-    /// Resets the counters only the engine keeps, before the threads start; an engine with none leaves this default.
+    /// Resets the counters only the engine keeps, before the threads start; empty by default.
     virtual void resetExtras() {}
+    /// Frees the buffers only the engine keeps, with the frame buffers; empty by default.
+    virtual void releaseExtras() {}
+    /// The bytes the buffers only the engine keeps hold, which heapBytes() counts; 0 by default.
+    virtual size_t extrasHeapBytes() const { return 0; }
+    /// Runs on the opening thread once both threads run, before open() returns true: an engine whose threads report something the open needs, such as the refresh thread's scheduling answer, waits here for it.
+    virtual void threadsStarted() {}
+    /// Whether the encode thread encodes on this pass, `fresh` saying a new RGB frame was published; an engine that re-encodes the held frame, as a carrying dither does, overrides it.
+    virtual bool encodeDue(bool fresh) { return fresh; }
     /// Encodes one lane's strip of `rgb` into `slotWords` at `brightness`; false when the encoder refuses the geometry.
     virtual bool encodeLane(const uint8_t* rgb, int lane, uint16_t* slotWords, uint8_t brightness) = 0;
     /// Repacks the lanes' slot streams into `out`, one frame of frameSlots_ words.
@@ -392,6 +409,7 @@ class Hub75EngineBase {
         encoded_.release();
         for (auto& lane : slots_) std::vector<uint16_t>().swap(lane);
         std::vector<uint32_t>().swap(blank_);
+        releaseExtras();
         fps_.store(0);
         frameSlots_ = 0;
     }
@@ -481,14 +499,13 @@ class Hub75EngineBase {
         return false;
     }
 
-    /// The encode thread's body: takes the newest RGB frame, encodes it and publishes the result; a failed encode skips the publish.
+    /// The encode thread's body: takes the newest RGB frame, encodes it and publishes the result; a failed encode skips the publish and waits a poll, so an engine that re-encodes a held frame does not spin on a failure.
     void encodeLoop() {
         while (!stop_.load()) {
-            if (!encodePaused_.load() && rgb_.take()) {
-                if (encodeFrame(rgb_.current(), encoded_.writeSlot())) encoded_.publishWritten();
-            } else {
-                std::this_thread::sleep_for(std::chrono::microseconds(kEncodePollUs));
-            }
+            const bool published = !encodePaused_.load() && encodeDue(rgb_.take()) &&
+                                   encodeFrame(rgb_.current(), encoded_.writeSlot());
+            if (published) encoded_.publishWritten();
+            else std::this_thread::sleep_for(std::chrono::microseconds(kEncodePollUs));
         }
     }
 
@@ -520,6 +537,7 @@ class Hub75EngineBase {
             error = "failed to start the encode thread";   // the refresh thread is joined by open()'s shutdown, within the deadline: it submits a blank as it leaves, which can block for good
             return false;
         }
+        threadsStarted();
         return true;
     }
 

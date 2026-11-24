@@ -33,6 +33,19 @@ The package installs MoonLight as `moonlight.service` and starts it, so the mach
 
 **Running it by hand**, to see its log in a terminal: `sudo systemctl stop moonlight`, then `/usr/lib/moonlight/MoonLight`, which keeps its settings in your own `~/.local/share/MoonLight/`. A workstation that runs it by hand alone keeps the program for this with `sudo systemctl disable --now moonlight`. The Audio card's `cpu` line and the terminal's first audio line name the backend the program holds, PulseAudio, ALSA, or Null where the system's audio libraries are missing. That copy sits in a folder only root writes, so it is updated by hand; the tarball unpacked in a folder of your own updates itself, restarting in its terminal window.
 
+### HUB75 panels over GPIO on a Pi
+
+The Pi 3/4 GPIO output ([Raspberry Pi 3/4](hardware/hub75-panels.md#raspberry-pi-34-pi-gpio)) opens `/dev/mem` and asks for a realtime thread, which the packaged service, unprivileged with one capability, cannot do. A Pi 3 or 4 that drives panels this way takes an opt-in drop-in, `/etc/systemd/system/moonlight.service.d/hub75-gpio.conf`:
+
+```ini
+[Service]
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_SYS_RAWIO CAP_DAC_OVERRIDE
+LimitRTPRIO=99
+```
+
+then `sudo systemctl daemon-reload` and `sudo systemctl restart moonlight`. `CAP_SYS_RAWIO` and `CAP_DAC_OVERRIDE` together grant write access to physical memory, which is root-equivalent, so only a machine that drives panels takes the drop-in. `LimitRTPRIO` lets the refresh thread ask for realtime scheduling, and its absence shows as a jitter warning in the status line.
+
 ## Docker
 
 **Use `--network host`.** The web UI and unicast fixture output work through ordinary port mapping (`-p 8080:8080`). mDNS discovery and Art-Net's broadcast mode are multicast, and neither crosses a bridge network. Host networking is what lets a container find boards and be found by them. Verified on a NanoPi R28S driving a ColorLight card.

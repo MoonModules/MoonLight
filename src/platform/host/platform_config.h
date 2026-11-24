@@ -81,6 +81,9 @@ constexpr bool hasNamedNetInterfaces = true;
 /// True: the RP1 PIO seam links on every host, and an open that finds no panels says why.
 constexpr bool hasHub75Pio = true;
 
+/// True: the Pi 3/4 GPIO seam links on every host, and an open that finds no panels says why.
+constexpr bool hasHub75Gpio = true;
+
 #ifdef __ANDROID__
 /// False: an Android app has no NDI runtime to load.
 constexpr bool hasNdi = false;

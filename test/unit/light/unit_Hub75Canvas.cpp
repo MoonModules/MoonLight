@@ -253,6 +253,23 @@ TEST_CASE("Hub75Canvas: an encoder-hold arrangement quotes the stretched rate") 
     checkArr(a[0], 1, 1, 64, 32, 1221);
 }
 
+TEST_CASE("Hub75Canvas: a Stripe panel's arrangement counts the driven width in its rate while its canvas stays the logical one") {
+    // One 64 by 32 panel at 6 bits, 130 ns LSB, 262 ns a column, 0.5 us latch: direct it shifts 64 columns across 16 address steps, 603 Hz; under Stripe the driven panel shifts 128 across 8, 612 Hz.
+    PanelSpec spec;
+    spec.rows = 32; spec.cols = 64; spec.scanRows = 16; spec.bits = 6; spec.lsbNs = 130;
+    spec.shiftTenthsPerPx = 2620; spec.latchTenthsNs = 5000;
+    Arrangement a[4];
+    REQUIRE(panelArrangements(1, spec, 1, a, 4) == 1);
+    checkArr(a[0], 1, 1, 64, 32, 603);
+    spec.scanRows = 8;
+    spec.rateCols = 128;
+    REQUIRE(panelArrangements(1, spec, 1, a, 4) == 1);
+    checkArr(a[0], 1, 1, 64, 32, 612);   // the canvas is still 64 by 32
+    // Two such panels in a lane shift 256 driven columns across 8 steps: 6 x 8 x (256 x 262 ns + 0.5 us) is 3.24 ms, 308 Hz, on a canvas 128 wide.
+    REQUIRE(panelArrangements(2, spec, 1, a, 4) == 1);
+    checkArr(a[0], 2, 1, 128, 32, 308);
+}
+
 namespace {
 
 // Feed a layout's lights to the walk in index order, as `place(i)` puts them, and say which panel breaks plain rows.

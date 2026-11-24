@@ -4173,7 +4173,7 @@
      "more": "A published map hides the pin rows, which stay bound. A pin on flash or PSRAM is refused. Boards and the R1/G1/B1 naming trap: [HUB75 panels](https://moonmodules.org/MoonLight/reference/hardware/hub75-panels.html#which-board)."
     },
     "peripheral": {
-     "line": "The silicon block that drives the panel: LCD_CAM, Parlio or a Pi 5's PIO.",
+     "line": "What drives the panel: LCD_CAM, Parlio, a Pi 5's PIO or a Pi 3/4's GPIO.",
      "more": "A P4 has one LCD_CAM and one Parlio, so a board already driving WS2812 strips from one needs the panel on the other. Only you know which way round."
     },
     "scanRate": {
@@ -4189,6 +4189,21 @@
     },
     "refresh": {
      "line": "The measured refresh rate: the number to report when a panel flickers."
+    },
+    "multiplexing": {
+     "line": "An outdoor panel's scan wiring"
+    },
+    "carryBits": {
+     "line": "Bits of each pixel's lost shade carried to its next refresh, 0 off"
+    },
+    "pwmLsbNs": {
+     "line": "The shortest lit time in nanoseconds"
+    },
+    "slowdown": {
+     "line": "Slows the GPIO for a fast Pi; auto is the model's own"
+    },
+    "slowdownTrue": {
+     "line": "The resolved slowdown as one digit, empty while closed"
     },
     "shown": {
      "line": "The frames the panels showed in the last second."

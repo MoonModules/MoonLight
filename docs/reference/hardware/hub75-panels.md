@@ -1,6 +1,6 @@
 # Driving a HUB75 panel
 
-A HUB75 LED panel can be driven straight from the board's pins with the [HUB75 driver](../../moonmodules/light/drivers.md#hub75), or over Ethernet through a receiving card with [Panel Card](../../moonmodules/light/drivers.md#panelcard). Board, panel and settings are below, in that order, and the readings behind the Raspberry Pi 5 figures are in the [HUB75 bench record](hub75-bench.md).
+A HUB75 LED panel can be driven straight from the board's pins with the [HUB75 driver](../../moonmodules/light/drivers.md#hub75), or over Ethernet through a receiving card with [Panel Card](../../moonmodules/light/drivers.md#panelcard). Board, panel and settings are below, in that order, and the readings behind the Raspberry Pi figures are in the [HUB75 bench record](hub75-bench.md).
 
 ## Which of the two paths
 
@@ -12,7 +12,7 @@ A [MoonHub75](https://moonmodules.org/projects/hardware/#moonhub75-pcb) drives a
 
 The chip needs an LCD_CAM or a Parlio block, which the S3, the P4 and the S31 carry and the classic ESP32 lacks. Its 13 usable output GPIOs are all a 1/16 port needs, so a strand, a button or a microphone has no pin left.
 
-A Raspberry Pi 5 drives panels through its RP1 PIO from the 40-pin header instead: [Raspberry Pi 5](#raspberry-pi-5-rp1-pio).
+A Raspberry Pi 5 drives panels through its RP1 PIO from the 40-pin header instead: [Raspberry Pi 5](#raspberry-pi-5-rp1-pio). A Pi 3 or 4 drives them through its GPIO: [Raspberry Pi 3/4](#raspberry-pi-34-pi-gpio).
 
 Three boards have published pin maps, which the `board` select fills in:
 
@@ -36,11 +36,11 @@ Steps: [Set up a driver or service for the hardware](../../moonwalk.md#driver-se
 - **`scanRate`** is read off the panel's label or listing, not calculated: two panels of the same size can scan differently. A 1/32-scan panel needs the `e` line; on 1/16 that pin is free.
 - **`peripheral`** matters on a P4, which has one LCD_CAM and one Parlio: a board already driving LED strips from one needs the panel on the other.
 - **`clockEdge`**: every pixel one column over means the other edge.
-- **`fixture`** names the panel's color order: a panel showing red as blue takes the BGR profile. A new driver starts on RGB.
+- **`fixture`** names the panel's color order: a panel showing red as blue takes the BGR profile. A new driver starts on RGB, and a wider profile gives its red, green and blue.
 
 ## Depth, refresh and brightness
 
-Every bit plane is a full scan, so `bitDepth` costs refresh and memory in proportion to the planes on a wider row. A row of 2^(`bitDepth`−2) clocks or fewer, 16 at 6-bit, is stretched with hold words, which cost more of both ([hold words](hub75-refresh.md#plane-weights-and-hold-words)). One 64x64 panel at 1/32 scan is 16,384 bytes a frame at 4-bit and 24,576 at 6-bit. Brightness on a HUB75 panel is time, not amplitude, so lowering it shortens each plane's lit time and keeps every color level. The price is top brightness: full white lights about a third of the time at 6-bit.
+Every bit plane is a full scan, so `bitDepth` costs refresh and memory in proportion to the planes on a wider row. A row of 2^(`bitDepth`−2) clocks or fewer, 16 at 6-bit, is stretched with hold words, which cost more of both ([hold words](hub75-refresh.md#plane-weights-and-hold-words)). One 64x64 panel at 1/32 scan is 16,384 bytes a frame at 4-bit and 24,576 at 6-bit. Brightness on a HUB75 panel is time, not amplitude, so lowering it shortens each plane's lit time and keeps every color level. The price is top brightness: full white lights about a third of the time at 6-bit. The [Pi 3/4 GPIO output](#raspberry-pi-34-pi-gpio) scales the codes instead and dithers what the scaling drops.
 
 On the bench (2026-10-06, the MoonHub75's panel on LCD_CAM) 4-bit refreshes at 2,157 Hz, against the 2,441 Hz [ceiling](hub75-refresh.md#how-drivers-set-the-lsb) its shift clock predicts. What a longer chain or deeper color costs: [HUB75 refresh rates](hub75-refresh.md). 6-bit costs about 2 ms more render tick, about 57 against 64 fps.
 
@@ -54,7 +54,7 @@ A Pi 5 drives HUB75 panels from its 40-pin header through one RP1 PIO state mach
 
 ### Which output
 
-The HUB75 driver takes its output from the machine: an ESP32 takes the bus output, LCD_CAM or Parlio by chip, and a Pi 5 takes the PIO output. The PIO output stays selected when the PIO is refused, and its status gives the reason. A Pi 4 or earlier shows the Pi card with a refusal in its status.
+The HUB75 driver takes its output from the machine: an ESP32 takes the bus output, LCD_CAM or Parlio by chip, a Pi 5 takes the PIO output and a Pi 3 or 4 takes the [GPIO output](#raspberry-pi-34-pi-gpio). The PIO output stays selected when the PIO is refused, and its status gives the reason.
 
 The machine comes from the kernel's device tree, `/proc/device-tree/compatible`. A container that masks that file (Docker does by default) falls to the `Model` line of `/proc/cpuinfo`, so a Pi 5 in a container is still a Pi 5; the device tree wins where both can be read. The container also needs `/dev/pio0` passed through, for example `docker run --device /dev/pio0`.
 
@@ -121,3 +121,47 @@ The gap is the DMA feed, which falls behind the wire as the clock rises: a frame
 ### 8-bit color
 
 The card offers 2 to 8 planes, starting at 6; 8 is set on the card. A frame at 8-bit is 8/6 the words of 6-bit, and the bench readings scale by 6/8 ([bench record](hub75-bench.md#refresh-at-6-bit-and-8-bit)). A narrow row leads with hold words, which cost refresh: the rule is `hub75HoldWords` in [`Hub75Bus.h`](https://github.com/MoonModules/MoonLight/blob/main/src/platform/Hub75Bus.h), and [hold words](hub75-refresh.md#plane-weights-and-hold-words) shows the effect. The brightness below which the lowest plane drops out is in [`Hub75Encode.h`](https://github.com/MoonModules/MoonLight/blob/main/src/platform/Hub75Encode.h): 64 on the wall's 256-word rows at 8-bit, where the picture reads as 7-bit.
+
+## Raspberry Pi 3/4 (Pi GPIO)
+
+A Pi 3 or 4 has no RP1 and no PIO, so it drives HUB75 panels straight from its 40-pin header: a realtime thread clocks the GPIO and the hardware PWM block times output-enable. The HUB75 driver offers `Pi GPIO` in its `peripheral` select on any Raspberry Pi 1 to 4 or Zero, and a Pi 5 offers `Pi PIO` instead. The output runs on a Pi 3, a Pi Zero 2 and a compute module 3 (BCM2837) and on a Pi 4, a Pi 400 and a compute module 4 (BCM2711); the SoC decides, so a Pi 2 v1.2 (a BCM2837) runs as a Pi 3, while a Pi 1, a Zero and an earlier Pi 2 (other SoCs) are offered it and refused, the status naming the host. The output stays selected when the engine refuses, and its status gives the reason. The readings behind the figures here, taken on the Pi 4 sign, are in the [bench record](hub75-bench.md#raspberry-pi-34-pi-gpio).
+
+The [wiring](#wiring) and the [geometry](#geometry) are the Pi 5's, the same board, with two differences: the scan follows the rows as `rows` / 2, or `rows` / 4 under Stripe, the driven panel's scan, and the kernel drivers of [the pins the kernel may own](#pins-the-kernel-may-own) take their pins back from the GPIO as from the PIO. Output-enable rides the PWM block on GPIO 18, so the PWM audio device must stay off.
+
+### Multiplexing
+
+An outdoor panel whose rows are wired through an internal multiplexer takes `multiplexing` Stripe, which reshapes the frame before the encoder: a 32x64 panel is driven as 16 rows by 128 columns at 1/8 scan. Normal is direct. The Pi 4 sign's panels need Stripe (`--led-multiplexing=1` in hzeller's terms); on normal the picture is a washed, shearing blend. The mapping is hzeller's Stripe algorithm, reimplemented with attribution (see the [attributions](../attributions.md#hzeller)), and the [test pattern](hub75-test-pattern.md) checks it on a panel.
+
+### Dump order
+
+The frame is plane-major in memory, but the panel is dumped row-major: one row's full PWM, every plane, before the next row, with the address set while the panel is dark, since slow-decay outdoor panels spread otherwise. The loop is shared between the hardware backend and the stub recorder (`hub75_gpio_dump.h`), so a unit test pins the sequence the panel sees.
+
+### Refresh
+
+The thread clocks one GPIO word a column at about 235 ns a column at slowdown 1 and 259 ns at slowdown 3 (the model in `hub75GpioColumnTimeNs`) while the PWM pulser times OE, so the frame is `bitDepth` x scan rows x (lane width x column time + the dark interval). That computes to about 86 Hz on the 256x192 wall at 6-bit and slowdown 1 and about 82 Hz at the Pi 4's auto slowdown 2, inside the 80 to 100 Hz band where flicker turns visible at 6-bit, so the wall stays on the PIO path; the Pi 4 sign is the one bench behind this output. Under Stripe the lane width doubles and the scan rows halve, so the pixel clocks stay the same and only the dark intervals halve. At 8-bit the frame is 8/6 the 6-bit one. A Pi 3 reads lower than a Pi 4 and has no bench behind it.
+
+- **`pwmLsbNs`** (50 to 3,000 ns, default 130) is the shortest plane's lit time. The PWM clock derives from the PLLD rate, 500 MHz on a Pi 3 and 750 MHz on a Pi 4, so the stated nanoseconds hold on both, quantized by the divider (`hub75_gpio_pwm.h`). A long LSB lights the panel for more of each frame, so it is brighter, and it makes the top planes OE-bound instead of shift-bound, so the rate drops.
+- **`slowdown`** (auto, 0 to 4; auto is 2 on a Pi 4, 1 on a Pi 3) lengthens the column writes for a panel that wants more setup time, at the cost of refresh. The card stores the select's index, so a stored 3 is slowdown 2, and the `slowdownTrue` readout quotes the slowdown the engine runs.
+- **`shown`** is the measured refresh.
+
+### 8-bit color on the GPIO
+
+The [8-bit rules](#8-bit-color) apply: at the default 6 planes two carried bits bring back the two bits the planes drop, at 8/6 the refresh of 8 planes. The PWM pulser sets the lit time (2^(p+1) ticks a plane), so a narrow row's hold words cost the dump no clocks, only the stride, unlike the PIO path, where the pass stretches and the refresh falls on narrow rows.
+
+### Dither
+
+The GPIO output dims by scaling each color code, and the scaled codes lose a fraction of a shown level: at brightness 64 two bits of shade, and at 6 bits the two low bits the planes drop. `carryBits` (0 to 3, default 2, 0 off) carries that many bits of each pixel's lost fraction to its next refresh, so over the refreshes the shown levels average to the scaled value and a dimmed gradient stays smooth to black. The mechanism is in `hub75_gpio_dither.h`, and the carry is MoonLight's own addition to the design it follows.
+
+The price is an encode a refresh while a fraction carries, from brightness 1 below 8 planes and 1 to 254 at 8. The encode runs on its own thread beside the refresh thread, so it costs the sign no refresh: the rate reads the same with the carry off and on, and the cost shows on the encode thread, 9.0% of a core with the carry off and 18.8% with 2 bits (8-bit, brightness 33; [bench record](hub75-bench.md#raspberry-pi-34-pi-gpio)). A refresh that finds the encode late dumps the held frame again. The memory is one remainder byte a channel. A pixel's pattern repeats within 2^bits encodes, one a refresh while the encode keeps up, so at 2 bits a quarter of the refresh rate is the slowest repeat; at a lower refresh, as with a long `pwmLsbNs`, take fewer bits to keep the darkest shades from shimmering.
+
+### Permissions and conflicts
+
+The engine opens `/dev/mem`, which needs root, or `CAP_SYS_RAWIO` and `CAP_DAC_OVERRIDE` together; the packaged service runs unprivileged, and [installing on Linux](../installing-on-linux.md#hub75-panels-over-gpio-on-a-pi) gives the opt-in drop-in that grants the capabilities and the realtime limit. The PWM block also drives the Pi's analog audio, so the audio driver must be off (`dtparam=audio=off` in `config.txt`, then reboot), or the open is refused with the reason in the status line. The refresh thread asks for realtime scheduling and pins itself to the last CPU; running as root or with `LimitRTPRIO` set (the same drop-in) grants it, and a warning in the status line says when it failed. Reserving that CPU with `isolcpus` steadies the timing further but is not required.
+
+### Building
+
+The GPIO output needs no extra library: the backend is pure syscalls (`/dev/mem`, the PWM and clock registers), built into every Linux aarch64 build. On another host the open fails naming the host or the build.
+
+### Shutdown and reopen
+
+Stopping the driver joins the threads, dumps a blank frame and waits for it to drain before the engine stops, so the panel goes dark; the release path frees every claim (PWM, mapped memory), so a setting change re-opens in the same process.

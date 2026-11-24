@@ -195,7 +195,9 @@ add_library(mm_platform
     src/platform/host/platform_host_update.cpp
     src/platform/host/platform_host_machine.cpp
     src/platform/host/platform_host_pio.cpp
+    src/platform/host/platform_host_gpio.cpp
     src/platform/rpi/hub75_pio_options.cpp
+    src/platform/rpi/hub75_gpio_options.cpp
     src/platform/host/moonlive_emit_noarch.cpp
     src/platform/host/moonlive_asm_noarch.cpp
     src/platform/host/moonlive_emit_arm64.cpp
@@ -297,6 +299,26 @@ if(NOT MSVC)
         endif()
     endif()
     set(MM_HUB75_PIO_ENGINE ON)   # test/ reads this, as it reads MM_CORE_HEADER_CHECK
+endif()
+
+# The Raspberry Pi 3/4 GPIO output: MoonLight's own engine (src/platform/rpi) behind the GPIO seam (platform_host_gpio.cpp), built where the PIO engine is for the same reasons.
+#
+# MSVC builds the seam alone, which keeps the recorder and the refusal ("this build has no GPIO engine"). MM_HUB75_GPIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
+# The hardware backend maps /dev/mem and the PWM registers itself, so it needs no library: it builds on Linux aarch64, the one place a Pi 3 or 4 runs 64-bit code
+# (a 32-bit off_t cannot hold the Pi 4's 0xFE000000 peripheral base), and createGpioBackend picks it there; every other build runs the stub in the tests and refuses a real open.
+if(NOT MSVC)
+    target_sources(mm_platform PRIVATE
+        src/platform/rpi/hub75_gpio_engine.cpp
+        src/platform/rpi/hub75_gpio_repack.cpp
+        src/platform/rpi/hub75_gpio_pwm.cpp
+        src/platform/rpi/hub75_gpio_backend.cpp
+        src/platform/rpi/hub75_gpio_backend_stub.cpp)
+    target_compile_definitions(mm_platform PUBLIC MM_HUB75_GPIO_HAS_ENGINE)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+        target_sources(mm_platform PRIVATE src/platform/rpi/hub75_gpio_backend_hw.cpp)
+        target_compile_definitions(mm_platform PUBLIC MM_HUB75_GPIO_HAVE_HW)
+    endif()
+    set(MM_HUB75_GPIO_ENGINE ON)   # test/ reads this, as it reads MM_HUB75_PIO_ENGINE
 endif()
 
 target_link_libraries(mm_platform PUBLIC mm_core)

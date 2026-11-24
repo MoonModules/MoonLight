@@ -1,5 +1,5 @@
 #pragma once
-/// What the Pi output's tests share: the bench a driver is wired on, the PIO seam's view of what the output opened and handed over, and a rig that runs one driver on the Pi PIO output.
+/// What the Pi outputs' tests share: the bench a driver is wired on, each seam's view of what its output opened and handed over, and a rig that runs one driver on a Pi output.
 
 #include <cstddef>
 #include <cstdint>
@@ -11,11 +11,13 @@
 #include "hub75_port.h"   // PioPortGuard, PioHost, PioAvailable, optionIndex
 #include "light/drivers/Correction.h"
 #include "light/drivers/Hub75Driver.h"
+#include "light/drivers/Hub75GpioOutput.h"
 #include "light/layers/Buffer.h"
 #include "light/layers/Layer.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/PanelsLayout.h"
+#include "platform/Hub75Gpio.h"
 #include "platform/Hub75Pio.h"
 #include "platform/platform.h"
 
@@ -89,12 +91,36 @@ struct PioSeam {
     static constexpr const char* backendLabel = "Pi PIO";                                    ///< the label the peripheral select offers it under
     static constexpr const char* label = "PIO";                                              ///< how the status and the board's refusals name it
     static const mm::platform::Hub75PioOptions& options() { return mm::platform::hub75PioTestPort().options; }   ///< the options the output opened the engine with
+    static void setStalled(bool stalled) { mm::platform::setTestHub75PioStalled(stalled); }                    ///< make the recorder answer a stalled submit, or none
+    static void setSubmitErrors(uint32_t count) { mm::platform::setTestHub75PioSubmitErrors(count); }          ///< make the recorder answer `count` failed submits
+    static void setFps(uint16_t hz) { mm::platform::setTestHub75PioFps(hz); }                                  ///< make the recorder answer a frame rate
+    static int brightness() { return mm::platform::hub75PioTestPort().brightness; }                            ///< the brightness the output last handed the seam
     static uint16_t width() { return mm::platform::hub75PioWidth(); }                         ///< the canvas width the seam holds, 0 when closed
     static uint16_t height() { return mm::platform::hub75PioHeight(); }                       ///< the canvas height the seam holds, 0 when closed
     static int frameCount() { return static_cast<int>(mm::platform::hub75PioTestPort().frames); }   ///< frames the seam took since it opened
     /// Pixel (x, y) of the last frame the seam took, three bytes.
     static const uint8_t* pixel(uint16_t x, uint16_t y) {
         return mm::platform::hub75PioTestFrame() + (static_cast<size_t>(y) * width() + x) * 3;
+    }
+};
+
+/// What the GPIO output's tests read from its seam, as PioSeam gives the PIO output's: the same members under the GPIO names.
+struct GpioSeam {
+    using Output = mm::Hub75GpioOutput;                                                      ///< the output under test
+    using RecordGuard = mm::GpioPortGuard;                                                   ///< the guard that makes the seam record
+    static constexpr const char* backendLabel = "Pi GPIO";                                   ///< the label the peripheral select offers it under
+    static constexpr const char* label = "GPIO";                                             ///< how the status and the board's refusals name it
+    static const mm::platform::Hub75GpioOptions& options() { return mm::platform::hub75GpioTestPort().options; }   ///< the options the output opened the engine with
+    static void setStalled(bool stalled) { mm::platform::setTestHub75GpioStalled(stalled); }                   ///< make the recorder answer a stalled dump, or none
+    static void setSubmitErrors(uint32_t count) { mm::platform::setTestHub75GpioSubmitErrors(count); }         ///< make the recorder answer `count` failed dumps
+    static void setFps(uint16_t hz) { mm::platform::setTestHub75GpioFps(hz); }                                 ///< make the recorder answer a frame rate
+    static int brightness() { return mm::platform::hub75GpioTestPort().brightness; }                           ///< the brightness the output last handed the seam
+    static uint16_t width() { return mm::platform::hub75GpioWidth(); }                        ///< the canvas width the seam holds, 0 when closed
+    static uint16_t height() { return mm::platform::hub75GpioHeight(); }                      ///< the canvas height the seam holds, 0 when closed
+    static int frameCount() { return static_cast<int>(mm::platform::hub75GpioTestPort().frames); }   ///< frames the seam took since it opened
+    /// Pixel (x, y) of the last frame the seam took, three bytes.
+    static const uint8_t* pixel(uint16_t x, uint16_t y) {
+        return mm::platform::hub75GpioTestFrame() + (static_cast<size_t>(y) * width() + x) * 3;
     }
 };
 
@@ -148,6 +174,16 @@ private:
     }
 };
 
+/// Open `r` on a linear curve, correct to `brightness`, and show a gray pixel of `value` as the first light: what a case reads from its seam after.
+template <class Rig>
+void showGrayAt(Rig& r, uint8_t brightness, uint8_t value) {
+    r.open();
+    REQUIRE(mm::setControlValue(r.driver, "curve", static_cast<uint8_t>(mm::Correction::Curve::Linear)));
+    r.driver.rebuildCorrection(brightness);
+    r.paint(0, value, value, value);
+    r.driver.tick();
+}
+
 /// A light corrected through a profile of `n` channels, `roles` placing its color, shows its red, green and blue on the panel's first pixel.
 template <class Seam>
 void showsColorsThrough(const mm::ChannelRole* roles, uint8_t n) {
@@ -164,3 +200,4 @@ void showsColorsThrough(const mm::ChannelRole* roles, uint8_t n) {
 }  // namespace mm
 
 TYPE_TO_STRING_AS("Pi PIO", mm::PioSeam);
+TYPE_TO_STRING_AS("Pi GPIO", mm::GpioSeam);

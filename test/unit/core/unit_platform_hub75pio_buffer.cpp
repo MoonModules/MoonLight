@@ -383,7 +383,7 @@ TEST_CASE("Hub75PioBuffer: the options' buffer total is what the engine allocate
     deep.bitDepth = 8;
     const uint64_t deepTotal = mm::platform::hub75PioBufferBytes(deep);
     CHECK(deepTotal == 1884160);   // and at 8 bits
-    CHECK(mm::platform::kPioMaxBufferBytes / deepTotal >= 100);   // the ceiling's margin over the wall the bench runs
+    CHECK(mm::platform::kHub75MaxBufferBytes / deepTotal >= 100);   // the ceiling's margin over the wall the bench runs
     CHECK(engine.shutdown());
     CHECK(engine.heapBytes() == 0);
     mm::platform::stubBackendReset();
@@ -827,4 +827,22 @@ TEST_CASE("Hub75PioBuffer: a submit that never returns reads as a stall, the rat
     mm::platform::stubBackendSetFaults({});
     CHECK(mm::test::waitUntil([&] { return !run.engine.stalled(); }, 2000));
     CHECK(run.engine.fps() > 0);    // the window's own figure speaks again
+}
+
+TEST_CASE("Hub75PioBuffer: the triple buffer says a frame waits from its publish to the reader's take, and a superseded frame leaves one waiting") {
+    mm::platform::TripleBuffer<uint32_t> t;
+    t.reset(4);
+    CHECK_FALSE(t.pending());   // a fresh buffer holds no frame
+    t.publishWritten();
+    CHECK(t.pending());
+    CHECK(t.take());
+    CHECK_FALSE(t.pending());   // taken: the reader holds it
+    t.publishWritten();
+    t.publishWritten();         // the second supersedes the first, and one still waits
+    CHECK(t.pending());
+    CHECK(t.take());
+    CHECK_FALSE(t.pending());   // not two: a count of publishes would still read one behind
+    CHECK(t.published() == 3);
+    t.reset(4);
+    CHECK_FALSE(t.pending());   // a reset forgets a waiting frame
 }
