@@ -170,9 +170,10 @@ std::vector<uint32_t> capturedFrame(size_t slots) {
     return words;
 }
 
-// Publish `frame`, wait until the stub holds a frame that is not the one it held, then for two more dumps, so the frame and the dump stream the case reads next are the new frame's.
+// Once the stub holds a frame, publish `frame`, wait for a frame other than that one, then two more dumps, so the case reads the new frame and its dump stream.
 void publishAndSettle(mm::platform::Hub75GpioEngine& engine, const std::vector<uint8_t>& frame) {
     const size_t slots = engine.frameSlots();
+    REQUIRE(mm::test::waitUntil([&] { return !capturedFrame(slots).empty(); }, 5000));
     const std::vector<uint32_t> before = capturedFrame(slots);
     engine.publishRgb(frame.data());
     REQUIRE(mm::test::waitUntil([&] { const auto now = capturedFrame(slots); return !now.empty() && now != before; }, 5000));
