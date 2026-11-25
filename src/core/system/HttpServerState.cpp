@@ -102,10 +102,10 @@ bool forEachName(const char* body, const char* key, Fn&& fn) {
 bool HttpServerModule::Subscription::parse(const char* body) {
     Subscription s;
     s.received = true;
-    const auto add = [&](const char* str, bool alone) {
+    const auto add = [&](const char* str, bool itself) {
         if (std::strcmp(str, "*") == 0) { s.all = true; return; }
         if (s.count >= kMaxModules) return;
-        if (alone) s.alone |= static_cast<uint8_t>(1u << s.count);
+        if (itself) s.alone |= static_cast<uint8_t>(1u << s.count);
         s.names[s.count++] = fnv1a(str, std::strlen(str));
     };
     if (!forEachName(body, "subscribe", [&](const char* str) { add(str, false); })) return false;
