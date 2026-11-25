@@ -157,20 +157,26 @@ TEST_CASE("Hub75PioBuffer: the submits keep their cadence while an encode runs")
     mm::test::forBothQueueModels([](StubQueueModel model) {
         mm::test::PioRun run(slowSmall(), model);
         REQUIRE(mm::test::waitFirstSubmit(run.engine));
-        const uint64_t idleFrom = run.engine.framesSubmitted();   // the pace with no encode running, on this machine as loaded now
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
-        const uint64_t idle = run.engine.framesSubmitted() - idleFrom;
+        // Submits over a window and the window's own length, since a sleep under load can wake late.
+        const auto count = [&](int ms, uint64_t& us) {
+            const uint64_t from = run.engine.framesSubmitted();
+            const auto start = Clock::now();
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            us = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - start).count());
+            return run.engine.framesSubmitted() - from;
+        };
+        uint64_t idleUs = 0, duringUs = 0;
+        const uint64_t idle = count(80, idleUs);   // the pace with no encode running, on this machine as loaded now
         run.engine.delayEncodes(150000);   // each encode takes 150 ms longer
         run.engine.publishRgb(uniform(kSmallRgb, 50).data());
         std::this_thread::sleep_for(std::chrono::milliseconds(20));   // the encode thread is inside the encode
         const uint64_t encoded = run.engine.framesEncoded();
-        const uint64_t before = run.engine.framesSubmitted();
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
-        const uint64_t during = run.engine.framesSubmitted() - before;
+        const uint64_t during = count(80, duringUs);
         CHECK(run.engine.framesEncoded() == encoded);   // still encoding
-        // The bar is relative to the idle pace, as load slows both windows alike: an engine that keeps its cadence gives about the idle count, one that encoded in the submit loop gives none.
-        INFO("idle " << idle << ", during " << during);
-        CHECK(during >= (idle / 2 > 4 ? idle / 2 : 4));
+        // The bar is half the idle rate over the encode window's own length, as load slows and stretches both windows: an engine that keeps its cadence gives about the idle rate, one that encoded in the submit loop gives none.
+        const uint64_t bar = idleUs > 0 ? idle * duringUs / (2 * idleUs) : 0;
+        INFO("idle " << idle << " in " << idleUs << " us, during " << during << " in " << duringUs << " us, bar " << bar);
+        CHECK(during >= (bar > 4 ? bar : 4));
         CHECK(mm::test::waitUntil([&] { return run.engine.framesEncoded() > encoded; }, 3000));
     });
 }
