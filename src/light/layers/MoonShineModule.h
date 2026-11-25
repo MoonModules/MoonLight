@@ -198,7 +198,7 @@ private:
         mem.free = mem.totals ? HeapBytes{heapFree, mem.psram ? heapFree - internalFree : 0} : HeapBytes{};
         // A computer reports no heap, so there used is what MoonLight took itself.
         const HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, mem.psram ? overSize(heapTotal - internalTotal, mem.free.psram) : 0}
-                                          : HeapBytes{platform::allocatedBytes()};
+                                          : HeapBytes{platform::allocatedBytes(), 0};
         const HeapBytes held = mem.modules + mem.types;
         const size_t unPsram = overSize(used.psram, held.psram);
         mem.unaccounted = {overSize(used.internal(), held.internal()) + unPsram, unPsram};
@@ -337,7 +337,7 @@ private:
     mutable ScratchBuffer<Node> nodes_{*this};   ///< the nodes in row order, grown as the tree grows
     mutable bool stale_ = true;                  ///< the figures moved since the snapshot
 
-    /// The snapshot, taken again once the tree changes, and once the figures moved at the start of a document (`start`, its first row), so one document never mixes two.
+    /// The snapshot, taken again once the tree changes, and once the figures moved at the start of a document (`start`, its first row), so one document holds one snapshot's figures.
     const Snapshot& snapshot(bool start = false) const {
         if ((start && stale_) || snap_.version != treeVersion()) take();
         return snap_;

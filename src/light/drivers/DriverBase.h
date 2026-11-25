@@ -267,14 +267,12 @@ protected:
 
     /// Whether the frame a driver keeps between ticks is a fresh block or was written under another channel layout, once per change: the driver zeroes it first, so a channel with no role reads 0 rather than the last profile's byte.
     bool frameLayoutChanged() MM_NONBLOCKING {
-        if (frameGen_ == correction_.layoutGen) return false;
-        frameGen_ = correction_.layoutGen;
+        if (!correction_.layoutChanged) return false;
+        correction_.layoutChanged = false;
         return true;
     }
     /// Say the kept frame is another block now, so the next tick zeroes it.
-    void frameReplaced() { frameGen_ = kFrameFresh; }
-    static constexpr uint8_t kFrameFresh = 255;   ///< a value past `layoutGen`'s range
-    uint8_t frameGen_ = kFrameFresh;              ///< the layout generation the kept frame was last zeroed for
+    void frameReplaced() { correction_.layoutChanged = true; }
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     ScratchBuffer<uint8_t> gainLut_{*this};    // the gained tables, only for a profile whose LED type carries a gain
     ScratchBuffer<uint16_t> gainLut16_{*this};   // the same to 16 bits, only where a channel is read wide

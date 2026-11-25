@@ -2712,7 +2712,7 @@ TcpConnection::ConnectResult TcpConnection::connectPoll() {
 void TcpConnection::close() {
     if (fd_ >= 0) {
         ::shutdown(sock(fd_), 1);   // SD_SEND on Windows, SHUT_WR elsewhere: both are 1
-        char sink[64];
+        char sink[64];   // at most 64 KB read away, a TCP receive window's worth: a peer streaming past that gets the reset, and a request-and-reply peer stays well under it
         for (int i = 0; i < 1024 && ::recv(sock(fd_), sink, sizeof(sink), 0) > 0; i++) {}
         close_sock(fd_);
         fd_ = -1;

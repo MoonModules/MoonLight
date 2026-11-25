@@ -1,4 +1,4 @@
-// The device flow (flow.js): where each node goes, its chips against the bars, and when it heats. Run without a browser, on the pure functions.
+// The device flow (flow.js): where each node goes, its chips against the bars, and when it heats. Run in Node, on the pure functions.
 // Run: `node --test test/js/pipeline-flow.test.mjs`.
 
 import { test } from "node:test";
@@ -16,14 +16,14 @@ test("a stage is a column, left to right", () => {
     assert.equal(pos.get("E1").x, pos.get("E2").x);
 });
 
-test("a layer's nodes share a band, and two layers' boxes never overlap", () => {
+test("a layer's nodes share a band, and two layers' boxes stay apart", () => {
     const { pos, boxes } = flowLayout(rows);
     assert.equal(boxes.length, 2);
     assert.ok(pos.get("E2").y > pos.get("E1").y);
     assert.ok(boxes[1].y >= boxes[0].y + boxes[0].h);
 });
 
-test("the same rows land on the same spots, so a redraw moves nothing", () => {
+test("the same rows land on the same spots, so a redraw keeps every node in place", () => {
     assert.deepEqual([...flowLayout(rows).pos], [...flowLayout(rows.map(r => ({ ...r, us: 5 }))).pos]);
 });
 
@@ -143,10 +143,10 @@ test("a box's label has room above its first row of nodes", () => {
     const top = Math.min(...["System", "Network"].map(n => pos.get("Modules/" + n).y));
     const box = boxes.find(b => b.name === "Modules");
     assert.ok(top - box.y >= 8 + 12, "the label's 12 px and the box's padding sit above the nodes");
-    boxes.slice(1).forEach((b, i) => assert.ok(b.y >= boxes[i].y + boxes[i].h, "two boxes never overlap"));
+    boxes.slice(1).forEach((b, i) => assert.ok(b.y >= boxes[i].y + boxes[i].h, "two boxes stay apart"));
 });
 
-test("a band starts below every node its columns already hold, so four drivers and the Modules band never meet", () => {
+test("a band starts below every node its columns already hold, so four drivers and the Modules band stay apart", () => {
     const deep = [row("Grid", 0), row("E1", 1, "L"), row("L", 3, "L"), row("Drivers", 4), row("D1", 5), row("D2", 5), row("D3", 5), row("D4", 5),
         ...["Files", "System", "Network", "Firmware", "Control", "Audio", "Pins"].map((n, i) => row(n, i % 6, "Modules"))];
     const { pos, nodeW } = flowLayout(deep);

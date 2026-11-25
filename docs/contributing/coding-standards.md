@@ -185,7 +185,7 @@ All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang and GCC (
 **A clean local build is not proof the Windows build passes.** The base warnings are the same on every host, but the code under `#ifdef _WIN32` compiles on Windows alone, and so does the Windows side of every `#else`: an unused variable or capture there is fatal under `/WX` and invisible on a Mac. So:
 
 - A name used on one platform only is declared under that platform's guard, so no host carries an unused one.
-- A change that only built and passed on macOS or Linux is **not** verified for Windows. The Windows CI job (`release.yml`, on every pull request touching `src/` as well as on main) is the gate; let it run before considering a `src/`-touching change done, or build on a Windows machine.
+- A change that only built and passed on macOS or Linux is **not** verified for Windows. The `windows` job in `test.yml`, which builds and runs the unit suite on every pull request, is the gate; let it run before considering a `src/`-touching change done, or build on a Windows machine.
 
 Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is [Set up the editor](../moonwalk.md#setup-editor).
 

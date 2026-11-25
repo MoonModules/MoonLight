@@ -262,7 +262,7 @@ size_t MqttModule::writeHaEffectList(char* out, size_t cap) const {
 void MqttModule::freeDiscoveryBuffers() {
     if (discoveryBuf_)     { platform::free(discoveryBuf_);     discoveryBuf_ = nullptr; }
     if (discoveryPayload_) { platform::free(discoveryPayload_); discoveryPayload_ = nullptr; }
-    setDynamicBytes(0);
+    setDynamicBytes({});
 }
 
 void MqttModule::publishDiscovery(bool announce) {

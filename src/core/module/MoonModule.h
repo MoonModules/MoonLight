@@ -398,7 +398,7 @@ private:
     MoonModule** children_ = nullptr;
     uint8_t childCount_ = 0;
     uint8_t childCapacity_ = 0;
-    uint32_t psramBytes_ = 0;   ///< the part of dynamicBytes_ in PSRAM, in the padding before classSize_
+    uint32_t psramBytes_ = 0;   ///< the part of dynamicBytes_ in PSRAM: in the padding before classSize_ on a 64-bit host, 4 bytes more on a 32-bit board
     size_t classSize_ = 0;
     size_t dynamicBytes_ = 0;
     ModuleResource* resources_ = nullptr;  ///< head of the intrusive let-go-on-release list

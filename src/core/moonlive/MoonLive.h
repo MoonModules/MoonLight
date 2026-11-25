@@ -194,7 +194,7 @@ public:
     size_t codeCap() const { return codeCap_; }
 
     /// Every heap byte this engine holds: the exec block, the control arena and the string pool.
-    HeapBytes heapBytes() const { return HeapBytes{codeCap_} + heapOf(ctrlArena_, ctrlArena_ ? kArenaBytes : 0) + heapOf(strings_, stringCap_) + heapOf(retired_, retiredCap_); }
+    HeapBytes heapBytes() const { return HeapBytes{codeCap_, 0} + heapOf(ctrlArena_, ctrlArena_ ? kArenaBytes : 0) + heapOf(strings_, stringCap_) + heapOf(retired_, retiredCap_); }
 
     /// The control arena's address, which names this engine to a host table holding things on its behalf, as `JsonFetch` holds documents.
     const void* arena() const { return ctrlArena_; }

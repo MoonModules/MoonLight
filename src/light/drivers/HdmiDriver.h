@@ -208,6 +208,7 @@ public:
 
 private:
     static constexpr uint8_t kMaxModes = 9;
+    static_assert(platform::hdmiDefaultMode < kMaxModes, "the platform's default mode is past the modes the driver lists");
     static constexpr uint8_t kRetrySeconds = 5;  // between tries to open a refused output
     static constexpr const char* kScalingOptions[kScalingCount] = {"fit", "stretch"};
 

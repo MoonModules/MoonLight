@@ -10,12 +10,14 @@
 
 namespace mm {
 
-/// Heap bytes and the part of them in PSRAM; a plain size counts as internal RAM. 32 bits each, as the readout writes them: one owner's heap stays under 4 GB, and a driver keeps one of these per object.
+/// Heap bytes and the part of them in PSRAM. 32 bits each, as the readout writes them: one owner's heap stays under 4 GB, and a driver keeps one of these per object.
 struct HeapBytes {
     uint32_t total = 0;   ///< every byte, internal RAM and PSRAM
     uint32_t psram = 0;   ///< the part of `total` in PSRAM
-    /// A size and its PSRAM part; a size alone is internal RAM, which is what an allocation of no known address is counted as.
-    HeapBytes(size_t t = 0, size_t p = 0) : total(static_cast<uint32_t>(t)), psram(static_cast<uint32_t>(p)) {}   // NOLINT(google-explicit-constructor)
+    /// No bytes.
+    HeapBytes() = default;
+    /// A size and its PSRAM part, both named, so a figure always says where its bytes live: an allocation's bytes come from heapOf, which reads where they live.
+    HeapBytes(size_t t, size_t p) : total(static_cast<uint32_t>(t)), psram(static_cast<uint32_t>(p)) {}
     /// The part in internal RAM.
     size_t internal() const { return total - psram; }
     /// Add another owner's bytes.

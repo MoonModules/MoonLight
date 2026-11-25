@@ -126,7 +126,7 @@ public:
             width_ = height_ = depth_ = 0;
             lut_.free();
             buffer_.free();
-            setDynamicBytes(0);
+            setDynamicBytes({});
             // Clear the status string AND the flag: a stale flag reports a LUT already freed.
             lutSkipped_ = false;
             clearStatus();

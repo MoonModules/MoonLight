@@ -1,5 +1,5 @@
 {
-  "commit": "72399d9c3",
+  "commit": "6ce4fcb39",
   "flash": {
     "esp32": 2496944,
     "esp32s31": 2887824,
@@ -13,7 +13,7 @@
     "esp32-lite": 2384992,
     "esp32-rev1-lite": 2441664,
     "esp32p4rev1": 2975408,
-    "esp32s3-opi": 2611696,
+    "esp32s3-opi": 2611008,
     "esp32s3-opi-oflash": 2609776,
     "esp32s3-qspi": 2619920,
     "esp32s3-qspi-lite": 2368576
@@ -756,8 +756,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 9,
-      "fps": 111111,
+      "tick_us": 10,
+      "fps": 100000,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -797,16 +797,16 @@
     }
   },
   "loc": {
-    "core": 42390,
-    "light": 39938,
+    "core": 42392,
+    "light": 39937,
     "platform": 34082,
     "ui": 15846,
-    "test": 106219,
+    "test": 106223,
     "moondeck": 36926
   },
   "comments": {
     "core": {
-      "lines": 8051,
+      "lines": 8052,
       "ratio": 0.211
     },
     "light": {
@@ -822,7 +822,7 @@
       "ratio": 0.256
     },
     "test": {
-      "lines": 8915,
+      "lines": 8914,
       "ratio": 0.096
     },
     "moondeck": {

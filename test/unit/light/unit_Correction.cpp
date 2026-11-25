@@ -14,7 +14,7 @@
 #include <set>
 #include <vector>
 
-// Pins the per-driver output correction: brightness LUT, channel reorder, and RGBW white derivation. The Drivers container owns a Correction, rebuilds it on a brightness/fixture change, and hands it to each physical driver, which calls apply() per light. These tests pin the transform so a regression in the LUT fill, the preset→role-offset mapping, or the white math fails here. A light is a span of outChannels bytes with a named offset per color role (offRed/offGreen/offBlue, and offWhite for the RGBW family; kAbsent = no white), so the checks read the observable apply() output plus outChannels, not an internal permutation table.
+// Pins the per-driver output correction: the brightness LUT, channel reorder and white derivation, read through apply()'s output and outChannels, so a regression in the LUT, the role offsets or the white math fails here.
 
 using mm::Correction;
 // At brightness=255, the LUT maps every input value to itself (no scaling).
@@ -51,8 +51,7 @@ TEST_CASE("Correction RGB preset: apply is identity at full brightness") {
     CHECK(out[2] == 30);
 }
 
-// GRB preset swaps R and G in the output (G first, then R, then B), for WS2812-like drivers.
-// The fast path runs only for a strip of colors alone: any optional role sends the light through the full transform, which the preset tests below pin.
+// GRB preset swaps R and G in the output (G first, then R, then B), for WS2812-like drivers; the fast path runs only for a strip of colors alone, and any optional role takes the full transform the preset tests pin.
 TEST_CASE("Correction takes the plain-strip path for RGB orders only") {
     Correction rgb, grb, rgbw;
     mm::rebuildFromPreset(rgb, 255, mm::PresetOrder::RGB);
@@ -157,7 +156,7 @@ TEST_CASE("Correction: rebuild switches output channel count RGB<->RGBW") {
 
 using mm::WhiteMode;
 
-// whiteMode = Min is the default and derives W = min(scaled R,G,B) leaving RGB intact, this is the byte-identical behavior the earlier RGBW tests already pin. whiteMode = None forces the white channel to 0 each frame (for effects that drive W themselves), written, not skipped, so a reused buffer can't keep a stale value (see the assertion below).
+// whiteMode Min, the default, derives W = min(scaled R,G,B) and leaves RGB intact; None writes the white channel 0 each frame, for effects that drive W themselves, so a reused buffer keeps no stale value.
 TEST_CASE("Correction whiteMode None: white channel forced to 0, RGB intact") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
@@ -250,7 +249,7 @@ TEST_CASE("Correction roles array: non-color role reserves a channel apply() ski
     CHECK(out[3] == 30);   // B
 }
 
-// WarmWhite / Yellow / UV are synthesized from RGB off the SAME whiteMode as White, so a fixture carrying them lights up (best-effort approximations, not a color model yet): WW ≈ min(RGB), Yellow ≈ min(R,G), UV ≈ the blue-excess max(0, B-max(R,G)). This is the "all channels burn so you can eyeball a fixture" behavior the finding asked for; a real per-emitter model comes later.
+// WarmWhite, Yellow and UV derive from RGB under the same whiteMode as White, so every channel of a fixture lights: WW ≈ min(RGB), Yellow ≈ min(R,G), UV ≈ max(0, B-max(R,G)), approximations until a per-emitter model.
 TEST_CASE("Correction: WarmWhite/Yellow/UV synthesised from RGB via whiteMode") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
@@ -271,7 +270,7 @@ TEST_CASE("Correction: WarmWhite/Yellow/UV synthesised from RGB via whiteMode") 
     CHECK(out[5] == 100);  // UV = B - max(R,G) = 200 - 100 (fires on the blue excess)
 }
 
-// Under Accurate, White pulls its component OUT of RGB, but the additive stand-ins (WW/Yellow/UV) must approximate from the RGB the effect produced, BEFORE that subtraction, or they collapse. This pins the compute-stand-ins-before-White ordering (a regression would compute them post-subtraction).
+// Under Accurate, White pulls its part out of RGB, so the stand-ins (WW, Yellow, UV) derive from the effect's RGB before that subtraction; computed after it, they collapse.
 TEST_CASE("Correction Accurate: Yellow/UV use pre-subtraction RGB, not post-White") {
     Correction c;
     c.curve = Correction::Curve::Linear;   // these pin roles and white math, not the curve
@@ -288,7 +287,7 @@ TEST_CASE("Correction Accurate: Yellow/UV use pre-subtraction RGB, not post-Whit
     CHECK(out[0] == 0);            // R after subtraction
     CHECK(out[1] == 60);           // G after subtraction
     CHECK(out[2] == 160);          // B after subtraction
-    // Yellow is computed from the PRE-subtraction RGB. Yellow = min(R,G) = min(40,100) = 40. This is the case that catches the bug: computed AFTER the subtraction it would be min(0,60) = 0, the stand-in would collapse to near-zero exactly when White is active. (UV = B-max(R,G) happens to be subtraction-invariant since w cancels, so it stays 100 either way, Yellow is the witness.)
+    // Yellow comes from the RGB before the subtraction: min(40,100) = 40, where after it would be min(0,60) = 0. UV = B-max(R,G) is the same either way, so Yellow is the witness.
     CHECK(out[4] == 40);           // Yellow, from pre-subtraction RGB (post would be 0 — the regression)
     CHECK(out[5] == 100);          // UV = 200 - max(40,100) = 100
 }
@@ -318,7 +317,7 @@ TEST_CASE("Correction: UV dark on warm colors; whiteMode None zeroes WW/Y/UV") {
     }
 }
 
-// A fixture with a master dimmer channel must actually be LIT. The dimmer is a real output, not a motion role: a moving head whose preset maps Pan/Tilt/Dimmer/RGBW stayed completely dark on the bench with a perfectly correct color map, because nothing ever wrote its dimmer and a linear dimmer at 0 emits nothing. The pre-existing "IRGB" preset had the same defect.
+// A fixture with a master dimmer lights: the dimmer is an output written every frame, since a linear dimmer at 0 stays dark, which left a moving head dark on the bench with a correct color map.
 TEST_CASE("A preset's master dimmer channel is driven, so the fixture actually lights") {
     using R = mm::ChannelRole;
     const R roles[] = {R::Pan, R::None, R::Tilt, R::None, R::None, R::Dimmer,
@@ -390,7 +389,7 @@ TEST_CASE("A plain RGB fixture reports no motion channels") {
     CHECK(c.hasMotion);
 }
 
-// The layer must be wide enough to hold the motion slots BEFORE it allocates, or an effect's setPan() falls outside the light and the fixture never moves. Modules prepare in registration order with Effects ahead of Drivers, so this only works because Drivers publishes the fixture layout in setup(), which runs for every module before any module's prepare(). Bench-observed before the fix: 12 bytes for 4 lights on a cold boot, and a motionless head until a rebuild.
+// The layer holds the motion slots before it allocates, so setPan() lands inside the light: Drivers publishes the fixture layout in setup(), which runs for every module before any prepare().
 TEST_CASE("A motion preset widens the light enough to carry pan and tilt") {
     using R = mm::ChannelRole;
     const R roles[] = {R::Pan, R::None, R::Tilt, R::None, R::None, R::Dimmer,
@@ -412,7 +411,7 @@ TEST_CASE("A motion preset widens the light enough to carry pan and tilt") {
     CHECK(fc.movable());
 }
 
-// The formations are the point of the moving-head effect: the same sweep, different relationships between the heads. A formation that produced identical aim for every head would be `unison` wearing another name, so each one is pinned by what makes it distinguishable on a real rig.
+// Formations give the same sweep different relationships between heads; each is pinned by what tells it apart on a real rig, since identical aim for every head is `unison` by another name.
 TEST_CASE("Each moving-head formation aims the rig differently") {
     mm::Layouts layouts;
     mm::GridLayout grid;
@@ -522,7 +521,7 @@ TEST_CASE("Brightness scales before the curve, so black stays black and the top 
     CHECK(halfTop < fullTop / 2);
 }
 
-// The white emitters are derived in LINEAR light and curved on the way out, so min() and the Accurate subtraction mean what they say. A curve applied before the subtraction would remove an amount that does not correspond to the light the white LED adds back.
+// The white emitters derive in linear light and curve on the way out, so min() and the Accurate subtraction remove exactly the light the white LED adds back.
 TEST_CASE("RGBW white is derived in linear light, then curved once") {
     Correction c;
     mm::rebuildFromPreset(c, 255, mm::PresetOrder::RGBW);
@@ -770,21 +769,26 @@ TEST_CASE("Correction gain: a copied correction reads its own tables") {
     CHECK(out[2] == 200);
 }
 
-TEST_CASE("Correction counts a rebuild that moves, drops or adds a role, and no other") {
+TEST_CASE("Correction flags a rebuild that moves, drops or adds a role, and no other") {
     const R rgb[3] = {R::Red, R::Green, R::Blue};
     const R grb[3] = {R::Green, R::Red, R::Blue};
     const R redGreen[3] = {R::Red, R::Green, R::None};
     const R rgbw[4] = {R::Red, R::Green, R::Blue, R::White};
     mm::Correction c;
+    CHECK(c.layoutChanged);   // a fresh correction: the first frame is zeroed
     c.rebuild(255, rgb, 3);
-    const uint8_t start = c.layoutGen;
+    c.layoutChanged = false;   // the driver read it
     c.rebuild(40, rgb, 3);
-    CHECK(c.layoutGen == start);   // a brightness is no layout
+    CHECK_FALSE(c.layoutChanged);   // a brightness is no layout
     c.rebuild(255, grb, 3);
-    CHECK(c.layoutGen == static_cast<uint8_t>(start + 1));   // moved
+    CHECK(c.layoutChanged);   // moved
+    c.layoutChanged = false;
     c.rebuild(255, redGreen, 3);
-    CHECK(c.layoutGen == static_cast<uint8_t>(start + 2));   // dropped
+    CHECK(c.layoutChanged);   // dropped
+    c.layoutChanged = false;
     c.rebuild(255, rgbw, 4);
-    CHECK(c.layoutGen == static_cast<uint8_t>(start + 3));   // added
-    for (int i = 0; i < 600; i++) { c.rebuild(255, i % 2 ? rgbw : rgb, i % 2 ? 4 : 3); CHECK(c.layoutGen != 255); }   // 255 is a fresh frame's mark
+    CHECK(c.layoutChanged);   // added
+    c.layoutChanged = false;
+    c.rebuild(255, rgbw, 4);
+    CHECK_FALSE(c.layoutChanged);   // the same layout again
 }

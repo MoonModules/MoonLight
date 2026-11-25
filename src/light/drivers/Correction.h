@@ -91,8 +91,8 @@ struct CorrectionData {
     bool hasFine = false;
     /// Whether the fixture carries red, green and blue alone, resolved at rebuild so a plain strip skips every optional role per light.
     bool plainRgb = true;
-    /// Counts the rebuilds that moved, dropped or added a role, 0 to 254: a change is when a frame a driver keeps holds bytes the new profile leaves unwritten.
-    uint8_t layoutGen = 0;
+    /// Set by a rebuild that moves, drops or adds a role, when a frame a driver keeps holds bytes the new profile leaves unwritten; the driver reads and clears it.
+    bool layoutChanged = true;
     uint8_t outChannels = 3;        // bytes emitted per light (= channelsPerLight of the wiring)
     WhiteMode whiteMode = WhiteMode::Min;   // how white is synthesized from RGB (white lights only)
 };
@@ -216,7 +216,7 @@ struct Correction : CorrectionData {
         hasFine = anyPresent({offRedFine, offGreenFine, offBlueFine, offWhiteFine, offWarmWhiteFine, offDimmerFine});
         plainRgb = !hasMotion && !hasFine && offDimmer == kAbsent && !anyPresent({offWhite, offWarmWhite, offYellow, offUV});
         outChannels = nChannels;
-        if (layoutOf(*this, kOffsetOf, kChannelRoleCount) != was) layoutGen = static_cast<uint8_t>((layoutGen + 1) % 255);
+        if (layoutOf(*this, kOffsetOf, kChannelRoleCount) != was) layoutChanged = true;
         // After the offsets: whether the 16-bit table is filled depends on hasFine.
         rebuildBrightness(brightness);
     }
