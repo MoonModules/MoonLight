@@ -6,6 +6,7 @@
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
 #include "light/layers/Buffer.h"
+#include "platform/platform_leds.h"   // RmtLoopbackResult
 
 #include <cstring>
 #include <string>   // std::string — clang gets it transitively, GCC does not

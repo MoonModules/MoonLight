@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cmath>
 #include <cstring>

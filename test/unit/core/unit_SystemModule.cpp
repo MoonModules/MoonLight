@@ -4,6 +4,7 @@
 #include "core/system/SystemModule.h"
 #include "core/util/JsonSink.h"
 #include "platform/host/host_update.h"   // inContainer: the rule the seed reads
+#include "platform/platform_system.h"   // getMacAddress, resetReason, setTestBootRecord
 
 #include <cstring>
 #include <string>

@@ -6,6 +6,7 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 #include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <set>
 #include <utility>

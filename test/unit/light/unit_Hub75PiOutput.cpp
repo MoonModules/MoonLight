@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include "hub75_pi_bench.h"
+#include "platform/platform_leds.h"   // hub75BackendLabel
 
 // The status of a 16x32 panel opened at the default 6 bits and healthy.
 template <class S>

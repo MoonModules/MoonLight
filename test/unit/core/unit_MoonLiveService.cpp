@@ -12,7 +12,8 @@
 #include "core/module/MoonModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/module/StateDocument.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_io.h"   // setTestGpioLevel, clearTestGpioLevel, setTestAdcValue
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>

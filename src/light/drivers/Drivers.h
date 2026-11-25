@@ -16,7 +16,11 @@
 #include "core/services/AudioDemand.h"         // what the palette script reads of the audio, as Demand.h describes
 #include "core/moonlive/script_catalog.h"       // the tags each factory palette declares
 #include "core/util/LightOutput.h"   // the seam the domain-neutral WLED, MQTT and MoonStats consumers read
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_tasks.h"   // notifyTask, WorkerTask, taskWdtSubscribe
+#include "platform/platform_system.h"   // kBootStableMs, bootRecord
+#include "platform/platform_fs.h"   // fsList
+#include "platform/platform_io.h"   // gpioWrite
 
 #include <cstring>  // std::strcmp in onControlChanged
 #include <atomic>   // encodeDone_: the render↔encode cross-core handoff flag

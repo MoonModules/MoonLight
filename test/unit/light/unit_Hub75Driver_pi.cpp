@@ -17,6 +17,7 @@
 #endif
 #include "platform/rpi/hub75_gpio_backend.h"   // kGpioTestRefusal: what a closed gate says
 #include "hub75_pi_bench.h"
+#include "platform/platform_leds.h"   // Hub75Backend, hub75BackendLabel
 
 #include <cstring>
 #include <memory>

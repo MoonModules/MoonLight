@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "platform/platform.h"            // InternalRamObject: the bank touches its state every sample
+#include "platform/platform_heap.h"   // InternalRamObject
 #include "core/util/AudioFrame.h"
 #include "core/util/SpscRing.h"           // the task's frames to the render tick
 #include "core/services/AudioLevel.h"     // DcBlocker

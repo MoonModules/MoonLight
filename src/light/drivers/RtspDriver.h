@@ -6,7 +6,9 @@
 #include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "light/util/RtpH264.h"
 #include "light/util/RtspSession.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_net.h"   // TcpConnection, UdpSocket, TcpServer
+#include "platform/platform_video.h"   // encoderRelease, EncoderConfig, encoderClaim
 
 #include <cstdio>
 #include <cstring>

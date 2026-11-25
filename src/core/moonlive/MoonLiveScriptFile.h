@@ -5,7 +5,8 @@
 #include "core/moonlive/MoonLiveMissing.h"   // what a compile finds missing
 #include "core/moonlive/script_catalog.h"
 #include "core/util/fnv.h"   // the shipped names, for isFactoryScript below
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_fs.h"   // fsSize, fsWriteAtomic, fsRead
 
 #include <cstdio>
 #include <cstring>

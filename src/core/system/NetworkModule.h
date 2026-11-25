@@ -11,7 +11,9 @@
 #include "core/system/AccessPointModule.h"
 #include "core/util/CaptivePortal.h"
 #include "core/util/JoinWindow.h"   // kStaGraceMs, kDhcpWaitMs: the windows the provisioning answer shares
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // free
+#include "platform/platform_net.h"   // setHostname, coprocessorShutdown, ethInit
 
 #include <cstdio>
 #include <cstring>

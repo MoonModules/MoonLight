@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "core/module/Control.h"          // ControlList: a backend appends its own controls into the shared list
-#include "platform/platform.h"     // RmtLoopbackResult
+#include "platform/platform_leds.h"   // RmtLoopbackResult
 
 namespace mm {
 

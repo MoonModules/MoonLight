@@ -6,7 +6,7 @@
 
 #include "doctest.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 #include <cstring>
 #include <string>

@@ -8,7 +8,8 @@
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"           // a subscribe message parsed
 #include "core/util/fnv.h"               // fnv1a: the diff-on-the-wire cache's digest
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <algorithm>
 #include <cstdio>

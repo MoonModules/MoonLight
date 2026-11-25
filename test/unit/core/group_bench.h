@@ -7,7 +7,8 @@
 #include "core/system/DeviceGroup.h"
 #include "core/system/DevicesModule.h"
 #include "core/system/WledPacket.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestEthIPv4
 
 #include <cstdio>
 

@@ -17,7 +17,10 @@
 #include "core/services/AudioSync.h"      // the audio sync's socket, either format
 #include "core/services/AudioDemand.h"    // what the readers of the notes need
 #include "core/module/Scheduler.h"        // the tree whose demands decide whether the notes run
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_tasks.h"   // WorkerTask, spawnPinnedTask, stopPinnedTask
+#include "platform/platform_audio.h"   // CodecType, audioCaptureDevices, hasAudioInput
+#include "platform/platform_io.h"   // i2cBusGeneration, i2cBusReady
 
 #include <atomic>
 #include <memory>   // unique_ptr: the analysis, held only while an input is open

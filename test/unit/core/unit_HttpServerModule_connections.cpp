@@ -7,7 +7,10 @@
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
 #include "http_loopback.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs, setTestNowMs
+#include "platform/platform_heap.h"   // setTestFreeInternalHeap
+#include "platform/platform_fs.h"   // setUiFolder
+#include "platform/platform_net.h"   // TcpConnection, setTestBindFails
 #include "ui/ui_embedded.h"
 
 #include <cstdio>

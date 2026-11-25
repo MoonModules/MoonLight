@@ -7,7 +7,7 @@
 #include "core/services/AnalogService.h"
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"
+#include "platform/platform_io.h"   // clearTestAdcValue, setTestAdcValue, adcMaxCount
 #include "core/util/JsonSink.h"
 
 #include <cstdio>

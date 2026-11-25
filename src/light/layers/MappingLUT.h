@@ -2,7 +2,7 @@
 
 #include "light/util/light_types.h"  // nrOfLightsType
 #include "core/util/HeapBytes.h"  // heap(): the bytes with their memory type
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // free, alloc, maxAllocBlock
 
 #include <cstring>
 

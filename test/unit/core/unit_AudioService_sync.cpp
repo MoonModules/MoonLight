@@ -40,7 +40,8 @@
 #include "core/services/AudioService.h"
 #include "core/util/MoonModulesAudioSyncPacket.h"
 #include "core/util/WLEDAudioSyncPacket.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs, delayMs
+#include "platform/platform_net.h"   // networkReady, UdpSocket, setTestBindFails
 
 #include <cstdint>
 #include <cstring>

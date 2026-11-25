@@ -8,6 +8,7 @@
 #include "light/effects/FseqPlayerEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_fs.h"   // fsSetRoot, SdPinConfig, sdMount
 
 #include <filesystem>
 #include <string>

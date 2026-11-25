@@ -17,7 +17,9 @@
 #include "core/system/FirmwareUpdateModule.h"   // a MoonBase behind the app, which this device's row names
 #include "core/util/JsonSink.h"
 #include "fake_light_output.h"   // a light output, whose drivers this device's row names
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestEthIPv4
+#include "platform/platform_ota.h"   // setTestMoonBase
 
 #include <cstdint>
 #include <cstdio>

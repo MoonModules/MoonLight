@@ -20,6 +20,7 @@
 #include "core/services/AudioService.h"   // the audio vocabulary reads the latest frame
 #include "light/powerfunctions/draw.h"    // draw::line, the shared 3D Bresenham a script draws with
 #include "light/powerfunctions/particles.h" // particles::Pool, the kernel a scripted particle effect drives
+#include "platform/platform_clock.h"   // millis
 
 /// The only place the LED vocabulary lives: the function names, their argument counts, and each inline opcode's meaning.
 ///

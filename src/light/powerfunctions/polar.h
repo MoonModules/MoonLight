@@ -4,7 +4,7 @@
 #include "core/util/ScratchBuffer.h"   // ScratchBuffer<T>: self-sizing, owner-tied scratch memory
 #include "core/util/math16.h"          // atan16, dist16, angle16
 #include "light/util/light_types.h"    // lengthType
-#include "platform/platform.h"    // freeHeap, HEAP_RESERVE: the memory gate
+#include "platform/platform_heap.h"   // freeHeap, HEAP_RESERVE
 
 #include <cstdint>
 

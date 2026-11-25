@@ -4,7 +4,7 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i): the modules to profile
 #include "core/util/JsonSink.h"    // writeListRow emits its row as JSON into the sink
-#include "platform/platform.h" // taskSnapshot / TaskInfo: the RTOS task view (behind the boundary)
+#include "platform/platform_tasks.h"   // currentTaskOnCore, TaskInfo, taskSnapshot
 
 #include <algorithm>  // std::sort: stable row order so the list doesn't jump each refresh
 #include <cstdint>

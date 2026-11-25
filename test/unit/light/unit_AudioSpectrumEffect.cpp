@@ -4,7 +4,7 @@
 /// The sweep colors with the readouts off draw WLED-MM's GEQ PPA: bar `i` over columns `i*w/16` up to `(i+1)*w/16`, one color per bar, rising from the floor, so two boards differ only in their audio.
 
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "light/layouts/Layouts.h"
 #include "light/effects/AudioSpectrumEffect.h"
 #include "light/layouts/GridLayout.h"

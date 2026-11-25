@@ -4,7 +4,9 @@
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/LayoutPicture.h"   // which light each pixel shows
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsMkdir, fsRootPath, fsList
+#include "platform/platform_video.h"   // encoderRelease, encoderWrite, encoderRunning
 
 #include <atomic>
 #include <cstdio>

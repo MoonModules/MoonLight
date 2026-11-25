@@ -3,7 +3,7 @@
 #include "core/util/ScratchBuffer.h"
 
 #include "core/module/MoonModule.h"    // full definition: the dynamic-bytes readout
-#include "platform/platform.h"  // alloc / free
+#include "platform/platform_heap.h"   // free, alloc, fitsWithReserve
 
 #include <cstring>              // memset, memcpy
 

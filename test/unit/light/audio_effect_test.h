@@ -7,6 +7,7 @@
 #include "light/util/Palette.h"
 #include "light/powerfunctions/audioReadout.h"
 #include "core/util/HarmonicSieve.h"   // keepNotes: the notes the core keeps of each frame
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cstring>
 #include <vector>

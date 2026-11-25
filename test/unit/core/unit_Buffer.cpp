@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 #include "light/layers/Buffer.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocatedBytes, allocatedCount
 
 // allocate(N,3) reserves count×channels bytes; count/channelsPerLight/bytes/data/span all reflect that.
 TEST_CASE("Buffer allocate and accessors") {

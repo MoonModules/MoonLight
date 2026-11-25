@@ -3,7 +3,7 @@
 ///
 /// A board with PSRAM has two kinds of RAM, and where a buffer lives matters as much as its size. So an owner reports its bytes with the part in PSRAM, read from each allocation's own address, and the sheet balances each type on its own.
 
-#include "platform/platform.h"   // ptrIsPsram
+#include "platform/platform_heap.h"   // ptrIsPsram
 
 #include <cstddef>
 #include <cstdint>

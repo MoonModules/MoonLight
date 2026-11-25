@@ -12,7 +12,9 @@
 #include "core/system/Devices.h"
 #include "core/util/ClockSync.h"
 #include "core/util/fnv.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs, millis, uptimeUs
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
+#include "platform/platform_fs.h"   // fsWriteAtomic, fsRemove
 
 #include <algorithm>
 #include <cstdio>

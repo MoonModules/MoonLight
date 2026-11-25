@@ -4,7 +4,7 @@
 #include "core/util/TryLock.h"     // staging, shared by a writer task and the render copy
 #include "light/effects/EffectBase.h"
 #include "light/layers/Layer.h"    // the mapping a sender-mapped frame is placed through
-#include "platform/platform.h"     // delayMs, while a writer waits out the render copy
+#include "platform/platform_clock.h"   // delayMs
 
 #include <atomic>
 #include <cstring>

@@ -9,7 +9,10 @@
 #include "light/util/ArtNetPacket.h"   // shared ArtNet wire formats (build + parse)
 #include "light/util/DdpPacket.h"      // shared DDP wire format
 #include "light/util/E131Packet.h"     // shared E1.31/sACN wire format
-#include "platform/platform.h"    // platform::UdpSocket: the three receive sockets
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_tasks.h"   // WorkerTask, sleepUs, spawnPinnedTask
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // UdpSocket, localIPv4, deviceIp
 
 #include <atomic>
 #include <cstring>

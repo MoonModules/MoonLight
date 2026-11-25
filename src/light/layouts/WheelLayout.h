@@ -48,7 +48,7 @@ public:
                 // offset = radius * component / 128, then shift so coords are ≥ 0.
                 const int32_t x = maxR + ((radius * cx) >> 7);
                 const int32_t y = maxR + ((radius * sy) >> 7);
-                sink.pixel(idx,
+                sink.addLight(idx,
                    static_cast<lengthType>(x),
                    static_cast<lengthType>(y),
                    0);

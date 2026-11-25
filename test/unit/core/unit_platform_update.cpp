@@ -7,7 +7,7 @@
 /// An image that is no program, misses its digest or is abandoned leaves the program as it was; a program in a folder it cannot write is updated by hand.
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_ota.h"   // OtaWrite, otaBegin, OtaTarget
 #include "host_update.h"
 #include "unit/host_android.h"
 #include "core/util/sha256.h"

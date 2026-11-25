@@ -4,6 +4,8 @@
 
 #include "doctest.h"
 #include "core/util/NameResolver.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // LookupStep
 
 #include <cstring>
 

@@ -1,7 +1,7 @@
 /// @module FixedPointEffect
 
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "light/effects/FixedPointEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"

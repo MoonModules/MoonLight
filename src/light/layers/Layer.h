@@ -10,7 +10,8 @@
 #include "light/modifiers/ModifierBase.h"
 #include "light/powerfunctions/draw.h"        // draw::fade, the collected once-per-frame fade
 #include "light/powerfunctions/particles.h"   // particles::FrameTime, the elapsed-to-scale conversion
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_heap.h"   // free, alloc, freeHeap
 
 #include <atomic>   // the worker time, added from a render worker's thread
 #include <cstdint>  // INT32_MAX: the bound on the warp's 16.16 steps
@@ -477,7 +478,7 @@ public:
         const nrOfLightsType driverCount = physicalLightCount();   // == Layouts::totalLightCount()
         const bool dense = (driverCount == boxCount);
         // A gap fills a cell but must not receive its color, so the identity map is wrong here.
-        const bool anyGap = layouts_ && layouts_->hasBlackPixels();
+        const bool anyGap = layouts_ && layouts_->hasGaps();
 
         // The frame-rate floor for the common case: box cell i is driver light i. Keep it first.
         if (staticCount_ == 0 && dense && !anyGap && isNaturalOrder()) {
@@ -506,7 +507,7 @@ public:
     bool isNaturalOrder() const {
         struct Ctx { Coord3D box; bool ok; };
         Ctx ctx{{physicalWidth_, physicalHeight_, physicalDepth_}, true};
-        // A gap reaches this callback too, since blackCb is null: out of place it breaks the order like any light.
+        // A gap reaches this callback too, since gapCb is null: out of place it breaks the order like any light.
         layouts_->placeLights(CoordSink{[](void* c, nrOfLightsType driverIdx, lengthType x, lengthType y, lengthType z) {
             auto* k = static_cast<Ctx*>(c);
             if (!k->ok) return;   // once a mismatch is found the answer is settled; skip the rest

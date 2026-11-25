@@ -5,6 +5,8 @@
 #include "doctest.h"
 #include "core/util/RtpMidi.h"
 #include "core/services/RtpMidiSession.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <chrono>
 #include <cstring>

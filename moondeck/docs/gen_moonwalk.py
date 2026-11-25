@@ -47,7 +47,6 @@ MAX_FRAME_WORDS = 150    # an intro or an outro: context, not content
 MAX_PROCESS_WORDS = 600  # a whole process as one reader reads it: past it, it is two processes or it holds reference
 MAX_READER_STEPS = 10    # a process's steps as one reader meets them: past it, steps fold into a subprocess, as procedure guides split a long task
 MAX_STAGE_PROCESSES = 8  # a stage's processes, one column of the map: past it, the stage is two stages
-MAX_DOWNLOAD_KB = 50     # the map and its renderer, gzipped, as a page or the app fetches them: past it, the details load on demand
 RENDERER = ROOT / "docs" / "assets" / "moonwalk.js"
 # The systems' one home is the architecture's Part table, so a process names them as that table does and no second list exists.
 ARCHITECTURE = ROOT / "docs" / "explanation" / "architecture" / "index.md"
@@ -710,7 +709,7 @@ def main() -> int:
         print(e, file=sys.stderr)
         return 1
     steps = sum(len(p.get("steps", [])) for p in model["processes"].values())
-    print(f"gen_moonwalk: {len(model['stages'])} stages, {len(model['processes'])} processes, {steps} steps")
+    print(f"gen_moonwalk: {len(model['stages'])} stages, {len(model['processes'])} processes, {steps} steps, {download_kb(model)} KB to download")   # the map's size, measured each run and reported per commit (repo-health) rather than capped: each item has its own cap
     if args.out:
         write(model, args.out)
     if args.pr_template:

@@ -6,7 +6,7 @@
 #include "light/effects/GEQ3DEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // A frozen clock and a sweep-simulating AudioService make the bars deterministic; both are restored when a case ends.
 struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } };

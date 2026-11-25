@@ -5,7 +5,9 @@
 #include "light/drivers/LedDriverConfig.h"
 #include "light/drivers/PinList.h"         // parsePinList / assignCounts (shared with I80Peripheral)
 #include "light/drivers/RmtSymbol.h"       // makeRmtSymbol (the bit shapes the peripheral expands with)
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayUs
+#include "platform/platform_heap.h"   // allocInternal, alloc, ptrIsPsram
+#include "platform/platform_leds.h"   // rmtWs2812Transmit, rmtWs2812Wait, RmtWs2812Handle
 
 namespace mm {
 

@@ -6,6 +6,7 @@
 #include "doctest.h"
 #include "golden_frame.h"                 // the effect harness: Layouts, Grid, Layer
 #include "light/effects/TrailsEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 using namespace mm;
 

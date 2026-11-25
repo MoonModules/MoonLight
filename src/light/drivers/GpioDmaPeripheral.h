@@ -1,7 +1,8 @@
 #pragma once
 
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // maxAllocBlock
+#include "platform/platform_leds.h"   // gpioDmaWs2812Init, gpioDmaWs2812Buffer, gpioDmaWs2812BufferCapacity
 
 namespace mm {
 

@@ -2,6 +2,7 @@
 
 #include "core/module/MoonModule.h"
 #include "core/module/StateDocument.h"   // what a live document's apply answers
+#include "platform/platform_heap.h"   // alloc
 
 #include <array>
 #include <atomic>
@@ -110,7 +111,7 @@ public:
     uint32_t frameUs() const { return frameUs_; }
     /// The tree's modification count, moved by every structural change: a reader keeping pointers into the tree rebuilds them once it moves, as a textbook iterator checks its collection's count.
     uint32_t structureVersion() const { return structureVersion_; }
-    /// Move the count; MoonModule::quiesceForMutation calls it through noteStructureChange.
+    /// Move the count, which MoonModule::quiesceForMutation does for every structural change.
     void bumpStructureVersion() { structureVersion_++; }
     /// Frames a second, derived from the tick time above.
     uint32_t fps() const { return tickTimeUs_ > 0 ? 1000000 / tickTimeUs_ : 0; }

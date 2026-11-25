@@ -5,6 +5,7 @@
 #include "doctest.h"
 #include "audio_effect_test.h"
 #include "light/effects/SheetMusicEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <memory>
 

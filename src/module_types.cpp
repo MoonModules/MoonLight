@@ -213,7 +213,7 @@
 #include "core/system/DeviceGroup.h"
 #include "core/system/FilesystemModule.h"
 #include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // sdCardBootsByDefault
 
 #include <cstring>
 

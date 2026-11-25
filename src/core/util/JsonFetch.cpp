@@ -4,6 +4,10 @@
 
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_clock.h"   // millis, delayMs
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_tasks.h"   // stopPinnedTask, spawnPinnedTask, notifyTask
+#include "platform/platform_net.h"   // httpFetch
 
 #include <cstdio>
 #include <cstring>

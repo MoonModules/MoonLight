@@ -8,6 +8,7 @@
 #include "light/drivers/MoonI80Peripheral.h"
 #include "light/layers/Buffer.h"
 #include "unit/core/conditional_controls.h"  // controlIndex/setControlValue: clockPin is set through the control the backend declares
+#include "platform/platform_heap.h"   // kInternalFreeFloor
 
 #include <cstring>
 

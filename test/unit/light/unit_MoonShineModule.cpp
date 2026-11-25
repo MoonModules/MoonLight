@@ -4,7 +4,8 @@
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"   // millis: one timing window
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_tasks.h"   // TaskInfo, setTestTaskSnapshot
 #include "core/util/ModuleFactory.h"
 #include "light/layers/MoonShineModule.h"
 #include "module_types.h"

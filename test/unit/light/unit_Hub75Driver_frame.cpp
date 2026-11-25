@@ -13,7 +13,7 @@
 #include "light/layers/Layer.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // hub75TestFrame, Hub75Handle, Hub75Pins
 
 #include <cstring>
 #include <memory>

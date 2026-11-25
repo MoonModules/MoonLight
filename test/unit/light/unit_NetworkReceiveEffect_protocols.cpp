@@ -8,7 +8,8 @@
 #include "light/util/E131Packet.h"
 #include "light/effects/NetworkReceiveEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs, setTestNowMs
+#include "platform/platform_net.h"   // UdpSocket, setTestJoin, TestJoin
 
 #include <cstring>
 #include <memory>

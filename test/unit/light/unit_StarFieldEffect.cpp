@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/StarFieldEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"  // setTestNowMs — drive the throttle past its interval deterministically
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Restore the real clock on scope exit, even if a REQUIRE aborts the case mid-way, so a frozen millis() can't leak into a later test (same pattern as unit_BouncingBallsEffect.cpp).
 namespace { struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } }; }

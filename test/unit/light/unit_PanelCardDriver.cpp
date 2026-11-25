@@ -13,6 +13,8 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/PanelsLayout.h"
 #include "core/util/JsonSink.h"   // writeControlMetadata: the schema the UI parses
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // ethTestClearFrames, ethRawL2Claimed, ethClaimRawL2
 #include <string>   // status() substring checks
 
 using mm::Wall;

@@ -6,6 +6,7 @@
 #include "light/drivers/RtspDriver.h"
 #include "light/layers/Buffer.h"
 #include "wall_fixture.h"
+#include "platform/platform_video.h"   // setTestEncoderMode, EncoderTestMode, encoderTestArgs
 
 #include <string>
 

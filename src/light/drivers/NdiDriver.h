@@ -3,7 +3,8 @@
 #include "core/util/ScratchBuffer.h"
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/LayoutPicture.h"   // which light each pixel shows
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_video.h"   // ndiAvailable, ndiSenderOpen, ndiSenderClose
 
 #include <cstdio>
 #include <cstring>

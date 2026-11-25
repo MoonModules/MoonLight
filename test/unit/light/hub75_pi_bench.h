@@ -19,7 +19,7 @@
 #include "light/layouts/PanelsLayout.h"
 #include "platform/Hub75Gpio.h"
 #include "platform/Hub75Pio.h"
-#include "platform/platform.h"
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 namespace mm {
 

@@ -4,7 +4,9 @@
 #include "core/module/MoonModule.h"
 #include "core/util/build_info.h"   // kVersion / kRelease / kBuildDate / kFirmwareName
 #include "core/util/FirmwareImage.h"  // kHandoffVersion: the MoonBase this app works with
-#include "platform/platform.h" // firmwareSize / firmwarePartition
+#include "platform/platform_system.h"   // firmwareSize, firmwarePartition, chipModel
+#include "platform/platform_net.h"   // coprocessorOutdated, coprocessorLine, coprocessorHostVersion
+#include "platform/platform_ota.h"   // otaMoonBaseVersion, otaMoonBaseBuild, otaMoonBaseHandoff
 #include "platform/coprocessor_status.h"   // kLinkNotStarted: the radio chip line that offers connect
 
 #include <cstdint>

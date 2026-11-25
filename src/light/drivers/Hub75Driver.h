@@ -8,7 +8,7 @@
 #include "light/drivers/Hub75PioOutput.h"   // the output that drives the Pi 5's PIO backend
 #include "light/layers/Layer.h"
 #include "platform/machine.h"      // which machine this is: the output follows it
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // Hub75Backend, hub75BackendLabel, hub75BackendAvailable
 
 #include <algorithm>
 #include <cstring>

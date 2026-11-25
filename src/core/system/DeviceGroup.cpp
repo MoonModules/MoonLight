@@ -9,7 +9,8 @@
 #include "core/util/Mdns.h"              // parseMac: a MAC as an API caller writes it
 #include "core/util/fnv.h"
 #include "core/util/format.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_system.h"   // getMacAddress
 
 #include <cinttypes>
 #include <cstdio>

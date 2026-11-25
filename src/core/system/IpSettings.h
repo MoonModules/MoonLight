@@ -2,7 +2,7 @@
 
 #include "core/util/fnv.h"
 #include "core/util/Ipv4.h"   // the rule a static setting is checked by, shared with MoonBase
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // NetIface, netGetIPv4, netSetStaticIPv4
 
 #include <cstdint>
 #include <cstring>

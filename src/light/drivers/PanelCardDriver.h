@@ -4,7 +4,8 @@
 #include "light/drivers/DriverBase.h"
 
 #include "light/drivers/ColorLight5A75Packet.h"   // the first wire format (byte layout lives there)
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_net.h"   // rawInterfaces, ethClaimRawL2, ethBindRawInterface
 
 #include <atomic>
 

@@ -2,6 +2,7 @@
 
 #include "doctest.h"
 #include "core/system/FirmwareUpdateModule.h"
+#include "platform/platform_ota.h"   // setTestMoonBase
 #include <cstring>
 
 // The `firmware` control always carries a name: the variant from build_info.h, or "unknown" on a local host build.

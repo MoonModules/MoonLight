@@ -53,20 +53,20 @@ public:
         // front: z = 0: for x { for y }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType y = 0; y < height && idx < limit; y++)
-                sink.pixel(static_cast<nrOfLightsType>(idx++),
+                sink.addLight(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(x + 1), static_cast<lengthType>(y + 1), 0);
 
         // back: z = depth+1: for x { for y }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType y = 0; y < height && idx < limit; y++)
-                sink.pixel(static_cast<nrOfLightsType>(idx++),
+                sink.addLight(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(x + 1), static_cast<lengthType>(y + 1),
                    static_cast<lengthType>(depth + 1));
 
         // above: y = 0: for x { for z }
         for (lengthType x = 0; x < width && idx < limit; x++)
             for (lengthType z = 0; z < depth && idx < limit; z++)
-                sink.pixel(static_cast<nrOfLightsType>(idx++),
+                sink.addLight(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(x + 1), 0, static_cast<lengthType>(z + 1));
 
         // The bottom face is deliberately absent: the cube is open there.
@@ -74,13 +74,13 @@ public:
         // left: x = 0: for z { for y }
         for (lengthType z = 0; z < depth && idx < limit; z++)
             for (lengthType y = 0; y < height && idx < limit; y++)
-                sink.pixel(static_cast<nrOfLightsType>(idx++),
+                sink.addLight(static_cast<nrOfLightsType>(idx++),
                    0, static_cast<lengthType>(y + 1), static_cast<lengthType>(z + 1));
 
         // right: x = width+1: for z { for y }
         for (lengthType z = 0; z < depth && idx < limit; z++)
             for (lengthType y = 0; y < height && idx < limit; y++)
-                sink.pixel(static_cast<nrOfLightsType>(idx++),
+                sink.addLight(static_cast<nrOfLightsType>(idx++),
                    static_cast<lengthType>(width + 1), static_cast<lengthType>(y + 1),
                    static_cast<lengthType>(z + 1));
     }

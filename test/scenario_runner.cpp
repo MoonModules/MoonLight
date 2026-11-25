@@ -95,7 +95,10 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "light/drivers/Drivers.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_heap.h"   // freeHeap, maxInternalAllocBlock
+#include "platform/platform_fs.h"   // fsRead, fsWriteAtomic, fsRemove
+#include "platform/platform_video.h"   // hdmiTestClear
 
 #include <cstdint>
 #include <cstdio>

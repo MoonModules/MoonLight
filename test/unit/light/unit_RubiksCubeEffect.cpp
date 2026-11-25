@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/RubiksCubeEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"  // setTestNowMs — freeze millis() so the first frame runs init() deterministically
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <vector>
 

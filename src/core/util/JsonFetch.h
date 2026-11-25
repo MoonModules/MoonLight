@@ -3,7 +3,7 @@
 #include "core/module/StateDocument.h"   // what a push to this device answers
 #include "core/util/JsonUtil.h"
 #include "core/util/SpscRing.h"
-#include "platform/platform.h"
+#include "platform/platform_tasks.h"   // WorkerTask
 
 #include <atomic>
 #include <cstdint>

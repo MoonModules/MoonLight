@@ -6,7 +6,7 @@
 #include "core/system/PinsModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"   // setTestGpioCapability: inject an unsafe pin for the severity cases
+#include "platform/platform_io.h"   // clearTestGpioCapability, GpioCapability, setTestGpioCapability
 
 #include <cstring>
 #include <string>

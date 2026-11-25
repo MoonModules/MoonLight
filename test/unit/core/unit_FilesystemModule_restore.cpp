@@ -9,7 +9,7 @@
 #include "light/effects/RainbowEffect.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/layers/Layer.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
 #include "filesystem_fixture.h"
 
 #include <cstdio>

@@ -166,6 +166,11 @@
 #include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight: shared with the OTA task
 #include "core/system/FilesystemModule.h"      // flushPending: settings written before an install restarts the device
 #include "core/util/LightOutput.h"   // the palettes as colors, for the HSV pair
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // networkReady, TcpConnection
+#include "platform/platform_ota.h"   // http_fetch_to_ota
 
 #include <cstdio>
 #include <cstdlib>

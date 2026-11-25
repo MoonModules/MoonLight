@@ -6,7 +6,7 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 #include "light/util/FixtureChannels.h"
-#include "platform/platform.h"   // setTestNowMs: the sweep needs the clock to move
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
 

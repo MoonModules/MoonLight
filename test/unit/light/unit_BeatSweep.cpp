@@ -8,6 +8,7 @@
 #include "light/effects/BeatSweepEffect.h"
 #include "light/effects/BeatRipplesEffect.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <string>
 

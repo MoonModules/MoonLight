@@ -12,7 +12,8 @@
 #include "light/moonlive/MoonLiveLayout.h"
 #include "light/moonlive/MoonLiveModifier.h"   // the cycle-break case below drives a modifier
 #include "light/moonlive/MoonLiveBuiltins_light.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocExec, writeExec, freeExec
+#include "platform/platform_fs.h"   // fsMkdir, fsWriteAtomic
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveCompiler.h"
 #include "light/layers/Layer.h"

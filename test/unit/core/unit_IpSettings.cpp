@@ -5,7 +5,7 @@
 
 #include "doctest.h"
 #include "core/system/IpSettings.h"
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // setTestWifiStaIPv4, setTestNetLease, NetIface
 
 #include <cstdio>
 #include <cstring>

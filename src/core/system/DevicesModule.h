@@ -23,7 +23,9 @@
 #include "core/util/LightOutput.h"        // writeOutputs: this device's own row carries what drives its lights
 #include "core/util/Mdns.h"               // the browse for devices that announce only over mDNS
 #include "core/util/ReceiverList.h"           // parseReceiverList: the added addresses, as every receiver list is read
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_system.h"   // getMacAddress, chipModel
+#include "platform/platform_net.h"   // arpLookup, localIPv4, UdpSocket
 
 #include <cstdint>
 #include <cstdio>

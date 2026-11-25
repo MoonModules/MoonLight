@@ -8,6 +8,8 @@
 #include "light/drivers/GpioDmaPeripheral.h"
 #include "light/layers/Buffer.h"
 #include "unit/core/conditional_controls.h"  // shared conditional-control helpers
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock
+#include "platform/platform_io.h"   // GpioCapability, setTestGpioCapability, clearTestGpioCapability
 
 #include <cstring>
 #include <string>

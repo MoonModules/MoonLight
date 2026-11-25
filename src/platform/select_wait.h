@@ -1,10 +1,15 @@
 #pragma once
 
-/// The select() wait the BSD-socket platforms share, host and ESP32; included after the platform's socket headers, which declare select and fd_set.
+/// The select() wait the BSD-socket platforms share, host and ESP32.
 
-#include "platform/platform.h"   // delayMs
+#include "platform/platform_clock.h"   // delayMs
 
 #include <cstdint>
+#if defined(_WIN32)
+#include <winsock2.h>     // select and fd_set
+#else
+#include <sys/select.h>   // select and fd_set, which ESP-IDF routes to lwIP
+#endif
 
 namespace mm::platform::detail {
 

@@ -3,7 +3,7 @@
 #include "doctest.h"
 #include "core/module/MoonModule.h"
 #include "core/util/ScratchBuffer.h"
-#include "platform/platform.h"   // setTestMaxAllocBlock: refuse a growth
+#include "platform/platform_heap.h"   // setTestPsramRange, setTestMaxAllocBlock
 
 #include <cstdint>
 

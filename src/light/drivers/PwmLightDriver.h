@@ -3,6 +3,7 @@
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/PinList.h"   // parsePinList: the GPIO list every pin driver reads
 #include "core/util/format.h"          // formatTo: the pin a refused channel names
+#include "platform/platform_leds.h"   // pwmMaxBits, kPwmClockHz, pwmChannelCount
 
 #include <cstdint>
 #include <cstring>

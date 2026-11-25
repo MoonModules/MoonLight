@@ -104,7 +104,8 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 
 ### File shape: header-only vs `.h` + `.cpp`
 
-- **Light-domain modules and the `MoonModule` base: header-only.** Implementation inline in a single `.h`, so a contributor copies an effect, edits, and registers one line in `main.cpp` with no CMake question. A file that outgrows one concern extracts a helper header rather than splitting to `.h` + `.cpp`.
+- **Light-domain modules: header-only.** Implementation inline in a single `.h`, so a contributor copies an effect, edits, and registers one line in `main.cpp` with no CMake question. A file that outgrows one concern extracts a helper header rather than splitting to `.h` + `.cpp`.
+- **The `MoonModule` base and `ControlList`: `.h` + `.cpp`, the per-frame members inline.** Nearly every file includes them, so a body edit in the header rebuilds the whole tree. The ticks, the child loop, the timing, the enabled and role checks, the accessors and the one-line virtual defaults stay in the header, where the render path inlines them; the lifecycle walks, the child mutators, the control rebuild and the binders live in `MoonModule.cpp` and `Control.cpp`.
 - **Core service modules: `.h` + `.cpp`.** A core module that bridges to the platform or carries real infrastructure splits interface from body. An implementation edit then recompiles one translation unit rather than every includer, which is 2-5x faster on the edits development makes. Small utilities that are almost all declarations stay header-only, and a template must.
 - **A catalog module includes ONLY its base header**, which is the module author's standard library. It carries the render context, the domain helpers, the lifecycle primitives and the standard headers bodies use. Bundling costs nothing, since unused declarations emit no code, so add a common header to the base rather than scatter it per file. A prelude, the way Rust's `std::prelude` is.
 

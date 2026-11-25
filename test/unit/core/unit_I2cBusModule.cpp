@@ -5,6 +5,7 @@
 #include "doctest.h"
 #include "core/system/I2cBusModule.h"
 #include "core/module/Scheduler.h"
+#include "platform/platform_io.h"   // i2cBusReady, i2cBusGeneration, setTestI2cDevices
 
 #include <cstring>
 #include <string>

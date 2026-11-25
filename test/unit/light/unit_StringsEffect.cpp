@@ -6,6 +6,7 @@
 #include <cmath>
 #include "audio_effect_test.h"
 #include "light/effects/StringsEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 using namespace mm;
 

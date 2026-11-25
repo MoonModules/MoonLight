@@ -1,7 +1,7 @@
 /// The microSD slot's pins, mount and format button; the files it holds are browsed through the File Manager's existing routes, not a surface of this module's own. Public surface and class layout live in SdCardService.h.
 #include "core/services/SdCardService.h"
 
-#include "platform/platform.h"   // sdMount/sdUnmount/sdFormat/sdCardUsed/sdCardTotal, hasSdCard
+#include "platform/platform_fs.h"   // SdBus, sdMountError, SdMountError
 
 #include <cstring>   // strcmp
 #include <iterator>  // size

@@ -15,7 +15,10 @@
 #include "core/util/JsonSink.h"
 #include "correction_presets.h"                  // mm::rebuildFromPreset
 #include "../core/conditional_controls.h"   // mm::setControlValue
-#include "platform/platform.h"                 // gpioRead: the host reads back what gpioWrite put there
+#include "platform/platform_clock.h"   // millis, setTestNowMs
+#include "platform/platform_system.h"   // setTestBootRecord, kBootStableMs
+#include "platform/platform_fs.h"   // fsMkdir, fsWriteAtomic, fsRemove
+#include "platform/platform_io.h"   // clearTestGpioLevel, gpioRead
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstring>

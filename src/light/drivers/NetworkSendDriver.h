@@ -10,7 +10,10 @@
 #include "core/util/NameResolver.h"    // a named receiver's address, looked up off the render thread
 #include "core/util/format.h"          // formatTo: the unresolved-names status
 #include "light/drivers/PinList.h"  // assignCounts: the same window-split idiom as ledsPerPin
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // micros, millis
+#include "platform/platform_tasks.h"   // notifyTask, WorkerTask, waitNotify
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <atomic>
 

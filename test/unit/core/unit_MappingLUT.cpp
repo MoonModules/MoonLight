@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 #include "light/layers/MappingLUT.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock, allocatedBytes, allocatedCount
 
 #include <vector>
 

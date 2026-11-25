@@ -5,7 +5,8 @@
 
 #include "light/util/light_types.h"  // lengthType, nrOfLightsType
 #include "core/util/BinaryBroadcaster.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free, maxAllocBlock
 
 #include <limits>  // numeric_limits for the memory-derived point cap
 

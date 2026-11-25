@@ -97,7 +97,11 @@
 #include "core/system/WiFiModule.h"
 #include "core/system/AccessPointModule.h"
 #include "core/system/NetworkModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // freeHeap, maxInternalAllocBlock
+#include "platform/platform_tasks.h"   // taskWdtSubscribe, taskWdtReset, pauseLoop
+#include "platform/platform_system.h"   // LogLevel
+#include "platform/platform_net.h"   // deviceIp
 
 #include <cstdio>
 #include <cstdlib>

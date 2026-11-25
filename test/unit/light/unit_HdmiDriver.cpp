@@ -10,6 +10,8 @@
 #include "wall_fixture.h"
 #include "light/layers/Buffer.h"
 #include "light/layouts/PanelsLayout.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_video.h"   // hdmiTestClear, hdmiTestOpenMode, HdmiMode
 #include <cstring>
 #include <memory>
 #include <optional>

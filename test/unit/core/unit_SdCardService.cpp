@@ -5,7 +5,7 @@
 
 #include "doctest.h"
 #include "core/services/SdCardService.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot, setTestSdFormatHeld, setTestSdCardPresent
 
 #include <cstdio>
 #include <cstring>

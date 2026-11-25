@@ -2,6 +2,7 @@
 # Most of core is header-only; these are the modules that split interface from body (coding-standards.md).
 set(MM_CORE_SOURCES
     module/Control.cpp
+    module/MoonModule.cpp
     module/ModuleResource.cpp
     module/Demand.cpp
     module/Scheduler.cpp

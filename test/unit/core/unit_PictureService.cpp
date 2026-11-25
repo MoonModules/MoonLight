@@ -5,6 +5,8 @@
 #include "doctest.h"
 #include "core/module/Scheduler.h"
 #include "core/services/PictureService.h"
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock
+#include "platform/platform_video.h"   // VideoCaptureFormat, setTestVideoCaptureFormats, setTestVideoCaptureColor
 
 #include <atomic>
 #include <chrono>

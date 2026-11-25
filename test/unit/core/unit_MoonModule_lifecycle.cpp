@@ -6,6 +6,8 @@
 
 #include "doctest.h"
 #include "core/module/MoonModule.h"
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_system.h"   // setTestBootRecord
 
 namespace {
 

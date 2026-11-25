@@ -6,7 +6,7 @@
 #include "light/drivers/Correction.h"
 #include "correction_presets.h"
 #include "light/layers/Buffer.h"
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // pwmDutyForTest, pwmPinForTest, pwmPhaseForTest
 
 #include <cstring>
 

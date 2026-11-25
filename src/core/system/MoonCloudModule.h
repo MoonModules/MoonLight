@@ -11,7 +11,9 @@
 #include "core/module/MoonModule.h"
 #include "core/util/JsonFetch.h"   // the worker an HTTPS post goes out on
 #include "core/util/sha256.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // httpsAvailable, tlsRoom
 
 namespace mm {
 

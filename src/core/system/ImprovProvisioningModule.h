@@ -7,7 +7,8 @@
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
 #include "core/util/build_info.h"
-#include "platform/platform.h"
+#include "platform/platform_system.h"   // chipModel
+#include "platform/platform_net.h"   // ImprovDeviceInfo, improvProvisioningInit, improvPoll
 
 #include <atomic>
 #include <cstdio>

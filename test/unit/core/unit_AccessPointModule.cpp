@@ -8,6 +8,9 @@
 #include "core/system/AccessPointModule.h"
 #include "core/util/CaptivePortal.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_system.h"   // setTestBootRecord, getMacAddress
+#include "platform/platform_net.h"   // setTestDeviceNetwork, setTestWifiStaAvailable, setTestWifiApAvailable
 
 #include <cstring>
 #include <string>

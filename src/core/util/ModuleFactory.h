@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
 
 #include <cstring>
 

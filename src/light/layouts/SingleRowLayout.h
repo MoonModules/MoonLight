@@ -46,12 +46,12 @@ public:
         if (reversedOrder) {
             for (int32_t x = static_cast<int32_t>(startX) + width - 1;
                  x >= static_cast<int32_t>(startX); x--) {
-                sink.pixel(idx++, static_cast<lengthType>(x), y, 0);
+                sink.addLight(idx++, static_cast<lengthType>(x), y, 0);
             }
         } else {
             for (int32_t x = static_cast<int32_t>(startX);
                  x < static_cast<int32_t>(startX) + width; x++) {
-                sink.pixel(idx++, static_cast<lengthType>(x), y, 0);
+                sink.addLight(idx++, static_cast<lengthType>(x), y, 0);
             }
         }
     }

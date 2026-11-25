@@ -4,6 +4,7 @@
 #include "light/effects/SpriteCast.h"
 #include "light/effects/SpriteFountainEffect.h"
 #include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
+#include "platform/platform_clock.h"   // setTestNowMs
 
 using namespace mm;
 

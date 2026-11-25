@@ -2,7 +2,7 @@
 #include "core/system/FileManagerModule.h"
 
 #include "core/system/FilesystemModule.h"   // instance()->lastSavedStr() for the "last saved" readout
-#include "platform/platform.h"       // fs* primitives
+#include "platform/platform_fs.h"   // filesystemTotal, filesystemUsed
 
 namespace mm {
 

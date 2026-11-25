@@ -6,6 +6,7 @@
 #include "light/effects/NoiseMeterEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // NoiseMeter is an audio-reactive 1D effect: a vertical VU column whose height tracks the overall sound level and whose color is a scrolling 2D noise field. It writes only the x=0 column and Layer::extrude fans each lit row across every x (and z), so a lit row is a complete horizontal band. The column fills bottom-up: row y=0 lights first (the floor is buffer row height-1, since drawY = sizeY-1-y). The frame comes from AudioService::latestFrame() (a process-wide static); on the host with no I2S mic we run a live AudioService with `simulate` set to an "always" mode so synthesizeFrame() fills the level each tick(). Every audio case brackets its own AudioService setup()/release() so it never leaks the active-mic pointer into another test file. Buffer index = (y*width + x)*3.
 

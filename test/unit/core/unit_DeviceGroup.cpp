@@ -10,7 +10,10 @@
 #include "core/system/DeviceGroup.h"
 #include "core/system/WledPacket.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // setTestEthIPv4, setTestBindFails
 
 #include <cinttypes>
 #include <cstdint>

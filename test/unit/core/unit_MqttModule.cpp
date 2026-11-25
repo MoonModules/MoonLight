@@ -60,7 +60,8 @@
 #include "light/effects/NoiseEffect.h"
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
-#include "platform/platform.h"
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_fs.h"   // fsSetRoot, fsMkdir, fsWriteAtomic
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <filesystem>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/platform.h"   // currentThreadId: the key a slot is claimed under
+#include "platform/platform_tasks.h"   // currentThreadId
 
 #include <atomic>
 #include <cstddef>

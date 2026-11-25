@@ -6,6 +6,7 @@
 #include "core/system/TasksModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_tasks.h"   // taskSnapshot, setTestTaskSnapshot, TaskInfo
 
 #include <cstring>
 #include <string>

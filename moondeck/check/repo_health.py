@@ -287,7 +287,17 @@ def measure_docs():
         "backlog_lines": sum(_read(f).count("\n") for f in backlog if f.is_file()),
         "lessons_lines": _read(lessons).count("\n") if lessons.exists() else 0,
         "claude_md_lines": _read(claude).count("\n") if claude.exists() else 0,
+        "moonwalk_kb": _moonwalk_kb(),
     }
+
+
+def _moonwalk_kb():
+    """What a reader downloads to see MoonWalk, the map and its renderer gzipped, from the generator's own summary line; 0 where it cannot run."""
+    try:
+        line = subprocess.run(["uv", "run", str(ROOT / "moondeck" / "docs" / "gen_moonwalk.py")], cwd=ROOT, capture_output=True, text=True, timeout=120).stdout
+        return int(line.rsplit(", ", 1)[-1].split(" KB")[0])
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return 0
 
 
 def measure_tests():
@@ -805,6 +815,7 @@ def render_markdown(new, old):
           f"| backlog lines | {_arrow(d.get('backlog_lines', 0), od, 'backlog_lines', lambda n: f'{n:,}')} |",
           f"| lessons lines | {_arrow(d.get('lessons_lines', 0), od, 'lessons_lines', str)} |",
           f"| CLAUDE.md lines | {_arrow(d.get('claude_md_lines', 0), od, 'claude_md_lines', str)} |",
+          f"| MoonWalk download, KB gzipped | {_arrow(d.get('moonwalk_kb', 0), od, 'moonwalk_kb', str)} |",
           ""]
     return "\n".join(L)
 

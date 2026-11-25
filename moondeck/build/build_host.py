@@ -87,23 +87,44 @@ def toolset_args():
     return ["-T", TOOLSET]
 
 
-def drop_other_toolset(bdir):
-    """Remove a build directory configured with another toolset, which CMake refuses to reconfigure, and say so; a directory on this one, or on no toolset, stays."""
+def generator_args():
+    """The CMake generator for this host: Ninja where it is installed, which schedules every compile of the app and the tests in one graph, against Unix Makefiles 35% off a cold build and up to 40% off a small rebuild (docs/work Plan-20261125, step 4).
+
+    Windows keeps the Visual Studio generator its clang-cl toolset belongs to, and a `CMAKE_GENERATOR` the caller set wins."""
+    if os.environ.get("CMAKE_GENERATOR") or platform.system() == "Windows" or not shutil.which("ninja"):
+        return []
+    return ["-G", "Ninja"]
+
+
+def configure_args():
+    """The generator and toolset arguments every configure of this host's tree takes."""
+    return [*generator_args(), *toolset_args()]
+
+
+def drop_other_configuration(bdir):
+    """Remove a build directory configured with another generator or toolset, both of which CMake refuses to change in place, and say why; a directory that matches stays."""
     cache = ROOT / bdir / "CMakeCache.txt"
-    if not toolset_args() or not cache.exists():
+    if not cache.exists():
         return
-    was = re.search(r"^CMAKE_GENERATOR_TOOLSET:INTERNAL=(.*)$", cache.read_text(encoding="utf-8", errors="replace"), re.M)
-    if was and was.group(1) != TOOLSET:
-        print(f"{bdir} was configured with {was.group(1) or 'MSVC'}, and CMake keeps a directory's toolset: removing it for a clean {TOOLSET} configure.")
-        shutil.rmtree(ROOT / bdir)
+    text = cache.read_text(encoding="utf-8", errors="replace")
+    gen = re.search(r"^CMAKE_GENERATOR:INTERNAL=(.*)$", text, re.M)
+    tool = re.search(r"^CMAKE_GENERATOR_TOOLSET:INTERNAL=(.*)$", text, re.M)
+    if generator_args() and gen and gen.group(1) != "Ninja":
+        why = f"was configured for {gen.group(1)}, and CMake keeps a directory's generator: removing it for a clean Ninja configure."
+    elif toolset_args() and tool and tool.group(1) != TOOLSET:
+        why = f"was configured with {tool.group(1) or 'MSVC'}, and CMake keeps a directory's toolset: removing it for a clean {TOOLSET} configure."
+    else:
+        return
+    print(f"{bdir} {why}")
+    shutil.rmtree(ROOT / bdir)
 
 
 def build_target(name, quiet=False):
     """Configure this host's tree as Release and build the one target `name`, as the bench scripts do; the exit code of the step that failed, or 0."""
     bdir = str(ROOT / host_build_dir())
-    drop_other_toolset(host_build_dir())
+    drop_other_configuration(host_build_dir())
     out = subprocess.DEVNULL if quiet else None
-    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *toolset_args()],
+    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *configure_args()],
                 ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
         rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
         if rc != 0:
@@ -186,9 +207,9 @@ def main():
     # CMAKE_BUILD_TYPE is honored by single-config generators (Ninja, Make).
     # Visual Studio is multi-config and ignores it — we pass --config Release at
     # build time below. Setting CMAKE_BUILD_TYPE on multi-config is harmless.
-    drop_other_toolset(bdir)
+    drop_other_configuration(bdir)
     r = subprocess.run(
-        ["cmake", "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *toolset_args(), *extra],
+        ["cmake", "-B", bdir, f"-DCMAKE_BUILD_TYPE={build_type}", *configure_args(), *extra],
         cwd=ROOT,
     )
     if r.returncode != 0:

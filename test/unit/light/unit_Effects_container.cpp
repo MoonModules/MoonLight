@@ -12,7 +12,9 @@
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/ModifierBase.h"
 #include "light/drivers/Drivers.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_tasks.h"   // setTestSpawnFails
+#include "platform/platform_system.h"   // cpuCores
 
 #include <atomic>
 #include <cstring>

@@ -8,6 +8,7 @@
 #include "light/modifiers/RegionModifier.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/CheckerboardModifier.h"
+#include "platform/platform_clock.h"   // micros
 
 #include <algorithm>
 #include <vector>

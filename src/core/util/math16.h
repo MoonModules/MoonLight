@@ -75,7 +75,7 @@
 /// It subtracts from zero rather than applying unary minus, the same modular operation, which one major compiler reports as a warning its build treats as an error.
 
 #include "core/util/math8.h"
-#include "platform/platform.h"   // MM_NONBLOCKING: the hot path calls halfLifeKeep every frame
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 #include <cstdint>
 

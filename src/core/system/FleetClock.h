@@ -1,7 +1,9 @@
 #pragma once
 
 #include "core/util/ClockSync.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // uptimeUs
+#include "platform/platform_tasks.h"   // WorkerTask
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <atomic>
 #include <cstddef>

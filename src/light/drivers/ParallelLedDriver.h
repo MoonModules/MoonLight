@@ -6,7 +6,11 @@
 #include "light/drivers/ParallelSlots.h"        // encodeWs2812ParallelSlots (shared encoder)
 #include "light/drivers/LedDriverConfig.h"
 #include "light/drivers/PinList.h"         // parsePinList / assignCounts (shared)
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // cycleCount, delayMs
+#include "platform/platform_heap.h"   // InternalRamObject, free, ptrIsPsram
+#include "platform/platform_tasks.h"   // kMaxCores, currentCore
+#include "platform/platform_leds.h"   // kRingRowsDefault, kRingBufsDefault, kRingBufsMin
+#include "platform/platform_io.h"   // gpioRefusal
 
 
 namespace mm {

@@ -2,7 +2,8 @@
 
 /// The FilesystemModule tests' fixture: a settings folder of its own per test, `<temp>/mm_<tag>_<millis>`, with the filesystem pointed at it for the test's life and removed after.
 
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsSetRoot
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>

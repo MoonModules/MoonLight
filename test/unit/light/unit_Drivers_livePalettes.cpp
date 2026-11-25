@@ -8,7 +8,8 @@
 #include "light/util/Palette.h"
 #include "core/util/JsonSink.h"
 #include "core/moonlive/MoonLiveScriptFile.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsSetRoot, fsMount, fsMkdir
 #include "../core/conditional_controls.h"   // mm::controlIndex
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 

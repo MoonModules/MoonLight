@@ -4,7 +4,7 @@
 #include "core/moonlive/MoonLive.h"
 #include <cstdio>
 #include "core/moonlive/MoonLiveCompiler.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // freeExec, allocExec, writeExec
 
 namespace mm::moonlive {
 

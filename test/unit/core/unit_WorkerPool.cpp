@@ -4,7 +4,8 @@
 
 #include "doctest.h"
 #include "core/util/WorkerPool.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // micros, delayUs
+#include "platform/platform_tasks.h"   // setTestSpawnFails
 
 #include <atomic>
 #include <cstdint>

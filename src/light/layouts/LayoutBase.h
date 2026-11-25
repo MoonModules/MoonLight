@@ -16,22 +16,22 @@ namespace mm {
 /// The per-light function a `CoordSink` carries, taking a physical index and a position.
 using CoordCallback = void(*)(void* ctx, nrOfLightsType idx, lengthType x, lengthType y, lengthType z);
 
-/// The sink a layout emits its positions into, with one named method per kind of pixel in the builder and visitor shape, avoiding a boolean parameter.
+/// The sink a layout emits its positions into, with one named method per kind of light in the builder and visitor shape, avoiding a boolean parameter.
 struct CoordSink {
-    /// The lit-pixel handler, which every layout reaches.
+    /// The light handler, which every layout reaches.
     CoordCallback cb;
     /// The gap handler, or null to let a gap fall back to `cb`.
-    CoordCallback blackCb;
+    CoordCallback gapCb;
     /// The consumer's own state, handed back to whichever handler runs.
     void* ctx;
 
     /// A normal light at physical index `idx`, position (x,y,z). What every layout calls.
-    void pixel(nrOfLightsType idx, lengthType x, lengthType y, lengthType z) const {
+    void addLight(nrOfLightsType idx, lengthType x, lengthType y, lengthType z) const {
         cb(ctx, idx, x, y, z);
     }
     /// A gap light: a physical slot that stays black, for a layout with dark regions.
-    void blackPixel(nrOfLightsType idx, lengthType x, lengthType y, lengthType z) const {
-        (blackCb ? blackCb : cb)(ctx, idx, x, y, z);
+    void addGap(nrOfLightsType idx, lengthType x, lengthType y, lengthType z) const {
+        (gapCb ? gapCb : cb)(ctx, idx, x, y, z);
     }
 };
 
@@ -46,16 +46,16 @@ struct LightEmitter {
     /// The next physical index, and so the count so far.
     uint32_t idx = 0;
     /// Emit the next light, false once the bound is reached.
-    bool pixel(lengthType x, lengthType y, lengthType z) {
+    bool addLight(lengthType x, lengthType y, lengthType z) {
         if (idx >= limit) return false;
-        if (sink) sink->pixel(static_cast<nrOfLightsType>(idx), x, y, z);
+        if (sink) sink->addLight(static_cast<nrOfLightsType>(idx), x, y, z);
         idx++;
         return true;
     }
     /// Emit the next light as a gap that stays black, false once the bound is reached.
-    bool blackPixel(lengthType x, lengthType y, lengthType z) {
+    bool addGap(lengthType x, lengthType y, lengthType z) {
         if (idx >= limit) return false;
-        if (sink) sink->blackPixel(static_cast<nrOfLightsType>(idx), x, y, z);
+        if (sink) sink->addGap(static_cast<nrOfLightsType>(idx), x, y, z);
         idx++;
         return true;
     }
@@ -90,7 +90,7 @@ public:
     virtual Dim dimensions() const { return Dim::D2; }
 
     /// Whether this layout holds any physical slots dark, which turns the dense-identity fast path off, since an identity map would light a gap.
-    virtual bool hasBlackPixels() const { return false; }
+    virtual bool hasGaps() const { return false; }
 
     /// Whether a control change rebuilds the pipeline, which every layout control does.
     bool affectsPrepare(const char* /*controlName*/) const override { return true; }
@@ -109,12 +109,12 @@ inline void LightEmitter::place(const LayoutBase& part, lengthType dx, lengthTyp
             [](void* c, nrOfLightsType i, lengthType x, lengthType y, lengthType z) {
                 auto* r = static_cast<Relay*>(c);
                 if (uint32_t(i) + r->offset < r->limit)
-                    r->sink->pixel(static_cast<nrOfLightsType>(i + r->offset), static_cast<lengthType>(x + r->dx), static_cast<lengthType>(y + r->dy), static_cast<lengthType>(z + r->dz));
+                    r->sink->addLight(static_cast<nrOfLightsType>(i + r->offset), static_cast<lengthType>(x + r->dx), static_cast<lengthType>(y + r->dy), static_cast<lengthType>(z + r->dz));
             },
             [](void* c, nrOfLightsType i, lengthType x, lengthType y, lengthType z) {
                 auto* r = static_cast<Relay*>(c);
                 if (uint32_t(i) + r->offset < r->limit)
-                    r->sink->blackPixel(static_cast<nrOfLightsType>(i + r->offset), static_cast<lengthType>(x + r->dx), static_cast<lengthType>(y + r->dy), static_cast<lengthType>(z + r->dz));
+                    r->sink->addGap(static_cast<nrOfLightsType>(i + r->offset), static_cast<lengthType>(x + r->dx), static_cast<lengthType>(y + r->dy), static_cast<lengthType>(z + r->dz));
             },
             &relay});
     }

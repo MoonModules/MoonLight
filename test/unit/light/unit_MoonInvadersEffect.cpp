@@ -5,7 +5,7 @@
 #include "light/effects/MoonInvadersEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Writing `player` and pressing `fire` take the cannon: it moves where the control says and fires one shot, a second press ignored while that shot flies.
 TEST_CASE("MoonInvaders hands the cannon to the player, one shot at a time") {

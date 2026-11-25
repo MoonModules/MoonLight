@@ -408,12 +408,16 @@ if(WIN32)
     set(MM_WIN_RESOURCES "${MM_RC}" "${MM_ICON}")
 endif()
 
+# The shared type registry, one list for the app, the unit tests and the scenario runner (src/module_types.cpp carries the reason). It includes every module, the heaviest file of the build, so it compiles once as an object library the three link, where each compiled its own copy.
+add_library(mm_module_types OBJECT src/module_types.cpp)
+target_include_directories(mm_module_types PRIVATE src/)
+target_link_libraries(mm_module_types PRIVATE mm_core mm_platform)
+add_dependencies(mm_module_types ui_embed build_info_gen moonlive_catalog)
+
 # Application
-# module_types.cpp is the shared type registry, compiled into the app and the scenario runner
-# alike so one list serves both: src/module_types.cpp carries the reason.
-add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
+add_executable(MoonLight src/main.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
 target_include_directories(MoonLight PRIVATE src/)
-target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
+target_link_libraries(MoonLight PRIVATE mm_module_types mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 # macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_host.py).
 if(APPLE)
@@ -424,9 +428,9 @@ endif()
 
 # The Android app's library: the same program as MoonLight, entered through main_android.cpp's JNI calls rather than main(), written where the app's Gradle build packs it (android/app/build.gradle.kts).
 if(ANDROID)
-    add_library(moonlight SHARED src/main.cpp src/module_types.cpp src/platform/host/main_android.cpp)
+    add_library(moonlight SHARED src/main.cpp src/platform/host/main_android.cpp)
     target_include_directories(moonlight PRIVATE src/)
-    target_link_libraries(moonlight PRIVATE mm_core mm_platform log)
+    target_link_libraries(moonlight PRIVATE mm_module_types mm_core mm_platform log)
     add_dependencies(moonlight ui_embed build_info_gen moonlive_catalog)
     set_target_properties(moonlight PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/jniLibs/${ANDROID_ABI}")
 endif()

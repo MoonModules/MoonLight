@@ -9,7 +9,9 @@
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"
 #include "http_loopback.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock, setTestFreeInternalHeap, setTestAllocRefusedFrom
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <algorithm> // std::max
 #include <cstdio>    // std::snprintf, the wide module's control names

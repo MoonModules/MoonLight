@@ -6,7 +6,8 @@
 #include "doctest.h"
 #include "core/moonlive/MoonLiveScriptFile.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"   // lightBuiltins: what an effect compiles against
-#include "platform/platform.h"
+#include "platform/platform_system.h"   // setTestBootRecord
+#include "platform/platform_fs.h"   // fsMkdir, fsWriteAtomic, fsRemove
 
 #include <cstdio>
 #include <filesystem>

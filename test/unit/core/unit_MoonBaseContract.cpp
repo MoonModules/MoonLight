@@ -9,6 +9,8 @@
 #include "core/util/FirmwareImage.h"   // kHandoffVersion and the NVS names: the contract's number and its one shared part
 #include "network_device.h"
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsSetRoot
 
 #include <cstdio>
 #include <cstring>

@@ -5,7 +5,7 @@
 #include "core/moonlive/MoonLive.h"
 #include "core/moonlive/moonlive_emit.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocExec, writeExec, freeExec
 
 #include <cstdint>
 #include <string>

@@ -4,6 +4,9 @@
 
 #include "core/services/OscPacket.h"
 #include "core/util/format.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_tasks.h"   // spawnPinnedTask, stopPinnedTask, waitNotify
+#include "platform/platform_net.h"   // localIPv4, UdpSocket
 
 #include <cstring>
 

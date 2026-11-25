@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 #include "core/moonlive/MoonLiveScriptFile.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsRemove, fsMkdir, fsWriteAtomic
 
 #include <atomic>
 #include <cstdio>

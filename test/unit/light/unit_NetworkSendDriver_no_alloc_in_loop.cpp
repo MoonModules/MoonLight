@@ -11,6 +11,7 @@
 #include "correction_presets.h"
 #include "light/drivers/Drivers.h"
 #include "light/layers/Buffer.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 #include <chrono>
 #include <thread>
 

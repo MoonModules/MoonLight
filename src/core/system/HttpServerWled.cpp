@@ -28,7 +28,10 @@
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
 #include "core/system/SystemModule.h"      // deviceName() for the WLED /json/info shim
 #include "core/util/LightOutput.h"   // the device shape and the palettes as colors, for the WLED shim
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // freeHeap
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // TcpConnection, localIPv4, wifiStaRssi
 
 #include <cstdio>
 #include <cstring>

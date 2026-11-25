@@ -50,7 +50,7 @@ public:
     /// Emit every light's coordinate, in wiring order.
     void placeLights(const CoordSink& sink) const override {
         LightEmitter e{&sink, lightCount()};
-        forEachCell(width, height, depth, serpentine, [&](lengthType x, lengthType y, lengthType z) { return e.pixel(x, y, z); });
+        forEachCell(width, height, depth, serpentine, [&](lengthType x, lengthType y, lengthType z) { return e.addLight(x, y, z); });
     }
 
 private:

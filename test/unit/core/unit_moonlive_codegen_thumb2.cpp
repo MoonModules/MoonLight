@@ -19,6 +19,8 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveSpill.h"
 
+#include "platform/platform.h"   // at global scope first, so the assembler header's own include inside the namespace below is a repeat
+
 namespace mm_thumb2_backend {
 // The IR, the spill pass and the platform seam are shared, so only the ISA-specific classes end up local to this namespace.
 namespace mm { using namespace ::mm; using namespace ::mm::moonlive;

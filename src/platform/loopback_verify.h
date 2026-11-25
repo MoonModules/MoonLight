@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/platform.h"   // RmtLoopbackResult
+#include "platform/platform_leds.h"   // RmtLoopbackResult
 
 #include <cstddef>
 #include <cstdint>

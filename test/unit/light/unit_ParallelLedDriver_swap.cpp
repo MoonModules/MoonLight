@@ -7,6 +7,7 @@
 #include "correction_presets.h"
 #include "light/layers/Buffer.h"
 #include "unit/core/conditional_controls.h"   // controlIndex
+#include "platform/platform_leds.h"   // RmtLoopbackResult
 
 #include <cstring>
 #include <vector>

@@ -5,6 +5,7 @@
 
 #include "doctest.h"
 #include "core/services/AudioService.h"
+#include "platform/platform_audio.h"   // CodecType
 
 #include <string>
 

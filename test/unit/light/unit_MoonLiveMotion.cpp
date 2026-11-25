@@ -21,6 +21,8 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 #include "light/layers/Layer.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_fs.h"   // fsMkdir, fsWriteAtomic
 
 using namespace mm;
 

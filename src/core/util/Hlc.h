@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/util/ClockSync.h"   // FleetTime: the fleet clock's offset, which puts every device's readings on one time
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
 
 #include <algorithm>   // std::max: an uptime on the fleet clock held at zero or above
 #include <cstdint>

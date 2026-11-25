@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform_system.h"   // setTestBootRecord
 
 #include <string>
 #include <vector>

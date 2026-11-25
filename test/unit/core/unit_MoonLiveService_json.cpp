@@ -11,7 +11,8 @@
 #include "core/system/FilesystemModule.h"
 #include "core/util/JsonFetch.h"
 #include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_net.h"   // setTestHttpFetch
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>

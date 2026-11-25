@@ -45,7 +45,7 @@ public:
         // Only the y walk direction depends on the reversed flag.
         for (int32_t i = 0; i < height; i++) {
             const int32_t y = reversed_order ? start_y + height - 1 - i : start_y + i;
-            if (!e.pixel(static_cast<lengthType>(xposition), static_cast<lengthType>(y), 0)) return;
+            if (!e.addLight(static_cast<lengthType>(xposition), static_cast<lengthType>(y), 0)) return;
         }
     }
 };

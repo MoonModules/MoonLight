@@ -9,7 +9,7 @@
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 namespace mm {
 

@@ -7,7 +7,9 @@
 #include "core/util/parse.h"             // parseIntStr: a light id
 #include "core/system/FilesystemModule.h"  // noteDirty: persist the app key after pairing
 #include "core/system/DevicesModule.h"     // DevicesModule::active(): list the bridge as a device
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_net.h"   // httpRequest
 
 namespace mm {
 

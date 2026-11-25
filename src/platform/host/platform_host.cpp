@@ -197,7 +197,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <net/bpf.h>
 #endif
 #endif
-#include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
+#include "platform/select_wait.h"   // the select() wait the ESP32 shares
 #include "host_mdns.h"   // the responder a host lends the mDNS calls
 #include "platform/host/host_address.h"   // which held address is the LAN's
 

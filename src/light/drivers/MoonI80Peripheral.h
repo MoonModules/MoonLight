@@ -1,7 +1,8 @@
 #pragma once
 
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // InternalRamObject, kInternalFreeFloor, ptrIsPsram
+#include "platform/platform_leds.h"   // kRingNodeMaxBytes, kRingAutoRows, kRingLeadRows
 
 
 namespace mm {

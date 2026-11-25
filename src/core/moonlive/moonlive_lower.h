@@ -3,6 +3,7 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveIr.h"
 #include "core/moonlive/MoonLiveSpill.h"   // the register allocator, run before lowering
+#include "platform/platform_heap.h"   // free, alloc
 
 #include <cstring>
 #include <new>       // placement new: the assembler lives on the heap

@@ -25,9 +25,9 @@ struct ShortRaster : mm::LayoutBase {
     bool inOrder = true;
     mm::nrOfLightsType lightCount() const override { return 6; }
     void placeLights(const mm::CoordSink& sink) const override {
-        for (mm::nrOfLightsType i = 0; i < 4; i++) sink.pixel(i, static_cast<mm::lengthType>(i), 0, 0);
-        sink.pixel(4, inOrder ? 0 : 3, 1, 0);
-        sink.pixel(5, inOrder ? 1 : 0, 1, 0);
+        for (mm::nrOfLightsType i = 0; i < 4; i++) sink.addLight(i, static_cast<mm::lengthType>(i), 0, 0);
+        sink.addLight(4, inOrder ? 0 : 3, 1, 0);
+        sink.addLight(5, inOrder ? 1 : 0, 1, 0);
     }
 };
 

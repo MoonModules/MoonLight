@@ -11,6 +11,8 @@
 #include "light/layers/Buffer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_video.h"   // EncoderTestMode, setTestEncoderMode, encoderTestClearFrames
 #include <memory>
 #include <string>
 #include <vector>

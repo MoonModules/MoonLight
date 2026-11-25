@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _findings  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
-from build_host import build_jobs  # noqa: E402  the one bound on compile jobs
+from build_host import build_jobs, drop_other_configuration, generator_args  # noqa: E402  the one bound on compile jobs, and the one generator
 
 RULES = {
     "address sanitizer": {"reason": "The unit suite fails under AddressSanitizer: a use-after-free or memory error.", "fix": "Run `check_sanitizers.py --kind address` and read the report.", "standard": "docs/contributing/coding-standards.md"},
@@ -101,8 +101,9 @@ def run_one(kind: str, filt: str | None, junit: Path | None = None) -> bool:
     flags = f"-fsanitize={kind} -fno-omit-frame-pointer -g"
 
     print(f"\n=== {kind.upper()} ===")
+    drop_other_configuration(build.relative_to(ROOT))
     subprocess.run(
-        ["cmake", "-S", str(ROOT), "-B", str(build), "-DCMAKE_BUILD_TYPE=Debug",
+        ["cmake", "-S", str(ROOT), "-B", str(build), "-DCMAKE_BUILD_TYPE=Debug", *generator_args(),
          f"-DCMAKE_C_COMPILER={cc}", f"-DCMAKE_CXX_COMPILER={cxx}",
          f"-DCMAKE_CXX_FLAGS={flags}", f"-DCMAKE_EXE_LINKER_FLAGS=-fsanitize={kind}"],
         check=True, stdout=subprocess.DEVNULL,

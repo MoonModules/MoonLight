@@ -1,7 +1,7 @@
 #pragma once
 
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // parlioWs2812Init, parlioWs2812Buffer, parlioWs2812BufferCapacity
 
 
 namespace mm {

@@ -11,6 +11,8 @@
 #include "light/layers/Layer.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
+#include "platform/platform_tasks.h"   // spawnPinnedTask, setTestSpawnFails
 
 #include <atomic>
 #include <cstring>

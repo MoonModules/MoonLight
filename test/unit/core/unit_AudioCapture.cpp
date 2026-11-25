@@ -5,7 +5,7 @@
 #include "doctest.h"
 #include "core/services/AudioService.h"
 #include "core/util/JsonSink.h"   // the device-Select persistence case writes a control value out
-#include "platform/platform.h"
+#include "platform/platform_audio.h"   // audioCaptureDevices, audioCaptureBackend, AudioMicHandle
 #include "unit/host_android.h"
 
 #include <cstring>

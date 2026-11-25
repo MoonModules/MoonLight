@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/RandomEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"   // setTestNowMs: the spawn is counted in elapsed time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // A single frame on a fresh black buffer lights exactly ONE light (one setRGB per frame).
 TEST_CASE("RandomEffect lights exactly one light per frame") {

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "platform/platform.h"   // spawnPinnedTask, notifyTask, waitNotify: the workers' tasks
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_tasks.h"   // spawnPinnedTask, stopPinnedTask, notifyTask
 
 #include <atomic>
 #include <cstddef>

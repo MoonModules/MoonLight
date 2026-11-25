@@ -4,16 +4,13 @@
 
 #include "core/module/Control.h"    // applyControlValue + ApplyResult in setControl
 #include "core/util/JsonUtil.h"   // mm::json::parseBool for the "enabled" pseudo-control
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_heap.h"   // free
 
 #include <cstdio>   // std::snprintf in freeName, std::printf in addModule
 #include <cstring>  // std::strcmp in firstInTree
 
 namespace mm {
-
-void noteStructureChange() {
-    if (Scheduler* s = Scheduler::instance()) s->bumpStructureVersion();
-}
 
 bool Scheduler::addModule(MoonModule* mod) {
     if (!mod) return false;

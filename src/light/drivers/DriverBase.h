@@ -10,7 +10,7 @@
 #include "light/drivers/LayoutPicture.h"   // a screen or stream driver's picture, cropped to the window
 #include "light/drivers/LedPeripheral.h"         // LedHwBlock: the peripheral-block claim guard's vocabulary
 #include "light/drivers/FixtureProfilesModule.h"   // the shared fixture-profile library a driver references by id
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocInternal, alloc, free
 
 #include <cstdio>       // std::snprintf for status strings
 #include <cstring>     // std::strcmp (onControlChanged) / memset (buffer clears)

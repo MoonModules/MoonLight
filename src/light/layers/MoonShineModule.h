@@ -13,7 +13,8 @@
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/Drivers.h"      // renderWaitAvgUs, renderSplitActive: the encode lane
 
-#include "platform/platform.h"         // totalHeap, freeHeap and their internal halves: the memory bars
+#include "platform/platform_heap.h"   // totalHeap, freeHeap, allocatedBytes
+#include "platform/platform_tasks.h"   // TaskInfo, kTaskCpuUnmeasured
 
 #include <algorithm>
 #include <cstdint>

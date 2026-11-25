@@ -13,7 +13,8 @@
 #include "light/modifiers/RegionModifier.h"
 #include "light/layers/Layer.h"
 #include "light/drivers/FixtureProfilesModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsSetRoot, fsMount, fsRootPath
 #include "filesystem_fixture.h"
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 

@@ -9,6 +9,8 @@
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/SphereLayout.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock
 
 #include <vector>
 #include <cstring>

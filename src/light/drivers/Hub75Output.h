@@ -9,7 +9,7 @@
 #include "light/drivers/LedPeripheral.h"  // LedHwBlock: the sibling claim guard's vocabulary
 #include "platform/nonblocking.h"        // MM_NONBLOCKING
 #include "platform/Hub75Pio.h"           // Hub75PioOptions: the defaults of the Pi output's settings
-#include "platform/platform.h"           // Hub75Backend: the backend the driver answers
+#include "platform/platform_leds.h"   // Hub75Backend
 
 namespace mm {
 

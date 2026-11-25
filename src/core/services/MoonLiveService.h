@@ -4,6 +4,7 @@
 #include "core/moonlive/MoonLive.h"
 #include "core/moonlive/MoonLiveBuiltins_service.h"
 #include "core/moonlive/MoonLiveScript.h"   // the file, the compile and the declared controls
+#include "platform/platform_clock.h"   // millis
 
 #include <cstring>
 

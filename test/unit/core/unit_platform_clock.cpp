@@ -4,7 +4,7 @@
 /// Production code never calls setTestNowMs; this contract is the only thing keeping the animation tests (LavaLamp, Metaballs, Checkerboard, Spiral) fast and deterministic instead of wall-clock-bound and flaky on a loaded CI box.
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, setTestNowMs
 
 // setTestNowMs freezes platform::millis() to the given value; passing 0 restores the real clock so subsequent test cases see fresh time.
 TEST_CASE("platform::setTestNowMs freezes and restores millis()") {

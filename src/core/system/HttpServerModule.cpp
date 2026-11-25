@@ -27,7 +27,13 @@
 #include "core/moonlive/MoonLiveScriptFile.h"   // kFactoryScriptDir: where a download lands
 #include "core/moonlive/script_catalog.h"        // generated: which factory scripts exist
 #include "core/util/build_info.h"                      // kVersion: the tag a script is fetched from
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, delayMs
+#include "platform/platform_heap.h"   // allocInternal, free, alloc
+#include "platform/platform_system.h"   // macString, chipModel
+#include "platform/platform_fs.h"   // FsWriteStream, fsWriteStreamClose, fsWriteStreamWrite
+#include "platform/platform_net.h"   // TcpConnection, coprocessorHostVersion, wifiStaRssi
+#include "platform/platform_ota.h"   // otaEnd, otaWrite, OtaTarget
+#include "platform/platform_video.h"   // hlsSegment, hlsSegmentRelease
 #include "ui/ui_embedded.h"
 
 #include <algorithm>   // std::min: a stream's span within its budget

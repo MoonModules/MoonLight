@@ -6,7 +6,7 @@
 #include "light/effects/BlurzEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"   // setTestNowMs: the simulated music follows the clock
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Blurz places one dot a frame, colored by a band, and blurs the strip; a simulating AudioService feeds the bands, and each case releases it.
 

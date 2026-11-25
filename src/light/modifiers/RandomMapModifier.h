@@ -2,7 +2,8 @@
 
 #include "light/modifiers/ModifierBase.h"
 
-#include "platform/platform.h"     // alloc / free / millis
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free
 
 namespace mm {
 

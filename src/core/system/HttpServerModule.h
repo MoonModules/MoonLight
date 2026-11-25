@@ -6,7 +6,10 @@
 #include "core/util/BinaryBroadcaster.h"
 #include "core/util/JsonSink.h"   // walkPatch_ holds the second's gathered patch between ticks
 #include "core/util/EsphomeOta.h"   // a relay slot speaks ESPHome's update protocol to the device it hands an image
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // kInternalFreeFloor, freeInternalHeap
+#include "platform/platform_fs.h"   // FsWriteStream, FsReadStream
+#include "platform/platform_net.h"   // TcpServer, TcpConnection
+#include "platform/platform_ota.h"   // OtaTarget, OtaWrite
 
 #include <array>
 #include <cstdint>

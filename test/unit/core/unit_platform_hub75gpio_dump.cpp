@@ -21,7 +21,7 @@
 /// The hold words and the clocked shift words are in hub75_gpio_dump.h (Row-major dump).
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 #include "platform/rpi/hub75_gpio_backend.h"
 #include "platform/rpi/hub75_gpio_backend_stub.h"
 #include "platform/rpi/hub75_gpio_dither.h"

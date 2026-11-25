@@ -6,6 +6,7 @@
 #include "core/util/JsonUtil.h"           // restoreList: recursive reader for the persisted array
 #include "light/drivers/ChannelRole.h"
 #include "light/drivers/Correction.h"  // the role-array rebuild and the derived offsets
+#include "platform/platform_heap.h"   // free, alloc
 
 #include <cstdint>
 #include <cstdio>

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // maxInternalAllocBlock
+#include "platform/platform_leds.h"   // i80Ws2812SharedBusFree, i80Ws2812LastError, kBusPinUnset
+#include "platform/platform_io.h"   // gpioRefusal
 
 #include <cstdio>   // snprintf: the refusal message
 

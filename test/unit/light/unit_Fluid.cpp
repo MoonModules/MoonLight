@@ -9,6 +9,7 @@
 #include "core/module/MoonModule.h"
 #include "golden_frame.h"                 // the effect harness: Layouts, Grid, Layer
 #include "light/effects/FluidEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cmath>
 #include <cstdlib>

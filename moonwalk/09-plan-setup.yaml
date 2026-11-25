@@ -91,13 +91,13 @@ processes:
       - id: mac
         say: Install Xcode's command line tools, CMake, uv, ccache.
         given: [{ input: platform, equals: macOS }]
-        when: { run: { command: "xcode-select --install; brew install cmake uv ccache && ccache --max-size 20G" } }
+        when: { run: { command: "xcode-select --install; brew install cmake uv ccache ninja && ccache --max-size 20G" } }
         detail: |
           ccache's 5 GB default holds about one target; 20 GB holds the host, the tests and every ESP32 target, which share one cache.
       - id: linux
         say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
+        when: { run: { command: "sudo apt install cmake g++ ccache ninja-build && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
         detail: |
           GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
       - id: linux-cache
@@ -138,7 +138,7 @@ processes:
         when: { manual: "The DefaultShell registry value." }
       - id: key
         say: Add your public key for your account.
-        when: { manual: "An administrator's goes in administrators_authorized_keys." }
+        when: { manual: "Administrators: administrators_authorized_keys." }
       - id: firewall
         say: Open port 22 on its network.
         when: { manual: "Public networks too." }

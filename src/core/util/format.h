@@ -23,7 +23,7 @@
 /// It reads the whole call rather than its first line, because seven sites here put the format string on the line below.
 /// A control test plants a `%f` and confirms the check fires, since a checker that reads nothing looks exactly like a clean tree.
 
-#include "platform/platform.h"   // MM_NONBLOCKING
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 #include <cstdarg>
 #include <cstdio>

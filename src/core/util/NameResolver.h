@@ -3,7 +3,9 @@
 #include "core/util/ReceiverList.h"   // kMaxHostName
 #include "core/util/TryLock.h"    // the cache is shared between the asking thread and the lookup task
 #include "core/util/format.h"     // formatTo: a peer named into a fixed buffer
-#include "platform/platform.h"    // resolveName, millis, yield, and the worker task seam
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_tasks.h"   // spawnPinnedTask, notifyTask, WorkerTask
+#include "platform/platform_net.h"   // resolveNameStep, LookupStep, resolveName
 
 #include <algorithm>   // std::rotate: a group's members into its name's place
 #include <atomic>

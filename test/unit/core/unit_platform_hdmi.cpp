@@ -3,7 +3,7 @@
 /// Pins what the host's HDMI seam offers the driver, on the stand-in every test runs against.
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_video.h"   // HdmiMode, hdmiModes
 #include "platform/host/screen.h"   // screen::pick, the display a desktop host shows on
 
 TEST_CASE("The host offers HDMI modes up to 4K, beyond the ESP32's 1080p") {

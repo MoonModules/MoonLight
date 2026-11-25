@@ -5,7 +5,9 @@
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs, millis, delayMs
+#include "platform/platform_fs.h"   // fsRead, fsSetRoot, fsSize
+#include "platform/platform_net.h"   // TcpConnection
 #include "http_loopback.h"
 #include "core/util/HttpHead.h"
 

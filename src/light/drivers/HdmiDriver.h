@@ -6,7 +6,8 @@
 #include "light/drivers/DriverBase.h"
 #include "light/drivers/LayoutPicture.h"   // which light each pixel shows
 #include "platform/edid.h"   // edid::Monitor, the monitor readout
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_video.h"   // HdmiMode, hdmiModes, hdmiClose
 
 #include <cstdio>
 #include <cstring>

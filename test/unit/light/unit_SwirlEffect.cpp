@@ -7,7 +7,7 @@
 #include "light/powerfunctions/modmatrix.h"
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
 
 #include <cmath>
 #include <cstdint>

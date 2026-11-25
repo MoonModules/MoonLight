@@ -2,7 +2,7 @@
 
 #include "core/module/MoonModule.h"
 #include "core/util/InputMapping.h"   // InputAction: the target half, shared with the infrared service
-#include "platform/platform.h"   // gpioInputBegin / gpioRead
+#include "platform/platform_io.h"   // gpioInputBegin, GpioPull, gpioRead
 
 #include <cstdint>
 #include <cstdio>

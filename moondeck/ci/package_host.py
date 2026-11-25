@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "build"))
-from build_host import build_jobs, toolset_args  # noqa: E402  the one bound on compile jobs, and the one compiler toolset
+from build_host import build_jobs, configure_args, drop_other_configuration  # noqa: E402  the one bound on compile jobs, and the one generator and compiler toolset
 from build_esp32 import APP_ASSET_PREFIX  # noqa: E402  the release image names a device asks for
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -68,11 +68,12 @@ def version_args(version: str) -> list[str]:
 def configure_and_build_macos(version: str = "") -> Path:
     """Configure + build for macOS arm64. Returns the built binary path."""
     bdir = str(BUILD_DIR_MACOS.relative_to(ROOT))
+    drop_other_configuration(bdir)
     run([
         "cmake", "-B", bdir,
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_OSX_ARCHITECTURES=arm64",
-    ] + version_args(version))
+    ] + configure_args() + version_args(version))
     # --target MoonLight: packaging ships one binary; the test suite builds and runs in the
     # test workflow, and compiling its ~200 files here roughly doubled the packaging build.
     run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
@@ -99,7 +100,8 @@ def linux_arch() -> tuple[str, str, str]:
 def configure_and_build_linux(version: str = "") -> Path:
     """Configure + build for Linux. Returns the built binary path."""
     bdir = str(BUILD_DIR_LINUX.relative_to(ROOT))
-    run(["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"] + version_args(version))
+    drop_other_configuration(bdir)
+    run(["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release"] + configure_args() + version_args(version))
     run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
     binary = BUILD_DIR_LINUX / "MoonLight"
     if not binary.exists():
@@ -255,13 +257,14 @@ def package_deb(binary: Path, version: str) -> Path | None:
 def configure_and_build_windows(version: str = "") -> Path:
     """Configure + build for Windows x64. Returns the built binary path."""
     bdir = str(BUILD_DIR_WIN.relative_to(ROOT))
+    drop_other_configuration(bdir)
     # No -G: let CMake auto-detect the installed Visual Studio. Pinning a
     # specific generator (e.g. "Visual Studio 17 2022") breaks whenever the
     # windows-latest runner image migrates its bundled VS version.
     run([
         "cmake", "-B", bdir,
         "-DCMAKE_BUILD_TYPE=Release",
-    ] + toolset_args() + version_args(version))
+    ] + configure_args() + version_args(version))
     run(["cmake", "--build", bdir, "--config", "Release", "--parallel", str(build_jobs()), "--target", "MoonLight"])
     # Visual Studio's multi-config generator places binaries under <build-dir>/Release/.
     binary = BUILD_DIR_WIN / "Release" / "MoonLight.exe"

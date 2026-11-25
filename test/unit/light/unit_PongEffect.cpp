@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/PongEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Short paddles miss, so a few minutes of play score points.
 TEST_CASE("Pong scores misses") {
