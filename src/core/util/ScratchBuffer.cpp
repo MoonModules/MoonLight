@@ -16,9 +16,8 @@ ScratchBufferBase::~ScratchBufferBase() {
 bool ScratchBufferBase::resizeBytes(std::size_t bytes) {
     if (bytes == bytes_) return raw_ != nullptr || bytes == 0;  // no-op fast path
 
+    const HeapBytes old = heapOf(raw_, bytes_);
     if (raw_) { platform::free(raw_); raw_ = nullptr; }
-
-    const std::size_t old = bytes_;
     bytes_ = 0;
 
     if (bytes > 0) {
@@ -30,9 +29,7 @@ bool ScratchBufferBase::resizeBytes(std::size_t bytes) {
         // alloc failed → raw_ stays null, bytes_ stays 0 (the caller's `if (!buf)` guard fires)
     }
 
-    // Keep owner_'s dynamic-bytes readout current: adjust by the signed delta.
-    owner_.addDynamicBytes(static_cast<std::ptrdiff_t>(bytes_) -
-                           static_cast<std::ptrdiff_t>(old));
+    owner_.moveDynamicBytes(old, heapOf(raw_, bytes_));   // keep owner_'s memory readout current
     return bytes_ == bytes;
 }
 
@@ -50,8 +47,8 @@ bool ScratchBufferBase::growTo(std::size_t want) {
     if (!fresh) return false;
     if (raw_) std::memcpy(fresh, raw_, bytes_);
     std::memset(static_cast<uint8_t*>(fresh) + bytes_, 0, want - bytes_);
+    owner_.moveDynamicBytes(heapOf(raw_, bytes_), heapOf(fresh, want));
     if (raw_) platform::free(raw_);
-    owner_.addDynamicBytes(static_cast<std::ptrdiff_t>(want) - static_cast<std::ptrdiff_t>(bytes_));
     raw_ = fresh;
     bytes_ = want;
     return true;

@@ -35,6 +35,8 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _console import utf8_stdio  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_host import build_target, test_binary  # noqa: E402  the one home of the build tree and its binaries
 from _tempo_baseline import baseline_bpm  # noqa: E402
@@ -476,7 +478,7 @@ def at_least(low: int):
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")   # track names print as they are, whatever the console's code page
+    utf8_stdio()   # track names print as they are, whatever the console's code page
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", type=Path, action="append", default=[], help="a data folder or mount, read only (repeatable)")
     ap.add_argument("--generated", action="store_true", help="add the generated set, written to build/tempo/generated once")

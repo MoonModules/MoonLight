@@ -214,6 +214,12 @@ def test_a_clone_counts_as_created_only_where_its_pair_of_files_holds_more_than_
     assert hook.clones_created([copy], now=[copy], head=[]) == [copy]
 
 
+def test_a_second_clone_in_a_pair_of_files_counts_as_created_whichever_order_names_them():
+    old = _clone("src/a.h", "src/b.h")
+    new = {"firstFile": {"name": "src/b.h", "start": 30, "end": 36}, "secondFile": {"name": "src/a.h", "start": 40, "end": 46}}
+    assert hook.clones_created([new], now=[old, new], head=[old]) == [new]
+
+
 def test_every_touched_clone_counts_when_head_could_not_be_scanned():
     copy = _clone("test/a.cpp", "src/b.h")
     assert hook.clones_created([copy], now=[copy], head=None) == [copy]

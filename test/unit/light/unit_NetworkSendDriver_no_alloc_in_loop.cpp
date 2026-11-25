@@ -144,3 +144,24 @@ TEST_CASE("NetworkSendDriver sends 0 on a channel the profile gives no role, wha
     CHECK(driver.correctedBuffer().data()[0] == 255);
     mm::platform::setTestNowMs(0);
 }
+
+// Found on MoonShine's memory sheet: a driver that was off held a frame of its own, and no driver reported the frame it held.
+TEST_CASE("NetworkSendDriver holds its staging frame only while it is on, and counts it in its memory") {
+    mm::Buffer source;
+    REQUIRE(source.allocate(64, 3));
+    mm::NetworkSendDriver driver;
+    driver.setEnabled(false);
+    mm::rebuildFromPreset(driver.correctionForTest(), 255, mm::PresetOrder::RGB);
+    driver.setSourceBuffer(&source);
+    driver.applyState();
+    CHECK(driver.correctedBuffer().data() == nullptr);   // off: no frame
+    const size_t off = driver.dynamicBytes();
+    driver.setEnabled(true);
+    driver.applyState();
+    REQUIRE(driver.correctedBuffer().data() != nullptr);
+    CHECK(driver.dynamicBytes() >= off + 64 * 3);        // on: the frame, counted
+    driver.setEnabled(false);
+    driver.applyState();
+    CHECK(driver.correctedBuffer().data() == nullptr);   // off again: given back
+    CHECK(driver.dynamicBytes() == off);
+}

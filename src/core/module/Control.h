@@ -124,6 +124,9 @@ struct ListSource {
     /// Draw the rows as a graph: a row is a node keyed by `ip` or else `name`, colored by `type`, marked by `self`; its `edges` array of `{to, label}` is the adjacency list.
     virtual bool listAsGraph() const { return false; }
 
+    /// Draw the rows as a flow: a row is a node in the column its `stage` names, and its `edges` array of `{to, bytes}` are the wires to later stages.
+    virtual bool listAsFlow() const { return false; }
+
     /// The pad grid's columns, a non-zero value making it a fixed surface with real empty cells.
     virtual uint8_t listGridCols() const { return 0; }
     /// The pad grid's rows, read with the columns above.

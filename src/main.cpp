@@ -132,6 +132,7 @@ static void printModuleMetrics(mm::MoonModule* mod, int depth) {
 
 void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort) {
     mm::registerModuleTypes();
+    mm::ModuleFactory::shrinkToFit();   // every type is in: the table keeps no spare room
     mm::Scheduler scheduler;
 
     // Every container is created from the one table the scenario runner shares, wired by code so a saved tree that predates a child keeps it: @xref{how-the-boot-tree-is-created}, @xref{why-markwiredbycode-matters}.

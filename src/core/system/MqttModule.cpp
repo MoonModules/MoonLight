@@ -218,7 +218,7 @@ bool MqttModule::ensureDiscoveryBuffers() {
     if (!discoveryBuf_ || !discoveryPayload_) { freeDiscoveryBuffers(); return false; }
     discoveryPayloadLen_ = wantPayload;
     discoveryBufLen_     = wantBuf;
-    setDynamicBytes(wantBuf + wantPayload);
+    setDynamicBytes(heapOf(discoveryBuf_, wantBuf) + heapOf(discoveryPayload_, wantPayload));
     return true;
 }
 
@@ -878,6 +878,7 @@ void MqttModule::setControlValue(const char* control, const char* valueJson) {
 }
 
 void MqttModule::feedForTest(const uint8_t* bytes, size_t len) {
+    lastActivity_ = platform::millis();   // as the socket read stamps it, so the keepalive sees the broker's bytes in a process older than 1.5 keepalives
     for (size_t i = 0; i < len; i++) handleInboundByte(bytes[i]);
 }
 

@@ -44,7 +44,7 @@ public:
           outbox_(route != Route::Direct ? static_cast<char*>(platform::alloc(kOutboxBytes)) : nullptr) {
         if (!outbox_) return;
         outbox_[0] = '\0';
-        setDynamicBytes(kOutboxBytes);   // the card's memory readout counts it
+        setDynamicBytes(heapOf(outbox_, kOutboxBytes));   // the card's memory readout counts it
     }
     /// Free the outbox, where there is one, and the replies held on the worker.
     ~MoonCloudModule() override {

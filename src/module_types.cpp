@@ -147,6 +147,7 @@
 #include "light/modifiers/BlockModifier.h"
 #include "light/modifiers/PinwheelModifier.h"
 #include "light/modifiers/RippleXZModifier.h"
+#include "light/layers/MoonShineModule.h"   // the render pipeline as a flow (a System child, wired below)
 #include "light/drivers/Drivers.h"   // the Drivers container (registered + wired below); driver subclasses include DriverBase.h directly
 #include "light/drivers/FixtureProfilesModule.h"  // the reusable fixture-profile library (Drivers submodule)
 #include "light/drivers/HueDriver.h"
@@ -229,6 +230,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::Layer>("Layer", "light/supporting.md#layer");
     mm::ModuleFactory::registerType<mm::Drivers>("Drivers", "light/supporting.md#drivers");
     mm::ModuleFactory::registerType<mm::FixtureProfilesModule>("FixtureProfilesModule", "light/supporting.md#fixtureprofiles");
+    mm::ModuleFactory::registerType<mm::MoonShineModule>("MoonShineModule", "light/supporting.md#moonshine");
 
     // Wire the core quiesce-render hook to the light domain's encode worker: @xref{why-the-quiesce-render-hook-is-a-function-pointer}.
     mm::MoonModule::setQuiesceRenderHook([] { if (auto* d = mm::Drivers::active()) d->quiesceRenderSplit(); });
@@ -440,6 +442,7 @@ constexpr BootModule kBootModules[] = {
     {nullptr, "FileManagerModule", "File Manager", true},
     {nullptr, "FirmwareUpdateModule", "Firmware", true},
     {"SystemModule", "TasksModule", nullptr, true},
+    {"SystemModule", "MoonShineModule", "MoonShine", true},
     {"SystemModule", "I2cBusModule", nullptr, true},
     {"SystemModule", "PinsModule", nullptr, true},
     {"Services", "AudioService", nullptr, true},

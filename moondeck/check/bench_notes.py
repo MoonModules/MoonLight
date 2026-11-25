@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_tempo  # noqa: E402  the one home of the build, the decode and the run's plumbing
+from _console import utf8_stdio  # noqa: E402  moondeck/ is on the path through bench_tempo
 
 ROOT = bench_tempo.ROOT
 OUT_DIR = ROOT / "build" / "notes"
@@ -363,7 +364,7 @@ def pct(x) -> str:
 def report(rows: list[dict], instrument: str) -> str:
     """The run's page: each stage over every file, then each file's F per stage, the errors named apart."""
     good = [r for r in rows if "scores" in r and r["scores"]["sounding"].get("n_ref")]
-    lines = [f"# Notes report", "", f"{len(good)} files scored, Strings as a {instrument}; onset within {ONSET_TOLERANCE * 1000:.0f} ms, "
+    lines = ["# Notes report", "", f"{len(good)} files scored, Strings as a {instrument}; onset within {ONSET_TOLERANCE * 1000:.0f} ms, "
              f"offset within 50 ms or {OFFSET_RATIO:.0%} of the note, whichever is longer; a note is dated back by its band's delay, "
              "and the latency is the median lag from a found note's start to its key lighting. The lit and played times are the frame measure, every 10 ms: "
              "the share of the time a key is lit that a played note sounds at its pitch, and the share of the time a note sounds that its key is lit, each lit note dated back by its band's delay as the onset score dates it.", "",
@@ -414,7 +415,7 @@ def run(items: list[tuple[Path, list]], out: Path, instrument: str = "guitar", j
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")
+    utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", type=Path, action="append", default=[], help="a data folder or mount, read only (repeatable)")
     ap.add_argument("--generated", action="store_true", help="add the generated set, written to build/notes/generated once")

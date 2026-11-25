@@ -221,6 +221,79 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/FixtureProfilesModule.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fixtureprofilesmodule"
   },
+  "MoonShineModule": {
+   "line": "The running device as a flow of nodes: what it renders, stage by stage, its other modules and its system tasks, each with its time and memory.",
+   "summary": "The MoonShine card under System, a diagram that reads left to right.",
+   "guide": [
+    {
+     "title": "Reading the flow",
+     "text": "The bars on top split each memory type and each thread's frame into the modules' share, waits, unaccounted and free or idle. A node's chips show what it holds per memory type and its time per thread; the selector switches bytes and microseconds to percentages. The magenta node sets the frame rate. A ▸ count opens a group."
+    }
+   ],
+   "controls": {
+    "pipeline": {
+     "line": "The device as bars, then nodes.",
+     "fields": {
+      "name": {
+       "line": "Its name."
+      },
+      "bar": {
+       "line": "\"memory\" or \"time\"."
+      },
+      "type": {
+       "line": "Memory type, or module type."
+      },
+      "lane": {
+       "line": "A time bar's thread."
+      },
+      "parts": {
+       "line": "A bar's parts, adding up."
+      },
+      "stage": {
+       "line": "A node's column."
+      },
+      "us": {
+       "line": "Time per frame, children included."
+      },
+      "own": {
+       "line": "Time per frame, children left out."
+      },
+      "time": {
+       "line": "Own time per thread."
+      },
+      "internal": {
+       "line": "Bytes in internal RAM."
+      },
+      "psram": {
+       "line": "Bytes in PSRAM."
+      },
+      "size": {
+       "line": "Object size."
+      },
+      "bottleneck": {
+       "line": "Sets the frame rate."
+      },
+      "group": {
+       "line": "Its box."
+      },
+      "parent": {
+       "line": "Its top-level module."
+      },
+      "core": {
+       "line": "A task's core."
+      },
+      "stackFree": {
+       "line": "A task's least free stack."
+      }
+     }
+    }
+   },
+   "role": "generic",
+   "dim": 0,
+   "doc": "light/supporting.md#moonshine",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layers/MoonShineModule.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonshinemodule"
+  },
   "CarLightsLayout": {
    "line": "A pair of car headlights: concentric rings of lights placed like a car's front lamps.",
    "summary": "Nested rings of 1, 8, 12, 16 and 24 lights form each lamp, with a ring of 32 more on the outer two. Side strips join them, in a fixed arrangement drawn with [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
@@ -4900,7 +4973,7 @@
    "guide": [
     {
      "title": "Reading a task row",
-     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick."
+     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage shows each task's share of its core since the last refresh, where the board measures it: an ESP32 does, a computer and a Teensy do not."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/TasksModule.png",

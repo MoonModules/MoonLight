@@ -1,9 +1,9 @@
 {
- "(total)": 1508,
+ "(total)": 1484,
  "appendix sections nothing refers to": 122,
- "member deep dives": 33,
- "multi-line comment blocks": 265,
- "over-wide comment lines": 559,
+ "member deep dives": 32,
+ "multi-line comment blocks": 262,
+ "over-wide comment lines": 556,
  "over-wide doc lines": 22,
- "split paragraphs": 507
+ "split paragraphs": 490
 }

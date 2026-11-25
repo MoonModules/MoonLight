@@ -269,8 +269,7 @@ PROFILE_ALIASES = {
 }
 
 
-def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
-                        task_cpu_stats: bool = False) -> list[str]:
+def firmware_cmake_args(firmware: str, release: str = "", version: str = "") -> list[str]:
     """Extra -D cache args for the requested firmware.
 
     `release` is the release-channel tag (e.g. "latest", "v1.0.0") to burn
@@ -283,16 +282,8 @@ def firmware_cmake_args(firmware: str, release: str = "", version: str = "",
     default (library.json) applies.
     """
     spec = FIRMWARES[firmware]
-    frags = list(spec["fragments"])
-    if task_cpu_stats:
-        # Opt-in per-task CPU% in TasksModule: append the run-time-stats fragment (enables the
-        # FreeRTOS counter, ~5% tick) and set the compile def that fills + shows the column. Off
-        # unless --task-cpu-stats is passed; a profiling build, never the default.
-        frags.append("sdkconfig.defaults.task-cpu-stats")
-    fragments = ";".join(frags)
+    fragments = ";".join(spec["fragments"])
     args = [f"-DSDKCONFIG_DEFAULTS={fragments}"]
-    if task_cpu_stats:
-        args.append("-DMM_TASK_CPU_STATS=1")
     # Burn the firmware key into the binary so SystemModule can report it and
     # the OTA path can pick the matching release asset (every release ships
     # one .bin per firmware key; see release.yml).
@@ -448,10 +439,7 @@ def stale_feature_cache(build_dir: Path, extra: list[str], chip: str) -> str | N
 
     # For each, "wanted" = does this firmware pass the -D, "cached" = is it set
     # in the existing cache. A disagreement means a stale dir.
-    # MM_TASK_CPU_STATS is here too: toggling --task-cpu-stats on an existing dir must wipe, or the
-    # sdkconfig fragment (GENERATE_RUN_TIME_STATS) never re-seeds; CPU% would read all-0 with the flag
-    # on, or leave a hidden ~5% tick tax with it off. Same stale-cache trap as MM_NO_ETH.
-    for flag in ("MM_NO_ETH", "MM_ETH_ONLY", "MM_NO_WIFI", "MM_TASK_CPU_STATS", "MM_PANEL_CARDS"):
+    for flag in ("MM_NO_ETH", "MM_ETH_ONLY", "MM_NO_WIFI", "MM_PANEL_CARDS"):
         wanted = any(a.startswith(f"-D{flag}") for a in extra)
         cached = f"{flag}:" in text  # CMake writes `MM_NO_ETH:UNINITIALIZED=1`
         if wanted != cached:
@@ -505,8 +493,7 @@ def idf_build(firmware: str, cmd: list[str], env: dict, args, action: str = "bui
     # Each firmware keeps its sdkconfig in its own build dir (-DSDKCONFIG, absolute since CMake resolves it from the build dir), ESP-IDF's way to parallel builds:
     # a shared esp32/sdkconfig would carry one firmware's target into the next. A new build dir takes `set-target` first, which seeds it from the defaults.
     b_arg = ["-B", str(build_dir), "-DSDKCONFIG=" + str(build_dir / "sdkconfig")]
-    extra = firmware_cmake_args(firmware, args.release, args.version,
-                                task_cpu_stats=args.task_cpu_stats)
+    extra = firmware_cmake_args(firmware, args.release, args.version)
 
     # A build dir configured for another feature set (a stale MM_NO_ETH / MM_ETH_ONLY a reconfigure keeps) is wiped, so set-target below seeds a clean cache.
     stale = stale_feature_cache(build_dir, extra, chip)
@@ -551,9 +538,6 @@ def main():
                              "(see compute_version.py): core for a stable tag, "
                              "'<next>-dev.<N>' for latest. Omit for local builds "
                              "(library.json applies).")
-    parser.add_argument("--task-cpu-stats", action="store_true",
-                        help="Enable per-task CPU%% in TasksModule (FreeRTOS run-time stats). "
-                             "A profiling build only: costs ~5%% tick; off by default.")
     parser.add_argument("--migrate-pause", type=int, default=0, metavar="SECONDS",
                         help="Also build a rehearsal migration image that pauses this long after each step, "
                              "into build/migrate-<family>-pause, so a power cut can be tested at each point.")

@@ -253,14 +253,14 @@ protected:
     }
 
     /// The heap bytes this driver holds beside its ScratchBuffers, which count themselves; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
-    virtual size_t driverHeapBytes() const { return wireCap_; }
+    virtual HeapBytes driverHeapBytes() const { return heapOf(wire_, wireCap_); }
     /// Move the readout by the change in driverHeapBytes() since the last report, so every ScratchBuffer's own count stays in it. A driver reports through this alone, which keeps the total in step.
     void publishHeapBytes() {
-        const size_t now = driverHeapBytes();
-        setDynamicBytes(dynamicBytes() - reportedHeapBytes_ + now);
+        const HeapBytes now = driverHeapBytes();
+        setDynamicBytes(heapBytes() - reportedHeapBytes_ + now);
         reportedHeapBytes_ = now;
     }
-    size_t reportedHeapBytes_ = 0;   ///< what driverHeapBytes() read at the last publish
+    HeapBytes reportedHeapBytes_;   ///< what driverHeapBytes() read at the last publish
 
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;

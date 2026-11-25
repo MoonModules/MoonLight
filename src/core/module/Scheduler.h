@@ -106,6 +106,12 @@ public:
 
     /// Average microseconds per tick over the last second, which is the primary performance metric.
     uint32_t tickTimeUs() const { return tickTimeUs_; }
+    /// Wall-clock microseconds per frame over the last second: the tick and the loop's pause after it, the total the tick time balance sheet splits.
+    uint32_t frameUs() const { return frameUs_; }
+    /// The tree's modification count, moved by every structural change: a reader keeping pointers into the tree rebuilds them once it moves, as a textbook iterator checks its collection's count.
+    uint32_t structureVersion() const { return structureVersion_; }
+    /// Move the count; MoonModule::quiesceForMutation calls it through noteStructureChange.
+    void bumpStructureVersion() { structureVersion_++; }
     /// Frames a second, derived from the tick time above.
     uint32_t fps() const { return tickTimeUs_ > 0 ? 1000000 / tickTimeUs_ : 0; }
     /// How many top-level modules are registered.
@@ -191,9 +197,12 @@ private:
     uint32_t lastLoop20ms_ = 0;
     uint32_t lastLoop1s_ = 0;
     uint32_t tickTimeUs_ = 0;
+    uint32_t frameUs_ = 0;
+    uint32_t structureVersion_ = 0;  ///< see structureVersion()
     uint32_t tickAccumUs_ = 0;
     uint32_t frameCount_ = 0;        ///< frames in the current window, which the average divides by
     uint32_t lastTimingUpdate_ = 0;  ///< when that window opened
+    uint32_t windowStartUs_ = 0;     ///< the same instant in microseconds, taken where the tick sum closes, so the frame always holds the ticks in it
 };
 
 /// Whether the lights are on, defaulting to on where the control is absent; a Drivers master-state read, whose default lives here once per consumer.

@@ -36,6 +36,35 @@ A firmware key that changes its feature set would otherwise keep its old `MM_NO_
 
 On Windows the compiler is clang-cl, Visual Studio's Clang toolset, which `build_host.py` and `package_host.py` select with `-T ClangCL`: every host then compiles with Clang or GCC, and the per-light loops vectorize on Windows as they do elsewhere. CMake refuses a build directory configured with another toolset, so `build_host.py` removes one left by an MSVC build and says so. The generator is Visual Studio multi-config, so `MoonLight.exe` lands at `build/windows/Release/MoonLight.exe` and `mm_scenarios.exe` under `build/windows/test/Release/`. `build_host.py` and `run_scenario.py` look in both the `Release/` folder and the build root, so Ninja works as well; a `CMAKE_GENERATOR` naming it gets no toolset and takes its compiler from `CC` and `CXX`.
 
+## A Windows machine over SSH
+
+A Windows bench answers `ssh` and `scp` as a Raspberry Pi does, through the OpenSSH server Windows ships; the steps are [Reach a Windows build machine over SSH](../moonwalk.md#windows-over-ssh). What each step writes:
+
+```powershell
+# the login shell
+New-ItemProperty -Path HKLM:\SOFTWARE\OpenSSH -Name DefaultShell -PropertyType String -Force -Value C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+# the key of an account in Administrators, as ASCII, readable by Administrators and SYSTEM alone
+Set-Content -Encoding ascii C:\ProgramData\ssh\administrators_authorized_keys "ssh-ed25519 AAAA... you@your-machine"
+icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r /grant "Administrators:F" /grant "SYSTEM:F"
+# port 22 on a network in the Public category, kept to the local network
+Set-NetFirewallRule -Name OpenSSH-Server-In-TCP -Profile Private,Public -RemoteAddress LocalSubnet
+```
+
+Windows' `sshd_config` sends every member of Administrators to the shared key file and reads no `authorized_keys` in their home folder, and a file saved as UTF-16 holds a key `sshd` reads as none. A Hyper-V virtual switch, such as the one a Home Assistant virtual machine adds, puts its adapter in the Public category, which the server's own rule leaves closed. Key-only takes both `PasswordAuthentication no` and `KbdInteractiveAuthentication no`, since the server asks for the password through keyboard-interactive as well.
+
+A program started over SSH runs in a session with no desktop, so an HDMI output has no screen to show on; a scheduled task for the signed-in user runs it in the desktop session:
+
+```powershell
+$exe = "$env:LOCALAPPDATA\Programs\MoonLight\MoonLight.exe"
+$a = New-ScheduledTaskAction -Execute $exe -Argument "--no-browser" -WorkingDirectory (Split-Path $exe)
+$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
+$s = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+Register-ScheduledTask -TaskName MoonLight -Action $a -Principal $p -Settings $s -Force
+Start-ScheduledTask MoonLight
+```
+
+A time limit of zero keeps Windows from ending it after three days; `Stop-ScheduledTask MoonLight`, then `Get-Process MoonLight | Stop-Process`, ends it. A new build copied over the installed `MoonLight.exe` keeps the task and its firewall entry.
+
 ## The compiler cache
 
 Every build uses [ccache](https://ccache.dev) when it is installed, and builds as before when it is not. A compile whose source, headers and flags match an earlier one is read back from the cache. That covers a rebuild after a clean, the same file in another ESP32 firmware, and a branch switched back to. ESP-IDF turns on its own ccache switch from `esp32/CMakeLists.txt`, and the host and Teensy builds set it as the compiler launcher. ESP-IDF's installer brings ccache on Windows; the Windows host build, on the Visual Studio generator, runs uncached. `ccache -s` shows how often it hits. CI keeps one cache per build job through `.github/actions/ccache`. The version, git hash and date change with every commit, so `build_info.cpp` alone holds them, and a new commit recompiles only what it changed.

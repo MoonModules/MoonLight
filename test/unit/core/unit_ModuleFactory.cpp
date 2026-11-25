@@ -82,7 +82,6 @@ TEST_CASE("ModuleFactory: create returns nullptr for unknown type") {
     CHECK(mm::ModuleFactory::create(nullptr) == nullptr);
 }
 
-// typeName/typeRole with an out-of-range index returns nullptr / Generic safely (never UB).
 // A type's cards need the reader's mode as a control does: user until the build raises it, which names a registered type.
 TEST_CASE("ModuleFactory: a type's cards show to every reader until the build raises their mode") {
     mm::ModuleFactory::registerType<EffectStub>("ModeStub");
@@ -132,6 +131,8 @@ public:
     void operator delete(void* ptr) noexcept { mm::MoonModule::operator delete(ptr); }
     uint8_t big[8192] = {};   ///< larger than a classic ESP32's boot-task stack can spare
 };
+// A plain module, registered late by the trimmed-table case below, which a later survey of every type can place.
+class LateStub : public mm::MoonModule {};
 }  // namespace
 
 // Regression: the probe was a stack local, so registering a large module boot-looped the P4 at registration.
@@ -139,4 +140,23 @@ TEST_CASE("ModuleFactory: the registration probe lives on the heap, however larg
     HeapCountedStub::heapBuilt = 0;
     CHECK(mm::ModuleFactory::registerType<HeapCountedStub>("HeapCountedStub"));
     CHECK(HeapCountedStub::heapBuilt == 1);
+}
+
+TEST_CASE("ModuleFactory: the table trimmed to fit keeps every type, holds no spare room, and still takes a new one") {
+    const uint8_t n = mm::ModuleFactory::typeCount();
+    REQUIRE(n > 0);
+    const char* first = mm::ModuleFactory::typeName(0);
+    const char* last = mm::ModuleFactory::typeName(static_cast<uint8_t>(n - 1));
+    mm::ModuleFactory::shrinkToFit();
+    CHECK(mm::ModuleFactory::typeCount() == n);
+    CHECK(mm::ModuleFactory::typeName(0) == first);
+    CHECK(mm::ModuleFactory::typeName(static_cast<uint8_t>(n - 1)) == last);
+    const size_t entry = mm::ModuleFactory::tableBytes().total / n;
+    CHECK(mm::ModuleFactory::tableBytes().total == entry * n);   // one entry per type, none spare
+    CHECK(entry <= 7 * sizeof(void*));                     // six words and the three single bytes sharing a seventh
+    mm::MoonModule* made = mm::ModuleFactory::create(first);
+    CHECK(made != nullptr);
+    delete made;
+    REQUIRE(mm::ModuleFactory::registerType<LateStub>("TrimmedTableLateType"));   // a type a later survey can place, as every registered one is
+    CHECK(mm::ModuleFactory::typeCount() == n + 1);        // growing works from a full table
 }

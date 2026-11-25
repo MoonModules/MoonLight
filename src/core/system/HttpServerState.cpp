@@ -60,39 +60,62 @@ void HttpServerModule::buildStateJson(JsonSink& sink) {
 
 // The diff-on-the-wire cache keeps an 8-byte FNV-1a {path,value} hash per leaf, not the value; a collision skips one update at worst.
 
-bool HttpServerModule::Subscription::names_(const char* s) const {
-    if (!s || !s[0]) return false;
-    const uint32_t h = fnv1a(s, std::strlen(s));
+uint8_t HttpServerModule::Subscription::matches_(const MoonModule* m) const {
+    const char* name = m->name();
+    const char* type = m->typeName();
+    const uint32_t hn = name && name[0] ? fnv1a(name, std::strlen(name)) : 0;
+    const uint32_t ht = type && type[0] ? fnv1a(type, std::strlen(type)) : 0;
+    uint8_t bits = 0;
     for (uint8_t i = 0; i < count; i++)
-        if (names[i] == h) return true;
-    return false;
+        if ((hn && names[i] == hn) || (ht && names[i] == ht)) bits |= static_cast<uint8_t>(1u << i);
+    return bits;
 }
 
 bool HttpServerModule::Subscription::covers(const MoonModule* mod) const {
     if (all) return true;
-    for (const MoonModule* m = mod; m && count; m = m->parent())
-        if (names_(m->name()) || names_(m->typeName())) return true;
+    for (const MoonModule* m = mod; m && count; m = m->parent()) {
+        const uint8_t bits = matches_(m);
+        if (bits & ~alone) return true;            // named with its descendants
+        if (m == mod && bits) return true;         // named alone, and this is the module itself
+    }
     return false;
 }
 
-bool HttpServerModule::Subscription::parse(const char* body) {
+namespace {
+
+// Each non-empty string of the array under `key` in `body`, given to fn; false when the body holds no such array.
+template <typename Fn>
+bool forEachName(const char* body, const char* key, Fn&& fn) {
     json::JsonDoc* doc = nullptr;
-    const json::JsonNode* arr = json::parseListArray(body, "subscribe", doc);
+    const json::JsonNode* arr = json::parseListArray(body, key, doc);
     if (!arr) return false;
-    *this = Subscription{};
-    received = true;
     const int n = json::arraySize(*doc, arr);
     for (int i = 0; i < n; i++) {
         const json::JsonNode* el = json::element(*doc, arr, i);
-        if (!el || el->type != json::JsonType::String || !el->str || !el->str[0]) continue;
-        if (std::strcmp(el->str, "*") == 0) all = true;
-        else if (count < kMaxModules) names[count++] = fnv1a(el->str, std::strlen(el->str));
+        if (el && el->type == json::JsonType::String && el->str && el->str[0]) fn(el->str);
     }
     return true;
 }
 
+}  // namespace
+
+bool HttpServerModule::Subscription::parse(const char* body) {
+    Subscription s;
+    s.received = true;
+    const auto add = [&](const char* str, bool alone) {
+        if (std::strcmp(str, "*") == 0) { s.all = true; return; }
+        if (s.count >= kMaxModules) return;
+        if (alone) s.alone |= static_cast<uint8_t>(1u << s.count);
+        s.names[s.count++] = fnv1a(str, std::strlen(str));
+    };
+    if (!forEachName(body, "subscribe", [&](const char* str) { add(str, false); })) return false;
+    forEachName(body, "only", [&](const char* str) { add(str, true); });   // the shared document is parsed again, after the first array is read
+    *this = s;
+    return true;
+}
+
 bool HttpServerModule::Subscription::operator==(const Subscription& o) const {
-    if (received != o.received || all != o.all || count != o.count) return false;
+    if (received != o.received || all != o.all || count != o.count || alone != o.alone) return false;
     for (uint8_t i = 0; i < count; i++)
         if (names[i] != o.names[i]) return false;
     return true;
@@ -603,6 +626,7 @@ void HttpServerModule::writeControlTail(JsonSink& sink, const ControlDescriptor&
         if (ls && ls->isEditableList()) sink.append(",\"editable\":true");
         if (ls && ls->listRowsFixed()) sink.append(",\"fixedRows\":true");
         if (ls && ls->listAsGraph()) sink.append(",\"graph\":true");
+        if (ls && ls->listAsFlow()) sink.append(",\"flow\":true");
         if (ls && ls->listAsPads()) {
             sink.append(",\"pads\":true");
             const uint8_t gc = ls->listGridCols(), gr = ls->listGridRows();

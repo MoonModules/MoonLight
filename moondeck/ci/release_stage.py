@@ -42,6 +42,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DIST = ROOT / "dist"
 FIRMWARES_JSON = ROOT / "mooninstaller" / "firmwares.json"
 SETUP_TEENSY = ROOT / "moondeck" / "build" / "setup_teensy.py"
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _console import utf8_stdio  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))
 from build_esp32 import APP_ASSET_PREFIX, FIRMWARES as ESP32_FIRMWARES  # noqa: E402  the release image names a device asks for, and each firmware's layouts
 
@@ -410,8 +412,7 @@ def gcc_version() -> str:
 
 
 def main() -> int:
-    # UTF-8 whatever the runner's console: a Windows runner's cp1252 cannot print the program's own log, which says "→".
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    utf8_stdio()   # the program's own log says "→" on a Windows runner
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     tag = sub.add_parser("tag", help="Emit tag=<release channel tag>.")

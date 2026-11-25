@@ -2,6 +2,7 @@
 
 #include "core/module/Control.h"
 #include "core/module/NetworkUse.h"   // what a module reports of its network traffic, as it reports its memory
+#include "core/util/HeapBytes.h"   // what a module reports of its memory, per type
 #include "core/util/ScratchBuffer.h"
 #include "core/util/fnv.h"
 #include "platform/platform.h"
@@ -38,6 +39,9 @@ inline const char* roleName(ModuleRole role) {
 
 /// How far a reshaping control change's rebuild reaches: the module itself, the container holding it, or the whole tree.
 enum class PrepareScope : uint8_t { Self, Parent, Tree };
+
+/// Move the tree's modification count, which the Scheduler, the tree's owner, keeps and defines.
+void noteStructureChange();
 
 /// The base class for everything in the system, from effects and drivers to system services.
 ///
@@ -368,8 +372,9 @@ public:
     /// Park any worker of this module's that reads the tree, returning once it is idle.
     virtual void quiesce() {}
 
-    /// Park both workers that read the tree, which every structural mutator calls first.
+    /// Park both workers that read the tree, which every structural mutator calls first, and move the tree's modification count (`Scheduler::structureVersion`).
     void quiesceForMutation() {
+        noteStructureChange();
         quiesce();
         if (quiesceRenderHook_) quiesceRenderHook_();
     }
@@ -449,8 +454,10 @@ public:
     void setClassSize(size_t s) { classSize_ = s; }
     /// The heap this module has allocated, which its build sets.
     size_t dynamicBytes() const { return dynamicBytes_; }
-    /// Record the heap total, for a module that allocates outside a scratch buffer.
-    void setDynamicBytes(size_t b) { dynamicBytes_ = b; }
+    /// The same heap with the part of it in PSRAM, for the memory sheet's columns per type.
+    HeapBytes heapBytes() const { return {dynamicBytes_, psramBytes_}; }
+    /// Record the heap total, for a module that allocates outside a scratch buffer: `heapOf` per allocation says which part is PSRAM.
+    void setDynamicBytes(const HeapBytes& h) { dynamicBytes_ = h.total; psramBytes_ = h.psram; }
 
     /// The first of the resources this module holds, for a service that counts what they demand.
     const ModuleResource* resources() const { return resources_; }
@@ -459,9 +466,9 @@ public:
     friend class ModuleResource;
     friend class ScratchBufferBase;
 private:
-    /// Adjust the heap total by a signed delta, which a buffer does on every resize.
-    void addDynamicBytes(std::ptrdiff_t delta) {
-        dynamicBytes_ = static_cast<size_t>(static_cast<std::ptrdiff_t>(dynamicBytes_) + delta);
+    /// Move the heap total from what a buffer held to what it holds now, which a buffer does on every resize.
+    void moveDynamicBytes(const HeapBytes& from, const HeapBytes& to) {
+        setDynamicBytes(heapBytes() - from + to);
     }
 
     /// Add a resource to the intrusive list release walks, so a module with none pays one pointer.
@@ -500,10 +507,15 @@ public:
     /// Add one tick's time to the running total, from whichever core ticked it: the drivers tick on the encode task and on the main loop.
     void addAccumUs(uint32_t us) MM_NONBLOCKING { accumUs_.fetch_add(us, std::memory_order_relaxed); }
 
-    /// Average the accumulated time into the published figure, then recurse.
-    void publishTiming(uint32_t frameCount) {
+    /// The module's own time per frame: its total less the time its own thread spent inside its children's ticks, which a child on another thread leaves in.
+    uint32_t ownTimeUs() const { return ownTimeUs_; }
+
+    /// Average the accumulated time into the published figures, then recurse; a module that counts time of its own, such as a wait, averages it here too.
+    virtual void publishTiming(uint32_t frameCount) MM_NONBLOCKING {
         const uint32_t accum = accumUs_.exchange(0, std::memory_order_relaxed);
+        const uint32_t kids = childAccumUs_.exchange(0, std::memory_order_relaxed);
         tickTimeUs_ = frameCount > 0 ? accum / frameCount : 0;
+        ownTimeUs_ = frameCount > 0 && accum > kids ? (accum - kids) / frameCount : 0;
         for (uint8_t i = 0; i < childCount_; i++) {
             children_[i]->publishTiming(frameCount);
         }
@@ -512,11 +524,17 @@ public:
 protected:
     ControlList controls_;
 
+    /// Charge one child's tick to the child, the one place a child's time is booked. A child ticked on this module's own thread also counts as children's time, which this module's own time excludes; `onThisThread` is false for a child on another thread.
+    void addChildTimeUs(MoonModule* c, uint32_t us, bool onThisThread = true) MM_NONBLOCKING {
+        c->addAccumUs(us);
+        if (onThisThread) childAccumUs_.fetch_add(us, std::memory_order_relaxed);
+    }
+
     /// Which children a tick covers: every one, only a role, or every role but one.
     enum class RoleFilter : uint8_t { All, Only, Except };
     /// Tick the selected children through the one enabled gate and timing loop core owns.
     void tickChildren(void (MoonModule::*fn)() MM_NONBLOCKING, RoleFilter filter = RoleFilter::All,
-                      ModuleRole role = ModuleRole::Generic) MM_NONBLOCKING {
+                      ModuleRole role = ModuleRole::Generic, bool onThisThread = true) MM_NONBLOCKING {
         // The annotation rides the pointer type, so an unannotated method stays a compile error.
         for (uint8_t i = 0; i < childCount_; i++) {
             MoonModule* c = children_[i];
@@ -525,7 +543,7 @@ protected:
             if (!c->respectsEnabled() || c->enabled()) {
                 uint32_t start = platform::micros();
                 (c->*fn)();
-                c->addAccumUs(platform::micros() - start);
+                addChildTimeUs(c, platform::micros() - start, onThisThread);
             }
         }
     }
@@ -538,16 +556,19 @@ private:
     static inline MoonModule* lastEnabledEffect_ = nullptr;   ///< see lastEnabledEffect()
     bool dirty_ = false;
     bool wiredByCode_ = false;
+    Severity severity_ = Severity::Status;   ///< beside the flags, so the byte shares their word
     MoonModule* parent_ = nullptr;
     MoonModule** children_ = nullptr;
     uint8_t childCount_ = 0;
     uint8_t childCapacity_ = 0;
+    uint32_t psramBytes_ = 0;   ///< the part of dynamicBytes_ in PSRAM, in the padding before classSize_
     size_t classSize_ = 0;
     size_t dynamicBytes_ = 0;
     ModuleResource* resources_ = nullptr;  ///< head of the intrusive let-go-on-release list
     const char* status_ = nullptr;  ///< the message `status()` reads
-    Severity severity_ = Severity::Status;
     uint32_t tickTimeUs_ = 0;
+    uint32_t ownTimeUs_ = 0;
+    std::atomic<uint32_t> childAccumUs_{0};   ///< the children's time on this module's own thread
     std::atomic<uint32_t> accumUs_{0};   ///< a statistic, so relaxed: no other memory is ordered by it
 
     /// The process-wide hooks the transport installs, one function pointer each, as with the persistence hook.

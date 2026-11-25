@@ -6,6 +6,7 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveBuiltins.h"
 #include "core/moonlive/MoonLiveCompiler.h"   // CompileResult (carries the declared controls)
+#include "core/util/HeapBytes.h"   // heapBytes(): what the engine takes, per memory type
 #include <cstring>   // std::strcmp: entry lookup by name
 
 namespace mm::moonlive {
@@ -192,7 +193,7 @@ public:
     size_t codeCap() const { return codeCap_; }
 
     /// Every heap byte this engine holds: the exec block, the control arena and the string pool.
-    size_t heapBytes() const { return codeCap_ + (ctrlArena_ ? kArenaBytes : 0) + stringCap_ + retiredCap_; }
+    HeapBytes heapBytes() const { return HeapBytes{codeCap_} + heapOf(ctrlArena_, ctrlArena_ ? kArenaBytes : 0) + heapOf(strings_, stringCap_) + heapOf(retired_, retiredCap_); }
 
     /// The control arena's address, which names this engine to a host table holding things on its behalf, as `JsonFetch` holds documents.
     const void* arena() const { return ctrlArena_; }

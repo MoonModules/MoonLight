@@ -480,7 +480,7 @@ bool up(uint32_t /*display*/, const HdmiMode& want, HdmiMode& running) {
     now.dmSize = sizeof(now);
     const bool rate = EnumDisplaySettingsA(w.device, ENUM_CURRENT_SETTINGS, &now);
     running = {w.width, w.height, static_cast<uint8_t>(rate ? now.dmDisplayFrequency : 0)};
-    // Esc as a hot key while the host's own display is covered: the keyboard's focus stays with whatever had it, MoonLight's console among them, so a key sent to the window alone never arrives.
+    // Esc as a hot key while the host's own display is covered: the keyboard's focus stays with whatever had it, MoonLight's console among them, so a hot key is what reaches MoonLight.
     w.escHeld = w.own && RegisterHotKey(nullptr, kEscHotKey, 0, VK_ESCAPE);
     if (w.own && !w.escHeld) std::printf("HDMI: another program holds Esc, so switch ownScreen off from a browser to get the desktop back\n");
     SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);   // a show has no keyboard to keep the screen saver and display sleep away; down() gives them back

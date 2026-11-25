@@ -33,6 +33,72 @@
 .list-graph .graph-link:focus { outline: none; }
 .list-graph .graph-link:focus-visible circle { stroke: var(--accent); stroke-width: 3; }
 
+/* A list drawn as a flow (listAsFlow): bars on top, nodes in stage columns below, wires as wide as the bytes they carry; gray is healthy, color
+   is abnormal. A chip's color is its memory type or its thread, the same in the bars, the chips and the legend. */
+.list-flow-box {
+    --flow-mem0: var(--blue, #4a90e2);       /* internal RAM */
+    --flow-mem1: var(--teal, #30b0b0);       /* PSRAM */
+    --flow-lane0: var(--accent, #a78bfa);    /* the render loop */
+    --flow-lane1: var(--orange, #e0662a);    /* the render workers */
+    --flow-lane2: var(--green, #30c040);     /* the encode task */
+    --flow-lane3: var(--fg-subtle, #8788a2); /* a system task */
+    --flow-bottleneck: #ff4fd8;
+    --flow-free: color-mix(in srgb, var(--fg-subtle) 22%, transparent);
+    --flow-unaccounted: color-mix(in srgb, var(--fg-subtle) 60%, transparent);
+}
+body[data-theme="light"] .list-flow-box { --flow-bottleneck: #c0179e; }
+.flow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.flow-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; font-size: 0.7rem; color: var(--fg-muted); }
+.flow-key { display: inline-flex; align-items: center; gap: 4px; }
+.flow-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.flow-key .flow-key-bottleneck { border: 2px solid var(--flow-bottleneck); }
+.flow-strip { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.flow-bar { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; }
+.flow-bar-label { flex: 0 0 9.5rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-bar-track { flex: 1; display: flex; height: 14px; border-radius: 3px; overflow: hidden; background: var(--flow-free); }
+.flow-seg { height: 100%; overflow: hidden; white-space: nowrap; font-size: 9px; line-height: 14px; padding-left: 3px; color: var(--bg-0); }
+.flow-seg-free { background: var(--flow-free); color: var(--fg-muted); }
+.flow-seg-unaccounted { background: var(--flow-unaccounted); }
+.flow-seg-wait { background: var(--yellow); }
+.flow-seg.flow-seg-types { opacity: 0.6; }
+span.flow-chip-mem0, i.flow-chip-mem0 { background: var(--flow-mem0); }
+span.flow-chip-mem1, i.flow-chip-mem1 { background: var(--flow-mem1); }
+span.flow-chip-lane0, i.flow-chip-lane0 { background: var(--flow-lane0); }
+span.flow-chip-lane1, i.flow-chip-lane1 { background: var(--flow-lane1); }
+span.flow-chip-lane2, i.flow-chip-lane2 { background: var(--flow-lane2); }
+span.flow-chip-lane3, i.flow-chip-lane3 { background: var(--flow-lane3); }
+.list-flow { display: block; width: 100%; }
+.list-flow .flow-group { fill: var(--accent-soft); fill-opacity: 0.1; stroke: var(--border); }
+.list-flow .flow-group-label { fill: var(--fg-muted); font-size: 9px; }
+.list-flow .flow-wire { fill: none; stroke: var(--fg-subtle); stroke-opacity: 0.6; }
+.list-flow .flow-wire-map { stroke-dasharray: 4 3; }
+.list-flow .flow-wire-label { fill: var(--fg-muted); font-size: 8px; text-anchor: middle; }
+.list-flow .flow-node { cursor: pointer; }
+.list-flow .flow-box { fill: var(--card-bg-1); stroke: var(--border); stroke-width: 1.5; }
+.list-flow .flow-name { fill: var(--fg); font-size: 11px; text-anchor: middle; }
+.list-flow .flow-chip-mem0 { fill: var(--flow-mem0); }
+.list-flow .flow-chip-mem1 { fill: var(--flow-mem1); }
+.list-flow .flow-chip-lane0 { fill: var(--flow-lane0); }
+.list-flow .flow-chip-lane1 { fill: var(--flow-lane1); }
+.list-flow .flow-chip-lane2 { fill: var(--flow-lane2); }
+.list-flow .flow-chip-lane3 { fill: var(--flow-lane3); }
+.list-flow .flow-chip-stack { fill: none; stroke: var(--fg-subtle); }
+.list-flow .flow-chip-text { fill: var(--bg-0); font-size: 8px; text-anchor: middle; }
+.list-flow .flow-chip-stack + .flow-chip-text { fill: var(--fg-muted); }
+.list-flow .flow-chip-idle { fill: var(--fg-subtle); }
+.list-flow .flow-badge { cursor: pointer; }
+.list-flow .flow-badge rect { fill: var(--card-bg-2); stroke: var(--fg-subtle); }
+.list-flow .flow-badge text { fill: var(--fg-muted); font-size: 8px; text-anchor: middle; }
+.list-flow .flow-badge:hover rect, .list-flow .flow-badge:focus-visible rect { stroke: var(--accent); }
+.list-flow .flow-warm .flow-box { fill: color-mix(in srgb, var(--yellow) 25%, var(--card-bg-1)); }
+.list-flow .flow-hot .flow-box { fill: color-mix(in srgb, var(--red) 25%, var(--card-bg-1)); }
+.list-flow .flow-warning .flow-box { stroke: var(--yellow); stroke-width: 2.5; }
+.list-flow .flow-error .flow-box { stroke: var(--red); stroke-width: 2.5; }
+.list-flow .flow-bottleneck .flow-box { stroke: var(--flow-bottleneck); stroke-width: 3; }
+.list-flow .flow-off { opacity: 0.4; }
+.list-flow .flow-node:hover .flow-box, .list-flow .flow-node:focus-visible .flow-box { stroke: var(--accent); }
+.list-flow .flow-node:focus { outline: none; }
+
 /* A node's popup: its detail, and for a MoonLight device its firmware and update. */
 dialog.graph-popup {
     color: var(--fg);

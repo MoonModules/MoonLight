@@ -11,6 +11,10 @@
 
 namespace mm {
 
+void noteStructureChange() {
+    if (Scheduler* s = Scheduler::instance()) s->bumpStructureVersion();
+}
+
 bool Scheduler::addModule(MoonModule* mod) {
     if (!mod) return false;
     if (moduleCount_ >= modules_.size()) {
@@ -56,11 +60,13 @@ void Scheduler::setup() {
     lastLoop20ms_ = platform::millis();
     lastLoop1s_ = platform::millis();
     lastTimingUpdate_ = platform::millis();
+    windowStartUs_ = platform::micros();
 }
 
 void Scheduler::tick() MM_NONBLOCKING {
     uint32_t now = platform::millis();
     uint32_t tickStart = platform::micros();
+    if (windowStartUs_ == 0) windowStartUs_ = tickStart;   // a scheduler a test ticks before any setup() starts its first window at its first tick
 
     // A requested rebuild runs here at a frame boundary; the analyzer reports it transitively and that finding stays on purpose, the only signal if the gate is lost.
     preparePending();
@@ -96,12 +102,16 @@ void Scheduler::tick() MM_NONBLOCKING {
         }
     }
 
-    tickAccumUs_ += platform::micros() - tickStart;
+    const uint32_t tickEnd = platform::micros();
+    tickAccumUs_ += tickEnd - tickStart;
     frameCount_++;
 
     // Every 1 second: compute averages, recurse into children
     if (now - lastTimingUpdate_ >= 1000) {
         tickTimeUs_ = frameCount_ > 0 ? tickAccumUs_ / frameCount_ : 0;
+        // The window closes where the tick sum does, in microseconds, so every tick counted lies inside it.
+        frameUs_ = frameCount_ > 0 ? (tickEnd - windowStartUs_) / frameCount_ : 0;
+        windowStartUs_ = tickEnd;
 
         for (uint8_t i = 0; i < moduleCount_; i++) {
             modules_[i]->publishTiming(frameCount_);

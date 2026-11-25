@@ -12,6 +12,7 @@
 #include "light/powerfunctions/particles.h"   // particles::FrameTime, the elapsed-to-scale conversion
 #include "platform/platform.h"
 
+#include <atomic>   // the worker time, added from a render worker's thread
 #include <cstdint>  // INT32_MAX: the bound on the warp's 16.16 steps
 #include <cstdio>
 #include <cstring>  // std::memcpy in extrude()
@@ -65,6 +66,17 @@ public:
     uint8_t opacity = 255;
     /// Whether this layer shows in a composite: at opacity 0 it neither renders nor blends, so a show switches looks by opacity at no cost. The bottom layer lies over black, so it fades out like any other.
     bool contributes() const MM_NONBLOCKING { return opacity > 0; }
+
+    /// Add one tick's time that a render worker ran, the part of this layer's time off the render loop.
+    void addWorkerUs(uint32_t us) MM_NONBLOCKING { workerAccumUs_.fetch_add(us, std::memory_order_relaxed); }
+    /// The microseconds per frame a render worker ran this layer, averaged over the last second as its tick time is.
+    uint32_t workerUs() const { return workerUs_; }
+    /// Average the worker time over the same frames as the tick time.
+    void publishTiming(uint32_t frameCount) MM_NONBLOCKING override {
+        MoonModule::publishTiming(frameCount);
+        const uint32_t accum = workerAccumUs_.exchange(0, std::memory_order_relaxed);
+        workerUs_ = frameCount > 0 ? accum / frameCount : 0;
+    }
 
     /// Publish the two composition controls the `Drivers` container reads.
     void defineControls() override {
@@ -192,14 +204,16 @@ public:
             // The effect writes only its own slice; the framework duplicates it across the rest.
             extrude(eff->dimensions());
             bufferGen_++;   // this effect wrote the shared buffer; see bufferGen()
-            eff->addAccumUs(platform::micros() - start);
+            addChildTimeUs(eff, platform::micros() - start);
         }
         // After the effect pass, so the frame's buffer is fully written before any modifier acts.
         bool rebuild = false;
         for (uint8_t i = 0; i < childCount(); i++) {
             if (child(i)->role() != ModuleRole::Modifier || !child(i)->enabled()) continue;
             auto* m = static_cast<ModifierBase*>(child(i));
+            const uint32_t start = platform::micros();
             m->tick();
+            addChildTimeUs(m, platform::micros() - start);
             rebuild |= m->consumeNeedsRebuild();
         }
         // One rebuild however many modifiers asked, applied on the render loop before the next frame renders, since layers share the layout a rebuild places lights through.
@@ -586,6 +600,8 @@ private:
     uint8_t  staticCount_ = 0;          // enabled modifiers folded into the mapping at build time
     uint8_t* liveScratch_ = nullptr;    // snapshot for the live pass; allocated only when hasLive_
     size_t   liveScratchBytes_ = 0;
+    std::atomic<uint32_t> workerAccumUs_{0};   ///< worker time since the last publish, added from the worker's thread
+    uint32_t workerUs_ = 0;                    ///< the worker time per frame the last second averaged
 
     /// Whether the heap can afford an allocation: true when unlimited or the budget suffices.
     static bool canAllocate(size_t bytesNeeded) {
@@ -616,7 +632,7 @@ private:
             size_t needed = static_cast<size_t>(count) * channelsPerLight_;
             if (buffer_.holds(count, channelsPerLight_) || canAllocate(needed)) {
                 if (buffer_.allocate(count, channelsPerLight_)) {
-                    setDynamicBytes(buffer_.bytes() + lut_.memoryUsed());
+                    setDynamicBytes(buffer_.heap() + lut_.heap());
                     if (reduced) setStatus("buffer reduced: not enough memory", Severity::Warning);
                     return;
                 }
@@ -641,7 +657,7 @@ private:
         } else if (reduced) {
             setStatus("buffer reduced: not enough memory", Severity::Warning);
         }
-        setDynamicBytes(buffer_.bytes() + lut_.memoryUsed());
+        setDynamicBytes(buffer_.heap() + lut_.heap());
     }
 };
 

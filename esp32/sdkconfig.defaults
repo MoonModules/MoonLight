@@ -83,12 +83,16 @@ CONFIG_ESP_WIFI_ENABLED=y
 # board-neutral so a WiFi-only ESP32 build doesn't reserve RMII GPIOs or
 # allocate Ethernet DMA buffers it can't use.
 
-# FreeRTOS task introspection for TasksModule (uxTaskGetSystemState): the trace facility is
-# cheap, a bit of RAM/flash, no per-context-switch cost. The per-task CPU% counter
-# (GENERATE_RUN_TIME_STATS) is NOT enabled here: it costs ~5% tick (measured) and is gated
-# behind the MM_TASK_CPU_STATS build flag for profiling builds only.
+# FreeRTOS task introspection for TasksModule and MoonShine (uxTaskGetSystemState): each task's
+# stack mark, core and CPU share. The run-time counter reads a clock on every context switch, which
+# measured no cost (A/B 2026-11-25: a P4 at 30,191 µs a tick without it, 30,246 with it; a classic
+# ESP32 run CPU-bound at 887 without, 857 with esp_timer, 842 with the cycle counter, all inside the
+# ±5% a change of code layout alone moves). The esp_timer clock: the cycle counter exists on Xtensa
+# only, wraps in 17 s, and ESP-IDF marks it wrong on a dual-core chip.
 CONFIG_FREERTOS_USE_TRACE_FACILITY=y
 CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
 
 # A 1 ms scheduler tick, Arduino-ESP32's rate: the code waits in whole milliseconds, and at IDF's 100 Hz
 # pdMS_TO_TICKS of anything under 10 ms is 0 ticks, a wait that never blocks.

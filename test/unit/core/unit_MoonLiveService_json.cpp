@@ -64,8 +64,7 @@ struct Rig {
     Rig() {
         static bool registered = false;
         if (!registered) { ModuleFactory::registerType<JmKnob>("JmKnob"); registered = true; }
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_mls_json_" + std::to_string(++seq);
+        root_ = mm::uniqueTempDir("mm_mls_json");
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_.c_str());
         net = Net{};

@@ -24,7 +24,7 @@ namespace mm {
 ///
 /// A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.
 ///
-/// A `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick.
+/// A `cpu` percentage shows each task's share of its core since the last refresh, where the board measures it: an ESP32 does, a computer and a Teensy do not.
 ///
 /// @technical
 ///
@@ -53,6 +53,11 @@ public:
         platform::currentTaskOnCore(0, core0_, sizeof(core0_));
         platform::currentTaskOnCore(1, core1_, sizeof(core1_));
     }
+
+    /// How many tasks the last snapshot holds.
+    uint8_t taskCount() const { return tasks_.count_; }
+    /// One task of the last snapshot, for a reader that shows the tasks elsewhere, such as MoonShine.
+    const platform::TaskInfo& task(uint8_t i) const { return tasks_.rows_[i]; }
 
 private:
     /// The task table, a source over a fixed snapshot the platform fills, with no allocation.

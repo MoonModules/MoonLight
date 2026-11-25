@@ -28,6 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_tempo  # noqa: E402  the one home of the build, the decode and the run's plumbing
+from _console import utf8_stdio  # noqa: E402  moondeck/ is on the path through bench_tempo
 
 OUT_DIR = bench_tempo.ROOT / "build" / "drums"
 WINDOW_S = 0.05       # mir_eval's onset window and the field's
@@ -254,7 +255,7 @@ def run(items: list, out: Path, mix: bool = False, jobs: int = 4, no_build: bool
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")
+    utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dir", type=Path, help="the MDB Drums folder, read only; without it, the generated drum walk")
     ap.add_argument("--mix", action="store_true", help="the full mix, the drums inside the band, in place of the drums alone")

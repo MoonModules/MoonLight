@@ -42,8 +42,7 @@ struct Device {
 
     Device() {
         // A monotonic counter, not millis(): two fixtures constructed in the same millisecond would otherwise share a root and see each other's preset files.
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_preset_test_" + std::to_string(++seq);
+        root_ = mm::uniqueTempDir("mm_preset_test");
         std::filesystem::remove_all(root_);
         mm::platform::fsSetRoot(root_.c_str());
 

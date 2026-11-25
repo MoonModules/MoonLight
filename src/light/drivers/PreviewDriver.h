@@ -580,11 +580,11 @@ private:
 
 protected:
     /// This driver's heap: the base scratch plus the kept-index cache, for the memory readout.
-    size_t driverHeapBytes() const override {
+    HeapBytes driverHeapBytes() const override {
         return DriverBase::driverHeapBytes()
-             + static_cast<size_t>(keptIdxCap_) * sizeof(nrOfLightsType)
-             + static_cast<size_t>(keptIdxCap_) * 3   // keptPos_, three bytes per kept light
-             + stagingCap_;
+             + heapOf(keptIdx_, static_cast<size_t>(keptIdxCap_) * sizeof(nrOfLightsType))
+             + heapOf(keptPos_, static_cast<size_t>(keptIdxCap_) * 3)   // three bytes per kept light
+             + heapOf(staging_, stagingCap_);
     }
 
 private:

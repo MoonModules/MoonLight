@@ -388,8 +388,8 @@ private:
 
 protected:
     /// This driver's heap: the base scratch plus the frame buffer, for the memory readout.
-    size_t driverHeapBytes() const override {
-        return DriverBase::driverHeapBytes() + frameCap_;
+    HeapBytes driverHeapBytes() const override {
+        return DriverBase::driverHeapBytes() + heapOf(frame_, frameCap_);
     }
 
 private:

@@ -30,18 +30,10 @@ import json
 import sys
 from pathlib import Path
 
-# Force UTF-8 stdio on Windows: this script prints a `↔` (U+2194) in the OK
-# summary, and Python 3.14 on Windows defaults stdout to cp1252 which raises
-# UnicodeEncodeError on that character — the exact case Windows CI + the
-# host-side pytest hit (subprocess captures stderr, but the print crash makes
-# the script return 1 and the tag-matches tests fail). reconfigure() is a no-op
-# on POSIX where stdio is already UTF-8. Same fix as build/setup_esp_idf.py.
-if sys.stdout is not None:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if sys.stderr is not None:
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _console import utf8_stdio  # noqa: E402
+utf8_stdio()   # the OK summary prints a ↔ through Windows CI's pipe
 LIBRARY_JSON = ROOT / "library.json"
 
 

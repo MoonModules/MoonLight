@@ -800,10 +800,10 @@ protected:
     size_t   snapshotCap_ = 0;            ///< allocated capacity, grown to fit the window
 
     /// This driver's heap: the scratch, the ring snapshot, and the peripheral's DMA buffers, which is what choosing this driver costs.
-    size_t driverHeapBytes() const override {
-        // The buffers that EXIST, as the bus counts them: a readout trusting the request reports unspent memory.
-        const size_t dma = peripheral_ ? peripheral_->busHeapBytes() : 0;
-        return DriverBase::driverHeapBytes() + snapshotCap_ + dma;
+    HeapBytes driverHeapBytes() const override {
+        // The buffers that EXIST, as the bus counts them: a readout trusting the request reports unspent memory. The first one's address tells their type, since the bus takes them from one pool.
+        const HeapBytes dma = peripheral_ ? heapOf(peripheral_->busBuffer(0), peripheral_->busHeapBytes()) : HeapBytes{};
+        return DriverBase::driverHeapBytes() + heapOf(snapshotBuf_, snapshotCap_) + dma;
     }
     /// The snapshot copy's source, set before copyRange.
     const uint8_t* snapCopySrc_ = nullptr;

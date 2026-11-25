@@ -139,6 +139,7 @@ bool readEdid(uint32_t display, const edid::Size* sizes, size_t n, edid::Monitor
 }
 
 bool up(uint32_t display, const HdmiMode& want, HdmiMode& running) {
+    m.dismissed.store(false);   // an Esc meant for the last session is that session's, so a new one starts undismissed
     m.display = display;
     if (CGDisplayModeRef mode = pickMode(display, want)) {
         m.ownMode = CGDisplayCopyDisplayMode(display);

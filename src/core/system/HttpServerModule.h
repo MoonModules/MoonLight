@@ -70,7 +70,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// ## State by subscription
 ///
-/// Publish/subscribe per client: `{"subscribe":[…]}` names the modules a client views, by name or type, each with its descendants, and `"*"` names the whole tree.
+/// Publish/subscribe per client: `{"subscribe":[…]}` names the modules a client views, by name or type, each with its descendants, and `"*"` names the whole tree. An `"only":[…]` beside it names modules alone, as a status bar reads System's own controls and not every module under it.
 ///
 /// The full state carries those modules whole and every other module as an outline: its header and children, without controls. A page so gets its root and its status bar's modules.
 ///
@@ -583,18 +583,19 @@ public:
         const size_t f = platform::freeInternalHeap();
         return f == 0 || f > kSendHeadroom;
     }
-    /// What one control client views: modules named at any depth by name or type, each bringing its descendants. @xref{state-by-subscription}
+    /// What one control client views: modules named at any depth by name or type, each bringing its descendants unless named alone. @xref{state-by-subscription}
     struct Subscription {
-        static constexpr uint8_t kMaxModules = 8;   ///< a page names its root and five types it reads beside it
+        static constexpr uint8_t kMaxModules = 8;   ///< a page names its root and six types it reads beside it
         bool received = false;             ///< the client has subscribed, which is what its first document answers
         bool all = false;                  ///< `"*"`: the whole tree
         uint8_t count = 0;                 ///< how many names are held
+        uint8_t alone = 0;                 ///< bit i: names[i] came from `only`, covering that module alone
         uint32_t names[kMaxModules] = {};  ///< each name's FNV-1a, a module name or a type name of any length
-        /// Whether `mod` or one of its ancestors is named, by its name or its type.
+        /// Whether `mod` or one of its ancestors is named with its descendants, or `mod` itself is named alone, by its name or its type.
         bool covers(const MoonModule* mod) const;
-        /// Whether `s` is one of the names held.
-        bool names_(const char* s) const;
-        /// Read `{"subscribe":[…]}`, false when the body holds no such array.
+        /// The bits of the names that match `m`'s name or type, 0 for none.
+        uint8_t matches_(const MoonModule* m) const;
+        /// Read `{"subscribe":[…], "only":[…]}`, false when the body holds no `subscribe` array.
         bool parse(const char* body);
         /// Whether two subscriptions name the same modules.
         bool operator==(const Subscription& o) const;

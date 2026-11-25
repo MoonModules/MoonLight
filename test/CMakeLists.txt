@@ -249,6 +249,7 @@ add_executable(mm_tests
     unit/light/unit_MovingHeadEffect.cpp
     unit/light/unit_FixedPointEffect.cpp
     unit/light/unit_Drivers_container.cpp
+    unit/light/unit_MoonShineModule.cpp
     unit/light/unit_Drivers_livePalettes.cpp
     unit/light/unit_Drivers_rendersplit.cpp
     unit/light/unit_FixtureProfilesModule.cpp

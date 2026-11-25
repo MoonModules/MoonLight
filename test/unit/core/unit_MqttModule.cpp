@@ -7,23 +7,19 @@
 ///
 /// ## Delivering a PUBLISH
 ///
-/// A suffix such as "on/set" is sent under the derived prefix, as the broker socket would deliver it.
-/// A leading slash sends an absolute topic instead, which is what the wrong-prefix case needs.
+/// A suffix such as "on/set" is sent under the derived prefix, as the broker socket would deliver it; a leading slash sends an absolute topic, which the wrong-prefix case needs.
 ///
 /// ## The two command topics
 ///
-/// Home Assistant drives the JSON-schema light with a state and an optional brightness on the ha/set topic.
-/// Its brightness is already 0-255, where the mqttthing brightness/set topic carries 0-100 and is rescaled.
+/// Home Assistant drives the JSON-schema light on ha/set, its brightness already 0-255, where the mqttthing brightness/set topic carries 0-100 and is rescaled.
 ///
 /// ## Why a preset change re-announces
 ///
-/// Home Assistant re-reads the effect list only when the retained discovery message changes, so a mid-session preset would never appear without this.
-/// All three mutations funnel through one revision, pinned in unit_ControlModule, so one path proves the mechanism.
+/// Home Assistant re-reads the effect list only when the retained discovery message changes; every preset change moves one revision (unit_ControlModule), so one path proves it.
 ///
 /// ## The fake carries the real ranges
 ///
-/// Drivers.palette binds 0..kCount-1, so the fake declares a Uint8 with the full 0..255 range, a superset of the sixty built-ins.
-/// An artificially small Select would clamp away a nearest-palette index the MQTT map returns, and the test would pass for the wrong reason.
+/// The fake's palette is a Uint8 over 0..255, a superset of the built-ins: a small Select would clamp away the nearest-palette index MQTT returns and pass for the wrong reason.
 ///
 /// ## The MAC is derived, never written out
 ///
@@ -35,13 +31,11 @@
 ///
 /// ## Why a test reads the fixed header
 ///
-/// Asserting the RETAIN bit, bit 0 of the PUBLISH fixed header per MQTT 3.1.1 section 3.3.1.3, catches what string-matching cannot.
-/// A regression dropping retain=true flips that bit and leaves every substring in the payload intact.
+/// The RETAIN bit, bit 0 of the PUBLISH fixed header (MQTT 3.1.1 section 3.3.1.3), catches a dropped retain=true, which leaves every substring of the payload intact.
 ///
 /// ## The guard that stranded a buffer
 ///
-/// The original guard bailed on a state other than Connected before reaching the free.
-/// So a discovery-off toggle during a reconnect stranded 768 bytes until release, breaking the promise of no memory when discovery is off.
+/// A guard that bailed before the free on any state but Connected stranded 768 bytes when discovery went off during a reconnect, so the free comes first.
 ///
 /// ## Why the state gate includes the look
 ///
@@ -49,8 +43,8 @@
 ///
 /// ## The routing is provable without a broker
 ///
-/// A control is driven through Scheduler::setControl, the shared primitive IR and the WLED bridge also use, so the socket is never involved.
-/// feedForTest() injects raw MQTT bytes built with the tested MqttPacket builders, exactly as a broker would deliver them, mirroring InfraredService::injectCodeForTest.
+/// feedForTest() injects the raw bytes a broker would deliver, built with the tested MqttPacket builders, and a control moves through Scheduler::setControl, as IR and WLED do.
+///
 /// A FakeDrivers stands in for the real one, carrying the on, brightness and palette controls MQTT targets.
 
 #include "doctest.h"
@@ -345,8 +339,7 @@ TEST_CASE("MqttModule: topic identity is MAC-stable, not affected by a device re
 
 namespace {
 
-/// Rig + a real preset stack (FilesystemModule, ControlModule, a Effects tree), so the MQTT<->preset seams are exercised against the real modules rather than a stub.
-/// Filesystem isolated per fixture.
+/// Rig plus the real preset stack (FilesystemModule, ControlModule, an Effects tree), on a filesystem of the fixture's own.
 struct PresetRig : Rig {
     FilesystemModule* fs = nullptr;
     ControlModule* control = nullptr;
@@ -354,8 +347,7 @@ struct PresetRig : Rig {
     std::string root_;   // fixture-private fs root; restored in the destructor
 
     PresetRig() {
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_mqtt_preset_" + std::to_string(++seq);
+        root_ = mm::uniqueTempDir("mm_mqtt_preset");
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_.c_str());
 
@@ -376,8 +368,8 @@ struct PresetRig : Rig {
         mqtt->setControlModule(control);
     }
     ~PresetRig() {
-        // Restore the default root BEFORE the directory goes: fsSetRoot is global, so leaving it pointed at a deleted fixture directory would follow every later test in the run.
-        platform::fsSetRoot("build");
+        // Restore the default root (MM_DATA_DIR-aware) BEFORE the directory goes: fsSetRoot is global, so leaving it pointed at a deleted fixture directory would follow every later test in the run.
+        platform::fsSetRoot("");
         std::filesystem::remove_all(root_);
     }
 
