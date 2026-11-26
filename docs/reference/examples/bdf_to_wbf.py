@@ -65,7 +65,7 @@ def parse_bdf(text):
 
 
 def box_from_glyphs(glyphs):
-    """Ascent and descent taken from the bitmaps when the BDF states neither."""
+    """Ascent and descent taken from the bitmaps when the BDF omits both."""
     ascent = descent = 0
     for glyph in glyphs.values():
         _, h, _, y = glyph["bbx"]

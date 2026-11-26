@@ -2957,7 +2957,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             input.dataset.mid = moduleName;
             input.dataset.key = ctrl.name;
             // A switch another control makes idle stays visible and keeps its saved value. The checkbox
-            // is disabled, so the click never writes, and the track draws grey.
+            // is disabled, so the click leaves the value as it is, and the track draws grey.
             if (ctrl.readonly) input.disabled = true;
             else input.addEventListener("change", () => {
                 dragTs[key] = Date.now();

@@ -21,6 +21,8 @@ struct Palette {
     /// Entries a palette holds, evenly spaced across the wheel.
     static constexpr uint8_t kEntries = 16;
     RGB entry[kEntries] = {};
+    /// Advances when a palette is installed. A script rewriting entries leaves it, so a trail can tell the two apart.
+    uint32_t generation = 0;
 
     /// Build the 16 entries from a gradient-stop list.
     void fromGradient(const uint8_t* stops, size_t count) {
@@ -206,21 +208,26 @@ public:
     /// The palette effects read, which the drivers module sets.
     static const Palette* active() { return &active_; }
 
-    /// Restore a previously captured palette verbatim. For tests that must hand back the global they disturbed.
-    static void setActiveDirect(const Palette& p) { active_ = p; }
+    /// Restore a previously captured palette verbatim, keeping the generation a trail is watching. For tests that must hand back the global they disturbed, and for a script rewriting entries.
+    static void setActiveDirect(const Palette& p) {
+        const uint32_t gen = active_.generation;
+        active_ = p;
+        active_.generation = gen;
+    }
 
     /// Expand built-in `index` into the active palette, off the hot path, on selection: @xref{gradients-expand-once}.
     static void setActive(uint8_t index) {
         requested_.store(0, std::memory_order_relaxed);   // a direct set supersedes a pending request, which would otherwise land over it next frame
+        const uint32_t next = active_.generation + 1;
         active_ = fromBuiltin(index);
-        noteChange();
+        active_.generation = next;
     }
 
     /// Advances when a palette is installed at the start of a frame. A script rewriting entries leaves it alone, so a trail keeps moving.
-    static uint32_t generation() { return generation_.load(std::memory_order_acquire); }
+    static uint32_t generation() { return active_.generation; }
 
     /// The palette about to be sampled changed. A trail drops the previous colors on this frame.
-    static void noteChange() { generation_.fetch_add(1, std::memory_order_release); }
+    static void noteChange() { active_.generation += 1; }
 
     /// Ask for built-in `index` from inside a layer's tick, applied before the next frame's layers render, so no layer reads a palette another is writing.
     static void request(uint8_t index) MM_NONBLOCKING { requested_.store(static_cast<uint16_t>(index + 1), std::memory_order_relaxed); }
@@ -287,7 +294,6 @@ private:
     /// Default to a full rainbow (index 0).
     static inline Palette active_ = fromBuiltin(0);
     static inline std::atomic<uint16_t> requested_{0};   ///< a palette a layer asked for, plus one, 0 for none
-    static inline std::atomic<uint32_t> generation_{0};  ///< selections, not per-frame script writes
 };
 
 /// How many scripted palettes the picker offers and their names, the catalog's at their places, then the user's `.mlp` files; Drivers sets them, as Palette.h holds no filesystem, the seam `Palettes::active()` is too.

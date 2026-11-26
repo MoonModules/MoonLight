@@ -780,6 +780,7 @@ static int runScenario(const char* path) {
                             || std::strcmp(op, "measure") == 0;
         if (isMeasure) {
             ensureStarted();
+            mm::platform::sampleCivilTime();
             for (int i = 0; i < WARMUP_FRAMES; i++) ctx.scheduler.tick();
             size_t heapBeforeMeasure = mm::platform::freeHeap();
             uint32_t startUs = mm::platform::micros();
@@ -897,6 +898,7 @@ static int runScenario(const char* path) {
     auto* drivers = static_cast<mm::Drivers*>(ctx.byId("Drivers"));
     if (layer) {
         // One frame first: a last step that prepared the tree, as a structural one does, leaves the buffer freshly allocated and empty until the next render.
+        mm::platform::sampleCivilTime();
         ctx.scheduler.tick();
         auto& buf = layer->buffer();
         result.check(buf.data() != nullptr, "buffer allocated");

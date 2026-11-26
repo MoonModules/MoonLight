@@ -3394,6 +3394,60 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/WaveEffect.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#waveeffect"
   },
+  "ScrollingTextEffect": {
+   "line": "Scrolls one line of text, and reads the clock where the text writes a # token.",
+   "summary": "The line enters from the right and leaves at the left. A line that fits the grid stays centered. With `absolute` off, the letters take their color from the active palette at `hue`, scaled by `brightness`. With it on, `hue` is a position on the color wheel and `brightness` is that color's value. With `fallback` on, a black palette color is that wheel color.",
+   "attribution": "[WLED](https://moonmodules.org/MoonLight/reference/attributions.html#wled), [PixelFonts](https://moonmodules.org/MoonLight/reference/attributions.html#pixelfonts), [raster-fonts](https://moonmodules.org/MoonLight/reference/attributions.html#raster-fonts)",
+   "image": "https://moonmodules.org/MoonLight/assets/light/effects/ScrollingTextEffect.gif",
+   "controls": {
+    "text": {
+     "line": "The line to show. A # token reads the clock, so #HH:#MM is the time.",
+     "more": "`#HH` `#MM` `#SS` are the hour, minute and second, always two digits. `#DD` is the day, `#MO` the month number, `#YY` and `#YYYY` the year. `#MON` and `#MONL` are the short and full month, `#DAY` and `#DDDD` the weekday. `#TIME` is `HH:MM:SS`, `#HHMM` is `HH:MM`, `#DATE` is `DD.MM.YYYY`, `#DDMM` and `#MMDD` the short dates. A `0` after a token is accepted. With `ampm` on, `#HH` runs from 01 to 12 and `#TIME` ends in AM or PM. `#MM` is the minute, not the month."
+    },
+    "ampm": {
+     "line": "12-hour clock, and AM or PM on #TIME."
+    },
+    "hue": {
+     "line": "Palette index, or a color-wheel position when `absolute` is on."
+    },
+    "brightness": {
+     "line": "How bright the letters are, from black up to the chosen color."
+    },
+    "absolute": {
+     "line": "Hue names a wheel color, and brightness its value."
+    },
+    "fallback": {
+     "line": "When the palette color is black, hue is a wheel position."
+    },
+    "speed": {
+     "line": "How fast the line travels, in pixels a second."
+    },
+    "offset": {
+     "line": "Vertical shift. The middle leaves the line centered."
+    },
+    "trail": {
+     "line": "How long the letters linger. 0 redraws them clean."
+    },
+    "font": {
+     "line": "A built-in face, or a .wbf file from /moonlive/fonts."
+    },
+    "scale": {
+     "line": "Each font pixel covers this many lights on a side."
+    },
+    "reverse": {
+     "line": "On sends the line toward the right."
+    },
+    "gradient": {
+     "line": "Color the letters from the palette along their width."
+    }
+   },
+   "role": "effect",
+   "tags": "💫🐙",
+   "dim": 2,
+   "doc": "light/effects.md#scrollingtext",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/ScrollingTextEffect.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#scrollingtexteffect"
+  },
   "BlockModifier": {
    "line": "Expands a 1D effect into concentric square rings: its position along the strip becomes the ring, so a gradient draws nested squares.",
    "summary": "The square sibling of [Circle](https://moonmodules.org/MoonLight/moonmodules/light/modifiers.html#circle), which draws round rings.",

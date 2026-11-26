@@ -31,9 +31,10 @@ struct Font {
     /// Unicode base for code points past ASCII. Zero means the face is ASCII only.
     uint32_t unicode = 0;
     const uint8_t* widths = nullptr;   ///< present when the face is variable-width
-    uint32_t start[257] = {};          ///< byte offset of each glyph, and one past the last
     /// True once `open` accepted the buffer.
     bool ok = false;
+    mutable int cachedGlyph_ = -1;     ///< the glyph `cachedAt_` was computed for
+    mutable uint32_t cachedAt_ = 0;    ///< byte offset of `cachedGlyph_`
 
     /// Glyph index of a code point, or -1 when the face has no glyph for it.
     int index(uint32_t cp) const {
@@ -56,15 +57,38 @@ struct Font {
         return widths[static_cast<size_t>(glyph)];
     }
 
+    /// Byte length of one glyph's packed rows.
+    uint32_t bytesAt(int glyph) const {
+        const unsigned bits = static_cast<unsigned>(widthAt(glyph)) * height;
+        return (bits + 7u) / 8u;
+    }
+
+    /// Byte offset of glyph `glyph`. The last answer is kept, so a row of pixels does not walk the face again.
+    uint32_t glyphAt(int glyph) const {
+        if (glyph == cachedGlyph_) return cachedAt_;
+        uint32_t pos = 12;
+        if (flags & 0x01) pos += count;
+        for (int i = 0; i < glyph; ++i) pos += bytesAt(i);
+        cachedGlyph_ = glyph;
+        cachedAt_ = pos;
+        return pos;
+    }
+
+    /// True when `glyph`, `col` and `row` name a pixel this face holds.
+    bool pixelIn(int glyph, int col, int row) const {
+        if (!ok || glyph < 0 || glyph >= count) return false;
+        if (row < 0 || row >= height) return false;
+        const int w = widthAt(glyph);
+        return col >= 0 && col < w;
+    }
+
     /// Whether the glyph's pixel is ink. Out of range is empty.
     bool lit(int glyph, int col, int row) const {
-        if (!ok || glyph < 0 || glyph >= count || row < 0 || row >= height) return false;
-        const int w = widthAt(glyph);
-        if (col < 0 || col >= w) return false;
-        const uint32_t bit = static_cast<uint32_t>(row) * static_cast<uint32_t>(w) + static_cast<uint32_t>(col);
-        const uint8_t* p = data + start[glyph] + (bit >> 3);
-        const uint8_t* end = data + start[glyph + 1];
-        if (p < data || p >= end) return false;
+        if (!pixelIn(glyph, col, row)) return false;
+        const uint32_t bit = static_cast<uint32_t>(row) * static_cast<uint32_t>(widthAt(glyph)) + static_cast<uint32_t>(col);
+        const uint32_t base = glyphAt(glyph);
+        const uint8_t* p = data + base + (bit >> 3);
+        if (p >= data + base + bytesAt(glyph) || p >= data + size) return false;
         return ((*p) >> (7 - (bit & 7))) & 0x01;
     }
 };
@@ -96,7 +120,7 @@ inline bool readHeader(Font& f, const uint8_t* data, size_t n) {
     return true;
 }
 
-/// Fill the glyph offsets. False when a glyph runs off the end or a width exceeds the header.
+/// Check each glyph fits. False when one runs off the end or a width exceeds the header.
 inline bool placeGlyphs(Font& f, size_t n) {
     size_t pos = 12;
     if (f.flags & 0x01) {
@@ -106,12 +130,9 @@ inline bool placeGlyphs(Font& f, size_t n) {
             if (f.widths[i] > f.maxWidth) return false;
         pos += f.count;
     }
-    f.start[0] = static_cast<uint32_t>(pos);
     for (uint16_t i = 0; i < f.count; i++) {
-        const unsigned bits = static_cast<unsigned>(f.widthAt(i)) * f.height;
-        const unsigned bytes = (bits + 7) / 8;
-        if (static_cast<size_t>(f.start[i]) + bytes > n) return false;
-        f.start[i + 1] = f.start[i] + bytes;
+        pos += f.bytesAt(i);
+        if (pos > n) return false;
     }
     return true;
 }

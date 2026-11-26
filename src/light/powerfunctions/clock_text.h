@@ -1,10 +1,10 @@
 #pragma once
 
-#include "platform/platform_clock.h"   // local civil time, spelled per platform
+#include "core/util/format.h"         // formatTo: the hot path's snprintf, which the nonblocking check can see through
+#include "platform/platform_clock.h"   // the sampled civil time, filled outside a tick
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 
 /// Clock tokens in the shape WLED's scrolling text reads. `#HH:#MM` is the hour and the minute.
@@ -28,22 +28,21 @@ struct Civil {
     int weekday = 0;
 };
 
-/// The device's local civil time. A board whose clock was never set reads the epoch.
-inline Civil civilNow() {
-    std::tm tm{};
-    if (!platform::localTm(tm)) return {};
+/// The device's local civil time, copied from the reading `sampleCivilTime` last stored. A board with an unsampled clock reads the epoch.
+inline Civil civilNow() MM_NONBLOCKING {
+    const platform::CivilReading r = platform::civilReading();
     Civil c;
-    c.year = tm.tm_year + 1900;
-    c.month = tm.tm_mon + 1;
-    c.day = tm.tm_mday;
-    c.hour = tm.tm_hour;
-    c.minute = tm.tm_min;
-    c.second = tm.tm_sec;
-    c.weekday = tm.tm_wday;
+    c.year = r.year;
+    c.month = r.month;
+    c.day = r.day;
+    c.hour = r.hour;
+    c.minute = r.minute;
+    c.second = r.second;
+    c.weekday = r.weekday;
     return c;
 }
 
-/// One token, longest key first, so a shorter key matches only when no longer one fits.
+/// One token, longest key first, so a shorter key matches only after every longer key misses.
 struct ClockTok {
     /// The key, including its #.
     const char* key;
@@ -130,35 +129,35 @@ struct ClockParts {
 /// A date or a weekday token. Kinds outside that set leave `piece` empty.
 inline void writeDateTok(char* piece, size_t cap, uint8_t kind, const Civil& clock, const ClockParts& parts) {
     switch (kind) {
-    case 0: std::snprintf(piece, cap, "%02d.%02d.%04d", clock.day, parts.month, clock.year); break;
-    case 1: std::snprintf(piece, cap, "%02d.%02d", clock.day, parts.month); break;
-    case 2: std::snprintf(piece, cap, "%02d/%02d", parts.month, clock.day); break;
-    case 5: std::snprintf(piece, cap, "%04d", clock.year); break;
-    case 6: std::snprintf(piece, cap, "%s", kClockMonL[parts.month - 1]); break;
-    case 7: std::snprintf(piece, cap, "%s", kClockDayL[parts.wday]); break;
-    case 8: std::snprintf(piece, cap, "%s", kClockMon[parts.month - 1]); break;
-    case 9: std::snprintf(piece, cap, "%s", kClockDay[parts.wday]); break;
+    case 0: formatTo(piece, cap, "%02d.%02d.%04d", clock.day, parts.month, clock.year); break;
+    case 1: formatTo(piece, cap, "%02d.%02d", clock.day, parts.month); break;
+    case 2: formatTo(piece, cap, "%02d/%02d", parts.month, clock.day); break;
+    case 5: formatTo(piece, cap, "%04d", clock.year); break;
+    case 6: formatTo(piece, cap, "%s", kClockMonL[parts.month - 1]); break;
+    case 7: formatTo(piece, cap, "%s", kClockDayL[parts.wday]); break;
+    case 8: formatTo(piece, cap, "%s", kClockMon[parts.month - 1]); break;
+    case 9: formatTo(piece, cap, "%s", kClockDay[parts.wday]); break;
     default: break;
     }
 }
 
 /// `#TIME`, with the half of the day when `ampm` is set.
 inline void writeTimeOfDay(char* piece, size_t cap, const Civil& clock, const ClockParts& parts) {
-    if (parts.ampm) std::snprintf(piece, cap, "%02d:%02d:%02d %s", parts.hour, clock.minute, clock.second, parts.pm ? "PM" : "AM");
-    else std::snprintf(piece, cap, "%02d:%02d:%02d", parts.hour, clock.minute, clock.second);
+    if (parts.ampm) formatTo(piece, cap, "%02d:%02d:%02d %s", parts.hour, clock.minute, clock.second, parts.pm ? "PM" : "AM");
+    else formatTo(piece, cap, "%02d:%02d:%02d", parts.hour, clock.minute, clock.second);
 }
 
 /// A time token. Kinds outside that set leave `piece` empty.
 inline void writeTimeTok(char* piece, size_t cap, uint8_t kind, const Civil& clock, const ClockParts& parts) {
     switch (kind) {
     case 3: writeTimeOfDay(piece, cap, clock, parts); break;
-    case 4:  std::snprintf(piece, cap, "%02d:%02d", parts.hour, clock.minute); break;
-    case 10: std::snprintf(piece, cap, "%02d", clock.year % 100); break;
-    case 11: std::snprintf(piece, cap, "%02d", parts.hour); break;
-    case 12: std::snprintf(piece, cap, "%02d", clock.minute); break;
-    case 13: std::snprintf(piece, cap, "%02d", clock.second); break;
-    case 14: std::snprintf(piece, cap, "%02d", parts.month); break;
-    case 15: std::snprintf(piece, cap, "%02d", clock.day); break;
+    case 4:  formatTo(piece, cap, "%02d:%02d", parts.hour, clock.minute); break;
+    case 10: formatTo(piece, cap, "%02d", clock.year % 100); break;
+    case 11: formatTo(piece, cap, "%02d", parts.hour); break;
+    case 12: formatTo(piece, cap, "%02d", clock.minute); break;
+    case 13: formatTo(piece, cap, "%02d", clock.second); break;
+    case 14: formatTo(piece, cap, "%02d", parts.month); break;
+    case 15: formatTo(piece, cap, "%02d", clock.day); break;
     default: break;
     }
 }
@@ -175,7 +174,7 @@ inline void appendPiece(char* out, size_t cap, size_t& n, const char* piece) {
     for (const char* s = piece; *s && n + 1 < cap; ++s) out[n++] = *s;
 }
 
-/// Write `in` into `out`, expanding clock tokens. Two-digit fields are zero-padded. A trailing `0` is accepted and changes nothing. With `ampm`, `#HH` runs 01 to 12 and `#TIME` ends in AM or PM.
+/// Write `in` into `out`, expanding clock tokens. Two-digit fields are zero-padded. A trailing `0` is accepted. With `ampm`, `#HH` runs 01 to 12 and `#TIME` ends in AM or PM.
 inline size_t expandClock(char* out, size_t cap, const char* in, const Civil& clock, bool ampm) {
     if (!out || cap == 0) return 0;
     out[0] = '\0';

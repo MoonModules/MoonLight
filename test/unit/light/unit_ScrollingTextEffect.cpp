@@ -8,6 +8,7 @@
 #include "unit/system_temp_dir.h"
 
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <string>
@@ -22,18 +23,11 @@ struct Scene {
     GridLayout grid;
     Layer layer;
     ScrollingTextEffect text;
-    Scene(int w, int h) {
-        grid.width = w; grid.height = h; grid.depth = 1;
-        layouts.addChild(&grid);
-        layer.setLayouts(&layouts);
-        layer.setChannelsPerLight(3);
-        layer.addChild(&text);
-    }
+    explicit Scene(int w, int h) { grid.width = w; grid.height = h; grid.depth = 1; layouts.addChild(&grid); layer.setChannelsPerLight(3); layer.setLayouts(&layouts); layer.addChild(&text); }
     int litPixels() {
-        auto& b = layer.buffer();
+        const uint8_t* p = layer.buffer().data();
         int n = 0;
-        for (size_t i = 0; i + 2 < b.bytes(); i += 3)
-            if (b.data()[i] || b.data()[i + 1] || b.data()[i + 2]) ++n;
+        for (size_t i = 2; i < layer.buffer().bytes(); i += 3) n += (p[i - 2] | p[i - 1] | p[i]) != 0;
         return n;
     }
     bool litAt(int x, int y) {
@@ -58,6 +52,50 @@ struct FsRoot {
         std::filesystem::remove_all(dir, ec);
     }
 };
+
+/// Puts the palette back when the case ends, so a later case still sees the rainbow.
+struct HoldPalette {
+    Palette saved = *Palettes::active();
+    ~HoldPalette() { Palettes::setActiveDirect(saved); }
+};
+
+/// True when every lit pixel is `c`, and at least one pixel is lit.
+bool paintIs(Scene& s, RGB c) {
+    const auto& b = s.layer.buffer();
+    bool saw = false;
+    for (size_t i = 0; i + 2 < b.bytes(); i += 3) {
+        if (!b.data()[i] && !b.data()[i + 1] && !b.data()[i + 2]) continue;
+        if (b.data()[i] != c.r || b.data()[i + 1] != c.g || b.data()[i + 2] != c.b) return false;
+        saw = true;
+    }
+    return saw;
+}
+
+/// The 4x6 bang the packing note describes: column 2 lit on rows 0, 1, 2 and 4.
+const uint8_t kBang[] = {
+    0x57, 0x06, 0x04, 0x00, 0x00, '!', '!', 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x22, 0x20, 0x20,
+};
+
+/// A 16 by 8 grid, letters AB, on a black palette, after one frame.
+void drawAB(Scene& s) {
+    Palettes::setActiveDirect(Palette{});
+    std::snprintf(s.text.text_, sizeof(s.text.text_), "AB");
+    s.text.font = 3;
+    s.text.hue = 0;
+    s.text.brightness = 255;
+    s.layer.applyState();
+    s.layer.tick();
+}
+
+/// Install bang.wbf and draw "!" with it.
+void drawBang(Scene& s) {
+    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(kBang), sizeof(kBang)));
+    std::snprintf(s.text.text_, sizeof(s.text.text_), "!");
+    s.text.font = wbf::kCount;
+    s.layer.applyState();
+    s.layer.tick();
+}
 
 Civil sampleClock() {
     Civil c;
@@ -93,10 +131,10 @@ TEST_CASE("ScrollingTextEffect: #HH:#MM expands to the zero-padded clock") {
     CHECK(std::string(out) == "no #ZZ tokens");
 }
 
-// A line that fits stays centered. A wider line starts just off the right and walks left with elapsed time.
+// A line that fits stays centered. A wider line starts off the right and walks left with elapsed time.
 TEST_CASE("ScrollingTextEffect: scroll position follows elapsed time") {
     CHECK(ScrollingTextEffect::originX(16, 8, 0, 40, false) == 4);          // centered
-    CHECK(ScrollingTextEffect::originX(16, 40, 0, 40, false) == 16);         // just off the right
+    CHECK(ScrollingTextEffect::originX(16, 40, 0, 40, false) == 16);         // off the right edge
     CHECK(ScrollingTextEffect::originX(16, 40, 1000, 10, false) == 6);       // 10 px in one second
     CHECK(ScrollingTextEffect::originX(16, 40, 0, 40, true) == 1 - 40);      // entering from the left
     CHECK(ScrollingTextEffect::originY(16, 8, 128) == 4);
@@ -119,12 +157,8 @@ TEST_CASE("ScrollingTextEffect: built-in fonts open") {
 
 // The 4x6 bang from the WBF packing note: column 2 lit on rows 0, 1, 2 and 4.
 TEST_CASE("ScrollingTextEffect: a .wbf glyph lights the packed pixels") {
-    const uint8_t bang[] = {
-        0x57, 0x06, 0x04, 0x00, 0x00, '!', '!', 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x22, 0x20, 0x20,
-    };
     wbf::Font f;
-    REQUIRE(wbf::open(f, bang, sizeof(bang)));
+    REQUIRE(wbf::open(f, kBang, sizeof(kBang)));
     CHECK(f.lit(0, 2, 0));
     CHECK(f.lit(0, 2, 1));
     CHECK(f.lit(0, 2, 2));
@@ -133,8 +167,8 @@ TEST_CASE("ScrollingTextEffect: a .wbf glyph lights the packed pixels") {
     CHECK_FALSE(f.lit(0, 1, 0));
 }
 
-// A short line draws. An empty line draws nothing. A pinned clock makes #HH:#MM draw digits.
-TEST_CASE("ScrollingTextEffect: text draws, a clock token draws, empty draws nothing") {
+// A short line draws. An empty line leaves the grid dark. A pinned clock makes #HH:#MM draw digits.
+TEST_CASE("ScrollingTextEffect: text draws, a clock token draws, empty leaves the grid dark") {
     Scene s(48, 16);
     std::snprintf(s.text.text_, sizeof(s.text.text_), "AB");
     s.text.font = 3;
@@ -153,7 +187,7 @@ TEST_CASE("ScrollingTextEffect: text draws, a clock token draws, empty draws not
 }
 
 // Brightness scales the palette color, so 0 is a black letter on the black ground.
-TEST_CASE("ScrollingTextEffect: brightness 0 draws nothing and 255 draws the letters") {
+TEST_CASE("ScrollingTextEffect: brightness 0 leaves the grid dark and 255 draws the letters") {
     Scene s(16, 8);
     std::snprintf(s.text.text_, sizeof(s.text.text_), "AB");
     s.text.font = 3;
@@ -169,64 +203,24 @@ TEST_CASE("ScrollingTextEffect: brightness 0 draws nothing and 255 draws the let
 
 // A black palette paints black letters. Absolute hue paints the wheel color instead.
 TEST_CASE("ScrollingTextEffect: absolute hue ignores a black palette") {
-    struct Restore {
-        Palette saved = *Palettes::active();
-        ~Restore() { Palettes::setActiveDirect(saved); }
-    } restore;
-    Palettes::setActiveDirect(Palette{});
-
+    HoldPalette restore;
     Scene s(16, 8);
-    std::snprintf(s.text.text_, sizeof(s.text.text_), "AB");
-    s.text.font = 3;
-    s.text.hue = 0;
-    s.text.brightness = 255;
-    s.layer.applyState();
-    s.layer.tick();
+    drawAB(s);
     CHECK(s.litPixels() == 0);
 
     s.text.absolute = true;
     s.layer.tick();
-    const RGB red = hsvToRgb(0, 255, 255);
-    bool saw = false;
-    auto& b = s.layer.buffer();
-    for (size_t i = 0; i + 2 < b.bytes(); i += 3) {
-        if (!b.data()[i] && !b.data()[i + 1] && !b.data()[i + 2]) continue;
-        saw = true;
-        CHECK(b.data()[i] == red.r);
-        CHECK(b.data()[i + 1] == red.g);
-        CHECK(b.data()[i + 2] == red.b);
-    }
-    CHECK(saw);
+    CHECK(paintIs(s, hsvToRgb(0, 255, 255)));
     (void)restore;
 }
 
 // A black palette sample uses the wheel when fallback is on. A colored sample stays the palette.
 TEST_CASE("ScrollingTextEffect: fallback uses the wheel when the palette is black") {
-    struct Restore {
-        Palette saved = *Palettes::active();
-        ~Restore() { Palettes::setActiveDirect(saved); }
-    } restore;
-    Palettes::setActiveDirect(Palette{});
-
+    HoldPalette restore;
     Scene s(16, 8);
-    std::snprintf(s.text.text_, sizeof(s.text.text_), "AB");
-    s.text.font = 3;
-    s.text.hue = 0;
-    s.text.brightness = 255;
     s.text.fallback = true;
-    s.layer.applyState();
-    s.layer.tick();
-    const RGB red = hsvToRgb(0, 255, 255);
-    auto& b = s.layer.buffer();
-    bool saw = false;
-    for (size_t i = 0; i + 2 < b.bytes(); i += 3) {
-        if (!b.data()[i] && !b.data()[i + 1] && !b.data()[i + 2]) continue;
-        saw = true;
-        CHECK(b.data()[i] == red.r);
-        CHECK(b.data()[i + 1] == red.g);
-        CHECK(b.data()[i + 2] == red.b);
-    }
-    CHECK(saw);
+    drawAB(s);
+    CHECK(paintIs(s, hsvToRgb(0, 255, 255)));
 
     Palettes::setActive(0);
     s.text.hue = 8;   // between two rainbow entries, so the blend is not the wheel color at 8
@@ -234,15 +228,7 @@ TEST_CASE("ScrollingTextEffect: fallback uses the wheel when the palette is blac
     const RGB wheel = hsvToRgb(8, 255, 255);
     const RGB pal = colorFromPalette(*Palettes::active(), 8, 255);
     REQUIRE((wheel.r != pal.r || wheel.g != pal.g || wheel.b != pal.b));
-    saw = false;
-    for (size_t i = 0; i + 2 < b.bytes(); i += 3) {
-        if (!b.data()[i] && !b.data()[i + 1] && !b.data()[i + 2]) continue;
-        saw = true;
-        CHECK(b.data()[i] == pal.r);
-        CHECK(b.data()[i + 1] == pal.g);
-        CHECK(b.data()[i + 2] == pal.b);
-    }
-    CHECK(saw);
+    CHECK(paintIs(s, pal));
     (void)restore;
 }
 
@@ -269,17 +255,8 @@ TEST_CASE("ScrollingTextEffect: fallback is idle while absolute is on") {
 // An uploaded .wbf replaces the built-in face. The bang's column lands where the packing says.
 TEST_CASE("ScrollingTextEffect: an uploaded .wbf font is the face that draws") {
     FsRoot root;
-    const uint8_t bang[] = {
-        0x57, 0x06, 0x04, 0x00, 0x00, '!', '!', 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x22, 0x20, 0x20,
-    };
-    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(bang), sizeof(bang)));
-
     Scene s(4, 8);
-    std::snprintf(s.text.text_, sizeof(s.text.text_), "!");
-    s.text.font = wbf::kCount;   // the only file, listed after the built-in faces
-    s.layer.applyState();
-    s.layer.tick();
+    drawBang(s);
     CHECK(s.litAt(2, 1));
     CHECK(s.litAt(2, 2));
     CHECK(s.litAt(2, 3));
@@ -292,18 +269,9 @@ TEST_CASE("ScrollingTextEffect: an uploaded .wbf font is the face that draws") {
 // Scale 2 draws the packed column as a 2 by 2 block, and leaves the dark source row dark.
 TEST_CASE("ScrollingTextEffect: scale draws each font pixel as a square") {
     FsRoot root;
-    const uint8_t bang[] = {
-        0x57, 0x06, 0x04, 0x00, 0x00, '!', '!', 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x22, 0x20, 0x20,
-    };
-    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(bang), sizeof(bang)));
-
     Scene s(8, 12);
-    std::snprintf(s.text.text_, sizeof(s.text.text_), "!");
-    s.text.font = wbf::kCount;   // the only file, listed after the built-in faces
     s.text.scale = 2;
-    s.layer.applyState();
-    s.layer.tick();
+    drawBang(s);
     CHECK(s.litAt(4, 0));
     CHECK(s.litAt(5, 1));
     CHECK_FALSE(s.litAt(4, 6));
@@ -316,12 +284,7 @@ TEST_CASE("ScrollingTextEffect: scale draws each font pixel as a square") {
 // The menu lists the file after the built-in faces, and choosing one of those faces draws that face.
 TEST_CASE("ScrollingTextEffect: the font menu returns to a built-in face") {
     FsRoot root;
-    const uint8_t bang[] = {
-        0x57, 0x06, 0x04, 0x00, 0x00, '!', '!', 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x22, 0x20, 0x20,
-    };
-    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(bang), sizeof(bang)));
-
+    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(kBang), sizeof(kBang)));
     Scene s(4, 8);
     std::snprintf(s.text.text_, sizeof(s.text.text_), "!");
     s.text.defineControls();
@@ -373,10 +336,7 @@ TEST_CASE("ScrollingTextEffect: a PixelFonts face is offered before it is instal
 
 // The trail is the previous color. A new palette drops it in that frame. A script rewriting entries does not.
 TEST_CASE("ScrollingTextEffect: a palette change drops the trail and a script rewrite keeps it") {
-    struct Restore {
-        Palette saved = *Palettes::active();
-        ~Restore() { Palettes::setActiveDirect(saved); }
-    } restore;
+    HoldPalette restore;
 
     Palettes::setActive(0);
     Scene s(16, 8);

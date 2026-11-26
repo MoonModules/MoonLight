@@ -375,7 +375,7 @@ public:
                 attachPaletteScript();
             } else {
                 detachPaletteScript();
-                // At the next frame's start, so a layer mid-paint never reads a half-written palette.
+                // At the next frame's start, so a layer mid-paint reads a finished palette.
                 Palettes::request(LivePalettes::sourceIndex(palette));
             }
             rebuildControls();   // the editor and the script's controls appear or disappear with it

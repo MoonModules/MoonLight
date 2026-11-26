@@ -115,7 +115,7 @@ public:
         MoonLivePalette* p = active_;
         if (!p || !p->tick(nowMs) || !p->fresh_) return;
         p->fresh_ = false;
-        Palettes::noteChange();   // one frame, then a script may rewrite entries without dropping trails
+        Palettes::noteChange();   // one frame, then a script may rewrite entries and the trails stay
     }
 
 private:

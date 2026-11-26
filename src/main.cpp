@@ -272,7 +272,15 @@ void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort) {
     // Subscribe THIS render-loop task to the task watchdog, so a genuine wedge here panics and reboots instead of hanging silently: @xref{why-the-render-loop-subscribes-to-the-task-watchdog}.
     mm::platform::taskWdtSubscribe();
 
+    mm::platform::sampleCivilTime();
+    uint32_t lastCivil = mm::platform::millis();
+
     while (keepRunning) {
+        const uint32_t civilAt = mm::platform::millis();
+        if (civilAt - lastCivil >= 1000) {
+            mm::platform::sampleCivilTime();
+            lastCivil = civilAt;
+        }
         scheduler.tick();
         mm::platform::taskWdtReset();   // feed the render-loop WDT subscription — a live tick is not a wedge
 

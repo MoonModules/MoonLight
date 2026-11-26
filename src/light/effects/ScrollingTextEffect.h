@@ -24,7 +24,7 @@ public:
     Dim dimensions() const override { return Dim::D2; }
 
     /// The line to show. A # token reads the clock, so #HH:#MM is the time.
-    /// @guide `#HH` `#MM` `#SS` are the hour, minute and second, always two digits. `#DD` is the day, `#MO` the month number, `#YY` and `#YYYY` the year. `#MON` and `#MONL` are the short and full month, `#DAY` and `#DDDD` the weekday. `#TIME` is `HH:MM:SS`, `#HHMM` is `HH:MM`, `#DATE` is `DD.MM.YYYY`, `#DDMM` and `#MMDD` the short dates. A `0` after a token is accepted and changes nothing. With `ampm` on, `#HH` runs from 01 to 12 and `#TIME` ends in AM or PM. `#MM` is the minute, not the month.
+    /// @guide `#HH` `#MM` `#SS` are the hour, minute and second, always two digits. `#DD` is the day, `#MO` the month number, `#YY` and `#YYYY` the year. `#MON` and `#MONL` are the short and full month, `#DAY` and `#DDDD` the weekday. `#TIME` is `HH:MM:SS`, `#HHMM` is `HH:MM`, `#DATE` is `DD.MM.YYYY`, `#DDMM` and `#MMDD` the short dates. A `0` after a token is accepted. With `ampm` on, `#HH` runs from 01 to 12 and `#TIME` ends in AM or PM. `#MM` is the minute, not the month.
     char text_[128] = "#HH:#MM";
     /// 12-hour clock, and AM or PM on #TIME.
     bool ampm = false;
@@ -32,7 +32,7 @@ public:
     uint8_t hue = 128;
     /// How bright the letters are, from black up to the chosen color.
     uint8_t brightness = 255;
-    /// Hue is a wheel position, and brightness its value, instead of a palette index.
+    /// Hue names a wheel color, and brightness its value.
     bool absolute = false;
     /// When the palette color is black, hue is a wheel position.
     bool fallback = false;
@@ -85,7 +85,7 @@ public:
         controls_.addControl("offset", offset, 0, 255);
         controls_.addControl("trail", trail, 0, 255);
         // ONE menu for both kinds, as the palette menu is: a .wbf is chosen like a built-in, and the two cannot disagree.
-        if (!fontsScanned_) refreshFonts();
+        if (!fontsScanned_ || !names_) refreshFonts();   // a release frees the name table, so the next build scans again
         controls_.addSelect("font", font, options_, optionCount_);
         controls_.setPersistLabel(controls_.count() - 1);   // by name, so a file added above the choice does not move it
         controls_.setDefault(controls_.count() - 1, 3);
@@ -101,6 +101,14 @@ public:
 
     /// Open the face the menu names.
     void prepare() override { loadFace(); }
+
+    /// The name table and a loaded file are scratch, freed by the base. The scan has to run again on the next prepare.
+    void release() override {
+        fontsScanned_ = false;
+        fileCount_ = 0;
+        face_ = {};
+        EffectBase::release();
+    }
 
     /// Hue, brightness or the absolute switch: the next frame replaces the trail instead of fading it.
     void onControlChanged(const char* controlName) override {
@@ -129,7 +137,7 @@ public:
         if (!face_.ok || cols <= 0 || rows <= 0) return;
 
         char shown[256];
-        // A line with no token never reads the clock: localtime takes a lock, and a small CPU feels it every frame.
+        // A line with no token leaves the clock unread. The reading itself is taken outside the tick.
         const bool timed = usePin_ || std::strchr(text_, '#') != nullptr;
         const Civil clock = !timed ? Civil{} : usePin_ ? pinned_ : civilNow();
         expandClock(shown, sizeof(shown), text_, clock, ampm);
@@ -167,7 +175,7 @@ private:
     bool openFile(uint8_t fileIndex) {
         if (fileIndex >= fileCount_) return false;
         char path[96];
-        std::snprintf(path, sizeof(path), "%s/%s", kFontDir, fileNames_[fileIndex]);
+        std::snprintf(path, sizeof(path), "%s/%s", kFontDir, fileName(fileIndex));
         const int64_t sz = platform::fsSize(path);
         if (sz < 12 || sz > 32768 || !file_.resize(static_cast<size_t>(sz) + 1)) return false;
         const int n = platform::fsRead(path, reinterpret_cast<char*>(file_.data()), file_.count());
@@ -176,7 +184,7 @@ private:
 
     /// Open the menu's face. A file that will not open draws the console face and says so.
     void loadFace() {
-        if (!fontsScanned_) refreshFonts();
+        if (!fontsScanned_ || !names_) refreshFonts();
         face_ = {};
         if (font < wbf::kCount) { openBuiltin(font, true); return; }
         if (openFile(static_cast<uint8_t>(font - wbf::kCount))) { clearStatus(); return; }
@@ -196,34 +204,34 @@ private:
     void takeFile(const char* name) {
         if (!name || fileCount_ >= kMaxFiles) return;
         const size_t n = std::strlen(name);
-        if (n < 5 || n >= sizeof(fileNames_[0])) return;
+        if (!names_ || n < 5 || n >= kNameCap) return;
         if (std::strcmp(name + n - 4, ".wbf") != 0) return;
         for (uint8_t i = 0; i < fileCount_; ++i)
-            if (std::strcmp(fileNames_[i], name) == 0) return;
-        std::memcpy(fileNames_[fileCount_], name, n);
-        fileNames_[fileCount_][n] = '\0';
+            if (std::strcmp(fileName(i), name) == 0) return;
+        std::memcpy(fileName(fileCount_), name, n);
+        fileName(fileCount_)[n] = '\0';
         ++fileCount_;
     }
 
     /// Alphabetical, so the menu does not jump when the directory is listed in another order.
     void sortFiles() {
         for (uint8_t i = 1; i < fileCount_; ++i)
-            for (uint8_t j = i; j > 0 && std::strcmp(fileNames_[j], fileNames_[j - 1]) < 0; --j) {
-                char tmp[sizeof(fileNames_[0])];
-                std::memcpy(tmp, fileNames_[j], sizeof(tmp));
-                std::memcpy(fileNames_[j], fileNames_[j - 1], sizeof(tmp));
-                std::memcpy(fileNames_[j - 1], tmp, sizeof(tmp));
+            for (uint8_t j = i; j > 0 && std::strcmp(fileName(j), fileName(j - 1)) < 0; --j) {
+                char tmp[kNameCap];
+                std::memcpy(tmp, fileName(j), kNameCap);
+                std::memcpy(fileName(j), fileName(j - 1), kNameCap);
+                std::memcpy(fileName(j - 1), tmp, kNameCap);
             }
     }
 
     /// Built-in names, then the files. The pointers stay valid until the next scan.
     void publishOptions() {
         for (uint8_t i = 0; i < wbf::kCount; ++i) options_[i] = wbf::kNames[i];
-        for (uint8_t i = 0; i < fileCount_; ++i) options_[wbf::kCount + i] = fileNames_[i];
+        for (uint8_t i = 0; i < fileCount_; ++i) options_[wbf::kCount + i] = fileName(i);
         optionCount_ = static_cast<uint8_t>(wbf::kCount + fileCount_);
     }
 
-    /// The name the menu currently shows, copied out before a scan rewrites the table.
+    /// The name the menu shows, copied out before a scan rewrites the table.
     void remember(char* keep, size_t cap) const {
         const char* name = nullptr;
         if (font < optionCount_) name = options_[font];
@@ -244,9 +252,16 @@ private:
 
     /// List the installable faces, then whatever else is already in /moonlive/fonts, and keep the current choice on the same name.
     void refreshFonts() {
-        char keep[sizeof(fileNames_[0])] = {};
+        char keep[kNameCap] = {};
         remember(keep, sizeof(keep));
         fileCount_ = 0;
+        if (!names_.resize(static_cast<size_t>(kMaxFiles) * kNameCap)) {
+            setStatus("out of memory for the font list");
+            publishOptions();
+            fontsScanned_ = true;
+            return;
+        }
+        std::memset(names_.data(), 0, names_.bytes());
         for (uint8_t i = 0; i < wbf::kFactoryCount; ++i) takeFile(wbf::kFactoryFonts[i]);
         platform::fsList(kFontDir, [](const char* name, bool isDir, uint32_t, void* user) {
             if (!isDir) static_cast<ScrollingTextEffect*>(user)->takeFile(name);
@@ -283,7 +298,7 @@ private:
         return colorFromPalette(framePal_, idx, brightness);
     }
 
-    /// The part of a rectangle that lies on the grid. `ok` is false when nothing remains.
+    /// The part of a rectangle that lies on the grid. `ok` is false when the rectangle misses the grid.
     struct Clip { int x, y, w, h; bool ok; };
     static Clip clip(int x, int y, int w, int h, int cols, int rows) {
         if (w <= 0 || h <= 0) return {};
@@ -380,6 +395,13 @@ private:
     static constexpr char kFontDir[] = "/moonlive/fonts";
     /// How many file rows the menu holds: the installable faces, then files a user added.
     static constexpr uint8_t kMaxFiles = 32;
+    /// Bytes kept for one file name, including the terminator.
+    static constexpr uint8_t kNameCap = 64;
+
+    /// One stored file name. Valid while `names_` holds the scan.
+    char* fileName(uint8_t i) { return names_.data() + static_cast<size_t>(i) * kNameCap; }
+    /// One stored file name, for a const menu read.
+    const char* fileName(uint8_t i) const { return names_.data() + static_cast<size_t>(i) * kNameCap; }
 
     Civil pinned_{};
     bool usePin_ = false;
@@ -389,10 +411,12 @@ private:
     bool fontsScanned_ = false;
     uint8_t fileCount_ = 0;
     uint8_t optionCount_ = 0;
-    char fileNames_[kMaxFiles][64] = {};
     const char* options_[wbf::kCount + kMaxFiles] = {};
     wbf::Font face_{};
+    ScratchBuffer<char> names_{*this};     ///< kMaxFiles names of kNameCap bytes, held while enabled
     ScratchBuffer<uint8_t> file_{*this};
 };
+
+static_assert(sizeof(ScrollingTextEffect) <= 2048, "ScrollingTextEffect is over the inline budget");
 
 }  // namespace mm
