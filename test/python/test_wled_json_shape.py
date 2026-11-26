@@ -75,7 +75,7 @@ def test_python_wled_accepts_device():
     # WLED-native UDP sync.
     assert dev.state.on is True
     assert dev.state.brightness == 20
-    # HA builds a segment light from the segment's own `lc`, which `ver` 99.0.0 reads as WLED 16 does: without it the segment has no color mode and HA creates no light for it.
+    # HA builds a segment light from the segment's own `lc`, which `ver` 99.0.0 reads as WLED 16 does: a segment that omits it gets no color mode and no light.
     assert dev.state.segments[0].light_capabilities == LightCapability.RGB_COLOR
     assert dev.state.nightlight.on is False     # default
     assert dev.state.sync.receive is False      # default (udpn: {})

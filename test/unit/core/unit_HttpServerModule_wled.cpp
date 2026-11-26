@@ -18,7 +18,7 @@ using mm::json::JsonNode;
 
 constexpr uint16_t kTestPort = 18097;   // 18090 to 18096 belong to the other server tests
 
-// A bare server on the test port: the WLED shim answers without a layer or a Drivers.
+// A bare server on the test port: the WLED shim answers when no layer or Drivers exists.
 struct WledDevice {
     mm::Scheduler s;
     mm::HttpServerModule http;

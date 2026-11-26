@@ -14,7 +14,7 @@
 ///
 /// ## Why one info object serves every route
 ///
-/// python-wled reads `/json` once, then polls `/json/si`, and merges each reply into the first, so `/json/si` needs every field `/json` carries: a reply without `fs` fails the update and HA marks the device unavailable.
+/// python-wled reads `/json` once, then polls `/json/si`, and merges each reply into the first, so `/json/si` needs every field `/json` carries: a reply that omits `fs` fails the update and HA marks the device unavailable.
 ///
 /// The WLED-Android app requires `leds`, `wifi`, `name` and `mac` in the same object, and real WLED always sends `wifi`.
 ///
@@ -87,7 +87,7 @@ void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], ui
     platform::localIPv4(ip);
 }
 
-// The 💫 marker prefixes only the WLED-compat name HA reads, never the real deviceName.
+// The 💫 marker prefixes the WLED-compat name HA reads, and no other name.
 void HttpServerModule::writeWledName(JsonSink& sink, const char* name) {
     char prefixed[80];
     std::snprintf(prefixed, sizeof(prefixed), "\xF0\x9F\x92\xAB %s", name ? name : "");
@@ -110,15 +110,16 @@ void HttpServerModule::writeWledInfoBody(JsonSink& sink) {
     const char* rgbw = (ls.channelsPerLight >= 4) ? "true" : "false";
     sink.appendf("{\"ver\":\"99.0.0\",\"vid\":2410150,\"name\":");
     writeWledName(sink, name);
+    // lightCount is a uint32_t, which is unsigned long on the boards and so needs the cast for %u.
     sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
                  "\"ip\":\"%u.%u.%u.%u\",\"arch\":\"esp32\","
                  "\"brand\":\"WLED\",\"product\":\"MoonModules\",\"release\":\"MoonModules\","
-                 // lc is a capability code, not a count: 1 (RGB_COLOR) gives HA a color picker, and a LED count would leave the light entity without color modes.
+                 // lc is a capability code: 1 (RGB_COLOR) gives HA a color picker, and a LED count would drop the light entity's color modes.
                  "\"leds\":{\"count\":%u,\"fps\":%u,\"rgbw\":%s,\"wv\":false,\"cct\":false,"
                  "\"maxpwr\":0,\"maxseg\":1,\"pwr\":0,\"lc\":1},",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
                  ip[0], ip[1], ip[2], ip[3],
-                 ls.lightCount, renderFps, rgbw);
+                 static_cast<unsigned>(ls.lightCount), renderFps, rgbw);
     sink.appendf("\"wifi\":{\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
                  "\"rssi\":%d,\"channel\":%d,\"signal\":%d},",
                  bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
