@@ -103,6 +103,32 @@ It also reads inbound.
 The native WLED app sets brightness and on-off by sending `{"on":true,"bri":128}`, and the device honors that frame.
 Anything richer belongs on the HTTP API: the socket's inbound half exists for app compatibility rather than as a general control channel.
 
+## The WLED API
+
+The device answers the WLED JSON API, so the WLED apps and Home Assistant discover it, read its state and set it. `GET /json`, `/json/info` and `/json/si` carry one `info` object, so python-wled can merge each poll of `/json/si` into its first read of `/json`. `POST /json/state` and the WebSocket take one state document. A field the device has no meaning for is ignored.
+
+| Field | Effect |
+|--|--|
+| `on`, `bri` | The Drivers module's `on` and `brightness`. `"on":"t"` toggles. |
+| `ps` | Applies the look preset in slot `ps`, counted from 1 as `/presets.json` lists them. |
+| `seg` | One segment object or an array of them. |
+
+A segment is a layer. `GET /json` carries one `seg` element per layer, with the layer's name in `n`, so Home Assistant shows a light per layer. A device with no layer reports one stand-in segment. Each segment carries `lc` set to 1 (RGB), which Home Assistant needs to create the segment's light.
+
+| Segment field | Reads and writes |
+|--|--|
+| `id` | The layer's index, or the array position when a write omits it. A lone object addresses the first layer. A write to a layer that does not exist is ignored. |
+| `on`, `bri` | The layer's enabled flag and opacity. `"on":"t"` toggles. |
+| `fx` | The index of the layer's first effect among the registered effect types, in the order `effects` lists them. A write replaces that effect, or adds one to an empty layer. |
+| `sx`, `ix`, `c1`, `c2`, `c3` | The first five byte controls of that effect, in declaration order. `c3` runs 0 to 31, the others 0 to 255. A write is clamped to the control's own range. |
+| `o1`, `o2`, `o3` | The first three Bool controls of that effect. |
+| `pal` | The palette index of the Drivers module, the same on every segment. |
+| `col` | The primary color, as `[r,g,b]` or hex, which a write maps to the nearest palette. A `pal` in the same write wins. |
+
+The device has no counterpart for the nightlight (`nl`), UDP sync (`udpn`), live override (`lor`) or a segment's `rev` and `frz`. A write that sets them succeeds and changes nothing, so the matching Home Assistant switches read back unchanged.
+
+The index of an effect type moves when a type is added, so a client resolves an effect by its name in `effects`. `docs/reference/openapi.yaml` lists the routes.
+
 ## Which to use
 
 Script something: **HTTP**. Everything is there, it is synchronous, and an error comes back as a reason rather than a silence.

@@ -22,9 +22,10 @@
 
 #include "core/system/HttpServerModule.h"
 
+#include "core/module/Control.h"         // the controls a WLED slider stands for
 #include "core/module/Scheduler.h"
 #include "core/util/JsonUtil.h"
-#include "core/util/parse.h"             // parseIntStr: the app's numeric fields
+#include "core/util/ModuleFactory.h"     // the effect types `fx` indexes
 #include "core/util/JsonSink.h"
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
@@ -35,11 +36,310 @@
 #include "platform/platform_system.h"   // getMacAddress
 #include "platform/platform_net.h"   // TcpConnection, localIPv4, wifiStaRssi
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
 
 namespace mm {
+
+namespace {
+
+using json::JsonDoc;
+using json::JsonNode;
+using json::JsonType;
+
+// WLED's sliders `sx`, `ix`, `c1`, `c2` and `c3`, and its options `o1`, `o2` and `o3`, in that order.
+constexpr uint8_t kSliderCount = 5;
+constexpr uint8_t kToggleCount = 3;
+// `c3`'s place among the sliders, the one WLED bounds at 31 where a control byte runs to 255.
+constexpr uint8_t kCustom3 = 4;
+constexpr int kCustom3Max = 31;
+// What `switchField` answers for `"t"`, WLED's toggle: flip the current state.
+constexpr int kToggle = 2;
+
+// The segments are the layers of `Effects`, in child order; with no `Effects` there are none.
+MoonModule* layerAt(const Scheduler* scheduler, int index) {
+    const MoonModule* effects = scheduler ? scheduler->topOfType("Effects") : nullptr;
+    int seen = 0;
+    for (uint8_t i = 0; effects && i < effects->childCount(); i++) {
+        MoonModule* child = effects->child(i);
+        if (!child || child->role() != ModuleRole::Layer) continue;
+        if (seen++ == index) return child;
+    }
+    return nullptr;
+}
+
+int layerCount(const Scheduler* scheduler) {
+    int count = 0;
+    while (layerAt(scheduler, count)) count++;
+    return count;
+}
+
+// One segment per layer, or the one stand-in segment on a device without a layer, which keeps HA's light entity available.
+int segmentCount(const Scheduler* scheduler) {
+    const int layers = layerCount(scheduler);
+    return layers ? layers : 1;
+}
+
+// The effect a segment's fx, sliders and options stand for: the first effect in the layer.
+MoonModule* leadEffect(MoonModule* layer) {
+    for (uint8_t i = 0; layer && i < layer->childCount(); i++) {
+        MoonModule* child = layer->child(i);
+        if (child && child->role() == ModuleRole::Effect) return child;
+    }
+    return nullptr;
+}
+
+bool isEffectType(uint8_t type) {
+    return ModuleFactory::typeRole(type) == ModuleRole::Effect;
+}
+
+// `fx` counts the registered effect types in registration order, which the effect list names in the same order.
+int effectIndexOf(const char* typeName) {
+    int seen = 0;
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++) {
+        if (!isEffectType(i)) continue;
+        if (std::strcmp(ModuleFactory::typeName(i), typeName) == 0) return seen;
+        seen++;
+    }
+    return 0;
+}
+
+const char* effectTypeAt(int fx) {
+    int seen = 0;
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++)
+        if (isEffectType(i) && seen++ == fx) return ModuleFactory::typeName(i);
+    return nullptr;
+}
+
+int effectTypeCount() {
+    int count = 0;
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++)
+        if (isEffectType(i)) count++;
+    return count;
+}
+
+// Every registered effect type's name as JSON strings, comma-separated, in `fx` order.
+void writeEffectNames(JsonSink& sink) {
+    bool first = true;
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++) {
+        if (!isEffectType(i)) continue;
+        // displayNameFor answers from one shared buffer, written as it is read.
+        if (!first) sink.append(",");
+        sink.writeJsonString(ModuleFactory::displayNameFor(ModuleFactory::typeName(i), ModuleRole::Effect));
+        first = false;
+    }
+}
+
+// The n-th control of `module` that WLED has a widget for: sliders are the Uint8 controls and options the Bool ones, in declaration order, as WLED's own effects number theirs.
+const ControlDescriptor* wledControl(MoonModule& module, ControlType type, uint8_t n) {
+    auto& controls = module.controls();
+    for (uint8_t i = 0; i < controls.count(); i++) {
+        const ControlDescriptor& c = controls[i];
+        if (c.type != type || c.hidden || c.readonly) continue;
+        if (n-- == 0) return &c;
+    }
+    return nullptr;
+}
+
+// A slider's top value, and its scale to and from the control byte: every slider is a byte but `c3`.
+int sliderMax(uint8_t slot) {
+    return slot == kCustom3 ? kCustom3Max : 255;
+}
+
+int sliderFromControl(uint8_t slot, int control) {
+    return slot == kCustom3 ? (control * kCustom3Max + 127) / 255 : control;
+}
+
+int sliderToControl(uint8_t slot, int slider) {
+    return slot == kCustom3 ? slider * 255 / kCustom3Max : slider;
+}
+
+int sliderValue(MoonModule* effect, uint8_t slot) {
+    const ControlDescriptor* c = effect ? wledControl(*effect, ControlType::Uint8, slot) : nullptr;
+    return c ? sliderFromControl(slot, *static_cast<const uint8_t*>(c->ptr)) : 0;
+}
+
+const char* toggleValue(MoonModule* effect, uint8_t slot) {
+    const ControlDescriptor* c = effect ? wledControl(*effect, ControlType::Bool, slot) : nullptr;
+    return c && *static_cast<const bool*>(c->ptr) ? "true" : "false";
+}
+
+// The applied look as a WLED preset slot (1-based, as /presets.json), or -1; without it HA's preset dropdown reads unknown even while a preset is active.
+int currentPresetSlot(const ControlModule* control) {
+    const char* look = control ? control->currentLook() : nullptr;
+    if (!look || !look[0]) return -1;
+    for (uint8_t i = 0; i < control->presetCount(); i++) {
+        if (!control->isLookOnly(i)) continue;
+        const char* name = control->presetName(i);
+        if (name && std::strcmp(name, look) == 0) return i + 1;
+    }
+    return -1;
+}
+
+// pmt is the presets-modified time HA uses to re-fetch /presets.json, stamped by ControlModule on every preset change; python-wled treats 0 as "no presets support", so the no-ControlModule fallback is 1.
+unsigned presetsStamp(const ControlModule* control) {
+    const unsigned stamp = control ? static_cast<unsigned>(control->presetsRevision()) : 0;
+    return stamp ? stamp : 1;
+}
+
+// One layer as a segment: its enabled flag and opacity, its name, the palette's color, and its first effect's index, sliders and options. With no layer the one stand-in segment carries the Drivers' power.
+void writeSegment(JsonSink& sink, Scheduler* scheduler, MoonModule* layer, int index, uint8_t pal, const RGB& color) {
+    MoonModule* effect = leadEffect(layer);
+    const unsigned lights = lightSummary().lightCount;
+    const bool on = layer ? layer->enabled() : driversOn(scheduler);
+    // bri 255 on the stand-in, so HA's segment.bri x state.bri / 255 shows the master value.
+    sink.appendf("{\"id\":%d,\"start\":0,\"stop\":%u,\"len\":%u,\"on\":%s,\"bri\":%u,\"lc\":1,\"n\":",
+                 index, lights, lights, on ? "true" : "false", layer ? static_cast<unsigned>(layer->readUint8("opacity", 255)) : 255u);
+    sink.writeJsonString(layer ? layer->name() : "");
+    sink.appendf(",\"col\":[[%u,%u,%u]],\"fx\":%d,\"sx\":%d,\"ix\":%d,\"pal\":%u,\"c1\":%d,\"c2\":%d,\"c3\":%d,"
+                 "\"o1\":%s,\"o2\":%s,\"o3\":%s,\"sel\":%s}",
+                 color.r, color.g, color.b, effect ? effectIndexOf(effect->typeName()) : 0,
+                 sliderValue(effect, 0), sliderValue(effect, 1), pal,
+                 sliderValue(effect, 2), sliderValue(effect, 3), sliderValue(effect, 4),
+                 toggleValue(effect, 0), toggleValue(effect, 1), toggleValue(effect, 2), index == 0 ? "true" : "false");
+}
+
+// The integer member `key` of `obj` held to [lo, hi], false when it is absent, not an integer or below `lo`, so a negative number is no value and a string such as "~10", WLED's relative step, is not read.
+bool intField(const JsonDoc& doc, const JsonNode* obj, const char* key, int lo, int hi, int& out) {
+    const JsonNode* n = json::member(doc, obj, key);
+    if (!n || n->type != JsonType::Int || n->intValue < lo) return false;
+    out = n->intValue > hi ? hi : static_cast<int>(n->intValue);
+    return true;
+}
+
+// A flag member as 0 or 1, or kToggle for the string "t"; false when it is absent or of another kind.
+bool switchField(const JsonDoc& doc, const JsonNode* obj, const char* key, bool allowToggle, int& out) {
+    const JsonNode* n = json::member(doc, obj, key);
+    if (!n) return false;
+    if (allowToggle && n->type == JsonType::String && n->str && n->str[0] == 't') { out = kToggle; return true; }
+    if (n->type != JsonType::Bool && n->type != JsonType::Int) return false;
+    out = n->intValue != 0 ? 1 : 0;
+    return true;
+}
+
+int hexDigit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+// A color as WLED writes it in hex, `RRGGBB` or `WWRRGGBB`, whose white byte this RGB output has no use for.
+bool hexColor(const char* text, uint8_t rgb[3]) {
+    const size_t n = text ? std::strlen(text) : 0;
+    if (n != 6 && n != 8) return false;
+    for (int i = 0; i < 3; i++) {
+        const int hi = hexDigit(text[n - 6 + 2 * i]), lo = hexDigit(text[n - 5 + 2 * i]);
+        if (hi < 0 || lo < 0) return false;
+        rgb[i] = static_cast<uint8_t>(hi * 16 + lo);
+    }
+    return true;
+}
+
+// The primary color of `col`: an [r,g,b] array or a hex string, as the WLED JSON API gives both.
+bool colorField(const JsonDoc& doc, const JsonNode* obj, uint8_t rgb[3]) {
+    const JsonNode* primary = json::element(doc, json::member(doc, obj, "col"), 0);
+    if (!primary) return false;
+    if (primary->type == JsonType::String) return hexColor(primary->str, rgb);
+    for (int i = 0; i < 3; i++) {
+        const long channel = json::readInt(json::element(doc, primary, i), -1);
+        if (channel < 0) return false;
+        rgb[i] = static_cast<uint8_t>(channel > 255 ? 255 : channel);
+    }
+    return true;
+}
+
+// A control set to a number or a flag, through the apply path every client shares.
+void setNumber(HttpServerModule& http, const char* module, const char* control, int value) {
+    char valueJson[24];
+    std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", value);
+    http.applySetControl(module, control, valueJson);
+}
+
+void setFlag(HttpServerModule& http, const char* module, const char* control, bool value) {
+    http.applySetControl(module, control, value ? "{\"value\":true}" : "{\"value\":false}");
+}
+
+// The palette and its color belong to Drivers, so any segment's pal and col reach the one palette. A pal wins over a col, which is mapped to the nearest palette; HA's brightness slider sends `bri`, so the color's value channel is ignored.
+void applyPalette(HttpServerModule& http, const JsonDoc& doc, const JsonNode* seg) {
+    const LightOutput* out = LightOutput::active();
+    if (!out || out->paletteCount() == 0) return;
+    int pal;
+    uint8_t rgb[3];
+    // Clamped to the full count, built-ins plus the scripted tail, the list served as `palettes[]`, so a scripted index the device offered is not snapped back.
+    if (intField(doc, seg, "pal", 0, out->paletteCount() - 1, pal)) setNumber(http, "Drivers", "palette", pal);
+    else if (colorField(doc, seg, rgb)) setNumber(http, "Drivers", "palette", out->nearestPalette(RGB{rgb[0], rgb[1], rgb[2]}));
+}
+
+// A segment's on and bri are the layer's enabled flag and opacity.
+void applyLayer(HttpServerModule& http, const JsonDoc& doc, const JsonNode* seg, MoonModule& layer) {
+    int v;
+    if (switchField(doc, seg, "on", true, v)) setFlag(http, layer.name(), "enabled", v == kToggle ? !layer.enabled() : v != 0);
+    if (intField(doc, seg, "bri", 0, 255, v)) setNumber(http, layer.name(), "opacity", v);
+}
+
+// A new effect replaces the layer's first one in its place, or joins an empty layer; answers the effect the sliders then address.
+MoonModule* applyEffect(HttpServerModule& http, const JsonDoc& doc, const JsonNode* seg, MoonModule& layer) {
+    int fx;
+    const char* type = intField(doc, seg, "fx", 0, 255, fx) ? effectTypeAt(fx) : nullptr;
+    MoonModule* effect = leadEffect(&layer);
+    if (!type) return effect;
+    if (!effect) {
+        http.applyAddModule(type, nullptr, layer.name());
+    } else if (std::strcmp(type, effect->typeName()) != 0) {
+        char effectName[MoonModule::kNameLen];   // copied: the replace deletes the module this name sits in
+        std::snprintf(effectName, sizeof(effectName), "%s", effect->name());
+        http.applyReplaceModule(effectName, type, nullptr);
+    }
+    return leadEffect(&layer);
+}
+
+// The sliders and options a segment names land on the effect's byte and Bool controls, in declaration order. A control is looked up per write: a control's reaction may rebuild the list and move its descriptors.
+void applyControls(HttpServerModule& http, const JsonDoc& doc, const JsonNode* seg, MoonModule& effect) {
+    static constexpr const char* kSliderKey[kSliderCount] = {"sx", "ix", "c1", "c2", "c3"};
+    static constexpr const char* kToggleKey[kToggleCount] = {"o1", "o2", "o3"};
+    int v;
+    for (uint8_t slot = 0; slot < kSliderCount; slot++) {
+        if (!intField(doc, seg, kSliderKey[slot], 0, sliderMax(slot), v)) continue;
+        if (const ControlDescriptor* c = wledControl(effect, ControlType::Uint8, slot))
+            setNumber(http, effect.name(), c->name, std::clamp(sliderToControl(slot, v), static_cast<int>(c->min), static_cast<int>(c->max)));
+    }
+    for (uint8_t slot = 0; slot < kToggleCount; slot++) {
+        if (!switchField(doc, seg, kToggleKey[slot], false, v)) continue;
+        if (const ControlDescriptor* c = wledControl(effect, ControlType::Bool, slot)) setFlag(http, effect.name(), c->name, v != 0);
+    }
+}
+
+// Apply what a client asks of segment `id`: the device's palette, then the layer and its first effect. A segment past the last layer is ignored whole; a device with no layer reports segment 0 as a stand-in, whose palette still applies.
+void applySegment(HttpServerModule& http, Scheduler* scheduler, const JsonDoc& doc, const JsonNode* seg, int id) {
+    MoonModule* layer = layerAt(scheduler, id);
+    if (!layer && id != 0) return;
+    applyPalette(http, doc, seg);
+    if (!layer) return;
+    applyLayer(http, doc, seg, *layer);
+    if (MoonModule* effect = applyEffect(http, doc, seg, *layer)) applyControls(http, doc, seg, *effect);
+}
+
+// The layer a segment object names by `id`, or `fallback` when it names none.
+int segmentId(const JsonDoc& doc, const JsonNode* element, int fallback) {
+    int id;
+    return intField(doc, element, "id", 0, 255, id) ? id : fallback;
+}
+
+// A body names its segments as an array, or as one object that is the main segment. An element without an id takes its place in the array.
+void applySegments(HttpServerModule& http, Scheduler* scheduler, const JsonDoc& doc, const JsonNode* seg) {
+    const bool array = seg && seg->type == JsonType::Array;
+    const int count = array ? json::arraySize(doc, seg) : (seg ? 1 : 0);
+    for (int i = 0; i < count; i++) {
+        const JsonNode* element = array ? json::element(doc, seg, i) : seg;
+        if (!element || element->type != JsonType::Object) continue;
+        applySegment(http, scheduler, doc, element, segmentId(doc, element, array ? i : 0));
+    }
+}
+
+}  // namespace
 
 
 // WLED-compatibility `/json/info`: the field set the WLED apps and HA validate after `_wled._tcp` discovery, with `brand:"WLED"` to interoperate and `product:"MoonModules"` to say what this is.
@@ -115,59 +415,49 @@ void HttpServerModule::writeWledInfoBody(JsonSink& sink) {
                  "\"brand\":\"WLED\",\"product\":\"MoonModules\",\"release\":\"MoonModules\","
                  // lc is a capability code, not a count: 1 (RGB_COLOR) gives HA a color picker, and a LED count would leave the light entity without color modes.
                  "\"leds\":{\"count\":%u,\"fps\":%u,\"rgbw\":%s,\"wv\":false,\"cct\":false,"
-                 "\"maxpwr\":0,\"maxseg\":1,\"pwr\":0,\"lc\":1},",
+                 "\"maxpwr\":0,\"maxseg\":%d,\"pwr\":0,\"lc\":1},",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
                  ip[0], ip[1], ip[2], ip[3],
-                 ls.lightCount, renderFps, rgbw);
+                 ls.lightCount, renderFps, rgbw, segmentCount(scheduler_));
     sink.appendf("\"wifi\":{\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
                  "\"rssi\":%d,\"channel\":%d,\"signal\":%d},",
                  bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
                  rssi, platform::wifiStaChannel(), signal);
-    // pmt is the presets-modified time HA uses to re-fetch /presets.json, stamped by ControlModule on every preset change, with 1 as the no-ControlModule fallback.
-    unsigned pmt = 1;
-    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control")))
-        pmt = static_cast<unsigned>(control->presetsRevision());   // >= 1 once setup's rescan ran
-    if (pmt == 0) pmt = 1;   // python-wled treats 0 as "no presets support"
     sink.appendf("\"fs\":{\"t\":256,\"u\":32,\"pmt\":%u},"
                  // uptime + pmt drive python-wled's presets change-detect: both non-zero and stable stop HA refetching /presets.json on every state update.
                  "\"freeheap\":%u,\"uptime\":%u,\"udpport\":21324,\"live\":false,"
                  // ws=-1 tells python-wled WebSocket updates are unsupported, so HA polls over HTTP instead of opening /ws, whose MoonLight-native frames flood its log with `MissingField: filesystem`.
                  "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"
-                 // palcount is the real count, built-ins plus the scripted tail, matching palettes[] below; fxcount stays 1 and cpal/umpal are 0.
-                 "\"fxcount\":1,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
+                 // fxcount and palcount are the real counts, matching effects[] and palettes[]; cpal/umpal are 0.
+                 "\"fxcount\":%d,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
                  // Non-zero or HA rejects the device: the host's freeHeap() reports 0, so a nominal figure stands in.
-                 pmt,
+                 presetsStamp(static_cast<ControlModule*>(findModuleByName("Control"))),
                  static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
                  static_cast<unsigned>(platform::millis() / 1000u),
+                 effectTypeCount(),
                  static_cast<unsigned>(out ? out->paletteCount() : 0));
 }
 
-// The WLED state object: `on`+`bri` mirror Drivers, and `seg[0].col[0]` is the active palette's full-value color, stable across consumers and never double-dimmed with HA's `state.bri × seg.bri`.
+// The WLED state object: `on`+`bri` mirror Drivers, and each `seg[i]` is a layer, whose `col[0]` is the active palette's full-value color, stable across consumers and never double-dimmed with HA's `state.bri × seg.bri`.
 void HttpServerModule::writeWledStateBody(JsonSink& sink) {
     const uint8_t bri = driversBrightness(scheduler_);
     const LightOutput* out = LightOutput::active();
     const RGB pc = out ? out->paletteRgb(driversPalette(scheduler_)) : RGB{0, 0, 0};
-    // python-wled parses this response through State.from_dict, so nl/udpn/lor/transition/ps/pl/mainseg are required, and seg[0].on must be present since HA reads segment .on, not top-level state.on.
+    // python-wled parses this response through State.from_dict, so nl/udpn/lor/transition/ps/pl/mainseg are required, and each segment's .on must be present since HA reads segment .on, not top-level state.on.
     const char* onStr = driversOn(scheduler_) ? "true" : "false";
-    // seg[0].pal is the active palette index, sharing the Drivers `palette` control with col[0], so HA's palette dropdown and color picker are two views of one value.
+    // seg[i].pal is the active palette index, sharing the Drivers `palette` control with col[0], so HA's palette dropdown and color picker are two views of one value.
     const uint8_t pal = driversPalette(scheduler_);
-    // The applied look as a WLED preset slot (1-based, as /presets.json), or -1; without it HA's preset dropdown reads unknown even while a preset is active.
-    int currentPs = -1;
-    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control"))) {
-        const char* look = control->currentLook();
-        if (look && look[0]) {
-            for (uint8_t i = 0; i < control->presetCount(); i++) {
-                if (!control->isLookOnly(i)) continue;
-                const char* n = control->presetName(i);
-                if (n && std::strcmp(n, look) == 0) { currentPs = i + 1; break; }
-            }
-        }
-    }
+    const int currentPs = currentPresetSlot(static_cast<ControlModule*>(findModuleByName("Control")));
     sink.appendf("{\"on\":%s,\"bri\":%u,\"transition\":7,\"ps\":%d,\"pl\":-1,"
-                 "\"nl\":{},\"udpn\":{},\"lor\":0,\"mainseg\":0,"
-                 // seg[0].bri = 255 so HA's segment.bri × state.bri / 255 shows the master value; fx=0 ("Solid") pairs with pal as python-wled expects, else the light entity stays unavailable.
-                 "\"seg\":[{\"id\":0,\"on\":%s,\"bri\":255,\"lc\":1,\"fx\":0,\"pal\":%u,\"col\":[[%u,%u,%u]]}]}",
-                 onStr, bri, currentPs, onStr, pal, pc.r, pc.g, pc.b);
+                 "\"nl\":{},\"udpn\":{},\"lor\":0,\"mainseg\":0,\"seg\":[",
+                 onStr, bri, currentPs);
+    // fx pairs with pal as python-wled expects, else the light entity stays unavailable.
+    const int segments = segmentCount(scheduler_);
+    for (int i = 0; i < segments; i++) {
+        if (i) sink.append(",");
+        writeSegment(sink, scheduler_, layerAt(scheduler_, i), i, pal, pc);
+    }
+    sink.append("]}");
 }
 
 void HttpServerModule::serveWledState(platform::TcpConnection& conn) {
@@ -183,9 +473,11 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
     writeWledStateBody(sink);
     sink.appendf(",\"info\":");
     writeWledInfoBody(sink);
-    // effects stays one real entry ("Solid") since this shim drives a single Layer; palettes is the real list, indexed to match seg[0].pal and the Drivers `palette` control.
+    // effects is every registered effect type, indexed to match a segment's fx; palettes is the real list, indexed to match seg.pal and the Drivers `palette` control.
     const LightOutput* out = LightOutput::active();
-    sink.appendf(",\"effects\":[\"Solid\"],\"palettes\":[");
+    sink.appendf(",\"effects\":[");
+    writeEffectNames(sink);
+    sink.appendf("],\"palettes\":[");
     if (out) out->writePaletteNames(sink);
     sink.appendf("]}");
     answerJson(conn, sink);
@@ -207,56 +499,24 @@ void HttpServerModule::serveWledStateInfo(platform::TcpConnection& conn) {
     answerJson(conn, sink);
 }
 
-// Apply a WLED state-set body ({on?, bri?}) to Drivers through the apply-core, from POST /json/state and the inbound WebSocket; `on` is master power, so toggling off keeps the brightness level.
+// Apply a WLED state-set body from POST /json/state and the inbound WebSocket: the device's preset, power and brightness, then each segment. `on` is master power, so toggling off keeps the brightness level.
 void HttpServerModule::applyWledState(const char* body) {
-    // ps is a preset slot from HA's dropdown (1-based, as /presets.json); applyLookByName re-checks look-only, so a crafted request naming a Drivers or Layouts preset is refused here, not hidden.
-    if (mm::json::hasKey(body, "ps")) {
-        const int slot = mm::json::parseInt(body, "ps");
-        auto* control = static_cast<ControlModule*>(findModuleByName("Control"));
-        if (control && slot > 0 && slot <= control->presetCount()) {
-            const char* name = control->presetName(static_cast<uint8_t>(slot - 1));
-            if (name) control->applyLookByName(name);
-        }
-    }
-    if (mm::json::hasKey(body, "on")) {
-        applySetControl("Drivers", "on",
-                        mm::json::parseBool(body, "on") ? "{\"value\":true}" : "{\"value\":false}");
-    }
-    if (mm::json::hasKey(body, "bri")) {
-        int bri = mm::json::parseInt(body, "bri");
-        if (bri < 0) bri = 0;
-        if (bri > 255) bri = 255;
-        char valueJson[32];
-        std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", bri);
-        applySetControl("Drivers", "brightness", valueJson);
-    }
-    // seg[0].pal is the palette index HA writes from its dropdown, mapped to the Drivers `palette` control and parsed from the segment object so a top-level "pal" cannot hijack it.
-    const LightOutput* out = LightOutput::active();
-    const char* segStart = std::strstr(body, "\"seg\":");
-    const char* palStart = segStart ? std::strstr(segStart, "\"pal\":") : nullptr;
-    if (palStart && out) {
-        int pal = mm::parseIntStr(palStart + 6);
-        if (pal < 0) pal = 0;
-        // Clamp to the full count, built-ins plus the scripted tail, the list served as `palettes[]`, so a scripted index the device offered is not snapped back.
-        if (pal >= out->paletteCount()) pal = out->paletteCount() - 1;
-        char valueJson[24];
-        std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%d}", pal);
-        applySetControl("Drivers", "palette", valueJson);
-    }
-    // seg[0].col[0] is [r,g,b] from HA's color picker, mapped to the nearest palette; the value channel is ignored since HA's brightness slider sends `bri`.
-    const char* colStart = std::strstr(body, "\"col\":[[");
-    if (colStart && out) {
-        int r = 0, g = 0, b = 0;
-        if (std::sscanf(colStart + 8, "%d,%d,%d", &r, &g, &b) == 3) {
-            const uint8_t rc = static_cast<uint8_t>(r < 0 ? 0 : (r > 255 ? 255 : r));
-            const uint8_t gc = static_cast<uint8_t>(g < 0 ? 0 : (g > 255 ? 255 : g));
-            const uint8_t bc = static_cast<uint8_t>(b < 0 ? 0 : (b > 255 ? 255 : b));
-            const uint8_t idx = out->nearestPalette(RGB{rc, gc, bc});
-            char valueJson[24];
-            std::snprintf(valueJson, sizeof(valueJson), "{\"value\":%u}", static_cast<unsigned>(idx));
-            applySetControl("Drivers", "palette", valueJson);
-        }
-    }
+    JsonDoc doc;
+    if (!json::parse(body, doc)) return;
+    const JsonNode* root = doc.rootNode();
+    if (!root || root->type != JsonType::Object) return;
+    int v;
+    if (intField(doc, root, "ps", 1, 250, v)) applyWledPreset(v);
+    if (switchField(doc, root, "on", true, v)) setFlag(*this, "Drivers", "on", v == kToggle ? !driversOn(scheduler_) : v != 0);
+    if (intField(doc, root, "bri", 0, 255, v)) setNumber(*this, "Drivers", "brightness", v);
+    applySegments(*this, scheduler_, doc, json::member(doc, root, "seg"));
+}
+
+// ps is a preset slot from HA's dropdown (1-based, as /presets.json); applyLookByName re-checks look-only, so a crafted request naming a Drivers or Layouts preset is refused here, not hidden.
+void HttpServerModule::applyWledPreset(int slot) {
+    auto* control = static_cast<ControlModule*>(findModuleByName("Control"));
+    if (!control || slot > control->presetCount()) return;
+    if (const char* name = control->presetName(static_cast<uint8_t>(slot - 1))) control->applyLookByName(name);
 }
 
 // POST /json/state: the WLED app's HTTP control channel; apply, then echo the resulting state, which the app expects.

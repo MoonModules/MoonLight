@@ -29,7 +29,7 @@ The control surface these integrations drive is documented once: the MQTT contro
 
 <img src="../assets/core/ha-integration.png" width="600" alt="MoonLight devices as 💫-marked lights in a Home Assistant dashboard">
 
-HA discovers a MoonLight device automatically over the WLED path, with no broker and nothing to configure, and lists it as a light with color, palette, and brightness. The 💫 in each name marks it as MoonLight among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge: no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [How HA creates the entity](#how-ha-creates-the-entity) below.
+HA discovers a MoonLight device automatically over the WLED path, with no broker and nothing to configure, and lists one light per layer with color, palette, brightness and an effect list of the device's effect types ([the WLED API](integrating.md#the-wled-api)). The 💫 in each name marks it as MoonLight among any plain WLED devices. An optional step brings that entity into Apple Home via HA's own HomeKit Bridge: no Homebridge needed. Turn the `haDiscovery` control on only for the MQTT path (broker-only or cross-subnet setups); see [How HA creates the entity](#how-ha-creates-the-entity) below.
 
 The chain:
 

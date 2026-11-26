@@ -143,11 +143,21 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// `/json`, `/json/info` and `/json/si` carry one `info` object: name, MAC, address, LED, WiFi and filesystem objects, and the brand and product fields. The app keys on the brand: we interoperate rather than impersonate.
 ///
-/// Live state goes over `/ws` as a state-and-info frame: Drivers brightness, and the active palette's color from `LightOutput::paletteRgb()`, or black without a light output.
+/// Live state goes over `/ws` as the `/json/si` object: Drivers power and brightness, and a segment per layer whose color is the active palette's, from `LightOutput::paletteRgb()`, or black without a light output.
 ///
 /// The app's slider and toggle send a frame on the same socket, applied to Drivers brightness through the apply core that REST and Improv share.
 ///
 /// Each client of the WLED API is reported as traffic into this device, requests a minute over the last whole minute, so the map draws a line from it. Its User-Agent's product token names it: `HomeAssistant/` is Home Assistant. A client quiet for five minutes is dropped.
+///
+/// ## A WLED segment is a layer
+///
+/// `seg[i]` is the i-th `Layer` of `Effects`: `on` is its `enabled`, `bri` its `opacity`, `n` its name, `fx` its first effect's index among the registered effect types, in the order `effects` lists them.
+///
+/// `sx`, `ix` and `c1` to `c3` are that effect's first five byte controls in declaration order, and `o1` to `o3` its first three toggles. `c3` runs 0 to 31 in WLED and is scaled.
+///
+/// A body is read as JSON, and each key of a segment writes the control it reads: `on` and `bri` the layer, `fx` the layer's first effect, `sx` to `o3` that effect's controls, held to each control's range. A write to a segment past the last layer is ignored.
+///
+/// `pal` and `col` are the one palette on Drivers, the same on every segment. A layer has no start, stop, grouping, spacing or offset, so `start` and `stop` span every light. A device with no layer reports one stand-in segment, which keeps Home Assistant's light available.
 ///
 /// ## Reading an uplink frame, and taking the lease
 ///
@@ -358,6 +368,8 @@ public:
 
     /// Test seams for the wire diff, so a unit test proves it without a socket.
     uint16_t buildStatePatchForTest(JsonSink& sink) { return buildStatePatch(sink); }
+    /// Test-only: the WLED state object, whose segments are the layers.
+    void writeWledStateForTest(JsonSink& sink) { writeWledStateBody(sink); }
     /// Test-only: the summary members /api/system leads with after the firmware.
     void writeDeviceSummaryForTest(JsonSink& sink) { writeDeviceSummary(sink); }
     /// Re-baseline the leaf hashes, for a test.
@@ -880,6 +892,8 @@ private:
     void serveWledDeviceJson(platform::TcpConnection& conn);   ///< /json, the surface Home Assistant's WLED integration reads
     void serveWledPresets(platform::TcpConnection& conn);      ///< /presets.json, the looks Home Assistant lists
     void handleWledState(platform::TcpConnection& conn, const char* body);
+    /// Apply the look preset in WLED slot `slot`, counted from 1.
+    void applyWledPreset(int slot);
     /// Read every client's uplink: preview requests on `/wsp`, and on `/ws` control writes, subscriptions, resync requests, Ping, Close and the WLED app's frame.
     void pollUplinks();
     void pollPreviewClient(int client);
@@ -888,6 +902,7 @@ private:
     void onTextFrame(int client, const char* body);
     void writeWledInfoBody(JsonSink& sink);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
+    /// The WLED state object: Drivers power and brightness, and a segment per layer. @xref{a-wled-segment-is-a-layer}
     void writeWledStateBody(JsonSink& sink);
     /// The combined {state, info} object /json/si answers and the WebSocket pushes.
     void writeWledStateInfo(JsonSink& sink);

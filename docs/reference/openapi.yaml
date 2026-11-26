@@ -630,7 +630,8 @@ paths:
     post:
       tags: [WLED compatibility]
       operationId: setWledState
-      summary: Sets on-off, brightness or a preset, and answers the resulting state.
+      summary: Applies a WLED state document, and answers the resulting state.
+      description: A segment is a layer, so `seg` sets a layer's enabled flag, opacity, effect, sliders and palette. See [the WLED API](https://moonmodules.org/MoonLight/reference/integrating/).
       requestBody:
         required: true
         content:
@@ -638,9 +639,15 @@ paths:
             schema:
               type: object
               properties:
-                "on": { type: boolean, description: Master power. }
+                "on": { oneOf: [{ type: boolean }, { const: t }], description: Master power, or "t" to toggle it. }
                 bri: { type: integer, minimum: 0, maximum: 255, description: Brightness. }
                 ps: { type: integer, description: A preset slot as /presets.json numbers it. }
+                seg:
+                  description: One segment object or an array of them. An array element without `id` addresses the layer at its index, a lone object the first layer.
+                  oneOf:
+                    - { $ref: "#/components/schemas/WledSegment" }
+                    - type: array
+                      items: { $ref: "#/components/schemas/WledSegment" }
       responses:
         "200": { $ref: "#/components/responses/WledState" }
 
@@ -907,13 +914,22 @@ components:
         ps: { type: integer, description: "The active look preset's slot, or -1." }
         seg:
           type: array
-          items:
-            type: object
-            properties:
-              lc: { type: integer, description: "The segment's capability code, 1 for RGB, which Home Assistant creates its light from." }
-              pal: { type: integer }
-              col: { type: array, items: { type: array, items: { type: integer } } }
+          items: { $ref: "#/components/schemas/WledSegment" }
       additionalProperties: true
+    WledSegment:
+      type: object
+      description: A layer. A write names it by `id` and sets the fields it carries; a state lists every one.
+      properties:
+        id: { type: integer, description: "The layer's index." }
+        n: { type: string, description: "The layer's name." }
+        "on": { oneOf: [{ type: boolean }, { const: t }], description: "The layer's enabled flag, or \"t\" to toggle it." }
+        bri: { type: integer, minimum: 0, maximum: 255, description: "The layer's opacity." }
+        lc: { type: integer, description: "The segment's capability code, 1 for RGB, which Home Assistant creates its light from." }
+        fx: { type: integer, description: "The index of the layer's first effect among `effects`." }
+        sx: { type: integer, minimum: 0, maximum: 255, description: "The effect's first byte control; `ix`, `c1` and `c2` are its next three, and `c3` its fifth, 0 to 31." }
+        o1: { type: boolean, description: "The effect's first Bool control; `o2` and `o3` are its next two." }
+        pal: { type: integer, description: The palette index of Drivers, the same on every segment. }
+        col: { type: array, items: { type: array, items: { type: integer } }, description: "The primary color as [r,g,b], or a hex string, which a write maps to the nearest palette." }
     WledInfo:
       type: object
       description: One object on /json, /json/info and /json/si, since python-wled merges each poll of /json/si into the first /json.

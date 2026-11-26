@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The WLED API treats a layer as a segment
+
+**Action: *nothing*, then re-select a Home Assistant light's effect and check any script that stores an `fx` number.**
+
+`GET /json` lists one segment per layer, where it listed one for the whole device, so Home Assistant shows a light per layer and the effect list comes from the device's effect types. `fx` indexes those types in the order `effects` lists them, so a stored `fx` number names a different effect once a type is added; resolve the effect by name ([the WLED API](integrating.md#the-wled-api)). A device with no layer keeps its one stand-in segment.
+
 ### A HUB75 driver's fixture profile sets the panel's color order
 
 **Action: *re-set a control*, on a HUB75 driver whose `fixture` is not RGB.**
