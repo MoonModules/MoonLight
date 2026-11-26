@@ -80,7 +80,7 @@ it publishes its frame for effects to pull, *and* it may carry mapping rows for 
 
 ### A third shape: a sensor that produces an image
 
-The VL53L8CX (and its VL53L5CX predecessor) is not a distance sensor with extra decimals. It reports an **8x8 grid of zones at up to 60 Hz**, over I2C or SPI at 3 MHz: a low-resolution depth image at render rate. That is a third shape beside event and stream; what it changes is step 4b of [the plan](../work/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md).
+The VL53L8CX (and its VL53L5CX predecessor) is not a distance sensor with extra decimals. It reports an **8x8 grid of zones at up to 60 Hz**, over I2C or SPI at 3 MHz: a low-resolution depth image at render rate. That is a third shape beside event and stream; what it changes is the image-sensor step of the input-mapping plan.
 
 **It carries an 84 KB firmware blob**, measured from ST's own driver
 ([stm32duino/VL53L8CX](https://github.com/stm32duino/VL53L8CX), `vl53l8cx_buffers.h`):
@@ -102,7 +102,7 @@ the hard case. See step 4b.
 
 A GPIO carries one bit. The sensors an installation wants mostly do not: a motion sensor worth having reports distance or an occupancy zone, not a level, and that arrives over a bus.
 
-**I2C is the common case, and its seam is proposed rather than shipped**: the unmerged commit `11f8eb76` adds `i2cInit`, `i2cWriteReg` and `i2cReadRegs`, and step 4 of [the plan](../work/Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md) merges it.
+**I2C is the common case, and its seam is proposed rather than shipped**: the unmerged commit `11f8eb76` adds `i2cInit`, `i2cWriteReg` and `i2cReadRegs`, and the input-mapping plan merges it.
 
 What it unlocks, in the order an installation asks for it: a **ToF distance sensor** (VL53L0X: a hand's distance drives a parameter, the well-behaved version of "motion"), a **light-level sensor** (BH1750: the piece dims itself to the room), an **IMU** (the MPU6050 that commit would add), and a **gesture/proximity sensor** (APDS-9960). All four are the same shape: init the bus, poll a register set on `tick20ms` or `tick1s`, publish a value.
 
@@ -113,7 +113,7 @@ category confusing:
   seam: presence as a level, which is how MoonLight models it (`pin_PIR`, "HIGH = lights on").
 - **Ultrasonic (HC-SR04)** is a trigger pulse plus an echo whose *width* is the distance. Neither
   I2C nor a plain read: it needs a **pulse-timing seam** that does not exist. The textbook answer on ESP32 is the same PCNT/RMT machinery an encoder wants, so the two features share a dependency.
-- **ToF** is I2C, so it rides the layer above. A **mmWave radar** such as the HLK-LD2450 is UART, so it needs the UART seam the [audio-reactive plan](../work/Plan-20261013%20-%20Audio%20reactive%20live%20performance%20(0%20of%207).md) names.
+- **ToF** is I2C, so it rides the layer above. A **mmWave radar** such as the HLK-LD2450 is UART, so it needs the UART seam the audio-reactive plan names.
 
 ## MoonLive: scripted sensors and mappings
 

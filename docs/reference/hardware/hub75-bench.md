@@ -25,6 +25,8 @@ The bench is a 256x192 wall on a Pi 5: six 128x64 panels, 2 to a lane, 3 lanes i
 
 The PIO output drove the wall: correct picture on all three lanes, 0 submit errors, encode about 1.28 ms a frame, the integrated output at 169 to 170 fps. The measured refresh of about 169 Hz sits under the computed 203.5 Hz because the DMA feed is the ceiling ([Refresh at 6-bit and 8-bit](#refresh-at-6-bit-and-8-bit)).
 
+A community reading from outside the bench: on 2026-11-23 TheRiderMan ran the output on a Pi 5 with a triple bonnet, six layers on 128x64 panels, at up to 150 fps.
+
 ### Refresh at 6-bit and 8-bit
 
 `shown` on the wall, median of three readings, with the 2026-11-13 reading beside it. Frame time is 1000 / `shown`. Wire time is computed, rows / 2 x bits x (256 + latch blank) words at one word per pixel clock; on 2026-11-13 it was computed with the 256 words alone, about 0.4% shorter.

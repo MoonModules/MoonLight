@@ -414,10 +414,17 @@ target_include_directories(mm_module_types PRIVATE src/)
 target_link_libraries(mm_module_types PRIVATE mm_core mm_platform)
 add_dependencies(mm_module_types ui_embed build_info_gen moonlive_catalog)
 
+# The light domain's .cpp files (src/light/sources.cmake), compiled once for the app, the unit tests and the scenario runner.
+include(src/light/sources.cmake)
+add_library(mm_light OBJECT ${MM_LIGHT_SOURCES})
+target_include_directories(mm_light PRIVATE src/)
+target_link_libraries(mm_light PRIVATE mm_core mm_platform)
+add_dependencies(mm_light ui_embed build_info_gen moonlive_catalog)
+
 # Application
 add_executable(MoonLight src/main.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
 target_include_directories(MoonLight PRIVATE src/)
-target_link_libraries(MoonLight PRIVATE mm_module_types mm_core mm_platform)
+target_link_libraries(MoonLight PRIVATE mm_module_types mm_light mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 # macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_host.py).
 if(APPLE)
@@ -430,7 +437,7 @@ endif()
 if(ANDROID)
     add_library(moonlight SHARED src/main.cpp src/platform/host/main_android.cpp)
     target_include_directories(moonlight PRIVATE src/)
-    target_link_libraries(moonlight PRIVATE mm_module_types mm_core mm_platform log)
+    target_link_libraries(moonlight PRIVATE mm_module_types mm_light mm_core mm_platform log)
     add_dependencies(moonlight ui_embed build_info_gen moonlive_catalog)
     set_target_properties(moonlight PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/jniLibs/${ANDROID_ABI}")
 endif()

@@ -191,7 +191,7 @@ size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_c
 size_t totalInternalHeap() { return totalHeap(); }
 
 namespace {
-// PJRC marks the OCRAM heap execute-never and the highest matching MPU region decides, so the last one re-maps it executable when MoonLive first asks.
+// PJRC marks the OCRAM heap data-only (XN) and the highest matching MPU region decides, so the last one re-maps it executable when MoonLive first asks; code runs from flash through the cache anyway, so OCRAM costs no speed, and ITCM has 9 KB.
 void allowExecInOcram() {
     static bool done = false;
     if (done) return;

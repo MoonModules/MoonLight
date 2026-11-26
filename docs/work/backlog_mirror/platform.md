@@ -355,7 +355,7 @@ The prerequisite exists: `src/platform/rpi/` drives HUB75 on a Pi 5 through the 
 The strips go behind `ParallelLedDriver` as two more `LedPeripheral` backends, so the correction, the encode and the 74HCT595 pin expander (up to 64 strands) are reused byte for byte:
 - Pi 5: a PIO program clocking the slot stream out of 8 or 16 header pins, the expander's shift clock as side-set.
 - Pi 3 and 4: SMI, the Broadcom chip's DMA-fed parallel bus (the i80 counterpart), its write strobe as the shift clock; iosoft's rpi_pixleds is the study material.
-HUB75 on a Pi 3 or 4 is Plan-20261030's step 7 (the GPIO engine).
+HUB75 on a Pi 3 or 4 exists as a GPIO engine (docs/reference/hardware/hub75-panels.md).
 The steps, starting with measuring each bus's rate: docs/work/Plan-20261123 - LEDs from a Pi's own pins.
 The research, with sources: [the LED-driver analysis](../../design/leddriver.md).
 
@@ -440,14 +440,14 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A UART that reads and writes a byte stream, as a platform seam with MoonLive builtins, so a serial device is a compiled module or a script written from its datasheet. The platform has none today: the only UART use is the Improv provisioning listener.
 
 **Who needs it**
-- The HLK-LD2450 24 GHz radar, up to three targets with x and y, at 256000 baud. Step 7 of [Audio reactive live performance](../Plan-20261013%20-%20Audio%20reactive%20live%20performance%20(0%20of%207).md) tracks performers with it. Two kit B units are on the bench.
+- The HLK-LD2450 24 GHz radar, up to three targets with x and y, at 256000 baud. Step 7 of Audio reactive live performance tracks performers with it. Two kit B units are on the bench.
 - Wired DMX-512 output, the same UART in RS-485 half-duplex mode: [RS-485 and DMX-512 wired output](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287080691).
 - A DIN MIDI port, which is a UART at 31250 baud. MIDI reaches the board over USB, the network and the browser today.
 - GPS modules, sending NMEA text lines at 9600 baud.
 - BLE-to-serial modules (Nordic UART Service, HM-10): BLE without a BLE stack beside WiFi on the ESP32.
 - A radar as a presence trigger where a PIR gives false positives and active infrared shows in night-vision gear, such as a trail camera.
 
-**The shape**, following the [input-mapping plan](../Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md)'s rule that a seam ships with its builtin:
+**The shape**, following the input-mapping plan's rule that a seam ships with its builtin:
 - The driver fills a receive ring buffer from its interrupt, so a read never blocks the render path. Pins are claimed through the Pins module. UART0 is the console; a classic ESP32 and an S3 have two more, a C3 one, a P4 four.
 - Builtins with the Arduino names: `serialBegin(rx, tx, baud)`, `serialAvailable()`, `serialRead()`, `serialWrite(b)`, plus a bulk read into an array, since at 256000 baud up to about 500 bytes arrive per 20 ms tick.
 - The seam is device-neutral: a device's protocol lives in its module or its script.

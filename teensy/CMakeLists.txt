@@ -99,11 +99,13 @@ file(WRITE "${CMAKE_BINARY_DIR}/imxrt1062_t41.ld" "${LINKER_SCRIPT}")
 
 # The application: core's list every build reads, and the light domain the ESP32 build lists, on the Teensy platform layer.
 include(${REPO}/src/core/sources.cmake)
+include(${REPO}/src/light/sources.cmake)
 add_executable(MoonLight.elf
     main.cpp
     ${REPO}/src/main.cpp
     ${REPO}/src/module_types.cpp
     ${MM_CORE_SOURCES}
+    ${MM_LIGHT_SOURCES}
     ${REPO}/src/platform/host/moonlive_emit_noarch.cpp
     ${REPO}/src/platform/teensy/moonlive_asm_thumb2.cpp
     ${REPO}/src/platform/teensy/platform_teensy.cpp

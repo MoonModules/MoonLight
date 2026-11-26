@@ -435,3 +435,55 @@ Kind: Restructure · Stage: Document and commit · [Card](https://github.com/use
 
 `check_code`'s name-spread rule counts a registered type's name as a word in every file, comments, strings and URLs included, so prose that names a feature counts as code that depends on its type. The generic names sit highest for that reason: `Layer` in 151 files, `Layouts` 111, `Effects` 67. On 2026-11-17 `Devices` crossed the limit of 10 through MoonDeck reading the `/api/modules/Devices` route and the web installer telling a user where "the Devices map" is, neither of them a dependency on the class.
 The textbook measure is code references: the identifiers a C++ or JavaScript file uses, with comments and string literals stripped first (the clang tokenizer `check_clang_query.py` already drives for C++, a tokenizer for JavaScript). `spread_rows` in [check_code.py](moondeck/check/check_code.py) counts those, and the committed `name spread` count is recorded again at the lower figure the change measures, a drop the commit names.
+
+### Bench sets for played MIDI, Slakh2100 and ENST-Drums
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209902)
+
+What: more labeled sets for `bench_notes.py` and `bench_drums.py`. (1) Played MIDI as labels: a capture script records a MIDI instrument's notes and its sound together on `MidiService`, and `bench_drums.py` learns General MIDI's drum notes (36 kick, 38 snare, 41 to 50 toms, 42 and 46 hi-hat, 49 and 51 cymbals); a MIDI keyboard plays keys and drum pads into the desktop, or over speakers into a board's microphone. (2) A Slakh2100 reader for the mix, the drum track and the bass, BabySlakh's 20 songs first and the full set, about 100 GB, when their numbers hold. (3) ENST-Drums, whose license is requested by email.
+Why: the current sets are studio or pickup recordings, and the tuned values should sweep to their best score on every set at once.
+What it takes: readers in the two scripts, the licenses, and a sweep over the compile-time constants.
+
+### mm_tempo stamps a frame with its block's start
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210076)
+
+What: `mm_tempo` stamps each frame with its block's start, 21 ms before the frame exists, so every bench harness reads latencies early, the drums' at -4 to -12 ms.
+Why: the bench numbers compare latencies against labels, and the offset shifts all of them. The behavior is described in `test/bench/bench_tempo.cpp`'s "The clock".
+What it takes: raise it with Anjin, whose binary it is, and stamp the end of the block.
+
+### Raise the host ccache hit rate
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295755)
+
+What: tune ccache's sloppiness and direct-mode settings for the host build. Why: the host hit rate measured 32.8% on 2026-11-25, so branch switches and repeated gate runs recompile what a cache could serve. What it takes: try the settings one at a time, measure the hit rate with ccache -s over a branch switch and a repeated gate run, keep what raises it. Risk: a wrong sloppiness setting serves a stale object, so each setting needs a reason in build-system.md.
+
+### extern template for the heavy templates
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295792)
+
+What: declare extern template for ModuleFactory and ScratchBuffer instantiations and instantiate each once in a .cpp. Why: each includer instantiates them again, which costs compile time in every file that includes them. What it takes: list the instantiations in use, add one declaration and one definition per instantiation, measure the host rebuild before and after. Cost: a declaration per instantiation to keep in step.
+
+### The compile launcher in a compiled language
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295860)
+
+What: replace diag_launcher.py, which wraps every host compile to keep its warnings for the code check, with a launcher in a compiled language, or read the warnings from the build log. Why: every object starts a Python interpreter, about 300 per core-edit rebuild. What it takes: a small launcher (or a log parser) that gives check_code the same warning input, and a comparison of the warning counts before and after.
+
+### Test fixtures include less
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295908)
+
+What: fixtures that include GridLayout.h and Layouts.h use a forward declaration where it serves (include-what-you-use). Why: 239 of 350 test objects reach MoonModule.h through their fixtures, so every fixture include widens the rebuild after an edit. What it takes: list the fixtures with the widest includes, replace each include with a forward declaration where the fixture needs only the name, check the one-header interface checks still pass, measure the rebuild count per header edit.
+
+### One warning set on every host
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295963)
+
+What: the same compiler warning flags on macOS, Linux and Android. Why: the macOS build lacks -Wshadow, which the Linux and Android builds turn into errors, so the local gates passed a shadowed name that CI then rejected (2026-11-25). What it takes: turn -Wshadow on for the macOS host build, fix what it then finds, and check that the three hosts' flag lists match in CMakeLists.txt.
+
+### Shape the test suite for build and run time
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319296012)
+
+What: shorten the suite's build and run time while every behavior stays pinned. Why: the tests are about 60% of the host build's objects and carry most of the header fan-out; the run's time sits in a few slow cases. What it takes, each measured: slow cases found with doctest --duration (sleeps become polls on a condition); heavy test objects found from a compile trace (leaner fixture includes); cases whose covered lines are a subset of another's found with llvm-cov per case and merged, keeping the description; per-pixel CHECK loops in audit cases replaced by a mismatch count and one CHECK(mismatches == 0).

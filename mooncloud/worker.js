@@ -398,7 +398,7 @@ async function handleStats(env, url) {
     filtered,
     versions: await counts("version"),
     chips: await counts("chip"),
-    // Which build each board runs, and the silicon that decides it (docs/work/Plan-20261121).
+    // Which build each board runs, and the silicon that decides it (docs/reference/hardware/firmware-variants.md).
     firmwares: await counts("firmware"),
     revisions: await counts("chipRevision"),
     packages: await counts("chipPackage"),

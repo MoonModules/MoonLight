@@ -1,4 +1,4 @@
-// The STRUCTURAL CHECKER over emitted machine code (Plan-20260813, verification item 2).
+// The STRUCTURAL CHECKER over emitted machine code.
 //
 // A golden-bytes test says "the emission changed"; it never says "the emission is WRONG". These
 // three checks say the second thing, and each one is a defect class that reached a bench:

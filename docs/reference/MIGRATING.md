@@ -435,7 +435,7 @@ A state document applied twice changes nothing, so a client that wants an idempo
 
 ### A desk on its own device is a MIDI bridge over RTP-MIDI
 
-**Action: *re-set a control*, on a MIDI-OSC bridge device: remove its OSC service and turn its MIDI service's `share` on. On the device the desk drives, set the MIDI service's `source` to network and `host` to the bridge's name or address.**
+**Action: *re-set a control*, on a MIDI-OSC bridge device: remove its OSC service and turn its MIDI service's `share` on. On the device the desk drives, set the MIDI service's `source` to network and `participant` to the bridge's name or address.**
 
 The bridge now carries the desk over RTP-MIDI, so the device it drives treats the desk as its own, and the OSC `follow` setting is gone.
 A device that listened to another with `follow` on needs nothing: a leader sends its preset pad states on `/mm/padstate/N`, an address apart from the press.

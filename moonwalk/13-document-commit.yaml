@@ -137,6 +137,12 @@ processes:
         when: { run: { script: moondeck/report/project_mirror.py, args: "--check" } }
         detail: |
           The cards are the backlog's home and `docs/work/backlog_mirror/` their generated copy, so the repository versions every card edit. A FAIL means a card changed since the last render or a file was edited by hand: run the script without `--check` and stage what it writes. Without a network it skips.
+      - id: plans
+        say: Check the plan index matches the plans.
+        given: [{ changed: ["docs/work/Plan-*.md", docs/work/index.md, moondeck/report/plan_index.py] }]
+        when: { run: { script: moondeck/report/plan_index.py, args: "--check" } }
+        detail: |
+          A plan's progress is its step markers and `docs/work/index.md` their generated count, so a plan keeps its name while its steps change. A FAIL means a plan's steps changed since the last render or the index was edited by hand: run the script without `--check` and stage what it writes.
       - id: taglines
         ci: true
         say: Check the front pages agree on the platforms.

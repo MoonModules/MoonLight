@@ -7,6 +7,7 @@
 #include "doctest.h"
 #include "core/util/JsonSink.h"
 #include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
 
 #include <cstring>
 #include <string>
@@ -47,4 +48,38 @@ TEST_CASE("a document larger than one doubling still serializes whole") {
     REQUIRE(sink.size() == expect.size());
     CHECK(std::memcmp(sink.data(), expect.data(), expect.size()) == 0);
     CHECK(sink.data()[sink.size()] == '\0');   // still a valid C string at the far end
+}
+
+TEST_CASE("a growth the allocator refuses leaves the document as it was, flags overflow until clear, and then writes again") {
+    struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } guard;
+    mm::JsonSink sink;
+    sink.append("{\"a\":1");
+    const size_t before = sink.size();
+
+    mm::platform::setTestAllocRefusedFrom(1024);                  // the first block of 2 KiB is refused, so the next growth fails
+    const std::string run(4096, 'x');
+    sink.append(run.c_str());
+    CHECK(sink.overflowed());
+    CHECK(sink.size() == before);                                 // none of the refused run is appended
+
+    mm::platform::setTestAllocRefusedFrom(0);
+    sink.append("}");
+    CHECK(sink.size() == before);                                 // the flag sticks: a later small append is ignored
+    CHECK(sink.overflowed());
+
+    sink.clear();
+    CHECK_FALSE(sink.overflowed());
+    sink.append("{}");
+    CHECK(std::strcmp(sink.data(), "{}") == 0);                   // clear recovers
+}
+
+TEST_CASE("a formatted fragment too long for the stack buffer flags overflow when its block is refused") {
+    struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } guard;
+    mm::JsonSink sink;
+    sink.append("[");
+    mm::platform::setTestAllocRefusedFrom(1);                     // every allocation is refused
+    const std::string longArg(4096, 'y');
+    sink.appendf("%s", longArg.c_str());
+    CHECK(sink.overflowed());
+    CHECK(sink.size() == 1);
 }

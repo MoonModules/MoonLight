@@ -4648,7 +4648,7 @@
    "guide": [
     {
      "title": "The surface",
-     "text": "Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
+     "text": "Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives, since a double-click would also move the fader.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
     },
     {
      "title": "Presets",

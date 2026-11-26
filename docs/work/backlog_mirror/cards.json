@@ -170,6 +170,16 @@
   "number": null
  },
  {
+  "title": "An ESP32 render worker for layers, and two open questions",
+  "area": "Core",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210483",
+  "number": null
+ },
+ {
   "title": "An explicit `Custom` Ethernet preset is reseeded to a named one",
   "area": "Core",
   "module": "EthernetModule",
@@ -387,6 +397,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287077175",
+  "number": null
+ },
+ {
+  "title": "Seeing the network: more uses of a neighbor's MAC",
+  "area": "Core",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210656",
   "number": null
  },
  {
@@ -760,6 +780,36 @@
   "number": null
  },
  {
+  "title": "Raspberry Pi HUB75 outputs: mappings beyond Stripe and panel init",
+  "area": "Drivers",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210158",
+  "number": null
+ },
+ {
+  "title": "Raspberry Pi HUB75: more than 8 bits to outputs that take them",
+  "area": "Drivers",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210231",
+  "number": null
+ },
+ {
+  "title": "Raspberry Pi: the DPI video output as a DMA path to HUB75",
+  "area": "Drivers",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210316",
+  "number": null
+ },
+ {
   "title": "Record the drivers' output to FSEQ, with clock sync (2026-10-30)",
   "area": "Drivers",
   "module": "",
@@ -947,6 +997,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287081899",
+  "number": null
+ },
+ {
+  "title": "Audio: a light that walks the bass",
+  "area": "Effects",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209993",
   "number": null
  },
  {
@@ -1287,6 +1347,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083200",
+  "number": null
+ },
+ {
+  "title": "MoonLive run() refuses a call with no light buffer, silently",
+  "area": "MoonLive",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210760",
   "number": null
  },
  {
@@ -1820,6 +1890,16 @@
   "number": null
  },
  {
+  "title": "Bench sets for played MIDI, Slakh2100 and ENST-Drums",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209902",
+  "number": null
+ },
+ {
   "title": "British spellings and em-dashes predate the prose gate (319 files)",
   "area": "Process and docs",
   "module": "",
@@ -1887,6 +1967,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287129673",
+  "number": null
+ },
+ {
+  "title": "extern template for the heavy templates",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295792",
   "number": null
  },
  {
@@ -1960,6 +2050,16 @@
   "number": null
  },
  {
+  "title": "mm_tempo stamps a frame with its block's start",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210076",
+  "number": null
+ },
+ {
   "title": "MoonDeck doc-asset endpoint hardening",
   "area": "Process and docs",
   "module": "",
@@ -2010,6 +2110,16 @@
   "number": null
  },
  {
+  "title": "One warning set on every host",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295963",
+  "number": null
+ },
+ {
   "title": "Pin the preview cancel over loopback (test)",
   "area": "Process and docs",
   "module": "",
@@ -2037,6 +2147,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287087501",
+  "number": null
+ },
+ {
+  "title": "Raise the host ccache hit rate",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295755",
   "number": null
  },
  {
@@ -2070,6 +2190,16 @@
   "number": null
  },
  {
+  "title": "Shape the test suite for build and run time",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319296012",
+  "number": null
+ },
+ {
   "title": "sigrok/fx2lafw cross-check + MoonDeck LED driver test script",
   "area": "Process and docs",
   "module": "",
@@ -2077,6 +2207,26 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130440",
+  "number": null
+ },
+ {
+  "title": "Test fixtures include less",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295908",
+  "number": null
+ },
+ {
+  "title": "The compile launcher in a compiled language",
+  "area": "Process and docs",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319295860",
   "number": null
  },
  {
@@ -2180,6 +2330,26 @@
   "number": null
  },
  {
+  "title": "Audio demand: measure the card's cpu on an S3 and a classic ESP32, and the capture with a grabber",
+  "area": "Services",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210412",
+  "number": null
+ },
+ {
+  "title": "Audio: drums in a mix, the snare and the kick against the band",
+  "area": "Services",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209827",
+  "number": null
+ },
+ {
   "title": "IR RX live-reconfigure recovery (unconfirmed, park until it recurs)",
   "area": "Services",
   "module": "InfraredService",
@@ -2187,6 +2357,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287130529",
+  "number": null
+ },
+ {
+  "title": "Migrate ESPixelStick, OpenMQTTGateway and Shelly's relay firmware from the map",
+  "area": "Services",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210573",
   "number": null
  },
  {

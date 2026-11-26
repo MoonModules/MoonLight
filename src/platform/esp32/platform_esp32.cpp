@@ -556,7 +556,7 @@ bool coprocessorConnect() {
     return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
 }
 void coprocessorShutdown() {
-    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort (Plan-20261121, step 2).
+    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort.
 }
 bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 #else

@@ -7,15 +7,15 @@
 #include <cstdint>
 #include <cstddef>
 
-/// The Teensy 4.1 backend: ARMv7E-M Thumb-2 for the Cortex-M7, written against the same named-instruction interface as the other backends.
-///
-/// Wide encodings throughout, with no IT blocks and no literal pools: a constant is a MOVW/MOVT pair and a conditional branch is a compare plus a wide branch.
+/// The Teensy 4.1 backend: ARMv7E-M Thumb-2 for the Cortex-M7, written against the same named-instruction interface as the other backends. Wide encodings throughout, with no IT blocks and no literal pools: a constant is a MOVW/MOVT pair and a conditional branch is a compare plus a wide branch.
 ///
 /// r0-r6, r8-r11 and lr hold values: every register a routine saving r4-r11 and lr may use, less r7, the Thumb frame pointer, and r12, the one scratch.
 ///
 /// The AAPCS passes the fifth argument, the control arena, on the stack. The prologue loads it into r4 once r4 is saved, and a script-to-script call pushes it the same way.
 ///
 /// A host call is MOVW/MOVT into r12, then BLX r12, since the code in OCRAM lies beyond BL's 16 MB reach of the built-ins. The C function pointer already carries the Thumb bit.
+///
+/// @attribution MicroPython
 
 namespace mm::moonlive {
 

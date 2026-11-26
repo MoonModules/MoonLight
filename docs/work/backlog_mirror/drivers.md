@@ -664,3 +664,27 @@ From the Streams plan, #215.
 - A check on the bench S3 matrix (.127), and on a Pi if the Pi outputs are included.
 
 An ESP32 has one HUB75 peripheral (LCD_CAM), so the gain there is one layout across several outputs, not two panels on one chip.
+
+### Raspberry Pi HUB75 outputs: mappings beyond Stripe and panel init
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210158)
+
+What: the Pi 5 PIO output and the Pi 3/4 GPIO output of the HUB75 driver take mappings beyond Stripe and the init sequences that panels such as the FM6126A need.
+Why: two ESP32-side cards cover "The shift-register driver init" and "Four-scan panels whose physical layout is not their logical one"; neither names the Pi outputs, and the shared encoder serves both.
+What it takes: the init and mapping code behind the shared encoder (`Hub75Encode.h`), reached from both Pi outputs, with a bench on a panel that needs it.
+
+### Raspberry Pi HUB75: more than 8 bits to outputs that take them
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210231)
+
+What: the color correction hands more than 8 bits per channel to a HUB75 output that can show them, where the Pi outputs take the 6-bit cap or 8 bits with dithering today.
+Why: the correction curve loses its low end at 8 bits, and the dithering's carry costs refresh time; the nearest card, "16 bits at the output: what remains", names no HUB75 output.
+What it takes: a wider handoff from the correction to the driver, the encoder's plane weights for more planes, and a refresh bench with the longer plane set.
+
+### Raspberry Pi: the DPI video output as a DMA path to HUB75
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210316)
+
+What: drive HUB75 panels from the Pi's DPI parallel video output, which clocks a frame out by DMA without CPU or PIO involvement.
+Why: it is a hardware path to the same signals the PIO and GPIO outputs make in software, with the frame's timing fixed by the display controller.
+What it takes: a study of the DPI timing against a HUB75 shift clock and latch, a pin mapping on the 40-pin header, and a plan before code.

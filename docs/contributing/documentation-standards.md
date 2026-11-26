@@ -134,6 +134,8 @@ Two scales below a page. **A module** has one reference card and one header (see
 
 **A plan is a working document, not testimony.** It may be edited or trimmed as it is built: whatever its PR or the docs already carry is duplication. A dated record of a past state, such as release notes or an inventory quoted from another project, stays as written.
 
+**A plan's name is its date and topic**, `Plan-<date> - <topic>.md`, and stays so while it is built. Its progress is its step markers, 🚧 in progress, 🧪 built with its test open, ✅ done, ⏳ not started, a dropped step (❌, ⏸) leaving the total; [plan_index](../../moondeck/MoonDeck.md#plan_index) counts them into `docs/work/index.md`. A plan is temporary, so only pages inside `docs/work/` link one.
+
 ## Writing
 
 - **A page is read start to finish by one reader**, a **user** or a **developer**. A user brings no coding and no hardware knowledge beyond plugging in a board; a developer brings C++, embedded and this codebase's shape. Where a page serves both, lead with the user and put the depth lower down.
@@ -172,12 +174,17 @@ One word per thing, so a reader never wonders whether two words mean two things.
 
 | word | what it is | example |
 |---|---|---|
+| **host** | the platform, the build and its code: MoonLight as a program on an operating system, the embedded term against the target | `src/platform/host/`, the `host-<os>-<arch>` firmware id |
+| **desktop** | a computer to a user, never the platform | the desktop app |
+| **receiver** | a device a service sends to, sACN's and Art-Net's term; a device's own address is `deviceIp()` and names go through a name resolver | the `receivers` list |
 | **device** | one unit running MoonLight: its board plus everything that makes it usable, such as an enclosure, power input, terminals and level shifters; it has a `deviceName` and a `deviceModel` | a QuinLED Dig-2-Go on a shelf, the StadBeest's legs (`MM-StadBeest`) |
 | **deviceModel** | the product a device is one of, which the catalog describes and the installer sets up | `QuinLED Dig-Next-2`, `LightCrafter 16`, `MIDI bridge` |
 | **board** | the bare PCB, as in on-board LED and on-board peripherals | the ESP32-S3 DevKit |
 | **firmware** | the compiled binary for one chip | `esp32s3-opi` |
 | **desk** | a hardware controller of faders, knobs and pads, which drives a device's control surface | the iCON QCon Pro G2 |
 | **installation** | several devices acting as one piece | the StadBeest: legs, two eyes and a MIDI bridge |
+
+A standard keeps its own word: `hostname` (RFC 1123), the HTTP `Host:` header, `localhost`, USB host, ESP-IDF's `SPI2_HOST`, ESP-Hosted. `native`, PlatformIO's and Zephyr's term, is not used, since on Android it means compiled code.
 
 A unit is a device even when it is one bare board: "the bridge device", "the device the desk drives".
 

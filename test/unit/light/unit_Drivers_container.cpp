@@ -312,16 +312,21 @@ TEST_CASE("the relay opens at brightness 0 and closes again when brightness retu
     mm::platform::clearTestGpioLevel();
 }
 
-// An unparseable relay list means no relays, the same as an empty one, so pins from the last valid list never stay asserted on GPIOs no control names.
-TEST_CASE("a typo in the relay list releases the relays it used to hold") {
+// Relays on GPIO 12 and 13, both closed: the start of the relay-list cases.
+static void holdRelays12And13(mm::Drivers& drivers) {
     mm::platform::clearTestGpioLevel();
-    mm::Drivers drivers;
     std::strcpy(drivers.relayPins, "12,13");
     drivers.on = true;
     drivers.brightness = 100;
     drivers.onControlChanged("relayPins");
     CHECK(mm::platform::gpioRead(12));
     CHECK(mm::platform::gpioRead(13));
+}
+
+// An unparseable relay list means no relays, the same as an empty one, so the pins of the last valid list open rather than stay asserted on GPIOs no control names.
+TEST_CASE("a typo in the relay list releases the relays it used to hold") {
+    mm::Drivers drivers;
+    holdRelays12And13(drivers);
 
     // Mid-edit the list is briefly nonsense, which is the normal way a user types one.
     std::strcpy(drivers.relayPins, "12,,x");
@@ -661,4 +666,18 @@ TEST_CASE("Drivers names each enabled output with its lights and moving heads, l
     layer.removeChild(&solid);
     hidden.removeChild(&onHidden);
     layouts.removeChild(&grid);
+}
+
+TEST_CASE("shrinking the relay list opens the pin that left it, and clearing the list opens the rest") {
+    mm::Drivers drivers;
+    holdRelays12And13(drivers);
+
+    std::strcpy(drivers.relayPins, "12");
+    drivers.onControlChanged("relayPins");
+    CHECK(mm::platform::gpioRead(12));
+    CHECK_FALSE(mm::platform::gpioRead(13));
+
+    drivers.relayPins[0] = '\0';
+    drivers.onControlChanged("relayPins");
+    CHECK_FALSE(mm::platform::gpioRead(12));
 }

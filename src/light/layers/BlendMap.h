@@ -32,6 +32,8 @@ namespace mm {
 ///
 /// A non-overwriting LUT, one folding several logical lights onto a single physical cell, routes through the additive accumulate path so overlaps sum with clamping rather than last-writer-wins.
 ///
+/// A layer blends only where it has lights, in every mode: one narrowed by a region modifier blends inside its region alone.
+///
 /// ## How a light finds its destination
 ///
 /// A dense-grid layer has no LUT, so its buffer blends one to one with the source index equal to the physical index and no lookup at all.

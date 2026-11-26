@@ -74,7 +74,7 @@ and an installation people can interact with has to sense them: that is stated i
 convenience, and an input peripheral is first-class alongside an output driver. The scope is still
 narrow on purpose: a lighting controller that senses its audience, not a home-automation platform.
 
-Beyond the sensors [the input mapping plan](../Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md) carries (PIR, distance, IMU, rotary encoder), the sensors worth having next:
+Beyond the sensors the input mapping plan carries (PIR, distance, IMU, rotary encoder), the sensors worth having next:
 
 - **Touch**: the classic ESP32's capacitive touch pins need no external part, so a conductive
   surface becomes an input. The Dig-2-Go's own button is on a touch-capable pin, though it reads
@@ -133,3 +133,27 @@ Kind: Feature · Platform: Android · [Card](https://github.com/users/MoonModule
 **Why.** At a party the phone is often the music source. Hearing whatever it plays lets its effects follow the music exactly, with no room noise, and the Audio card's audio sync then sends that analysis to every board on the network, so the phone drives a whole installation from the music it plays, as it already can from its microphone.
 
 **What.** The device's whole audio as the Audio card's input: the microphone, or Android's playback capture (`AudioPlaybackCaptureConfiguration`, Android 10 and later) of every app that plays. The app asks for the MediaProjection consent in Kotlin, hands the capture to the program, and the card offers the sources side by side. Android hears only apps that allow capture (most music apps do; some video apps do not), and asks for the consent again after each restart. No iOS equivalent.
+
+### Audio: drums in a mix, the snare and the kick against the band
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209827)
+
+What: score and build rules that tell a snare and a kick inside a full band mix, on MDB Drums' full mixes (`bench_drums.py --mix`). The snare's wire noise is 1 to 5 kHz noise a kick and a bass guitar do not make; a kick and a bass guitar differ in that a bass note rises at its pitch and holds, where a kick rises over 40 to 80 Hz at once and dies within 100 ms.
+Why: inside the band the shipped engine scores the kick at 48% F and the snare and toms at 50%; the target is the kick at 0.60 F and the snare at 0.55. A first rule (the low bands rising together) bought 2 to 4 points and cost the fast kick, and nothing found told a snare from the rest at a frame.
+What it takes: a rule is kept when it buys 3 points of F on the mix and costs the drums alone none; the work stops once a rule buys under 2. Related: the `drums` rule misses a kick repeated at speed (12% at 8 a second), because it measures the rise from the dip.
+
+### Audio demand: measure the card's cpu on an S3 and a classic ESP32, and the capture with a grabber
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210412)
+
+What: two hardware checks of the on-demand features never run. (1) The Audio card's `cpu` reading with an audio look and without, on an S3 and a classic ESP32 (the P4 reads 14 to 15% of a core with audio sync, paused without any reader). (2) The USB capture with a grabber on a board: the decode task's share of a core and the pictures' RAM with a Picture look and without.
+Why: the analysis costs 3.6% (P4), 7.2% (S3) and 8.2% (classic ESP32) of a core for the third octaves and 5 to 7 points more for the onsets, computed from the cost per block; the per-chip reading confirms them, and the capture was only tested on the host.
+What it takes: a board of each kind, the Audio card open, and a grabber.
+
+### Migrate ESPixelStick, OpenMQTTGateway and Shelly's relay firmware from the map
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210573)
+
+What: the Devices map moves WLED, ESPHome and Tasmota devices to MoonLight over the air; three more firmwares are each their own track: ESPixelStick (its EFU container), OpenMQTTGateway (it pulls the image through `/up?o=`), and Shelly Group's relay firmware (its own ZIP package, its table at 0x10000).
+Why: each is a common firmware on boards MoonLight runs on.
+What it takes: per firmware, a guard in the migration check and an upload path in the migration flow, then a bench on a device running it.

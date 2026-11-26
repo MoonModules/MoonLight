@@ -534,3 +534,19 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 **Out.** "Backup and Restore after updating" for renames; a table that grows forever.
 
 **Not.** A firmware-embedded copy of the table: it would duplicate migrate.js in flash and grow with it.
+
+### An ESP32 render worker for layers, and two open questions
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210483)
+
+What: let an ESP32, S3 or P4 render its layers on a worker beside the render loop, as a computer does through the worker pool (`WorkerPool.h`, `renderThreads` in `platform_config.h`, 1 on every ESP32 today).
+Why: the second core carries the drivers, the network and the audio task, so a worker there may compete with them; a measured step shows whether it has room. On a NanoPi R3S four layers at 640x360 went from 25.5 to 13.0 ms.
+What it takes: a measurement on a P4 and an S3 with the worker, and two decisions. Does the audio task share the second core well with a render worker, or does the worker yield while audio sync is busy? Does a layer with a live modifier keep its warp on the worker that rendered it, or does the composite pass take all warps?
+
+### Seeing the network: more uses of a neighbor's MAC
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210656)
+
+What: the Devices map reads an added address's MAC from ARP today. More uses, each its own decision: a MAC fallback for every row without one (any device this one has talked to); the vendor from the first three bytes against a small IEEE OUI table (Espressif, Signify, Raspberry Pi, Apple), which tells an ESP32 from a Pi or a bridge without asking it; Wake-on-LAN for a sleeping PC or Pi running MoonLight; an active scan that asks every address of the subnet as `arp-scan` does, on demand since it is a burst of broadcast; changes spotted (a MAC at a new address is a device that moved, a new MAC at a known address is another device that took it).
+Why: the map shows only what it hears, and the MAC names what a row is.
+What it takes: the ARP read already on the Discovery card, plus a table and the on-demand rules.

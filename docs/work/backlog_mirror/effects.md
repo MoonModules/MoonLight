@@ -210,3 +210,11 @@ Kind: Investigation · Platform: C3 · [Card](https://github.com/users/MoonModul
 MoonFlock, Flock and Raymarch compile out where the chip has no hardware FPU (`MM_HEAVY_COMPUTE`, from ESP-IDF's `SOC_CPU_HAS_FPU`, `src/platform/esp32/platform_config.h`), which among the targets is the ESP32-C3 alone. Software float on the C3 is roughly 10 to 30 times slower; an estimate puts MoonFlock (88 boids, cost by boids squared, not by layout) near 20 ms a frame and Raymarch (per pixel) near 25 fps at 16x16 and 100 fps at 8x8.
 
 Measure before deciding: build the C3 with the guard lifted, run each effect on a C3 (.115) at 8x8 and 16x16, and read the tick times. Then keep the compile-out, or include them everywhere and let the effect's fps say what a layout costs (degrade visibly), weighing a few KB of flash each.
+
+### Audio: a light that walks the bass
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209993)
+
+What: a light stepping along the floor to each bass note's pitch on its strike, scored on URMP's double bass and Slakh2100's bass tracks.
+Why: the low notes answer later than the high ones (a band's delay, 139 ms at the guitar's low E), so a walking bass waits for the low notes to answer sooner.
+What it takes: faster low-band notes in the bank, then an effect reading the bass note of the audio frame.

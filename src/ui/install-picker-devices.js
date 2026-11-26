@@ -121,7 +121,7 @@ function psramModeOfSize(mb) {
     return mb >= 8 ? "octal" : "quad";
 }
 
-// The firmware each chip family's facts name, one rule per family (docs/work/Plan-20261121, "What decides each choice").
+// The firmware each chip family's facts name, one rule per family (docs/reference/hardware/firmware-variants.md).
 const FIRMWARE_BY_FAMILY = {
     "ESP32": ({ revision, flashMB, psramMB }) => {
         if (revision !== null && revision < 300 && psramMB) return "esp32-rev1-lite";

@@ -96,7 +96,7 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 
 **A host benchmark ranks nothing for Xtensa.** Compile a probe with the target compiler (`-O2 -S`), count its instructions, branches, calls and stack traffic, then flash the one winner. An arity is a template parameter, never a runtime argument.
 
-**A function split out of a per-light loop stays a step, not a call.** Splitting one to satisfy the complex-function rule keeps it inline in the same header, and the target's `-O2 -S` shows no call left; where one is, `[[gnu::always_inline]]` on that helper.
+**A function split out of a per-light loop stays a step, not a call.** Splitting one to satisfy the complex-function rule keeps it inline where its caller is, in the same header or above the caller in the same `.cpp`, and the target's `-O2 -S` shows no call left; where one is, `__attribute__((always_inline))` on that helper.
 
 **A FreeRTOS wait is at least one tick.** `CONFIG_FREERTOS_HZ` is 1000, so 1 ms is the shortest blocking wait and a shorter one is a `platform::sleepUs` timer wake. A spinning loop starves the tasks below it on its core, so the render loop waits in `platform::pauseLoop` each pass.
 
@@ -105,12 +105,12 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 ### File shape: header-only vs `.h` + `.cpp`
 
 - **Light-domain modules: header-only.** Implementation inline in a single `.h`, so a contributor copies an effect, edits, and registers one line in `main.cpp` with no CMake question. A file that outgrows one concern extracts a helper header rather than splitting to `.h` + `.cpp`.
-- **The `MoonModule` base and `ControlList`: `.h` + `.cpp`, the per-frame members inline.** Nearly every file includes them, so a body edit in the header rebuilds the whole tree. The ticks, the child loop, the timing, the enabled and role checks, the accessors and the one-line virtual defaults stay in the header, where the render path inlines them; the lifecycle walks, the child mutators, the control rebuild and the binders live in `MoonModule.cpp` and `Control.cpp`.
+- **A widely included, often edited header: `.h` + `.cpp`, its per-frame members inline.** The `MoonModule` base, `ControlList` and `JsonSink` in core, `Layer`, `DriverBase` and `Drivers` in light: dozens to hundreds of files include each, so a body edit in the header would rebuild them all. The ticks, the accessors, the per-frame helpers and the one-line virtual defaults stay in the header, where the render path inlines them; the cold path with real logic (the lifecycle walks, the control rebuild, layout and mapping, the correction rebuild, `prepare`) lives in the `.cpp`, listed once in `src/core/sources.cmake` or `src/light/sources.cmake`.
 - **Core service modules: `.h` + `.cpp`.** A core module that bridges to the platform or carries real infrastructure splits interface from body. An implementation edit then recompiles one translation unit rather than every includer, which is 2-5x faster on the edits development makes. Small utilities that are almost all declarations stay header-only, and a template must.
 - **A catalog module includes ONLY its base header**, which is the module author's standard library. It carries the render context, the domain helpers, the lifecycle primitives and the standard headers bodies use. Bundling costs nothing, since unused declarations emit no code, so add a common header to the base rather than scatter it per file. A prelude, the way Rust's `std::prelude` is.
 
   **The only permitted second include** is a helper outside the domain's standard surface. A network packet format, a font table, the module factory, a platform primitive or a specialized core service. It carries a one-line comment so the exception is visibly deliberate. A header that two or more modules of one kind reach for is no exception: move it into the base header, which is how `<cstdint>`, `<array>` and `<algorithm>` got there. Where a base header has an include cycle, the header itself explains the shape it takes.
-- **Exceptions need a one-line comment at the top of the file naming the reason.** Without a stated reason the file is expected to follow the default for its category. When in doubt: light → header-only, core → `.h` + `.cpp`.
+- **An exception names its reason** in its class comment's `@technical` appendix, where its page shows it. A file with no stated reason follows the default for its category. When in doubt: light → header-only, core → `.h` + `.cpp`.
 
 ### Override-and-chain convention
 

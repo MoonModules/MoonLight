@@ -371,6 +371,20 @@ def hotpath_rows(out: str) -> list:
     return rows
 
 
+def _repo_relative(path: str) -> str:
+    """A path from the repository root with forward slashes, whatever the separators and the checkout's own location."""
+    p = Path(path.replace("\\", "/"))
+    return (p.relative_to(ROOT) if p.is_absolute() and p.is_relative_to(ROOT) else p).as_posix()
+
+
+def release_warnings(out: str) -> str:
+    """The saved warnings of the objects the release builds, leaving out the test objects: a test object compiles its own copy of an inline function, whose frame no device runs."""
+    import check_nonblocking as nb
+    build_dir = nb.check_clang_tidy._host_build_dir()
+    release = nb.saved_findings(build_dir, keep=lambda e: not _repo_relative(e["file"]).startswith("test/"))
+    return release if release is not None else out
+
+
 _FRAME_RE = re.compile(r"^(?P<path>[^:\n]+):(?P<line>\d+):\d+: warning: stack frame size \((?P<size>\d+)\) "
                        r"exceeds limit \(\d+\) in '(?P<fn>[^']*)' \[-Wframe-larger-than\]", re.M)
 
@@ -657,7 +671,7 @@ def main() -> int:
     hot = None
     if warnings is not None:
         hot = hotpath_rows(warnings)
-        rows += hot + stack_rows(warnings)
+        rows += hot + stack_rows(release_warnings(warnings))
 
     if partial:
         if args.files:

@@ -71,6 +71,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [mplayer-colorlight](http://www.mylifesucks.de/oss/mplayer-colorlight/) | 🧰 | The original reverse engineering of the ColorLight receiving cards. |
 | [MQTT](https://mqtt.org) | 📜 | The OASIS publish-subscribe protocol, 3.1.1, that home automation speaks. |
 | [mrcodetastic](https://github.com/mrcodetastic) | 🧑 | ESP32 HUB75 DMA. |
+| [MicroPython](https://github.com/micropython/micropython) | 🧰 | Its `asmthumb.c` (MIT) is the prior art for the Thumb-2 backend of [MoonLive](../explanation/architecture/moonlive.md) on the Teensy. |
 | [MycilaSafeBoot](https://github.com/mathieucarbou/MycilaSafeBoot) | 🧰 | Mathieu Carbou's safeboot, with Tasmota's the pattern behind [MoonBase](../explanation/architecture/moonbase.md). |
 | [NDI](https://en.wikipedia.org/wiki/Network_Device_Interface) | 📜 | NewTek and Vizrt's video-over-network protocol. |
 | [NEC](https://www.sbprojects.net/knowledge/ir/nec.php) | 📜 | The infrared protocol consumer remotes speak. |
@@ -101,7 +102,7 @@ The people, projects and published algorithms whose work shaped MoonLight. Almos
 | [Sutaburosu](https://github.com/sutaburosu) | 🧑 | The fixed-point canvas demos. |
 | [Sébastien Truchet / Truchet tiles](https://en.wikipedia.org/wiki/Truchet_tiles) File:Truchet_tiling.svg | 🧑🧮 | The tiling, revived by Cyril Smith in 1987. |
 | [Sören / LostHope](https://github.com/LostHope) | 🧑 | The MoonHub75 board, and the web installer. |
-| [Tasmota](https://github.com/arendst/Tasmota) | 🧰 | With MycilaSafeBoot, the safeboot pattern behind [MoonBase](../explanation/architecture/moonbase.md), our from-scratch minimal take on it. |
+| [Tasmota](https://github.com/arendst/Tasmota) | 🧰 | With MycilaSafeBoot, the safeboot pattern behind [MoonBase](../explanation/architecture/moonbase.md), our from-scratch minimal take on it. Its Partition Wizard, which moves a running device to a new layout over OTA, is the prior art for the [migration image](migrating-over-the-air.md), and its one generic image per chip, PSRAM used when found, is the model of [the firmware variants](hardware/firmware-variants.md#firmware-variants). |
 | [toggledbits](https://github.com/toggledbits) | 🧑 | Patrick Rigney: MatrixFireFast, the 2D fire the Fire effect adapts. |
 | [Transpose](https://en.wikipedia.org/wiki/Transpose) File:Matrix_transpose.gif | 🧮 | Rows becoming columns. |
 | [troyhacks](https://github.com/troyhacks) | 🧑 | Reworked the WLED-MM audio DSP, onto Espressif's [esp-dsp](https://github.com/espressif/esp-dsp) FFT and then onto third-octave filter banks, the idea AudioService's `FractionalOctaveBank` builds on, and WLED-MM's Art-Net, WLED effects, P4 tuning, and the P4's HDMI clock rule with its 720p timing. |

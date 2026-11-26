@@ -29,7 +29,7 @@ namespace mm {
 ///
 /// ## The surface
 ///
-/// Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives.
+/// Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives, since a double-click would also move the fader.
 ///
 /// From the second slot on, an unassigned slot follows the effect enabled last.
 ///
@@ -57,7 +57,7 @@ namespace mm {
 ///
 /// ## What a preset holds
 ///
-/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets. A save writes one container, so a look applies on any board and a driver preset, carrying pins, is specific.
+/// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets. The surface's assignments persist with Control and stay out of presets, since a pad re-mapping the desk mid-set surprises a performer. A save writes one container, so a look applies on any board and a driver preset, carrying pins, is specific.
 ///
 /// ## Why files
 ///

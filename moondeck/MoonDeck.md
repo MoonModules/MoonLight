@@ -154,6 +154,10 @@ uv run moondeck/check/bench_notes.py --show                            # the lat
 
 **What a score claims.** The sets are studio or pickup recordings, so a board's MEMS microphone in a room scores lower and line-in sits closer. The values it tunes are compile-time constants on the bank's 0..255 levels, the bank at 24 kHz on every board, so one tuning serves every chip and the microphone and the room stay each device's own. The harness is the guardrail every change to the note path passes, scored before and after, and the values are tuned again when the bank, the level path or the rate changes.
 
+#### Where the shipped engine scores
+
+The baseline a later change compares against (precision, recall, F): Strings' hand reaches 23 to 29% F on GuitarSet, 35 to 41% on URMP's violin and 15% on its cello. By the frame measure, Strings' hand lights a played note for 50% of the lit time and lights 64% of the played time on GuitarSet, 62% and 88% on URMP's violin; Keyboard's hand scores 24% and 56% on MAESTRO. Each step now buys 1 to 3 points: the errors left, flashes of two or three frames and long notes far from any played pitch, resist rules.
+
 ### bench_drums
 
 Run drum recordings whose hits are labeled through the shipped analysis on the host, and score each onset the frame carries against the drums it stands for: `onsetLow` the kick, `onsetMid` the snare and the toms, `onsetHigh` the hi-hat and the cymbals, `onset` every drum.
@@ -167,6 +171,10 @@ uv run moondeck/check/bench_drums.py                                            
 Without `--dir` it scores a generated drum walk, written once to `build/drums/generated/` from the rise profiles of MDB Drums' isolated hits: each drum alone, then kick and hi-hat together, then kick, snare and hi-hat at 4 to 20 hits a second, so DrumKit is judged by eye on a pattern that alternates its drums and the fastest rate each drum keeps apart, 90% of its hits lit, is a number. Its kick carries a beater click 19 dB under its body, as MDB Drums' kicks do.
 
 `mm_tempo --drums` prints each frame's four onsets; a frame whose field is above 0 is a hit, scored with mir_eval's onset measure, within 50 ms of a labeled hit. The set is [MDB Drums](https://github.com/CarlSouthall/MDBDrums) (CC BY-NC-SA 4.0), 23 tracks with every hit labeled by drum, the drums alone or the full mix; the data is only read, and runs and reports go to `build/drums/`. **The report** gives each field's labeled hits, the hits it found, precision, recall, F and latency, the median lag from a labeled hit to the frame that found it, then each track's F per field.
+
+#### Where the shipped engine scores on drums
+
+On MDB Drums alone and inside the band: `onset` 93 and 79% F; the kick 61% on a `drums` input and 48 to 49% in the band; the snare and toms 62% and 50%; the hi-hat and cymbals 74% and 67%. Signal-processing drum transcription in a mix reaches about 0.8 F on the kick and 0.6 on the snare in published comparisons (Gillet and Richard, 2008). The target in the band is the kick at 0.60 F and the snare at 0.55, a rule is kept when it buys 3 points of F on the mix and costs the drums alone none, and the work stops once a rule buys under 2.
 
 ### tempo_compare
 
@@ -669,7 +677,7 @@ The [test page](../docs/reference/tests.md#check_code) shows each rule with its 
 
 **Module type in the UI** is a registered type's name as a string literal in `src/ui`, one row per literal. The four root containers `main.cpp` pins are not findings. **Name spread** is a type named in more than 10 files beyond its own header, implementation and tests, one row on its header.
 
-**Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the host Release build. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there.
+**Large stack frame** is a firmware function whose frame the compiler measures over 512 bytes, from `-Wframe-larger-than=512` in the host Release build. Test objects are left out. **Raw allocation in light** is a buffer taken by hand in `src/light`: an array `new`, a malloc-family call or `platform::alloc`. The architecture asks for a `ScratchBuffer` member there.
 
 **Blocking call on the render path** is one row per site [check_nonblocking](#check_nonblocking) finds. It reads that script's saved findings after an incremental host build, so a full run takes seconds; `--module` and `--account` skip it. A host without Clang 20 skips this rule with a SKIP line and leaves `code.json` as it is.
 
@@ -723,6 +731,15 @@ Render the [GitHub Project](https://github.com/users/MoonModules/projects/5), th
 ```bash
 uv run moondeck/report/project_mirror.py           # render the board into docs/work/backlog_mirror/
 uv run moondeck/report/project_mirror.py --check   # the commit check: fail on a stale or hand-edited document
+```
+
+### plan_index
+
+Write `docs/work/index.md`, every plan with its top-level steps counted by their markers (🚧 in progress, 🧪 built with its test open, ✅ done, ⏳ not started; a dropped ❌ or ⏸ step leaves the total), so a plan's name stays its date and topic while its progress lives in its steps. A plan's steps are the first structure in its steps section that carries a marker: step headings, numbered items, phase lines or a step table's rows. `--check` only renders, and fails when the index differs from what the plans render; it is the commit step.
+
+```bash
+uv run moondeck/report/plan_index.py           # render docs/work/index.md from the plans
+uv run moondeck/report/plan_index.py --check   # the commit check: fail on a stale index
 ```
 
 ### discord_reader

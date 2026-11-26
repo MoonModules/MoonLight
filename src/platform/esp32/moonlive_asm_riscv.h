@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <cstddef>
 
-/// The ESP32-P4 backend, written against the same named-instruction interface as the other two.
+/// The RISC-V backend for the ESP32-P4 and the ESP32-C3 (RV32IMC only, running from SRAM), written against the same named-instruction interface as the other two.
 ///
 /// Fixed four-byte instructions and a standard call ABI make it the simplest of the three. Every register maps into the caller-saved set, so a call saves the live pool explicitly, and branch displacements are back-patched against bound labels.
 ///

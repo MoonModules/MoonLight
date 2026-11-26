@@ -23,11 +23,11 @@ The plan has two parts. **The steps** lead to supersync, numbered 1 to 16. **Bes
 
 Shipped: the [Discovery card](../moonmodules/core/devices.md#discovery), its map, growth and what memory refuses; the allocation rule in [moonmodule.md](../explanation/architecture/moonmodule.md#lifecycle-propagation-to-children).
 
-#### 2. This device's flows and services ✅ (OSC, MQTT and Hue on the P4, PanelCard's ColorLight service on the NanoPi, 2026-11-17)
+#### 2. This device's flows and services ✅
 
 Shipped: the map's edges, each module's own flows and services, on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
-#### 3. Peers' flows: the whole MoonLight map ✅ (bench 2026-11-19: a flow between two other devices on a third board's map, drawn broken when its receiver stopped)
+#### 3. Peers' flows: the whole MoonLight map ✅
 
 Shipped: the peers' maps merged, broken links and unreachable peers, on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
@@ -41,15 +41,15 @@ Shipped: the `outputs` of `/api/system` in [the REST API](../reference/openapi.y
 
 ### Act as a group
 
-#### 6. Device groups, shared by their members ✅ (bench 2026-11-19: a five-member group edited from a board, a member missing in MoonBase)
+#### 6. Device groups, shared by their members ✅
 
 Shipped: the [Device group card](../moonmodules/core/devices.md#devicegroup), and its replication in [mooncore.md](../explanation/architecture/mooncore.md#multi-device-runtime).
 
-#### 7. A group acts as one ✅ (bench 2026-11-19: five members, a change everywhere within 3 s, simultaneous changes converging, a restarted member catching up)
+#### 7. A group acts as one ✅
 
 Shipped: shared controls in [mooncore.md](../explanation/architecture/mooncore.md#multi-device-runtime) and on the [Device group card](../moonmodules/core/devices.md#devicegroup); a group's name in `receivers` in [How feedback works](../reference/control-surface.md#how-feedback-works).
 
-#### 8. Update a group ✅ (bench 2026-11-19: three members behind, updated in waves in two minutes)
+#### 8. Update a group ✅
 
 Shipped: Updating the members, the waves and the skipped, on the [Device group card](../moonmodules/core/devices.md#devicegroup); one node's update on the [Discovery card](../moonmodules/core/devices.md#discovery).
 
@@ -138,7 +138,7 @@ Shipped: Updating the members, the waves and the skipped, on the [Device group c
 
 - A gamepad or touch on one member becomes group state, stamped "apply at T" a little ahead, so every member applies it at the same step: the delay-based lockstep of networked games. Where the delay shows, the effect stays streamed.
 - **Pong across two boards**, a paddle on each and the ball crossing between them. Its attract mode re-rolls each paddle's aiming error per exchange; drawn as a hash of the exchange number, the rally is deterministic (levels 1 and 3), and a gamepad per board makes it level 6.
-- **Verified by:** Pong played with a gamepad on each of two boards, the bench's Xbox Series pad and 8BitDo Zero 2, each paired with the computer showing its board's page ([the gamepad plan](Plan-20261001%20-%20Gamepads%20and%20MIDI%20desks%20(2%20of%207).md) owns how a pad reaches a board); MoonInvaders from one board's gamepad across three.
+- **Verified by:** Pong played with a gamepad on each of two boards, the bench's Xbox Series pad and 8BitDo Zero 2, each paired with the computer showing its board's page (the gamepad plan owns how a pad reaches a board); MoonInvaders from one board's gamepad across three.
 
 ### Beyond the LAN
 
@@ -197,7 +197,7 @@ Asked by the product owner (2026-11-12), after the desktops.
 - **What the map offers.** A node's popup shows "Update MoonBase" and "Update WiFi coprocessor" beside the app's update, only when due, each pressed twice like the app's, posting to its route and watching `/api/system` until the peer reports it current. A board without TLS is sent to its own Firmware card, as for the app.
 - **Verified by:** a bench board with an older MoonBase and the P4 with an older coprocessor image, each brought current from another device's map.
 
-#### The map marks a device behind its channel ✅ (a bench board behind, on the host's map, 2026-11-17)
+#### The map marks a device behind its channel ✅
 
 Shipped: a node's mark and its popup's update on the [Discovery card](../moonmodules/core/devices.md#discovery); the channel in [Update MoonLight](../moonwalk.md#update-firmware); `moonbaseMismatch` and `coprocessorMismatch` in [the REST API](../reference/openapi.yaml).
 
@@ -217,8 +217,6 @@ Shipped: [Migrating over the air](../reference/migrating-over-the-air.md) and th
 #### ESPHome, Tasmota and others to MoonLight from the map ✅
 
 Shipped: [What can move](../reference/migrating-over-the-air.md#what-can-move), and each firmware's guards the map keeps in [security](../explanation/security.md#the-devices-map).
-
-- **Still open, each its own track:** ESPixelStick (its EFU container), OpenMQTTGateway (pulls the image through `/up?o=`), Shelly Group's relay firmware (its own ZIP package, its table at 0x10000).
 
 #### MoonBase's page installs through the shared picker ✅
 
@@ -274,16 +272,9 @@ WLED is the obvious partner; ESPHome and Tasmota run on far more devices in a ho
 - It needs a hardware test: mDNS queries were ended by a pool exhaustion on the ESP32, so the passive listen is a hypothesis until a board runs it.
 - **Verified by:** a Hue bridge nobody configured on the bench map.
 
-#### Every neighbor's MAC, by ARP ✅ (Windows run 2026-11-17: MM-Windows at .245 gave the Hue bridge at .143, an added address, its MAC 00:17:88:41:67:f0)
+#### Every neighbor's MAC, by ARP ✅
 
 Shipped: an added address's MAC from ARP on the [Discovery card](../moonmodules/core/devices.md#discovery), and ARP read from this device's own table in [security](../explanation/security.md#the-devices-map).
-
-- **More uses**, each its own decision:
-    - *A fallback for every row without a MAC*, not only added addresses: any device this one has talked to. Receiving a device's broadcasts alone does not always put it in the table.
-    - *The vendor*: a MAC's first three bytes name its maker in the IEEE OUI registry, Espressif, Signify (Hue), Raspberry Pi, Apple, so a small table tells an ESP32 from a Pi or a bridge without asking it.
-    - *Wake-on-LAN*, which needs the MAC: the map waking a sleeping PC or Pi that runs MoonLight.
-    - *An active scan*: ask for every address of the subnet and list what answers, silent devices included, as `arp-scan` does; a burst of broadcast, so on demand.
-    - *Changes spotted*: one MAC at a new address is a device that moved; a new MAC at a known address, another device that took it.
 
 #### A security and privacy check of the map ✅
 
@@ -322,12 +313,7 @@ The principles every step follows, the messages they send, and how an effect spr
 
 No new protocol (product owner, 2026-11-09): each kind of message already has its textbook one, and what is designed is the rules on top. The only new formats are documents: the summary and flows JSON, and the OSC addresses of group state.
 
-| Kind | Loss | Protocol |
-|--|--|--|
-| **Streams**: light, audio, video | acceptable, latest wins | Art-Net, DDP, E1.31, the MoonLight audio sync format, each its own |
-| **Group state**: preset, controls, clock, roles | repaired by the next send | OSC on the groups' one well-known multicast address: the definitions (step 6), the shared controls and looks (step 7) |
-| **Requests**: summary, flows, identify, firmware | must arrive | REST over TCP, every peer answering cross-origin (`Access-Control-Allow-Origin: *`) |
-| **Discovery** | acceptable | presence, ArtPoll, SSDP, mDNS |
+The four kinds of message, with the protocol each rides, are in [the multi-device runtime](../explanation/architecture/mooncore.md#multi-device-runtime).
 
 - **Audio sync stays its own packet.** It is a stream at ~42 packets a second, WLED-compatible in one format; carrying must-arrive state in it would tie that state to a lossy stream.
 - **State, not commands.** A group's state is published as absolute values ("preset X, apply at T"), on a change at once and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice changes nothing, so no acknowledgements are needed and a swarm costs one multicast send. Presence already works this way. REST stays for what is not state: an update, identify, reading a peer.
