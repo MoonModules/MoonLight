@@ -381,7 +381,7 @@
    "guide": [
     {
      "title": "How the light count is known",
-     "text": "The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count."
+     "text": "The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` and `addGap` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count."
     },
     {
      "title": "What a layout script is given",
