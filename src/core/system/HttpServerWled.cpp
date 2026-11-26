@@ -12,11 +12,13 @@
 ///
 /// The real version belongs on the MQTT update topic, where the question is whether MoonLight shipped a release.
 ///
-/// ## Why an Ethernet device sends no wifi object
+/// ## Why one info object serves every route
 ///
-/// The `wifi` block feeds HA's diagnostic sensors, and an Ethernet device has no AP, so `info.wifi` (optional in python-wled) is omitted.
+/// python-wled reads `/json` once, then polls `/json/si`, and merges each reply into the first, so `/json/si` needs every field `/json` carries: a reply that omits `fs` fails the update and HA marks the device unavailable.
 ///
-/// Omitting it makes HA create no WiFi sensors, as a real WLED on Ethernet does, instead of greyed-out zero rows.
+/// The WLED-Android app requires `leds`, `wifi`, `name` and `mac` in the same object, and real WLED always sends `wifi`.
+///
+/// One writer therefore emits the full `info` for `/json`, `/json/info`, `/json/si` and the WebSocket push, and an Ethernet device reports `wifi` with a zero signal.
 
 #include "core/system/HttpServerModule.h"
 
@@ -42,13 +44,8 @@ namespace mm {
 
 // WLED-compatibility `/json/info`: the field set the WLED apps and HA validate after `_wled._tcp` discovery, with `brand:"WLED"` to interoperate and `product:"MoonModules"` to say what this is.
 void HttpServerModule::serveWledInfo(platform::TcpConnection& conn) {
-    // Identity: the deviceName (from SystemModule), the live IP, the MAC.
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
-
-    // The WLED-Android app requires only `name`, `leds{}`, `wifi{}` and a non-empty `mac` (model/wledapi/Info.kt), else it drops the device silently, so these are the smallest shapes.
     JsonSink sink;
-    writeWledInfoBody(sink, name, mac);
+    writeWledInfoBody(sink);
     answerJson(conn, sink);
 }
 
@@ -90,26 +87,60 @@ void HttpServerModule::resolveWledIdentity(const char*& name, uint8_t mac[6], ui
     platform::localIPv4(ip);
 }
 
-// The WLED info object (no HTTP header), shared by /json/info and /json/si; the 💫 marker prefixes only the WLED-compat name HA reads, never the real deviceName.
+// The 💫 marker prefixes the WLED-compat name HA reads, and no other name.
 void HttpServerModule::writeWledName(JsonSink& sink, const char* name) {
     char prefixed[80];
     std::snprintf(prefixed, sizeof(prefixed), "\xF0\x9F\x92\xAB %s", name ? name : "");
     sink.writeJsonString(prefixed);
 }
 
-void HttpServerModule::writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]) {
-    sink.appendf("{\"name\":");
-    writeWledName(sink, name);
-    // The real light count and the wifi signal, so the WLED app card shows the true device shape; signal maps rssi to 0-100 as WLED does.
-    const unsigned ledCount = lightSummary().lightCount;
+// The WLED info object (no HTTP header), shared by /json, /json/info, /json/si and the WebSocket push. @xref{why-one-info-object-serves-every-route} @xref{why-the-wled-shim-reports-a-sentinel-version}
+void HttpServerModule::writeWledInfoBody(JsonSink& sink) {
+    const char* name; uint8_t mac[6]; uint8_t ip[4];
+    resolveWledIdentity(name, mac, ip);
     const int rssi = platform::wifiStaRssi();
+    uint8_t bssid[6] = {};
+    platform::wifiStaBssid(bssid);
     int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
     if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
+    // The real pipeline shape and render rate.
+    const LightSummary& ls = lightSummary();
+    const LightOutput* out = LightOutput::active();
+    const unsigned renderFps = scheduler_ ? scheduler_->fps() : 0;
+    const char* rgbw = (ls.channelsPerLight >= 4) ? "true" : "false";
+    sink.appendf("{\"ver\":\"99.0.0\",\"vid\":2410150,\"name\":");
+    writeWledName(sink, name);
+    // lightCount is a uint32_t, which is unsigned long on the boards and so needs the cast for %u.
     sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
-                 "\"leds\":{\"count\":%u},\"wifi\":{\"rssi\":%d,\"signal\":%d},"
-                 "\"brand\":\"WLED\",\"product\":\"MoonModules\"}",
+                 "\"ip\":\"%u.%u.%u.%u\",\"arch\":\"esp32\","
+                 "\"brand\":\"WLED\",\"product\":\"MoonModules\",\"release\":\"MoonModules\","
+                 // lc is a capability code: 1 (RGB_COLOR) gives HA a color picker, and a LED count would drop the light entity's color modes.
+                 "\"leds\":{\"count\":%u,\"fps\":%u,\"rgbw\":%s,\"wv\":false,\"cct\":false,"
+                 "\"maxpwr\":0,\"maxseg\":1,\"pwr\":0,\"lc\":1},",
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-                 ledCount, rssi, signal);
+                 ip[0], ip[1], ip[2], ip[3],
+                 static_cast<unsigned>(ls.lightCount), renderFps, rgbw);
+    sink.appendf("\"wifi\":{\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
+                 "\"rssi\":%d,\"channel\":%d,\"signal\":%d},",
+                 bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
+                 rssi, platform::wifiStaChannel(), signal);
+    // pmt is the presets-modified time HA uses to re-fetch /presets.json, stamped by ControlModule on every preset change, with 1 as the no-ControlModule fallback.
+    unsigned pmt = 1;
+    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control")))
+        pmt = static_cast<unsigned>(control->presetsRevision());   // >= 1 once setup's rescan ran
+    if (pmt == 0) pmt = 1;   // python-wled treats 0 as "no presets support"
+    sink.appendf("\"fs\":{\"t\":256,\"u\":32,\"pmt\":%u},"
+                 // uptime + pmt drive python-wled's presets change-detect: both non-zero and stable stop HA refetching /presets.json on every state update.
+                 "\"freeheap\":%u,\"uptime\":%u,\"udpport\":21324,\"live\":false,"
+                 // ws=-1 tells python-wled WebSocket updates are unsupported, so HA polls over HTTP instead of opening /ws, whose MoonLight-native frames flood its log with `MissingField: filesystem`.
+                 "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"
+                 // palcount is the real count, built-ins plus the scripted tail, matching palettes[] below; fxcount stays 1 and cpal/umpal are 0.
+                 "\"fxcount\":1,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
+                 // Non-zero or HA rejects the device: the host's freeHeap() reports 0, so a nominal figure stands in.
+                 pmt,
+                 static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
+                 static_cast<unsigned>(platform::millis() / 1000u),
+                 static_cast<unsigned>(out ? out->paletteCount() : 0));
 }
 
 // The WLED state object: `on`+`bri` mirror Drivers, and `seg[0].col[0]` is the active palette's full-value color, stable across consumers and never double-dimmed with HA's `state.bri × seg.bri`.
@@ -136,7 +167,7 @@ void HttpServerModule::writeWledStateBody(JsonSink& sink) {
     sink.appendf("{\"on\":%s,\"bri\":%u,\"transition\":7,\"ps\":%d,\"pl\":-1,"
                  "\"nl\":{},\"udpn\":{},\"lor\":0,\"mainseg\":0,"
                  // seg[0].bri = 255 so HA's segment.bri × state.bri / 255 shows the master value; fx=0 ("Solid") pairs with pal as python-wled expects, else the light entity stays unavailable.
-                 "\"seg\":[{\"id\":0,\"on\":%s,\"bri\":255,\"fx\":0,\"pal\":%u,\"col\":[[%u,%u,%u]]}]}",
+                 "\"seg\":[{\"id\":0,\"on\":%s,\"bri\":255,\"lc\":1,\"fx\":0,\"pal\":%u,\"col\":[[%u,%u,%u]]}]}",
                  onStr, bri, currentPs, onStr, pal, pc.r, pc.g, pc.b);
 }
 
@@ -146,65 +177,15 @@ void HttpServerModule::serveWledState(platform::TcpConnection& conn) {
     answerJson(conn, sink);
 }
 
-// /json: the full blob HA's python-wled fetches, requiring `info.fs`, `state.nl`, `state.udpn`, `state.lor` and `ver` >= 0.14.0; separate from /json/info and /json/state, which stay the Android-validated minimum.
+// /json: the full blob HA's python-wled fetches once, then polls /json/si, so state and info come from the writers /json/si shares.
 void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
-    const char* name; uint8_t mac[6]; uint8_t ip[4];
-    resolveWledIdentity(name, mac, ip);
-
     JsonSink sink;
-    // state: reuse writeWledStateBody under "state" so one writer decides which seg[0] fields HA reads.
     sink.appendf("{\"state\":");
     writeWledStateBody(sink);
-    // `ver` is a sentinel and an Ethernet device omits `wifi` entirely. @xref{why-the-wled-shim-reports-a-sentinel-version} @xref{why-an-ethernet-device-sends-no-wifi-object}
-    const bool onEth = platform::ethConnected();
-    const int rssi = platform::wifiStaRssi();
-    uint8_t bssid[6] = {};
-    platform::wifiStaBssid(bssid);
-    const int channel = platform::wifiStaChannel();
-    int signal = (rssi == 0) ? 0 : (2 * (rssi + 100));
-    if (signal < 0) signal = 0; else if (signal > 100) signal = 100;
-    // The real pipeline shape and render rate.
-    const LightSummary& ls = lightSummary();
-    const LightOutput* out = LightOutput::active();
-    const unsigned ledCount = ls.lightCount;
-    const unsigned renderFps = scheduler_ ? scheduler_->fps() : 0;
-    const char* rgbw = (ls.channelsPerLight >= 4) ? "true" : "false";
-    sink.appendf(",\"info\":{\"ver\":\"99.0.0\",\"vid\":2410150,\"name\":");
-    writeWledName(sink, name);
-    sink.appendf(",\"mac\":\"%02x%02x%02x%02x%02x%02x\","
-                 "\"ip\":\"%u.%u.%u.%u\",\"arch\":\"esp32\","
-                 "\"brand\":\"WLED\",\"product\":\"MoonModules\",\"release\":\"MoonModules\","
-                 // lc and seglc are capability codes, not counts: 1 (RGB_COLOR) gives HA a brightness slider and color picker, and a LED count would leave the light entity without color modes.
-                 "\"leds\":{\"count\":%u,\"fps\":%u,\"rgbw\":%s,\"wv\":false,\"cct\":false,"
-                 "\"maxpwr\":0,\"maxseg\":1,\"pwr\":0,\"lc\":1,\"seglc\":[1]},",
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
-                 ip[0], ip[1], ip[2], ip[3],
-                 ledCount, renderFps, rgbw);
-    // wifi: only for a Wi-Fi device (omitted on Ethernet; see the comment above the getters).
-    if (!onEth) {
-        sink.appendf("\"wifi\":{\"bssid\":\"%02x:%02x:%02x:%02x:%02x:%02x\","
-                     "\"rssi\":%d,\"channel\":%d,\"signal\":%d},",
-                     bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5],
-                     rssi, channel, signal);
-    }
-    // pmt is the presets-modified time HA uses to re-fetch /presets.json, stamped by ControlModule on every preset change, with 1 as the no-ControlModule fallback.
-    unsigned pmt = 1;
-    if (auto* control = static_cast<ControlModule*>(findModuleByName("Control")))
-        pmt = static_cast<unsigned>(control->presetsRevision());   // >= 1 once setup's rescan ran
-    if (pmt == 0) pmt = 1;   // python-wled treats 0 as "no presets support"
-    sink.appendf("\"fs\":{\"t\":256,\"u\":32,\"pmt\":%u},"
-                 // uptime + pmt drive python-wled's presets change-detect: both non-zero and stable stop HA refetching /presets.json on every state update.
-                 "\"freeheap\":%u,\"uptime\":%u,\"udpport\":21324,\"live\":false,"
-                 // ws=-1 tells python-wled WebSocket updates are unsupported, so HA polls over HTTP instead of opening /ws, whose MoonLight-native frames flood its log with `MissingField: filesystem`.
-                 "\"lm\":\"\",\"lip\":\"\",\"ws\":-1,"
-                 // palcount is the real count, built-ins plus the scripted tail, matching palettes[] below; fxcount stays 1 and cpal/umpal are 0.
-                 "\"fxcount\":1,\"palcount\":%u,\"cpalcount\":0,\"umpalcount\":0,\"str\":false}",
-                 // Non-zero or HA rejects the device: the host's freeHeap() reports 0, so a nominal figure stands in.
-                 pmt,
-                 static_cast<unsigned>(platform::freeHeap() ? platform::freeHeap() : 32768u),
-                 static_cast<unsigned>(platform::millis() / 1000u),
-                 static_cast<unsigned>(out ? out->paletteCount() : 0));
+    sink.appendf(",\"info\":");
+    writeWledInfoBody(sink);
     // effects stays one real entry ("Solid") since this shim drives a single Layer; palettes is the real list, indexed to match seg[0].pal and the Drivers `palette` control.
+    const LightOutput* out = LightOutput::active();
     sink.appendf(",\"effects\":[\"Solid\"],\"palettes\":[");
     if (out) out->writePaletteNames(sink);
     sink.appendf("]}");
@@ -213,12 +194,10 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
 
 // The combined {state, info} object, which /json/si answers and the WebSocket pushes.
 void HttpServerModule::writeWledStateInfo(JsonSink& sink) {
-    const char* name; uint8_t mac[6];
-    resolveWledIdentity(name, mac, nullptr);
     sink.appendf("{\"state\":");
     writeWledStateBody(sink);
     sink.appendf(",\"info\":");
-    writeWledInfoBody(sink, name, mac);
+    writeWledInfoBody(sink);
     sink.appendf("}");
 }
 
