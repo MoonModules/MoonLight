@@ -607,6 +607,22 @@ paths:
                   info: { $ref: "#/components/schemas/WledInfo" }
                   effects: { type: array, items: { type: string } }
                   palettes: { type: array, items: { type: string } }
+    post:
+      tags: [WLED compatibility]
+      operationId: postWledState
+      summary: Applies a WLED state document, the same one `/json/state` takes.
+      description: Answers `{"success":true}`, or the whole device object when the body sets `"v":true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WledStateRequest" }
+      responses:
+        "200":
+          description: The success object, or the device object for `"v":true`.
+          content:
+            application/json:
+              schema: { type: object }
 
   /json/info:
     get:
@@ -636,18 +652,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              properties:
-                "on": { oneOf: [{ type: boolean }, { const: t }], description: Master power, or "t" to toggle it. }
-                bri: { type: integer, minimum: 0, maximum: 255, description: Brightness. }
-                ps: { type: integer, description: A preset slot as /presets.json numbers it. }
-                seg:
-                  description: One segment object or an array of them. An array element without `id` addresses the layer at its index, a lone object the first layer.
-                  oneOf:
-                    - { $ref: "#/components/schemas/WledSegment" }
-                    - type: array
-                      items: { $ref: "#/components/schemas/WledSegment" }
+            schema: { $ref: "#/components/schemas/WledStateRequest" }
       responses:
         "200": { $ref: "#/components/responses/WledState" }
 
@@ -714,6 +719,28 @@ paths:
       summary: The short form of `/json/fxdata`.
       responses:
         "200": { $ref: "#/components/responses/WledNames" }
+  /win:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledWin
+      summary: WLED's older HTTP API, with the keys in the query.
+      description: "`T` sets power (0 off, 1 on, 2 toggle), `A` brightness and `PL` a preset slot. `SS` selects the layer the remaining keys address, the first by default: `FX` the effect, `SX`, `IX`, `X1`, `X2` and `X3` its sliders, `M1` to `M3` its options, `FP` the palette, `SB` the layer's opacity, `CL` a color in hex and `R`, `G` and `B` its channels. A value that does not start with a digit is ignored."
+      responses:
+        "200": { $ref: "#/components/responses/WledState" }
+
+  /win&{keys}:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledWinInPath
+      summary: The same API with the keys after `&` in the path, as WLED's older clients send them.
+      parameters:
+        - name: keys
+          in: path
+          required: true
+          description: "`A=128&T=1`, the keys `/win` takes."
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/WledState" }
 
   /presets.json:
     get:
@@ -968,6 +995,21 @@ components:
         seg:
           type: array
           items: { $ref: "#/components/schemas/WledSegment" }
+      additionalProperties: true
+    WledStateRequest:
+      type: object
+      description: The WLED state a client sends. Every field is optional and an unknown one is ignored. A segment is a layer.
+      properties:
+        "on": { oneOf: [{ type: boolean }, { const: t }], description: Master power, or "t" to toggle it. }
+        bri: { type: integer, minimum: 0, maximum: 255, description: Brightness. }
+        ps: { type: integer, description: A preset slot as /presets.json numbers it. }
+        v: { type: boolean, description: On `/json`, answer the whole device object. }
+        seg:
+          description: One segment object or an array of them. An array element without `id` addresses the layer at its index, a lone object the first layer.
+          oneOf:
+            - { $ref: "#/components/schemas/WledSegment" }
+            - type: array
+              items: { $ref: "#/components/schemas/WledSegment" }
       additionalProperties: true
     WledSegment:
       type: object

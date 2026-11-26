@@ -157,6 +157,8 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// A body is read as JSON, and each key of a segment writes the control it reads: `on` and `bri` the layer, `fx` the layer's first effect, `sx` to `o3` that effect's controls, held to each control's range. A write to a segment past the last layer is ignored.
 ///
+/// One parser reads the body of `POST /json`, `POST /json/state` and the `/ws` frame. `GET /win` writes its query as that body, so every route means the same thing by a field.
+///
 /// `pal` and `col` are the one palette on Drivers, the same on every segment. A layer has no start, stop, grouping, spacing or offset, so `start` and `stop` span every light. A device with no layer reports one stand-in segment, which keeps Home Assistant's light available.
 ///
 /// ## Reading an uplink frame, and taking the lease
@@ -895,6 +897,10 @@ private:
     void serveWledEffects(platform::TcpConnection& conn);      ///< /json/effects and /json/eff: the effect names, in `fx` order
     void serveWledPalettes(platform::TcpConnection& conn);     ///< /json/palettes and /json/pal: the palette names, in `pal` order
     void serveWledEffectData(platform::TcpConnection& conn);   ///< /json/fxdata and /json/fxda: what each effect's sliders are called
+    /// `POST /json`: apply the body, then answer `{"success":true}`, or the whole device object when the body asks for `"v":true`.
+    void handleWledJson(platform::TcpConnection& conn, const char* body);
+    /// `GET /win`: apply the query's keys (`A`, `T`, `PL`, `FX`, `SX`, `IX`, `X1` to `X3`, `M1` to `M3`, `FP`, `R`, `G`, `B`, `CL`, `SB`, `SS`) as the JSON body would, and answer the state.
+    void handleWledWin(platform::TcpConnection& conn, const char* args);
     /// Apply the look preset in WLED slot `slot`, counted from 1.
     void applyWledPreset(int slot);
     /// Read every client's uplink: preview requests on `/wsp`, and on `/ws` control writes, subscriptions, resync requests, Ping, Close and the WLED app's frame.

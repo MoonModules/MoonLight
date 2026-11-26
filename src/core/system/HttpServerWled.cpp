@@ -24,8 +24,10 @@
 
 #include "core/module/Control.h"         // the controls a WLED slider stands for
 #include "core/module/Scheduler.h"
+#include "core/util/HttpHead.h"          // queryValue: the /win query's keys
 #include "core/util/JsonUtil.h"
 #include "core/util/ModuleFactory.h"     // the effect types `fx` indexes
+#include "core/util/parse.h"             // parseIntStr: the /win query's numbers
 #include "core/util/JsonSink.h"
 #include "core/util/format.h"            // formatTo: nonblocking formatting into a fixed buffer
 #include "core/system/ControlModule.h"   // look presets on /presets.json (HA WLED integration)
@@ -37,6 +39,7 @@
 #include "platform/platform_net.h"   // TcpConnection, localIPv4, wifiStaRssi
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
@@ -391,6 +394,51 @@ void writeEffectData(JsonSink& sink) {
     }
 }
 
+// A /win query is WLED's older HTTP API, `/win&A=128&FX=5`. It is turned into the JSON body the other routes take, so a key means the same on every route.
+constexpr int kNoValue = -1;
+
+// The number a /win key names, or kNoValue when it is absent, does not start with a digit, such as WLED's relative step `~10`, or runs past five digits.
+int queryNumber(const char* args, const char* key) {
+    const char* value = http::queryValue(args, key);
+    size_t digits = 0;
+    while (value && value[digits] >= '0' && value[digits] <= '9') digits++;
+    return digits == 0 || digits > 5 ? kNoValue : parseIntStr(value);
+}
+
+struct WinKey { const char* key; const char* field; };
+constexpr WinKey kWinDeviceKeys[] = {{"A", "bri"}, {"PL", "ps"}};
+constexpr WinKey kWinSegmentKeys[] = {{"SB", "bri"}, {"FX", "fx"}, {"SX", "sx"}, {"IX", "ix"}, {"X1", "c1"}, {"X2", "c2"}, {"X3", "c3"},
+                                      {"M1", "o1"}, {"M2", "o2"}, {"M3", "o3"}, {"FP", "pal"}};
+
+// `,"field":number` for each key of `keys` the query names.
+template <size_t N>
+void appendWinKeys(JsonSink& sink, const char* args, const WinKey (&keys)[N]) {
+    for (const WinKey& k : keys) {
+        const int value = queryNumber(args, k.key);
+        if (value != kNoValue) sink.appendf(",\"%s\":%d", k.field, value);
+    }
+}
+
+// T is power: 0 off, 1 on, 2 toggle.
+void appendWinPower(JsonSink& sink, const char* args) {
+    static constexpr const char* kPower[] = {"false", "true", "\"t\""};
+    const int power = queryNumber(args, "T");
+    if (power >= 0 && power <= kToggle) sink.appendf(",\"on\":%s", kPower[power]);
+}
+
+int channelOr(int named, int current) { return named == kNoValue ? current : named; }
+
+// CL is the whole color in hex, and R, G and B each change one channel of the `current` color, as WLED's do. Only hex digits reach the body.
+void appendWinColor(JsonSink& sink, const char* args, const RGB& current) {
+    const char* hex = http::queryValue(args, "CL");
+    size_t digits = 0;
+    while (hex && std::isxdigit(static_cast<unsigned char>(hex[digits]))) digits++;
+    if (digits == 6 || digits == 8) { sink.appendf(",\"col\":[\"%.*s\"]", static_cast<int>(digits), hex); return; }
+    const int r = queryNumber(args, "R"), g = queryNumber(args, "G"), b = queryNumber(args, "B");
+    if (r == kNoValue && g == kNoValue && b == kNoValue) return;
+    sink.appendf(",\"col\":[[%d,%d,%d]]", channelOr(r, current.r), channelOr(g, current.g), channelOr(b, current.b));
+}
+
 }  // namespace
 
 
@@ -601,6 +649,29 @@ void HttpServerModule::serveWledEffectData(platform::TcpConnection& conn) {
     writeEffectData(sink);
     sink.append("]");
     answerJson(conn, sink);
+}
+
+// POST /json: the same apply, then WLED's own answer: `{"success":true}`, or the whole device object when the body carries `"v":true`.
+void HttpServerModule::handleWledJson(platform::TcpConnection& conn, const char* body) {
+    applyWledState(body);
+    if (mm::json::parseBool(body, "v")) serveWledDeviceJson(conn);
+    else sendResponse(conn, 200, "application/json", "{\"success\":true}");
+}
+
+// GET /win: `/win&A=128&FX=5` or `/win?A=128&FX=5`. The keys are written as the JSON body they stand for, and applied as one; SS names the layer the segment keys address, the first by default.
+void HttpServerModule::handleWledWin(platform::TcpConnection& conn, const char* args) {
+    const LightOutput* out = LightOutput::active();
+    const int layer = queryNumber(args, "SS");
+    JsonSink body;
+    body.append("{\"v\":false");
+    appendWinPower(body, args);
+    appendWinKeys(body, args, kWinDeviceKeys);
+    body.appendf(",\"seg\":[{\"id\":%d", layer == kNoValue ? 0 : layer);
+    appendWinKeys(body, args, kWinSegmentKeys);
+    appendWinColor(body, args, out ? out->paletteRgb(driversPalette(scheduler_)) : RGB{0, 0, 0});
+    body.append("}]}");
+    applyWledState(body.data());
+    serveWledState(conn);
 }
 
 // Build and push the WLED {state, info} object to every WS client, the same object /json/si answers.

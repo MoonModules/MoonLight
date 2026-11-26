@@ -563,7 +563,7 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
     char* body = headerEnd ? const_cast<char*>(headerEnd) + 4 : nullptr;
 
     // A WLED API client, Home Assistant or the WLED app, is traffic into this device the map draws.
-    if (std::strncmp(path, "/json", 5) == 0 || std::strcmp(path, "/win") == 0 || std::strcmp(path, "/presets.json") == 0) {
+    if (std::strncmp(path, "/json", 5) == 0 || std::strcmp(path, "/win") == 0 || std::strncmp(path, "/win&", 5) == 0 || std::strcmp(path, "/presets.json") == 0) {
         uint8_t peer[4] = {};
         const char* agent = http::findHeader(req, "User-Agent:");
         if (conn.peerIPv4(peer)) noteApiClient(peer, agent ? http::skipSpace(agent + 11) : nullptr);
@@ -611,6 +611,9 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         else if (std::strcmp(path, "/json/effects") == 0 || std::strcmp(path, "/json/eff") == 0) serveWledEffects(conn);
         else if (std::strcmp(path, "/json/palettes") == 0 || std::strcmp(path, "/json/pal") == 0) serveWledPalettes(conn);
         else if (std::strcmp(path, "/json/fxdata") == 0 || std::strcmp(path, "/json/fxda") == 0) serveWledEffectData(conn);
+        // WLED's older /win API takes its keys in the query, or after an `&` in the path.
+        else if (std::strcmp(path, "/win") == 0) handleWledWin(conn, queryStart ? queryStart + 1 : "");
+        else if (std::strncmp(path, "/win&", 5) == 0) handleWledWin(conn, path + 5);
         // A host running from a checkout serves the UI's own modules and imported sheets, which the embedded bundle holds inside app.js and style.css: those kinds only, so the folder's other files stay private.
         else if (isBundledName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");
@@ -658,6 +661,8 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
             if (!routeModuleName(path + 13, nameBuf)) sendResponse(conn, 400, "application/json", "{\"error\":\"module name too long\"}");
             else if (isMoveRoute) handleMoveModule(conn, nameBuf, body);
             else handleReplaceModule(conn, nameBuf, body);
+        } else if (std::strcmp(path, "/json") == 0 && body) {
+            handleWledJson(conn, body);
         } else if (std::strcmp(path, "/json/state") == 0 && body) {
             // WLED-compatibility: the native WLED app POSTs {on,bri,…} here; we map it onto the Drivers brightness control.
             handleWledState(conn, body);

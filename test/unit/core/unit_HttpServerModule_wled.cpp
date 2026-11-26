@@ -1,6 +1,6 @@
 /// @module HttpServerModule
 ///
-/// The WLED API a MoonLight device answers, over loopback: the info object every route carries, and a segment that is a layer with its first effect's sliders, read and written, and the routes that list them.
+/// The WLED API a MoonLight device answers, over loopback: the info object every route carries, and a segment that is a layer with its first effect's sliders, read and written, and the routes that list and set them.
 
 #include "doctest.h"
 #include "core/module/Scheduler.h"
@@ -137,14 +137,17 @@ struct WledDevice {
         return sink.data();
     }
     // One request on its own connection, read until the server closes it, so headers and body both arrive.
-    std::string get(const char* path) {
+    std::string exchange(const std::string& request) {
         mm::platform::TcpConnection client;
         if (!connectAndAccept(http, client, kTestPort)) return {};
-        const std::string request = std::string("GET ") + path + " HTTP/1.1\r\nHost: test\r\n\r\n";
         if (!client.write(reinterpret_cast<const uint8_t*>(request.data()), request.size())) return {};
         std::string reply = readUntilClosed(http, client);
         client.close();
         return reply;
+    }
+    std::string get(const char* path) { return exchange(std::string("GET ") + path + " HTTP/1.1\r\nHost: test\r\n\r\n"); }
+    std::string post(const char* path, const std::string& body) {
+        return exchange(std::string("POST ") + path + " HTTP/1.1\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body);
     }
     // The JSON body of `path`'s reply.
     bool json(const char* path, JsonDoc& doc) {
@@ -438,4 +441,63 @@ TEST_CASE("WLED API: /json/effects, /json/palettes and /json/fxdata list the eff
     CHECK(entry("WledSolid") == "speed,scale,twist,spin,depth,mirror,invert;!;!;12");   // flags 12: an effect drawing in two dimensions or more
     CHECK(entry("WledWave") == "bpm;!;!;12");
     CHECK(bodyOf(t.get("/json/fxda")) == bodyOf(t.get("/json/fxdata")));
+}
+
+TEST_CASE("WLED API: POST /json applies the body and answers success, or the whole device for \"v\":true") {
+    WledDevice t;
+    const std::string quiet = t.post("/json", "{\"bri\":77,\"seg\":[{\"id\":1,\"bri\":5}]}");
+    CHECK(bodyOf(quiet) == "{\"success\":true}");
+    CHECK(t.drivers->brightness == 77);
+    CHECK(t.layer(1).opacity == 5);
+    const std::string verbose = bodyOf(t.post("/json", "{\"v\":true,\"bri\":78}"));
+    CHECK(t.drivers->brightness == 78);
+    CHECK(verbose.find("\"state\":") != std::string::npos);
+    CHECK(verbose.find("\"effects\":") != std::string::npos);
+    // POST /json/state keeps answering the state.
+    const std::string echoed = bodyOf(t.post("/json/state", "{\"bri\":79}"));
+    CHECK(t.drivers->brightness == 79);
+    CHECK(echoed.find("\"bri\":79") != std::string::npos);
+}
+
+TEST_CASE("WLED API: GET /win applies its keys, in the path or the query, to the main segment or the one SS names") {
+    WledDevice t;
+    t.drivers->outputSeat_.claim();
+    const int wave = fxOf(t, "WledWave");
+    REQUIRE(wave >= 0);
+
+    const std::string reply = t.get("/win&A=64&T=0&SX=200&IX=9&FP=5&M1=1&M2=0");
+    CHECK(reply.find("200 OK") != std::string::npos);
+    CHECK(t.drivers->brightness == 64);
+    CHECK_FALSE(t.drivers->on);
+    CHECK(t.drivers->palette == 5);
+    auto* fx = static_cast<SolidFx*>(&t.effectOf(0));
+    CHECK(fx->speed == 200);
+    CHECK(fx->scale == 9);
+    CHECK(fx->mirror);        // M1 is the first option
+    CHECK_FALSE(fx->invert);  // M2 the second
+    CHECK(bodyOf(reply).find("\"bri\":64") != std::string::npos);   // the answer is the state
+
+    char path[96];
+    std::snprintf(path, sizeof(path), "/win?T=2&SS=1&SB=33&FX=%d&X1=40", wave);
+    t.get(path);
+    CHECK(t.drivers->on);                                           // toggled back on
+    CHECK(t.layer(1).opacity == 33);
+    CHECK(std::strcmp(t.effectOf(1).typeName(), "WledWaveEffect") == 0);
+    CHECK(static_cast<SolidFx*>(&t.effectOf(0))->speed == 200);      // the first segment is untouched
+
+    // A color by channel keeps the other channels of the current color; one in hex sets all three.
+    t.get("/win&CL=0000FF");
+    CHECK(t.drivers->palette == 8);
+    t.get("/win&R=255&G=0&B=0");
+    CHECK(t.drivers->palette == 0);
+    // A relative step is not read, and a stray key changes nothing.
+    t.get("/win&A=~10&ZZ=1&SX=abc");
+    CHECK(t.drivers->brightness == 64);
+    CHECK(static_cast<SolidFx*>(&t.effectOf(0))->speed == 200);
+    // A hex color followed by another key is read to its end, and only hex digits reach the body.
+    t.get("/win&CL=FF0000&A=70");
+    CHECK(t.drivers->palette == 0);
+    CHECK(t.drivers->brightness == 70);
+    t.get("/win&CL=00FF00\",\"bri\":1&A=71");
+    CHECK(t.drivers->brightness == 71);
 }

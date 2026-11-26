@@ -105,7 +105,7 @@ Anything richer belongs on the HTTP API: the socket's inbound half exists for ap
 
 ## The WLED API
 
-The device answers the WLED JSON API, so the WLED apps and Home Assistant discover it, read its state and set it. `GET /json`, `/json/info` and `/json/si` carry one `info` object, so python-wled can merge each poll of `/json/si` into its first read of `/json`. `POST /json/state` and the WebSocket take one state document. A field the device has no meaning for is ignored.
+The device answers the WLED JSON API, so the WLED apps and Home Assistant discover it, read its state and set it. `GET /json`, `/json/info` and `/json/si` carry one `info` object, so python-wled can merge each poll of `/json/si` into its first read of `/json`. `POST /json/state`, `POST /json` and the WebSocket take one state document. `POST /json` answers `{"success":true}`, or the whole device object when the body carries `"v":true`. `GET /win` takes the same fields as query keys. A field the device has no meaning for is ignored.
 
 | Field | Effect |
 |--|--|
@@ -128,6 +128,8 @@ A segment is a layer. `GET /json` carries one `seg` element per layer, with the 
 The device has no counterpart for the nightlight (`nl`), UDP sync (`udpn`), live override (`lor`) or a segment's `rev` and `frz`. A write that sets them succeeds and changes nothing, so the matching Home Assistant switches read back unchanged.
 
 The index of an effect type moves when a type is added, so a client resolves an effect by its name in `/json/effects`. `/json/fxdata` names each effect's sliders and options in the `sliders;colors;palette;flags` format of WLED's own interface, and `/json/palettes` lists the palette names that `pal` indexes. `/json/eff`, `/json/fxda` and `/json/pal` answer the same.
+
+`GET /win` takes `T` (0 off, 1 on, 2 toggle), `A` (brightness) and `PL` (preset). `SS` names the layer the other keys address, the first by default. The keys `FX`, `SX`, `IX`, `X1`, `X2`, `X3`, `M1`, `M2`, `M3`, `FP`, `SB`, `CL`, `R`, `G` and `B` set the layer's effect, sliders, options, palette, opacity and color. The keys go in the query, or after `&` in the path as `/win&A=128`. A value that does not start with a digit, such as WLED's relative step `~10`, is ignored.
 
 `docs/reference/openapi.yaml` lists the routes.
 
