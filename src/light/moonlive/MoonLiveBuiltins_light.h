@@ -163,7 +163,7 @@ extern "C" inline uint32_t mm_light_osc(const uintptr_t* args, uint32_t, const u
 /// Where addLight sends each light, one call per light and nothing stored, since staging a 16k fixture needs 48 KB the classic lacks.
 using AddLightFn = void (*)(void* ctx, uint16_t x, uint16_t y, uint16_t z);
 
-/// The addLight sink for one thread, installed by the binding around each run, and keyed on the task handle, since `thread_local` dies on an ESP32 task without TLS. `gapFn` takes addGap, a slot the driver clocks and nothing lights.
+/// The addLight sink for one thread, installed by the binding around each run, and keyed on the task handle, since `thread_local` dies on an ESP32 task without TLS. `gapFn` takes addGap, a slot the driver clocks that stays dark.
 struct AddLightSink { AddLightFn fn = nullptr; void* ctx = nullptr; AddLightFn gapFn = nullptr; };
 
 /// Where fade(amt) sends its request, forwarded to the layer, which applies one amount per frame, so the longest trail wins.
@@ -390,7 +390,7 @@ extern "C" inline uint32_t mm_light_addLight(const uintptr_t* args, uint32_t, co
     return 0;
 }
 
-/// Place the next slot as a gap, clocked but never lit, through this thread's layout sink.
+/// Place the next slot as a gap, clocked and kept dark, through this thread's layout sink.
 extern "C" inline uint32_t mm_light_addGap(const uintptr_t* args, uint32_t, const uint8_t*) {
     const AddLightSink s = addLightSink();
     if (s.gapFn && s.ctx) s.gapFn(s.ctx, uint16_t(args[0]), uint16_t(args[1]), uint16_t(args[2]));

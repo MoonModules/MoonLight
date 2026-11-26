@@ -1,7 +1,7 @@
 /// @module MoonLiveLayout
 /// @also LayoutBase, Layer
 
-/// A scripted layout's gaps: `addGap` places a slot the driver clocks in wiring order and nothing lights, as a light behind a round frame stays dark under every layer.
+/// A scripted layout's gaps: `addGap` places a dark slot the driver clocks in wiring order, as a light behind a round frame stays dark under every layer.
 
 #include "doctest.h"
 #include "MoonLiveScriptFixture.h"
@@ -97,7 +97,7 @@ TEST_CASE("a scripted layout with gaps maps no light to them, and switching gaps
         return lit;
     };
 
-    // Off, on, off, on: the flag the Layer reads comes from the count it has just taken.
+    // Off, on, off, on: the flag the Layer reads comes from the count it took last.
     for (uint8_t gaps : {0, 1, 0, 1}) {
         INFO("gaps " << (int)gaps);
         setGaps(gaps);

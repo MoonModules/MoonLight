@@ -86,11 +86,9 @@ public:
     /// Run the script, counting what it places: the Layer sizes its buffer from this before asking for a coordinate.
     nrOfLightsType lightCount() const override {
         compile();
-        hasGaps_ = false;
-        if (!script_.ok()) return 0;
         Counter c{0, false};
-        runScript(&addToCounter, &gapToCounter, &c);
-        hasGaps_ = c.gaps;
+        if (script_.ok()) runScript(&addToCounter, &gapToCounter, &c);
+        hasGaps_ = c.gaps;   // set once, after the count, so the flag always holds a finished count's answer
         return c.n;
     }
 
