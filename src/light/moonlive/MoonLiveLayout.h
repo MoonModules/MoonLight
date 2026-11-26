@@ -45,7 +45,7 @@ inline constexpr const char* kLayoutPick[3] = {kScriptDir, kLayoutExt, kLayoutTe
 ///
 /// ## How the light count is known
 ///
-/// The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count.
+/// The Layer sizes its buffer from the light count before it asks for any position, so the script runs twice: the first pass counts `addLight` and `addGap` calls, the second emits positions. Nothing is stored between passes, which saves 48 KB at 16,384 lights. A `random16` loop bound makes the passes disagree on the count.
 ///
 /// ## What a layout script is given
 ///
@@ -86,18 +86,21 @@ public:
     /// Run the script, counting what it places: the Layer sizes its buffer from this before asking for a coordinate.
     nrOfLightsType lightCount() const override {
         compile();
-        if (!script_.ok()) return 0;
-        Counter c{0};
-        runScript(&addToCounter, &c);
+        Counter c{0, false};
+        if (script_.ok()) runScript(&addToCounter, &gapToCounter, &c);
+        hasGaps_ = c.gaps;   // set once, after the count, so the flag always holds a finished count's answer
         return c.n;
     }
+
+    /// Whether the last count met an addGap; the Layer counts the lights before it asks, so this is the current script's answer.
+    bool hasGaps() const override { return hasGaps_; }
 
     /// Run the script again, emitting each light into the consumer's sink.
     void placeLights(const CoordSink& sink) const override {
         compile();
         if (!script_.ok()) return;
         Emitter e{&sink, 0};
-        runScript(&addToSink, &e);
+        runScript(&addToSink, &gapToSink, &e);
     }
 
     /// A changed file may be this module's script, which the next prepare then reads again.
@@ -107,6 +110,7 @@ public:
     void release() override {
         script_.engine().free();
         script_.invalidate();     // forget what was compiled, so re-enabling rebuilds it
+        hasGaps_ = false;
         script_.releaseReporting(*this);
         LayoutBase::release();
     }
@@ -128,30 +132,42 @@ private:
         self->script_.sync(moonlive::layoutSysVars(), *self, moonlive::lightBuiltins());
     }
 
-    struct Counter { nrOfLightsType n; };
+    struct Counter { nrOfLightsType n; bool gaps; };
     struct Emitter { const CoordSink* sink; nrOfLightsType idx; };
 
     static void addToCounter(void* ctx, uint16_t, uint16_t, uint16_t) {
         static_cast<Counter*>(ctx)->n++;
+    }
+    static void gapToCounter(void* ctx, uint16_t, uint16_t, uint16_t) {
+        auto* c = static_cast<Counter*>(ctx);
+        c->n++;   // a gap is a slot the driver clocks, so it counts toward the lights
+        c->gaps = true;
     }
     static void addToSink(void* ctx, uint16_t x, uint16_t y, uint16_t z) {
         auto* e = static_cast<Emitter*>(ctx);
         e->sink->addLight(e->idx++, static_cast<lengthType>(x),
                        static_cast<lengthType>(y), static_cast<lengthType>(z));
     }
+    static void gapToSink(void* ctx, uint16_t x, uint16_t y, uint16_t z) {
+        auto* e = static_cast<Emitter*>(ctx);
+        e->sink->addGap(e->idx++, static_cast<lengthType>(x),
+                            static_cast<lengthType>(y), static_cast<lengthType>(z));
+    }
 
-    /// Point addLight at `fn` and run the script once, given a single scratch light, which satisfies run()'s precondition without staging anything.
-    void runScript(moonlive::AddLightFn fn, void* ctx) const {
+    /// Point addLight at `fn` and addGap at `gapFn`, and run the script once, given a single scratch light, which satisfies run()'s precondition without staging anything.
+    void runScript(moonlive::AddLightFn fn, moonlive::AddLightFn gapFn, void* ctx) const {
         uint8_t scratch[3] = {0, 0, 0};
         // Checked before the sink is installed, which would otherwise point at a dead frame.
         if (!script_.engine().hasEntry(moonlive::kEntryPlaceLights)) return;
-        moonlive::setAddLightSink(fn, ctx);
+        moonlive::setAddLightSink(fn, ctx, gapFn);
         script_.engine().run(scratch, 1, 3, 0, moonlive::kEntryPlaceLights);
         moonlive::setAddLightSink(nullptr, nullptr);
     }
 
     /// Which `.mll` script runs, picked from the library and edited here.
     mutable moonlive::MoonLiveScript script_;
+    /// Whether the last count placed a gap, which hasGaps answers.
+    mutable bool hasGaps_ = false;
 
 };
 

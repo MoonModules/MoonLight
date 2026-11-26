@@ -233,6 +233,7 @@ The core owns the grammar and a generic call mechanism, and nothing else.
 | `setXYZ(x, y, z)` | write one position, for a modifier |
 | `fill(r, g, b)` | write every light |
 | `addLight(x, y, z)` | place the next light, for a layout |
+| `addGap(x, y, z)` | place the next slot as a gap, clocked by the driver and kept dark, for a layout |
 | `line(x1, y1, x2, y2, r, g, b)` | a straight segment, via the shared `draw::line` |
 | `circle(cx, cy, radius, thickness, r, g, b)` | a circle outline of a given stroke width, via the shared `draw::ring` |
 | `random16(n)` | a value in `[0, n)` |
