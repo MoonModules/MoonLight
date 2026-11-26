@@ -489,3 +489,19 @@ Two iOS rules bind:
 - **Suspension.** iOS suspends an app about 30 s after a switch away. The `audio` background mode keeps an app with the mic open running, so an audio-reactive session survives a switch and a plain effect does not (Anjin, Discord, 2026-11-13).
 
 First step: a design study on the interpreter backend. Costs: an Apple developer account, TestFlight for every tester, the multicast entitlement. The Vision Pro waits on the same decision.
+
+### Waveshare ESP32-P4 Knob Touch AMOLED 1.75: WiFi through esp-extconn, the ES8389 codec, a device model
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319093297)
+
+**The board** ([wiki](https://docs.waveshare.com/ESP32-P4-Knob-Touch-AMOLED-1.75X), [code](https://github.com/waveshareteam/ESP32-P4-Knob-Touch-AMOLED-1.75)): an ESP32-P4NRW32X (chip revision 3.x, so `esp32p4rev3`) with 32 MB PSRAM and 32 MB flash. Its radio is an **ESP32-D0WD-V3**, a classic ESP32, where every other P4 board in the catalog has an ESP32-C6. It has an ES8389 codec with ES7210 microphones, a 466×466 CO5300 AMOLED on MIPI-DSI with CST9217 touch, a rotary knob, a vibration motor, a QMI8658 IMU, a PCF85063 clock, an AXP2101 PMIC and a TF slot. UART0 is on GPIO 37/38 through a CH343. The product owner orders one to verify on.
+
+**Pins**, from the vendor's `examples/arduino/libraries/board_config/pin_config.h`: I2C 7/8; TF slot (SDMMC slot 0) CLK 43, CMD 44, D0-D3 39-42, card power from the chip's LDO channel 4; I2S MCLK 13, BCLK 12, WS 10, DOUT 9, DIN 11; amplifier enable 53; BOOT button 35, PWR button 2 (active high); RTC interrupt 3; IMU interrupts 4/5; knob CW 20, CCW 21; haptic IN1 22, IN2 23; LCD reset 29; touch reset 27, interrupt 26.
+
+**WiFi is a different stack from the C6 boards.** The vendor uses Espressif's **esp-extconn** (0.3.3; 0.4.0 is out), not ESP-Hosted: the P4 runs the WiFi stack itself and the ESP32 serves as a radio over SDIO. From `examples/esp-idf/common/knob_wireless/sdkconfig.defaults.wireless`: `CONFIG_ESP_EXT_CONN_VIA_SDIO=y`, SDIO slot 1, CLK 18, CMD 19, D0-D3 14-17, slave enable 54 (active high), slave boot 6, `CONFIG_ESP_HOST_WIFI_ENABLED=y`, `CONFIG_ESP_WIFI_CONTROLLER_TARGET="esp32"`. The vendor builds on ESP-IDF 5.5.6 or newer; whether esp-extconn builds on our 6.1.1 is the first thing to check.
+
+**What it takes:**
+1. **A firmware of its own (medium to large, one to two sessions with ESP32 build rounds).** The P4 builds choose ESP-Hosted with a C6 at compile time (`CONFIG_SLAVE_IDF_TARGET_ESP32C6`, `CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6` in `esp32/sdkconfig.defaults.esp32p4-wifi`). This board needs esp-extconn in place of `esp_hosted` and `esp_wifi_remote`: a row in `FIRMWARES` (`moondeck/build/build_esp32.py`), its own sdkconfig fragment and component rule, and platform code that hides the C6-only parts (the coprocessor version, its update tab and `coprocessor_image.py`'s image). It touches the build configuration every P4 firmware shares, so it goes on a branch of its own.
+2. **ES8389 (small).** `esp_codec_dev` already carries it (`device/es8389`): one more `CodecType` in `platform_esp32_es8311.cpp` and one more option on the Audio card.
+3. **Device model (small).** The pins above; SD card power through LDO 4 rather than a GPIO.
+4. **Not in this card:** the display and the knob as an input, a topic of their own once the board is on the bench.

@@ -620,6 +620,16 @@
   "number": null
  },
  {
+  "title": "HUB75 driver: start and count, a window on the layer like every other driver",
+  "area": "Drivers",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319098957",
+  "number": null
+ },
+ {
   "title": "Migrate HueDriver's name buffers to ScratchBuffer (finish the ScratchBuffer sweep)",
   "area": "Drivers",
   "module": "HueDriver",
@@ -1687,6 +1697,16 @@
   "status": "Backlog",
   "process": "",
   "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=296929750",
+  "number": null
+ },
+ {
+  "title": "Waveshare ESP32-P4 Knob Touch AMOLED 1.75: WiFi through esp-extconn, the ES8389 codec, a device model",
+  "area": "Platform",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319093297",
   "number": null
  },
  {

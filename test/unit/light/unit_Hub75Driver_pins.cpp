@@ -88,6 +88,20 @@ TEST_CASE("Hub75Driver fills the pins from the first board once, at the first ca
     CHECK(d.r1 == 20);
 }
 
+TEST_CASE("Hub75Driver starts a P4 with no pins, and the Waveshare P4-NANO row carries that board's free set") {
+    // P4 boards wire different pins: the P4-NANO's 39-42 are the TF slot's on the WIFI6-DEV-KIT, off its header, so the generic row names none.
+    mm::Hub75Driver d;
+    d.defineControls();
+    selectBoard(d, "P4 generic");
+    CHECK(d.r1 == -1);
+    CHECK(d.addrE == -1);
+    CHECK(d.oe == -1);
+    selectBoard(d, "Waveshare P4-NANO");
+    CHECK(d.r1 == 20);
+    CHECK(d.addrE == 39);
+    CHECK(d.oe == 42);
+}
+
 TEST_CASE("Hub75Driver offers 2 to 6 bit planes, though the encoder reaches 8") {
     // The encoder shifts and weights up to 8 planes, but the ESP32 port stops at 6 until the repeated-planes card lands (the reason is at `kHub75PortMaxBitDepth`), so the control and the port bound the depth rather than valid().
     mm::Hub75Driver d;

@@ -207,9 +207,11 @@ private:
         {"Waveshare RGB Matrix", 4,  5,  6,   7, 15, 16,  18,  8,  3, 42,  9,  41, 40,  2, chipIsS3, false},
         // Generic sets: the first fourteen of each chip's free GPIOs, in ribbon order.
         {"S3 generic",  4,  5,  6,   7,  8,  9,  10, 11, 12, 13, 14,  15, 16, 17, chipIsS3, true},
-        {"P4 generic", 20, 21, 22,  23, 24, 25,  26, 27, 32, 33, 39,  40, 41, 42, chipIsP4, true},
-        // The S31's free set is board-specific, so it ships unset rather than invented.
+        // The P4's and the S31's free sets are board-specific, so they ship unset rather than invented: the P4-NANO's 39-42 are the TF slot's on the WIFI6-DEV-KIT, off its header.
+        {"P4 generic", -1, -1, -1,  -1, -1, -1,  -1, -1, -1, -1, -1,  -1, -1, -1, chipIsP4, true},
         {"S31 generic", -1, -1, -1,  -1, -1, -1,  -1, -1, -1, -1, -1,  -1, -1, -1, chipIsS31, true},
+        // Waveshare ESP32-P4-NANO: the first fourteen of its free GPIOs (gpio-usage.md), in ribbon order.
+        {"Waveshare P4-NANO", 20, 21, 22,  23, 24, 25,  26, 27, 32, 33, 39,  40, 41, 42, chipIsP4, true},
         // Custom keeps whatever is in the fields: the escape hatch for a hand-wired panel.
         {"Custom",     -1, -1, -1,  -1, -1, -1,  -1, -1, -1, -1, -1,  -1, -1, -1, nullptr, true},
     };
@@ -232,13 +234,15 @@ private:
             boardOptionCount_++;
         }
         // Re-point by LABEL, so a filtered list keeps the picked board while it is offered, and falls to the first row when it is not.
-        uint8_t sel = 0;
-        if (current) {
-            for (uint8_t k = 0; k < boardOptionCount_; k++) {
-                if (std::strcmp(boardOptions_[k], current) == 0) { sel = k; break; }
-            }
-        }
-        boardSel = sel;
+        boardSel = offeredIndexOf(current);
+    }
+
+    /// The offered row carrying `label`, or the first row when none does.
+    uint8_t offeredIndexOf(const char* label) const {
+        if (!label) return 0;
+        for (uint8_t k = 0; k < boardOptionCount_; k++)
+            if (std::strcmp(boardOptions_[k], label) == 0) return k;
+        return 0;
     }
 
     // One HUB75 line as wired: the GPIO and the ribbon name it carries.

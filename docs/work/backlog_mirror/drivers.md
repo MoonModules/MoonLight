@@ -649,3 +649,18 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 A live stream in, an FSEQ file out: the drivers' output written to the SD card, as Falcon Player records. It is the bridge between the two kinds of stream, and how a show "from the SD card" is made. Playing a recording on several boards then needs clock sync: every board computes the same frame index from a shared clock, so seek, loop and sync are arithmetic ([live and recorded](../../design/streams.md#live-and-recorded)).
 
 From the Streams plan, #215.
+
+### HUB75 driver: start and count, a window on the layer like every other driver
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319098957)
+
+**Why:** every driver that lights something offers `start` and `count` (DriverBase, a45ac63bb), and HUB75 alone opens its panel at the layer's full size, a test pinning the exception. One layout feeding several outputs, such as a HUB75 panel beside an LED strip (the TV backlight setup), sends the strip's lights to the panel too.
+
+**What it takes (about one working session, roughly 150 to 250 lines):**
+- `Hub75Driver::prepare()` opens the output at the window's box, through `placeWindowed` and `LayoutPicture`'s crop, as HDMI, NDI, HLS and RTSP do.
+- `tick()` copies through the crop's light-to-pixel table, and a plain offset when the window is in natural order, so the hot path keeps today's cost (32 ms a tick at 128×128 on an S3, measured 2026-11-26).
+- The Pi outputs' panel canvas (`Hub75Canvas.h`) takes the cropped size.
+- Tests: the window test drops HUB75's exception; a crop case and two drivers each showing half.
+- A check on the bench S3 matrix (.127), and on a Pi if the Pi outputs are included.
+
+An ESP32 has one HUB75 peripheral (LCD_CAM), so the gain there is one layout across several outputs, not two panels on one chip.
