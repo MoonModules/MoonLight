@@ -604,7 +604,7 @@ paths:
                 type: object
                 properties:
                   state: { $ref: "#/components/schemas/WledState" }
-                  info: { type: object }
+                  info: { $ref: "#/components/schemas/WledInfo" }
                   effects: { type: array, items: { type: string } }
                   palettes: { type: array, items: { type: string } }
 
@@ -910,15 +910,20 @@ components:
           items:
             type: object
             properties:
+              lc: { type: integer, description: "The segment's capability code, 1 for RGB, which Home Assistant creates its light from." }
               pal: { type: integer }
               col: { type: array, items: { type: array, items: { type: integer } } }
       additionalProperties: true
     WledInfo:
       type: object
+      description: One object on /json, /json/info and /json/si, since python-wled merges each poll of /json/si into the first /json.
       properties:
+        ver: { type: string, description: "A sentinel, not the MoonLight version." }
         name: { type: string }
         mac: { type: string }
+        ip: { type: string }
         leds: { type: object, properties: { count: { type: integer } } }
         wifi: { type: object, properties: { rssi: { type: integer }, signal: { type: integer } } }
+        fs: { type: object, properties: { t: { type: integer }, u: { type: integer }, pmt: { type: integer } } }
         brand: { const: WLED }
         product: { const: MoonModules }

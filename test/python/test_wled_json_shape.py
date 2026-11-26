@@ -20,6 +20,7 @@ deliberate acknowledgement, not a silent drift.
 
 import json
 
+from wled import LightCapability
 from wled.models import Device
 
 
@@ -28,7 +29,7 @@ from wled.models import Device
 # WLED-shim field python-wled reads is present.
 GOLDEN_JSON = (
     '{"state":{"on":true,"bri":20,"transition":7,"ps":-1,"pl":-1,"nl":{},"udpn":{},"lor":0,"mainseg":0,'
-    '"seg":[{"id":0,"on":true,"bri":255,"col":[[255,255,255]]}]},'
+    '"seg":[{"id":0,"on":true,"bri":255,"lc":1,"fx":0,"pal":0,"col":[[255,255,255]]}]},'
     # ver is the sentinel "99.0.0", NOT the MoonLight semver. Reason: HA's WLED integration
     # parses WLED tags as CalVer (`16.0.1` is year-16, not `0.16.1`), so a MoonLight semver
     # like `2.1.0-dev` compares LOWER (2 < 16) and HA nagged "update to WLED 16.0.1" on the
@@ -36,7 +37,7 @@ GOLDEN_JSON = (
     # real MoonLight version lives on the MQTT update entity's `installed_version`.
     '"info":{"ver":"99.0.0","vid":2410150,"name":"MM-CAFE","mac":"deadbeefcafe","ip":"192.168.1.246",'
     '"arch":"esp32","brand":"WLED","product":"MoonModules","release":"MoonModules",'
-    '"leds":{"count":1,"fps":60,"rgbw":false,"wv":false,"cct":false,"maxpwr":0,"maxseg":1,"pwr":0,"lc":1,"seglc":[1]},'
+    '"leds":{"count":1,"fps":60,"rgbw":false,"wv":false,"cct":false,"maxpwr":0,"maxseg":1,"pwr":0,"lc":1},'
     '"wifi":{"bssid":"00:00:00:00:00:00","rssi":-50,"channel":0,"signal":100},'
     '"fs":{"t":256,"u":32,"pmt":1},"freeheap":100000,"uptime":42,"udpport":21324,"live":false,'
     '"lm":"","lip":"","ws":-1,"fxcount":1,"palcount":1,"cpalcount":0,"umpalcount":0,"str":false},'
@@ -74,6 +75,8 @@ def test_python_wled_accepts_device():
     # WLED-native UDP sync.
     assert dev.state.on is True
     assert dev.state.brightness == 20
+    # HA builds a segment light from the segment's own `lc`, which `ver` 99.0.0 reads as WLED 16 does: without it the segment has no color mode and HA creates no light for it.
+    assert dev.state.segments[0].light_capabilities == LightCapability.RGB_COLOR
     assert dev.state.nightlight.on is False     # default
     assert dev.state.sync.receive is False      # default (udpn: {})
     assert int(dev.state.live_data_override) == 0  # LiveDataOverride.OFF
@@ -97,3 +100,15 @@ def test_all_python_wled_required_fields_present():
     assert "nl" in d["state"], "python-wled State.nightlight has no default"
     assert "udpn" in d["state"], "python-wled State.sync has no default"
     assert "lor" in d["state"], "python-wled State.live_data_override has no default"
+
+
+def test_poll_reply_merges_into_the_first_fetch():
+    """python-wled reads /json once, then polls /json/si and merges each reply
+    into the first: a reply whose info lacks `fs` raised MissingField on every
+    poll after the first and HA marked the device unavailable. The poll carries
+    the same info object as /json."""
+    full = json.loads(GOLDEN_JSON)
+    dev = Device.from_dict(full)
+    dev.update_from_dict({"state": full["state"], "info": full["info"]})
+    assert dev.info.filesystem.total == 256
+    assert dev.info.wifi is not None
