@@ -103,24 +103,17 @@ public:
     /// The palette script the frame should run, or nullptr; a static seam because Drivers owns the script but ticks after the effects that sample it.
     static MoonLivePalette* active() { return active_; }
     /// Publish the palette script the frame should run.
-    static void setActiveInstance(MoonLivePalette* p) {
-        active_ = p;
-        if (p) p->fresh_ = true;   // the first frame it runs installs a new palette
-    }
+    static void setActiveInstance(MoonLivePalette* p) { active_ = p; }
     /// Detach, for an owner whose storage is about to go away; it takes the caller's own instance, so a departing owner cannot unpublish somebody else's.
     static void clearActiveInstance(const MoonLivePalette* p) { if (active_ == p) active_ = nullptr; }
 
     /// Run the active palette script, if there is one. Called once per frame before the layers.
     static void tickActive(uint32_t nowMs) MM_NONBLOCKING {
-        MoonLivePalette* p = active_;
-        if (!p || !p->tick(nowMs) || !p->fresh_) return;
-        p->fresh_ = false;
-        Palettes::noteChange();   // one frame, then a script may rewrite entries and the trails stay
+        if (active_) active_->tick(nowMs);
     }
 
 private:
     moonlive::MoonLiveScript script_;
-    bool fresh_ = false;   ///< the next successful tick is a newly chosen script
     static inline MoonLivePalette* active_ = nullptr;
 };
 

@@ -417,6 +417,8 @@ document.addEventListener("mouseover", e => {
 // A segmented control cannot wrap, so its labels together must fit the field.
 const SEGMENTED_MAX = 3, SEGMENTED_CHARS = 36;
 function choiceIsSegmented(ctrl) {
+    // The font menu grows when the release folder is listed, so it stays a dropdown.
+    if (ctrl.name === "font" && (ctrl.options || [])[0] === "4x6") return false;
     const opts = ctrl.options || [];
     return opts.length <= SEGMENTED_MAX && opts.join("").length <= SEGMENTED_CHARS;
 }
@@ -3093,17 +3095,25 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             break;
         }
         case "select": {
+            const localCount = (ctrl.options || []).length;
             const pick = async (i) => {
                 // A .wbf row is a file, installed on first choice the way a factory script is. The bytes stay out of the firmware.
                 const opt = (ctrl.options || [])[i];
                 if (typeof opt === "string" && opt.endsWith(".wbf")) {
                     try { await ensureFontFile(opt); }
-                    catch (e) { alert("could not install " + opt + ": " + (e && e.message ? e.message : e)); }
+                    catch (e) { alert("could not install " + opt + ": " + (e && e.message ? e.message : e)); return; }
                 }
                 dragTs[key] = Date.now();
-                write(ctrl.name, i);
+                if (i < localCount) { write(ctrl.name, i); return; }
+                // The name was offered from the release folder. The device lists it once the file has landed.
+                await refetchState();
+                const mod = state && findModule(moduleName);
+                const font = mod && mod.controls && mod.controls.find(c => c.name === "font");
+                const at = font && Array.isArray(font.options) ? font.options.indexOf(opt) : -1;
+                if (at >= 0) write(ctrl.name, at);
             };
             row.appendChild(buildChoice(moduleName, ctrl, key, pick));
+            if (ctrl.name === "font" && (ctrl.options || [])[0] === "4x6") offerReleaseFonts(row, ctrl);
             // The row's current choice, since a live patch may have swapped a dropdown for segments.
             resetButton(() => setChoice(row.querySelector("select, .segmented"), selectIndex({ ...ctrl, value: def })));
             break;
@@ -6189,6 +6199,44 @@ async function mlDownloadScript(name, group) {
     if (!text.trim()) throw new Error("downloaded script is empty");
     // Straight to the factory directory, never the user's: an edit is what puts a copy there, and that copy is what shadows this one.
     await writeDeviceFile(cat.dir, name, text);
+}
+
+/// The `.wbf` names in the firmware's release folder. The menu lists that folder, so the names are not compiled into the device.
+let releaseFontNamesCache = null;
+async function releaseFontNames() {
+    if (releaseFontNamesCache) return releaseFontNamesCache;
+    try {
+        const cat = await mlFetchCatalog();
+        const res = await fetch("https://api.github.com/repos/MoonModules/MoonLight/contents/moonlive/fonts?ref="
+            + encodeURIComponent(cat.tag));
+        if (!res.ok) return [];
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return [];
+        releaseFontNamesCache = rows
+            .filter(r => r && r.type === "file" && typeof r.name === "string" && r.name.endsWith(".wbf"))
+            .map(r => r.name)
+            .sort();
+        return releaseFontNamesCache;
+    } catch (e) {
+        return [];
+    }
+}
+
+/// Add release-folder faces the device does not hold yet. Choosing one installs the file, then selects it.
+function offerReleaseFonts(row, ctrl) {
+    releaseFontNames().then((names) => {
+        const sel = row.querySelector("select");
+        if (!sel || !sel.isConnected || !names.length || !Array.isArray(ctrl.options)) return;
+        const have = new Set(ctrl.options);
+        for (const name of names) {
+            if (have.has(name)) continue;
+            const o = document.createElement("option");
+            o.value = String(ctrl.options.length);
+            o.textContent = name;
+            ctrl.options.push(name);
+            sel.appendChild(o);
+        }
+    });
 }
 
 /// Install one `.wbf` into `/moonlive/fonts` when the device does not have it yet. The browser fetches the bytes, as it does a factory script, so the firmware does not carry them.

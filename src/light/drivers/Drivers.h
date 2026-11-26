@@ -177,11 +177,9 @@ public:
 
     /// Run the script `paletteScript_` names, compiling it, whose size or error the card shows.
     void attachPaletteScript() {
-        // Unpublished while it compiles, so a frame cannot run the engine prepare is rewriting.
-        MoonLivePalette::setActiveInstance(nullptr);
+        MoonLivePalette::setActiveInstance(&paletteScriptModule_);
         paletteScriptModule_.setScript(paletteScript_);
         paletteScriptModule_.prepare(*this);
-        MoonLivePalette::setActiveInstance(&paletteScriptModule_);
         demandPaletteAudio();
     }
 
@@ -375,8 +373,7 @@ public:
                 attachPaletteScript();
             } else {
                 detachPaletteScript();
-                // At the next frame's start, so a layer mid-paint reads a finished palette.
-                Palettes::request(LivePalettes::sourceIndex(palette));
+                Palettes::setActive(LivePalettes::sourceIndex(palette));
             }
             rebuildControls();   // the editor and the script's controls appear or disappear with it
             return;
@@ -387,7 +384,7 @@ public:
             } else {
                 // Clearing the name hands the palette back to the built-in select.
                 detachPaletteScript();
-                Palettes::request(palette);
+                Palettes::setActive(palette);
             }
             rebuildControls();              // the compile re-derives the script's own controls
             return;

@@ -254,7 +254,7 @@ nav:
       - Examples:
           - Playing an effect while a button is held: reference/examples/hold-to-play.md
           - The StadBeest, a multi-device installation: reference/examples/multi-board-installation.md
-          - A BDF font as a Scrolling Text face: reference/examples/bdf-to-wbf.md
+          - A BDF font as a Text face: reference/examples/bdf-to-wbf.md
       - Hardware:
           - Firmware variants and memory: reference/hardware/firmware-variants.md
           - GPIO usage per MCU: reference/hardware/gpio-usage.md

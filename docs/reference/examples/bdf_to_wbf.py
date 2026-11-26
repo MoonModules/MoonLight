@@ -1,4 +1,4 @@
-"""Convert one BDF font into a WLED bitmap font (.wbf) for Scrolling Text.
+"""Convert one BDF font into a WLED bitmap font (.wbf) for Text.
 
 The bitmap is the reason to convert: each pixel is one bit, so the file is a
 small fraction of the BDF text. The measured sizes are in

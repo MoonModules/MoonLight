@@ -5,7 +5,7 @@
 
 /// The glyph data `draw::text` blits: one byte per glyph row, aligned to the high bit, a set bit being a lit pixel.
 ///
-/// Two sizes ship, a compact 4x6 and a larger 6x8, and more are pure data to add.
+/// Two sizes ship for `draw::text`, a compact 4x6 and a larger 6x8. Text's further faces are `.wbf` files.
 ///
 /// @attribution raster-fonts
 ///
@@ -223,7 +223,7 @@ inline constexpr uint8_t kFont6x8_rows[] = {
 inline constexpr Font kFont6x8{ kFont6x8_rows, 6, 8 };
 static_assert(sizeof(kFont6x8_rows) == 95 * 8, "kFont6x8: 95 printable ASCII glyphs, one byte per row");
 
-/// The available fonts, in the order the TextEffect's font select lists them.
+/// The faces `draw::text` blits. Text lists 4x6 and then the `.wbf` files in `/moonlive/fonts`.
 inline constexpr Font kAll[] = { kFont4x6, kFont6x8 };
 inline constexpr uint8_t kCount = sizeof(kAll) / sizeof(kAll[0]);
 
