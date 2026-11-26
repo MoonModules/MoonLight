@@ -18,30 +18,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # `.clangd` at the repo root points at it; see docs/contributing/coding-standards.md § Editor setup.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Warning flags differ between GCC/Clang and MSVC. Gate by compiler so the
-# host build runs cleanly on Windows runners (no -W flags on MSVC) and on
-# macOS/Linux (no /W flags on Clang/GCC).
+# Windows builds with clang-cl (`-T ClangCL`, from build_host.py), which takes MSVC's command line: CMake's
+# MSVC branch below is that command line, and /W4 /WX is clang-cl's spelling of -Wall -Wextra -Werror.
 if(MSVC)
-    # /W4 /WX matches the GCC/Clang `-Wall -Wextra -Werror` discipline. A few
-    # MSVC-only warnings have no GCC equivalent at -Wall -Wextra and are
-    # suppressed below rather than fought at every call site:
-    #   C4702 — "unreachable code" inside `if constexpr` early-return branches
-    #           (a well-known MSVC quirk: it analyzes the discarded branch as
-    #           live and flags everything after `return;`). GCC understands the
-    #           constexpr discard and doesn't warn.
-    #   C4244 / C4267 — implicit narrowing (int→smaller, size_t→smaller). GCC
-    #           only warns under -Wconversion, which is not part of -Wall
-    #           -Wextra. The codebase uses explicit static_cast at the sites
-    #           where loss-of-data is the real concern; suppressing here brings
-    #           MSVC noise level back in line with GCC.
-    add_compile_options(/W4 /WX /wd4702 /wd4244 /wd4267)
-    # Our sources are UTF-8 and every other compiler reads them that way. MSVC alone assumes the
-    # system codepage for both the source and the execution charset, so a non-ASCII literal raises
-    # C4566 ("cannot be represented in the current code page") and /WX makes it fatal. /utf-8 sets
-    # both charsets, which is what GCC and Clang already do.
-    add_compile_options(/utf-8)
-    # MSVC marks the standard C library (strcpy, sprintf, fopen, localtime, …)
-    # as deprecated and emits C4996; /WX makes that fatal. Silence the family:
+    add_compile_options(/W4 /WX)
+    # Microsoft's headers mark the standard C library (strcpy, sprintf, fopen, localtime, …)
+    # as deprecated, and /WX makes that fatal. Silence the family:
     # the code uses these standard functions deliberately and consistently with
     # the POSIX side, and the "secure" `_s` variants are a Microsoft extension.
     # NOMINMAX: windows.h otherwise defines min and max macros, which break every std::min and std::max call after it.
@@ -54,7 +36,6 @@ else()
     # misses. -Wdouble-promotion is the one that earns its place here specifically — the Xtensa
     # has no FPU, so an accidental float->double promotion is a silent softfloat call in the
     # render path, and it enforces the integer-math rule the coding standards ask for.
-    # (GCC/Clang only; the MSVC branch above uses /W4 /WX, which has no direct equivalents.)
     add_compile_options(-Wall -Wextra -Werror
                         -Wshadow -Wnon-virtual-dtor -Wdouble-promotion
                         -Wimplicit-fallthrough -Wnull-dereference)
@@ -279,7 +260,7 @@ endif()
 
 # The Raspberry Pi 5 PIO output: MoonLight's own engine (src/platform/rpi) behind the PIO seam (platform_host_pio.cpp).
 #
-# The engine needs GCC or Clang: it uses [[gnu::always_inline]] and POSIX threads and signals. MSVC builds the seam alone, which keeps the
+# The engine needs GCC or Clang: it uses [[gnu::always_inline]] and POSIX threads and signals. Windows builds the seam alone, which keeps the
 # recorder and the refusal ("needs a Raspberry Pi 5 build (Linux aarch64)") and nothing else, so a Windows build offers the PIO card to the tests
 # and never to a panel. MM_HUB75_PIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
 if(NOT MSVC)
@@ -303,7 +284,7 @@ endif()
 
 # The Raspberry Pi 3/4 GPIO output: MoonLight's own engine (src/platform/rpi) behind the GPIO seam (platform_host_gpio.cpp), built where the PIO engine is for the same reasons.
 #
-# MSVC builds the seam alone, which keeps the recorder and the refusal ("this build has no GPIO engine"). MM_HUB75_GPIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
+# Windows builds the seam alone, which keeps the recorder and the refusal ("this build has no GPIO engine"). MM_HUB75_GPIO_HAS_ENGINE says which: it is PUBLIC so the tests read it.
 # The hardware backend maps /dev/mem and the PWM registers itself, so it needs no library: it builds on Linux aarch64, the one place a Pi 3 or 4 runs 64-bit code
 # (a 32-bit off_t cannot hold the Pi 4's 0xFE000000 peripheral base), and createGpioBackend picks it there; every other build runs the stub in the tests and refuses a real open.
 if(NOT MSVC)
@@ -427,12 +408,16 @@ if(WIN32)
     set(MM_WIN_RESOURCES "${MM_RC}" "${MM_ICON}")
 endif()
 
+# The shared type registry, one list for the app, the unit tests and the scenario runner (src/module_types.cpp carries the reason). It includes every module, the heaviest file of the build, so it compiles once as an object library the three link, where each compiled its own copy.
+add_library(mm_module_types OBJECT src/module_types.cpp)
+target_include_directories(mm_module_types PRIVATE src/)
+target_link_libraries(mm_module_types PRIVATE mm_core mm_platform)
+add_dependencies(mm_module_types ui_embed build_info_gen moonlive_catalog)
+
 # Application
-# module_types.cpp is the shared type registry, compiled into the app and the scenario runner
-# alike so one list serves both: src/module_types.cpp carries the reason.
-add_executable(MoonLight src/main.cpp src/module_types.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
+add_executable(MoonLight src/main.cpp src/platform/host/main_host.cpp ${MM_WIN_RESOURCES})
 target_include_directories(MoonLight PRIVATE src/)
-target_link_libraries(MoonLight PRIVATE mm_core mm_platform)
+target_link_libraries(MoonLight PRIVATE mm_module_types mm_core mm_platform)
 add_dependencies(MoonLight ui_embed build_info_gen moonlive_catalog)
 # macOS 27 answers the address table's sysctl with nothing unless the binary is signed with an identifier: the linker's own signature names it "MoonLight", so the build signs it as the release bundle is named (package_host.py).
 if(APPLE)
@@ -443,9 +428,9 @@ endif()
 
 # The Android app's library: the same program as MoonLight, entered through main_android.cpp's JNI calls rather than main(), written where the app's Gradle build packs it (android/app/build.gradle.kts).
 if(ANDROID)
-    add_library(moonlight SHARED src/main.cpp src/module_types.cpp src/platform/host/main_android.cpp)
+    add_library(moonlight SHARED src/main.cpp src/platform/host/main_android.cpp)
     target_include_directories(moonlight PRIVATE src/)
-    target_link_libraries(moonlight PRIVATE mm_core mm_platform log)
+    target_link_libraries(moonlight PRIVATE mm_module_types mm_core mm_platform log)
     add_dependencies(moonlight ui_embed build_info_gen moonlive_catalog)
     set_target_properties(moonlight PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/jniLibs/${ANDROID_ABI}")
 endif()

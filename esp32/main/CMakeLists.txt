@@ -135,14 +135,6 @@ endif()
 if(MM_NO_ETH)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_NO_ETH)
 endif()
-# MM_TASK_CPU_STATS — opt-in per-task CPU% in TasksModule. Off by default because the FreeRTOS
-# run-time-stats counter it needs (CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS, added by the
-# sdkconfig.defaults.task-cpu-stats fragment build_esp32.py appends when this is set) reads a timer
-# on every context switch — measured ~5% tick. A profiling build turns it on; normal builds pay
-# nothing. The define both fills TaskInfo.cpuPermille (platform_esp32_tasks.cpp) and shows the column.
-if(MM_TASK_CPU_STATS)
-    target_compile_definitions(${COMPONENT_LIB} PRIVATE MM_TASK_CPU_STATS=1)
-endif()
 
 # MM_MAX_GPIO — the highest valid GPIO for this chip, the default clamp for
 # Control.h's Pin controls. Derived from the IDF's own per-chip soc-cap

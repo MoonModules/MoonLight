@@ -4,7 +4,8 @@
 
 #include "doctest.h"
 #include "platform_config.h"   // EthPhyType, EthPinConfig, hasEthernet, ethConfigDefault
-#include "platform/platform.h" // setEthConfig / ethStop / ethInit / ethConnected
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestDeviceNetwork, setEthConfig, ethInit
 #include "core/system/NetworkModule.h"
 #include "core/system/EthernetModule.h"
 #include "core/system/WiFiModule.h"

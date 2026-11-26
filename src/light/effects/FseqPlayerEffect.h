@@ -4,7 +4,9 @@
 #include "light/effects/EffectBase.h"
 
 #include "light/util/FseqFile.h"     // the FSEQ header/sparse-range parser this effect plays back
-#include "platform/platform.h"       // fsReadStreamXxx, fsList, zlibInflateAll
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_heap.h"   // free, alloc
+#include "platform/platform_fs.h"   // FsReadStream, zlibInflateAll, fsReadStreamClose
 #include "core/util/JsonSink.h"      // the playlist's own ListSource serialization
 #include "core/util/JsonUtil.h"      // restoreList: recursive reader for the persisted playlist
 

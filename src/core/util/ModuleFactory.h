@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
 
 #include <cstring>
 
@@ -51,11 +51,12 @@ public:
         }
         types_[count_++] = {typeName,
                             []() -> MoonModule* { return new T(); },
-                            sizeof(T), probe->role(),
+                            sizeof(T),
                             docPath ? docPath : "",
                             probe->tags() ? probe->tags() : "",
-                            dim,
                             probe->acceptsChildRoles() ? probe->acceptsChildRoles() : "",
+                            probe->role(),
+                            dim,
                             0};
         delete probe;
         return true;
@@ -70,7 +71,7 @@ public:
             if (std::strcmp(types_[i].name, typeName) == 0) return true;
         if (!grow()) return false;
         // A hand-built entry cannot probe an instance, so it accepts no children; no such type is a container today.
-        types_[count_++] = {typeName, fn, classSize, role, docPath ? docPath : "", tags ? tags : "", 0, "", 0};
+        types_[count_++] = {typeName, fn, classSize, docPath ? docPath : "", tags ? tags : "", "", role, 0, 0};
         return true;
     }
 
@@ -130,6 +131,18 @@ public:
     }
 
     static uint8_t typeCount() { return count_; }   ///< how many types are registered
+    /// The heap the table of types holds, which no module owns.
+    static HeapBytes tableBytes() { return heapOf(types_, sizeof(TypeEntry) * capacity_); }
+    /// Give back the room the table grew past its entries, once every type is registered: growing doubles, so a table of 159 types holds room for 255.
+    static void shrinkToFit() {
+        if (count_ == 0 || count_ == capacity_) return;
+        auto* fit = static_cast<TypeEntry*>(platform::alloc(sizeof(TypeEntry) * count_));
+        if (!fit) return;   // the roomier table keeps working
+        for (uint8_t i = 0; i < count_; i++) fit[i] = types_[i];
+        platform::free(types_);
+        types_ = fit;
+        capacity_ = count_;
+    }
     /// The registered name at an index, or nothing when it is out of range.
     static const char* typeName(uint8_t i) { return (types_ && i < count_) ? types_[i].name : nullptr; }
     /// The role a type declares, generic when it declares none.
@@ -171,11 +184,11 @@ private:
         const char* name;
         CreateModuleFn create;
         size_t classSize;
-        ModuleRole role;
         const char* docPath;
         const char* tags;
-        uint8_t dim;  // 0 = N/A; 1/2/3 for types whose probe.dimensions() returns a Dim
         const char* acceptsChildRoles;  // comma-separated roles this type accepts as children; "" = none
+        ModuleRole role;                // the three single bytes together, so they share one word
+        uint8_t dim;                    // 0 = N/A; 1/2/3 for types whose probe.dimensions() returns a Dim
         uint8_t minMode;                // the reader's mode its cards need, a control's kModeUser to kModeDeveloper
     };
 

@@ -13,7 +13,9 @@
 #include "core/util/ModuleFactory.h"
 #include "module_types.h"
 #include "platform/Hub75Pio.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // alloc, allocatedBytes
+#include "platform/platform_net.h"   // setTestBindFails
 
 #include <cstdio>
 #include <cstring>
@@ -54,8 +56,6 @@ const std::vector<Known> kIgnoresEnabled = {
 const std::vector<Known> kHoldsAllocation = {
     {"Layer", "its pixel buffer_ is a plain Buffer that release() does not free"},
     {"RandomMapModifier", "the permutation is taken with a raw platform::alloc and freed only in the destructor"},
-    {"NetworkSendDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees"},
-    {"PanelCardDriver", "corrected_ is a plain Buffer, outside the scratch list that release() frees", false, mm::platform::hasRawEthernet},
 };
 
 // Types leaving an allocation behind once removed.

@@ -11,7 +11,8 @@
 #include "core/system/FilesystemModule.h"
 #include "core/util/JsonFetch.h"
 #include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_net.h"   // setTestHttpFetch
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
@@ -64,8 +65,7 @@ struct Rig {
     Rig() {
         static bool registered = false;
         if (!registered) { ModuleFactory::registerType<JmKnob>("JmKnob"); registered = true; }
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_mls_json_" + std::to_string(++seq);
+        root_ = mm::uniqueTempDir("mm_mls_json");
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_.c_str());
         net = Net{};

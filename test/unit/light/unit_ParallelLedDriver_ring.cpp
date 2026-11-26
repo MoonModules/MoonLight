@@ -4,6 +4,8 @@
 #include "doctest.h"
 #include "light/drivers/ParallelLedDriver.h"
 #include "correction_presets.h"
+#include "platform/platform_heap.h"   // setTestPsramRange
+#include "platform/platform_leds.h"   // RmtLoopbackResult
 
 #include <algorithm>   // std::count (pin-count in wireShift)
 #include <cstring>

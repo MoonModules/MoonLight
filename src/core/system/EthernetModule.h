@@ -5,7 +5,7 @@
 #include "core/system/IpSettings.h"
 #include "core/util/EthPresets.h"   // the board wirings, shared with MoonBase
 #include "core/util/JsonUtil.h"   // adoptLegacy reads the flat config
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // setEthConfig, ethStop, ethInit
 
 #include <cstdio>
 #include <cstring>

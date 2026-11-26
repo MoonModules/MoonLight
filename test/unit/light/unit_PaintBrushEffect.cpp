@@ -6,7 +6,7 @@
 #include "light/effects/PaintBrushEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "audio_effect_test.h"   // EffectOnGrid, seat, play
 
 #include <cstdlib>

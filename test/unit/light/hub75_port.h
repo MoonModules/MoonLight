@@ -8,7 +8,7 @@
 #include "platform/Hub75Gpio.h"
 #include "platform/Hub75Pio.h"
 #include "platform/machine.h"
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // setTestHub75
 
 #include <cstdint>
 #include <cstring>

@@ -217,7 +217,7 @@ private:
                 if (!grid_[r][c]) continue;
                 const lengthType px = static_cast<lengthType>(ox_ + c * cell() + inset);
                 const lengthType py = static_cast<lengthType>(oy_ + r * rowPitch());
-                draw::sprite(cv, {moonart::kGhostSmall, pal, moonart::SW, moonart::SH, moonart::SF, moonart::kPaletteCount}, frame_, px, py, sc);
+                draw::sprite(cv, {moonart::kGhostSmall, pal, moonart::SW, moonart::SH, moonart::SF, moonart::kPaletteCount}, frame_, px, py, sc, dir_ < 0);   // the pupils look where the formation marches
             }
         }
     }
@@ -230,6 +230,7 @@ private:
         pal[invart::kBody]  = RGB{40, 230, 60};
         pal[invart::kDark]  = RGB{20, 120, 30};
         pal[invart::kEye]   = RGB{200, 255, 200};
+        pal[invart::kPupil] = pal[invart::kEye];   // the cannon has no eyes
         const uint8_t sc = scale();
         // Clamped: a panel shorter than the scaled cannon would put it off the top edge.
         const int32_t top = static_cast<int32_t>(height()) - invart::GH * sc;

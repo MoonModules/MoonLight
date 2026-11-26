@@ -21,7 +21,9 @@
 #include "light/layers/Layer.h"
 #include "light/layers/Effects.h"
 #include "light/drivers/Drivers.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot, fsMkdir, fsWriteAtomic
+#include "platform/platform_net.h"   // mdnsAdvertisedPort
+#include "platform/platform_io.h"   // takeTestUsbMidiSent, setTestUsbMidiDesk, injectTestUsbMidi
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
@@ -42,8 +44,7 @@ struct Device {
 
     Device() {
         // A monotonic counter, not millis(): two fixtures constructed in the same millisecond would otherwise share a root and see each other's preset files.
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_preset_test_" + std::to_string(++seq);
+        root_ = mm::uniqueTempDir("mm_preset_test");
         std::filesystem::remove_all(root_);
         mm::platform::fsSetRoot(root_.c_str());
 

@@ -9,6 +9,8 @@
 #include "light/layouts/Layouts.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/SphereLayout.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock
 
 #include <vector>
 #include <cstring>
@@ -21,7 +23,7 @@ namespace {
 // -Wnon-virtual-dtor: BinaryBroadcaster's own destructor is protected and non-virtual on
 // purpose ("not owned through this interface"), so no code can delete through a base pointer.
 // This double is a stack local in every test, never owned polymorphically, and cannot copy the base's protected-destructor trick: that would forbid the stack construction the tests rely on.
-// #ifndef _MSC_VER: `#pragma GCC` is unknown to MSVC (C4068) and /WX fails an unguarded one. MSVC has no -Wnon-virtual-dtor to silence, so excluding it there is complete. Clang understands it.
+// #ifndef _MSC_VER: the Windows build's command line carries no -Wnon-virtual-dtor to silence, so excluding the pragma there is complete.
 #ifndef _MSC_VER
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

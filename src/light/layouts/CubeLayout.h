@@ -94,7 +94,7 @@ public:
                     coords[a0] = v0;
                     coords[a1] = v1;
                     coords[a2] = v2;
-                    sink.pixel(static_cast<nrOfLightsType>(idx++),
+                    sink.addLight(static_cast<nrOfLightsType>(idx++),
                        coords[0], coords[1], coords[2]);
                 }
             }

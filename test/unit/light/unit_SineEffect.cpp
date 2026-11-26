@@ -4,6 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/SineEffect.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Render the effect on a w×h×d grid for one tick; returns the layer (buffer populated).
 static void buildLayer(mm::Layouts& layouts, mm::GridLayout& grid, mm::Layer& layer,

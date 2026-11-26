@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/BreakoutEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 namespace {
 

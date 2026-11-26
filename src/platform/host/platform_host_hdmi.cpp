@@ -1,6 +1,6 @@
 #include "platform/platform.h"
 
-/// The host half of the HDMI seam: one output loop over each platform's screen (screen.h), the kernel's display interface on Linux and a full-screen window on a second display on Windows and macOS, and a stand-in recording what the driver hands over, which the tests run against.
+/// The host half of the HDMI seam: one output loop over each platform's screen (screen.h), the kernel's display interface on Linux and a full-screen window on a second display on Windows and macOS, or on the host's own when asked, and a stand-in recording what the driver hands over, which the tests run against.
 ///
 /// @technical
 ///
@@ -14,7 +14,9 @@
 ///
 /// ## Windows and macOS: a second display
 ///
-/// The output is a display beside the one the host runs on, as a sending card or a projector is: a borderless window covers it, its mode changed for as long as the output runs and given back when it stops. With one display only there is no monitor to show on, so the host is never covered.
+/// The output is a display beside the one the host runs on, as a sending card or a projector is: a borderless window covers it, its mode changed and the display kept awake for as long as the output runs, both given back when it stops.
+///
+/// With one display only there is no monitor to show on, unless the output was opened with `ownScreen`: the window then covers the host's own display, and the desktop is back when the output stops or Esc is pressed on it, which the driver answers by switching `ownScreen` off. A second display, plugged in, takes the output from it.
 ///
 /// The EDID comes from where each system keeps it: Windows in the monitor device's registry key, macOS in the I/O registry on the display's port. A built-in panel has none.
 ///
@@ -52,14 +54,19 @@ namespace mm::platform {
 
 namespace {
 
-// The ESP32's sizes first, so the default and the driver's mode control read alike everywhere, then the sizes a host runs beyond the ESP32's lanes: 1440p, the ultrawide 1440p and 4K. A display without the size keeps its own mode instead.
+// The ESP32's sizes first, so the mode control reads alike everywhere, then a host's larger ones. Last the display's own mode, all zero: no display lists it, so every backend leaves the display as it is, as for any size it lacks.
 constexpr HdmiMode kHdmiModes[] = {{800, 600, 60},   {1024, 768, 60},  {1280, 720, 60},  {1280, 800, 60},
-                                   {1920, 1080, 60}, {2560, 1440, 60}, {3440, 1440, 60}, {3840, 2160, 60}};
+                                   {1920, 1080, 60}, {2560, 1440, 60}, {3440, 1440, 60}, {3840, 2160, 60},
+                                   {0, 0, 0}};
 constexpr size_t kModeCount = sizeof(kHdmiModes) / sizeof(kHdmiModes[0]);
+static_assert(hdmiDefaultMode == kModeCount - 1 && kHdmiModes[hdmiDefaultMode].width == 0, "the default is the display's own mode, the list's last");
+constexpr HdmiMode kStandInOwnMode = {1920, 1080, 60};   // what the stand-in's display runs when a test names none
 
 // --- The stand-in ---
 bool hdmiStandIn_ = false;   // set by the first test hook: @xref{the-tests-run-on-the-stand-in|the tests}
 int hdmiOpenMode_ = -1;
+bool hdmiOwnScreen_ = false;
+bool hdmiDismissed_ = false;
 HdmiLink hdmiLink_ = HdmiLink::NoMonitor;
 edid::Monitor hdmiMonitor_;
 bool hdmiMonitorRead_ = false;
@@ -77,9 +84,11 @@ size_t hdmiFrameBytes_ = 0;
 
 struct Output {
     uint8_t modeIndex = 0;   // the driver's choice in kHdmiModes
+    bool ownScreen = false;  // whether the host's own display may be covered
     std::thread thread;
     std::atomic<bool> run{false};
     std::atomic<uint8_t> link{static_cast<uint8_t>(HdmiLink::NoMonitor)};
+    std::atomic<bool> dismissed{false};   // Esc on the host's own screen, until the driver takes it
     std::atomic<uint64_t> active{0};   // the mode the display runs, packed by pack(), 0 while none is up
     Seqlock<MonitorReport> monitor;
     // The frame the tick hands over, grown by the thread so the tick never allocates.
@@ -112,7 +121,7 @@ void releaseDisplay() {
 
 // Once a second: follow the display coming, going or changing.
 void pollDisplay() {
-    const uint32_t id = screen::find(o.up ? o.display : 0);
+    const uint32_t id = screen::find(o.up ? o.display : 0, o.ownScreen);
     if (!id) {
         releaseDisplay();
         publishMonitor(edid::Monitor{}, false);
@@ -190,6 +199,7 @@ void runOutput() {
     Clock::time_point lastPoll{};
     while (o.run.load()) {
         screen::pump();
+        if (screen::takeDismiss()) o.dismissed.store(true);
         if (Clock::now() - lastPoll >= std::chrono::seconds(1)) { pollDisplay(); lastPoll = Clock::now(); }
         growFrame();
         if (o.up && o.slot.claimShow()) { show(); o.slot.release(); }
@@ -209,12 +219,14 @@ void outputClose() {
     o.link.store(static_cast<uint8_t>(HdmiLink::NoMonitor));
 }
 
-bool outputOpen(uint8_t index) {
+bool outputOpen(uint8_t index, bool ownScreen) {
     outputClose();
     if (!screen::open()) return false;
     static bool atExitRegistered = false;   // a reboot exits with the thread running, which would otherwise end the process in std::terminate
     if (!atExitRegistered) atExitRegistered = std::atexit(outputClose) == 0;
     o.modeIndex = index;
+    o.ownScreen = ownScreen;
+    o.dismissed.store(false);
     o.frameWant.store(0);
     o.slot.release();
     o.run.store(true);
@@ -252,6 +264,19 @@ void useStandIn() {
 
 }  // namespace
 
+// --- Which display, the one rule every desktop backend asks ---
+
+namespace screen {
+uint32_t pick(const Display* list, size_t n, uint32_t current, bool own) {
+    uint32_t other = 0, self = 0;
+    for (size_t i = 0; i < n; i++) {
+        if (list[i].own) { self = list[i].id; continue; }
+        if (!other || list[i].id == current) other = list[i].id;
+    }
+    return other ? other : own ? self : 0;
+}
+}  // namespace screen
+
 // --- Linux: DRM/KMS, in platform_host_hdmi_linux.cpp ---
 
 // --- Windows: a full-screen window on a second display ---
@@ -267,12 +292,18 @@ struct Win {
     HGDIOBJ previous = nullptr;
     uint8_t* pixels = nullptr;
     uint16_t width = 0, height = 0;
-    char device[CCHDEVICENAME] = {};
+    char device[CCHDEVICENAME] = {};   // the display that is up: set by up(), so down() gives back the one it changed
     bool modeChanged = false;
+    bool own = false;               // the device is the host's own display
+    char found[CCHDEVICENAME] = {};    // the display find() last picked, which up() takes
+    bool foundOwn = false;
+    bool dismissed = false;         // Esc pressed on it, until the loop takes it
+    bool escHeld = false;           // Esc is registered as a hot key
 };
 Win w;
 
 constexpr const char* kClassName = "MoonLightHdmi";
+constexpr int kEscHotKey = 1;   // this thread's id for the Esc hot key
 
 LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_PAINT) {   // uncovered: the last frame again
@@ -283,6 +314,7 @@ LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_ERASEBKGND) return 1;   // the frame covers it all
+    if (msg == WM_CLOSE) { w.dismissed = w.own; return 0; }   // the system's close (Alt+F4) asks for the desktop back, as Esc does; the window stays until the driver stops the output
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
 
@@ -293,19 +325,21 @@ uint32_t displayId(const char* device) {
     return hash ? hash : 1;
 }
 
-struct Pick {
-    uint32_t current;
-    uint32_t found = 0;
-    char device[CCHDEVICENAME] = {};
+// The connected displays, as the picking rule reads them, each with the device name Windows knows it by.
+struct Listing {
+    Display display[16];
+    char device[16][CCHDEVICENAME];
+    size_t count = 0;
 };
 
-BOOL CALLBACK pickMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
-    Pick& p = *reinterpret_cast<Pick*>(user);
+BOOL CALLBACK listMonitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
+    Listing& l = *reinterpret_cast<Listing*>(user);
     MONITORINFOEXA info{};
     info.cbSize = sizeof(info);
-    if (!GetMonitorInfoA(monitor, &info) || (info.dwFlags & MONITORINFOF_PRIMARY)) return TRUE;   // the host's own display is never covered
-    const uint32_t id = displayId(info.szDevice);
-    if (!p.found || id == p.current) { p.found = id; std::strncpy(p.device, info.szDevice, sizeof(p.device) - 1); }
+    if (l.count == sizeof(l.display) / sizeof(l.display[0]) || !GetMonitorInfoA(monitor, &info)) return TRUE;
+    l.display[l.count] = {displayId(info.szDevice), (info.dwFlags & MONITORINFOF_PRIMARY) != 0};
+    std::snprintf(l.device[l.count], sizeof(l.device[0]), "%s", info.szDevice);
+    l.count++;
     return TRUE;
 }
 
@@ -355,11 +389,16 @@ bool open() {
 
 void close() {}
 
-uint32_t find(uint32_t current) {
-    Pick p{current};
-    EnumDisplayMonitors(nullptr, nullptr, pickMonitor, reinterpret_cast<LPARAM>(&p));
-    if (p.found) std::memcpy(w.device, p.device, sizeof(w.device));
-    return p.found;
+uint32_t find(uint32_t current, bool own) {
+    Listing l;
+    EnumDisplayMonitors(nullptr, nullptr, listMonitor, reinterpret_cast<LPARAM>(&l));
+    const uint32_t id = pick(l.display, l.count, current, own);
+    for (size_t i = 0; id && i < l.count; i++) {
+        if (l.display[i].id != id) continue;
+        std::memcpy(w.found, l.device[i], sizeof(w.found));
+        w.foundOwn = l.display[i].own;
+    }
+    return id;
 }
 
 namespace {
@@ -400,7 +439,7 @@ bool readEdid(uint32_t, const edid::Size* sizes, size_t n, edid::Monitor& out) {
     static constexpr GUID kMonitorClass = {0x4d36e96e, 0xe325, 0x11ce, {0xbf, 0xc1, 0x08, 0x00, 0x2b, 0xe1, 0x03, 0x18}};   // GUID_DEVCLASS_MONITOR
     DISPLAY_DEVICEA monitor{};
     monitor.cb = sizeof(monitor);
-    if (!EnumDisplayDevicesA(w.device, 0, &monitor, 0)) return false;
+    if (!EnumDisplayDevicesA(w.found, 0, &monitor, 0)) return false;   // read before up(), so of the display find() picked
     const char* driver = driverKey(monitor.DeviceID);
     if (!driver) return false;
     HDEVINFO set = SetupDiGetClassDevsA(&kMonitorClass, nullptr, nullptr, DIGCF_PRESENT);
@@ -413,6 +452,8 @@ bool readEdid(uint32_t, const edid::Size* sizes, size_t n, edid::Monitor& out) {
 
 bool up(uint32_t /*display*/, const HdmiMode& want, HdmiMode& running) {
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);   // on the output thread, which sizes and creates the window: the display's own pixels, not scaled ones
+    std::memcpy(w.device, w.found, sizeof(w.device));   // the display find() picked; the one that was up is down by now
+    w.own = w.foundOwn;
     setMode(want);
     Bounds b{w.device};
     EnumDisplayMonitors(nullptr, nullptr, boundsOf, reinterpret_cast<LPARAM>(&b));
@@ -439,6 +480,10 @@ bool up(uint32_t /*display*/, const HdmiMode& want, HdmiMode& running) {
     now.dmSize = sizeof(now);
     const bool rate = EnumDisplaySettingsA(w.device, ENUM_CURRENT_SETTINGS, &now);
     running = {w.width, w.height, static_cast<uint8_t>(rate ? now.dmDisplayFrequency : 0)};
+    // Esc as a hot key while the host's own display is covered: the keyboard's focus stays with whatever had it, MoonLight's console among them, so a hot key is what reaches MoonLight.
+    w.escHeld = w.own && RegisterHotKey(nullptr, kEscHotKey, 0, VK_ESCAPE);
+    if (w.own && !w.escHeld) std::printf("HDMI: another program holds Esc, so switch ownScreen off from a browser to get the desktop back\n");
+    SetThreadExecutionState(ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);   // a show has no keyboard to keep the screen saver and display sleep away; down() gives them back
     std::printf("HDMI: %ux%u window on %s\n", static_cast<unsigned>(w.width), static_cast<unsigned>(w.height), w.device);
     return true;
 }
@@ -452,6 +497,8 @@ void present() {
 }
 
 void down() {
+    if (w.escHeld) { UnregisterHotKey(nullptr, kEscHotKey); w.escHeld = false; }   // Esc is every program's again
+    SetThreadExecutionState(ES_CONTINUOUS);   // the system's own idle timers again
     if (w.window) { DestroyWindow(w.window); w.window = nullptr; }
     if (w.memory) { SelectObject(w.memory, w.previous); DeleteDC(w.memory); w.memory = nullptr; }
     if (w.dib) { DeleteObject(w.dib); w.dib = nullptr; }
@@ -461,7 +508,17 @@ void down() {
 
 void pump() {
     MSG msg;
-    while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageA(&msg); }
+    while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        if (msg.message == WM_HOTKEY && static_cast<int>(msg.wParam) == kEscHotKey) { w.dismissed = w.own; continue; }   // posted to this thread, which registered it
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+}
+
+bool takeDismiss() {
+    const bool was = w.dismissed;   // set by pump and by windowProc, both on this thread
+    w.dismissed = false;
+    return was;
 }
 
 // The window takes a screen-sized buffer, so the loop scales into it.
@@ -475,7 +532,7 @@ bool presentScaled(const uint8_t*, uint16_t, uint16_t, uint16_t, uint16_t, uint1
 namespace screen {
 bool open() { return false; }
 void close() {}
-uint32_t find(uint32_t) { return 0; }
+uint32_t find(uint32_t, bool) { return 0; }
 bool readEdid(uint32_t, const edid::Size*, size_t, edid::Monitor&) { return false; }
 bool up(uint32_t, const HdmiMode&, HdmiMode&) { return false; }
 Surface back() { return {}; }
@@ -483,6 +540,7 @@ bool presentScaled(const uint8_t*, uint16_t, uint16_t, uint16_t, uint16_t, uint1
 void present() {}
 void down() {}
 void pump() {}
+bool takeDismiss() { return false; }
 }  // namespace screen
 #endif
 
@@ -493,10 +551,11 @@ size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING {
     return kModeCount;
 }
 
-bool hdmiOpen(uint8_t index) {
+bool hdmiOpen(uint8_t index, bool ownScreen) {
     if (index >= kModeCount) return false;
-    if (!hdmiStandIn_) return outputOpen(index);
+    if (!hdmiStandIn_) return outputOpen(index, ownScreen);
     hdmiOpenMode_ = index;
+    hdmiOwnScreen_ = ownScreen;
     return true;
 }
 
@@ -525,7 +584,7 @@ bool hdmiActiveMode(HdmiMode& out) MM_NONBLOCKING {
         return true;
     }
     if (hdmiOpenMode_ < 0 || hdmiLink_ != HdmiLink::Monitor) return false;
-    out = hdmiActive_.width ? hdmiActive_ : kHdmiModes[hdmiOpenMode_];
+    out = hdmiActive_.width ? hdmiActive_ : kHdmiModes[hdmiOpenMode_].width ? kHdmiModes[hdmiOpenMode_] : kStandInOwnMode;
     return true;
 }
 
@@ -541,6 +600,13 @@ bool hdmiMonitor(edid::Monitor& out) MM_NONBLOCKING {
     return true;
 }
 
+bool hdmiTakeDismiss() MM_NONBLOCKING {
+    if (!hdmiStandIn_) return o.dismissed.exchange(false, std::memory_order_relaxed);
+    const bool was = hdmiDismissed_;
+    hdmiDismissed_ = false;
+    return was;
+}
+
 // A host has no bridge to read back; the stand-in reports what a test set.
 bool hdmiBridge(HdmiBridgeState& out) MM_NONBLOCKING {
     if (!hdmiStandIn_ || hdmiOpenMode_ < 0 || hdmiLink_ == HdmiLink::Down || !hdmiBridgeRead_) return false;
@@ -553,6 +619,8 @@ void setTestHdmiBridge(const HdmiBridgeState& state) { useStandIn(); hdmiBridge_
 void setTestHdmiMonitor(const edid::Monitor& monitor) { useStandIn(); hdmiMonitor_ = monitor; hdmiMonitorRead_ = true; }
 void setTestHdmiActiveMode(const HdmiMode& mode) { useStandIn(); hdmiActive_ = mode; }
 int hdmiTestOpenMode() { return hdmiOpenMode_; }
+bool hdmiTestOwnScreen() { return hdmiOwnScreen_; }
+void setTestHdmiDismiss() { useStandIn(); hdmiDismissed_ = true; }
 size_t hdmiTestFrameCount() { return hdmiFrames_; }
 uint16_t hdmiTestFrameWidth() { return hdmiW_; }
 uint16_t hdmiTestFrameHeight() { return hdmiH_; }
@@ -560,7 +628,7 @@ bool hdmiTestFrameFit() { return hdmiFit_; }
 const uint8_t* hdmiTestFrameData() { return hdmiFrameBytes_ ? hdmiFrame_ : nullptr; }
 void hdmiTestClear() {
     useStandIn();
-    hdmiFrames_ = 0; hdmiFrameBytes_ = 0; hdmiW_ = hdmiH_ = 0; hdmiOpenMode_ = -1; hdmiLink_ = HdmiLink::NoMonitor; hdmiMonitorRead_ = false; hdmiBridgeRead_ = false; hdmiActive_ = {};
+    hdmiFrames_ = 0; hdmiFrameBytes_ = 0; hdmiW_ = hdmiH_ = 0; hdmiOpenMode_ = -1; hdmiOwnScreen_ = false; hdmiDismissed_ = false; hdmiLink_ = HdmiLink::NoMonitor; hdmiMonitorRead_ = false; hdmiBridgeRead_ = false; hdmiActive_ = {};
 }
 
 }  // namespace mm::platform

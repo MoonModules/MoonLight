@@ -9,6 +9,7 @@ import { preview } from "./preview3d.js";
 import { markExpandable, panelFit, panelRefit, panelGrips, setupPanel } from "./panel.js";
 import { encodeGif } from "./gif.js";
 import { mountDeviceMap } from "./devicemap.js";
+import { mountFlow } from "./flow.js";
 import { openDevicePopup, attachCatalogField, catalogLink, setCatalogLink } from "./devicepopup.js";
 import { openGroupPopup } from "./devicegroup.js";
 import { fmtBytes, fmtTime, fwSleep, errorMessage, armPressTwice, uploadWithProgress } from "./uikit.js";
@@ -247,16 +248,18 @@ function connectWs() {
     ws.onerror = () => { /* onclose will fire next */ };
 }
 
-// The modules the page reads outside the root it shows, by type: the status bar and mode, the update badge, the cloud relay, the preview's frame rate and the MIDI bridge.
-const ALWAYS_SUBSCRIBED = ["SystemModule", "FirmwareUpdateModule", "MoonCloudModule", "PreviewDriver", "MidiService"];
+// The modules the page reads outside the root it shows, by type, each alone: the status bar and mode, the update badge, the preview's frame rate and the MIDI bridge.
+const ALWAYS_SUBSCRIBED = ["SystemModule", "FirmwareUpdateModule", "PreviewDriver", "MidiService"];
+// The ones read with their children: the cloud relay, whose stats child the Firmware card's nudge reads.
+const ALWAYS_WITH_CHILDREN = ["MoonCloudModule"];
 
 /// Tell the device which root the interface shows, so it sends that root in full and an outline of the rest.
 ///
-/// Sent on every change of root: the answer is a full state, which renderStructure draws.
+/// The root comes with its descendants; the modules read beside it come alone (`only`), so System's children, such as MoonShine, are sent once their root is shown. Sent on every change of root: the answer is a full state, which renderStructure draws.
 function subscribe(root) {
     if (!ws || ws.readyState !== WebSocket.OPEN || root === subscribedRoot) return;
     subscribedRoot = root;
-    ws.send(JSON.stringify({ subscribe: root ? [root, ...ALWAYS_SUBSCRIBED] : ALWAYS_SUBSCRIBED }));
+    ws.send(JSON.stringify({ subscribe: root ? [root, ...ALWAYS_WITH_CHILDREN] : ALWAYS_WITH_CHILDREN, only: ALWAYS_SUBSCRIBED }));
 }
 
 function setWsDot(connected) {
@@ -1944,7 +1947,7 @@ function createCard(mod, depth) {
     card.appendChild(title);
     const help = helpFor(mod.type);
     // The help's Docs link leads to the module's card on the docs site; docPath comes from /api/types.
-    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type), walkLinks(walkIndex, mod.type, null, WALK_PAGE)));
+    if (help && help.line) card.appendChild(moduleHelp(help, docPathForType(mod.type), walkLinks(walkIndex, mod.type, null, WALK_PAGE), deviceBuild()));
 
     // -- Controls --
     // Child-hosting modules deeper in the tree (Effects, Layer, Drivers, Layouts)
@@ -3243,7 +3246,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             // to before). The flag flows through to both render paths via the opts object.
             if (ctrl.editable) list.dataset.editable = "true";
             buildListEntries(list, rows, details, new Set(),   // initial: nothing expanded
-                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, flow: ctrl.flow, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                  moduleName: moduleName, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
             row.appendChild(list);
             break;
@@ -4139,6 +4142,11 @@ function buildListEntries(container, rows, details, openSet, opts) {
     // A graph replaces the rows: a node is a row, and a click opens what the row's detail would have shown; the panel's grips give its box height.
     if (opts && opts.graph && rows.length) {
         mountDeviceMap(container, rows, details, { ...opts, hooks: MAP_HOOKS });
+        return;
+    }
+    // A flow draws the pipeline in columns; a click on a node opens that module's card.
+    if (opts && opts.flow && rows.length) {
+        mountFlow(container, rows, details, { ...opts, summary: (type) => helpFor(type)?.line || "", open: (name) => { selectModule(revealModule(name)); focusModule(name); } });
         return;
     }
     container.replaceChildren();
@@ -5047,7 +5055,7 @@ function updateModuleControls(mod) {
                 // would jump a long list back to the top mid-edit of a row further down.
                 const prevScroll = list.querySelector(".list-scroll")?.scrollTop ?? 0;
                 buildListEntries(list, rows, details, open,
-                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
+                    {editable: ctrl.editable, fixedRows: ctrl.fixedRows, pads: ctrl.pads, graph: ctrl.graph, flow: ctrl.flow, gridCols: ctrl.gridCols, gridRows: ctrl.gridRows,
                      moduleName: mod.name, ctrlName: ctrl.name, optionSets: ctrl.optionSets || {}});
                 const newScroll = list.querySelector(".list-scroll");
                 if (newScroll) newScroll.scrollTop = prevScroll;
@@ -5994,6 +6002,12 @@ function deviceFirmwareInfo() {
     // "unknown" is what a host build older than its own firmware name reports, with no image to match.
     return version ? { version, firmware: firmware && firmware !== "unknown" ? firmware : null, update: value(fw, "update"),
                        moonbase: value(fw, "moonbaseMismatch") || null, mode: uiMode() } : null;
+}
+
+// The build this device runs, the Firmware card's `build` ("84769c65+ · date"): the help's Source link opens the header at that commit.
+function deviceBuild() {
+    const build = state?.modules?.flatMap(m => m.controls || []).find(c => c.name === "build");   // the one module with a build control
+    return build?.value || "";
 }
 
 // Light the badge for an available update. `tag` is the release the picker should pre-select

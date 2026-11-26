@@ -5,7 +5,7 @@
 #include "core/system/SystemModule.h"
 
 namespace mm { class ControlModule; }   // presets published as the HA effect list; .cpp includes it
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <cstdint>
 

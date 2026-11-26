@@ -7,7 +7,8 @@
 #include "core/services/RtpMidiSession.h"   // a desk on the network
 #include "core/util/NameResolver.h"         // a desk named rather than numbered
 #include "core/util/Ipv4.h"                 // parseDottedQuad: a desk's address
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // mdnsWithdraw, mdnsAdvertise
+#include "platform/platform_io.h"   // usbMidiEnd, usbMidiBegin, usbMidiConnected
 #include "core/util/format.h"              // formatTo: nonblocking formatting into a fixed buffer
 
 #include <algorithm>

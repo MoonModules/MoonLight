@@ -11,7 +11,7 @@
 #include "light/effects/SpiralEffect.h"
 #include "light/effects/TunnelEffect.h"
 #include "light/powerfunctions/polar.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // HEAP_RESERVE, freeHeap
 
 #include <cstdint>
 

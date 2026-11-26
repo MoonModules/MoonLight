@@ -9,7 +9,7 @@
 #include "light/modifiers/RotateModifier.h"
 #include "light/modifiers/RandomMapModifier.h"
 #include "light/effects/EffectBase.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "golden_frame.h"   // LayerFixture, the shared grid and layer
 
 #include <vector>

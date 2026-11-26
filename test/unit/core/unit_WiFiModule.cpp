@@ -4,6 +4,8 @@
 #include "doctest.h"
 #include "core/system/WiFiModule.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestWifiStaIPv4, setTestNetLease, setTestWifiScan
 
 #include <cstdio>
 #include <cstring>

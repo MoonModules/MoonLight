@@ -9,7 +9,7 @@
 #include "light/effects/RainbowEffect.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/layers/Layer.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
 #include "filesystem_fixture.h"
 
 #include <cstdio>
@@ -410,8 +410,11 @@ TEST_CASE("A config file in the flat format older builds wrote loads at boot and
     CHECK(static_cast<mm::NoiseEffect*>(layer->child(3))->scale == 6);
 
     fs->flush();   // the conversion marked it for saving
-    std::ifstream f(std::string(tmpRoot) + "/.config/Layer.json");
-    const std::string saved((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::string saved;
+    {   // closed before the folder is removed: Windows refuses to delete an open file
+        std::ifstream f(std::string(tmpRoot) + "/.config/Layer.json");
+        saved.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
     CHECK(saved.rfind("{\"Layer\":{", 0) == 0);
     CHECK(saved.find("\"Bow\":{\"type\":\"RainbowEffect\"") != std::string::npos);
     CHECK(saved.find("1.type") == std::string::npos);

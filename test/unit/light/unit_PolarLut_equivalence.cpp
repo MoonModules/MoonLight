@@ -15,7 +15,7 @@
 #include "light/layers/Layer.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cstdint>
 #include <vector>

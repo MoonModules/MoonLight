@@ -8,7 +8,7 @@
 #include "light/effects/RipplesEffect.h"
 #include "light/effects/LavaLampEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "golden_frame.h"   // cornersDiffer, the suite's one corner check
 
 namespace {

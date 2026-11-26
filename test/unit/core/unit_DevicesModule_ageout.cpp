@@ -16,7 +16,8 @@
 #include "discovery_rows.h"
 #include "core/system/DevicesModule.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestEthIPv4
 
 #include <cstdint>
 #include <cstring>

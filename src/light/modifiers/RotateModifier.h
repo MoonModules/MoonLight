@@ -2,6 +2,7 @@
 
 #include "light/modifiers/ModifierBase.h"
 #include "core/services/AudioService.h"   // the beat a beat-synced turn lands on
+#include "platform/platform_clock.h"   // millis
 
 namespace mm {
 

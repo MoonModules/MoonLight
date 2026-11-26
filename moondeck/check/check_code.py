@@ -198,10 +198,10 @@ def owned_files() -> list:
     return [rel for rel in files if not rel.startswith(FILE_EXCLUDE) and (ROOT / rel).exists()]
 
 
-def clones():
+def clones(root=ROOT, files=None):
     """Every clone jscpd finds among the files we own, as the parsed report, or None when the run produced nothing, which is a broken run rather than a clean tree.
 
-    jscpd comes through npx, which a developer machine with Node has.
+    jscpd comes through npx, which a developer machine with Node has. `root` and `files` name another copy of the tree, as `clones_at_head` does.
     """
     npx = shutil.which("npx")
     if not npx:
@@ -209,17 +209,34 @@ def clones():
         return None
     with tempfile.TemporaryDirectory() as td:
         # jscpd skips a file over 1,000 lines by default, which would leave the largest files uncompared; the caps lift so every owned file is read.
-        proc = subprocess.run([npx, "--yes", "jscpd@4", *owned_files(),
+        proc = subprocess.run([npx, "--yes", "jscpd@4", *(owned_files() if files is None else files),
                                "--min-lines", str(MIN_CLONE_LINES), "--min-tokens", str(MIN_CLONE_TOKENS),
                                "--max-lines", "1000000", "--max-size", "100mb",
                                "--reporters", "json", "--output", td, "--silent"],
-                              cwd=ROOT, capture_output=True, text=True, timeout=600)
+                              cwd=root, capture_output=True, text=True, timeout=600)
         report = Path(td) / "jscpd-report.json"
         if not report.exists():
             print("jscpd wrote no report", file=sys.stderr)
             print(proc.stderr.strip()[:500], file=sys.stderr)
             return None
         return json.loads(report.read_text(encoding="utf-8"))
+
+
+def clones_at_head():
+    """The committed tree's clones, as `clones` reports the working tree's: HEAD's copy of the directories we own files in, unpacked on its own and scanned the same way. None when it cannot be read."""
+    owned = owned_files()
+    tops = sorted({rel.split("/", 1)[0] for rel in owned if "/" in rel})
+    with tempfile.TemporaryDirectory() as td:
+        archive = subprocess.run(["git", "archive", "HEAD", "--", *tops], cwd=ROOT, capture_output=True, timeout=120)
+        if archive.returncode != 0:
+            return None
+        subprocess.run(["tar", "-x", "-C", td], input=archive.stdout, check=True, timeout=120)
+        return clones(Path(td), [rel for rel in owned if (Path(td) / rel).exists()])
+
+
+def clone_pair(clone) -> tuple:
+    """The two files a clone lies in, in one order, relative to the tree it was found in."""
+    return tuple(sorted((clone["firstFile"]["name"], clone["secondFile"]["name"])))
 
 
 def clone_rows(report) -> tuple:

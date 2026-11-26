@@ -1,7 +1,8 @@
 #pragma once
 
 #include "light/util/light_types.h"  // nrOfLightsType
-#include "platform/platform.h"
+#include "core/util/HeapBytes.h"  // heap(): the bytes with their memory type
+#include "platform/platform_heap.h"   // alloc, free
 
 #include <cstdint>
 #include <cstring>
@@ -11,20 +12,16 @@ namespace mm {
 
 /// The contiguous light data every effect writes and every driver reads.
 ///
-/// Allocated once outside the hot path and reused each frame, and kept by a resize to the same size.
-/// A layer and a driver group each own one when memory allows, and share one when it is tight.
+/// Allocated once outside the hot path and reused each frame, and kept by a resize to the same size. A layer and a driver group each own one when memory allows, and share one when it is tight.
 /// @technical
 ///
 /// ## Any channel layout fits
 ///
-/// The storage is a raw byte array rather than a pixel type, addressed by channel count and offset.
-/// That is what lets RGB, RGBW and multi-channel DMX fixtures share one buffer.
-/// A `std::span` view is the zero-cost safe accessor over it.
+/// The storage is a raw byte array rather than a pixel type, addressed by channel count and offset. That is what lets RGB, RGBW and multi-channel DMX fixtures share one buffer. A `std::span` view is the zero-cost safe accessor over it.
 ///
 /// ## Locking is avoided, not optimized
 ///
-/// A semaphore costs around 150 bytes on an ESP32, so the patterns here stay lock-free.
-/// An atomic pointer swap for double buffering, or one shared semaphore across layers.
+/// A semaphore costs around 150 bytes on an ESP32, so the patterns here stay lock-free: an atomic pointer swap for double buffering, or one shared semaphore across layers.
 class Buffer {
 public:
     /// An empty buffer, holding nothing until it is allocated.
@@ -104,6 +101,8 @@ public:
     uint8_t channelsPerLight() const { return channelsPerLight_; }
     /// How many bytes the lights occupy.
     size_t bytes() const { return static_cast<size_t>(count_) * channelsPerLight_; }
+    /// The same bytes with the memory type they live in, for the owner's memory readout.
+    HeapBytes heap() const { return heapOf(data_, bytes()); }
     /// Whether `allocate` keeps the current block for this size: it holds exactly that many bytes.
     bool holds(nrOfLightsType nrOfLights, uint8_t cpl) const {
         return data_ && static_cast<size_t>(nrOfLights) * cpl == bytes();

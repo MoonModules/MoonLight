@@ -1,6 +1,7 @@
 #pragma once
 
-#include "platform/platform.h"   // spawnPinnedTask, notifyTask, waitNotify: the workers' tasks
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_tasks.h"   // spawnPinnedTask, stopPinnedTask, notifyTask
 
 #include <atomic>
 #include <cstddef>
@@ -19,8 +20,8 @@ namespace mm {
 /// Workers and the caller take items from one shared counter, the textbook work queue for equal jobs. The counter holds the batch's number and its item count beside the next index, and an item is claimed by compare-and-swap: a worker still leaving the last batch finds the number changed and leaves the new one to the others, where a bare index would hand it an item with the old batch's function.
 class WorkerPool {
 public:
-    /// What runs one item: `ctx` is the batch's, `item` its index.
-    using ItemFn = void (*)(void* ctx, uint8_t item);
+    /// What runs one item: `ctx` is the batch's, `item` its index, `worker` whether a pool worker runs it rather than the caller.
+    using ItemFn = void (*)(void* ctx, uint8_t item, bool worker);
     /// The most workers a pool holds: one for each render thread beside the caller, none on a single core.
     static constexpr uint8_t kMaxWorkers = platform::renderThreads - 1;
 
@@ -56,18 +57,38 @@ public:
     /// How many workers run beside the caller.
     uint8_t workers() const { return count_; }
 
-    /// Run `fn(ctx, i)` once for every `i` below `items`, the workers and the caller taking items until none is left; returns once every item has run.
+    /// The time the items took, by who ran them, and the caller's wait for the last worker, in microseconds since the last take: the lanes of the tick time balance sheet.
+    struct Load {
+        uint32_t callerUs = 0;    ///< items the caller ran itself
+        uint32_t workersUs = 0;   ///< items the workers ran, summed over them
+        uint32_t joinUs = 0;      ///< the caller waiting for the workers' last items
+    };
+    /// Hand over the load since the last take and start again; called by the caller's thread, between batches.
+    Load takeLoad() {
+        const Load l{callerUs_, workersUs_.exchange(0, std::memory_order_relaxed), joinUs_};
+        callerUs_ = joinUs_ = 0;
+        return l;
+    }
+
+    /// Run `fn(ctx, i, worker)` once for every `i` below `items`, the workers and the caller taking items until none is left; returns once every item has run.
     void run(uint8_t items, ItemFn fn, void* ctx) {
         if (items == 0) return;
-        if (count_ == 0 || items == 1) { for (uint8_t i = 0; i < items; i++) fn(ctx, i); return; }
+        if (count_ == 0 || items == 1) {
+            const uint32_t t0 = platform::micros();
+            for (uint8_t i = 0; i < items; i++) fn(ctx, i, false);
+            callerUs_ += platform::micros() - t0;
+            return;
+        }
         fn_ = fn;
         ctx_ = ctx;
         done_.store(0, std::memory_order_relaxed);
         batch_ = static_cast<uint16_t>(batch_ + 1);
         claim_.store(pack(batch_, items, 0), std::memory_order_release);   // publishes fn_ and ctx_ with it
         for (uint8_t i = 0; i < count_; i++) platform::notifyTask(workers_[i].task);
-        takeItems(batch_);
+        takeItems(batch_, true);
+        const uint32_t t0 = platform::micros();
         while (done_.load(std::memory_order_acquire) < items) platform::yield();   // the caller's own items are done; the last workers finish theirs
+        joinUs_ += platform::micros() - t0;
     }
 
 private:
@@ -82,14 +103,18 @@ private:
         return (uint32_t{batch} << 16) | (uint32_t{items} << 8) | next;
     }
 
-    /// Claim and run items of `batch` until none is left or another batch has begun.
-    void takeItems(uint16_t batch) {
+    /// Claim and run items of `batch` until none is left or another batch has begun, timing each for the load of whoever ran it.
+    void takeItems(uint16_t batch, bool caller) {
         uint32_t c = claim_.load(std::memory_order_acquire);
         for (;;) {
             const uint8_t items = static_cast<uint8_t>(c >> 8), next = static_cast<uint8_t>(c);
             if ((c >> 16) != batch || next >= items) return;
             if (!claim_.compare_exchange_weak(c, c + 1, std::memory_order_acq_rel, std::memory_order_acquire)) continue;
-            fn_(ctx_, next);
+            const uint32_t t0 = platform::micros();
+            fn_(ctx_, next, !caller);
+            const uint32_t us = platform::micros() - t0;
+            if (caller) callerUs_ += us;
+            else workersUs_.fetch_add(us, std::memory_order_relaxed);
             done_.fetch_add(1, std::memory_order_release);
             c = claim_.load(std::memory_order_acquire);
         }
@@ -101,7 +126,7 @@ private:
         WorkerPool& p = *w.pool;
         while (!p.stop_.load(std::memory_order_acquire)) {
             if (!platform::waitNotify(w.task, 100)) continue;
-            p.takeItems(static_cast<uint16_t>(p.claim_.load(std::memory_order_acquire) >> 16));
+            p.takeItems(static_cast<uint16_t>(p.claim_.load(std::memory_order_acquire) >> 16), false);
         }
     }
 
@@ -111,6 +136,9 @@ private:
     std::atomic<uint32_t> claim_{0};    ///< the claim word, @xref{one-word-claims-an-item}
     std::atomic<uint8_t> done_{0};      ///< items of the batch that have run
     std::atomic<bool> stop_{false};
+    uint32_t callerUs_ = 0;             ///< the caller's item time since the last take, the caller's alone
+    uint32_t joinUs_ = 0;               ///< the caller's wait for the workers since the last take
+    std::atomic<uint32_t> workersUs_{0};   ///< the workers' item time since the last take
     ItemFn fn_ = nullptr;               ///< the batch's function, published by the claim word
     void* ctx_ = nullptr;               ///< and its context
 };

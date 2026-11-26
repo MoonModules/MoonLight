@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 from bench_tempo import OUT_DIR, pct, show
+from _console import utf8_stdio  # moondeck/ is on the path through bench_tempo
 
 KEYS = ("acc1_2", "acc1_4", "acc2_2", "acc2_4")
 
@@ -86,7 +87,7 @@ def reading(row: dict) -> str:
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8")   # track names print as they are, whatever the console's code page
+    utf8_stdio()   # track names print as they are, whatever the console's code page
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("runs", type=Path, nargs="*", metavar="RUN", help="two run files, older first")
     ap.add_argument("--last", action="store_true", help="the two newest runs on the same files")

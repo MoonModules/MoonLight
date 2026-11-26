@@ -8,7 +8,8 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
 #include "light/layouts/PanelsLayout.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
 
 #include <memory>
 
@@ -71,9 +72,9 @@ struct LeftOfBox : mm::LayoutBase {
     mm::nrOfLightsType lightCount() const override { return 9; }
     /// Light 0 left of the box, then the raster.
     void placeLights(const mm::CoordSink& sink) const override {
-        sink.pixel(0, -1, 1, 0);
+        sink.addLight(0, -1, 1, 0);
         for (mm::nrOfLightsType i = 1; i < 9; i++)
-            sink.pixel(i, static_cast<mm::lengthType>((i - 1) % 4), static_cast<mm::lengthType>((i - 1) / 4), 0);
+            sink.addLight(i, static_cast<mm::lengthType>((i - 1) % 4), static_cast<mm::lengthType>((i - 1) / 4), 0);
     }
 };
 
@@ -84,8 +85,8 @@ struct OneOutsideDense : mm::LayoutBase {
     /// The raster, with light 3 moved left of the box.
     void placeLights(const mm::CoordSink& sink) const override {
         for (mm::nrOfLightsType i = 0; i < 8; i++) {
-            if (i == 3) sink.pixel(3, -1, 1, 0);
-            else sink.pixel(i, static_cast<mm::lengthType>(i % 4), static_cast<mm::lengthType>(i / 4), 0);
+            if (i == 3) sink.addLight(3, -1, 1, 0);
+            else sink.addLight(i, static_cast<mm::lengthType>(i % 4), static_cast<mm::lengthType>(i / 4), 0);
         }
     }
 };

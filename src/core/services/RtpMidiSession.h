@@ -1,7 +1,8 @@
 #pragma once
 
 #include "core/util/RtpMidi.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <cstdint>
 #include <cstdio>

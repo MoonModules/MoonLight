@@ -7,7 +7,8 @@
 #include "core/module/Scheduler.h"
 #include "core/system/FilesystemModule.h"   // setDeviceModel() arms the debounced save (noteDirty)
 #include "core/util/build_info.h"        // kFirmwareName: the variant persisted for MoonBase
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // totalInternalHeap, totalHeap, freeHeap
+#include "platform/platform_system.h"   // getMacAddress, resetReason, LogLevel
 
 #include <cstdio>
 #include <cstring>

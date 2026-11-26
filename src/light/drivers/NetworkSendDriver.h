@@ -10,7 +10,10 @@
 #include "core/util/NameResolver.h"    // a named receiver's address, looked up off the render thread
 #include "core/util/format.h"          // formatTo: the unresolved-names status
 #include "light/drivers/PinList.h"  // assignCounts: the same window-split idiom as ledsPerPin
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // micros, millis
+#include "platform/platform_tasks.h"   // notifyTask, WorkerTask, waitNotify
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <atomic>
 
@@ -191,6 +194,8 @@ public:
         stopSendTask();
         socket_.close();
         nDest_ = 0;   // re-derived by prepare() on the next enable
+        corrected_.free();   // the staging frame goes with the driver, and prepare() takes it again
+        publishHeapBytes();
         DriverBase::release();
     }
 
@@ -299,6 +304,7 @@ public:
             const uint8_t* src = sourceBuffer_->data();
             const uint8_t srcCh = sourceBuffer_->channelsPerLight();
             uint8_t* dst = corrected_.data();
+            if (frameLayoutChanged()) corrected_.clear();   // once per profile change: a channel with no role sends 0
             for (nrOfLightsType i = 0; i < nLights; i++) {
                 // The source stride lets a wide light hand its motion channels through.
                 correction_.apply(src + (winStart + i) * srcCh, dst + i * outCh, srcCh);
@@ -379,6 +385,8 @@ private:
     Buffer* sourceBuffer_ = nullptr;
     /// Owned: source bytes after brightness/order/white. Sized off the hot path (resizeCorrected).
     Buffer corrected_;
+    /// The staging frame beside the base's scratch, so the memory readout counts it.
+    HeapBytes driverHeapBytes() const override { return DriverBase::driverHeapBytes() + corrected_.heap(); }
     /// Art-Net/E1.31 per-frame sequence counter, so each universe counts up once a frame, as nextSequence steps it.
     uint8_t sequence_ = 1;
     /// DDP's per-packet sequence counter for each destination, 1 to 15, 0 before its first packet: each receiver sees its own run unbroken.
@@ -592,7 +600,7 @@ private:
 
     /// Size the corrected buffer, off the hot path, which is the no-allocation contract.
     void resizeCorrected() {
-        if (!sourceBuffer_) return;
+        if (!sourceBuffer_ || !effectivelyEnabled()) return;   // a driver that is off holds no frame
         // Sized for the window slice, using the same resolver the send loop does.
         nrOfLightsType winStart, n;
         windowSlice(sourceBuffer_->count(), winStart, n);
@@ -603,6 +611,8 @@ private:
         const bool wasSending = sendTask_.impl != nullptr;
         stopSendTask();
         corrected_.allocate(n, ch);
+        frameReplaced();
+        publishHeapBytes();
         if (wasSending) startSendTask();
     }
     uint32_t taskStarts_ = 0;   ///< send-task starts, for taskStartsForTest

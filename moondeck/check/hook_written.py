@@ -35,6 +35,7 @@ Each check runs only on the files it governs:
 A malformed payload, a missing tool or a build not configured yet stays silent: this is a guardrail, not a gatekeeper.
 """
 
+import collections
 import json
 import os
 import shlex
@@ -348,7 +349,7 @@ def lizard_rises(paths: list[Path]) -> list[str]:
 
 
 def clone_rises(paths: list[Path]) -> list[str]:
-    """Duplicated blocks jscpd finds whose either side lies in lines this change added: a copy the change made."""
+    """Duplicated blocks jscpd finds whose either side lies in lines this change added, in a pair of files that holds more of them than at HEAD: a copy the change made."""
     import check_code  # noqa: PLC0415
     added: dict[str, list[tuple[int, int]]] = {}
     diff = subprocess.run(["git", "diff", "-U0", "HEAD", "--", *map(_rel, paths)], cwd=REPO, capture_output=True, text=True, check=False).stdout
@@ -365,10 +366,26 @@ def clone_rises(paths: list[Path]) -> list[str]:
         if not subprocess.run(["git", "cat-file", "-e", f"HEAD:{_rel(p)}"], cwd=REPO, capture_output=True, check=False).returncode == 0:
             added[_rel(p)] = [(1, 10**9)]
     new = lambda side: any(a <= side["end"] and side["start"] <= b for a, b in added.get(side["name"], []))  # noqa: E731
-    report = check_code.clones() or {}
+    now = (check_code.clones() or {}).get("duplicates", [])
+    touched = [d for d in now if new(d["firstFile"]) or new(d["secondFile"])]
+    # The second scan, of HEAD, runs only when a clone touches the change: most changes touch none.
+    head = (check_code.clones_at_head() or {}).get("duplicates") if touched else []
     return [f"duplicated block: {d['firstFile']['name']}:{d['firstFile']['start']}-{d['firstFile']['end']} == "
             f"{d['secondFile']['name']}:{d['secondFile']['start']}-{d['secondFile']['end']}"
-            for d in report.get("duplicates", []) if new(d["firstFile"]) or new(d["secondFile"])]
+            for d in clones_created(touched, now, head)]
+
+
+def clones_created(touched: list, now: list, head: list | None) -> list:
+    """The clones among `touched`, the ones lying in added lines, that the change created: those in a pair of files holding more clones now than at HEAD.
+
+    An edit inside a clone that was there already, such as a pixel changed in two animation frames that share rows, creates none. With no HEAD scan to compare (None) every touched clone counts.
+    """
+    import check_code  # noqa: PLC0415
+    if head is None:
+        return touched
+    count = lambda clones: collections.Counter(check_code.clone_pair(d) for d in clones)  # noqa: E731
+    before, after = count(head), count(now)
+    return [d for d in touched if after[check_code.clone_pair(d)] > before[check_code.clone_pair(d)]]
 
 
 def diff_gate() -> int:

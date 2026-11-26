@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/BouncingBallsEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"  // setTestNowMs: a frozen clock for a deterministic frame
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <vector>
 

@@ -6,7 +6,7 @@
 
 #include <vector>
 
-// GridBlacks is a Grid with mid-strand DARK COLUMNS. A dark column is a GAP: a physical wire slot the driver clocks (index + coordinate) that maps to NO logical light, so it stays black. These tests pin the emit contract: gaps arrive via sink.blackPixel() at their true position, the physical index advances across them (they are real wire slots), and the lit/gap choice is on the true column x.
+// GridBlacks is a Grid with mid-strand dark columns: gaps, wire slots the driver clocks that map to no logical light. Gaps arrive through sink.addGap() at their true position, and the physical index advances across them.
 
 namespace {
 
@@ -25,8 +25,8 @@ std::vector<GapEntry> walk(const mm::GridBlacksLayout& g) {
 
 } // namespace
 
-// A dark column run: [blackStart, blackStart+blackCount) is black in every row. The physical index still advances across gaps (they are wire slots), the coordinate is the true (x,y), and lit/black is decided on x, so lit columns beyond the gap keep their true positions (the picture is HOLED, not collapsed).
-TEST_CASE("GridBlacks black columns emit gap pixels at their true position") {
+// A dark column run [blackStart, blackStart+blackCount) is black in every row; the index advances across gaps and lit columns past the run keep their true x, so the picture is holed with every column in place.
+TEST_CASE("GridBlacks black columns emit gaps at their true position") {
     mm::GridBlacksLayout grid;
     grid.width = 5;
     grid.height = 2;
@@ -34,9 +34,9 @@ TEST_CASE("GridBlacks black columns emit gap pixels at their true position") {
     grid.blackStart = 2;   // columns 2,3 dark
     grid.blackCount = 2;
 
-    // Gaps are PHYSICAL pixels: lightCount (the wire/driver count) is the full box.
+    // Gaps are physical slots: lightCount (the wire/driver count) is the full box.
     CHECK(grid.lightCount() == 10);
-    CHECK(grid.hasBlackPixels());
+    CHECK(grid.hasGaps());
 
     auto v = walk(grid);
     REQUIRE(v.size() == 10);                 // every cell emitted, lit and gap alike
@@ -70,17 +70,17 @@ TEST_CASE("GridBlacks black columns hold on the true column under serpentine") {
     CHECK(v[7].x == 0); CHECK(v[7].black);       // true column 0, emitted last in the reversed row
 }
 
-// No black run → no gaps, and the walk is byte-identical to a plain grid (a GridBlacks with blackCount 0 renders exactly like a Grid). blackCb never fires; hasBlackPixels is false.
+// No black run → no gaps, and the walk is byte-identical to a plain grid (a GridBlacks with blackCount 0 renders exactly like a Grid). Every slot reaches the light handler; hasGaps is false.
 TEST_CASE("GridBlacks with no black run emits zero gaps") {
     mm::GridBlacksLayout grid;
     grid.width = 4;
     grid.height = 4;
     grid.blackCount = 0;   // the default
 
-    CHECK_FALSE(grid.hasBlackPixels());
+    CHECK_FALSE(grid.hasGaps());
     auto v = walk(grid);
     REQUIRE(v.size() == 16);
-    for (const auto& e : v) CHECK_FALSE(e.black);   // every emission is a normal pixel
+    for (const auto& e : v) CHECK_FALSE(e.black);   // every emission is a light
 }
 
 // Robustness: a black run wider than the grid darkens every column (whole grid dark, no crash), and a run starting past the right edge darkens nothing.

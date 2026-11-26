@@ -5,7 +5,7 @@
 #include "light/effects/MoonInvadersEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "audio_effect_test.h"   // seat and EffectOnGrid: the audio service and the grid
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Writing `player` and pressing `fire` take the cannon: it moves where the control says and fires one shot, a second press ignored while that shot flies.
 TEST_CASE("MoonInvaders hands the cannon to the player, one shot at a time") {
@@ -76,4 +76,36 @@ TEST_CASE("MoonInvaders needs the audio analysis only while audioReactive is on"
     fx.e.audioReactive = false;
     fx.e.prepare();
     CHECK_FALSE(demanded());
+}
+
+namespace {
+// How many pupils of the frame have the white of their eye on the side `dx` names, the pupil's own pixels apart.
+int pupilsWithWhiteAt(const mm::Layer& layer, int w, int h, int dx) {
+    const auto px = [&](int x, int y) { const uint8_t* d = layer.buffer().data() + (static_cast<size_t>(y) * w + x) * 3; return mm::RGB{d[0], d[1], d[2]}; };
+    const auto is = [](mm::RGB c, mm::RGB want) { return c.r == want.r && c.g == want.g && c.b == want.b; };
+    int n = 0;
+    for (int y = 0; y < h; y++)
+        for (int x = 1; x + 1 < w; x++)
+            if (is(px(x, y), {20, 20, 120}) && is(px(x + dx, y), {255, 255, 255})) n++;
+    return n;
+}
+}  // namespace
+
+TEST_CASE("MoonInvaders' ghosts look the way the formation marches, and turn their eyes when it turns at a wall") {
+    struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } } guard;
+    uint32_t now = 1000;
+    mm::platform::setTestNowMs(now);
+    mm::EffectOnGrid<mm::MoonInvadersEffect> game(64, 64);
+    mm::Layer& layer = game.layer;
+    layer.tick();
+    REQUIRE(pupilsWithWhiteAt(layer, 64, 64, -1) > 0);   // marching right: the white behind each pupil, on its left
+    CHECK(pupilsWithWhiteAt(layer, 64, 64, +1) == 0);
+    bool turned = false;
+    for (int frame = 0; frame < 4000 && !turned; frame++) {   // a wall is a few steps away
+        now += 50;
+        mm::platform::setTestNowMs(now);
+        layer.tick();
+        turned = pupilsWithWhiteAt(layer, 64, 64, +1) > 0 && pupilsWithWhiteAt(layer, 64, 64, -1) == 0;
+    }
+    CHECK(turned);   // marching left: mirrored
 }

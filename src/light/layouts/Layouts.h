@@ -129,10 +129,10 @@ public:
     }
 
     /// Whether any enabled child holds physical slots dark, which turns the dense-identity fast path off, since an identity map would light a gap.
-    bool hasBlackPixels() const {
+    bool hasGaps() const {
         if (!enabled()) return false;
         for (uint8_t i = 0; i < childCount(); i++) {
-            if (child(i)->enabled() && static_cast<LayoutBase*>(child(i))->hasBlackPixels()) return true;
+            if (child(i)->enabled() && static_cast<LayoutBase*>(child(i))->hasGaps()) return true;
         }
         return false;
     }

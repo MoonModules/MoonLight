@@ -55,7 +55,7 @@ public:
     }
 
     /// Whether dark columns exist, which is what makes the Layer fold the mapping.
-    bool hasBlackPixels() const override { return blackCount != 0; }
+    bool hasGaps() const override { return blackCount != 0; }
 
     /// Emit every light's coordinate, in wiring order: a GridLayout object places the lights, and a dark column's are held black.
     void placeLights(const CoordSink& sink) const override {
@@ -69,8 +69,8 @@ public:
         Holes holes{&sink, blackStart, static_cast<lengthType>(blackStart + blackCount), blackCount != 0};
         grid.placeLights(CoordSink{[](void* c, nrOfLightsType i, lengthType x, lengthType y, lengthType z) {
             auto* h = static_cast<Holes*>(c);
-            if (h->any && x >= h->start && x < h->end) h->sink->blackPixel(i, x, y, z);
-            else h->sink->pixel(i, x, y, z);
+            if (h->any && x >= h->start && x < h->end) h->sink->addGap(i, x, y, z);
+            else h->sink->addLight(i, x, y, z);
         }, nullptr, &holes});
     }
 };

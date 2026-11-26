@@ -67,7 +67,7 @@ void setGateOpen(bool open) { setGpioBackendGateOpen(open); }
 uint32_t realOpensNow() { return gpioBackendRealOpens(); }
 bool realtimeFailed() { return engine_.realtimeFailed(); }
 #else
-// A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
+// A build that omits the engine (Windows): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
 struct NoEngine : Hub75NoEngine<Hub75GpioOptions> {
     NoEngine() : Hub75NoEngine("this build has no GPIO engine") {}
     void setCorrection(uint8_t, uint8_t) {}

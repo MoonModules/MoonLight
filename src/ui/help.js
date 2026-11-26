@@ -87,8 +87,14 @@ function walkAnchor(w) {
     return a;
 }
 
-// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then. `walks` are walkLinks' links, listed after the source and the tests.
-export function moduleHelp(help, docPath, walks = []) {
+// A header's address at the device's own build: the help names a branch or a release, and the build id (`84769c65+ · date`, as the Firmware card shows it) names the commit the device runs. A `+` marks local edits, so the link is that commit's closest file.
+export function sourceAtBuild(source, build) {
+    const commit = /^[0-9a-f]{7,40}/.exec(build || "")?.[0];
+    return commit && source ? source.replace(/\/blob\/.*?(?=\/src\/)/, `/blob/${commit}`) : source;   // the whole ref up to src/, so a branch named fix/foo is replaced too
+}
+
+// A module's help, progressive disclosure: the line and the summary always show, the guide and the rest open on a tap, and the picture loads only then. `walks` are walkLinks' links, listed after the source and the tests. `build` pins the source link to the device's commit.
+export function moduleHelp(help, docPath, walks = [], build = "") {
     const box = document.createElement("details");
     box.className = "card-helpbox";
     // The line and the summary always show; the arrow opens the guide, the picture, the attribution and the links.
@@ -112,7 +118,7 @@ export function moduleHelp(help, docPath, walks = []) {
     // Built as elements, each URL through safeUrl, so nothing in the file becomes an attribute of its own.
     const links = document.createElement("div");
     links.className = "help-links";
-    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Source", help.source], ["Tests", help.tests]]) {
+    for (const [label, url] of [["Docs", docPath ? docUrl(docPath) : null], ["Source", sourceAtBuild(help.source, build)], ["Tests", help.tests]]) {
         const href = safeUrl(url);
         if (!href) continue;
         if (links.childNodes.length) links.append(" · ");

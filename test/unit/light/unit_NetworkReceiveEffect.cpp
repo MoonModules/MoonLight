@@ -9,7 +9,8 @@
 #include "light/modifiers/MirrorModifier.h"
 #include "light/modifiers/TransposeModifier.h"
 #include "light/effects/SolidEffect.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs, setTestNowMs
+#include "platform/platform_net.h"   // UdpSocket
 #include "unit/core/conditional_controls.h"   // isVisible, isHidden
 
 #include <cstring>

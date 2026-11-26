@@ -8,7 +8,9 @@
 #include "core/util/ModuleFactory.h"
 #include "core/module/Scheduler.h"
 #include "core/module/StateDocument.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_fs.h"   // isSdPath, fsRemove, fsList
 
 #include <cstdio>
 #include <new>      // placement new: removeTree's heap DirLevel

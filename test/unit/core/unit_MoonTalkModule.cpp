@@ -4,6 +4,7 @@
 #include "core/system/MoonTalkModule.h"
 #include "core/module/Scheduler.h"
 #include "core/system/SystemModule.h"
+#include "platform/platform_net.h"   // httpsAvailable, setTestHttpFetch
 
 #include <string>
 

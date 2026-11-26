@@ -15,7 +15,8 @@
 #include "core/services/OscService.h"
 #include "core/util/Addressing.h"
 #include "core/util/NameResolver.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_system.h"   // getMacAddress
 
 #include <cstdio>
 #include <cstring>

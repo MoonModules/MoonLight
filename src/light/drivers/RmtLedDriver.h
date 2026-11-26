@@ -5,7 +5,9 @@
 #include "light/drivers/LedDriverConfig.h"
 #include "light/drivers/PinList.h"         // parsePinList / assignCounts (shared with I80Peripheral)
 #include "light/drivers/RmtSymbol.h"       // makeRmtSymbol (the bit shapes the peripheral expands with)
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayUs
+#include "platform/platform_heap.h"   // allocInternal, alloc, ptrIsPsram
+#include "platform/platform_leds.h"   // rmtWs2812Transmit, rmtWs2812Wait, RmtWs2812Handle
 
 namespace mm {
 
@@ -194,6 +196,7 @@ public:
         const uint8_t* src = sourceBuffer_->data();
         const uint8_t srcCh = sourceBuffer_->channelsPerLight();
         // The bit expansion happens on the way out, so this buffer is outCh bytes per light.
+        if (frameLayoutChanged()) std::memset(frame_, 0, frameCap_);   // once per profile change: a channel with no role sends 0
         for (nrOfLightsType i = 0; i < n; i++) {
             correction_.apply(src + (winStart_ + i) * srcCh, frame_ + static_cast<size_t>(i) * outCh, srcCh);
         }
@@ -360,6 +363,7 @@ private:
         frame_ = static_cast<uint8_t*>(platform::allocInternal(need));
         if (!frame_) frame_ = static_cast<uint8_t*>(platform::alloc(need));
         frameCap_ = frame_ ? need : 0;
+        frameReplaced();
         // A failed or PSRAM allocation must SAY so, or the strip freezes under a healthy status.
         frameUnusable_ = !frame_ || platform::ptrIsPsram(frame_);
         if (frameUnusable_) {
@@ -386,8 +390,8 @@ private:
 
 protected:
     /// This driver's heap: the base scratch plus the frame buffer, for the memory readout.
-    size_t driverHeapBytes() const override {
-        return DriverBase::driverHeapBytes() + frameCap_;
+    HeapBytes driverHeapBytes() const override {
+        return DriverBase::driverHeapBytes() + heapOf(frame_, frameCap_);
     }
 
 private:

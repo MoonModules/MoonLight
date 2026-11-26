@@ -8,6 +8,7 @@
 #include "light/effects/FseqPlayerEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_fs.h"   // fsSetRoot, SdPinConfig, sdMount
 
 #include <filesystem>
 #include <string>
@@ -526,7 +527,7 @@ TEST_CASE("a zlib file declaring no compression blocks is refused by name, befor
 TEST_CASE("a scanned name past kPathCap is skipped, not truncated into a different file, with a named warning") {
     SdFixture sd;
     sd.writeFseq("/sd/good.fseq", makeFseqV1Bytes(10, 2));
-    const std::string longName(200, 'x');   // past kPathCap (192)
+    const std::string longName(184, 'x');   // "/sd/" + name + ".fseq" is 193 bytes, one past kPathCap (192): the shortest such name, so the file stays under Windows' 260-character path limit with a temp folder of up to 47 characters and ".tmp" added
     sd.writeFseq(("/sd/" + longName + ".fseq").c_str(), makeFseqV1Bytes(10, 2));
 
     Scene s;

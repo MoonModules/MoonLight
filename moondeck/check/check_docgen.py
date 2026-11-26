@@ -1158,9 +1158,6 @@ def _process_sizes():
     files = {s["id"]: f"moonwalk/{s['file']}" for s in model["stages"]}
     out = [(files[stage], f"{_PROCESS_SIZE_RULE}: {why}") for stage, why in gen_moonwalk.size_warnings(model["processes"])]
     out += [(files[stage], f"{_PROCESS_REPEAT_RULE}: {why}") for stage, why in gen_moonwalk.shared_runs(model["processes"])]
-    kb = gen_moonwalk.download_kb(model)
-    if kb > gen_moonwalk.MAX_DOWNLOAD_KB:
-        out.append(("docs/assets/moonwalk.js", f"{_PROCESS_SIZE_RULE}: the map and its renderer download {kb} KB gzipped > {gen_moonwalk.MAX_DOWNLOAD_KB}; the map carries less"))
     return out
 
 

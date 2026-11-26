@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include "hub75_pi_bench.h"
+#include "platform/platform_leds.h"   // Hub75Backend, hub75BackendLabel
 
 namespace {
 

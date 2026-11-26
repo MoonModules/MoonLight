@@ -2,7 +2,7 @@
 
 #include "core/util/HttpHead.h"   // findHeader: the probe reads a page's Server header as the server reads a request's
 #include "core/util/format.h"     // formatTo: nonblocking formatting into a fixed buffer
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <cctype>
 #include <cstddef>

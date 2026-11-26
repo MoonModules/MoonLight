@@ -3,7 +3,7 @@
 #include "core/moonlive/MoonLive.h"
 #include "core/moonlive/MoonLiveBuiltins.h"
 #include "core/module/Scheduler.h"
-#include "platform/platform.h"   // gpioInputBegin / gpioRead / gpioWrite
+#include "platform/platform_io.h"   // gpioInputBegin, GpioPull, gpioRead
 #include "core/moonlive/MoonLiveBuiltins_common.h"   // the neutral half: math, waveforms, print
 #include "core/util/JsonFetch.h"   // the documents a script's json values name
 

@@ -73,7 +73,7 @@ bool gateOpen() { return pioBackendGateOpen(); }
 void setGateOpen(bool open) { setPioBackendGateOpen(open); }
 uint32_t realOpensNow() { return pioBackendRealOpens(); }
 #else
-// A build that omits the engine (MSVC): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
+// A build that omits the engine (Windows): the same calls land on an engine whose every open refuses, so the seam keeps one code path; the recorder refuses what the engine would, and Stub mode refuses with the reason.
 struct NoEngine : Hub75NoEngine<Hub75PioOptions> {
     NoEngine() : Hub75NoEngine("this build has no PIO engine") {}
     void setBrightness(uint8_t) {}

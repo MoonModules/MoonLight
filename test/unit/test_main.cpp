@@ -11,7 +11,9 @@
 #include "platform/Hub75Gpio.h"   // setTestHub75GpioGateOpen: no case opens the real GPIO; hub75GpioTestRealOpens: the count the run ends on
 #include "platform/Hub75Pio.h"    // setTestHub75PioGateOpen: no case opens the real PIO; hub75PioTestRealOpens: the count the run ends on
 #include "platform/machine.h"     // setTestMachineRest: no case depends on the board it runs on
-#include "platform/platform.h"   // setTestNowMs, setTestClockStep: the shared test clock; hdmiTestClear: the HDMI stand-in; setTestJoin: multicast off the host's network
+#include "platform/platform_clock.h"   // setTestNowMs, setTestClockStep
+#include "platform/platform_net.h"   // setTestJoin, TestJoin
+#include "platform/platform_video.h"   // hdmiTestClear
 
 // Every case and subcase rerun starts on the real clock and its own local time, the HDMI stand-in, a multicast off the host's network, a machine and a SoC that are `Other` whatever the board, the real PIO and GPIO out of reach and the default palette.
 struct FreshFixturesPerTest : doctest::IReporter {

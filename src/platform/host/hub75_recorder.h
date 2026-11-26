@@ -108,7 +108,7 @@ uint32_t hub75SeamSubmitErrors(bool engineHolds, const Engine& engine, const Hub
 /// Whether a seam holds panels, the engine or the recorder: the state whose close counts.
 inline bool hub75SeamHoldsPanels(bool engineHolds, const Hub75Recorder& rec) { return engineHolds || rec.width() != 0; }
 
-/// The engine of a build that omits it (MSVC): every open refuses with `why`, every count is 0 and every call lands harmlessly, so a seam keeps one code path. A seam derives its own to take the calls only it makes.
+/// The engine of a build that omits it (Windows): every open refuses with `why`, every count is 0 and every call lands harmlessly, so a seam keeps one code path. A seam derives its own to take the calls only it makes.
 template <class Options>
 class Hub75NoEngine {
   public:

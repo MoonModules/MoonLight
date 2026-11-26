@@ -6,6 +6,7 @@
 #include "audio_effect_test.h"
 #include "light/effects/KeyboardEffect.h"
 #include "../core/conditional_controls.h"   // mm::controlIndex
+#include "platform/platform_clock.h"   // setTestNowMs
 
 using namespace mm;
 

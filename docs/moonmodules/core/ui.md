@@ -68,7 +68,7 @@ A left column listing the root modules, one entry per top-level MoonModule.
 - **Footer** pinned to the bottom of the nav: social links (GitHub, Discord, Reddit, YouTube, inline
   SVG) and a `© <year> MoonLight` line.
 
-The page subscribes to what it shows: the selected root, plus by type the modules it reads outside that root (`ALWAYS_SUBSCRIBED`: System for the status bar and mode, FirmwareUpdate for the update badge, MoonCloud for the relay, PreviewDriver for the frame rate, MidiService for the MIDI bridge). The device answers with those modules in full and an outline of the rest, names and shape without controls, which is all the nav reads. Opening another root sends a new subscription, and its cards appear when the answer arrives; until then the previous cards stay. The control-surface target picker offers every module's controls, so assign mode fetches the whole tree from `/api/state`.
+The page subscribes to what it shows: the selected root with its descendants, plus by type the modules it reads outside that root, each without its children (`ALWAYS_SUBSCRIBED`, sent as `only`: System for the status bar and mode, FirmwareUpdate for the update badge, MoonCloud for the relay, MoonStats for the Firmware card's stats nudge, PreviewDriver for the frame rate, MidiService for the MIDI bridge), so a module under System, such as MoonShine, costs nothing until System is shown. The device answers with those modules in full and an outline of the rest, names and shape without controls, which is all the nav reads. Opening another root sends a new subscription, and its cards appear when the answer arrives; until then the previous cards stay. The control-surface target picker offers every module's controls, so assign mode fetches the whole tree from `/api/state`.
 
 ## Module card
 
@@ -193,7 +193,7 @@ card-render closure holding a `mod` reference goes stale within ~1 s. Any "which
 The endpoints, the `/ws` frame shape, and the streaming state sink are owned by [HttpServerModule](system.md#httpserver); `/api/control` is `{module, control, value}`. The
 **browser-side** socket behavior the server doesn't dictate:
 
-- URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.
+- URL `ws://<host>/ws` (same port as HTTP). On open the page sends `{"subscribe":[…], "only":[…]}`; the server answers with a full state, then a patch of what changed in the subscribed modules each second.
 - After an add, delete, move, replace or rename, `refetchState()` sends `{"resync":n}` and resolves when the document ending in `"resync":n` has rendered: the view alone, never the whole tree. Only the diagnostics download, the control-surface target picker and a config restore read `/api/state`, since each needs every module.
 - Client sends `"ping"` every 25 s as keepalive (Safari kills idle sockets otherwise).
 - Auto-reconnect on close with exponential backoff (500 ms → 5 s ceiling).

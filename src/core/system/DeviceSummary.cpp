@@ -5,7 +5,7 @@
 #include "core/system/FirmwareUpdateModule.h"
 #include "core/system/SystemModule.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"   // chipRevision, chipPackage, flashChipSize, psramFoundBytes, psramType: the board facts
+#include "platform/platform_system.h"   // chipRevision, chipPackage, psramFoundBytes
 
 #include <cstring>
 

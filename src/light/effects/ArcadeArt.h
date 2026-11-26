@@ -24,7 +24,7 @@ inline void moonManPalette(RGB (&pal)[kPaletteCount]) {
     pal[kDark]  = RGB{140, 118, 0};
 }
 
-/// A ghost's palette from one entry of the active one, keeping the white eyes that make a colored blob read as a ghost.
+/// A ghost's palette from one entry of the active one, keeping the white eyes that make a colored blob read as a ghost. A ghost is drawn looking right, so flipX turns its look with its travel.
 inline void ghostPalette(RGB (&pal)[kPaletteCount], uint8_t entry) {
     const RGB body = colorFromPalette(*Palettes::active(), entry);
     pal[kClear] = RGB{0, 0, 0};
@@ -147,16 +147,17 @@ static_assert(sizeof(kGhostSmall) == static_cast<size_t>(SW) * SH * SF, "small g
 namespace invart {
 
 /// The sprites index these and the effect fills them, so one drawing serves every rank in a color.
-enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kEye = 3 };
-inline constexpr uint8_t kPaletteCount = 4;
+enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kEye = 3, kPupil = 4 };
+inline constexpr uint8_t kPaletteCount = 5;
 
-/// An invader's palette from one entry of the active one, with dark eyes.
+/// An invader's palette from one entry of the active one, with the ghosts' white eyes and dark pupils. Every invader is drawn looking right, its pupil on the right of each eye, so flipX turns its look with its travel, as it turns MoonMan.
 inline void invaderPalette(RGB (&pal)[kPaletteCount], uint8_t entry) {
     const RGB body = colorFromPalette(*Palettes::active(), entry);
     pal[kClear] = RGB{0, 0, 0};
     pal[kBody]  = body;
     pal[kDark]  = blend(body, RGB{0, 0, 0}, 140);
-    pal[kEye]   = RGB{10, 10, 14};
+    pal[kEye]   = RGB{255, 255, 255};
+    pal[kPupil] = RGB{20, 20, 120};
 }
 
 /// The squid, top rank: 8x8, and the arcade's own two frames are what the march looks like.
@@ -166,7 +167,7 @@ inline constexpr uint8_t kSquid[] = {
     0,0,0,1,1,0,0,0,
     0,0,1,1,1,1,0,0,
     0,1,1,1,1,1,1,0,
-    1,1,3,1,1,3,1,1,
+    1,3,4,1,1,3,4,1,
     1,1,1,1,1,1,1,1,
     0,0,1,0,0,1,0,0,
     0,1,0,1,1,0,1,0,
@@ -175,7 +176,7 @@ inline constexpr uint8_t kSquid[] = {
     0,0,0,1,1,0,0,0,
     0,0,1,1,1,1,0,0,
     0,1,1,1,1,1,1,0,
-    1,1,3,1,1,3,1,1,
+    1,3,4,1,1,3,4,1,
     1,1,1,1,1,1,1,1,
     0,1,0,1,1,0,1,0,
     1,0,0,0,0,0,0,1,
@@ -190,7 +191,7 @@ inline constexpr uint8_t kCrab[] = {
     0,0,1,0,0,0,0,0,1,0,0,
     0,0,0,1,0,0,0,1,0,0,0,
     0,0,1,1,1,1,1,1,1,0,0,
-    0,1,1,3,1,1,1,3,1,1,0,
+    0,1,3,4,1,1,1,3,4,1,0,
     1,1,1,1,1,1,1,1,1,1,1,
     1,0,1,1,1,1,1,1,1,0,1,
     1,0,1,0,0,0,0,0,1,0,1,
@@ -199,7 +200,7 @@ inline constexpr uint8_t kCrab[] = {
     0,0,1,0,0,0,0,0,1,0,0,
     1,0,0,1,0,0,0,1,0,0,1,
     1,0,1,1,1,1,1,1,1,0,1,
-    1,1,1,3,1,1,1,3,1,1,1,
+    1,1,3,4,1,1,1,3,4,1,1,
     1,1,1,1,1,1,1,1,1,1,1,
     0,1,1,1,1,1,1,1,1,1,0,
     0,0,1,0,0,0,0,0,1,0,0,
@@ -214,7 +215,7 @@ inline constexpr uint8_t kOcto[] = {
     0,0,0,0,1,1,1,1,0,0,0,0,
     0,1,1,1,1,1,1,1,1,1,1,0,
     1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,3,3,1,1,3,3,1,1,1,
+    1,1,1,3,4,1,1,3,4,1,1,1,
     1,1,1,1,1,1,1,1,1,1,1,1,
     0,0,0,1,1,0,0,1,1,0,0,0,
     0,0,1,1,0,1,1,0,1,1,0,0,
@@ -223,7 +224,7 @@ inline constexpr uint8_t kOcto[] = {
     0,0,0,0,1,1,1,1,0,0,0,0,
     0,1,1,1,1,1,1,1,1,1,1,0,
     1,1,1,1,1,1,1,1,1,1,1,1,
-    1,1,1,3,3,1,1,3,3,1,1,1,
+    1,1,1,3,4,1,1,3,4,1,1,1,
     1,1,1,1,1,1,1,1,1,1,1,1,
     0,0,1,1,1,0,0,1,1,1,0,0,
     0,1,1,0,0,1,1,0,0,1,1,0,

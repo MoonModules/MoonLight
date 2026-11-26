@@ -10,6 +10,8 @@
 #include "core/module/NetworkUse.h"   // what the server reports of its API clients
 #include "core/module/StateDocument.h"   // the engine's refusal an op passes back
 #include "fake_light_output.h"   // the fake Drivers is the light output too
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_ota.h"   // setTestMoonBase
 
 #include <cstring>
 #include <string>    // std::string: named explicitly, GCC does not pull it in transitively

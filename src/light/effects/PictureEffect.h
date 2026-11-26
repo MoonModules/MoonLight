@@ -3,6 +3,7 @@
 #include "light/effects/EffectBase.h"
 #include "core/services/PictureService.h"   // the picture it samples, as audio effects include AudioService
 #include "core/util/AreaSample.h"            // cellSpan, areaMean: the shrink every sampler shares
+#include "platform/platform_clock.h"   // millis
 
 namespace mm {
 

@@ -4,6 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/RainbowEffect.h"
 #include "light/layouts/GridLayout.h"
+#include "platform/platform_clock.h"   // millis
 
 // A single frame on a 4×4 grid leaves the buffer non-zero (rainbow always paints somewhere).
 TEST_CASE("RainbowEffect writes non-zero RGB data to buffer") {

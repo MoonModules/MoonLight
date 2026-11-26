@@ -10,7 +10,7 @@
 #include "light/drivers/LayoutPicture.h"   // a screen or stream driver's picture, cropped to the window
 #include "light/drivers/LedPeripheral.h"         // LedHwBlock: the peripheral-block claim guard's vocabulary
 #include "light/drivers/FixtureProfilesModule.h"   // the shared fixture-profile library a driver references by id
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocInternal, alloc, free
 
 #include <cstdio>       // std::snprintf for status strings
 #include <cstring>     // std::strcmp (onControlChanged) / memset (buffer clears)
@@ -244,6 +244,7 @@ protected:
         wire_ = static_cast<uint8_t*>(platform::allocInternal(bytes));
         if (!wire_) wire_ = static_cast<uint8_t*>(platform::alloc(bytes));
         wireCap_ = wire_ ? bytes : 0;
+        frameReplaced();
         publishHeapBytes();   // the scratch grew: refresh the memory readout
     }
     /// Release the scratch (on the true teardown: release(), not a mid-life reinit).
@@ -252,17 +253,26 @@ protected:
     }
 
     /// The heap bytes this driver holds beside its ScratchBuffers, which count themselves; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
-    virtual size_t driverHeapBytes() const { return wireCap_; }
+    virtual HeapBytes driverHeapBytes() const { return heapOf(wire_, wireCap_); }
     /// Move the readout by the change in driverHeapBytes() since the last report, so every ScratchBuffer's own count stays in it. A driver reports through this alone, which keeps the total in step.
     void publishHeapBytes() {
-        const size_t now = driverHeapBytes();
-        setDynamicBytes(dynamicBytes() - reportedHeapBytes_ + now);
+        const HeapBytes now = driverHeapBytes();
+        setDynamicBytes(heapBytes() - reportedHeapBytes_ + now);
         reportedHeapBytes_ = now;
     }
-    size_t reportedHeapBytes_ = 0;   ///< what driverHeapBytes() read at the last publish
+    HeapBytes reportedHeapBytes_;   ///< what driverHeapBytes() read at the last publish
 
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
     Correction correction_;
+
+    /// Whether the frame a driver keeps between ticks is a fresh block or was written under another channel layout, once per change: the driver zeroes it first, so a channel with no role reads 0 rather than the last profile's byte.
+    bool frameLayoutChanged() MM_NONBLOCKING {
+        if (!correction_.layoutChanged) return false;
+        correction_.layoutChanged = false;
+        return true;
+    }
+    /// Say the kept frame is another block now, so the next tick zeroes it.
+    void frameReplaced() { correction_.layoutChanged = true; }
     ScratchBuffer<uint16_t> lut16_{*this};   // the correction's 16-bit table, allocated the first time it is wanted
     ScratchBuffer<uint8_t> gainLut_{*this};    // the gained tables, only for a profile whose LED type carries a gain
     ScratchBuffer<uint16_t> gainLut16_{*this};   // the same to 16 bits, only where a channel is read wide

@@ -3,7 +3,8 @@
 /// Loopback helpers the HTTP server tests share: connect a client and let the server accept it, tick until a reply arrives, read a close, make a payload.
 
 #include "core/system/HttpServerModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <chrono>
 #include <cstddef>

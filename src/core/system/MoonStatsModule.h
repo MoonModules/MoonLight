@@ -20,7 +20,8 @@
 #include "core/util/JsonSink.h"
 #include "core/module/Scheduler.h"
 #include "core/util/build_info.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // totalHeap, freeHeap
+#include "platform/platform_net.h"   // networkReady, httpsAvailable, wifiApConnected
 #include "core/util/LightOutput.h"           // lightSummary: the real light total the light domain publishes
 #include "core/util/ModuleFactory.h"      // displayNameFor: the TYPE label, not the instance name
 #include "core/moonlive/MoonLiveScriptFile.h"  // isFactoryScript: a shipped name is ours, not yours

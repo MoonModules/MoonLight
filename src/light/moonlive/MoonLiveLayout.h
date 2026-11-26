@@ -136,7 +136,7 @@ private:
     }
     static void addToSink(void* ctx, uint16_t x, uint16_t y, uint16_t z) {
         auto* e = static_cast<Emitter*>(ctx);
-        e->sink->pixel(e->idx++, static_cast<lengthType>(x),
+        e->sink->addLight(e->idx++, static_cast<lengthType>(x),
                        static_cast<lengthType>(y), static_cast<lengthType>(z));
     }
 

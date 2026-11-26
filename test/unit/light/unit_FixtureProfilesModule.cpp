@@ -238,6 +238,7 @@ TEST_CASE("FixtureProfiles: an out-of-range persisted role clamps to a default o
 
 // A driver's `fixture` select lists the library, and picking a profile changes its Correction; the seat exists at construction, so defineControls sees it.
 #include "light/drivers/NetworkSendDriver.h"
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
 
 TEST_CASE("A driver's fixture Select is populated from the library, and picking one resolves") {
     FixtureProfilesModule lib;            // construction claims the seat + defineControls seeds built-ins

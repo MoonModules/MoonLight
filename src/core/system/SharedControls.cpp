@@ -7,7 +7,9 @@
 #include "core/util/JsonUtil.h"   // effectsOnly: a received look's root members
 #include "core/util/fnv.h"
 #include "core/util/format.h"
-#include "platform/platform.h"     // millis and the MAC: when a chunk or a request goes, and each device's offset
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // free, alloc
+#include "platform/platform_system.h"   // getMacAddress
 
 #include <algorithm>   // std::min: the last chunk is the rest
 #include <cstdio>

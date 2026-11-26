@@ -6,6 +6,7 @@
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_heap.h"   // alloc, free
 
 #include <cstdio>
 #include <cstring>

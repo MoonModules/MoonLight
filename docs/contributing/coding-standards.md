@@ -104,7 +104,8 @@ carry_ += rate * time_.advance(elapsed());     // particles::FrameTime, 256 = on
 
 ### File shape: header-only vs `.h` + `.cpp`
 
-- **Light-domain modules and the `MoonModule` base: header-only.** Implementation inline in a single `.h`, so a contributor copies an effect, edits, and registers one line in `main.cpp` with no CMake question. A file that outgrows one concern extracts a helper header rather than splitting to `.h` + `.cpp`.
+- **Light-domain modules: header-only.** Implementation inline in a single `.h`, so a contributor copies an effect, edits, and registers one line in `main.cpp` with no CMake question. A file that outgrows one concern extracts a helper header rather than splitting to `.h` + `.cpp`.
+- **The `MoonModule` base and `ControlList`: `.h` + `.cpp`, the per-frame members inline.** Nearly every file includes them, so a body edit in the header rebuilds the whole tree. The ticks, the child loop, the timing, the enabled and role checks, the accessors and the one-line virtual defaults stay in the header, where the render path inlines them; the lifecycle walks, the child mutators, the control rebuild and the binders live in `MoonModule.cpp` and `Control.cpp`.
 - **Core service modules: `.h` + `.cpp`.** A core module that bridges to the platform or carries real infrastructure splits interface from body. An implementation edit then recompiles one translation unit rather than every includer, which is 2-5x faster on the edits development makes. Small utilities that are almost all declarations stay header-only, and a template must.
 - **A catalog module includes ONLY its base header**, which is the module author's standard library. It carries the render context, the domain helpers, the lifecycle primitives and the standard headers bodies use. Bundling costs nothing, since unused declarations emit no code, so add a common header to the base rather than scatter it per file. A prelude, the way Rust's `std::prelude` is.
 
@@ -179,12 +180,12 @@ A "default" that is one specific board's values is bespoke masquerading as stand
 
 ### Compiler warnings
 
-All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang/GCC (macOS, Linux, ESP32), `/W4 /WX` on MSVC (Windows), gated by compiler in `CMakeLists.txt`. No warning is "harmless", fix it or silence it explicitly with a `-Wno-…` (Clang/GCC) or `#pragma warning` justified in code.
+All targets build warnings-as-errors: `-Wall -Wextra -Werror` on Clang and GCC (macOS, Linux, ESP32), `/W4 /WX` on clang-cl (Windows), which reads them as the same base set, gated by compiler in `CMakeLists.txt`. The five tier-zero warnings and the nonblocking check are added on Clang and GCC alone. No warning is "harmless": fix it, or silence it explicitly with a `-Wno-…` justified in code.
 
-**A clean local build is not proof the Windows build passes.** MSVC's `/W4` flags things Clang/GCC's `-Wall -Wextra` don't, most commonly **signed/unsigned mismatch in comparisons** (C4389), e.g. `(x & 1) == 1u` where the left side is signed: harmless logically, fatal under `/WX`. This has slipped past the macOS gate and broken Windows CI more than once. So:
+**A clean local build is not proof the Windows build passes.** The base warnings are the same on every host, but the code under `#ifdef _WIN32` compiles on Windows alone, and so does the Windows side of every `#else`: an unused variable or capture there is fatal under `/WX` and invisible on a Mac. So:
 
-- In a comparison, keep both sides the same signedness, don't mix a signed expression with an unsigned literal (`== 1`, not `== 1u`, when the other side is signed). Watch `& `, `%`, and subtraction results, which carry the signedness of their operands.
-- A change that only built+passed on macOS/Linux is **not** verified for Windows. The Windows CI job (`release.yml`, on every pull request touching `src/` as well as on main) is the real gate for MSVC-only warnings; let it run before considering a `src/`-touching change done, or build with MSVC locally if you have it.
+- A name used on one platform only is declared under that platform's guard, so no host carries an unused one.
+- A change that only built and passed on macOS or Linux is **not** verified for Windows. The `windows` job in `test.yml`, which builds and runs the unit suite on every pull request, is the gate; let it run before considering a `src/`-touching change done, or build on a Windows machine.
 
 Diagnostics as you type come from clangd, using the same `.clang-tidy` CI runs; once-per-machine setup is [Set up the editor](../moonwalk.md#setup-editor).
 

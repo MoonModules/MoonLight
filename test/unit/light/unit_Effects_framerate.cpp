@@ -16,7 +16,7 @@
 #include "light/effects/EchoEffect.h"
 #include "light/effects/FireworksEffect.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs, millis
 
 #include <cmath>
 #include <memory>

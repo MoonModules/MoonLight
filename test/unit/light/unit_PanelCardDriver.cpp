@@ -13,6 +13,8 @@
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/PanelsLayout.h"
 #include "core/util/JsonSink.h"   // writeControlMetadata: the schema the UI parses
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // ethTestClearFrames, ethRawL2Claimed, ethClaimRawL2
 #include <string>   // status() substring checks
 
 using mm::Wall;
@@ -165,6 +167,29 @@ TEST_CASE("PanelCardDriver puts rendered pixels on the wire") {
     CHECK(row[mm::COLORLIGHT_ROW_PREFIX + 1] == 20);
     CHECK(row[mm::COLORLIGHT_ROW_PREFIX + 2] == 30);
     CHECK(row[mm::COLORLIGHT_ROW_PREFIX + 3] == 40);
+}
+
+TEST_CASE("PanelCardDriver sends 0 on a channel the profile gives no role, whatever the profile before it sent there") {
+    mm::Buffer source;
+    mm::PanelCardDriver driver;
+    Wall wall(2, 1);
+    setUp(driver, source, wall, 2);
+    std::memset(source.data(), 255, 2 * 3);
+    mm::platform::setTestNowMs(1000);
+    driver.tick();
+    REQUIRE(mm::platform::ethTestFrameCount() == 3);   // brightness + row + sync
+    REQUIRE(mm::platform::ethTestFrameData(1)[mm::COLORLIGHT_ROW_PREFIX + 2] == 255);   // blue, lit
+    const mm::ChannelRole redGreen[3] = {mm::ChannelRole::Red, mm::ChannelRole::Green, mm::ChannelRole::None};
+    driver.correctionForTest().rebuild(255, redGreen, 3);
+    driver.onCorrectionChanged();
+    mm::platform::ethTestClearFrames();
+    mm::platform::setTestNowMs(3000);
+    driver.tick();
+    REQUIRE(mm::platform::ethTestFrameCount() >= 2);
+    const uint8_t* row = mm::platform::ethTestFrameData(mm::platform::ethTestFrameCount() - 2);   // the row before the sync
+    CHECK(row[mm::COLORLIGHT_ROW_PREFIX + 0] == 255);
+    CHECK(row[mm::COLORLIGHT_ROW_PREFIX + 2] == 0);    // no role, so dark
+    mm::platform::setTestNowMs(0);
 }
 
 // The fps control caps the send rate, so a render loop faster than the panel needs doesn't saturate the link.

@@ -101,8 +101,8 @@ public:
         compiledHash_ = hash;
         haveCompiled_ = engine_.ok();   // a FAILED compile has no program, whatever the file hashed to
         // Added rather than assigned, since a binding may own buffers that report themselves.
-        const size_t nowBytes = engine_.heapBytes();
-        owner.setDynamicBytes(owner.dynamicBytes() - reportedBytes_ + nowBytes);
+        const HeapBytes nowBytes = engine_.heapBytes();
+        owner.setDynamicBytes(owner.heapBytes() - reportedBytes_ + nowBytes);
         reportedBytes_ = nowBytes;
         return true;
     }
@@ -133,9 +133,9 @@ public:
     /// Hand back what this script reported, called after the engine is freed.
     void releaseReporting(MoonModule& owner) {
         // Subtracting rather than zeroing, so a binding may own other memory the owner still counts.
-        const size_t held = owner.dynamicBytes();
-        owner.setDynamicBytes(held > reportedBytes_ ? held - reportedBytes_ : 0);
-        reportedBytes_ = 0;
+        const HeapBytes held = owner.heapBytes();
+        owner.setDynamicBytes(held.total > reportedBytes_.total ? held - reportedBytes_ : HeapBytes{});
+        reportedBytes_ = {};
     }
 
     /// Forget what is compiled, so the next sync rebuilds for a module coming back from disabled.
@@ -246,7 +246,7 @@ private:
     uint32_t failedHash_ = 0;
     char     failedScript_[kMaxScriptName + 1] = "";
 
-    size_t     reportedBytes_ = 0;   // what this script last added to the owner's total
+    HeapBytes  reportedBytes_;   // what this script last added to the owner's total
     DefineHook  defineHook_ = nullptr;
     void*       defineCtx_  = nullptr;
 };

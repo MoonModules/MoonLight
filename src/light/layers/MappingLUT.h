@@ -1,7 +1,8 @@
 #pragma once
 
 #include "light/util/light_types.h"  // nrOfLightsType
-#include "platform/platform.h"
+#include "core/util/HeapBytes.h"  // heap(): the bytes with their memory type
+#include "platform/platform_heap.h"   // free, alloc, maxAllocBlock
 
 #include <cstring>
 
@@ -155,6 +156,13 @@ public:
         if (identity_) return 0;
         return static_cast<size_t>(logicalCount_ + 1) * sizeof(nrOfLightsType)
              + static_cast<size_t>(destinationCount_) * sizeof(nrOfLightsType);
+    }
+
+    /// The same bytes with the memory type they live in; the pages come from one allocator, so the first one's address tells theirs.
+    HeapBytes heap() const {
+        if (identity_) return {};
+        const size_t offsets = static_cast<size_t>(logicalCount_ + 1) * sizeof(nrOfLightsType);
+        return heapOf(offsets_, offsets) + heapOf(paged_ ? pages_[0] : destinations_, memoryUsed() - offsets);
     }
 
     /// The bytes a prospective build would take, which paging does not change.

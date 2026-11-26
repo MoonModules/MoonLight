@@ -197,7 +197,7 @@ extern char** environ;   // posix_spawnp wants the environment explicitly
 #include <net/bpf.h>
 #endif
 #endif
-#include "platform/select_wait.h"   // the select() wait the ESP32 shares, after the socket headers
+#include "platform/select_wait.h"   // the select() wait the ESP32 shares
 #include "host_mdns.h"   // the responder a host lends the mDNS calls
 #include "platform/host/host_address.h"   // which held address is the LAN's
 
@@ -1542,13 +1542,13 @@ std::atomic<uint32_t> ethSendFails_{0};    // consecutive ethSendRaw failures (t
 std::atomic<uint32_t> ethFailTotal_{0};    // cumulative since boot; what ethSendFailCounts reports
 uint32_t ethRestarts_ = 0;           // ethRestartTx() calls, for the once-per-wedge test
 bool     ethRestartFails_ = false;   // simulated recovery failure
+#ifndef _WIN32
 // The bound raw socket, or -1 for capture mode (the default, and all any test sees).
 int      ethRawFd_ = -1;
 unsigned ethRawIfIndex_ = 0;         // Linux AF_PACKET needs the index; BPF binds by name
 // The interface the raw sender bound to, so the link queries describe that one rather than whichever the host lists first.
 char     ethRawIfName_[64] = {};
-
-#ifdef _WIN32
+#else
 // Npcap/WinPcap, resolved at RUN TIME rather than linked: @xref{the-raw-frame-driver-is-loaded-not-linked|why}.
 struct PcapIf { PcapIf* next; char* name; char* description; /* remaining fields unused */ };
 using PcapT = struct pcap;
@@ -2551,9 +2551,11 @@ bool UdpSocket::membership(const uint8_t group[4], bool join) {
     ip_mreq mreq{};
     std::memcpy(&mreq.imr_multiaddr.s_addr, group, 4);   // network order = octets
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-    // A socket that joins a group and also sends to it must not hear its own sends back.
+#ifndef _WIN32
+    // A socket that joins a group and also sends to it must not hear its own sends back. Windows applies this option to the receiving socket, where it would also deaden every other local sender, so there it stays at its default.
     const unsigned char loop = 0;
     if (join) ::setsockopt(sock(fd_), IPPROTO_IP, IP_MULTICAST_LOOP, reinterpret_cast<const char*>(&loop), sizeof(loop));
+#endif
     return ::setsockopt(sock(fd_), IPPROTO_IP, join ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP,
                         reinterpret_cast<const char*>(&mreq), sizeof(mreq)) == 0;
 }
@@ -2706,8 +2708,12 @@ TcpConnection::ConnectResult TcpConnection::connectPoll() {
     return ConnectResult::Connected;                                 // socket stays non-blocking
 }
 
+// Send the FIN after the reply and read away what already arrived, as a lingering close opens (RFC 9112 section 9.6): closing over unread bytes makes Windows send a reset, which discards a reply the peer still has to read.
 void TcpConnection::close() {
     if (fd_ >= 0) {
+        ::shutdown(sock(fd_), 1);   // SD_SEND on Windows, SHUT_WR elsewhere: both are 1
+        char sink[64];   // at most 64 KB read away, a TCP receive window's worth: a peer streaming past that gets the reset, and a request-and-reply peer stays well under it
+        for (int i = 0; i < 1024 && ::recv(sock(fd_), sink, sizeof(sink), 0) > 0; i++) {}
         close_sock(fd_);
         fd_ = -1;
     }
@@ -3808,11 +3814,10 @@ static bool spawnEncoderProcess(const char* const argv[], bool captureStdout = f
         }
         // Captured BY VALUE: the stop path clears the globals while this thread runs, and reading them here would race that write. Windows wakes the reader with CancelIoEx and so has no wake pipe to capture.
 #ifdef _WIN32
-        const int wakeFd = -1;
+        esReader_ = std::thread([out = encStdout_] {
 #else
-        const int wakeFd = esWake_[0];
+        esReader_ = std::thread([out = encStdout_, wake = esWake_[0]] {
 #endif
-        esReader_ = std::thread([out = encStdout_, wake = wakeFd] {
             std::vector<uint8_t> pending;     // bytes read but not yet a whole access unit
             uint8_t buf[16384];
             uint32_t frames = 0;

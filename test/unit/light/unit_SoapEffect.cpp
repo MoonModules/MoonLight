@@ -5,6 +5,7 @@
 #include "doctest.h"
 #include "golden_frame.h"                 // the effect harness: Layouts, Grid, Layer
 #include "light/effects/SoapEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <vector>
 

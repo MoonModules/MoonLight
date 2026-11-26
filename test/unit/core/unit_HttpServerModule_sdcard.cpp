@@ -5,7 +5,10 @@
 
 #include "doctest.h"
 #include "core/system/HttpServerModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_heap.h"   // setTestFreeInternalHeap
+#include "platform/platform_fs.h"   // fsSetRoot, setTestSdCardTotal, SdPinConfig
+#include "platform/platform_net.h"   // TcpConnection
 #include "http_loopback.h"
 
 #include <algorithm>

@@ -3,7 +3,7 @@
 #include "light/effects/EffectBase.h"
 #include "light/powerfunctions/particles.h"   // FrameTime: the shared time scale
 
-#include "platform/platform.h"      // platform::millis (the per-drop start-delay clock)
+#include "platform/platform_clock.h"   // millis
 
 namespace mm {
 

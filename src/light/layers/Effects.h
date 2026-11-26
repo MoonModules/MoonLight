@@ -6,7 +6,8 @@
 #include "light/moonlive/MoonLivePalette.h"   // the scripted palette, run before the layers
 #include "light/layers/Layer.h"
 #include "light/layouts/Layouts.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_system.h"   // cpuCores
 
 namespace mm {
 
@@ -55,6 +56,22 @@ public:
 
     /// How many render workers run beside the render loop: a computer's cores less one, none on a device.
     uint8_t renderWorkers() const { return pool_.workers(); }
+
+    /// The layers' time per frame over the last second, by lane: on the render loop, on a render worker (averaged over the workers), and the render loop waiting for the last worker.
+    struct LayerLoad {
+        uint32_t hereUs = 0;     ///< layers the render loop ran itself
+        uint32_t workerUs = 0;   ///< layers per render worker
+        uint32_t joinUs = 0;     ///< the render loop waiting for the workers
+    };
+    /// The layer load the last second averaged.
+    LayerLoad layerLoad() const { return load_; }
+    /// Average the pool's load with the module times, over the same frames.
+    void publishTiming(uint32_t frameCount) MM_NONBLOCKING override {
+        MoonModule::publishTiming(frameCount);
+        const WorkerPool::Load l = pool_.takeLoad();
+        const uint32_t frames = frameCount ? frameCount : 1, workers = pool_.workers() ? pool_.workers() : 1;
+        load_ = {l.callerUs / frames, l.workersUs / frames / workers, l.joinUs / frames};
+    }
 
     /// Tick every enabled layer child, side by side on the render workers; role-filtered, since a stray child ticked here would run at the wrong depth.
     void tick() MM_NONBLOCKING override {
@@ -113,9 +130,9 @@ public:
     }
 
 private:
-    /// Render child `i` when it is a layer due this frame, timing it.
-    static void tickChild(void* ctx, uint8_t i) MM_NONBLOCKING {
-        const auto& self = *static_cast<const Effects*>(ctx);
+    /// Render child `i` when it is a layer due this frame, timing it; `worker` says which lane its time is booked to.
+    static void tickChild(void* ctx, uint8_t i, bool worker) MM_NONBLOCKING {
+        auto& self = *static_cast<Effects*>(ctx);
         MoonModule* c = self.child(i);
         if (!c || c->role() != ModuleRole::Layer) return;
         if (c->respectsEnabled() && !c->enabled()) return;
@@ -123,11 +140,15 @@ private:
         if (self.composited_ && !static_cast<Layer*>(c)->contributes()) return;
         const uint32_t start = platform::micros();
         c->tick();
-        c->addAccumUs(platform::micros() - start);
+        const uint32_t us = platform::micros() - start;
+        // A layer the render loop ran is Effects' children's time; one a worker ran is on another thread, booked to the worker's lane.
+        self.addChildTimeUs(c, us, !worker);
+        if (worker) static_cast<Layer*>(c)->addWorkerUs(us);
     }
 
     Layouts* layouts_ = nullptr;
     WorkerPool pool_;           ///< the render workers beside the render loop
+    LayerLoad load_;            ///< the layer load of the last second
     bool composited_ = false;   ///< whether this frame blends several layers, set before they render
 };
 

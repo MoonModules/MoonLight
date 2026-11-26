@@ -6,6 +6,7 @@
 #include "golden_frame.h"
 #include "light/effects/DrumKitEffect.h"
 #include "core/services/AudioService.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <vector>
 

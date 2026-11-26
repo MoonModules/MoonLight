@@ -13,6 +13,144 @@
 
 namespace mm {
 
+void sanitizeHostname(char* buf) MM_NONBLOCKING {
+    if (!buf) return;
+    char* w = buf;                       // the write cursor, which compacts in place
+    bool pendingDash = false;            // emit one hyphen before the next keeper
+    for (const char* r = buf; *r; ++r) {
+        const char c = *r;
+        const bool keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+                       || (c >= '0' && c <= '9') || c == '-';
+        if (keep) {
+            // The name starts with a letter or digit, so a leading hyphen, from a run or a literal one, drops.
+            if (c == '-' && w == buf) continue;
+            if (pendingDash && w != buf) *w++ = '-';
+            pendingDash = false;
+            *w++ = c;
+        } else {
+            pendingDash = true;          // deferring drops a trailing run entirely
+        }
+    }
+    // Literal hyphens are kept as written, so loop to strip every trailing one.
+    while (w != buf && w[-1] == '-') --w;
+    *w = '\0';
+}
+
+void ControlList::addControl(const char* name, uint8_t& var, uint8_t min, uint8_t max) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Uint8, min, max};
+}
+
+void ControlList::addControl(const char* name, uint16_t& var, uint16_t min, uint16_t max) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Uint16, min, max};
+}
+
+void ControlList::addControl(const char* name, int16_t& var, int16_t min, int16_t max) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Int16, min, max};
+}
+
+void ControlList::addControl(const char* name, int32_t& var, int32_t min, int32_t max) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Int32, min, max};
+}
+
+void ControlList::addPin(const char* name, int8_t& var, int16_t min, int16_t max) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Pin, min, max};
+}
+
+void ControlList::addControl(const char* name, bool& var) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, 0, ControlType::Bool, 0, 1};
+}
+
+void ControlList::addText(const char* name, char* var, uint16_t bufSize, bool (*validate)(const char*)) {
+    if (!grow(name)) return;
+    controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Text,
+                           .max = bufSize, .validate = validate};
+}
+
+void ControlList::addTextArea(const char* name, char* var, uint16_t bufSize, bool (*validate)(const char*)) {
+    if (!grow(name)) return;
+    controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::TextArea,
+                           .max = bufSize, .validate = validate};
+}
+
+void ControlList::addFilePath(const char* name, char* var, uint16_t bufSize, const FilePathPick& pick, bool (*validate)(const char*)) {
+    if (!grow(name)) return;
+    controls_[count_++] = {.ptr = var, .name = name,
+                           .aux = reinterpret_cast<uintptr_t>(&pick[0]),
+                           .type = ControlType::FilePath,
+                           .max = bufSize, .validate = validate};
+}
+
+void ControlList::addFilePath(const char* name, char* var, uint16_t bufSize, bool (*validate)(const char*)) {
+    if (!grow(name)) return;
+    controls_[count_++] = {.ptr = var, .name = name, .aux = 0,
+                           .type = ControlType::FilePath,
+                           .max = bufSize, .validate = validate};
+}
+
+void ControlList::addPassword(const char* name, char* var, uint8_t bufSize, bool (*validate)(const char*)) {
+    if (!grow(name)) return;
+    controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Password,
+                           .max = bufSize, .validate = validate};
+}
+
+void ControlList::addReadOnly(const char* name, char* var, uint8_t bufSize) {
+    if (!grow(name)) return;
+    controls_[count_++] = {var, name, 0, ControlType::ReadOnly, 0, bufSize};
+}
+
+void ControlList::addReadOnlyInt(const char* name, int8_t& var, const char* unit) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(unit),
+                           ControlType::ReadOnlyInt, 0, 0};
+}
+
+void ControlList::addPalette(const char* name, uint8_t& var, PaletteOptionsFn optionsFn, uint8_t optionCount) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(optionsFn), ControlType::Palette, 0, optionCount};
+}
+
+void ControlList::addSelect(const char* name, uint8_t& var, const char* const* options, uint8_t optionCount) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(options), ControlType::Select, 0, optionCount};
+}
+
+void ControlList::addProgress(const char* name, uint32_t& var, uint32_t total, ProgressUnit unit) {
+    if (!grow(name)) return;
+    controls_[count_++] = {&var, name, total, ControlType::Progress, static_cast<int32_t>(unit), 0};
+}
+
+void ControlList::addIPv4(const char* name, uint8_t* var) {
+    if (!grow(name)) return;
+    controls_[count_++] = {var, name, 0, ControlType::IPv4, 0, 0};
+}
+
+void ControlList::addList(const char* name, ListSource& source) {
+    if (!grow(name)) return;
+    // A non-const reference, since restoring a list repopulates the source's rows.
+    controls_[count_++] = {&source, name, 0, ControlType::List, 0, 0};
+}
+
+void ControlList::addButton(const char* name, bool confirm) {
+    if (!grow(name)) return;
+    controls_[count_++] = {nullptr, name, confirm ? 1u : 0u, ControlType::Button, 0, 0};
+}
+
+void ControlList::shrinkToFit() {
+    if (count_ == capacity_) return;
+    auto* fitted = count_ ? new (std::nothrow) ControlDescriptor[count_] : nullptr;
+    if (count_ && !fitted) return;
+    for (uint8_t i = 0; i < count_; i++) fitted[i] = controls_[i];
+    delete[] controls_;
+    controls_ = fitted;
+    capacity_ = count_;
+}
+
 void ControlList::setHidden(uint8_t i, bool hidden) {
     if (i < count_) controls_[i].hidden = hidden;
 }

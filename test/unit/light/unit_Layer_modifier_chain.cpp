@@ -8,12 +8,13 @@
 #include "light/modifiers/RegionModifier.h"
 #include "light/modifiers/MultiplyModifier.h"
 #include "light/modifiers/CheckerboardModifier.h"
+#include "platform/platform_clock.h"   // micros
 
 #include <algorithm>
 #include <vector>
 #include <initializer_list>
 
-// Composable modifiers: a Layer folds ALL its enabled static modifiers in child order into one mapping (M₁∘M₂∘…). These pin that the chain composes (the logical box is the product of the folds), that order matters (A∘B ≠ B∘A), and that a disabled middle modifier is skipped. The single-modifier and sphere cases live in unit_Layer_sparse_mapping.
+// A Layer folds its enabled static modifiers in child order into one mapping (M₁∘M₂∘…): the chain composes, order matters, a disabled middle one is skipped.
 
 namespace {
 // Build a dense w×h grid Layer with the given modifiers added in order, run applyState.
@@ -45,7 +46,7 @@ TEST_CASE("Layer chains Region then Multiply (both fold)") {
     CHECK(rig.layer.height() == 4);   // y untouched by either
     CHECK(rig.layer.lut().hasLUT());  // a real mapping, not the identity fast path
 
-    // REGRESSION: each modifier must fold in ITS OWN stage's box, not the final composed box. A bug where Region tested its region-local coord against the FINAL (post-Multiply) box truncated the region to a strip, only the first tile's worth of physical lights mapped, the rest were wrongly rejected. Assert the FULL left region (x 0..7) is covered: 8 region cols × 4 rows = 32 physical lights all reach the 4×4 logical box (16 cells), so every logical cell gets ≥1 destination and the total is the whole region (32), not a strip.
+    // Regression: each modifier folds in its own stage's box; Region tested against the final box mapped a strip. The whole left region, 8 × 4 = 32 lights, reaches all 16 cells.
     std::size_t total = 0;
     std::size_t cellsHit = 0;
     for (mm::nrOfLightsType li = 0; li < rig.layer.lut().logicalCount(); li++) {
@@ -65,9 +66,7 @@ TEST_CASE("Layer modifier order matters (A∘B ≠ B∘A)") {
     mm::MultiplyModifier mA; mA.multiplyX = 2; mA.multiplyY = 1;
     ChainRig a(16, 4, {&rA, &mA});
 
-    // B: Multiply(2×) then Region(0..50) → 16→8→4 as well by size, but the cells the region keeps differ. Use a region that makes the SIZE differ to pin order cheaply: Multiply(4×) then Region(0..50): 16→4→2.  Region(0..50) then Multiply(4×): 16→8→2.
-    // Sizes match (2) but let's pin via a size-distinguishing case instead: Region(0..25) then Multiply(2×): 16→4→2.  Multiply(2×) then Region(0..25): 16→8→2.
-    // Equal again, so assert on the MAPPING, not just size: different composition order sends a given physical light to a different logical cell.
+    // B: Multiply(2×) then Region(0..50), the same size as A, so the mapping pins the order: each order sends a light to a different cell.
     mm::MultiplyModifier mB; mB.multiplyX = 2; mB.multiplyY = 1;
     mm::RegionModifier rB; rB.startX = 0; rB.endX = 50;
     ChainRig b(16, 4, {&mB, &rB});
@@ -158,4 +157,25 @@ TEST_CASE("Layer swaps a box-resizing modifier for one that does not, and back, 
     CHECK(total == 32 * 32);                           // all 1024 physical lights
     const bool eachOnce = std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; });
     CHECK(eachOnce);                                   // and none of them twice, none missed
+}
+
+namespace {
+// A modifier whose tick takes a measurable while.
+struct SlowModifier : mm::CheckerboardModifier {
+    void tick() MM_NONBLOCKING override { const uint32_t t0 = mm::platform::micros(); while (mm::platform::micros() - t0 < 3000) {} }   // a spin, as a render tick holds its thread
+};
+}  // namespace
+
+// The layer times each modifier as it times each effect, so a modifier's own figure is not left at 0.
+TEST_CASE("Layer times its modifiers, own time included") {
+    SlowModifier mod;
+    ChainRig rig(8, 4, {&mod});
+    mm::MoonModule root;   // brackets the layer, as the Effects container does
+    root.addChild(&rig.layer);
+    root.tick();
+    root.publishTiming(1);
+
+    CHECK(mod.tickTimeUs() >= 3000u);
+    CHECK(mod.ownTimeUs() >= 3000u);
+    CHECK(rig.layer.ownTimeUs() < rig.layer.tickTimeUs());
 }

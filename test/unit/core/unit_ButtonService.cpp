@@ -7,7 +7,7 @@
 #include "core/services/ButtonService.h"
 #include "core/module/Scheduler.h"
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"
+#include "platform/platform_io.h"   // clearTestGpioLevel, setTestGpioLevel
 #include "core/util/JsonSink.h"
 
 #include <cstring>

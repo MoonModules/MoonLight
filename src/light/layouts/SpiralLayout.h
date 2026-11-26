@@ -70,7 +70,7 @@ public:
             const float y = currentHeight;
             const float z = currentRadius * cosf(radians);
 
-            sink.pixel(static_cast<nrOfLightsType>(i),
+            sink.addLight(static_cast<nrOfLightsType>(i),
                static_cast<lengthType>(x + middleX),
                static_cast<lengthType>(y),
                static_cast<lengthType>(z + middleZ));

@@ -9,6 +9,8 @@
 #include <cstdint>
 #include "core/util/WledNetworks.h"   // the document the migration image writes
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_fs.h"   // fsSetRoot
 
 #include <cstdio>
 #include <cstring>

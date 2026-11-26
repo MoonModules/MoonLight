@@ -5,7 +5,8 @@
 #include <memory>   // unique_ptr: the receive buffer, held only while receiving
 #include <new>      // std::nothrow
 
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_net.h"   // networkReady, UdpSocket
 #include "core/module/MoonModule.h"     // the owner whose status line the sync reports on
 #include "core/util/format.h"           // formatTo: nonblocking formatting into a fixed buffer
 #include "core/util/Addressing.h"       // sendAddressed: the multicast rule every sender shares

@@ -4,7 +4,7 @@
 /// The waterfall keeps the music's recent shape in view: the newest bands paint the top row and each step moves the history down one.
 
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "light/layouts/Layouts.h"
 #include "light/effects/WaterfallEffect.h"
 #include "light/layouts/GridLayout.h"

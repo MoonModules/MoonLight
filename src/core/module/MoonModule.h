@@ -2,9 +2,12 @@
 
 #include "core/module/Control.h"
 #include "core/module/NetworkUse.h"   // what a module reports of its network traffic, as it reports its memory
+#include "core/util/HeapBytes.h"   // what a module reports of its memory, per type
 #include "core/util/ScratchBuffer.h"
 #include "core/util/fnv.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // bootRecord
 
 #include <atomic>
 #include <cstddef>
@@ -68,10 +71,7 @@ public:
     /// A module starts enabled, with no children and no controls.
     MoonModule() = default;
     /// Release the children array, the children themselves being the caller's.
-    virtual ~MoonModule() {
-        if (lastEnabledEffect_ == this) lastEnabledEffect_ = nullptr;
-        delete[] children_;
-    }
+    virtual ~MoonModule();
 
     /// A module is identified by its place in the tree, so it is never copied.
     MoonModule(const MoonModule&) = delete;
@@ -91,23 +91,10 @@ public:
     /// The once-a-second tick for housekeeping, which by default ticks the children.
     virtual void tick1s() MM_NONBLOCKING { tickChildren(&MoonModule::tick1s); }
     /// Free everything this module holds, buffers and hardware alike, then the children; a released module reports nothing, so its status clears.
-    virtual void release() {
-        clearStatus();
-        // An override frees its own hardware; this base lets go of every resource it registered, its buffers among them.
-        for (ModuleResource* r = resources_; r; r = r->next_) r->releaseResource();
-        // Then the children, in reverse, a module shutting down before those it owns.
-        for (uint8_t i = childCount_; i > 0; i--) children_[i-1]->release();
-    }
+    virtual void release();
 
     /// Build or tear down each node by its own effective-enabled, which is the one lifecycle path.
-    void applyState() {
-        if (effectivelyEnabled()) {
-            prepare();
-            for (uint8_t i = 0; i < childCount_; i++) children_[i]->applyState();
-        } else {
-            release();   // recurses to children itself (reverse order)
-        }
-    }
+    void applyState();
 
     /// React once to the enabled flag flipping, for a one-shot that is not building state.
     virtual void onEnabled(bool /*newEnabled*/) {}
@@ -139,49 +126,15 @@ public:
     virtual uint8_t i2cDevices(I2cDevice* /*out*/, uint8_t /*max*/) const { return 0; }
 
     /// Clear and rebuild this module's controls and its descendants', re-evaluating what is hidden.
-    void rebuildControls() {
-        // Every value patch passes here too, so hash and resync only on a real change.
-        const uint32_t before = schemaSignature();
-        clearControlsRecursive();
-        defineControls();
-        shrinkControlsRecursive();
-        if (schemaChangedHook_ && schemaSignature() != before) schemaChangedHook_();
-    }
+    void rebuildControls();
 
     /// Size every control array in the subtree to its controls, once a rebuild has declared them.
-    void shrinkControlsRecursive() {
-        controls_.shrinkToFit();
-        for (uint8_t i = 0; i < childCount_; i++) children_[i]->shrinkControlsRecursive();
-    }
+    void shrinkControlsRecursive();
 
     /// Hash the schema across this subtree, excluding values, so a resync fires only on a real change.
-    uint32_t schemaSignature() const {
-        Fnv1a f;
-        mixSchema(f);
-        return f.h;
-    }
+    uint32_t schemaSignature() const;
     /// Mix this node's schema into the running hash, then its children's.
-    void mixSchema(Fnv1a& f) const {
-        auto mix = [&f](uint32_t v) { f.add(&v, sizeof(v)); };
-        auto mixStr = [&f](const char* s) { if (s) f.add(s, std::strlen(s)); f.add(0); };
-        mix(controls_.count());
-        for (uint8_t i = 0; i < controls_.count(); i++) {
-            const ControlDescriptor& c = controls_[i];
-            mixStr(c.name);
-            mix(static_cast<uint32_t>(c.type));
-            mix(static_cast<uint32_t>(c.min));
-            mix(static_cast<uint32_t>(c.max));
-            mix((c.hidden ? 1u : 0u) | (c.readonly ? 2u : 0u) | (static_cast<unsigned>(c.minMode) << 2));
-            if (c.type == ControlType::Select && c.aux) {
-                // Hash the strings, so an in-place rename still changes the signature.
-                const char* const* opts = reinterpret_cast<const char* const*>(c.aux);
-                for (int32_t o = 0; o < c.max; o++) mixStr(opts[o]);
-            } else {
-                mix(static_cast<uint32_t>(c.aux));   // a Progress total or another aux value, so a change differs
-            }
-        }
-        for (uint8_t i = 0; i < childCount_; i++) children_[i]->mixSchema(f);
-    }
+    void mixSchema(Fnv1a& f) const;
 
     /// The schema-changed hook's type, a function pointer so core needs no web-layer include.
     using SchemaChangedFn = void (*)();
@@ -205,10 +158,7 @@ public:
     /// Stop the render worker directly, for a mutation that frees memory outside the child array.
     static void notifyQuiesceRender() { if (quiesceRenderHook_) quiesceRenderHook_(); }
     /// Clear this module's controls and every descendant's.
-    void clearControlsRecursive() {
-        controls_.clear();
-        for (uint8_t i = 0; i < childCount_; i++) children_[i]->clearControlsRecursive();
-    }
+    void clearControlsRecursive();
 
     /// Build this node's derived state for the current controls, the acquire half of the lifecycle.
     virtual void prepare() {}
@@ -218,13 +168,7 @@ public:
     /// This module's human label, which the user may rename.
     const char* name() const { return name_; }
     /// Set the label, truncating it to the buffer.
-    void setName(const char* n) {
-        if (!n) { name_[0] = 0; return; }
-        size_t len = std::strlen(n);
-        if (len >= sizeof(name_)) len = sizeof(name_) - 1;
-        std::memcpy(name_, n, len);
-        name_[len] = 0;
-    }
+    void setName(const char* n);
 
     /// The stable factory key, which lives in flash rather than per instance.
     const char* typeName() const { return typeName_; }
@@ -247,13 +191,7 @@ public:
     /// Whether safe mode holds this module, counting it as disabled while its saved flag stays, for one that can crash the device or overload its supply.
     virtual bool heldInSafeMode() const { return false; }
     /// Set the flag, firing the transition hook only on a real change, with the workers parked first, as every structural mutator does.
-    void setEnabled(bool e) {
-        if (enabled_ == e) return;
-        quiesceForMutation();   // a worker may be in this module's tick, and onEnabled may release what that tick uses
-        enabled_ = e;
-        if (e && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
-        onEnabled(e);
-    }
+    void setEnabled(bool e);
     /// The effect enabled or added last, the one someone just switched to, or null once it leaves the tree.
     static MoonModule* lastEnabledEffect() { return lastEnabledEffect_; }
     /// React once a rebuild walk has finished, for a top-level module that reads across the tree.
@@ -263,11 +201,7 @@ public:
     virtual bool respectsEnabled() const MM_NONBLOCKING { return true; }
 
     /// True unless this module or a gating ancestor is disabled, which the lifecycle keys off.
-    bool effectivelyEnabled() const {
-        for (const MoonModule* m = this; m; m = m->parent())
-            if (m->respectsEnabled() && !m->enabled()) return false;
-        return true;
-    }
+    bool effectivelyEnabled() const;
 
     /// Whether this module shows in the UI, which a pure engine with no controls declines.
     virtual bool appearsInUi() const { return true; }
@@ -282,14 +216,7 @@ public:
     /// This module's parent, or null at the top level.
     MoonModule* parent() const { return parent_; }
     /// Set the parent, which the child mutators do.
-    void setParent(MoonModule* p) {
-        parent_ = p;
-        // Decided as it joins the tree, where the type is complete, rather than on every tick.
-        held_ = p && safeMode() && heldInSafeMode();
-        // Joining counts as being switched on, and leaving forgets it.
-        if (p && role() == ModuleRole::Effect) lastEnabledEffect_ = this;
-        else if (!p && lastEnabledEffect_ == this) lastEnabledEffect_ = nullptr;
-    }
+    void setParent(MoonModule* p);
 
     /// Mark this module as wired by code, so a file that predates it cannot trim it away.
     void markWiredByCode() { wiredByCode_ = true; }
@@ -302,25 +229,9 @@ public:
     const ControlList& controls() const { return controls_; }
 
     /// Read a boolean control by name, or the given default where it is absent.
-    bool readBool(const char* name, bool dflt) const {
-        for (uint8_t i = 0; i < controls_.count(); i++) {
-            const ControlDescriptor& c = controls_[i];
-            if (c.ptr && c.type == ControlType::Bool && std::strcmp(c.name, name) == 0)
-                return *static_cast<const bool*>(c.ptr);
-        }
-        return dflt;
-    }
+    bool readBool(const char* name, bool dflt) const;
     /// Read a byte-backed control by name, or the given default where it is absent.
-    uint8_t readUint8(const char* name, uint8_t dflt) const {
-        for (uint8_t i = 0; i < controls_.count(); i++) {
-            const ControlDescriptor& c = controls_[i];   // a slider, a dropdown index, a palette index
-            if (c.ptr && std::strcmp(c.name, name) == 0 &&
-                (c.type == ControlType::Uint8 || c.type == ControlType::Select ||
-                 c.type == ControlType::Palette))
-                return *static_cast<const uint8_t*>(c.ptr);
-        }
-        return dflt;
-    }
+    uint8_t readUint8(const char* name, uint8_t dflt) const;
 
     /// Role for type identification (no RTTI needed).
     virtual ModuleRole role() const MM_NONBLOCKING { return ModuleRole::Generic; }
@@ -332,20 +243,7 @@ public:
     virtual const char* acceptsChildRoles() const { return ""; }
 
     /// Whether a child of this role may go here, read from acceptsChildRoles(); the rule every path that adds a child enforces.
-    bool acceptsRole(ModuleRole childRole) const {
-        const char* csv = acceptsChildRoles();
-        if (!csv || !csv[0]) return false;
-        const char* want = roleName(childRole);
-        const size_t wantLen = std::strlen(want);
-        for (const char* p = csv; *p;) {
-            const char* comma = std::strchr(p, ',');
-            const size_t len = comma ? static_cast<size_t>(comma - p) : std::strlen(p);
-            if (len == wantLen && std::strncmp(p, want, len) == 0) return true;
-            if (!comma) break;
-            p = comma + 1;
-        }
-        return false;
-    }
+    bool acceptsRole(ModuleRole childRole) const;
 
     /// Whether some controls appear only once prepare has run, as a script's do once it compiles; a state document waits for that prepare to set them.
     virtual bool declaresControlsAtPrepare() const { return false; }
@@ -368,72 +266,20 @@ public:
     /// Park any worker of this module's that reads the tree, returning once it is idle.
     virtual void quiesce() {}
 
-    /// Park both workers that read the tree, which every structural mutator calls first.
-    void quiesceForMutation() {
-        quiesce();
-        if (quiesceRenderHook_) quiesceRenderHook_();
-    }
+    /// Park both workers that read the tree, which every structural mutator calls first, and move the tree's modification count (`Scheduler::structureVersion`).
+    void quiesceForMutation();
 
     /// Append a child, growing the array on demand.
-    bool addChild(MoonModule* child) {
-        if (!child) return false;
-        quiesceForMutation();   // the realloc below would pull the array from under a worker
-        if (childCount_ == childCapacity_) {
-            uint8_t newCap = childCapacity_ == 0 ? 4 : childCapacity_ * 2;
-            auto** newArr = new MoonModule*[newCap];
-            for (uint8_t i = 0; i < childCount_; i++) newArr[i] = children_[i];
-            delete[] children_;
-            children_ = newArr;
-            childCapacity_ = newCap;
-        }
-        child->setParent(this);
-        children_[childCount_++] = child;
-        return true;
-    }
+    bool addChild(MoonModule* child);
 
     /// Remove a child, which the caller then releases and deletes.
-    bool removeChild(MoonModule* child) {
-        // Locate it first: a no-op removal must not needlessly park the render worker.
-        uint8_t idx = 0;
-        for (; idx < childCount_; idx++) if (children_[idx] == child) break;
-        if (idx >= childCount_) return false;
-        quiesceForMutation();   // the caller deletes the child next, so no worker may be in its tick
-        child->setParent(nullptr);
-        for (uint8_t j = idx; j + 1 < childCount_; j++) children_[j] = children_[j + 1];
-        childCount_--;
-        return true;
-    }
+    bool removeChild(MoonModule* child);
 
     /// Swap in a fresh child at this position, returning the old one for the caller to delete.
-    MoonModule* replaceChildAt(uint8_t i, MoonModule* fresh) {
-        quiesceForMutation();   // the caller deletes the child swapped out, as with removeChild
-        if (i >= childCount_ || !fresh) return nullptr;
-        MoonModule* old = children_[i];
-        if (old) old->setParent(nullptr);
-        fresh->setParent(this);
-        children_[i] = fresh;
-        return old;
-    }
+    MoonModule* replaceChildAt(uint8_t i, MoonModule* fresh);
 
     /// Move a child to an absolute position, the siblings between shifting toward the gap.
-    bool moveChildTo(MoonModule* child, uint8_t newIndex) {
-        if (newIndex >= childCount_) return false;
-        // Reject a no-op before parking anything: a move that changes nothing needs no guard.
-        uint8_t idx = 0;
-        for (; idx < childCount_; idx++) if (children_[idx] == child) break;
-        if (idx >= childCount_ || idx == newIndex) return false;
-        // Permuting under an index-based worker loop can tick a child twice or skip one.
-        quiesceForMutation();
-        if (newIndex > idx) {
-            // Shift left to fill the gap
-            for (uint8_t j = idx; j < newIndex; j++) children_[j] = children_[j + 1];
-        } else {
-            // Shift right to make room
-            for (uint8_t j = idx; j > newIndex; j--) children_[j] = children_[j - 1];
-        }
-        children_[newIndex] = child;
-        return true;
-    }
+    bool moveChildTo(MoonModule* child, uint8_t newIndex);
 
     /// How many children this module holds.
     uint8_t childCount() const { return childCount_; }
@@ -449,8 +295,10 @@ public:
     void setClassSize(size_t s) { classSize_ = s; }
     /// The heap this module has allocated, which its build sets.
     size_t dynamicBytes() const { return dynamicBytes_; }
-    /// Record the heap total, for a module that allocates outside a scratch buffer.
-    void setDynamicBytes(size_t b) { dynamicBytes_ = b; }
+    /// The same heap with the part of it in PSRAM, for the memory sheet's columns per type.
+    HeapBytes heapBytes() const { return {dynamicBytes_, psramBytes_}; }
+    /// Record the heap total, for a module that allocates outside a scratch buffer: `heapOf` per allocation says which part is PSRAM.
+    void setDynamicBytes(const HeapBytes& h) { dynamicBytes_ = h.total; psramBytes_ = h.psram; }
 
     /// The first of the resources this module holds, for a service that counts what they demand.
     const ModuleResource* resources() const { return resources_; }
@@ -459,9 +307,9 @@ public:
     friend class ModuleResource;
     friend class ScratchBufferBase;
 private:
-    /// Adjust the heap total by a signed delta, which a buffer does on every resize.
-    void addDynamicBytes(std::ptrdiff_t delta) {
-        dynamicBytes_ = static_cast<size_t>(static_cast<std::ptrdiff_t>(dynamicBytes_) + delta);
+    /// Move the heap total from what a buffer held to what it holds now, which a buffer does on every resize.
+    void moveDynamicBytes(const HeapBytes& from, const HeapBytes& to) {
+        setDynamicBytes(heapBytes() - from + to);
     }
 
     /// Add a resource to the intrusive list release walks, so a module with none pays one pointer.
@@ -470,11 +318,7 @@ private:
         resources_ = r;
     }
     /// Unlink a resource from that list.
-    void deregisterResource(ModuleResource* r) {
-        for (ModuleResource** p = &resources_; *p; p = &(*p)->next_) {
-            if (*p == r) { *p = r->next_; return; }   // unlink
-        }
-    }
+    void deregisterResource(ModuleResource* r);
 public:
 
     /// How much a status message matters, which picks the icon the UI shows.
@@ -500,10 +344,15 @@ public:
     /// Add one tick's time to the running total, from whichever core ticked it: the drivers tick on the encode task and on the main loop.
     void addAccumUs(uint32_t us) MM_NONBLOCKING { accumUs_.fetch_add(us, std::memory_order_relaxed); }
 
-    /// Average the accumulated time into the published figure, then recurse.
-    void publishTiming(uint32_t frameCount) {
+    /// The module's own time per frame: its total less the time its own thread spent inside its children's ticks, which a child on another thread leaves in.
+    uint32_t ownTimeUs() const { return ownTimeUs_; }
+
+    /// Average the accumulated time into the published figures, then recurse; a module that counts time of its own, such as a wait, averages it here too.
+    virtual void publishTiming(uint32_t frameCount) MM_NONBLOCKING {
         const uint32_t accum = accumUs_.exchange(0, std::memory_order_relaxed);
+        const uint32_t kids = childAccumUs_.exchange(0, std::memory_order_relaxed);
         tickTimeUs_ = frameCount > 0 ? accum / frameCount : 0;
+        ownTimeUs_ = frameCount > 0 && accum > kids ? (accum - kids) / frameCount : 0;
         for (uint8_t i = 0; i < childCount_; i++) {
             children_[i]->publishTiming(frameCount);
         }
@@ -512,11 +361,17 @@ public:
 protected:
     ControlList controls_;
 
+    /// Charge one child's tick to the child, the one place a child's time is booked. A child ticked on this module's own thread also counts as children's time, which this module's own time excludes; `onThisThread` is false for a child on another thread.
+    void addChildTimeUs(MoonModule* c, uint32_t us, bool onThisThread = true) MM_NONBLOCKING {
+        c->addAccumUs(us);
+        if (onThisThread) childAccumUs_.fetch_add(us, std::memory_order_relaxed);
+    }
+
     /// Which children a tick covers: every one, only a role, or every role but one.
     enum class RoleFilter : uint8_t { All, Only, Except };
     /// Tick the selected children through the one enabled gate and timing loop core owns.
     void tickChildren(void (MoonModule::*fn)() MM_NONBLOCKING, RoleFilter filter = RoleFilter::All,
-                      ModuleRole role = ModuleRole::Generic) MM_NONBLOCKING {
+                      ModuleRole role = ModuleRole::Generic, bool onThisThread = true) MM_NONBLOCKING {
         // The annotation rides the pointer type, so an unannotated method stays a compile error.
         for (uint8_t i = 0; i < childCount_; i++) {
             MoonModule* c = children_[i];
@@ -525,7 +380,7 @@ protected:
             if (!c->respectsEnabled() || c->enabled()) {
                 uint32_t start = platform::micros();
                 (c->*fn)();
-                c->addAccumUs(platform::micros() - start);
+                addChildTimeUs(c, platform::micros() - start, onThisThread);
             }
         }
     }
@@ -538,16 +393,19 @@ private:
     static inline MoonModule* lastEnabledEffect_ = nullptr;   ///< see lastEnabledEffect()
     bool dirty_ = false;
     bool wiredByCode_ = false;
+    Severity severity_ = Severity::Status;   ///< beside the flags, so the byte shares their word
     MoonModule* parent_ = nullptr;
     MoonModule** children_ = nullptr;
     uint8_t childCount_ = 0;
     uint8_t childCapacity_ = 0;
+    uint32_t psramBytes_ = 0;   ///< the part of dynamicBytes_ in PSRAM: in the padding before classSize_ on a 64-bit host, 4 bytes more on a 32-bit board
     size_t classSize_ = 0;
     size_t dynamicBytes_ = 0;
     ModuleResource* resources_ = nullptr;  ///< head of the intrusive let-go-on-release list
     const char* status_ = nullptr;  ///< the message `status()` reads
-    Severity severity_ = Severity::Status;
     uint32_t tickTimeUs_ = 0;
+    uint32_t ownTimeUs_ = 0;
+    std::atomic<uint32_t> childAccumUs_{0};   ///< the children's time on this module's own thread
     std::atomic<uint32_t> accumUs_{0};   ///< a statistic, so relaxed: no other memory is ordered by it
 
     /// The process-wide hooks the transport installs, one function pointer each, as with the persistence hook.

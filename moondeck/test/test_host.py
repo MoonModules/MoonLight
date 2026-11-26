@@ -16,6 +16,9 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(ROOT / "moondeck"))
+from _console import utf8_stdio  # noqa: E402
+utf8_stdio()   # a test's name may hold a character the Windows code page lacks
 # Reuse the shared test-metadata parser instead of re-implementing @module /
 # @case discovery here. Same parser feeds the doc generator and MoonDeck.
 sys.path.insert(0, str(ROOT / "moondeck" / "docs"))

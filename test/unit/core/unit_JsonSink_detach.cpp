@@ -4,7 +4,7 @@
 
 #include "doctest.h"
 #include "core/util/JsonSink.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // free
 
 #include <cstring>
 

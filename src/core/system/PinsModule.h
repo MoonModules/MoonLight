@@ -5,7 +5,7 @@
 #include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i): the roots of the tree to walk
 #include "core/util/JsonSink.h"    // writeListRow emits its row as JSON into the sink
 #include "core/util/Sort.h"        // insertionSort: order the map by GPIO (Device-Manager keying)
-#include "platform/platform.h"  // gpioCapability: is a claimed pin a strap / input-only / reserved?
+#include "platform/platform_io.h"   // GpioLiveState, gpioLiveState, GpioCapability
 #include "core/util/PinList.h"        // parsePinList: the domain-neutral "18,19,20" CSV parser (core primitive)
 
 #include <cstdint>

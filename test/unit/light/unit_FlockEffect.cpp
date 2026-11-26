@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "golden_frame.h"
 #include "light/effects/FlockEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cstring>
 #include <vector>

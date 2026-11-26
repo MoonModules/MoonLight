@@ -4,6 +4,8 @@
 #include "light/drivers/NetworkSendDriver.h"
 #include "correction_presets.h"
 #include "unit/core/conditional_controls.h"   // isVisible, isHidden
+#include "platform/platform_clock.h"   // setTestNowMs, delayUs, micros
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <cstring>
 #include <cstdio>

@@ -135,7 +135,7 @@ extern "C" uint8_t is_transport_tx_ready(void);
 #include "lwip/netdb.h"   // getaddrinfo: hostname resolution for TcpConnection::connect
 #include "lwip/etharp.h"  // etharp_get_entry: a neighbor's MAC (arpLookup)
 #include "lwip/tcpip.h"   // LOCK_TCPIP_CORE: the table is read under the stack's lock
-#include "platform/select_wait.h"   // the select() wait the host shares, after the socket headers
+#include "platform/select_wait.h"   // the select() wait the host shares
 
 #include <atomic>
 #include <cstdarg>

@@ -10,7 +10,7 @@
 #include "light/drivers/Drivers.h"
 #include "light/drivers/FixtureProfilesModule.h"
 #include "light/drivers/NetworkSendDriver.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <filesystem>

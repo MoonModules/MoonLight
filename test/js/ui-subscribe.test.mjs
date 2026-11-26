@@ -8,19 +8,20 @@ import { readFileSync } from "node:fs";
 import { src, fnSource } from "./app-source.mjs";
 
 const always = src.match(/const ALWAYS_SUBSCRIBED = (\[[^\]]*\]);/);
+const withChildren = src.match(/const ALWAYS_WITH_CHILDREN = (\[[^\]]*\]);/);
 
 function subscriber() {
     const sent = [];
     const ws = { readyState: 1, send: (m) => sent.push(JSON.parse(m)) };
     const subscribe = new Function("ws", "WebSocket",
-        `const ALWAYS_SUBSCRIBED = ${always[1]}; let subscribedRoot; ${fnSource("subscribe")} return subscribe;`)(ws, { OPEN: 1 });
+        `const ALWAYS_SUBSCRIBED = ${always[1]}; const ALWAYS_WITH_CHILDREN = ${withChildren[1]}; let subscribedRoot; ${fnSource("subscribe")} return subscribe;`)(ws, { OPEN: 1 });
     return { sent, subscribe };
 }
 
-test("a subscription names the root and the modules the page reads outside it", () => {
+test("a subscription names the root with its descendants and the modules the page reads outside it alone", () => {
     const { sent, subscribe } = subscriber();
     subscribe("Drivers");
-    assert.deepEqual(sent, [{ subscribe: ["Drivers", ...JSON.parse(always[1])] }]);
+    assert.deepEqual(sent, [{ subscribe: ["Drivers", ...JSON.parse(withChildren[1])], only: JSON.parse(always[1]) }]);
 });
 
 test("the same root is subscribed once, and another root subscribes again", () => {
@@ -35,7 +36,7 @@ test("the same root is subscribed once, and another root subscribes again", () =
 test("every module the page always subscribes to is a registered type", () => {
     // A type renamed on the device would silently stop the status bar or the preview, with every other test green.
     const types = readFileSync(new URL("../../src/module_types.cpp", import.meta.url), "utf8");
-    for (const t of JSON.parse(always[1])) assert.ok(types.includes(`("${t}"`), `${t} is not registered`);
+    for (const t of [...JSON.parse(always[1]), ...JSON.parse(withChildren[1])]) assert.ok(types.includes(`("${t}"`), `${t} is not registered`);
 });
 
 test("a reconnect subscribes again, since the device keeps no subscription across sockets", () => {
@@ -95,8 +96,7 @@ test("a config backup names its device from the state the page holds, without fe
 // Every module type the page names is either always subscribed or read where it is already whole, each with its reason.
 // A new name fails here until someone decides which: a read of another root's controls that is not subscribed finds an outline, without them.
 const READ_WHERE_WHOLE = {
-    MoonStatsModule: "a MoonCloud child, subscribed with it",
-    MoonTalkModule: "a MoonCloud child, subscribed with it",
+    MoonTalkModule: "read only by its own root's cards",
     NetworkModule: "read only by its own root's cards (the address-move check)",
     EthernetModule: "read only by its own root's cards",
     WiFiModule: "read only by its own root's cards",
@@ -108,10 +108,11 @@ const READ_WHERE_WHOLE = {
     MoonLiveModifier: "a type to create, not a module read",
     MoonLiveService: "a type to create, not a module read",
     RainbowEffect: "a comment's example",
+    MoonStatsModule: "a child of the cloud relay, which is subscribed with its children",
 };
 
 test("every module type the page names is subscribed or read where it is whole", () => {
-    const subscribed = new Set(JSON.parse(always[1]));
+    const subscribed = new Set([...JSON.parse(always[1]), ...JSON.parse(withChildren[1])]);
     const named = new Set([...src.matchAll(/"([A-Z][A-Za-z0-9]*(?:Module|Service|Driver|Effect|Layout|Modifier))"/g)].map(m => m[1]));
     const unexplained = [...named].filter(t => !subscribed.has(t) && !(t in READ_WHERE_WHOLE));
     assert.deepEqual(unexplained, [], "add the type to ALWAYS_SUBSCRIBED, or to READ_WHERE_WHOLE with the reason its controls are there");

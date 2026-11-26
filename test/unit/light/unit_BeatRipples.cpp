@@ -7,6 +7,7 @@
 #include "golden_frame.h"
 #include "light/effects/BeatRipplesEffect.h"
 #include "core/services/AudioService.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 using namespace mm;
 

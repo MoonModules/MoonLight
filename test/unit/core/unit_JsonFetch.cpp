@@ -8,6 +8,8 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
+#include "platform/platform_net.h"   // setTestHttpFetch
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cstring>
 #include <string>

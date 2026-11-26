@@ -1,9 +1,8 @@
 # Unit tests, split between core/ and light/ to mirror src/.
 # A test stays in the subfolder whose domain its primary @module belongs to;
 # cross-domain references travel through the @also list, not the directory.
-# module_types.cpp is the registry the device builds, which the module contract test walks type by type.
+# The registry the device builds (mm_module_types), which the module contract test walks type by type, is linked below.
 add_executable(mm_tests
-    ${CMAKE_SOURCE_DIR}/src/module_types.cpp
     # core/
     unit/core/unit_PartitionTables.cpp
     unit/core/unit_PsramRule.cpp
@@ -224,6 +223,8 @@ add_executable(mm_tests
     unit/light/unit_Coord3D.cpp
     unit/light/unit_effects_render.cpp
     unit/light/unit_Effects_gridsweep.cpp
+    unit/light/unit_Effects_buffersweep.cpp
+    unit/light/unit_Effects_tubesweep.cpp
     unit/core/unit_OscPacket.cpp
     unit/core/unit_UsbMidi.cpp
     unit/core/unit_RtpMidi.cpp
@@ -249,6 +250,7 @@ add_executable(mm_tests
     unit/light/unit_MovingHeadEffect.cpp
     unit/light/unit_FixedPointEffect.cpp
     unit/light/unit_Drivers_container.cpp
+    unit/light/unit_MoonShineModule.cpp
     unit/light/unit_Drivers_livePalettes.cpp
     unit/light/unit_Drivers_rendersplit.cpp
     unit/light/unit_FixtureProfilesModule.cpp
@@ -341,7 +343,7 @@ add_custom_target(effect_sweep_gen ALL
     VERBATIM
 )
 
-# The PIO engine's tests drive the engine and its stub backend, which MSVC does not build (the root CMakeLists.txt, MM_HUB75_PIO_ENGINE).
+# The PIO engine's tests drive the engine and its stub backend, which Windows does not build (the root CMakeLists.txt, MM_HUB75_PIO_ENGINE).
 if(MM_HUB75_PIO_ENGINE)
     target_sources(mm_tests PRIVATE
         unit/core/unit_platform_hub75pio.cpp
@@ -350,7 +352,7 @@ if(MM_HUB75_PIO_ENGINE)
         unit/core/unit_platform_hub75pio_stub.cpp
         unit/core/unit_platform_hub75pio_rp1.cpp)
 endif()
-# The GPIO engine's tests drive the engine and its stub backend, which MSVC does not build (the root CMakeLists.txt, MM_HUB75_GPIO_ENGINE).
+# The GPIO engine's tests drive the engine and its stub backend, which Windows does not build (the root CMakeLists.txt, MM_HUB75_GPIO_ENGINE).
 if(MM_HUB75_GPIO_ENGINE)
     target_sources(mm_tests PRIVATE
         unit/core/unit_platform_hub75gpio.cpp
@@ -358,7 +360,25 @@ if(MM_HUB75_GPIO_ENGINE)
         unit/core/unit_platform_hub75gpio_dump.cpp)
 endif()
 target_include_directories(mm_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(mm_tests PRIVATE mm_core mm_platform)
+target_link_libraries(mm_tests PRIVATE mm_module_types mm_core mm_platform)
+
+# A precompiled header: doctest and the standard headers most tests include, parsed once for the target rather than by every test object. doctest.h alone measured 249 s of a cold build's 815 s of compiler time (docs/work Plan-20261125, step 2). The project's own headers stay out of it, so a core edit leaves it as it is.
+target_precompile_headers(mm_tests PRIVATE
+    <cstdint> <cstdio> <cstring> <string> <vector> <algorithm> <memory> <filesystem> <thread>
+    "${CMAKE_CURRENT_SOURCE_DIR}/doctest.h")
+set_source_files_properties(unit/test_main.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)   # it defines DOCTEST_CONFIG_IMPLEMENT before its include, which a header forced in first would precede
+# ccache caches a compile that uses a precompiled header only with these sloppiness settings, and Clang only without the header's timestamp (ccache manual, Precompiled headers); scoped to this target.
+if(CCACHE_PROGRAM)
+    get_target_property(_mm_launcher mm_tests CXX_COMPILER_LAUNCHER)
+    list(FIND _mm_launcher "${CCACHE_PROGRAM}" _mm_ccache_at)
+    if(_mm_ccache_at GREATER -1)
+        list(INSERT _mm_launcher ${_mm_ccache_at} "${CMAKE_COMMAND}" -E env "CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime")
+        set_target_properties(mm_tests PROPERTIES CXX_COMPILER_LAUNCHER "${_mm_launcher}")
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT MSVC)
+        target_compile_options(mm_tests PRIVATE "SHELL:-Xclang -fno-pch-timestamp")
+    endif()
+endif()
 
 # doctest::Approx takes a double, so every CHECK against a float literal promotes: inside
 # doctest.h itself, which is vendored. -Wdouble-promotion stays -Werror for the firmware
@@ -391,11 +411,10 @@ set_tests_properties(unit_tests PROPERTIES
     ENVIRONMENT "MM_DATA_DIR=${CMAKE_CURRENT_BINARY_DIR}/fs-root")
 
 # Scenario runner (replays scenario JSON files in-process)
-# The same shared type registry the app compiles, so a scenario can name any module the
-# firmware has: src/module_types.cpp carries the reason.
-add_executable(mm_scenarios scenario_runner.cpp ${CMAKE_SOURCE_DIR}/src/module_types.cpp)
+# The same shared type registry the app links (mm_module_types), so a scenario can name any module the firmware has: src/module_types.cpp carries the reason.
+add_executable(mm_scenarios scenario_runner.cpp)
 target_include_directories(mm_scenarios PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})   # src/, and test/ for the helpers named from it
-target_link_libraries(mm_scenarios PRIVATE mm_core mm_platform)
+target_link_libraries(mm_scenarios PRIVATE mm_module_types mm_core mm_platform)
 # A write_file step's `from` names a file in the repository, such as a shipped script.
 target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR}")
 

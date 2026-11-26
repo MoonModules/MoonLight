@@ -1,11 +1,12 @@
 /// @module TasksModule
 
-/// Pins TasksModule's shape: one `tasks` List (rows = RTOS tasks) whose row-detail nests the MoonModules running in that task, plus core0/core1. On the host there is no FreeRTOS, so platform::taskSnapshot returns 0 → the tasks list is empty; the ESP32 path (a populated list with the render task's detail nesting every module) is verified on hardware. So the host test covers the module's control set + that the empty-snapshot path is safe, not the populated rows.
+/// Pins TasksModule's shape: one `tasks` List of RTOS tasks whose row detail nests the MoonModules running in that task, plus core0 and core1. A host has no FreeRTOS, so taskSnapshot returns 0 and the list is empty: the host test covers the control set and the empty-snapshot path, and the populated rows are verified on an ESP32.
 
 #include "doctest.h"
 #include "core/system/TasksModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_tasks.h"   // taskSnapshot, setTestTaskSnapshot, TaskInfo
 
 #include <cstring>
 #include <string>
@@ -17,7 +18,7 @@ namespace {
 // A minimal module with a fixed reported cost, to appear nested under the render task.
 struct FakeModule : MoonModule {
     FakeModule(const char* n, size_t klass, size_t heap) {
-        setName(n); setClassSize(klass); setDynamicBytes(heap);
+        setName(n); setClassSize(klass); setDynamicBytes({heap, 0});
     }
 };
 
@@ -53,7 +54,7 @@ TEST_CASE("TasksModule: exposes a tasks list + core0/core1, no separate modules 
 
 TEST_CASE("TasksModule: a fixed System module (Generic role, no delete affordance)") {
     TasksModule tasks;
-    // Tasks is wired-by-code as a System child (main.cpp), not user-added, so it keeps the base Generic role, which no container accepts as a user-editable child. That's what makes the UI render no delete/replace: a fixed inspection module, like Task Manager you don't delete.
+    // Tasks is wired by code as a System child (main.cpp), so it keeps the base Generic role, which no container accepts as a user child: the UI offers no delete or replace.
     CHECK(tasks.role() == ModuleRole::Generic);
 }
 
@@ -86,7 +87,7 @@ TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with thei
     REQUIRE(src != nullptr);
     REQUIRE(src->listRowCount() == 2);
 
-    // Rows hold a STABLE order across refreshes (the RTOS snapshot order is unstable, it shifts as tasks change state, which made the once-a-second list jump). MoonLight's own tasks float to the top (the render task "main" and "mm"-prefixed workers), RTOS system tasks sink below, alphabetical within each group. So "main" (ours) is row 0 and "IDLE1" (system) is row 1.
+    // Rows keep a stable order across refreshes, where the RTOS snapshot's order shifts: MoonLight's tasks first, RTOS tasks below, alphabetical within each, so "main" is row 0 and "IDLE1" row 1.
     JsonSink r0; src->writeListRow(r0, 0);
     std::string row0(r0.data());
     CHECK(row0.find("\"name\":\"main\"") != std::string::npos);    // our render task, floated to the top
@@ -102,7 +103,7 @@ TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with thei
     CHECK(row1.find("\"cpu\":") == std::string::npos);             // kTaskCpuUnmeasured → field omitted
 }
 
-// The row order: MoonLight's OWN tasks (render "main" + "mm"-prefixed workers) float to the top so the user sees them first, RTOS system tasks sink below, alphabetical within each group, regardless of the (unstable) order the RTOS snapshot returns them in. Feed a deliberately-jumbled snapshot and pin the exact resulting order.
+// The row order: MoonLight's own tasks ("main" and the "mm" workers) first, RTOS system tasks below, alphabetical within each, whatever order the snapshot returns; a jumbled snapshot pins it.
 TEST_CASE("TasksModule: MoonLight tasks sort to the top, system tasks below, alphabetical within") {
     // Input order is scrambled (system, ours, system, ours, ...), exactly the kind of shuffle the RTOS snapshot produces frame to frame.
     const platform::TaskInfo snap[] = {

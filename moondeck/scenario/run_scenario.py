@@ -25,20 +25,11 @@ import sys
 import time
 from pathlib import Path
 
-# A REDIRECTED Windows stdout takes the locale encoding, cp1252, and this runner relays the output
-# of `mm_scenarios`, which prints an arrow and an em-dash of its own. A scenario the runner PASSED
-# would be reported as failed by the print rather than by the run, which is the misdiagnosis the
-# live runner's own preamble exists to prevent. An attached console has been UTF-8 since Python 3.6
-# (PEP 528), so the failing mode is a pipe or a CI log, which is exactly how a gate runs this.
-# errors=replace, so a stray glyph never costs a result.
-if sys.stdout is not None:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if sys.stderr is not None:
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 ROOT = Path(__file__).resolve().parent.parent.parent
 # Reuse the shared test-metadata parser so scenario discovery stays in one place.
 sys.path.insert(0, str(ROOT / "moondeck"))
+from _console import utf8_stdio  # noqa: E402
+utf8_stdio()   # this runner relays mm_scenarios' arrows through a gate's pipe
 from _host import host_target  # noqa: E402
 import _suite_output  # noqa: E402
 sys.path.insert(0, str(ROOT / "moondeck" / "build"))

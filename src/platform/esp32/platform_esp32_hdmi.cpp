@@ -88,6 +88,7 @@ const char* const TAG = "hdmi";
 // The order mm_hdmi_dpi and mm_hdmi_timing list.
 constexpr HdmiMode kModes[] = {{800, 600, 60}, {1024, 768, 60}, {1280, 720, 60}, {1280, 800, 60}, {1920, 1080, 30}};
 constexpr size_t kModeCount = sizeof(kModes) / sizeof(kModes[0]);
+static_assert(hdmiDefaultMode < kModeCount && kModes[hdmiDefaultMode].width == 1280 && kModes[hdmiDefaultMode].height == 720, "the default is 1280x720");
 
 constexpr int kPhyLdoChannel = 3;      // the on-chip LDO that powers the MIPI-DSI PHY
 constexpr int kPhyLdoMillivolts = 2500;
@@ -389,7 +390,9 @@ size_t hdmiModes(const HdmiMode** out) MM_NONBLOCKING {
     return mm_hdmi_mode_count == kModeCount ? kModeCount : 0;   // the two tables disagreeing is a build mistake: offer nothing
 }
 
-bool hdmiOpen(uint8_t index) {
+bool hdmiTakeDismiss() MM_NONBLOCKING { return false; }   // no desktop, so nobody to ask for it back
+
+bool hdmiOpen(uint8_t index, bool /*ownScreen*/) {   // the port carries no desktop
     hdmiClose();
     if (!g.exited.load()) return false;   // the task is still inside a bring-up: a second task on one bridge is worse than no output this time
     if (index >= hdmiModes(nullptr) || !i2cBusHandle()) return false;

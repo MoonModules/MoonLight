@@ -3,7 +3,7 @@
 #include "core/module/MoonModule.h"
 #include "core/util/InputMapping.h"   // InputAction + runInputLevel: the target half, shared with every input service
 #include "core/module/Scheduler.h"
-#include "platform/platform.h"   // adcRead / adcMaxCount
+#include "platform/platform_io.h"   // adcMaxCount, adcRead
 
 #include <cstdint>
 #include <cstdio>

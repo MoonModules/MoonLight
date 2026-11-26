@@ -12,7 +12,8 @@
 #include "light/drivers/Hub75Driver.h"
 #include "light/layers/Buffer.h"
 #include "platform/Hub75Bus.h"   // kHub75PortMaxBitDepth
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc
+#include "platform/platform_leds.h"   // setTestHub75RefreshHz, Hub75TestPort, hub75TestPort
 #include "wall_fixture.h"
 
 #include <cstring>

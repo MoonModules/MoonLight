@@ -10,8 +10,20 @@ namespace mm {
 namespace fishart {
 
 /// Every fish sprite indexes these slots, which the effect fills per fish.
-enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kLight = 3, kFin = 4, kEye = 5, kBand = 6 };
+enum : uint8_t { kClear = 0, kBody = 1, kDark = 2, kEyeWhite = 3, kFin = 4, kEye = 5, kBand = 6 };
 inline constexpr uint8_t kPaletteCount = 7;
+
+/// A fish's palette from one entry of the active one, so a fish recolors with the show. The white of its eye sits behind the pupil, so a fish looks where it swims as flipX turns it; one at rest closes the eye to the pupil's dark.
+inline void fishPalette(RGB (&pal)[kPaletteCount], uint8_t entry, bool moving = true) {
+    const RGB body = colorFromPalette(*Palettes::active(), entry);
+    pal[kClear]    = RGB{0, 0, 0};                         // the transparent key
+    pal[kBody]     = body;
+    pal[kDark]     = blend(body, RGB{0, 0, 0}, 150);       // outline and shading
+    pal[kEye]      = RGB{20, 20, 24};
+    pal[kEyeWhite] = moving ? RGB{255, 255, 255} : pal[kEye];
+    pal[kFin]      = blend(body, RGB{255, 255, 255}, 60);
+    pal[kBand]     = blend(body, RGB{255, 255, 255}, 200);   // a paler version of the fish's own color: a second palette pick reads as two fish fused
+}
 
 /// A broad reef fish, 16x11 in 3 tail-beat frames, facing right since flipX serves the other way.
 inline constexpr uint8_t W = 16, H = 11, F = 3;
@@ -198,7 +210,7 @@ public:
             if (px > w + fishart::W * sc) { launch(i, /*anywhere=*/false); continue; }
 
             RGB pal[fishart::kPaletteCount];
-            paletteFor(entry, pal);
+            fishart::fishPalette(pal, entry, pool_.vx[i] != 0);
             const uint8_t frame = static_cast<uint8_t>((beat_.phase(3) + (i * 5) % 3) % 3);
             // The art faces right, so a fish swimming left is mirrored or the tank reads as wallpaper.
             const bool flip = pool_.vx[i] < 0;
@@ -222,19 +234,6 @@ public:
 private:
     enum : uint8_t { kBroad = 0, kSlim = 1, kTiny = 2 };
     static constexpr uint32_t kSeed = 0x0F157A9Bu;
-
-    /// Fill one fish's sprite palette from the active palette, its shade roles taking the colors.
-    void paletteFor(uint8_t entry, RGB (&pal)[fishart::kPaletteCount]) const {
-        const RGB body = colorFromPalette(*Palettes::active(), entry);
-        pal[fishart::kClear] = RGB{0, 0, 0};                 // the transparent key, never read
-        pal[fishart::kBody]  = body;
-        pal[fishart::kDark]  = blend(body, RGB{0, 0, 0}, 150);   // outline / shading
-        pal[fishart::kLight] = blend(body, RGB{255, 255, 255}, 120);
-        pal[fishart::kFin]   = blend(body, RGB{255, 255, 255}, 60);
-        pal[fishart::kEye]   = RGB{20, 20, 24};
-        // A paler version of the fish's own color: a second palette pick reads as two fish fused.
-        pal[fishart::kBand]  = blend(body, RGB{255, 255, 255}, 200);
-    }
 
     /// How many fish the three controls ask for, capped at the pool.
     uint16_t wanted() const {

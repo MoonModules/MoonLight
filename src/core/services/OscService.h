@@ -7,7 +7,8 @@
 #include "core/util/Addressing.h"      // sendAddressed: feedback to receivers, a group, or everyone
 #include "core/util/ReceiverList.h"        // parseReceiverList: the feedback receivers
 #include "core/util/NameResolver.h"    // a named receiver's address, looked up off the render thread
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_net.h"   // networkReady, UdpSocket
 
 #include <cstdio>
 #include <cstdlib>

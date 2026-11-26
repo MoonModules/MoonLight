@@ -11,7 +11,7 @@
 #include "light/layers/Layer.h"
 #include "light/layouts/GridLayout.h"
 #include "light/layouts/Layouts.h"
-#include "platform/platform.h"   // setTestGpioCapability: make one GPIO report as a PSRAM pin
+#include "platform/platform_io.h"   // GpioCapability, clearTestGpioCapability, setTestGpioCapability
 
 #include <cstring>
 #include <string>

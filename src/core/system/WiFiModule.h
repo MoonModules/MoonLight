@@ -6,7 +6,9 @@
 #include "core/system/FilesystemModule.h"
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"   // restoreList: the recursive reader for the persisted rows
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // free, alloc
+#include "platform/platform_net.h"   // WifiFailure, NetIface, wifiScanStart
 
 #include <cstdint>
 #include <cstring>

@@ -4,7 +4,8 @@
 #include "light/drivers/Hub75Output.h"
 #include "platform/Hub75Bus.h"      // Hub75Geometry, kHub75PortMaxBitDepth
 #include "platform/Hub75Encode.h"   // hub75Encode: the frame's wire format
-#include "platform/platform.h"
+#include "platform/platform_leds.h"   // Hub75Pins, hub75Init, hub75LastError
+#include "platform/platform_io.h"   // gpioRefusal, gpioCapability
 
 #include <cstdio>
 #include <cstring>

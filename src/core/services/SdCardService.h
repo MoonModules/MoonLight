@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/module/MoonModule.h"
-#include "platform/platform.h"   // SdPinConfig
+#include "platform/platform_fs.h"   // sdCardUsed, sdMount, SdPinConfig
 
 #include <cstdint>
 

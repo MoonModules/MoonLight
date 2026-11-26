@@ -13,7 +13,7 @@
 #include "light/effects/TrailsEffect.h"
 #include "core/util/ClockSync.h"   // FleetTime: a fleet clock stepping under a running layer
 #include "golden_frame.h"          // LayerFixture, ScopedTestClock
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs, uptimeUs
 
 #include <vector>
 

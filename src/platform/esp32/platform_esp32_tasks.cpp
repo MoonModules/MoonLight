@@ -7,8 +7,8 @@
 /// ## Two SDK options gate what it can answer
 ///
 /// The snapshot call is the textbook introspection one and needs the trace facility: without it the snapshot is empty and the module shows only its own cost table.
-/// The per-task CPU figure needs run-time stats, which cost a timer read on every context switch, measured at about 5 percent of the tick.
-/// So that one is gated behind its own build flag and reported as unmeasured when compiled out, and a share covers the interval since the last snapshot, as top reports it.
+/// The per-task CPU figure needs run-time stats, a clock read on every context switch, which measured no cost and is on in every build; an image built with it off reports the figure as unmeasured.
+/// A share covers the interval since the last snapshot, as top reports it.
 ///
 /// ## The scratch buffer is lazy and internal
 ///
@@ -66,7 +66,7 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     uint32_t totalRunTime = 0;
     const UBaseType_t got = uxTaskGetSystemState(raw, kScratch, &totalRunTime);
     const size_t n = got < maxTasks ? got : maxTasks;
-#if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
+#if configGENERATE_RUN_TIME_STATS == 1   // on in every MoonLight build (sdkconfig.defaults); with it off the Tasks card shows no CPU column
     // Each task's counter at the previous snapshot, by task number, so a share covers only the interval since.
     static UBaseType_t prevNumber[kScratch] = {};
     static uint32_t prevRunTime[kScratch] = {};
@@ -88,7 +88,7 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     #else
         o.core = -1;
     #endif
-    #if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
+    #if configGENERATE_RUN_TIME_STATS == 1
         uint32_t before = 0;
         for (UBaseType_t k = 0; k < prevCount; k++)
             if (prevNumber[k] == t.xTaskNumber) { before = prevRunTime[k]; break; }
@@ -98,7 +98,7 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
         (void)totalRunTime;
     #endif
     }
-#if defined(MM_TASK_CPU_STATS) && MM_TASK_CPU_STATS
+#if configGENERATE_RUN_TIME_STATS == 1
     for (UBaseType_t i = 0; i < got && i < kScratch; i++) {
         prevNumber[i] = raw[i].xTaskNumber;
         prevRunTime[i] = raw[i].ulRunTimeCounter;

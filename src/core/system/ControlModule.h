@@ -9,7 +9,9 @@
 #include "core/module/StateDocument.h"   // a preset is a state document
 #include "core/util/JsonUtil.h"
 #include "core/util/InputMapping.h"   // kTargetTypeMaxNumber: the bank sizes an input row may name
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // free, alloc
+#include "platform/platform_fs.h"   // fsMkdir, fsRemove, fsList
 
 #include <cstdarg>   // setStatusf
 #include <cstdio>

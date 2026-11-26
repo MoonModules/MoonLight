@@ -4,6 +4,7 @@
 #include "core/system/ControlModule.h"   // kTargetLen and kMaxNameLen: a parameter is a slot's target, a look a preset's name
 #include "core/util/Hlc.h"             // Stamp: when and by whom a shared value was written
 #include "core/util/ScratchBuffer.h"   // the values and the looks, grown as they are shared
+#include "platform/platform_clock.h"   // millis
 
 #include <cstddef>
 #include <cstdint>

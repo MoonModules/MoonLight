@@ -7,7 +7,7 @@
 #include "unit/source_tree.h"
 #include "MoonLiveEffectScene.h"
 #include "../core/moonlive_script_wrap.h"
-#include "platform/platform.h"   // setTestNowMs: particle physics runs on elapsed time
+#include "platform/platform_clock.h"   // setTestNowMs
 #include <filesystem>
 #include <fstream>
 #include <sstream>

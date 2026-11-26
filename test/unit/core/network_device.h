@@ -8,7 +8,8 @@
 #include "core/system/SystemModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_net.h"   // setTestDeviceNetwork
 
 namespace mm {
 

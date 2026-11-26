@@ -4,55 +4,55 @@ The one interface every module reaches hardware through. Core and the light doma
 
 Why the boundary is drawn here, and what is allowed to cross it, is [MoonCore's platform abstraction](../../explanation/architecture/mooncore.md#platform-abstraction). This page is the reference half: what the interface offers, and where each target implements it.
 
-`platform.h` declares the interface; `host/`, `esp32/` and `teensy/` implement it. A module that needs something the interface does not offer gets a new function here rather than an `#ifdef` at the call site, which is what keeps the domains target-blind.
+Each concern of the interface has its own header, which a file includes for the concern it uses, so an edit to one rebuilds that concern's users alone; [platform.h](../../../src/platform/platform.h) gathers them all for the implementations. `host/`, `esp32/` and `teensy/` implement them. A module that needs something the interface does not offer gets a new function in the concern header it belongs to rather than an `#ifdef` at the call site, which is what keeps the domains target-blind.
 
 ## Time
 
 `millis`, `micros`, `delayMs`, `delayUs`. The clock every animation is written against, and the only sleep a module may take.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_clock.h](../../../src/platform/platform_clock.h)
 
 ## Memory
 
 `alloc`, `free`, `allocInternal`, `freeHeap`, `freeInternalHeap`, plus the accounting (`allocatedBytes`, `allocatedCount`, `allocatedPeak`) that MoonStats reports. Internal versus PSRAM is a platform question, so a module asks for what it needs and the layer decides where it lands.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_heap.h](../../../src/platform/platform_heap.h)
 
 ## Executable memory
 
 `allocExec`, `writeExec`, `freeExec`. Memory a CPU will fetch instructions from, which is IRAM on an ESP32 and an mmap page on the host. [MoonLive](../light/moonlive.md) compiles into it; nothing else does.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_heap.h](../../../src/platform/platform_heap.h)
 
 ## Filesystem
 
 `fsMount`, `fsRead`, `fsWrite`, `fsList`, `fsExists`, `fsMkdir`. LittleFS on a device and `std::filesystem` on the host, behind one set of names, so a config file and a script are read the same way on both.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_fs.h](../../../src/platform/platform_fs.h)
 
 ## GPIO and ADC
 
 `gpioRead`, `gpioWrite`, `gpioInputBegin`, `adcRead`, `adcReadMv`, `adcMaxCount`, and the capability introspection PinsModule renders. A pin's existence is a per-chip fact, so the layer answers it rather than each module guessing.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_io.h](../../../src/platform/platform_io.h)
 
 ## Networking
 
 Sockets, plus the raw-L2 ethernet path (`ethInit`, `ethSendRaw`, `ethLinkUp`, `ethGetIPv4`). Art-Net and sACN reach the wire through this, which is why a driver never opens a socket itself.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_net.h](../../../src/platform/platform_net.h)
 
 ## Tasks and workers
 
 RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On the host these are threads; the contract is identical.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_tasks.h](../../../src/platform/platform_tasks.h)
 
 ## Video output
 
 NDI, HLS, RTSP and HDMI. Present where the target can carry them and absent elsewhere, which a module discovers by asking rather than by target. HDMI hands a frame to the display and reads back the monitor: its hot-plug, its EDID and the mode it runs. An ESP32-P4 drives an LT8912B bridge; a computer drives its own display.
 
-Source: [platform.h](../../../src/platform/platform.h)
+Source: [platform_video.h](../../../src/platform/platform_video.h)
 
 ## Three implementations, one contract
 

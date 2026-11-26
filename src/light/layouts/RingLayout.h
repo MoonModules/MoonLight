@@ -82,7 +82,7 @@ private:
             const float ledAngle = fmodf(angleFirst + (static_cast<float>(i) / nrOfLEDs) * 360.0f, 360.0f);
             if (!inArc(ledAngle)) continue;
             // Truncating each axis toward zero is what the source does.
-            if (!e.pixel(static_cast<lengthType>(static_cast<int>(x)), static_cast<lengthType>(static_cast<int>(y)), 0)) return;
+            if (!e.addLight(static_cast<lengthType>(static_cast<int>(x)), static_cast<lengthType>(static_cast<int>(y)), 0)) return;
         }
     }
 

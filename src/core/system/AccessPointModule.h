@@ -4,7 +4,9 @@
 #include "core/module/MoonModule.h"
 #include "core/util/CaptivePortal.h"
 #include "core/util/fnv.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // bootRecord, getMacAddress
+#include "platform/platform_net.h"   // WifiApConfig, UdpSocket
 
 #include <cstdint>
 #include <cstdio>

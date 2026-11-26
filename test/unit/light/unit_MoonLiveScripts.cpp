@@ -14,7 +14,7 @@
 #include "unit/source_tree.h"
 #include "../core/moonlive_script_wrap.h"
 #include "core/moonlive/MoonLive.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // allocExec, writeExec, freeExec
 #include "core/moonlive/moonlive_emit.h"
 #include "light/moonlive/MoonLiveBuiltins_light.h"
 #include "core/moonlive/MoonLiveBuiltins_service.h"   // the service vocabulary a .mls compiles against

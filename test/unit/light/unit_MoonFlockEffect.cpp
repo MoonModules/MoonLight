@@ -3,6 +3,7 @@
 #include "doctest.h"
 #include "golden_frame.h"
 #include "light/effects/MoonFlockEffect.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <algorithm>
 #include <cstring>

@@ -4,7 +4,7 @@
 #include "core/module/MoonModule.h"
 #include "core/util/InputMapping.h"        // InputAction: the target half, shared with the button service
 #include "core/system/FilesystemModule.h"    // noteDirty: schedule the debounced save on a learned bind
-#include "platform/platform.h"        // irRead
+#include "platform/platform_io.h"   // irRead, irStop, irChannelReady
 
 #include <cstdint>
 #include <cstdio>

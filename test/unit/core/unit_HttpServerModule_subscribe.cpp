@@ -9,7 +9,9 @@
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"
 #include "http_loopback.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock, setTestFreeInternalHeap, setTestAllocRefusedFrom
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <algorithm> // std::max
 #include <cstdio>    // std::snprintf, the wide module's control names
@@ -199,6 +201,30 @@ TEST_CASE("a subscribed module deep in the tree brings its own controls and not 
     CHECK(objectOf(doc, "L").find("\"controls\"") != std::string::npos);
     CHECK(objectOf(doc, "B").find("\"controls\"") == std::string::npos);
     CHECK(objectOf(doc, "W").find("\"controls\"") == std::string::npos);
+}
+
+// A status bar reads System's own controls, so naming it alone keeps the modules under it out of every push, as HttpServerModule.h's State by subscription describes.
+TEST_CASE("a module named alone is sent in full without its children, and a root beside it keeps its descendants") {
+    Tree t;
+    mm::HttpServerModule http;
+    http.setScheduler(&t.s);
+    const auto sub = subscribed("{\"subscribe\":[\"A\"],\"only\":[\"B\"]}");
+    CHECK(sub.covers(t.a));
+    CHECK(sub.covers(t.k));    // the root's child
+    CHECK(sub.covers(t.b));    // the module named alone
+    CHECK_FALSE(sub.covers(t.l));   // its children are not
+    CHECK_FALSE(sub.covers(t.w));
+    const std::string doc = whole(http, &sub);
+    CHECK(objectOf(doc, "K").find("\"controls\"") != std::string::npos);
+    CHECK(objectOf(doc, "L").find("\"controls\"") == std::string::npos);
+    // A name in both lists counts with its descendants.
+    const auto both = subscribed("{\"subscribe\":[\"B\"],\"only\":[\"B\"]}");
+    CHECK(both.covers(t.l));
+    // Only-names alone, with an empty root list, as a page with no root shown sends.
+    const auto bare = subscribed("{\"subscribe\":[],\"only\":[\"L\"]}");
+    CHECK(bare.covers(t.l));
+    CHECK_FALSE(bare.covers(t.b));
+    CHECK_FALSE(bare == sub);
 }
 
 TEST_CASE("the subscribe message names modules, and a star subscribes to the whole tree") {

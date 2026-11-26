@@ -23,6 +23,8 @@
 #include "core/system/DevicesModule.h"
 #include "core/system/WledPacket.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_clock.h"   // setTestNowMs
+#include "platform/platform_net.h"   // setTestArpEntry, UdpSocket
 
 #include <cstdint>
 #include <cstring>

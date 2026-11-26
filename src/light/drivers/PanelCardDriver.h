@@ -4,7 +4,8 @@
 #include "light/drivers/DriverBase.h"
 
 #include "light/drivers/ColorLight5A75Packet.h"   // the first wire format (byte layout lives there)
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_net.h"   // rawInterfaces, ethClaimRawL2, ethBindRawInterface
 
 #include <atomic>
 
@@ -113,6 +114,8 @@ public:
     void release() override {
         if (claimed_) { platform::ethClaimRawL2(false); claimed_ = false; }
         platform::ethBindRawInterface(nullptr);
+        corrected_.free();   // the staging frame goes with the driver, and prepare() takes it again
+        publishHeapBytes();
         DriverBase::release();
     }
 
@@ -200,6 +203,7 @@ public:
             const uint8_t* src = sourceBuffer_->data();
             const uint8_t srcCh = sourceBuffer_->channelsPerLight();
             uint8_t* dst = corrected_.data();
+            if (frameLayoutChanged()) corrected_.clear();   // once per profile change: a channel with no role sends 0
             for (nrOfLightsType i = 0; i < nLights; i++) {
                 // srcCh carries a wide light's motion channels through, as NetworkSendDriver does.
                 correction_.apply(src + (winStart + i) * srcCh, dst + i * outCh, srcCh);
@@ -369,19 +373,23 @@ private:
 
     /// Size the corrected buffer, off the hot path, which is the no-allocation contract.
     void resizeCorrected() {
-        if (!sourceBuffer_) return;
+        if (!sourceBuffer_ || !effectivelyEnabled()) return;   // a driver that is off holds no frame
         nrOfLightsType winStart, n;
         windowSlice(sourceBuffer_->count(), winStart, n);
         const uint8_t ch = correction_.outChannels;
         if (n == 0 || ch == 0) return;
         if (corrected_.count() >= n && corrected_.channelsPerLight() >= ch) return;
         corrected_.allocate(n, ch);
+        frameReplaced();
+        publishHeapBytes();
     }
 
     /// The shared frame this driver reads its window from; borrowed, not owned.
     Buffer* sourceBuffer_ = nullptr;
     /// Owned: source bytes after brightness/order/white. Sized off the hot path.
     Buffer corrected_;
+    /// The staging frame beside the base's scratch, so the memory readout counts it.
+    HeapBytes driverHeapBytes() const override { return DriverBase::driverHeapBytes() + corrected_.heap(); }
     /// One reused frame buffer, sized for the largest packet the format builds.
     uint8_t packet_[COLORLIGHT_MAX_FRAME] = {};
     /// millis() of the last frame sent: the `fps` limiter's reference.

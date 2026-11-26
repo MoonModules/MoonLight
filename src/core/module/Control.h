@@ -20,28 +20,7 @@ inline void formatDottedQuad(char out[16], const uint8_t ip[4]) MM_NONBLOCKING {
 }
 
 /// Coerce a string in place into a valid hostname label, which the device name must be.
-inline void sanitizeHostname(char* buf) {
-    if (!buf) return;
-    char* w = buf;                       // the write cursor, which compacts in place
-    bool pendingDash = false;            // emit one hyphen before the next keeper
-    for (const char* r = buf; *r; ++r) {
-        const char c = *r;
-        const bool keep = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
-                       || (c >= '0' && c <= '9') || c == '-';
-        if (keep) {
-            // Never lead with a hyphen, from a run or from a literal one.
-            if (c == '-' && w == buf) continue;
-            if (pendingDash && w != buf) *w++ = '-';
-            pendingDash = false;
-            *w++ = c;
-        } else {
-            pendingDash = true;          // deferring drops a trailing run entirely
-        }
-    }
-    // Literal hyphens are kept as written, so loop to strip every trailing one.
-    while (w != buf && w[-1] == '-') --w;
-    *w = '\0';
-}
+void sanitizeHostname(char* buf) MM_NONBLOCKING;   // a pure loop over the buffer, called from SystemModule's tick1s
 
 /// What a file-path control tells the UI: a directory, an extension and a template.
 using FilePathPick = const char* const[3];
@@ -123,6 +102,9 @@ struct ListSource {
 
     /// Draw the rows as a graph: a row is a node keyed by `ip` or else `name`, colored by `type`, marked by `self`; its `edges` array of `{to, label}` is the adjacency list.
     virtual bool listAsGraph() const { return false; }
+
+    /// Draw the rows as a flow: a row is a node in the column its `stage` names, and its `edges` array of `{to, bytes}` are the wires to later stages.
+    virtual bool listAsFlow() const { return false; }
 
     /// The pad grid's columns, a non-zero value making it a fixed surface with real empty cells.
     virtual uint8_t listGridCols() const { return 0; }
@@ -231,153 +213,69 @@ public:
     ControlList& operator=(ControlList&&) = delete;
 
     /// Bind a byte as a slider, the preferred default, whose bounds also clamp writes.
-    void addControl(const char* name, uint8_t& var, uint8_t min = 0, uint8_t max = 255) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Uint8, min, max};
-    }
+    void addControl(const char* name, uint8_t& var, uint8_t min = 0, uint8_t max = 255);
 
     /// Bind a wide unsigned value, whose bounds default to its own full range.
-    void addControl(const char* name, uint16_t& var,
-                    uint16_t min = 0, uint16_t max = UINT16_MAX) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Uint16, min, max};
-    }
+    void addControl(const char* name, uint16_t& var, uint16_t min = 0, uint16_t max = UINT16_MAX);
 
     /// Bind a signed value, for a coordinate where negatives are legal.
-    void addControl(const char* name, int16_t& var,
-                    int16_t min = INT16_MIN, int16_t max = INT16_MAX) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Int16, min, max};
-    }
+    void addControl(const char* name, int16_t& var, int16_t min = INT16_MIN, int16_t max = INT16_MAX);
 
     /// Bind a wide signed value, where sixteen bits would wrap.
-    void addControl(const char* name, int32_t& var,
-                    int32_t min = INT32_MIN, int32_t max = INT32_MAX) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Int32, min, max};
-    }
+    void addControl(const char* name, int32_t& var, int32_t min = INT32_MIN, int32_t max = INT32_MAX);
 
     /// A small signed value is either a pin or telemetry, so the caller names which.
     void addControl(const char* name, int8_t& var, int16_t min = 0, int16_t max = 0) = delete;
 
     /// Bind a GPIO number, which renders as a number since a pin is an identity not a magnitude.
-    void addPin(const char* name, int8_t& var, int16_t min = -1, int16_t max = MM_MAX_GPIO) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Pin, min, max};
-    }
+    void addPin(const char* name, int8_t& var, int16_t min = -1, int16_t max = MM_MAX_GPIO);
 
     /// Bind a boolean as a toggle, whose range is itself.
-    void addControl(const char* name, bool& var) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, 0, ControlType::Bool, 0, 1};
-    }
+    void addControl(const char* name, bool& var);
 
     /// Bind a character buffer as a text input, with an optional check on every write.
-    void addText(const char* name, char* var, uint16_t bufSize = 16,
-                 bool (*validate)(const char*) = nullptr) {
-        if (!grow(name)) return;
-        controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Text,
-                               .max = bufSize, .validate = validate};
-    }
+    void addText(const char* name, char* var, uint16_t bufSize = 16, bool (*validate)(const char*) = nullptr);
 
     /// Bind a buffer the UI renders as a resizable multi-line box, such as a script's source.
-    void addTextArea(const char* name, char* var, uint16_t bufSize = 16,
-                     bool (*validate)(const char*) = nullptr) {
-        if (!grow(name)) return;
-        controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::TextArea,
-                               .max = bufSize, .validate = validate};
-    }
+    void addTextArea(const char* name, char* var, uint16_t bufSize = 16, bool (*validate)(const char*) = nullptr);
 
     /// Bind a buffer naming a file, whose contents the UI edits, with a picker over a directory.
-    void addFilePath(const char* name, char* var, uint16_t bufSize,
-                     const FilePathPick& pick,
-                     bool (*validate)(const char*) = nullptr) {
-        if (!grow(name)) return;
-        controls_[count_++] = {.ptr = var, .name = name,
-                               .aux = reinterpret_cast<uintptr_t>(&pick[0]),
-                               .type = ControlType::FilePath,
-                               .max = bufSize, .validate = validate};
-    }
+    void addFilePath(const char* name, char* var, uint16_t bufSize, const FilePathPick& pick, bool (*validate)(const char*) = nullptr);
 
     /// Bind a file-path control with no picker, which is an editor over one fixed path.
-    void addFilePath(const char* name, char* var, uint16_t bufSize,
-                     bool (*validate)(const char*) = nullptr) {
-        if (!grow(name)) return;
-        controls_[count_++] = {.ptr = var, .name = name, .aux = 0,
-                               .type = ControlType::FilePath,
-                               .max = bufSize, .validate = validate};
-    }
+    void addFilePath(const char* name, char* var, uint16_t bufSize, bool (*validate)(const char*) = nullptr);
 
     /// Bind a buffer holding a secret, which the API obfuscates rather than sending in clear, with an optional check on every write.
-    void addPassword(const char* name, char* var, uint8_t bufSize = 32,
-                     bool (*validate)(const char*) = nullptr) {
-        if (!grow(name)) return;
-        controls_[count_++] = {.ptr = var, .name = name, .type = ControlType::Password,
-                               .max = bufSize, .validate = validate};
-    }
+    void addPassword(const char* name, char* var, uint8_t bufSize = 32, bool (*validate)(const char*) = nullptr);
 
     /// Bind a buffer the UI shows but never edits.
-    void addReadOnly(const char* name, char* var, uint8_t bufSize = 32) {
-        if (!grow(name)) return;
-        controls_[count_++] = {var, name, 0, ControlType::ReadOnly, 0, bufSize};
-    }
+    void addReadOnly(const char* name, char* var, uint8_t bufSize = 32);
 
     /// Bind a small signed telemetry value, shown with the unit suffix the caller owns.
-    void addReadOnlyInt(const char* name, int8_t& var, const char* unit) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(unit),
-                               ControlType::ReadOnlyInt, 0, 0};
-    }
+    void addReadOnlyInt(const char* name, int8_t& var, const char* unit);
 
     /// Bind an index as a palette dropdown, whose options carry their own swatch colors.
-    void addPalette(const char* name, uint8_t& var, PaletteOptionsFn optionsFn, uint8_t optionCount) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(optionsFn), ControlType::Palette, 0, optionCount};
-    }
+    void addPalette(const char* name, uint8_t& var, PaletteOptionsFn optionsFn, uint8_t optionCount);
 
     /// Bind an index as a dropdown over the options array the caller owns.
-    void addSelect(const char* name, uint8_t& var, const char* const* options, uint8_t optionCount) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, reinterpret_cast<uintptr_t>(options), ControlType::Select, 0, optionCount};
-    }
+    void addSelect(const char* name, uint8_t& var, const char* const* options, uint8_t optionCount);
 
     /// Bind a value as a progress bar against a total, both counted in `unit`.
-    void addProgress(const char* name, uint32_t& var, uint32_t total, ProgressUnit unit = ProgressUnit::Bytes) {
-        if (!grow(name)) return;
-        controls_[count_++] = {&var, name, total, ControlType::Progress, static_cast<int32_t>(unit), 0};
-    }
+    void addProgress(const char* name, uint32_t& var, uint32_t total, ProgressUnit unit = ProgressUnit::Bytes);
 
     /// Bind four octets as an address, which serializes as its dotted-quad string.
-    void addIPv4(const char* name, uint8_t* var) {
-        if (!grow(name)) return;
-        controls_[count_++] = {var, name, 0, ControlType::IPv4, 0, 0};
-    }
+    void addIPv4(const char* name, uint8_t* var);
 
     /// Bind a source as a list of rows, which it produces on demand from its own data.
-    void addList(const char* name, ListSource& source) {
-        if (!grow(name)) return;
-        // A non-const reference, since restoring a list repopulates the source's rows.
-        controls_[count_++] = {&source, name, 0, ControlType::List, 0, 0};
-    }
+    void addList(const char* name, ListSource& source);
 
     /// Add a momentary button, whose click reaches the module's changed hook rather than storage. `confirm` asks the UI for a second press, while the API, a desk or MQTT acts on one write.
-    void addButton(const char* name, bool confirm = false) {
-        if (!grow(name)) return;
-        controls_[count_++] = {nullptr, name, confirm ? 1u : 0u, ControlType::Button, 0, 0};
-    }
+    void addButton(const char* name, bool confirm = false);
 
     /// Drop every control, which a rebuild does before redeclaring them.
     void clear() { count_ = 0; }
     /// Size the array to the controls declared, so the doubling that declaring them took leaves no empty slots; a list that cannot move keeps its slack, and a rebuild declaring as many fills it without moving.
-    void shrinkToFit() {
-        if (count_ == capacity_) return;
-        auto* fitted = count_ ? new (std::nothrow) ControlDescriptor[count_] : nullptr;
-        if (count_ && !fitted) return;
-        for (uint8_t i = 0; i < count_; i++) fitted[i] = controls_[i];
-        delete[] controls_;
-        controls_ = fitted;
-        capacity_ = count_;
-    }
+    void shrinkToFit();
     /// How many controls the array holds room for.
     uint8_t capacity() const { return capacity_; }
     /// How many controls are declared.

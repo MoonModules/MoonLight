@@ -16,7 +16,11 @@
 #include "core/services/AudioDemand.h"         // what the palette script reads of the audio, as Demand.h describes
 #include "core/moonlive/script_catalog.h"       // the tags each factory palette declares
 #include "core/util/LightOutput.h"   // the seam the domain-neutral WLED, MQTT and MoonStats consumers read
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, micros
+#include "platform/platform_tasks.h"   // notifyTask, WorkerTask, taskWdtSubscribe
+#include "platform/platform_system.h"   // kBootStableMs, bootRecord
+#include "platform/platform_fs.h"   // fsList
+#include "platform/platform_io.h"   // gpioWrite
 
 #include <cstring>  // std::strcmp in onControlChanged
 #include <atomic>   // encodeDone_: the render↔encode cross-core handoff flag
@@ -601,7 +605,7 @@ public:
         } else {
             outputBuffer_.free();
         }
-        setDynamicBytes(outputBuffer_.bytes());
+        setDynamicBytes(outputBuffer_.heap());
         wiredLast_ = false;   // a reallocated output holds no frame yet
         // Read before a failed worker gives an identity layer's buffer back, which a retry claims again; a configuration whose buffer fit keeps fitting through one refusal, so a passing shortage leaves the retry running.
         splitBufferFits_ = outputBuffer_.data() != nullptr || (sameConfig && splitBufferFits_);
@@ -614,7 +618,7 @@ public:
             // An identity layer needs the shared buffer only for the split, so the inline path gives its memory and its copy back.
             if (!renderSplitActive_ && !needOutput) {
                 outputBuffer_.free();
-                setDynamicBytes(outputBuffer_.bytes());
+                setDynamicBytes(outputBuffer_.heap());
             }
         } else if (!shouldSplit && renderSplitActive_) {
             stopEncodeTask();                  // drains core 1 before we leave split mode
@@ -645,6 +649,7 @@ public:
             if (!quiesceEncode()) stopEncodeTask();
             renderWaitUs_ = static_cast<uint32_t>(platform::micros() - s0);
             if (renderWaitUs_ > renderWaitPeakUs_) renderWaitPeakUs_ = renderWaitUs_;   // the 1 s window's worst, for the KPI
+            renderWaitSumUs_ += renderWaitUs_;
         }
         // Resolved ONCE: both single-layer branches need it, and an if-init shadowed the outer one.
         Layer* srcLayer = effects_ ? effects_->firstEnabledLayer() : layer_;
@@ -720,6 +725,8 @@ private:
     uint8_t splitEngagedS_ = 0;        // seconds engaged since the last attempt, which resets the delay at the cap
     uint32_t renderWaitUs_ = 0;                 // last frame's core-0 wait at the boundary (the tick-line KPI)
     uint32_t renderWaitPeakUs_ = 0;             // worst wait in the current 1 s window (what the control shows)
+    uint32_t renderWaitSumUs_ = 0;              // the waits of the current timing window, which publishTiming averages
+    uint32_t renderWaitAvgUs_ = 0;              // the average wait per frame over the last window
     /// How long core 0 waited for core 1 at the frame boundary.
     /// @guide Near zero means render and output overlap well. A large value means core 0 idles on a slow output stage.
     char renderWaitStr_[32] = {};
@@ -732,7 +739,7 @@ private:
             if (!platform::waitNotify(encodeTask_, 100)) { platform::taskWdtReset(); continue; }
             if (encodeStop_.load(std::memory_order_acquire)) break;
             // Every Driver child, through core's one gate and timing loop, now on core 1.
-            tickChildren(&MoonModule::tick, RoleFilter::Only, ModuleRole::Driver);
+            tickChildren(&MoonModule::tick, RoleFilter::Only, ModuleRole::Driver, false);   // core 1: core 0's own time leaves this out
             platform::taskWdtReset();
             encodeDone_.store(true, std::memory_order_release);
         }
@@ -795,6 +802,14 @@ public:
     bool renderSplitActive() const { return renderSplitActive_; }
     /// The worst core-0 wait at the frame boundary in the current one-second window, in µs; a large value means core 0 idles, which a second handoff buffer would recover.
     uint32_t renderWaitPeakUs() const { return renderWaitPeakUs_; }
+    /// The average core-0 wait per frame over the last second, in µs, the tick time balance sheet's "waiting for encoder".
+    uint32_t renderWaitAvgUs() const { return renderWaitAvgUs_; }
+    /// Average the boundary wait with the module times, over the same frames.
+    void publishTiming(uint32_t frameCount) MM_NONBLOCKING override {
+        MoonModule::publishTiming(frameCount);
+        renderWaitAvgUs_ = frameCount ? renderWaitSumUs_ / frameCount : 0;
+        renderWaitSumUs_ = 0;
+    }
     /// Test-only: the frame-boundary wait alone, without the fallback inline tick that follows a timeout; false means it timed out and disengaged.
     bool quiesceEncodeForTest() { return quiesceEncode(); }
     /// Test-only: stop and join the worker, as quiesce() does after a boundary wait times out.

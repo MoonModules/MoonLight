@@ -6,7 +6,7 @@
 #include "light/effects/FreqMatrixEffect.h"
 #include "light/layouts/GridLayout.h"
 #include "core/services/AudioService.h"
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // millis, setTestNowMs
 
 // FreqMatrixEffect is audio-driven: it paints the new x=0/y=0 pixel from AudioService::latestFrame() (hue from peakHz, brightness from levelSmoothed) and scrolls the column away from y=0 each tick. To pin real behavior the frame is fed through a live AudioService in simulate = kSimSweep (sweep): on host (hasI2sMic=false) tick() runs synthesizeFrame, elects the module as the active mic, and fills a DETERMINISTIC frame off platform::millis(). At the frozen time t=375 the sweep is at step pos=1 (peakHz = 80 + 1*700 = 780 Hz, comfortably above the effect's 80 Hz tone gate) and env=triwave8(127)=254 (a near-full level). Driving the mic's tick() repeatedly at that time converges the smoothed level (a /4 EMA of 254) well past the effect's `levelSmoothed > 64` gate, so the painted pixel is guaranteed lit, letting us assert the paint and the scroll rather than "renders non-zero".
 

@@ -1,8 +1,7 @@
 /// @module MoonLiveService
 /// @also Scheduler
 
-/// Pins the scripted-service path end to end: a .mls script reads a GPIO through the platform seam and drives a control through Scheduler::setControl, on the 50 Hz tick.
-/// The GPIO seam is a host stub whose level the test injects (platform::setTestGpioLevel), so "the pin went low" is expressed exactly as the module sees it on a board.
+/// Pins the scripted-service path end to end: a .mls script reads a GPIO, whose level the test injects (platform::setTestGpioLevel), and drives a control through Scheduler::setControl.
 ///
 /// This is the test the plan's step 2 asks for: the script does in eight lines what ButtonService does as a module, and proving both drive the same control through the same primitive is what "compiled and scripted are interchangeable" means.
 
@@ -13,7 +12,8 @@
 #include "core/module/MoonModule.h"
 #include "core/system/FilesystemModule.h"
 #include "core/module/StateDocument.h"
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_io.h"   // setTestGpioLevel, clearTestGpioLevel, setTestAdcValue
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
 
 #include <cstdio>
@@ -34,17 +34,14 @@ constexpr uint8_t kPin = 4;
 
 struct Rig {
     Scheduler scheduler;
-    // The filesystem is what MOUNTS storage: a script is a file, so without this in the tree every write fails and the service has nothing to compile. Alone in a run the mount happened to survive from another test; in the full suite it does not, which is why this is explicit.
+    // The filesystem mounts storage, and a script is a file: writes and the service's compile need it in the tree.
     FilesystemModule* fs = new FilesystemModule();
     FakeControl* control = new FakeControl();
     MoonLiveService* svc = new MoonLiveService();
     std::string root_;
     Rig() {
-        // Its own filesystem root, the pattern every file-touching test here uses.
-        // The suite leaves the root pointing wherever the last test set it, so a write to a shared root fails on a directory that no longer exists.
-        // A monotonic counter rather than millis(), so two rigs built in the same millisecond cannot share one.
-        static unsigned seq = 0;
-        root_ = mm::systemTempDir() + "/mm_mls_test_" + std::to_string(++seq);
+        // A filesystem root of its own, since the suite leaves the root wherever the last test set it.
+        root_ = mm::uniqueTempDir("mm_mls_test");
         std::filesystem::remove_all(root_);
         platform::fsSetRoot(root_.c_str());
 
@@ -59,8 +56,7 @@ struct Rig {
     }
     ~Rig() { scheduler.release(); platform::clearTestGpioLevel(); }
 
-    /// Hold a level for `ms`, in the 20 ms steps the module is polled at.
-    /// Active-low, so a pressed switch reads LOW and the script's `gpioRead` returns 0.
+    /// Hold a level for `ms` in the module's 20 ms steps; active-low, so a pressed switch reads 0.
     void hold(bool low, int ms) {
         platform::setTestGpioLevel(kPin, !low);
         for (int t = 0; t < ms; t += 20) svc->tick20ms();

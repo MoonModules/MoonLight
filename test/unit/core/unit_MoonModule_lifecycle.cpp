@@ -1,11 +1,13 @@
-/// Pins the MoonModule base-default propagation for loop / tick20ms / tick1s.
-/// The three tick callbacks default to iterating children, gating by `!respectsEnabled() || enabled()`, dispatching the same callback on each child, and accumulating per-child timing.
-/// The tests pin the gating and dispatch rules, so a change to MoonModule::tickChildren fails here instead of silently breaking a container subtree.
+/// Pins MoonModule's base tick, tick20ms and tick1s: each walks its children, gated by `!respectsEnabled() || enabled()`, and times each child.
+///
+/// A change to MoonModule::tickChildren fails here rather than in a container subtree.
 
 /// @module MoonModule
 
 #include "doctest.h"
 #include "core/module/MoonModule.h"
+#include "platform/platform_clock.h"   // micros
+#include "platform/platform_system.h"   // setTestBootRecord
 
 namespace {
 
@@ -135,6 +137,29 @@ TEST_CASE("per-child timing accumulates on the child, not the parent") {
     CHECK(a.loopCalls == 1);
     // 40us across 2 frames bounds the averaged tickTimeUs() at 20 or more; a broken publishTiming would drop to 0.
     CHECK(a.tickTimeUs() >= 20u);
+}
+
+namespace {
+// A child whose tick takes a measurable while.
+class Slow : public Counting {
+public:
+    void tick() MM_NONBLOCKING override { const uint32_t t0 = mm::platform::micros(); while (mm::platform::micros() - t0 < 3000) {} }   // a spin, as a render tick holds its thread
+};
+}  // namespace
+
+// A parent's own time leaves out the child it ticks inline, while its total keeps it.
+TEST_CASE("own time excludes a child ticked inline") {
+    Counting root, parent;
+    Slow child;
+    root.addChild(&parent);
+    parent.addChild(&child);
+    root.tick();
+    root.publishTiming(1);
+
+    CHECK(child.tickTimeUs() >= 3000u);
+    CHECK(child.ownTimeUs() == child.tickTimeUs());   // a leaf's own time is its total
+    CHECK(parent.tickTimeUs() >= 3000u);
+    CHECK(parent.ownTimeUs() < parent.tickTimeUs() / 2);
 }
 
 // Two crashes or brownouts in a row hold a module that can crash the device or overload its supply: it counts as disabled, and its saved flag stays as set.

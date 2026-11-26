@@ -11,7 +11,9 @@
 #include "core/module/MoonModule.h"
 #include "core/util/JsonFetch.h"   // the worker an HTTPS post goes out on
 #include "core/util/sha256.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // httpsAvailable, tlsRoom
 
 namespace mm {
 
@@ -44,7 +46,7 @@ public:
           outbox_(route != Route::Direct ? static_cast<char*>(platform::alloc(kOutboxBytes)) : nullptr) {
         if (!outbox_) return;
         outbox_[0] = '\0';
-        setDynamicBytes(kOutboxBytes);   // the card's memory readout counts it
+        setDynamicBytes(heapOf(outbox_, kOutboxBytes));   // the card's memory readout counts it
     }
     /// Free the outbox, where there is one, and the replies held on the worker.
     ~MoonCloudModule() override {

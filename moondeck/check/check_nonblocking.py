@@ -531,7 +531,7 @@ def main():
         return 2
 
     # NOT APPLICABLE is not the same as FAILED. -Wfunction-effects is Clang 20+ only, and
-    # CMakeLists probes for it (`check_cxx_compiler_flag`) inside the non-MSVC branch, so an MSVC
+    # CMakeLists probes for it (`check_cxx_compiler_flag`) inside the branch a Windows build skips, so a Windows
     # cache carries no MM_HAS_WFUNCTION_EFFECTS at all. Without the warning this check can never
     # produce a finding, and building to discover that wastes a build and then reports a
     # failure the toolchain guarantees. Reading the cache says the same thing for free.
@@ -547,9 +547,9 @@ def main():
     # promise and then report success, which is the silent zero this script exists to refuse.
     if not function_effects_enabled(build_dir):
         # The cache, not the compiler: a Clang below 20, or a cache written before the probe
-        # existed, lands here too, and naming MSVC alone would misdescribe both.
+        # existed, lands here too, and naming Windows alone would misdescribe both.
         print(f"SKIP: the build cache in {build_dir.relative_to(ROOT)} carries no "
-              f"MM_HAS_WFUNCTION_EFFECTS=1\n(MSVC, a Clang below 20, or a cache older than the "
+              f"MM_HAS_WFUNCTION_EFFECTS=1\n(a Windows build, a Clang below 20, or a cache older than the "
               f"probe), so the transitive hot-path\ncheck cannot run here. Reconfigure on a Clang "
               f"20+ host to run it, or read the\nclang-hotpath card, which CI keeps current. The "
               f"float-conversion findings above DID run.")

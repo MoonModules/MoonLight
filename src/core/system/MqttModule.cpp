@@ -166,6 +166,11 @@
 #include "core/system/FirmwareUpdateModule.h"  // g_otaStatus / g_otaBytesTotal / otaInFlight: shared with the OTA task
 #include "core/system/FilesystemModule.h"      // flushPending: settings written before an install restarts the device
 #include "core/util/LightOutput.h"   // the palettes as colors, for the HSV pair
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_system.h"   // getMacAddress
+#include "platform/platform_net.h"   // networkReady, TcpConnection
+#include "platform/platform_ota.h"   // http_fetch_to_ota
 
 #include <cstdio>
 #include <cstdlib>
@@ -218,7 +223,7 @@ bool MqttModule::ensureDiscoveryBuffers() {
     if (!discoveryBuf_ || !discoveryPayload_) { freeDiscoveryBuffers(); return false; }
     discoveryPayloadLen_ = wantPayload;
     discoveryBufLen_     = wantBuf;
-    setDynamicBytes(wantBuf + wantPayload);
+    setDynamicBytes(heapOf(discoveryBuf_, wantBuf) + heapOf(discoveryPayload_, wantPayload));
     return true;
 }
 
@@ -257,7 +262,7 @@ size_t MqttModule::writeHaEffectList(char* out, size_t cap) const {
 void MqttModule::freeDiscoveryBuffers() {
     if (discoveryBuf_)     { platform::free(discoveryBuf_);     discoveryBuf_ = nullptr; }
     if (discoveryPayload_) { platform::free(discoveryPayload_); discoveryPayload_ = nullptr; }
-    setDynamicBytes(0);
+    setDynamicBytes({});
 }
 
 void MqttModule::publishDiscovery(bool announce) {
@@ -878,6 +883,7 @@ void MqttModule::setControlValue(const char* control, const char* valueJson) {
 }
 
 void MqttModule::feedForTest(const uint8_t* bytes, size_t len) {
+    lastActivity_ = platform::millis();   // as the socket read stamps it, so the keepalive sees the broker's bytes in a process older than 1.5 keepalives
     for (size_t i = 0; i < len; i++) handleInboundByte(bytes[i]);
 }
 

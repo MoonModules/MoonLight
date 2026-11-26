@@ -28,6 +28,8 @@
 #include "core/moonlive/moonlive_emit.h"
 #include "core/moonlive/MoonLiveSpill.h"
 
+#include "platform/platform.h"   // at global scope first, so the assembler header's own include inside the namespace below is a repeat
+
 namespace mm_xtensa_backend {
 // The IR, the spill pass and the platform seam are SHARED, one definition each in the binary. Pull them into scope so the backend's unqualified references resolve to those, and only the ISA-specific classes below end up local to this namespace.
 namespace mm { using namespace ::mm; using namespace ::mm::moonlive;

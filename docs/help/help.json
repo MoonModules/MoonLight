@@ -221,6 +221,79 @@
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/drivers/FixtureProfilesModule.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#fixtureprofilesmodule"
   },
+  "MoonShineModule": {
+   "line": "The running device as a flow of nodes: what it renders, stage by stage, its other modules and its system tasks, each with its time and memory.",
+   "summary": "The MoonShine card under System, a diagram that reads left to right.",
+   "guide": [
+    {
+     "title": "Reading the flow",
+     "text": "The bars on top split each memory type and each thread's frame into the modules' share, waits, unaccounted and free or idle. A node's chips show what it holds per memory type and its time per thread; the selector switches bytes and microseconds to percentages. The magenta node sets the frame rate. A ▸ count opens a group."
+    }
+   ],
+   "controls": {
+    "pipeline": {
+     "line": "The device as bars, then nodes.",
+     "fields": {
+      "name": {
+       "line": "Its name."
+      },
+      "bar": {
+       "line": "\"memory\" or \"time\"."
+      },
+      "type": {
+       "line": "Memory type, or module type."
+      },
+      "lane": {
+       "line": "A time bar's thread."
+      },
+      "parts": {
+       "line": "A bar's parts, adding up."
+      },
+      "stage": {
+       "line": "A node's column."
+      },
+      "us": {
+       "line": "Time per frame, children included."
+      },
+      "own": {
+       "line": "Time per frame, children left out."
+      },
+      "time": {
+       "line": "Own time per thread."
+      },
+      "internal": {
+       "line": "Bytes in internal RAM."
+      },
+      "psram": {
+       "line": "Bytes in PSRAM."
+      },
+      "size": {
+       "line": "Object size."
+      },
+      "bottleneck": {
+       "line": "Sets the frame rate."
+      },
+      "group": {
+       "line": "Its box."
+      },
+      "parent": {
+       "line": "Its top-level module."
+      },
+      "core": {
+       "line": "A task's core."
+      },
+      "stackFree": {
+       "line": "A task's least free stack."
+      }
+     }
+    }
+   },
+   "role": "generic",
+   "dim": 0,
+   "doc": "light/supporting.md#moonshine",
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layers/MoonShineModule.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#moonshinemodule"
+  },
   "CarLightsLayout": {
    "line": "A pair of car headlights: concentric rings of lights placed like a car's front lamps.",
    "summary": "Nested rings of 1, 8, 12, 16 and 24 lights form each lamp, with a ring of 32 more on the outer two. Side strips join them, in a fixed arrangement drawn with [Ring](https://moonmodules.org/MoonLight/moonmodules/light/layouts.html#ring) geometry.",
@@ -3992,7 +4065,7 @@
   },
   "HdmiDriver": {
    "line": "Shows the layer on a monitor through the board's HDMI port, scaled to the screen.",
-   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux machine's HDMI port, such as a Raspberry Pi's, without a desktop; a Mac or Windows PC's second display.",
+   "summary": "One light per pixel, placed where the layout puts it and corrected as the wall is, for a monitor, a projector or an LED wall's sending card (Novastar, ColorLight).\n\nESP32-P4 boards with an LT8912B bridge, such as the Olimex ESP32-P4-PC; a Linux console's HDMI port, such as a Raspberry Pi's; a Mac or Windows PC's second display, or its only one.",
    "attribution": "[Espressif](https://moonmodules.org/MoonLight/reference/attributions.html#espressif), [Olimex](https://moonmodules.org/MoonLight/reference/attributions.html#olimex)",
    "guide": [
     {
@@ -4005,7 +4078,7 @@
     },
     {
      "title": "Status line",
-     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in: a second, on a computer |\n| `<w>x<h> on <mode>` | Live; orange when the monitor lacks the size |"
+     "text": "| It says | It means |\n|---|---|\n| `no HDMI output on this board` | No bus for the bridge, or no HDMI port it may open |\n| `output did not come up, retrying` | No bridge answers, or a desktop holds it |\n| `no monitor connected` | Plug one in, or set `ownScreen` |\n| `<w>x<h> on <mode>` | Live; orange when the display lacks that size |"
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/HdmiDriver.png",
@@ -4034,7 +4107,7 @@
      "more": "A status LED takes `start 0, count 1`, the strip `start 1`."
     },
     "mode": {
-     "line": "The screen mode; 1280x720 suits a 1080p monitor, which scales it by exactly 1.5.",
+     "line": "`display's own` keeps the display's mode; a fixed size suits a sending card.",
      "tests": [
       {
        "title": "HdmiDriver shows the layer on the monitor",
@@ -4047,6 +4120,9 @@
     },
     "fps": {
      "line": "Frame-rate ceiling; the screen refreshes on its own."
+    },
+    "ownScreen": {
+     "line": "Cover the computer's only screen; Esc gives it back."
     },
     "monitor": {
      "line": "What the monitor says of itself in its EDID: name, preferred size, a mode it lacks.",
@@ -4897,7 +4973,7 @@
    "guide": [
     {
      "title": "Reading a task row",
-     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage appears only in a profiling build, since the run-time counter costs about 5% of the tick."
+     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage shows each task's share of its core since the last refresh, where the board measures it: an ESP32 does, a computer and a Teensy do not."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/core/TasksModule.png",

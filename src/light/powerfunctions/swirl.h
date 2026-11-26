@@ -10,7 +10,7 @@
 #include "light/util/Palette.h"               // colorFromPalette, Palettes::active
 #include "light/util/light_types.h"           // lengthType, and the platform's MM_HEAVY_COMPUTE
 #include "platform/noinline.h"                // MM_NOINLINE: the birth helpers, called from every emitter
-#include "platform/platform.h"                // MM_NONBLOCKING
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 #include <algorithm>
 #include <cmath>

@@ -3,7 +3,8 @@
 /// Pins the one HTTP client every outbound request shares: a request goes out with its method and body, and its answer comes back. An answer too big for the caller is refused rather than cut. An HTTPS request waits while a board without PSRAM has no internal RAM for a TLS session.
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // setTestFreeInternalHeap, kInternalFreeFloor
+#include "platform/platform_net.h"   // setTestHttpFetch, httpFetch, kTlsSessionBytes
 
 #include <cstring>
 #include <string>

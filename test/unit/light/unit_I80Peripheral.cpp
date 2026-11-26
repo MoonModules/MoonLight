@@ -8,6 +8,7 @@
 #include "light/drivers/I80Peripheral.h"
 #include "light/layers/Buffer.h"
 #include "unit/core/conditional_controls.h"  // shared conditional-control helpers
+#include "platform/platform_io.h"   // GpioCapability, setTestGpioCapability, clearTestGpioCapability
 
 #include <cstring>
 

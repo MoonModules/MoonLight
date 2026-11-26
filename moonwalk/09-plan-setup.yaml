@@ -91,13 +91,13 @@ processes:
       - id: mac
         say: Install Xcode's command line tools, CMake, uv, ccache.
         given: [{ input: platform, equals: macOS }]
-        when: { run: { command: "xcode-select --install; brew install cmake uv ccache && ccache --max-size 20G" } }
+        when: { run: { command: "xcode-select --install; brew install cmake uv ccache ninja && ccache --max-size 20G" } }
         detail: |
           ccache's 5 GB default holds about one target; 20 GB holds the host, the tests and every ESP32 target, which share one cache.
       - id: linux
         say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]
-        when: { run: { command: "sudo apt install cmake g++ ccache && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
+        when: { run: { command: "sudo apt install cmake g++ ccache ninja-build && curl -LsSf https://astral.sh/uv/install.sh | sh" } }
         detail: |
           GCC 12 or Clang 15 from your distribution, and uv from astral's installer.
       - id: linux-cache
@@ -109,16 +109,49 @@ processes:
       - id: windows
         say: Install CMake and the Visual Studio Build Tools.
         given: [{ input: platform, equals: Windows }]
-        when: { run: { command: "winget install Kitware.CMake; winget install astral-sh.uv; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended\"" } }
+        when: { run: { command: "winget install Kitware.CMake; winget install astral-sh.uv; winget install Microsoft.VisualStudio.2022.BuildTools --override \"--passive --add Microsoft.VisualStudio.Workload.VCTools --add Microsoft.VisualStudio.Component.VC.Llvm.Clang --add Microsoft.VisualStudio.Component.VC.Llvm.ClangToolset --includeRecommended\"" } }
         detail: |
-          Visual Studio 2022 with the MSVC v143 workload and the Windows 11 SDK, from an elevated terminal.
+          Visual Studio 2022 with the MSVC v143 workload, the clang-cl compiler MoonLight builds with, and the Windows 11 SDK, from an elevated terminal.
 
-          Build and test from a **Developer PowerShell for VS 2022**, so `cl.exe` and the SDK are on `PATH`.
+          `build_host.py` runs from any PowerShell; calling `clang-cl.exe` by hand takes a **Developer PowerShell for VS 2022**.
       - id: moondeck
         say: Start MoonDeck.
         when: { run: { command: "uv run moondeck/moondeck.py" } }
         detail: |
           Open `http://localhost:8420` in the browser. Every MoonDeck script a process runs is one of its cards, and the same scripts run from a terminal.
+  - id: windows-over-ssh
+    title: Reach a Windows build machine over SSH
+    actor: contributor
+    goal: A Windows bench you build and test on by SSH key.
+    systems: [MoonDeck]
+    dependsOn: [build-setup]
+    page: reference/build-system.md
+    intro: |
+      The commands and their reasons: [A Windows machine over SSH](reference/build-system.md#a-windows-machine-over-ssh).
+    steps:
+      - id: server
+        section: On Windows
+        say: Install and start the OpenSSH server.
+        when: { run: { command: "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Set-Service sshd -StartupType Automatic; Start-Service sshd" } }
+      - id: shell
+        say: Make PowerShell its shell.
+        when: { manual: "The DefaultShell registry value." }
+      - id: key
+        say: Add your public key for your account.
+        when: { manual: "Administrators: administrators_authorized_keys." }
+      - id: firewall
+        say: Open port 22 on its network.
+        when: { manual: "Public networks too." }
+      - id: key-only
+        section: From your machine
+        say: Turn password login off.
+        when: { manual: "PasswordAuthentication and KbdInteractiveAuthentication off." }
+      - id: build
+        say: Build and test over SSH.
+        when: { process: host-build-test }
+      - id: desktop
+        say: Start MoonLight on the desktop.
+        when: { manual: "An interactive scheduled task." }
   - id: setup-editor
     title: Set up the editor
     actor: contributor

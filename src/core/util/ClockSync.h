@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform/platform.h"   // uptimeUs: the local clock fleet time is read against
+#include "platform/platform_clock.h"   // uptimeUs
 
 #include <atomic>
 #include <cstdint>

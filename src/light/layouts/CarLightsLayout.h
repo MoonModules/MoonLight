@@ -69,21 +69,21 @@ private:
         ring.angleFirst = 180;
         ring.rotation = 90;
         for (int x = (kLeft + 16) * scale; x >= kLeft * scale; x--)
-            e.pixel(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
+            e.addLight(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
         ring.centerX = kLeft;
         ring.centerY = 6;
         e.place(ring);
         for (int y = 5; y >= 1; y--)
-            e.pixel(0, static_cast<lengthType>(y * scale), 0);
+            e.addLight(0, static_cast<lengthType>(y * scale), 0);
 
         // The right strip walks outward, and its arc turns counter-clockwise.
         for (int x = (kLeft + 19) * scale; x <= (kLeft + 35) * scale; x++)
-            e.pixel(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
+            e.addLight(static_cast<lengthType>(x), static_cast<lengthType>(15 * scale), 0);
         ring.centerX = kLeft + 36;
         ring.clockwise = false;
         e.place(ring);
         for (int y = 5; y >= 1; y--)
-            e.pixel(static_cast<lengthType>((kLeft + 44) * scale), static_cast<lengthType>(y * scale), 0);
+            e.addLight(static_cast<lengthType>((kLeft + 44) * scale), static_cast<lengthType>(y * scale), 0);
     }
 };
 

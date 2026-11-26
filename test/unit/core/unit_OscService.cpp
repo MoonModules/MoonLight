@@ -8,6 +8,8 @@
 #include "core/services/OscService.h"
 #include "core/module/Scheduler.h"
 #include "core/system/ControlModule.h"
+#include "platform/platform_clock.h"   // delayMs
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <cstring>
 

@@ -6,6 +6,9 @@
 #include "core/system/MoonStatsModule.h"
 #include "core/module/Scheduler.h"
 #include "unit/system_temp_dir.h"   // mm::systemTempDir: the system temp folder, which Android and Windows place elsewhere than /tmp
+#include "platform/platform_clock.h"   // millis, setTestNowMs
+#include "platform/platform_fs.h"   // fsSetRoot
+#include "platform/platform_net.h"   // httpsAvailable, setTestHttpFetch
 
 #include <cstdio>
 #include <cstring>

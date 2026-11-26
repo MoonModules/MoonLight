@@ -341,8 +341,10 @@ void close() {
     if (k.fd >= 0) { ::close(k.fd); k.fd = -1; }   // @xref{linux-the-console-takes-the-screen-back|the console}
 }
 
+bool takeDismiss() { return false; }   // the console's screen has no desktop under it
+
 // The connected HDMI connector, the one shown kept first so a second monitor does not take its place.
-uint32_t find(uint32_t current) {
+uint32_t find(uint32_t current, bool /*own*/) {   // the console's screen is the output already
     std::vector<uint32_t> crtcs, connectors;
     if (!resources(k.fd, crtcs, connectors)) return 0;
     uint32_t found = 0;

@@ -5,6 +5,8 @@
 #include "light/drivers/ParallelLedDriver.h"
 #include "light/drivers/I80Peripheral.h"   // I80Peripheral: the i80 clock/DC defaults
 #include "correction_presets.h"
+#include "platform/platform_leds.h"   // RmtLoopbackResult
+#include "platform/platform_io.h"   // clearTestGpioCapability, GpioCapability, setTestGpioCapability
 
 #include <cstring>
 #include <vector>

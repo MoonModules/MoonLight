@@ -5,7 +5,7 @@
 #include "doctest.h"
 #include "light/layers/BlendMap.h"
 #include "light/layers/Layer.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // setTestMaxAllocBlock
 
 #include <cstring>
 

@@ -10,7 +10,9 @@
 #include "core/system/DevicesModule.h"   // the boards a receivers text names
 #include "core/system/FirmwareUpdateModule.h"   // g_otaBytesTotal: the size an accepted image announced
 #include "core/system/WledPacket.h"      // a board announcing itself
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis, delayMs, setTestNowMs
+#include "platform/platform_net.h"   // TcpConnection
+#include "platform/platform_ota.h"   // updateMode, UpdateMode
 #include "http_loopback.h"
 
 #include <algorithm>

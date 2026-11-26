@@ -4,7 +4,7 @@
 
 #include "doctest.h"
 
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, allocatedBytes, free
 
 #include <cstdint>
 #include <vector>

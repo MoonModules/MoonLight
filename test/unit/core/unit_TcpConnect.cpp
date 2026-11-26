@@ -7,7 +7,8 @@
 /// Driven over loopback against a real TcpServer (deterministic on host): a listening port connects + the server accepts; a dead port / bad host fails cleanly (no hang, no crash).
 
 #include "doctest.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // delayMs
+#include "platform/platform_net.h"   // TcpConnection, TcpServer
 
 #include <cstdint>
 

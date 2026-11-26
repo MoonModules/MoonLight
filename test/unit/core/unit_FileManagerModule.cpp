@@ -9,7 +9,7 @@
 #include "core/util/ModuleFactory.h"     // a type that exists, in the wrong place
 #include "core/system/HttpServerModule.h"   // parseFilePath — the shared filesystem-path guard
 #include "core/system/SystemModule.h"       // factoryReset: the folder it deletes
-#include "platform/platform.h"
+#include "platform/platform_fs.h"   // fsSetRoot, fsMkdir, fsRemove
 
 #include <cstdio>
 #include <cstring>

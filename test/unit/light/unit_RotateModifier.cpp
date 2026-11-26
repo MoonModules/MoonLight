@@ -2,7 +2,7 @@
 
 #include "doctest.h"
 #include "light/modifiers/RotateModifier.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // setTestNowMs
 
 #include <cstring>
 

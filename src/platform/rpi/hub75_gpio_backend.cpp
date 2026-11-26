@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-/// The `GpioBackend` factory with its real-backend gate, the host refusal, the SoC's addresses and clock, and the start check both backends' start() run, in a file every non-MSVC host builds so they are tested wherever the stub runs.
+/// The `GpioBackend` factory with its real-backend gate, the host refusal, the SoC's addresses and clock, and the start check both backends' start() run, in a file every host but Windows builds so they are tested wherever the stub runs.
 ///
 /// The stub when asked for it, else the hardware backend, or null when the build has none or the gate is closed (hub75_gpio_backend.h, Real-backend gate).
 

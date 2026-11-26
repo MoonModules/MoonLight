@@ -7,7 +7,7 @@
 #include "core/util/JsonSink.h"
 #include "core/util/JsonUtil.h"
 #include "core/util/ModuleFactory.h"
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // free, alloc
 
 #include <cstdio>
 #include <cstring>

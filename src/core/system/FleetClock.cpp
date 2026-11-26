@@ -4,6 +4,9 @@
 
 #include "core/services/OscPacket.h"
 #include "core/util/format.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_tasks.h"   // spawnPinnedTask, stopPinnedTask, waitNotify
+#include "platform/platform_net.h"   // localIPv4, UdpSocket
 
 #include <cstring>
 
@@ -72,7 +75,7 @@ uint8_t FleetClock::slotFor(uint32_t id, uint32_t nowMs) const {
 }
 
 void FleetClock::heard(uint32_t id, int64_t fleetUs, int64_t arrivedUs) {
-    if (!id) return;
+    if (!id || id == selfId_.load(std::memory_order_relaxed)) return;   // its own beacon, which a network loops back on some systems, is no other device's
     if (fleetUs > 0) { heardFleetUs_ = fleetUs; heardAtUs_ = arrivedUs; }   // the fleet's time, as of its arrival
     const uint32_t now = platform::millis();
     const uint8_t slot = slotFor(id, now);

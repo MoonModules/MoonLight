@@ -4,7 +4,7 @@
 #include <cstring>
 #include <cstddef>
 #include "core/moonlive/MoonLiveBuiltins.h"   // InlineOp (a neutral opcode tag)
-#include "platform/platform.h"                // alloc/free, since the op array is script-sized
+#include "platform/platform_heap.h"   // free, alloc
 
 /// The typed form between the front-end and the per-ISA assembler.
 ///

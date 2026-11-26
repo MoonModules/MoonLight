@@ -97,7 +97,11 @@
 #include "core/system/WiFiModule.h"
 #include "core/system/AccessPointModule.h"
 #include "core/system/NetworkModule.h"
-#include "platform/platform.h"
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // freeHeap, maxInternalAllocBlock
+#include "platform/platform_tasks.h"   // taskWdtSubscribe, taskWdtReset, pauseLoop
+#include "platform/platform_system.h"   // LogLevel
+#include "platform/platform_net.h"   // deviceIp
 
 #include <cstdio>
 #include <cstdlib>
@@ -132,6 +136,7 @@ static void printModuleMetrics(mm::MoonModule* mod, int depth) {
 
 void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort) {
     mm::registerModuleTypes();
+    mm::ModuleFactory::shrinkToFit();   // every type is in: the table keeps no spare room
     mm::Scheduler scheduler;
 
     // Every container is created from the one table the scenario runner shares, wired by code so a saved tree that predates a child keeps it: @xref{how-the-boot-tree-is-created}, @xref{why-markwiredbycode-matters}.

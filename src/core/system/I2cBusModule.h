@@ -2,7 +2,7 @@
 
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"   // instance(): the tree whose modules name the devices a scan finds
-#include "platform/platform.h"  // i2cBusOpen, i2cScan
+#include "platform/platform_io.h"   // i2cBusOpen, i2cBusClose, i2cScan
 
 #include <cstdint>
 #include <cstdio>

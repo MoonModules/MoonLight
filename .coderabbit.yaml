@@ -20,8 +20,10 @@ reviews:
     - "!docs/friend-repos/**"       # digests of other projects, records rather than our system
 
   # The rules have one home each; CodeRabbit reads them from the files below rather than from a copy here.
-  instructions: |
-    Review against CLAUDE.md, docs/contributing/coding-standards.md and docs/contributing/documentation-standards.md, which hold every rule.
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Review against CLAUDE.md, docs/contributing/coding-standards.md and docs/contributing/documentation-standards.md, which hold every rule.
 
 knowledge_base:
   code_guidelines:

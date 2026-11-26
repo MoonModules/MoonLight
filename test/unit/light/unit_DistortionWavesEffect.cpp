@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/DistortionWavesEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"  // setTestNowMs: freeze millis() for a deterministic phase
+#include "platform/platform_clock.h"   // setTestNowMs, millis
 
 // Restore the real clock after any test that froze it, so a frozen value can't leak into order-dependent neighbors.
 namespace { struct ClockGuard { ~ClockGuard() { mm::platform::setTestNowMs(0); } }; }

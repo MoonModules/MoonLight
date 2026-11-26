@@ -1,7 +1,8 @@
 #pragma once
 
 #include "core/util/JsonEscape.h"   // jsonEscape: a string as a literal's contents, control characters included
-#include "platform/platform.h"
+#include "platform/platform_heap.h"   // alloc, free
+#include "platform/platform_net.h"   // TcpConnection
 
 #include <cstdarg>
 #include <cstdint>

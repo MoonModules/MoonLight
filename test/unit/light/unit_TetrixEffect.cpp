@@ -4,7 +4,7 @@
 #include "light/layouts/Layouts.h"
 #include "light/effects/TetrixEffect.h"
 #include "light/layouts/GridLayout.h"
-#include "platform/platform.h"   // setTestNowMs: deterministic virtual time
+#include "platform/platform_clock.h"   // setTestNowMs
 
 // Each column runs a falling-brick state machine that starts after its own delay of up to 2 s; a frozen clock makes the seed, and so the run, deterministic.
 

@@ -7,7 +7,7 @@
 #include "core/util/Hlc.h"
 #include "core/util/ScratchBuffer.h"
 #include "core/util/WallPlace.h"   // the members' places in a wall
-#include "platform/platform.h"
+#include "platform/platform_net.h"   // UdpSocket
 
 #include <cstddef>
 #include <cstdint>

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 
-#include "platform/platform.h"
+#include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
 
 /// A neutral declaration here, and the implementation per instruction set behind the platform boundary; the tests key on @xref{the-host-jit-macro|the host-JIT macro}.
 ///

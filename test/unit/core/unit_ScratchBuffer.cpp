@@ -3,7 +3,7 @@
 #include "doctest.h"
 #include "core/module/MoonModule.h"
 #include "core/util/ScratchBuffer.h"
-#include "platform/platform.h"   // setTestMaxAllocBlock: refuse a growth
+#include "platform/platform_heap.h"   // setTestPsramRange, setTestMaxAllocBlock
 
 #include <cstdint>
 
@@ -66,6 +66,33 @@ TEST_CASE("ScratchBuffer grow then shrink tracks dynamicBytes by delta") {
     o.buf.resize(50);
     CHECK(o.buf.bytes() == 50);
     CHECK(o.dynamicBytes() == 50);   // 200 → 50 via delta -150, not a fresh absolute
+}
+
+// The memory sheet's columns per type: a block in PSRAM counts in the owner's PSRAM part, and a move to internal RAM takes it out again.
+TEST_CASE("ScratchBuffer reports the part of its bytes in PSRAM to its owner") {
+    struct Psram { ~Psram() { platform::setTestPsramRange(nullptr, nullptr); } } psram;   // restored however the test ends
+    Owner o;
+    platform::setTestPsramRange(reinterpret_cast<const void*>(1), reinterpret_cast<const void*>(UINTPTR_MAX));   // every address is PSRAM
+    o.buf.resize(200);
+    CHECK(o.heapBytes() == HeapBytes{200, 200});
+    o.buf.resize(0);
+    CHECK(o.heapBytes() == HeapBytes{});
+    platform::setTestPsramRange(nullptr, nullptr);   // and now none is
+    o.buf.resize(50);
+    CHECK(o.heapBytes() == HeapBytes{50, 0});
+}
+
+// Bytes counted as PSRAM and taken back out as internal RAM, a buffer that moved between types, leave no wrapped part.
+TEST_CASE("an owner's bytes stop at zero per memory type, whatever is taken out") {
+    HeapBytes h{100, 60};
+    h -= HeapBytes{30, 80};           // more PSRAM out than was counted
+    CHECK(h == HeapBytes{70, 0});
+    h -= HeapBytes{200, 0};           // more out than there is at all
+    CHECK(h == HeapBytes{});
+    HeapBytes p{50, 50};
+    p -= HeapBytes{40, 0};            // internal bytes out of a PSRAM-only owner: the PSRAM part stays within the total
+    CHECK(p == HeapBytes{10, 10});
+    CHECK(p.internal() == 0);
 }
 
 // sizeof(T) drives the byte math for non-uint8 element types.

@@ -2,7 +2,7 @@
 /// @also AudioService
 
 #include "doctest.h"
-#include "platform/platform.h"   // setTestNowMs
+#include "platform/platform_clock.h"   // setTestNowMs
 #include "light/layouts/Layouts.h"
 #include "light/effects/GEQEffect.h"
 #include "light/layouts/GridLayout.h"

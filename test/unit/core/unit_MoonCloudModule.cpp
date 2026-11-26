@@ -4,6 +4,8 @@
 
 #include "doctest.h"
 #include "core/system/MoonCloudModule.h"
+#include "platform/platform_heap.h"   // setTestFreeInternalHeap, kInternalFreeFloor
+#include "platform/platform_net.h"   // httpsAvailable, setTestHttpFetch
 
 #include <cstring>
 #include <string>

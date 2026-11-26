@@ -8,7 +8,7 @@
 #include <cstring>
 #include <string>
 
-#include "platform/platform.h"
+#include "platform/platform_system.h"   // getMacAddress
 
 namespace {
 std::string id() {

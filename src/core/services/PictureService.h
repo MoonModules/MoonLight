@@ -9,7 +9,10 @@
 #include "core/util/PictureFrame.h"
 #include "core/util/ScratchBuffer.h"
 #include "core/util/TryLock.h"      // the swap a reader holds off for its gather
-#include "platform/platform.h"      // maxAllocBlock, freeHeap: whether the second picture fits
+#include "platform/platform_clock.h"   // millis
+#include "platform/platform_heap.h"   // fitsWithReserve
+#include "platform/platform_tasks.h"   // yield, spawnPinnedTask, stopPinnedTask
+#include "platform/platform_video.h"   // videoCaptureShutdown, videoCaptureFormatGeneration, videoCaptureSettling
 
 #include <atomic>
 #include <cstdint>

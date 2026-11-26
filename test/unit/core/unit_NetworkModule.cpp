@@ -8,6 +8,8 @@
 #include "core/system/WiFiModule.h"
 #include "core/util/JsonSink.h"
 #include "conditional_controls.h"  // shared conditional-control invariant helpers
+#include "platform/platform_clock.h"   // setTestNowMs, setTestClockStep
+#include "platform/platform_net.h"   // setTestDeviceNetwork, setTestWifiStaAvailable, testLastStaSsid
 
 #include <cstdio>
 #include <cstring>
