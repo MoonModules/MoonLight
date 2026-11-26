@@ -3346,7 +3346,7 @@
   },
   "TextEffect": {
    "line": "Renders a multi-line string in a bitmap font, static by default or as a wrapping marquee.",
-   "summary": "Static text sits at the top left, and a newline drops one font height. `scroll` marches a line wider than the grid, and a shorter line stays centered. A `#` token reads the clock. The 4x6 face is built in, and every other face is a `.wbf` file in `/moonlive/fonts`. Letters take the active palette at `hue`.",
+   "summary": "Static text sits at the top left, and a newline drops one font height. `scroll` marches a line wider than the grid, and a shorter line stays centered. A `#` token reads the clock. The 4x6 face is built in, and every other face is a `.wbf` file in `/fonts`. Letters take the active palette at `hue`.",
    "attribution": "[raster-fonts](https://moonmodules.org/MoonLight/reference/attributions.html#raster-fonts), [WLED](https://moonmodules.org/MoonLight/reference/attributions.html#wled), [PixelFonts](https://moonmodules.org/MoonLight/reference/attributions.html#pixelfonts)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TextEffect.gif",
    "controls": {
@@ -3361,7 +3361,7 @@
      "line": "Off is static, on a horizontal marquee."
     },
     "font": {
-     "line": "The 4x6 face, or a .wbf file in /moonlive/fonts."
+     "line": "The 4x6 face, or a .wbf file in /fonts."
     },
     "speed": {
      "line": "How fast a scrolling line travels, in pixels a second."

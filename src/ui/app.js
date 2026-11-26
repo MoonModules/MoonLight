@@ -6207,7 +6207,7 @@ async function releaseFontNames() {
     if (releaseFontNamesCache) return releaseFontNamesCache;
     try {
         const cat = await mlFetchCatalog();
-        const res = await fetch("https://api.github.com/repos/MoonModules/MoonLight/contents/moonlive/fonts?ref="
+        const res = await fetch("https://api.github.com/repos/MoonModules/MoonLight/contents/fonts?ref="
             + encodeURIComponent(cat.tag));
         if (!res.ok) return [];
         const rows = await res.json();
@@ -6239,13 +6239,13 @@ function offerReleaseFonts(row, ctrl) {
     });
 }
 
-/// Install one `.wbf` into `/moonlive/fonts` when the device does not have it yet. The browser fetches the bytes, as it does a factory script, so the firmware does not carry them.
+/// Install one `.wbf` into `/fonts` when the device lacks it. The browser fetches the bytes, as it does a factory script, so they stay out of the firmware.
 async function ensureFontFile(name) {
-    const rows = await fmFetchDir("/moonlive/fonts").catch(() => []);
+    const rows = await fmFetchDir("/fonts").catch(() => []);
     if (rows.some(r => r.name === name)) return;
     const cat = await mlFetchCatalog();
     const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
-              + encodeURIComponent(cat.tag) + "/moonlive/fonts/" + encodeURIComponent(name);
+              + encodeURIComponent(cat.tag) + "/fonts/" + encodeURIComponent(name);
     const res = await fetch(url);
     if (!res.ok) {
         if (res.status !== 404) throw new Error("download failed");
@@ -6256,7 +6256,7 @@ async function ensureFontFile(name) {
     }
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (!bytes.length) throw new Error("downloaded font is empty");
-    await writeDeviceFile("/moonlive/fonts", name, bytes);
+    await writeDeviceFile("/fonts", name, bytes);
 }
 
 /// Write a text file onto the device, creating its folder first, since POST /api/file does not create parents and mkdir is idempotent.

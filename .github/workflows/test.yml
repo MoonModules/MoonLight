@@ -27,6 +27,8 @@ on:
       # A MoonLive script IS the subject of test_scripts_are_cpp.py: editing one is exactly when
       # the "this is a subset of C++" claim needs re-checking.
       - 'moonlive/**'
+      # A face the TextEffect golden reads.
+      - 'fonts/**'
       - 'src/light/moonlive/MoonLiveBuiltins_light.h'
       # MoonWalk's stage files, the map's renderer and what the generator checks them against.
       - 'moonwalk/**'

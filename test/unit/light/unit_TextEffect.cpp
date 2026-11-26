@@ -6,11 +6,15 @@
 #include "light/powerfunctions/clock_text.h"
 #include "platform/platform_fs.h"
 #include "unit/system_temp_dir.h"
+#include "unit/source_tree.h"
+#include "golden_frame.h"
 
 #include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
 
@@ -252,14 +256,14 @@ TEST_CASE("TextEffect: scale draws each font pixel as a square") {
 }
 
 // The menu lists the files in the font folder, and a name that is not there is not a row.
-TEST_CASE("TextEffect: the font menu lists /moonlive/fonts") {
+TEST_CASE("TextEffect: the font menu lists /fonts") {
     FsRoot root;
     Scene s(16, 8);
     s.text.defineControls();
     CHECK(fontIndex(s.text, "4x6") == 0);
     CHECK(fontIndex(s.text, "pixelfont_5x5_thin.wbf") < 0);
-    CHECK(platform::fsWriteAtomic("/moonlive/fonts/bang.wbf", reinterpret_cast<const char*>(kBang), sizeof(kBang)));
-    s.text.onFileChanged("/moonlive/fonts/bang.wbf");
+    CHECK(platform::fsWriteAtomic("/fonts/bang.wbf", reinterpret_cast<const char*>(kBang), sizeof(kBang)));
+    s.text.onFileChanged("/fonts/bang.wbf");
     const int bang = fontIndex(s.text, "bang.wbf");
     REQUIRE(bang > 0);
     std::snprintf(s.text.text_, sizeof(s.text.text_), "!");
@@ -269,6 +273,23 @@ TEST_CASE("TextEffect: the font menu lists /moonlive/fonts") {
     // The 4x6 bang lights this same pixel, so a clear status is what shows the file opened.
     CHECK(s.text.status() == nullptr);
     CHECK(s.litAt(2, 0));
+    (void)root;
+}
+
+// The 6x8 face is a file, and its golden is the frame the default text draws in it.
+TEST_CASE("TextEffect: fonts/6x8.wbf draws its golden frame" * doctest::skip(!sourceTreePresent())) {
+    FsRoot root;
+    std::ifstream in(sourceRoot() / "fonts" / "6x8.wbf", std::ios::binary);
+    REQUIRE(in.good());
+    const std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    REQUIRE(platform::fsWriteAtomic("/fonts/6x8.wbf", bytes.data(), bytes.size()));
+    TextEffect e;
+    e.defineControls();
+    e.onFileChanged("/fonts/6x8.wbf");
+    const int face = fontIndex(e, "6x8.wbf");
+    REQUIRE(face > 0);
+    e.font = static_cast<uint8_t>(face);
+    CHECK(golden::renderHash(e, 16, 16, 1) == 0xf2344942db9d42ffull);
     (void)root;
 }
 

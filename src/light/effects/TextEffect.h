@@ -14,7 +14,7 @@ namespace mm {
 /// @card TextEffect.gif
 /// @attribution raster-fonts, WLED, PixelFonts
 ///
-/// Static text sits at the top left, and a newline drops one font height. `scroll` marches a line wider than the grid, and a shorter line stays centered. A `#` token reads the clock. The 4x6 face is built in, and every other face is a `.wbf` file in `/moonlive/fonts`. Letters take the active palette at `hue`.
+/// Static text sits at the top left, and a newline drops one font height. `scroll` marches a line wider than the grid, and a shorter line stays centered. A `#` token reads the clock. The 4x6 face is built in, and every other face is a `.wbf` file in `/fonts`. Letters take the active palette at `hue`.
 class TextEffect : public EffectBase {
 public:
     /// Catalog tags: MoonLight, with the clock tokens and the font file taken from WLED.
@@ -29,7 +29,7 @@ public:
     bool ampm = false;
     /// Off is static, on a horizontal marquee.
     bool scroll = false;
-    /// The 4x6 face, or a .wbf file in /moonlive/fonts.
+    /// The 4x6 face, or a .wbf file in /fonts.
     uint8_t font = 0;
     /// How fast a scrolling line travels, in pixels a second.
     uint8_t speed = 30;
@@ -288,7 +288,7 @@ private:
         if (font >= optionCount_) font = 0;
     }
 
-    /// List `/moonlive/fonts` and keep the current choice on the same name.
+    /// List `/fonts` and keep the current choice on the same name.
     void refreshFonts() {
         char keep[kNameCap] = {};
         remember(keep, sizeof(keep));
@@ -406,8 +406,8 @@ private:
         }
     }
 
-    /// Uploaded faces live here. The file manager creates folders under /moonlive.
-    static constexpr char kFontDir[] = "/moonlive/fonts";
+    /// Uploaded and downloaded faces live here, a folder of its own beside the scripts.
+    static constexpr char kFontDir[] = "/fonts";
     /// How many file rows the menu holds.
     static constexpr uint8_t kMaxFiles = 32;
     /// Bytes kept for one file name, including the terminator.
