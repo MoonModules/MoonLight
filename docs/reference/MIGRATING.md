@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### Text draws with the 4x6 face and `.wbf` files
+
+**Action: *re-set a control*, on a Text effect whose font was 6x8. *re-add a module*, where a layout used Scrolling Text.**
+
+Text keeps the 4x6 face in the firmware. The 6x8 face, the WLED faces and any PixelFonts face are `.wbf` files in `/fonts`, and the font menu lists that folder. A saved font index of 1 used to name 6x8, and it now names the first file in the folder, so set the font again. The clock tokens (`#HH:#MM` and the rest), the scale, the vertical shift, the trail, the reverse and the gradient are controls on Text. A one-color palette sets the letter color. The layer's opacity sets how bright the letters are.
+
 ### A HUB75 driver's fixture profile sets the panel's color order
 
 **Action: *re-set a control*, on a HUB75 driver whose `fixture` is not RGB.**
