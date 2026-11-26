@@ -127,7 +127,9 @@ A segment is a layer. `GET /json` carries one `seg` element per layer, with the 
 
 The device has no counterpart for the nightlight (`nl`), UDP sync (`udpn`), live override (`lor`) or a segment's `rev` and `frz`. A write that sets them succeeds and changes nothing, so the matching Home Assistant switches read back unchanged.
 
-The index of an effect type moves when a type is added, so a client resolves an effect by its name in `effects`. `docs/reference/openapi.yaml` lists the routes.
+The index of an effect type moves when a type is added, so a client resolves an effect by its name in `/json/effects`. `/json/fxdata` names each effect's sliders and options in the `sliders;colors;palette;flags` format of WLED's own interface, and `/json/palettes` lists the palette names that `pal` indexes. `/json/eff`, `/json/fxda` and `/json/pal` answer the same.
+
+`docs/reference/openapi.yaml` lists the routes.
 
 ## Which to use
 

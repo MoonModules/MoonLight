@@ -1,6 +1,6 @@
 /// @module HttpServerModule
 ///
-/// The WLED API a MoonLight device answers, over loopback: the info object every route carries, and a segment that is a layer with its first effect's sliders, read and written.
+/// The WLED API a MoonLight device answers, over loopback: the info object every route carries, and a segment that is a layer with its first effect's sliders, read and written, and the routes that list them.
 
 #include "doctest.h"
 #include "core/module/Scheduler.h"
@@ -80,6 +80,11 @@ void registerTypes() {
     done = true;
 }
 
+std::string bodyOf(const std::string& reply) {
+    const size_t at = reply.find("\r\n\r\n");
+    return at == std::string::npos ? std::string() : reply.substr(at + 4);
+}
+
 // Two layers, `A` enabled at opacity 200 and `B` disabled, each holding one SolidFx, and a Drivers beside them, served on the test port.
 struct WledDevice {
     mm::Scheduler s;
@@ -143,9 +148,7 @@ struct WledDevice {
     }
     // The JSON body of `path`'s reply.
     bool json(const char* path, JsonDoc& doc) {
-        const std::string reply = get(path);
-        const size_t at = reply.find("\r\n\r\n");
-        return at != std::string::npos && mm::json::parse(reply.c_str() + at + 4, doc);
+        return mm::json::parse(bodyOf(get(path)).c_str(), doc);
     }
 };
 
@@ -410,4 +413,29 @@ TEST_CASE("WLED segments: pal and a color reach the one palette, whichever segme
     // Every segment reports the one palette.
     CHECK(Segment(t.state(), 0).number("pal") == 4);
     CHECK(Segment(t.state(), 1).number("pal") == 4);
+}
+
+TEST_CASE("WLED API: /json/effects, /json/palettes and /json/fxdata list the effect types in fx order, with each effect's sliders named") {
+    WledDevice t;
+    for (const char* path : {"/json/effects", "/json/eff"}) {
+        const std::string reply = t.get(path);
+        CHECK(reply.find("200 OK") != std::string::npos);
+        CHECK(bodyOf(reply).find("\"WledSolid\"") != std::string::npos);
+    }
+    CHECK(bodyOf(t.get("/json/palettes")) == "[]");   // no light output claimed yet
+    t.drivers->outputSeat_.claim();
+    CHECK(bodyOf(t.get("/json/pal")) == "[\"P0\"]");
+
+    JsonDoc names, data;
+    REQUIRE(mm::json::parse(bodyOf(t.get("/json/effects")).c_str(), names));
+    REQUIRE(mm::json::parse(bodyOf(t.get("/json/fxdata")).c_str(), data));
+    CHECK(mm::json::arraySize(data, data.rootNode()) == mm::json::arraySize(names, names.rootNode()));   // one entry per effect
+    auto entry = [&](const char* effect) {
+        char text[192];
+        mm::json::readString(mm::json::element(data, data.rootNode(), fxOf(t, effect)), text, sizeof(text));
+        return std::string(text);
+    };
+    CHECK(entry("WledSolid") == "speed,scale,twist,spin,depth,mirror,invert;!;!;12");   // flags 12: an effect drawing in two dimensions or more
+    CHECK(entry("WledWave") == "bpm;!;!;12");
+    CHECK(bodyOf(t.get("/json/fxda")) == bodyOf(t.get("/json/fxdata")));
 }

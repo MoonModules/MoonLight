@@ -667,6 +667,54 @@ paths:
                   state: { $ref: "#/components/schemas/WledState" }
                   info: { $ref: "#/components/schemas/WledInfo" }
 
+  /json/effects:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledEffects
+      summary: The effect type names, in the order a segment's `fx` indexes.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
+  /json/eff:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledEff
+      summary: The short form of `/json/effects`.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
+  /json/palettes:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledPalettes
+      summary: The palette names, in the order a segment's `pal` indexes, empty when no light output is running.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
+  /json/pal:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledPal
+      summary: The short form of `/json/palettes`.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
+  /json/fxdata:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledEffectData
+      summary: One string per effect, `sliders;colors;palette;flags`, naming the effect's own controls.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
+  /json/fxda:
+    get:
+      tags: [WLED compatibility]
+      operationId: getWledFxda
+      summary: The short form of `/json/fxdata`.
+      responses:
+        "200": { $ref: "#/components/responses/WledNames" }
+
   /presets.json:
     get:
       tags: [WLED compatibility]
@@ -763,6 +811,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/StateResult" }
+    WledNames:
+      description: A JSON array of strings, one per effect or palette, in the order `fx` or `pal` indexes.
+      content:
+        application/json:
+          schema: { type: array, items: { type: string } }
     WledState:
       description: The WLED state object.
       content:

@@ -607,6 +607,10 @@ void HttpServerModule::routeRequest(platform::TcpConnection& conn, char* req, si
         else if (std::strcmp(path, "/json") == 0) serveWledDeviceJson(conn);
         // /presets.json: python-wled fetches it after /json and a 404 aborts HA's config flow; the truthy-but-empty `{"0":{}}` yields zero presets where `{}` fails its `not presets` guard.
         else if (std::strcmp(path, "/presets.json") == 0) serveWledPresets(conn);
+        // The effect and palette names the segments index, and what each effect's sliders are called, under WLED's long and short names.
+        else if (std::strcmp(path, "/json/effects") == 0 || std::strcmp(path, "/json/eff") == 0) serveWledEffects(conn);
+        else if (std::strcmp(path, "/json/palettes") == 0 || std::strcmp(path, "/json/pal") == 0) serveWledPalettes(conn);
+        else if (std::strcmp(path, "/json/fxdata") == 0 || std::strcmp(path, "/json/fxda") == 0) serveWledEffectData(conn);
         // A host running from a checkout serves the UI's own modules and imported sheets, which the embedded bundle holds inside app.js and style.css: those kinds only, so the folder's other files stay private.
         else if (isBundledName(path) && serveUiFromDisk(conn, path + 1)) {}
         else sendResponse(conn, 404, "text/plain", "Not found");

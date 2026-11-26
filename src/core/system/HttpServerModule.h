@@ -892,6 +892,9 @@ private:
     void serveWledDeviceJson(platform::TcpConnection& conn);   ///< /json, the surface Home Assistant's WLED integration reads
     void serveWledPresets(platform::TcpConnection& conn);      ///< /presets.json, the looks Home Assistant lists
     void handleWledState(platform::TcpConnection& conn, const char* body);
+    void serveWledEffects(platform::TcpConnection& conn);      ///< /json/effects and /json/eff: the effect names, in `fx` order
+    void serveWledPalettes(platform::TcpConnection& conn);     ///< /json/palettes and /json/pal: the palette names, in `pal` order
+    void serveWledEffectData(platform::TcpConnection& conn);   ///< /json/fxdata and /json/fxda: what each effect's sliders are called
     /// Apply the look preset in WLED slot `slot`, counted from 1.
     void applyWledPreset(int slot);
     /// Read every client's uplink: preview requests on `/wsp`, and on `/ws` control writes, subscriptions, resync requests, Ping, Close and the WLED app's frame.

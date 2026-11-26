@@ -339,6 +339,58 @@ void applySegments(HttpServerModule& http, Scheduler* scheduler, const JsonDoc& 
     }
 }
 
+// The bytes one effect's slider and option labels share in `/json/fxdata`.
+constexpr size_t kLabelBytes = 192;
+
+// The palette names as JSON strings, comma-separated, in `pal` order.
+void writePaletteNames(JsonSink& sink) {
+    if (const LightOutput* out = LightOutput::active()) out->writePaletteNames(sink);
+}
+
+// The label of a probe's n-th slider or option, or an empty one.
+const char* controlLabel(MoonModule& probe, ControlType type, uint8_t slot) {
+    const ControlDescriptor* c = wledControl(probe, type, slot);
+    return c ? c->name : "";
+}
+
+void appendLabel(char (&labels)[kLabelBytes], size_t& used, const char* name, bool separator) {
+    const int n = std::snprintf(labels + used, sizeof(labels) - used, "%s%s", separator ? "," : "", name);
+    if (n > 0 && used + static_cast<size_t>(n) < sizeof(labels)) used += static_cast<size_t>(n);
+}
+
+// The comma-separated slider labels, then the option labels, of an effect a probe stands for.
+void effectLabels(MoonModule& probe, char (&labels)[kLabelBytes]) {
+    size_t used = 0;
+    uint8_t sliders = 0, options = 0;
+    while (sliders < kSliderCount && wledControl(probe, ControlType::Uint8, sliders)) sliders++;
+    while (options < kToggleCount && wledControl(probe, ControlType::Bool, options)) options++;
+    // Options sit after the fifth slider's place, so a short slider list is padded with empty labels, which the UI hides.
+    const uint8_t slots = options ? kSliderCount : sliders;
+    for (uint8_t slot = 0; slot < slots; slot++) appendLabel(labels, used, controlLabel(probe, ControlType::Uint8, slot), slot > 0);
+    for (uint8_t slot = 0; slot < options; slot++) appendLabel(labels, used, controlLabel(probe, ControlType::Bool, slot), true);
+}
+
+// One string per effect, `sliders;colors;palette;flags`, which WLED's own UI reads to show an effect's controls and label them. Sliders are the Uint8 controls, then the options after a fifth slot, as the UI numbers them.
+void writeEffectData(JsonSink& sink) {
+    bool first = true;
+    for (uint8_t i = 0; i < ModuleFactory::typeCount(); i++) {
+        if (!isEffectType(i)) continue;
+        char labels[kLabelBytes] = {};
+        // Built once to read its controls and deleted unreleased, as `/api/types` does for its defaults: release undoes a prepare the probe skipped.
+        if (MoonModule* probe = ModuleFactory::create(ModuleFactory::typeName(i))) {
+            probe->defineControls();
+            effectLabels(*probe, labels);
+            delete probe;
+        }
+        // The palette and one color slot stay on: every effect takes the Drivers palette, and a color picked is matched to one. Flags say which dimensions the effect draws in.
+        char entry[240];
+        std::snprintf(entry, sizeof(entry), "%s;!;!;%s", labels, ModuleFactory::typeDim(i) >= 2 ? "12" : "1");
+        if (!first) sink.append(",");
+        sink.writeJsonString(entry);
+        first = false;
+    }
+}
+
 }  // namespace
 
 
@@ -474,11 +526,10 @@ void HttpServerModule::serveWledDeviceJson(platform::TcpConnection& conn) {
     sink.appendf(",\"info\":");
     writeWledInfoBody(sink);
     // effects is every registered effect type, indexed to match a segment's fx; palettes is the real list, indexed to match seg.pal and the Drivers `palette` control.
-    const LightOutput* out = LightOutput::active();
     sink.appendf(",\"effects\":[");
     writeEffectNames(sink);
     sink.appendf("],\"palettes\":[");
-    if (out) out->writePaletteNames(sink);
+    writePaletteNames(sink);
     sink.appendf("]}");
     answerJson(conn, sink);
 }
@@ -523,6 +574,33 @@ void HttpServerModule::applyWledPreset(int slot) {
 void HttpServerModule::handleWledState(platform::TcpConnection& conn, const char* body) {
     applyWledState(body);
     serveWledState(conn);
+}
+
+// /json/effects: the effect names, in the order a segment's fx indexes.
+void HttpServerModule::serveWledEffects(platform::TcpConnection& conn) {
+    JsonSink sink;
+    sink.append("[");
+    writeEffectNames(sink);
+    sink.append("]");
+    answerJson(conn, sink);
+}
+
+// /json/palettes: the palette names, in the order a segment's pal indexes.
+void HttpServerModule::serveWledPalettes(platform::TcpConnection& conn) {
+    JsonSink sink;
+    sink.append("[");
+    writePaletteNames(sink);
+    sink.append("]");
+    answerJson(conn, sink);
+}
+
+// /json/fxdata: what each effect's sliders and options are called.
+void HttpServerModule::serveWledEffectData(platform::TcpConnection& conn) {
+    JsonSink sink;
+    sink.append("[");
+    writeEffectData(sink);
+    sink.append("]");
+    answerJson(conn, sink);
 }
 
 // Build and push the WLED {state, info} object to every WS client, the same object /json/si answers.
