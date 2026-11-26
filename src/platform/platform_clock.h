@@ -5,8 +5,21 @@
 
 #include "platform/platform_base.h"   // target flags, MM_NONBLOCKING and the compiler macros
 
+#include <ctime>
+
 namespace mm::platform {
 
+
+/// Fill `out` with the device's local civil time. False when the clock cannot be read.
+inline bool localTm(std::tm& out) {
+    const std::time_t t = std::time(nullptr);
+    out = {};
+#if defined(_WIN32)
+    return localtime_s(&out, &t) == 0;   // MSVC takes the arguments in the other order
+#else
+    return localtime_r(&t, &out) != nullptr;
+#endif
+}
 
 /// Milliseconds since boot, the clock every animation is written against.
 uint32_t millis() MM_NONBLOCKING;

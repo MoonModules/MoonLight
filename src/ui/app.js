@@ -2956,7 +2956,10 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             input.checked = !!ctrl.value;
             input.dataset.mid = moduleName;
             input.dataset.key = ctrl.name;
-            input.addEventListener("change", () => {
+            // A switch another control makes idle stays visible and keeps its saved value. The checkbox
+            // is disabled, so the click never writes, and the track draws grey.
+            if (ctrl.readonly) input.disabled = true;
+            else input.addEventListener("change", () => {
                 dragTs[key] = Date.now();
                 write(ctrl.name, input.checked);
             });
@@ -2965,7 +2968,7 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             sw.appendChild(input);
             sw.appendChild(track);
             row.appendChild(sw);
-            resetButton(() => { input.checked = !!def; });
+            if (!ctrl.readonly) resetButton(() => { input.checked = !!def; });
             // A surface SWITCH is assignable like a fader or a knob: it drives a control, and
             // switch1 driving Drivers.on is the same kind of binding fader1 has to brightness.
             if (ctrl.switchRow) attachTargetPopup(row, input, ctrl);
@@ -3090,7 +3093,16 @@ function createControl(moduleName, moduleType, ctrl, writeTo = (name, value) => 
             break;
         }
         case "select": {
-            const pick = i => { dragTs[key] = Date.now(); write(ctrl.name, i); };
+            const pick = async (i) => {
+                // A .wbf row is a file, installed on first choice the way a factory script is. The bytes stay out of the firmware.
+                const opt = (ctrl.options || [])[i];
+                if (typeof opt === "string" && opt.endsWith(".wbf")) {
+                    try { await ensureFontFile(opt); }
+                    catch (e) { alert("could not install " + opt + ": " + (e && e.message ? e.message : e)); }
+                }
+                dragTs[key] = Date.now();
+                write(ctrl.name, i);
+            };
             row.appendChild(buildChoice(moduleName, ctrl, key, pick));
             // The row's current choice, since a live patch may have swapped a dropdown for segments.
             resetButton(() => setChoice(row.querySelector("select, .segmented"), selectIndex({ ...ctrl, value: def })));
@@ -4887,6 +4899,7 @@ function updateModuleControls(mod) {
             case "bool": {
                 const input = queryByName(`input[data-mid="${cssEscape(mid)}"][data-key="${k}"]`, "data-mid", mid);
                 if (input && input.checked !== !!ctrl.value) input.checked = !!ctrl.value;
+                if (input && input.disabled !== !!ctrl.readonly) input.disabled = !!ctrl.readonly;
                 break;
             }
             case "text": {
@@ -6176,6 +6189,26 @@ async function mlDownloadScript(name, group) {
     if (!text.trim()) throw new Error("downloaded script is empty");
     // Straight to the factory directory, never the user's: an edit is what puts a copy there, and that copy is what shadows this one.
     await writeDeviceFile(cat.dir, name, text);
+}
+
+/// Install one `.wbf` into `/moonlive/fonts` when the device does not have it yet. The browser fetches the bytes, as it does a factory script, so the firmware does not carry them.
+async function ensureFontFile(name) {
+    const rows = await fmFetchDir("/moonlive/fonts").catch(() => []);
+    if (rows.some(r => r.name === name)) return;
+    const cat = await mlFetchCatalog();
+    const url = "https://raw.githubusercontent.com/MoonModules/MoonLight/"
+              + encodeURIComponent(cat.tag) + "/moonlive/fonts/" + encodeURIComponent(name);
+    const res = await fetch(url);
+    if (!res.ok) {
+        if (res.status !== 404) throw new Error("download failed");
+        const dev = !String(cat.tag || "").startsWith("v");
+        throw new Error(dev
+            ? name + " is not on GitHub at commit " + cat.tag + " (push the branch, or the font is new)"
+            : name + " is not in this firmware's release");
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!bytes.length) throw new Error("downloaded font is empty");
+    await writeDeviceFile("/moonlive/fonts", name, bytes);
 }
 
 /// Write a text file onto the device, creating its folder first, since POST /api/file does not create parents and mkdir is idempotent.

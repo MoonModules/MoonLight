@@ -213,7 +213,14 @@ public:
     static void setActive(uint8_t index) {
         requested_.store(0, std::memory_order_relaxed);   // a direct set supersedes a pending request, which would otherwise land over it next frame
         active_ = fromBuiltin(index);
+        noteChange();
     }
+
+    /// Advances when a palette is installed at the start of a frame. A script rewriting entries leaves it alone, so a trail keeps moving.
+    static uint32_t generation() { return generation_.load(std::memory_order_acquire); }
+
+    /// The palette about to be sampled changed. A trail drops the previous colors on this frame.
+    static void noteChange() { generation_.fetch_add(1, std::memory_order_release); }
 
     /// Ask for built-in `index` from inside a layer's tick, applied before the next frame's layers render, so no layer reads a palette another is writing.
     static void request(uint8_t index) MM_NONBLOCKING { requested_.store(static_cast<uint16_t>(index + 1), std::memory_order_relaxed); }
@@ -280,6 +287,7 @@ private:
     /// Default to a full rainbow (index 0).
     static inline Palette active_ = fromBuiltin(0);
     static inline std::atomic<uint16_t> requested_{0};   ///< a palette a layer asked for, plus one, 0 for none
+    static inline std::atomic<uint32_t> generation_{0};  ///< selections, not per-frame script writes
 };
 
 /// How many scripted palettes the picker offers and their names, the catalog's at their places, then the user's `.mlp` files; Drivers sets them, as Palette.h holds no filesystem, the seam `Palettes::active()` is too.

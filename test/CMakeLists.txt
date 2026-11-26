@@ -220,6 +220,7 @@ add_executable(mm_tests
     unit/light/unit_TransposeModifier.cpp
     unit/light/unit_DemoReelEffect.cpp
     unit/light/unit_TextEffect.cpp
+    unit/light/unit_ScrollingTextEffect.cpp
     unit/light/unit_Coord3D.cpp
     unit/light/unit_effects_render.cpp
     unit/light/unit_Effects_gridsweep.cpp

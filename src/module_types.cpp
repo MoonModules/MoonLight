@@ -129,6 +129,7 @@
 #include "light/effects/BouncingBallsEffect.h"
 #include "light/effects/TetrixEffect.h"
 #include "light/effects/TextEffect.h"
+#include "light/effects/ScrollingTextEffect.h"
 #include "light/effects/FreqSawsEffect.h"
 #include "light/effects/FseqPlayerEffect.h"
 #include "light/effects/BlurzEffect.h"
@@ -339,6 +340,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::TetrixEffect>("TetrixEffect", "light/effects.md#tetrix");
     mm::ModuleFactory::registerType<mm::TextEffect>("TextEffect", "light/effects.md#text");
     mm::ModuleFactory::registerType<mm::WaveEffect>("WaveEffect", "light/effects.md#wave");
+    mm::ModuleFactory::registerType<mm::ScrollingTextEffect>("ScrollingTextEffect", "light/effects.md#scrollingtext");
     // Modifiers, alphabetical by display name.
     mm::ModuleFactory::registerType<mm::BlockModifier>("BlockModifier", "light/modifiers.md#block");
     mm::ModuleFactory::registerType<mm::CheckerboardModifier>("CheckerboardModifier", "light/modifiers.md#checkerboard");
