@@ -281,6 +281,9 @@ TEST_CASE("Hub75Driver's headroom is its refresh over the 100 Hz flicker line, n
     mm::platform::setTestHub75RefreshHz(90);
     w->driver.tick1s();
     CHECK(w->driver.headroom() == 0);                // under the line, it flickers
+    w->driver.release();
+    CHECK_FALSE(w->driver.headroom().has_value());   // a stopped panel measures no refresh
+    CHECK(w->driver.dmaBytes() == 0);
 }
 
 TEST_CASE("Hub75Driver reads its output's lights once, in prepare(), and a frame costs the output's show() alone") {

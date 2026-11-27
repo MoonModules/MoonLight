@@ -143,6 +143,8 @@ TEST_CASE("apply-core: applyWledState toggles power on \"t\" and reads a color a
     CHECK(drivers->on == false);
     http.applyWledState("{\"seg\":[{\"id\":0,\"on\":\"t\"}]}");
     CHECK(drivers->on == true);
+    http.applyWledState("{\"on\":\"true\"}");   // a string other than "t" is no toggle, and no flag either
+    CHECK(drivers->on == true);
 
     http.applyWledState("{\"seg\":[{\"col\":[\"00FF00\"]}]}");
     CHECK(drivers->palette == 4);    // pure green, the fake's palette 4

@@ -122,6 +122,11 @@ bool HttpServerModule::Subscription::operator==(const Subscription& o) const {
     return true;
 }
 
+void HttpServerModule::flagResyncCovering(const MoonModule* mod) {
+    for (int i = 0; i < kMaxWsClients; i++)
+        if (subs_[i].covers(mod)) resyncClient_[i] = true;
+}
+
 bool HttpServerModule::anyClientCovers(const MoonModule* mod) const {
     // Every slot's subscription, live or not: the uplink poll clears a slot's subscription once its client is gone.
     for (const auto& sub : subs_)
@@ -313,7 +318,7 @@ template <class Walk>
 void HttpServerModule::collectPatch(PatchBuild& b, Walk&& walk) {
     walk([&](const MoonModule* mod, uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
         // A value cut short by memory is not valid JSON: every client takes its whole state again rather than a patch that breaks it.
-        if (vs.overflowed()) { for (bool& r : resyncClient_) r = true; return; }
+        if (vs.overflowed()) { flagResyncCovering(mod); return; }
         LeafHash* h = findLeaf(ph, b.next);
         if (h && h->value == vh) return;              // unchanged: the common case, emit nothing
         const bool opens = !b.slices || patchSlices_[b.slices - 1].mod != mod;

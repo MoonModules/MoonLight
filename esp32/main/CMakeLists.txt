@@ -12,6 +12,7 @@ idf_component_register(
         ${MM_CORE_SOURCES}
         ${MM_LIGHT_SOURCES}
         "../../src/platform/esp32/platform_esp32.cpp"
+        "../../src/platform/esp32/platform_esp32_heap.cpp"
         "../../src/platform/esp32/moonlive_emit_xtensa.cpp"
         "../../src/platform/esp32/moonlive_emit_riscv.cpp"
         "../../src/platform/esp32/moonlive_asm_xtensa.cpp"

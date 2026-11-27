@@ -1,36 +1,24 @@
 /// Parallel WS2812 output over the S3 and P4 LCD_CAM i80 peripheral, sequenced by our own DMA.
 ///
-/// This file owns the peripheral alone: the registers, the GDMA channel and its descriptor chain, the frame buffers, transmit and wait.
-/// The driver above it does the domain work, and the esp_lcd sibling beside it is the behavioral reference this matches function for function.
+/// This file owns the peripheral alone: the registers, the GDMA channel and its descriptor chain, the frame buffers, transmit and wait. The driver above it does the domain work, and the esp_lcd sibling beside it is the behavioral reference this matches function for function.
 ///
 /// @technical
 ///
 /// ## Why this exists next to the esp_lcd backend
 ///
-/// That component re-arms the peripheral on every transaction, resetting the bus and busy-waiting before each one.
-/// An LCD panel does not care, but WS2812 is one unbroken self-clocked bit stream, so a mid-frame reset garbles everything after it.
-/// A frame split across several transactions therefore cannot be sent gaplessly at any chunk size, which forces the whole frame into one.
-/// That is what caps the sibling: the DMA must stream an entire frame from one contiguous reachable block.
+/// That component re-arms the peripheral on every transaction, resetting the bus and busy-waiting before each one. WS2812 is one unbroken self-clocked bit stream, so a mid-frame reset garbles everything after it, and a frame split across transactions cannot be gapless at any chunk size. That caps the sibling: the DMA streams an entire frame from one contiguous reachable block.
 ///
 /// ## The hardware never demanded it
 ///
-/// The peripheral has no data-length register, and the SDK's own comment says the data phase is controlled by the buffer length.
-/// So it clocks out exactly what the DMA feeds it and stops when the chain ends.
-/// One start over an arbitrarily long descriptor chain is a single gapless stream across as many buffers as we like.
-/// This backend takes that, built on the SDK's own hardware and link-list interfaces rather than raw registers, which keeps it a recognizable construct.
+/// The peripheral has no data-length register: the SDK's own comment says the buffer length controls the data phase, so it clocks out what the DMA feeds it and stops when the chain ends. One start over an arbitrarily long descriptor chain is a single gapless stream across many buffers, built here on the SDK's own hardware and link-list interfaces rather than raw registers.
 ///
 /// ## Both implementations ship
 ///
-/// The esp_lcd one is the reference and this one is the measured alternative, selected as a module swap in the interface.
-/// The guard is the narrow capability macro rather than the sibling's broad one, since this pokes registers the classic chip does not have.
-/// Its i80 is a different peripheral with a different register file entirely, so the stubs are inert there and the build list stays unconditional.
+/// The esp_lcd one is the reference and this one is the measured alternative, selected as a module swap in the interface. The guard is the narrow capability macro rather than the sibling's broad one, since this pokes registers the classic chip does not have. Its i80 is a different peripheral with a different register file entirely, so the stubs are inert there and the build list stays unconditional.
 ///
 /// ## The shift clock window
 ///
-/// What constrains the clock is the WS2812 slot duration rather than the elegance of the divider, the slot being the zero pulse.
-/// An expander shifts each slot out over several bus words, so the slot is that multiplier divided by the pixel clock.
-/// The specified zero pulse runs to 380 ns on newer revisions and the one pulse from 580 to 1000 ns.
-/// Three settings were taken to the wall, and the default is the middle one.
+/// The WS2812 slot duration sets the clock, the slot being the zero pulse. An expander shifts each slot out over several bus words, so the slot is that multiplier divided by the pixel clock. The specified zero pulse runs to 380 ns on newer revisions and the one pulse from 580 to 1000 ns. Three settings were taken to the wall, and the default is the middle one.
 ///
 /// ```
 /// div 3  26.67 MHz  zero 300 ns, bit 900 ns   strict spec, but marginal strands scramble
@@ -38,15 +26,11 @@
 /// div 5  16.00 MHz  zero 500 ns               crosses the threshold: every bit reads one, all white
 /// ```
 ///
-/// Div 3 is the overclock for short-wired rigs chasing the higher ceiling, measured at 151 frames against 118.
-/// Long runs under capacitive load cannot track it, and raising the drive strength does not help, both measured: it is bandwidth-bound rather than edge-bound.
-/// Div 4 gives the expander a third more shift margin, which is why hpwit ships his own driver near that rate.
-/// Calibration is per wall: sweep up from the default until marginal strands are clean, and all white means one step too far.
+/// Div 3 is the overclock for short-wired rigs chasing the higher ceiling, measured at 151 frames against 118; long runs under capacitive load cannot track it, and drive strength does not help (bandwidth-bound, not edge-bound). Div 4 gives the expander a third more shift margin. Calibrate per wall: sweep up from the default until marginal strands are clean, and all white means one step too far.
 ///
 /// ## The ring's geometry is runtime
 ///
-/// The lights per buffer and the pool depth arrive as parameters, because the optimum is a measurement rather than a derivation.
-/// Memory is the only axis wanting a small buffer, and three others want it big.
+/// The lights per buffer and the pool depth arrive as parameters, because the optimum is a measurement rather than a derivation. Memory is the only axis wanting a small buffer, and three others want it big.
 ///
 /// ```
 /// memory          lights x depth x row bytes; flat only at one light per buffer
@@ -55,166 +39,91 @@
 /// lap-time runway how long a preemption may last before the DMA laps a refilling buffer
 /// ```
 ///
-/// A busy interrupt on the first core starves the network stack, measured as a 19 ms encode killing ethernet on the LC16.
-/// Bench history worth keeping: at sixteen lights per buffer the pool only ever held about twelve, which caps that geometry near 240 lights per strand.
-/// A depth of two broke transport outright, the loopback failing at the first bit, because our chain runs without the owner gate that scheme relies on.
+/// A busy interrupt on the first core starves the network stack (a 19 ms encode killed ethernet on the LC16). At sixteen lights per buffer the pool holds about twelve, capping that geometry near 240 lights per strand. A depth of two broke transport at the first loopback bit, because the chain runs lacking the owner gate that scheme relies on.
 ///
 /// ## The scatter above eight slices, resolved
 ///
-/// It read as an unknown mechanism at the time and was two knowable per-hardware faults the ring counters are structurally blind to.
-/// The inter-slice pad latched the strand, a LOW gap over the reset threshold repainting the first lights of every slice.
-/// And the producer needed headroom over the consumer, which the near-prime pool provides.
-/// With the automatic geometry and a latch-safe pad, the full wall streams clean, verified.
+/// It read as an unknown mechanism and was two per-hardware faults the ring counters are structurally blind to: the inter-slice pad latched the strand (a LOW gap over the reset threshold repainted the first lights of every slice), and the producer needs headroom over the consumer, which the near-prime pool provides. With automatic geometry and a latch-safe pad the full wall streams clean.
 ///
-/// The lasting lesson is that without the owner check there is no handshake, so a torn or short read raises no error at all.
-/// Timings look healthy and the error count stays zero, so a correct geometry drawn in scattered dots reads as a latch fault rather than a data fault.
-/// Do not trust a ring counter for that class: the wall, or the loopback bit-verify, is the instrument.
+/// The lasting lesson is that lacking the owner check there is no handshake, so a torn or short read raises no error at all. Timings look healthy and the error count stays zero, so a correct geometry drawn in scattered dots reads as a latch fault rather than a data fault. Do not trust a ring counter for that class: the wall, or the loopback bit-verify, is the instrument.
 ///
 /// ## Where the frame lives is decided by the pixel clock
 ///
-/// Measured on one board with one variable changed, which is the cleanest result of the whole investigation.
-/// In direct mode a frame in external memory streams fine; in expander mode it never completes, at any size.
-/// So it is neither the memory nor the frame size: the transfer engine cannot sustain an external read at the expander's clock.
-/// An expander is serial, so each slot shifts out over eight bus words and the bus runs ten times faster, which is exactly the rate that memory cannot feed.
+/// Measured on one board with one variable changed: in direct mode a frame in external memory streams fine; in expander mode it stalls at any size. The transfer engine cannot sustain an external read at the expander's clock: each slot shifts out over eight bus words, so the bus runs ten times faster, a rate that memory cannot feed.
 ///
-/// This backend is what proved it, and is why it was built.
-/// The sibling failed here with thousands of descriptor-mount errors that pointed hard at its own descriptor handling.
-/// This one removes that mechanism entirely, owning the chain and mounting it once, and the mount errors are gone while the transfer still never completes.
-/// So that storm was a symptom rather than the cause, killed by a controlled experiment with a working control condition.
+/// This backend proved it. The sibling failed here with thousands of descriptor-mount errors that pointed at its own descriptor handling; this one owns the chain and mounts it once, the errors vanish, and the transfer still stalls. The mount storm was a symptom, killed by a controlled experiment with a working control condition.
 ///
-/// Hence internal memory first in expander mode and external first otherwise, which is what the measurement says rather than a workaround inherited from the sibling.
-/// External stays the fallback there, so a frame too big to fit still drives badly rather than refusing to start.
+/// Hence internal memory first in expander mode and external first otherwise, which is what the measurement says rather than a workaround inherited from the sibling. External stays the fallback there, so a frame too big to fit still drives badly rather than refusing to start.
 ///
-/// ## The interrupt does the encode, and must never touch flash
+/// ## The interrupt does the encode, from instruction memory alone
 ///
-/// The handler runs in the transfer interrupt and its ring branch calls the domain encode, so the whole chain is resident in instruction memory.
-/// The channel is registered cache-safe, a deliberate shipped hardening: the interrupt fires at the wire rate, so a cache miss inside it would blow the refill deadline.
-/// Being cache-safe, it may fire while the flash cache is disabled by a write, so the slice encode must not touch anything flash-resident.
-/// The refill defers when the cache is off and the batch catches up afterwards.
-/// Do not remove that guard or move the encode back to flash: either reintroduces the measured cache-error panic.
+/// The handler runs in the transfer interrupt and its ring branch calls the domain encode, so the whole chain is resident in instruction memory. The channel is registered cache-safe because a cache miss at the wire rate blows the refill deadline.
 ///
 /// ## Why completion is reported on written, not drained
 ///
-/// The hardware ends the frame, the terminator sitting on the final slice, so there is no software stop and no post-frame interrupt to catch.
-/// Completion is therefore reported the instant the last slice is written.
-/// From there the frame's fate is sealed: the engine drains the rest at the exact wire rate and stops itself.
-/// That dodges the coalescing trap which wedged the older drain-keyed stop, where two late interrupts latch into one and the firing that would have observed the end never arrives.
-/// A drain-gated completion then deadlocks, the halted engine firing nothing further, measured as flicker and then no output.
+/// The hardware ends the frame (the terminator sits on the final slice), so completion is reported the instant the last slice is written, and the engine drains the rest at the wire rate and stops itself. That dodges the coalescing trap of the older drain-keyed stop, where two late interrupts latch into one and a drain-gated completion deadlocks, seen as flicker and then silence.
 ///
-/// A stall-truncated frame cannot be reported as a clean completion: reaching that branch means an interrupt fired, and one fires only while the engine runs.
-/// A stall long enough to truncate is one where the engine halted at the frontier.
-/// The handler never runs again for that frame, so its completion comes from the backstop instead.
+/// A stall-truncated frame cannot be reported as a clean completion: reaching that branch means an interrupt fired, and one fires only while the engine runs. A stall long enough to truncate is one where the engine halted at the frontier. The handler stays silent for the rest of that frame, so its completion comes from the backstop instead.
 ///
 /// ## Only the data lines reach a pad
 ///
-/// The routing fabric is not a broadcast: a peripheral signal never connected to a pad stays inside the peripheral.
-/// So the lanes a board does not use, and both bus control lines, cost no pins at all.
-/// The peripheral clocks every lane whatever the pin count, but those past the board's count go nowhere.
-/// Which the sibling component cannot do: it rejects an unconnected data pin and must park spares on a real ghost pin.
+/// A peripheral signal left unconnected to a pad stays inside the peripheral, so unused lanes and both bus control lines cost no pins. The peripheral clocks every lane whatever the pin count, and lanes past the board's count go nowhere, where the sibling component rejects an unconnected data pin and parks spares on a real ghost pin.
 ///
-/// The data-command line separates command from data on a panel, a concept a strand does not have, and it is nailed to a constant level in every phase.
-/// The write strobe must still be generated, being the clock that shifts each bus word out and drives an expander, but only a shift register consumes it.
-/// A strand is self-clocked, so in direct mode it ignores the strobe entirely and that needs no pad either.
-/// A direct-mode board therefore spends its pins on strands alone, which is the budget the hand-rolled drivers have always had.
+/// The data-command line separates command from data on a panel, a concept a strand lacks, and it is held at a constant level in every phase. The write strobe is still generated, since it shifts each bus word out and drives an expander, but a self-clocked strand ignores it in direct mode, so a direct-mode board spends its pins on strands alone.
 ///
 /// ## The chain is ours, so the owner check protects nothing
 ///
-/// The sibling component leaves owner-checking on, which makes a mount walk from the start and refuse at the first descriptor the engine still owns.
-/// That is the mount failure which makes its path unusable with a large expanded frame.
-/// We own the chain outright and rebuild it from scratch on every transmit, so the check protects nothing and only fails.
+/// The sibling component leaves owner-checking on, which makes a mount walk from the start and refuse at the first descriptor the engine still owns. That is the mount failure which makes its path unusable with a large expanded frame. We own the chain outright and rebuild it from scratch on every transmit, so the check guards a chain that is always fresh and only fails.
 ///
 /// ## The frontier-terminated chain
 ///
-/// The pool is a fixed set of node runs, one per buffer, mounted linear with a spare tail the arm re-links, and it is not a loop.
-/// The chain always ends at a terminator sitting on the last written slice: the arm plants it at the prime edge and the interrupt advances it as it refills.
-/// So the engine can never run past written data. Reaching the end of the encoded slices it halts there, lines idle low, and the strand latches a partially-updated frame.
+/// The pool is a fixed set of node runs, one per buffer, mounted linear with a spare tail the arm re-links; it is a line rather than a loop. The chain ends at a terminator on the last written slice: the arm plants it at the prime edge and the interrupt advances it as it refills, so the engine halts at the end of the encoded slices with lines idle low and the strand latches a partially-updated frame.
 ///
-/// That replaces the earlier looping chain, where a deferred refill let the engine lap the pool and re-clock stale slices as bright garbage.
-/// It is also why the original linear chain stalled beyond a certain length: it revisited buffers with no live terminator to advance.
-/// So the engine reached a node it could not pass and halted mid-frame.
-/// A moving frontier is the fix that both a fixed terminator and a bare loop lacked.
+/// That replaces the earlier looping chain, where a deferred refill let the engine lap the pool and re-clock stale slices as bright garbage. It also explains why the original linear chain stalled beyond a certain length: it revisited buffers with no live terminator to advance. A moving frontier is the fix that both a fixed terminator and a bare loop lacked.
 ///
-/// Every node carries rows and nothing else, since the bit stream must flow continuously from buffer to buffer.
-/// A trailing low pad on any mid-chain buffer is a gap long enough to latch the strand, which is the scrambled-image fault.
-/// The reset gap is not in a buffer at all: it is the idle time after the halt, held by the next arm.
+/// Every node carries rows only, since the bit stream must flow continuously from buffer to buffer. A trailing low pad on any mid-chain buffer is a gap long enough to latch the strand, which is the scrambled-image fault. The reset gap is not in a buffer at all: it is the idle time after the halt, held by the next arm.
 ///
 /// ## One buffer is one descriptor node
 ///
-/// A buffer larger than a node's maximum spans several, and the per-buffer mount and re-link interaction then breaks the self-terminating end.
-/// On the bench the terminator sat correctly on its node yet the engine stopped several nodes earlier, while the identical logic was clean at one node per buffer.
-/// Clamping the buffer to fit one node deletes that class of bug instead of patching it, and small buffers are the direction the large walls want anyway.
+/// A buffer larger than a node's maximum spans several nodes, and the per-buffer mount and re-link interaction then breaks the self-terminating end: the terminator sat on its node yet the engine stopped several nodes earlier, while one node per buffer ran clean. Clamping the buffer to one node deletes that class of bug, and small buffers suit the large walls anyway.
 ///
 /// ## Descriptor write-back stays off
 ///
-/// With it on, the engine clears each descriptor's owner bit as it consumes the node.
-/// On a chain whose buffers are refilled behind it, that leaves the engine gating on bits it cleared.
-/// It then halts politely once it reaches a node it now thinks the processor owns.
-/// That is the measured symptom of a clean stop after a number of interrupts with no error recorded.
-/// The refill rewrites buffer contents and never the descriptor, so it never re-arms a bit; the fix is to never let the hardware clear them.
+/// With write-back on, the engine clears each descriptor's owner bit as it consumes the node, so on a chain refilled behind it the engine gates on bits it cleared and halts once it reaches a node it thinks the processor owns (a clean stop after some interrupts, with no error recorded). The refill rewrites buffer contents and leaves descriptors alone, so keeping write-back off keeps every bit armed.
 ///
 /// ## Where the frame lives is decided by the pixel clock
 ///
-/// Measured on one board with one variable changed, and the cleanest result of the whole investigation.
-/// Same board, same memory, same chain, same driver: in direct mode a frame in external memory streams fine, and in expander mode it never completes at any size.
-/// So it is neither the memory nor the frame size: the engine cannot sustain an external read at the expander's clock.
-/// An expander is serial, so each slot shifts out over eight bus words and the bus must run ten times faster, which is exactly the rate that memory cannot feed.
+/// Measured on one board with one variable changed: same memory, chain and driver, a frame in external memory streams fine in direct mode and stalls in expander mode at any size. The engine cannot sustain an external read at the expander's clock: each slot shifts out over eight bus words and the bus runs ten times faster, a rate that memory cannot feed.
 ///
-/// This backend is what proved it, which is why it was built.
-/// The sibling failed here with thousands of descriptor-mount errors that pointed hard at its own handling.
-/// This one removes that mechanism entirely and the errors are gone, yet the transfer still never completes.
-/// So that storm was a symptom rather than the cause, killed by a controlled experiment with a working control condition.
+/// This backend is what proved it, which is why it was built. The sibling failed here with thousands of descriptor-mount errors that pointed hard at its own handling. This one removes that mechanism entirely and the errors are gone, yet the transfer still stalls. So that storm was a symptom rather than the cause, killed by a controlled experiment with a working control condition.
 ///
-/// Hence internal memory first in expander mode and external first otherwise, which caps the expander on this path at what fits internally.
-/// Above that the driver does not use this path at all: it builds the streaming ring, which never materializes the frame.
+/// Hence internal memory first in expander mode and external first otherwise, which caps the expander on this path at what fits internally. Above that the driver does not use this path at all: it builds the streaming ring, which holds a few slices of the frame at a time.
 ///
 /// ## Only the optional allocation is reserve-guarded
 ///
-/// The reserve protects the network heap from an OPTIONAL allocation, and the frame itself is not optional.
-/// Refusing it to keep the reserve intact would decline to drive the lights at all.
-/// That degrades the essential thing to protect a nice-to-have, which inverts the policy.
+/// The reserve protects the network heap from an OPTIONAL allocation, and the frame itself is not optional. Refusing it to keep the reserve intact would decline to drive the lights at all. That degrades the essential thing to protect a nice-to-have, which inverts the policy.
 ///
-/// With an expander there is no external fallback at all, internal or nothing.
-/// Measured: a frame placed externally reports no output and burns a fifth of a second per tick timing out, while the same frame internally drives fine.
-/// So such a fallback does not degrade, it WEDGES: init still succeeds, the driver reports driving, and every tick times out. Returning nothing instead surfaces the failure through the normal path.
+/// With an expander the only choice is internal; an external frame reports no output and burns a fifth of a second per tick timing out, while the same frame internally drives fine. An external fallback would WEDGE: init succeeds, the driver reports driving, and every tick times out. Returning null surfaces the failure through the normal path.
 ///
-/// ## Largest block, never total free
+/// ## The largest free block decides a fit
 ///
-/// The whole-frame path allocates in one contiguous piece, so what matters is the largest free block: a fragmented heap can report megabytes free with no run big enough.
-/// Using the total was a bug: at sixteen strands a 144 KB expander frame reported as fitting, so the ring was not chosen.
-/// The contiguous allocation of those 144 KB then failed, fell back to external memory, and stalled at the expander clock.
-/// The ring's own check deliberately uses free SIZE instead, since it makes many small allocations and needs no single run.
+/// The whole-frame path allocates one contiguous piece, so the largest free block matters: a fragmented heap can report megabytes free with no run big enough. Using the total was a bug: a 144 KB expander frame at sixteen strands reported as fitting, then fell back to external memory and stalled. The ring's own check uses free SIZE, since it makes many small allocations.
 ///
 /// ## The wire is waited for, not refused
 ///
-/// The peripheral holds exactly one transfer and the caller may legitimately hand over the next while one is still clocking out.
-/// There is no queue to absorb it, and reprogramming the chain mid-walk would garble the frame, but refusing a busy bus would be wrong.
-/// The double buffer's whole design is that the driver waits only on the buffer it is about to encode into.
-/// At that point the other's transfer is quite legitimately still on the wire, and refusing there would drop every second frame.
-/// Waiting here costs nothing that design was buying: its win is that the next encode overlapped the previous wire time, which has already happened by the time this is called.
-/// What is left is the wire itself, which is serial on any design, the strand receiving one frame at a time.
+/// The peripheral holds one transfer, and the caller may hand over the next while one is still clocking out. Reprogramming the chain mid-walk garbles the frame and refusing a busy bus drops every second frame, so the call waits. The double buffer waits only on the buffer about to be encoded into, and its win (the next encode overlapping the previous wire time) has happened by then.
 ///
 /// ## The loopback follows the same rule the render path does
 ///
-/// An expander test frame at the full light count lands in external memory and stalls at that clock on the whole-frame path.
-/// The loopback would then time out and report nothing captured, blaming the transport for what is really a placement problem, and never testing the encode at all.
-/// So when the frame will not fit internally it streams through the RING instead, exactly as the render path does, and the bit-verify then validates the actual ring output.
+/// An expander test frame at the full light count lands in external memory and stalls at that clock on the whole-frame path, so the loopback would time out and blame the transport for a placement problem. When the frame exceeds internal memory it therefore streams through the RING, as the render path does, and the bit-verify validates the actual ring output.
 ///
-/// The ring's encode seam is a slice producer while the loopback already holds the whole pre-encoded frame.
-/// So its encode is a copy of the matching slice out of that frame.
-/// The row count must come from strand-side units: dividing by bus bytes mixes units and would build a ring for a fraction of the frame.
+/// The ring's encode seam is a slice producer while the loopback already holds the whole pre-encoded frame. So its encode is a copy of the matching slice out of that frame. The row count must come from strand-side units: dividing by bus bytes mixes units and would build a ring for a fraction of the frame.
 ///
 /// ## Two stall backstops, one recovery
 ///
-/// On the ring path a cache-off window can outlast the pool's lead: the handler defers and the engine halts at the frontier.
-/// A halted engine fires nothing further, so the completion never comes and the wait times out.
-/// That is the designed benign outcome, the strand holding a partially-updated frame rather than replaying stale slices.
-/// The frame must still be finalized, though, so the render thread proceeds.
-/// It finalizes only once elapsed time proves the engine cannot still be mid-frame and the refills never reached the end, since a completed frame reports from the handler instead.
+/// On the ring path a cache-off window can outlast the pool's lead: the handler defers and the engine halts at the frontier, so the completion stays absent and the wait times out. That is the designed benign outcome, the strand holding a partially-updated frame. The render thread still finalizes the frame once elapsed time proves the engine is past the frame and the refills stopped short of its end.
 ///
-/// On the whole-frame path the completion interrupt is a latch that can very rarely be lost.
-/// Two firings coalesce, or one races the next frame's reset, and the busy flag is left stuck.
-/// Without recovery the bus wedges permanently, every later transmit blocking its full timeout and the driver's retry re-arming into the same state.
-/// Here the condition is simply that the wait timed out with a transfer in flight, and the shared stop-and-clear does the rest.
+/// On the whole-frame path the completion interrupt is a latch that can rarely be lost (two firings coalesce, or one races the next frame's reset) and leave the busy flag stuck. Recovery matters: the bus wedges otherwise, every later transmit blocking its full timeout. The condition is a wait that timed out with a transfer in flight, and the shared stop-and-clear does the rest.
 
 #include "platform/platform.h"
 #include "platform/loopback_verify.h"   // the loopback pattern and its checks
@@ -300,10 +209,7 @@ constexpr int kBusId = 0;
 // Backstop for a transmit arriving while the previous frame is still on the wire; it bounds a wedged peripheral so a broken DMA cannot hang the render thread.
 constexpr uint32_t kWireFreeTimeoutMs = 200;
 
-// The frame buffers, the peripheral, and the chain that streams one into the other.
-// Two buffers for the deferred-wait double buffer, the second null when its allocation did not fit, each with its own completion signal.
-// Transfers complete in start order and the event carries no token, so a two-slot queue of started indices routes each signal to the buffer that finished.
-// There is no transaction queue, so a transmit programs the chain directly and a second one in flight is a caller error, rejected rather than queued.
+// Two buffers for the deferred-wait double buffer (the second null when memory is short), each with its own done signal; a two-slot queue of started indices routes each in-order completion. A second transmit in flight is a caller error.
 struct MoonI80State : platform::InternalRamObject {
     lcd_hal_context_t hal = {};
     gdma_channel_handle_t dma = nullptr;
@@ -351,9 +257,7 @@ struct MoonI80State : platform::InternalRamObject {
     size_t   ringRowBytes = 0;       // encoded bytes per row (encode writes rowsPerBuf × this per buffer)
     MoonI80EncodeFn   encode = nullptr;   // the domain's slice encoder (platform.h seam)
     void*             encodeUser = nullptr;
-    // The clock oracle: the drain position is a function of TIME rather than of interrupt arrivals, since the DMA free-runs at the exact bus rate.
-    // The interrupt is a latch and not a queue, so two under load coalesce into one firing and any per-firing counter undercounts.
-    // Deriving the refill target from elapsed time makes a coalesced interrupt change only when work happens, never what gets written.
+    // The clock oracle: the drain position is a function of TIME rather than interrupt arrivals, since the DMA free-runs at the bus rate and two interrupts coalesce into one firing; a refill target from elapsed time changes only when work happens.
     volatile int64_t  armUs = 0;          // esp_timer time at gdma_start — the oracle's epoch, per frame
     uint32_t          sliceNs = 0;        // one slice's wire duration incl. the pad (bytes × 37.5 ns + padUs)
     // The refill cursor as a slice index, the mount order fixing which buffer each slice lives in; advanced in batches toward the writable window.
@@ -411,21 +315,16 @@ inline int ringTailNode(const MoonI80State* st, uint8_t b) {
     return st->bufLastNode[b] + (st->zeroPad ? 1 : 0);
 }
 
-// The completion callback: the chain reached its end node, so pop the oldest started index, record the wire duration and release that buffer's waiter.
-// The event fires when the last bytes reach the peripheral's queue rather than the pins, which suits this contract: a wait gates reusing a buffer rather than reading the output.
-// Resident in instruction memory, and the encode chain with it: @xref{the-interrupt-does-the-encode-and-must-never-touch-flash|the guard that must not be removed}.
+// The completion callback: the chain reached its end, so pop the oldest started index, record the wire duration and release that buffer's waiter; in instruction memory: @xref{the-interrupt-does-the-encode-from-instruction-memory-alone|why}.
 bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* user) {
     auto* st = static_cast<MoonI80State*>(user);
 
-    // Ring mode, in two shapes. When every slice was encoded before arming, only the terminator carries the end mark, so the one interrupt that arrives IS the frame's end.
-    // When the frame laps the pool, every data node carries it and the handler is driven by elapsed time.
-    // Not by its own arrival count, the interrupt being a latch where two coalesce into one firing.
-    // Each firing refills every slice the writable window allows and advances the terminator, so a coalesced interrupt changes only when work happens, never what gets written.
+    // Ring mode has two shapes: with every slice encoded before arming only the terminator carries the end mark and its one interrupt IS the frame's end; when the frame laps the pool every data node carries it and elapsed time drives the handler.
     if (st->isRing) {
         BaseType_t high = pdFALSE;
-        // The cache-off guard, the pattern the vendor's own cache-safe handlers use: @xref{the-interrupt-does-the-encode-and-must-never-touch-flash|why deferring is free}.
+        // The cache-off guard, the pattern the vendor's own cache-safe handlers use: @xref{the-interrupt-does-the-encode-from-instruction-memory-alone|why deferring is free}.
         if (!spi_flash_cache_enabled()) {
-            // Cache off: this firing refills NOTHING and does NOT advance the frontier. Count it + track the consecutive-defer streak (buffers drained un-refilled while the write holds). If the write outlasts the pool's lead, the DMA reaches the frontier NULL and HALTS, the wait backstop then finalizes the held frame (dbgStallAbandons). No stale-slice replay: the frontier is the guard.
+            // Cache off: this firing refills no slice and leaves the frontier in place, counting the defer streak; if the write outlasts the pool's lead the DMA halts at the NULL frontier and the wait backstop finalizes the held frame (dbgStallAbandons).
             st->dbgCacheOffDefers = st->dbgCacheOffDefers + 1u;
             st->dbgCacheOffRun = st->dbgCacheOffRun + 1u;
             if (st->dbgCacheOffRun > st->dbgCacheOffMaxRun) st->dbgCacheOffMaxRun = st->dbgCacheOffRun;
@@ -455,13 +354,11 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
             const int32_t lead = static_cast<int32_t>(st->lastWrittenSlice) - static_cast<int32_t>(drainPos);
             if (lead < st->dbgMinLead) st->dbgMinLead = lead;
 
-            // Batch refill toward the writable window: a slice's previous occupant is provably drained once the drain position has passed it, and a safety margin sets the edge.
-            // Capped per firing to bound the handler's duration, and capped batches still converge since interrupts keep arriving.
-            // The pool is the jitter buffer, so only the average encode must beat the deadline.
+            // Batch refill toward the writable window: a slice's previous occupant is drained once the drain position has passed it, plus a safety margin; batches are capped per firing to bound the handler and converge as interrupts keep arriving.
             constexpr uint32_t kBatchMax = 4;
             // kTailBufs (file scope): one pure-zero flush slice past the frame-close slice, so a stop firing on the second-to-last EOF (oracle floor at a slice boundary) can only truncate zeros, never the frame-close latch (which streams a whole slice earlier).
             const uint32_t windowEnd = drainPos + st->ringBufs - kRingRefillGap;
-            // The frame's last writes are the frame-close slice (index nSlices: zeros + the closing latch word) and kTailBufs pure-zero flush slices. The frontier terminator then RESTS on the final node as the frame's hardware end, the DMA cannot pass a NULL, so nothing past the frame is ever re-read (no lap of zero-fill needed beyond it).
+            // The frame's last writes are the frame-close slice (index nSlices: zeros plus the closing latch word) and kTailBufs pure-zero flush slices; the frontier terminator RESTS on the final node as the frame's hardware end, since the DMA stops at a NULL.
             const uint32_t lastSlice = st->nSlices + kTailBufs;
             for (uint32_t n = 0; n < kBatchMax; n++) {
                 const uint32_t s = st->lastWrittenSlice + 1u;
@@ -478,10 +375,7 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
                     st->dbgEncSumUs = st->dbgEncSumUs + encUs;    // average = sum/count at readout
                     st->dbgEncCount = st->dbgEncCount + 1u;
                 }
-                // The moving terminator: the chain always ends at the last written slice, the new frontier terminated first and the old one then extended into it.
-                // In that order, with a fence between the two writes, there is never an instant where the chain runs past written data into a stale link.
-                // A stalled refill therefore halts the engine at the frontier and the strand latches a partially-updated frame, instead of lapping the pool and re-clocking stale slices as bright garbage.
-                // The link edit writes through a non-cacheable alias and needs no sync, and it runs only on the cache-on path.
+                // The moving terminator: the chain ends at the last written slice, the new frontier terminated first and the old one then extended into it with a fence between, so the chain ends at written data and a stalled refill halts at the frontier.
                 gdma_link_concat(st->link, ringTailNode(st, static_cast<uint8_t>(slot)), nullptr, 0);
                 std::atomic_thread_fence(std::memory_order_release);
                 gdma_link_concat(st->link, ringTailNode(st, static_cast<uint8_t>((s - 1u) % st->ringBufs)),
@@ -489,9 +383,7 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
                 st->lastWrittenSlice = s;
             }
 
-            // Frame end, reported on written rather than drained: @xref{why-completion-is-reported-on-written-not-drained|the coalescing trap this dodges}.
-            // The engine is not stopped here, the terminator halting it, and stopping now would truncate the still-draining wire.
-            // Fires exactly once per frame, the block being gated on the busy flag that the completion clears.
+            // Frame end, reported on written rather than drained: @xref{why-completion-is-reported-on-written-not-drained|the coalescing trap this dodges}. The terminator halts the engine; the busy flag the completion clears makes this fire once per frame.
             if (st->lastWrittenSlice >= lastSlice) {
                 st->busy = false;
                 st->dbgLastEofUs = 0;   // the idle time before the next frame is no refill gap
@@ -499,9 +391,7 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
                 st->dbgEncAvgUs = st->dbgEncCount ? st->dbgEncSumUs / st->dbgEncCount : 0;
                 st->dbgEncSumUs = 0;
                 st->dbgEncCount = 0;
-                // The wire finishes a whole frame's duration after the arm, and the reset begins there rather than at this earlier written moment.
-                // The next arm waits out the real tail before re-arming, and the frame carries its flush slice too.
-                // Omitting that would start the reset a slice early and release the barrier while it is still draining.
+                // The wire finishes a whole frame's duration after the arm and the reset begins there, not at this earlier written moment; the next arm waits out the real tail, and the frame carries its flush slice too.
                 const uint32_t frameWireUs = static_cast<uint32_t>(
                     (static_cast<uint64_t>(st->nSlices + kTailBufs) * st->sliceNs) / 1000u);
                 st->lastStopUs = st->armUs + frameWireUs;
@@ -522,7 +412,7 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
         return high == pdTRUE;
     }
 
-    // Whole-frame mode: pop the oldest started buffer, record its wire time, release its waiter. Guard on a non-empty FIFO: if the wait-timeout backstop already drained this entry (fifoTail == fifoHead) and the lost EOF then arrives late, popping would read a stale slot, hand out a spurious `done`, and desync tail past head, so a firing against a structurally empty FIFO is dropped.
+    // Whole-frame mode: pop the oldest started buffer, record its wire time, release its waiter; when the wait-timeout backstop already drained this entry (fifoTail == fifoHead) and the lost EOF arrives late, the empty FIFO drops the firing.
     if (st->fifoTail == st->fifoHead) return false;
     const uint8_t slot = st->fifoTail;
     const uint8_t b = st->fifo[slot] & 1u;
@@ -539,14 +429,14 @@ bool IRAM_ATTR moonI80EofCb(gdma_channel_handle_t, gdma_event_data_t*, void* use
 
 void destroyState(MoonI80State* st) {
     if (!st) return;
-    // GDMA teardown FIRST: the refill now runs in the EOF ISR, so stopping + deleting the channel (which disables the interrupt) is what guarantees no further refill fires into a buffer about to be freed. gdma_stop halts the engine; gdma_del_channel detaches the ISR. After this no EOF handler can run, so the buffer frees below are safe.
+    // GDMA teardown FIRST: the refill runs in the EOF ISR, so stopping and deleting the channel (gdma_stop, gdma_del_channel detaches the ISR) guarantees no refill fires into a buffer about to be freed.
     if (st->dma) {
         gdma_stop(st->dma);
         gdma_disconnect(st->dma);
         gdma_del_channel(st->dma);
     }
     if (st->link) gdma_del_link_list(st->link);
-    // Detach the GPIO-matrix routes configureGpio established, so a deleted driver leaves no data/WR signal pointing at this (now torn-down) peripheral. Route each back to plain GPIO (SIG_GPIO_OUT_IDX = no peripheral). Safe after the GDMA barrier above, nothing is clocking these pins any more, and a route that was never made (routedPinCount 0, routedWrGpio -1) is simply skipped.
+    // Detach the GPIO-matrix routes configureGpio established, so a deleted driver leaves no signal pointing at this torn-down peripheral: each route goes back to plain GPIO (SIG_GPIO_OUT_IDX), after the GDMA barrier; a route left unmade is skipped.
     for (uint8_t i = 0; i < st->routedPinCount; i++)
         esp_rom_gpio_connect_out_signal(st->routedPins[i], SIG_GPIO_OUT_IDX, false, false);
     if (st->routedWrGpio >= 0)
@@ -572,7 +462,7 @@ void destroyState(MoonI80State* st) {
     delete st;
 }
 
-// Bring the peripheral up for a pure data phase, replicating the sibling's bus creation and clock selection minus everything a strand frame does not use. No peripheral interrupt, since the transfer completion is ours, and no transaction queue, format buffer, power lock or sleep retention.
+// Bring the peripheral up for a pure data phase, replicating the sibling's bus creation and clock selection minus what a strand frame leaves unused: the peripheral interrupt, transaction queue, format buffer, power lock and sleep retention.
 bool initPeripheral(MoonI80State* st, uint32_t pclkHz) {
     // Bus resolution = source clock / the group prescale. Ask the clock tree rather than assuming 160 MHz, so a future default-source change can't silently retune the WS2812 waveform.
     uint32_t srcHz = 0;
@@ -583,7 +473,7 @@ bool initPeripheral(MoonI80State* st, uint32_t pclkHz) {
         return false;
     const uint32_t resolutionHz = srcHz / kClockPreScale;   // 80 MHz with the PLL160M default
     const uint32_t prescale = resolutionHz / pclkHz;
-    // The prescale is an integer register field: an inexact pclk rounds DOWN into a LONGER slot, and a too-long "0" pulse is read as a "1" (the max-white washout). Both supported rates divide 80 MHz exactly, so reject anything that doesn't rather than emit a wrong waveform.
+    // The prescale is an integer register field: an inexact pclk rounds DOWN into a LONGER slot, and a too-long zero pulse reads as a one (the max-white washout). Both supported rates divide 80 MHz exactly, so any other rate is rejected.
     if (prescale == 0 || prescale > LCD_LL_PCLK_DIV_MAX) return false;
     st->prescale = prescale;
 
@@ -609,7 +499,7 @@ bool initPeripheral(MoonI80State* st, uint32_t pclkHz) {
     lcd_ll_reset(dev);
     lcd_ll_fifo_reset(dev);
 
-    // No LCD interrupt is installed at all: esp_lcd needs one to dispatch its transaction queue, we do not (the GDMA EOF is the only completion event this driver has). Mask the peripheral's interrupts and clear anything the previous owner left pending, so a stale TRANS_DONE can't fire into an ISR that isn't ours.
+    // Install no LCD interrupt: esp_lcd needs one for its transaction queue, and the GDMA EOF is this driver's completion event. Mask the peripheral's interrupts and clear leftovers, so a stale TRANS_DONE cannot fire into a foreign ISR.
     PERIPH_RCC_ATOMIC() {
         lcd_ll_enable_interrupt(dev, LCD_LL_EVENT_I80, false);
     }
@@ -644,9 +534,7 @@ void configureGpio(MoonI80State* st, const uint16_t* dataPins, uint8_t laneCount
         gpio_func_sel(static_cast<gpio_num_t>(dataPins[i]), PIN_FUNC_GPIO);
         esp_rom_gpio_connect_out_signal(dataPins[i], soc_lcd_i80_signals[kBusId].data_sigs[i],
                                         false, false);
-        // Maximum drive strength on every routed pin, data and the expander's latch alike.
-        // Strong pads mean sharp edges, which is what the register needs to sample cleanly over real strand wiring.
-        // Marginal strands lose the most margin and the strongest edge buys it back.
+        // Maximum drive strength on every routed pin, data and the expander's latch alike: strong pads give sharp edges, which the register needs to sample cleanly over real strand wiring, and marginal strands gain the most.
         gpio_set_drive_capability(static_cast<gpio_num_t>(dataPins[i]), GPIO_DRIVE_CAP_3);
         if (i < n) st->routedPins[i] = dataPins[i];   // recorded for teardown (see destroyState)
     }
@@ -659,10 +547,7 @@ void configureGpio(MoonI80State* st, const uint16_t* dataPins, uint8_t laneCount
     }
 }
 
-// The transfer channel and its descriptor chain, replicating the sibling's setup with two deliberate differences.
-// Owner-checking is off: @xref{the-chain-is-ours-so-the-owner-check-protects-nothing|why it only fails here}.
-// And the completion callback is the engine's own rather than a peripheral interrupt.
-// The channel's buffer alignment for internal and for external memory, the external one the encrypted-PSRAM worst case ESP-IDF names as the safe default.
+// The channel's buffer alignment for internal and for external memory, the external one being the encrypted-PSRAM worst case ESP-IDF names as the safe default.
 bool dmaAlignment(MoonI80State* st, size_t& intAlign, size_t& extAlign) {
     gdma_channel_alignment_info_t info = {};
     if (gdma_get_channel_alignment_constraints(st->dma, &info) != ESP_OK) return false;
@@ -673,7 +558,7 @@ bool dmaAlignment(MoonI80State* st, size_t& intAlign, size_t& extAlign) {
 
 bool initDma(MoonI80State* st, size_t bufferBytes) {
     gdma_channel_alloc_config_t chanCfg = {};
-    // The S3's LCD hangs off the AHB GDMA, the P4's off the AXI one, and the descriptor alignment differs with the bus. Same selection esp_lcd makes (esp_lcd_panel_io_i80.c:19-27), including its `defined(...) &&` guard, on a chip with no AXI GDMA the AXI symbol is simply absent, and an unguarded `== SOC_GDMA_BUS_AXI` would compare against the preprocessor's 0 and match.
+    // The S3's LCD hangs off the AHB GDMA, the P4's off the AXI one, with a bus-dependent descriptor alignment. This is esp_lcd's selection (esp_lcd_panel_io_i80.c:19-27) with its `defined(...) &&` guard, since an absent AXI symbol compares as 0.
 #if defined(SOC_GDMA_BUS_AXI) && (SOC_GDMA_TRIG_PERIPH_LCD0_BUS == SOC_GDMA_BUS_AXI)
     constexpr size_t kDescAlign = 8;
     if (gdma_new_axi_channel(&chanCfg, &st->dma, nullptr) != ESP_OK) return false;
@@ -719,11 +604,11 @@ uint8_t* allocFrame(MoonI80State* st, size_t bufferBytes, bool psram) {
     const size_t align = psram ? extAlign : intAlign;
     const uint32_t caps = MALLOC_CAP_8BIT | MALLOC_CAP_DMA
                         | (psram ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL);
-    // Round the size up to the alignment too, gdma_link_mount_buffers checks the LENGTH against the same constraint, and a short tail would fail the mount. The pad is zeroed, so it just extends the frame's trailing latch gap (the lines already idle LOW there).
+    // Round the size up to the alignment too, since gdma_link_mount_buffers checks the LENGTH against the same constraint and a short tail fails the mount; the zeroed pad extends the frame's trailing latch gap, where the lines already idle LOW.
     return static_cast<uint8_t*>(callocCaps(roundToDma(bufferBytes, align), caps, align ? align : 4));
 }
 
-// One peripheral + GDMA chain + frame buffer(s). `wantSecond` allocates the async double-buffer's second frame buffer (best-effort, null if it won't fit); false allocates buffer 0 only. Shared by the runtime init and the loopback (which passes false, one transfer).
+// One peripheral + GDMA chain + frame buffer(s). `wantSecond` allocates the double-buffer's second frame buffer (best effort, null when memory is short). Shared by the runtime init and the loopback (one transfer).
 MoonI80State* createState(const uint16_t* dataPins, uint8_t laneCount,
                           uint16_t wrGpio, size_t bufferBytes, bool wantSecond,
                           uint8_t clockMultiplier) {
@@ -733,7 +618,7 @@ MoonI80State* createState(const uint16_t* dataPins, uint8_t laneCount,
     // Bus width is power-of-two only (8 or 16), derived from the lane count: ≤8 → 8, 9..16 → 16.
     st->busWidth = laneCount <= 8 ? 8 : 16;
 
-    // An expander shifts each slot out over several bus words, so the bus must clock proportionally faster to keep the slot inside its window. The shift clock is the bus resolution over the runtime divider, and the init recomputes the exact prescale from the clock tree, so this need only be the intended rate.
+    // An expander shifts each slot out over several bus words, so the bus clocks proportionally faster to keep the slot inside its window: the shift clock is the bus resolution over the runtime divider, and init recomputes the exact prescale.
     const uint32_t pclkHz = (clockMultiplier > 1) ? (kShiftBusResolutionHz / g_shiftClockDiv) : kPclkHz;
     if (!initPeripheral(st, pclkHz) || !initDma(st, bufferBytes)) {
         destroyState(st);
@@ -749,7 +634,7 @@ MoonI80State* createState(const uint16_t* dataPins, uint8_t laneCount,
         return nullptr;
     }
 
-    // Where the frame lives is decided by the pixel clock rather than its size: @xref{where-the-frame-lives-is-decided-by-the-pixel-clock|the measurement}. The frame itself is not reserve-guarded, unlike the optional second buffer: @xref{only-the-optional-allocation-is-reserve-guarded|why, and why an expander has no external fallback at all}.
+    // The pixel clock sets the frame's home: @xref{where-the-frame-lives-is-decided-by-the-pixel-clock|the measurement}. The reserve guard covers the optional second buffer only: @xref{only-the-optional-allocation-is-reserve-guarded|why}.
     const bool pinExpanderMode = clockMultiplier > 1;
     st->buf[0] = allocFrame(st, bufferBytes, /*psram=*/!pinExpanderMode);
     if (!st->buf[0] && !pinExpanderMode) st->buf[0] = allocFrame(st, bufferBytes, /*psram=*/false);
@@ -759,10 +644,7 @@ MoonI80State* createState(const uint16_t* dataPins, uint8_t laneCount,
     }
     st->cap = bufferBytes;
 
-    // The second buffer, only when asked, arming double buffering if it fits and leaving the driver single-buffered if not.
-    // The reserve guards the INTERNAL attempt, whichever that is: the preference order flips with the mode.
-    // So binding the guard to a fixed branch would put it on the wrong one half the time.
-    // A small helper keeps the rule with the thing it guards.
+    // The second buffer, only when asked, arms double buffering if it fits and leaves the driver single-buffered otherwise. The reserve guards the INTERNAL attempt, whichever branch that is, since the preference order flips with the mode.
     if (wantSecond) {
         st->done[1] = xSemaphoreCreateBinary();
         if (st->done[1]) {
@@ -774,7 +656,7 @@ MoonI80State* createState(const uint16_t* dataPins, uint8_t laneCount,
                 }
                 return allocFrame(st, bufferBytes, psram);
             };
-            // Same rule as buf[0]: with a pin expander it is internal-or-nothing. A PSRAM buf[1] is worse than no second buffer at all, tickAsync would alternate a working internal buf[0] with a PSRAM buf[1] that never completes, giving exactly one frame at boot and then ~207 ms per tick forever. Refusing it leaves buf[1] null, which the driver reads as "run single-buffered".
+            // Same rule as buf[0]: with a pin expander it is internal-only, since a PSRAM buf[1] makes tickAsync alternate a working internal buf[0] with one that stalls (one frame at boot, then ~207 ms per tick); a null buf[1] reads as single-buffered.
             st->buf[1] = tryAlloc(/*psram=*/!pinExpanderMode);
             if (!st->buf[1] && !pinExpanderMode) st->buf[1] = tryAlloc(/*psram=*/false);
             if (!st->buf[1]) {
@@ -796,7 +678,7 @@ bool startTransfer(MoonI80State* st, uint8_t buffer, size_t bytes) {
                         ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
     }
 
-    // Mount the WHOLE frame in ONE call: the link list splits it across as many 4095-byte nodes as it needs and chains them, so the DMA walks the frame end to end without CPU involvement. mark_eof fires our completion callback on the last node; mark_final NULLs its next-pointer so the DMA stops there instead of wrapping to the head.
+    // Mount the WHOLE frame in ONE call: the link list splits it across 4095-byte nodes and chains them; mark_eof fires our completion callback on the last node and mark_final NULLs its next-pointer so the DMA stops there.
     gdma_buffer_mount_config_t mount = {};
     mount.buffer = st->buf[buffer];
     mount.length = bytes;
@@ -804,13 +686,13 @@ bool startTransfer(MoonI80State* st, uint8_t buffer, size_t bytes) {
     mount.flags.mark_final = GDMA_FINAL_LINK_TO_NULL;
     if (gdma_link_mount_buffers(st->link, 0, &mount, 1, nullptr) != ESP_OK) return false;
 
-    // Data phase only: no command cycles, no dummy cycles, `data_cycles = 1` is a boolean ENABLE, the peripheral clocks whatever the DMA chain feeds it and stops when the chain ends ("Number of data phase cycles are controlled by DMA buffer length", esp_lcd_panel_io_i80.c:778).
+    // Data phase only: no command or dummy cycles; `data_cycles = 1` is a boolean ENABLE, and the peripheral clocks whatever the DMA chain feeds it and stops when the chain ends (esp_lcd_panel_io_i80.c:778).
     lcd_ll_set_phase_cycles(dev, /*cmd=*/0, /*dummy=*/0, /*data=*/1);
     lcd_ll_set_blank_cycles(dev, 1, 1);
     lcd_ll_reset(dev);
     lcd_ll_fifo_reset(dev);   // discard any FIFO residue from the previous frame
 
-    // Start the transfer engine first, the peripheral only consuming once data has reached its queue. The settle is the sibling's, shortened: at these clocks the queue fills far faster than one word period, so this is ample and keeps the inter-frame gap short.
+    // Start the transfer engine first, so the peripheral consumes once data has reached its queue. The settle is the sibling's, shortened: at these clocks the queue fills far faster than one word period, which keeps the inter-frame gap short.
     if (gdma_start(st->dma, gdma_link_get_head_addr(st->link)) != ESP_OK) return false;
     esp_rom_delay_us(1);
     lcd_ll_start(dev);
@@ -819,10 +701,7 @@ bool startTransfer(MoonI80State* st, uint8_t buffer, size_t bytes) {
 
 // --- Ring mode ---------------------------------------------------------------------------------------
 
-// Encode one slice straight into the internal buffer the engine is about to read.
-// A ring buffer holds rows and nothing else, the reset coming from stopping the peripheral, so a pad written here would land past the allocation.
-// The cache sync is a no-op for internal memory but kept for symmetry, and for correctness if a buffer ever lands cache-mapped.
-// The chain lives in instruction memory for throughput: flash-resident code shares one cache between both cores, which the render core's churn evicts between firings.
+// Encode one slice straight into the internal buffer the engine is about to read; a ring buffer holds rows only. The chain lives in instruction memory because flash-resident code shares a cache across both cores.
 void IRAM_ATTR encodeRingSlice(MoonI80State* st, uint8_t slot, uint32_t firstRow, uint32_t count) {
     // Hand the encoder the buffer-lifecycle fact its prefill-skip hangs on, and consume it: after this call the buffer's constants are laid (or were already), until a memset invalidates them again.
     const bool needsPrefill = st->bufNeedsPrefill[slot];
@@ -835,10 +714,7 @@ void IRAM_ATTR encodeRingSlice(MoonI80State* st, uint8_t slot, uint32_t firstRow
     }
 }
 
-// The one place the slice-fill rule lives, called both by the prime and by the interrupt's refill.
-// A buffer holding a real slice gets its rows encoded, and one past the frame's slices is fully zeroed so the loop clocks clean.
-// The first past-frame buffer carries the closing latch word at its head, one more latch so the register's final slot presents before the reset.
-// True when it ran a real encode rather than a zero fill, since the interrupt times only those and cheap fills would dilute the pace number.
+// The one place the slice-fill rule lives (prime and refill): a real slice gets its rows encoded, one past the frame is zeroed, and the first past-frame buffer carries the closing latch word. Returns true for a real encode, which the interrupt times.
 bool IRAM_ATTR fillSlice(MoonI80State* st, uint8_t slot, uint32_t sliceIdx) {
     const uint32_t firstRow = sliceIdx * st->rowsPerBuf;
     if (firstRow < st->totalRows) {
@@ -865,10 +741,7 @@ bool IRAM_ATTR fillSlice(MoonI80State* st, uint8_t slot, uint32_t sliceIdx) {
     return false;
 }
 
-// The barrier between priming and draining. Completion is written-gated, so it leads the wire's actual drain by most of the frame.
-// A lapping frame's LAST slices live in its FIRST buffers, exactly the ones the next prime rewrites first, so priming early repaints the bottom rows and no counter sees it.
-// Holding the prime until the deterministic wire end closes that race at its only entry point, waiting nothing in the common case.
-// Do not instead gate completion on the drain, which deadlocks: a frontier-halted engine fires no completing interrupt.
+// The barrier between priming and draining: completion leads the wire's drain by most of the frame, and a lapping frame's LAST slices live in its FIRST buffers, which the next prime rewrites first, so the prime waits for the wire end.
 void waitWireDrained(MoonI80State* st) {
     if (st->lastStopUs == 0) return;   // first-ever frame: no prior wire to drain
     const int64_t now = esp_timer_get_time();
@@ -891,11 +764,9 @@ bool armRingTransfer(MoonI80State* st) {
     // Priming wrote slices 0..ringBufs-1 (real ones encoded, the rest zero-filled), the batch refill's cursor continues from there.
     st->lastWrittenSlice = st->ringBufs - 1u;
 
-    // When the frame laps, rebuild the chain linear and terminate it at the prime frontier before every arm, so it ends exactly where written data ends.
-    // Re-linking each frame rather than once at mount is what lets the terminator travel: the previous frame left it wherever its last refill put it.
-    // A chain that never laps is self-terminated at mount and needs no re-link.
+    // When the frame laps, rebuild the chain linear and terminate it at the prime frontier before every arm, so it ends where written data ends; re-linking each frame lets the terminator travel. A chain that stays within the pool self-terminates at mount.
     if (st->nSlices > st->ringBufs) {
-        // The previous frame's DMA halted itself at the frontier NULL; force it fully stopped before we rewrite its descriptors so no in-flight prefetch reads a half-edited link. gdma_start(head) below re-arms from the head cleanly. (First arm: the channel is idle already, a no-op stop.)
+        // The previous frame's DMA halted itself at the frontier NULL; force it fully stopped before rewriting its descriptors, so no in-flight prefetch reads a half-edited link; gdma_start(head) below re-arms from the head.
         gdma_stop(st->dma);
         for (uint8_t b = 0; b + 1u < st->ringBufs; b++)
             gdma_link_concat(st->link, ringTailNode(st, b), st->link, st->bufLastNode[b + 1u]);
@@ -907,9 +778,7 @@ bool armRingTransfer(MoonI80State* st) {
     lcd_ll_reset(dev);
     lcd_ll_fifo_reset(dev);
 
-    // Guarantee the reset by holding the arm until the strand has idled long enough since the last frame stopped.
-    // At normal rates the render loop's own gap already exceeds it, so this waits nothing in the common case and busy-waits only the remainder on back-to-back frames.
-    // Sizing the reset by TIME rather than by tail-buffer count is what makes a small pool render at all.
+    // Guarantee the reset by holding the arm until the strand has idled long enough since the last frame stopped; the render loop's own gap normally exceeds it, so only back-to-back frames busy-wait. Sizing by TIME lets a small pool render.
     if (st->lastStopUs != 0) {
         const int64_t lowSoFar = esp_timer_get_time() - st->lastStopUs;
         if (lowSoFar < kResetLowUs) esp_rom_delay_us(static_cast<uint32_t>(kResetLowUs - lowSoFar));
@@ -937,7 +806,7 @@ bool startRingTransfer(MoonI80State* st) {
 // GDMA channel + the link list the ring circulates. Mirrors initDma (channel alloc / connect / strategy / transfer / EOF callback); the chain itself is described where it is mounted, in createRingState.
 bool initRingDma(MoonI80State* st) {
     gdma_channel_alloc_config_t chanCfg = {};
-    // The deadline race runs at interrupt-dispatch granularity, so this interrupt takes a priority no render-thread interrupt can delay, and a cache-safe registration so a flash write delays nothing. The whole handler chain is resident in instruction memory, which is what makes that registration legal.
+    // The deadline race runs at interrupt-dispatch granularity, so this interrupt takes a priority above any render-thread interrupt and a cache-safe registration, which a handler chain resident in instruction memory makes legal.
     chanCfg.intr_priority = 3;
     chanCfg.flags.isr_cache_safe = true;
 #if defined(SOC_GDMA_BUS_AXI) && (SOC_GDMA_TRIG_PERIPH_LCD0_BUS == SOC_GDMA_BUS_AXI)
@@ -1017,7 +886,7 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
     st->ringRowBytes = rowBytes;
     st->totalRows = totalRows;
     st->padUs = padUs;
-    // One buffer is one descriptor node, a structural rule enforced here: @xref{one-buffer-is-one-descriptor-node|what spanning several broke}. The clamp has a floor of one row, since a single row larger than a node cannot ring at all and the driver falls back to whole-frame.
+    // One buffer is one descriptor node: @xref{one-buffer-is-one-descriptor-node|what spanning several broke}. The clamp floors at one row, since a row larger than a node cannot ring and the driver falls back to whole-frame.
     const uint32_t maxRowsPerNode = rowBytes ? static_cast<uint32_t>(kDmaNodeMaxBytes / rowBytes) : 1u;
     const uint32_t rowsClamped = rowsPerBuf > maxRowsPerNode ? (maxRowsPerNode ? maxRowsPerNode : 1u)
                                                              : rowsPerBuf;
@@ -1029,15 +898,15 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
     st->encodeUser = user;
     st->cap = st->rowsPerBuf * rowBytes;   // reported buffer capacity (one ring buffer — ROWS ONLY, no pad)
 
-    // Shift mode: the '595 SRCLK = the 80 MHz bus resolution / the runtime shiftClockDiv (default 4 = 20 MHz). initPeripheral recomputes the exact prescale from the clock tree, so this only needs to be the intended rate. Direct mode is unaffected (kPclkHz).
+    // Shift mode: the '595 SRCLK is the 80 MHz bus resolution over the runtime shiftClockDiv (default 4, 20 MHz); initPeripheral recomputes the exact prescale from the clock tree. Direct mode uses kPclkHz.
     const uint32_t pclkHz = (clockMultiplier > 1) ? (kShiftBusResolutionHz / g_shiftClockDiv) : kPclkHz;
-    // The clock oracle's tick: one slice's exact wire duration in ns. The bus clocks busWidth/8 bytes per pclk, so ns = bytes × 8e9 / (busWidth × pclkHz); the inter-buffer pad (below) extends every slice's slot by padUs. Exact integer math, the oracle's only error source is esp_timer resolution (µs).
+    // The clock oracle's tick: one slice's exact wire duration in ns, bytes x 8e9 / (busWidth x pclkHz) since the bus clocks busWidth/8 bytes per pclk, plus padUs per inter-buffer pad; exact integer math leaves esp_timer resolution (us) as the only error.
     const uint64_t sliceWireNs = (static_cast<uint64_t>(st->rowsPerBuf) * rowBytes * 8u * 1'000'000'000ull)
                                  / (static_cast<uint64_t>(st->busWidth) * pclkHz);
     st->sliceNs = static_cast<uint32_t>(sliceWireNs);   // + the pad below, once it is actually mounted
     // The geometry initRingDma sizes the pool from, computed here too because the pad decision needs it.
     st->nSlices = (st->totalRows + st->rowsPerBuf - 1u) / st->rowsPerBuf;
-    // The shared pad block, used only where there is a refill deadline to stretch: one block every pad node references, sized in bus time and aligned. Zeros on the expander bus read as a strand-level pause, and the bound keeps that pause far under the latch threshold.
+    // The shared pad block, used where a refill deadline needs stretching: one block every pad node references, sized in bus time and aligned. Zeros on the expander bus read as a strand-level pause, and the bound keeps it far under the latch threshold.
     if (padUs > 0 && st->nSlices > st->ringBufs) {
         const uint64_t padBytes64 = (static_cast<uint64_t>(padUs) * pclkHz * st->busWidth) / (8u * 1'000'000ull);
         st->zeroPadBytes = static_cast<size_t>(padBytes64) & ~size_t{7};
@@ -1084,21 +953,15 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
     // Cache-line size is a per-pool constant (all buffers come from the same internal-DMA heap), hoisted here so the refill never makes the (flash-resident) query inside the now cache-safe ISR.
     st->ringCacheLine = esp_cache_get_line_size_by_addr(st->ring[0]);
 
-    // Mount the chain, self-terminating from creation rather than spliced at runtime, which raced the still-walking engine and was index-fragile.
-    // A geometry whose frame fits the pool has a fixed length and a fixed terminator, the zero tail past the last real slice, so re-arming is a plain start.
-    // One that laps can have no fixed terminator, so it is mounted linear and the arm plants the frontier: @xref{the-frontier-terminated-chain|the rule}.
+    // Mount the chain self-terminating from creation (runtime splicing raced the engine): a frame that fits the pool ends at the zero tail; a lapping one mounts linear and the arm plants the frontier: @xref{the-frontier-terminated-chain|the rule}.
     const bool primeOnly = st->nSlices <= st->ringBufs;
     const uint32_t termBuf = primeOnly
         ? (st->nSlices < st->ringBufs ? st->nSlices : st->ringBufs - 1u)   // the zero reset-tail buffer
         : st->ringBufs;   // sentinel "none" for the lapping case (no buffer gets LINK_TO_NULL)
     const size_t rowsOnly = static_cast<size_t>(st->rowsPerBuf) * rowBytes;   // node length: rows, NO pad
-    // Mount up to and including the terminator, then stop: each mount re-links the previous node to the one it mounts.
-    // So mounting one more would overwrite the end we just set and the chain would loop forever.
-    // The engine never reaches buffers past the terminator, so leaving them unmounted is correct.
+    // Mount up to and including the terminator, then stop: each mount re-links the previous node to the one it mounts, so one more would overwrite the end and loop the chain forever; the engine stops at the terminator and leaves later buffers unread.
     const uint8_t mountCount = primeOnly ? static_cast<uint8_t>(termBuf + 1u) : st->ringBufs;
-    // With a pad, one pad node is interleaved after every data node, each re-mounting the SAME shared zero block, which is only more mount calls.
-    // The pad reads as a strand-level pause after each slice, stretching the refill deadline by its wire time.
-    // The end mark stays on the data nodes, whose drain is the one that needs an interrupt.
+    // With a pad, one pad node follows every data node, each re-mounting the SAME shared zero block; the pad reads as a pause that stretches the refill deadline, and the end mark stays on the data nodes, whose drain needs the interrupt.
     const bool padded = !primeOnly && st->zeroPad != nullptr;
     int idx = 0;
     bool mountOk = true;
@@ -1107,14 +970,9 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
         gdma_buffer_mount_config_t mount = {};
         mount.buffer = st->ring[b];
         mount.length = rowsOnly;   // rows only — continuous stream, no inter-buffer LOW gap (see initRingDma)
-        // When the whole frame is primed before arming, the interrupt fires ONCE per frame, on the terminator alone.
-        // Counting per-buffer completions would be unsound, the status being a latch: two coalesce while the handler is delayed and the count undercounts.
-        // Completion then never fires and the driver gives up, measured as every large configuration dying within a few dozen frames.
-        // A lapping geometry keeps per-buffer interrupts, its handler genuinely refilling per drain.
+        // When the whole frame is primed before arming, the interrupt fires ONCE per frame, on the terminator alone, since per-buffer counting undercounts when two latched firings coalesce. A lapping geometry keeps per-buffer interrupts.
         mount.flags.mark_eof = primeOnly ? (b == termBuf) : true;
-        // Prime-only: the reset-tail buffer self-terminates (NULL); every other node → next (DEFAULT).
-        // Lapping: every node → next (DEFAULT). The lapping chain never loops to HEAD, armRingTransfer re-links it linear and plants the frontier NULL at the prime edge, and the ISR advances that NULL.
-        // A DEFAULT link on the last mounted node is a don't-care: armRingTransfer overwrites it before arm.
+        // Prime-only: the reset-tail buffer self-terminates (NULL), every other node links to next. Lapping: every node links to next, armRingTransfer re-links the chain linear and plants the frontier NULL at the prime edge, and the ISR advances it.
         mount.flags.mark_final = (b == termBuf) ? GDMA_FINAL_LINK_TO_NULL : GDMA_FINAL_LINK_TO_DEFAULT;
         int endIdx = 0;
         if (idx >= static_cast<int>(st->linkItemCap)) mountOk = false;
@@ -1140,14 +998,11 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
     st->termNode = primeOnly ? st->bufLastNode[termBuf] : -1;
     if (!mountOk) { destroyState(st); return nullptr; }
 
-    // No refill task: the EOF ISR encodes the next slice inline as each buffer drains (see moonI80EofCb). That is the reuse-race fix, an interrupt-priority refill always beats the DMA lapping into a reused buffer, which a lower-priority task could lose to wake latency at >8 slices (≥192 lights/strand).
+    // The EOF ISR encodes the next slice inline as each buffer drains (see moonI80EofCb): an interrupt-priority refill beats the DMA lapping into a reused buffer, which a lower-priority task could lose to wake latency at >8 slices (192+ lights per strand).
     return st;
 }
 
-// Abandon the in-flight transfer and return the peripheral to a clean idle, the one recovery both backstops share.
-// A lost interrupt leaves the busy flag stuck with nothing to clear it, and the bus then wedges permanently.
-// So this stops the peripheral and the engine, clears the flag, and marks the strand as idling now, holding the next arm's reset window.
-// The condition and any mode-specific residue stay at the call sites, so the two paths cannot drift in how they leave the hardware.
+// Abandon the in-flight transfer and return the peripheral to idle, the one recovery both backstops share: stop the peripheral and engine, clear the busy flag a lost interrupt leaves stuck, and mark the strand idling to hold the next reset window.
 void finalizeStalledTransfer(MoonI80State* st) {
     lcd_ll_stop(st->hal.dev);
     gdma_stop(st->dma);
@@ -1162,10 +1017,7 @@ bool moonI80Ws2812Init(MoonI80Ws2812Handle& h, const uint16_t* dataPins, uint8_t
                        uint16_t wrGpio, size_t bufferBytes,
                        bool wantSecondBuffer, uint8_t clockMultiplier) {
     if (!dataPins || laneCount == 0 || bufferBytes == 0 || clockMultiplier == 0) return false;
-    // Pre-check that the frame can land somewhere before touching the peripheral, which is fine when either region fits, the reserve guarding only internal memory.
-    // The external query uses that capability alone, no registered heap carrying both it and the transfer one.
-    // A combined query would report nothing even where the engine reaches it perfectly well.
-    // Largest block rather than total free: @xref{largest-block-never-total-free|the bug the total caused}.
+    // Pre-check that the frame can land in either region before touching the peripheral (the reserve guards internal memory only); the external query uses that capability alone. @xref{the-largest-free-block-decides-a-fit|Why largest block}.
     const bool fitsInternal =
         heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)
             >= bufferBytes + HEAP_RESERVE;
@@ -1184,17 +1036,14 @@ bool moonI80Ws2812InitRing(MoonI80Ws2812Handle& h, const uint16_t* dataPins, uin
                            uint8_t clockMultiplier, MoonI80EncodeFn encode, void* user) {
     if (!dataPins || laneCount == 0 || rowBytes == 0 || totalRows == 0 || clockMultiplier == 0
         || !encode) return false;
-    // The geometry is a user control, so clamp it here rather than trusting the caller: a 0 would divide by zero in the nSlices math, and a depth past the array bound would overrun `ring[]`. Depth 2 is the hard floor (see kRingBufsMax's note: IDF's 2-buffer bounce scheme relies on an owner gate this chain does not run).
+    // The geometry is a user control, so it is clamped here: a 0 would divide by zero in the nSlices math and a depth past the array bound would overrun `ring[]`. Depth 2 is the floor (see kRingBufsMax).
     if (rowsPerBuf == 0 || ringBufs < 2 || ringBufs > kRingBufsMax) {
         ESP_LOGE(MOON_I80_TAG, "ring init rejected: rowsPerBuf=%u ringBufs=%u (bounds %u..%u)",
                  (unsigned)rowsPerBuf, (unsigned)ringBufs, (unsigned)kRingBufsMin, (unsigned)kRingBufsMax);
         return false;
     }
     if (padUs > kRingPadMaxUs) padUs = kRingPadMaxUs;   // the latch-threshold bound (see platform.h)
-    // The pool must fit internal memory while leaving the reserve, which is the whole reason the ring exists.
-    // Rows only: a pad inside a buffer would be allocated, encoded, synced and never clocked, and sizing every buffer with one pushed the pool past the heap.
-    // Free SIZE here rather than the largest block, the ring making many small allocations: @xref{largest-block-never-total-free|the distinction}.
-    // The row clamp is applied before the fit arithmetic, so the pre-check prices the geometry actually built.
+    // The pool must fit internal memory while leaving the reserve, which is why the ring exists. Rows only: a pad inside a buffer would be allocated and synced yet go unclocked. The fit uses free SIZE (@xref{the-largest-free-block-decides-a-fit|why}).
     const uint32_t maxRowsPerNode = static_cast<uint32_t>(kDmaNodeMaxBytes / rowBytes);
     const uint32_t rowsEffective = rowsPerBuf > maxRowsPerNode ? (maxRowsPerNode ? maxRowsPerNode : 1u)
                                                               : rowsPerBuf;
@@ -1225,7 +1074,7 @@ void moonI80SetShiftClockDiv(uint8_t div) {
 bool moonI80Ws2812TransmitRing(MoonI80Ws2812Handle& h) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     if (!st || !st->isRing) return false;
-    // Serial on the wire like the whole-frame path: a strand receives one frame at a time. If a previous ring frame is still clocking out, its completion gives done[0]; the driver waits on slot 0 before calling here again (tickRing), so busy should already be clear, guard anyway.
+    // Serial on the wire like the whole-frame path: a strand receives one frame at a time. A previous ring frame still clocking out gives done[0] and the driver waits on slot 0 (tickRing), so busy is already clear here; the guard stays as a safeguard.
     if (st->busy) return false;
     return startRingTransfer(st);
 }
@@ -1236,7 +1085,7 @@ bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle& h) {
 }
 
 bool moonI80Ws2812InternalFits(size_t bytes) {
-    // Does a whole frame fit internal memory as ONE contiguous block? @xref{largest-block-never-total-free|why the total is the wrong question}.
+    // Does a whole frame fit internal memory as ONE contiguous block? @xref{the-largest-free-block-decides-a-fit|why the total is the wrong question}.
     const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     const size_t freeTotal = heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     return largest >= bytes && freeTotal >= bytes + HEAP_RESERVE;
@@ -1245,7 +1094,7 @@ bool moonI80Ws2812InternalFits(size_t bytes) {
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     if (!st) return nullptr;
-    // A ring handle has no whole-frame buf[]; the domain never encodes into a ring buffer itself (the platform's refill task does, via the encode seam). But the base uses busBuffer(0) as its non-null "inited" sentinel (dmaBuf_) and busBuffer(1) to detect double-buffer mode. So report ring[0] for slot 0 (a real, non-null pointer → inited) and null for slot 1 (a ring is never the double-buffer).
+    // A ring handle has no whole-frame buf[]. The base uses busBuffer(0) as its non-null inited sentinel (dmaBuf_) and busBuffer(1) to detect double-buffer mode, so ring[0] is reported for slot 0 and null for slot 1.
     if (st->isRing) return buffer == 0 ? st->ring[0] : nullptr;
     return buffer < 2 ? st->buf[buffer] : nullptr;
 }
@@ -1265,14 +1114,14 @@ size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle& h) {
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     if (!st || buffer >= 2 || !st->buf[buffer] || bytes == 0 || bytes > st->cap) return false;
-    // Wait for the wire here rather than refusing a busy bus: @xref{the-wire-is-waited-for-not-refused|why refusing would drop every second frame}. A stale token is drained first, since the previous frame's completion gives one unconditionally and it can sit unconsumed, so the wait below is for THIS frame.
+    // Wait for the wire here rather than refusing a busy bus: @xref{the-wire-is-waited-for-not-refused|why refusing would drop every second frame}. A stale token is drained first (the previous completion gives one), so the wait is for THIS frame.
     xSemaphoreTake(st->wireFree, 0);
     if (st->busy) {
-        // Block on the dedicated wire-free signal rather than the in-flight buffer's own, which belongs to the driver and would make its wait miss if consumed here. The completion gives both. The bound is a backstop against a wedged peripheral rather than a policy, the driver's own frame-derived timeout governing a stalled bus.
+        // Block on the dedicated wire-free signal rather than the in-flight buffer's own, which belongs to the driver and would make its wait miss if consumed here. The bound backstops a wedged peripheral; the driver's frame-derived timeout governs.
         if (xSemaphoreTake(st->wireFree, pdMS_TO_TICKS(kWireFreeTimeoutMs)) != pdTRUE) return false;
     }
 
-    // Push the buffer onto the completion FIFO BEFORE starting the hardware, so a fast EOF (which pops it) can never fire before its slot is populated. The push touches slot `fifoHead`; the ISR only ever reads slot `fifoTail`, and with one transfer in flight those are different slots, that disjointness is what makes the push safe without a lock.
+    // Push the buffer onto the completion FIFO BEFORE starting the hardware, so a fast EOF finds its slot populated; the push touches slot fifoHead while the ISR reads slot fifoTail, different slots with one transfer in flight, which makes it lock-free.
     const uint8_t slot = st->fifoHead;
     st->fifo[slot] = buffer;
     // The transfer starts on the wire immediately (we waited above for any predecessor), so stamp the wire-time KPI right here, no deferred stamping is needed, which is a small simplification over the esp_lcd sibling's queued path.
@@ -1292,7 +1141,7 @@ bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes)
 bool moonI80Ws2812Wait(MoonI80Ws2812Handle& h, uint8_t buffer, uint32_t timeoutMs) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     if (!st || buffer >= 2 || !st->done[buffer]) return true;   // nothing to wait on = not in flight
-    // Report whether the transfer actually completed. On a timeout the DMA may still be reading this buffer, so the caller must keep it marked in-flight rather than re-encoding into it, handing a live DMA a half-rewritten buffer is exactly the frame corruption the timeout is meant to avoid.
+    // Report whether the transfer completed. After a timeout the DMA may still read this buffer, so the caller keeps it marked in-flight rather than re-encoding into it, which would hand a live DMA a half-rewritten buffer.
     if (xSemaphoreTake(st->done[buffer], pdMS_TO_TICKS(timeoutMs)) == pdTRUE) return true;
 
     // The ring's stall backstop: @xref{two-stall-backstops-one-recovery|the window that outlasts the pool's lead}. The next arm re-links the chain and plants a fresh frontier, so no residual state carries over.
@@ -1308,7 +1157,7 @@ bool moonI80Ws2812Wait(MoonI80Ws2812Handle& h, uint8_t buffer, uint32_t timeoutM
         }
     }
 
-    // The whole-frame path's stall backstop: @xref{two-stall-backstops-one-recovery|the lost interrupt this recovers from}. Its own residue is draining the completion queue, so the abandoned entry cannot be popped by a late interrupt against the next frame.
+    // The whole-frame path's stall backstop: @xref{two-stall-backstops-one-recovery|the lost interrupt this recovers from}. Its residue drains the completion queue, so a late interrupt cannot pop the abandoned entry against the next frame.
     if (!st->isRing && st->busy) {
         finalizeStalledTransfer(st);   // stop LCD + GDMA FIRST, so no EOF can fire during the drain below
         st->fifoTail = st->fifoHead;   // then drop the un-completed entry; the ISR guard ignores a late EOF
@@ -1359,10 +1208,7 @@ void moonI80Ws2812Deinit(MoonI80Ws2812Handle& h) {
     h.impl = nullptr;
 }
 
-// The loopback self-test: a private full-width setup on the driver's real pins transmits the caller's real frame, exactly like the render loop.
-// A receive channel captures it off the jumpered pin and verifies every bit.
-// A short synthetic burst would miss exactly the failures a real frame hits, so the test sends the genuine article.
-// The capture and verify half is shared with the sibling loopbacks; only the transmit differs.
+// The loopback self-test: a private full-width setup on the driver's real pins transmits the caller's real frame like the render loop, and a receive channel verifies every bit off the jumpered pin; the capture half is shared with the sibling loopbacks.
 
 namespace detail {
 void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
@@ -1370,7 +1216,7 @@ void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
                            const std::function<void()>& transmitOnce,
                            RmtLoopbackResult& r, bool rideMode = false,
                            uint32_t* rxSymbols = nullptr);
-// Pre-allocate the capture buffer, one contiguous internal block, so a caller can take it before its own allocations fragment the heap. Ownership transfers regardless of outcome, and passing nothing on failure is fine: the helper retries and reports it.
+// Pre-allocate the capture buffer, one contiguous internal block, so a caller can take it before its own allocations fragment the heap; ownership transfers regardless of outcome.
 uint32_t* allocLoopbackCapture(size_t dataBytes);
 }
 
@@ -1388,9 +1234,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
     const bool pinExpanderMode = clockMultiplier > 1;
 
     if (pinExpanderMode) {
-        // Skip the continuity pre-check, which expects the receive pin to follow the transmit one directly.
-        // True of a bare jumper and false through an expander, where raising the input raises no output until a latch.
-        // It would report no jumper on perfectly good wiring, and the bit-verify is the stronger check anyway, validating the whole chain.
+        // Skip the continuity pre-check, which expects the receive pin to follow the transmit one directly (a bare jumper; through an expander the input raises an output only at a latch); the bit-verify validates the whole chain.
         r.jumperDetected = true;
     } else {
         r.jumperDetected = detail::loopbackJumperOk(static_cast<uint8_t>(txGpio),
@@ -1398,9 +1242,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
         if (!r.jumperDetected) return r;
     }
 
-    // The loopback follows the same rule the render path does: @xref{the-loopback-follows-the-same-rule-the-render-path-does|why, and what its encode becomes}.
-    // It rides the ring when the driver asked for it, the render path being on the ring so the self-test must be too.
-    // Or when the frame would overflow internal memory.
+    // The loopback follows the render path's rule: @xref{the-loopback-follows-the-same-rule-the-render-path-does|why, and what its encode becomes}. It rides the ring when the driver does, or when the frame would overflow internal memory.
     const bool useRing = pinExpanderMode && (useRingArg || !moonI80Ws2812InternalFits(frameBytes));
     const uint8_t sb = laneCount <= 8 ? 1 : 2;
     // rowBytes = outCh(=rowBits/8) × 8 × 3 × slotBytes × outputsPerPin(=clockMultiplier in shift mode).
@@ -1409,11 +1251,11 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
     const uint32_t rowStrandBytes = static_cast<uint32_t>(rowBits) * 3u;
     const uint32_t loopRows = rowStrandBytes ? static_cast<uint32_t>(dataBytes / rowStrandBytes) : 0;
 
-    // Grab the capture buffer FIRST: it is the loopback's one big contiguous DMA block (~4 B per WS2812 bit), and the ring init below fragments internal RAM with its per-buffer nodes, in that order the capture alloc fails on a busy heap and the test dies as "no capture" before transmitting a bit. Largest-first fixes it; ownership passes to captureAndVerifyFrame.
+    // Grab the capture buffer FIRST: it is the loopback's one big contiguous DMA block (~4 B per WS2812 bit) and the ring init below fragments internal RAM, so a later capture alloc fails on a busy heap; ownership passes to captureAndVerifyFrame.
     uint32_t* rxSymbols = detail::allocLoopbackCapture(dataBytes);
 
     MoonI80State* st = nullptr;
-    // The copy-slice encoder: the frame is already encoded, so a slice is a straight copy out of it, its geometry riding in the seam's own user pointer. Rows only, like every ring slice, so the pre-built frame's trailing pad is not copied: a ring buffer holds rows and nothing else, and the pad has nowhere to go.
+    // The copy-slice encoder: the frame is already encoded, so a slice is a straight copy out of it, its geometry riding in the seam's user pointer. Rows only, like every ring slice, so the pre-built frame's trailing pad is left out.
     struct LoopCopyCtx { const uint8_t* frame; size_t rowBytes; uint32_t rows; size_t slotBytes; };
     LoopCopyCtx ctx{frame, loopRowBytes, loopRows, sb};
     if (useRing && loopRows > 0) {
@@ -1429,14 +1271,9 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
                         static_cast<size_t>(count) * c->rowBytes);
         };
         MoonI80Ws2812Handle h;
-        // Prefer the driver's LIVE geometry, so the self-test streams through the same ring the render path is tuned to.
-        // A scattered margin then shows as a bit fault at the same slice boundary the eyes see on the wall.
-        // Zero takes the platform default, so a caller that does not care still works, and the depth steps down on a memory-tight heap.
+        // Prefer the driver's LIVE geometry, so the self-test streams through the ring the render path is tuned to and a scattered margin shows as a bit fault at the slice boundary the eyes see; zero takes the platform default.
         const uint32_t loopRingRows = ringRows ? ringRows : kRingRowsDefault;
-        // The live depth when memory allows, else stepping down until the init's gate accepts.
-        // The capture buffer already holds several bytes per bit of the same pool, and both do not fit a tight board.
-        // A shallower ring still verifies the same chain, only the refill margin differing.
-        // The copy refill is far faster than a render encode, so even a minimal pool streams clean.
+        // The live depth when memory allows, else stepping down until the init's gate accepts, since the capture buffer holds several bytes per bit of the same pool; a shallower ring verifies the same chain and the copy refill suits a minimal pool.
         uint32_t tryBufs = ringBufs ? ringBufs : kRingBufsDefault;
         while (tryBufs >= kRingBufsMin) {
             if (moonI80Ws2812InitRing(h, dataPins, laneCount, wrGpio, loopRowBytes, loopRows,
@@ -1461,7 +1298,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
     }
     const bool loopIsRing = st->isRing;
 
-    // Ship one frame and wait for its completion, everything else being the shared helper. This is the runtime path's bookkeeping minus the handle indirection, surfacing a failed arm or a timeout rather than letting either show up only as a later capture mismatch.
+    // Ship one frame and wait for its completion, with the shared helper doing the rest. This is the runtime path's bookkeeping minus the handle indirection, surfacing a failed arm or a timeout instead of a later capture mismatch.
     auto transmitOnce = [st, frameBytes, loopIsRing]() {
         bool armed;
         if (loopIsRing) {
@@ -1481,10 +1318,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
         if (xSemaphoreTake(st->done[0], pdMS_TO_TICKS(1000)) != pdTRUE)
             ESP_LOGE(MOON_I80_TAG, "loopback: tx EOF timed out");
     };
-    // The rate passed here is the SLOT rate the strand sees, which sets the verifier's pulse threshold and expected duration.
-    // So it must describe the strand rather than the bus: in expander mode several bus words fill one slot, so the rate divides by that multiplier.
-    // Passing the bus rate sized the window far too short and decoded nothing on a working strand.
-    // It is derived from the runtime divider rather than a constant, or a non-default one makes the capture expect the wrong widths.
+    // The rate passed is the SLOT rate the strand sees, which sets the verifier's pulse threshold and expected duration; in expander mode several bus words fill one slot, so it divides by that multiplier and derives from the runtime divider.
     const uint32_t slotHz = pinExpanderMode
         ? (kShiftBusResolutionHz / g_shiftClockDiv / clockMultiplier) : kPclkHz;
     detail::captureAndVerifyFrame(rxGpio, frameBytes, dataBytes, rowBits, slotHz, pinExpanderMode,

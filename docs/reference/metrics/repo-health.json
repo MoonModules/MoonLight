@@ -1,23 +1,23 @@
 {
-  "commit": "4030156e4",
+  "commit": "49c8fb0da",
   "flash": {
-    "esp32": 2524608,
+    "esp32": 2522800,
     "esp32s31": 2887824,
     "qemu": 1383648,
-    "host-macos": 2956496,
+    "host-macos": 2956624,
     "host-windows": 1925120,
-    "esp32c3": 2486480,
+    "esp32c3": 2497120,
     "host-linux": 2548000,
     "teensy41": 1426388,
     "esp32-ethonly": 2128832,
-    "esp32-lite": 2380032,
+    "esp32-lite": 2388848,
     "esp32-rev1-lite": 2441664,
     "esp32p4rev1": 2981920,
-    "esp32s3-opi": 2615040,
+    "esp32s3-opi": 2613968,
     "esp32s3-opi-oflash": 2609776,
     "esp32s3-qspi": 2619920,
     "esp32s3-qspi-lite": 2364128,
-    "esp32p4rev3": 2959888
+    "esp32p4rev3": 2958464
   },
   "measured": {
     "esp32p4rev1-eth": "2026-11-18",
@@ -33,7 +33,7 @@
     "esp32p4rev3-eth": "2026-11-11",
     "host-macos": "2026-11-27",
     "host-windows": "2026-09-30",
-    "esp32c3": "2026-11-18",
+    "esp32c3": "2026-11-27",
     "host-linux": "2026-10-12",
     "esp32s3-n32r16": "2026-11-20",
     "teensy41": "2026-11-27",
@@ -758,8 +758,8 @@
       }
     },
     "host-macos": {
-      "tick_us": 11,
-      "fps": 90909,
+      "tick_us": 18,
+      "fps": 55555,
       "scenario_p50": {
         "Effects_pipeline_builds_and_renders": {
           "p50": 7,
@@ -799,32 +799,32 @@
     }
   },
   "loc": {
-    "core": 42504,
-    "light": 41086,
-    "platform": 34776,
+    "core": 42511,
+    "light": 41081,
+    "platform": 34554,
     "ui": 15951,
-    "test": 107381,
-    "moondeck": 37099
+    "test": 107412,
+    "moondeck": 37098
   },
   "comments": {
     "core": {
-      "lines": 8057,
+      "lines": 8058,
       "ratio": 0.211
     },
     "light": {
-      "lines": 8554,
+      "lines": 8553,
       "ratio": 0.234
     },
     "platform": {
-      "lines": 6590,
-      "ratio": 0.214
+      "lines": 6313,
+      "ratio": 0.207
     },
     "ui": {
       "lines": 3823,
       "ratio": 0.255
     },
     "test": {
-      "lines": 8968,
+      "lines": 8953,
       "ratio": 0.096
     },
     "moondeck": {
@@ -838,7 +838,7 @@
   },
   "docs": {
     "md_files": 132,
-    "md_lines": 20927,
+    "md_lines": 20938,
     "plans_files": 17,
     "backlog_lines": 3115,
     "lessons_lines": 458,
@@ -846,7 +846,7 @@
     "moonwalk_kb": 51
   },
   "complexity": {
-    "functions": 7808,
+    "functions": 7810,
     "over_threshold": 315,
     "worst_ccn": 130
   }

@@ -6,7 +6,7 @@
 
 This is a **rule, not a direction**, it's enforceable (grep app.js for a module name; there should be zero) and it's the acceptance test for the refactor. This study surveys how the field achieves it, measures MoonLight's current distance from it, and extracts the mechanism. The top-down companion (design from the goal, not consulting this) follows.
 
-The trigger: app.js has grown to **~3,200 lines** with module-specific content baked in (a hardcoded `renderFileManager` and `if (mod.type === …)` branches), and while building TasksModule we **hit the wall**, the generic list-detail renderer couldn't display a new module's data shape, forcing a workaround. That's the smell; the statement above is the fix.
+The trigger: app.js has grown to **~3,200 lines** with module-specific content baked in (a hardcoded `renderFileManager` and `if (mod.type === …)` branches), and while building the Tasks card (TasksModule, since folded into MoonShine) we **hit the wall**, the generic list-detail renderer couldn't display a new module's data shape, forcing a workaround. That's the smell; the statement above is the fix.
 
 ## The goal (what "generic" means here)
 

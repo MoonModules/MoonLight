@@ -146,14 +146,13 @@ def build_target(name, quiet=False):
     bdir = str(ROOT / host_build_dir())
     drop_other_configuration(host_build_dir())
     out = subprocess.DEVNULL if quiet else None
-    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *configure_args()],
-                ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
-        rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
-        if rc != 0:
-            return rc
-        if cmd[1] == "-B":
-            drop_stale_precompiled_headers(bdir)
-    return 0
+    configure = ["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *configure_args()]
+    build = ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])
+    rc = subprocess.run(configure, cwd=ROOT, stdout=out).returncode
+    if rc != 0:
+        return rc
+    drop_stale_precompiled_headers(bdir)   # after the configure, which names the compiler the headers are checked against
+    return subprocess.run(build, cwd=ROOT, stdout=out).returncode
 
 
 def gcc_pair():

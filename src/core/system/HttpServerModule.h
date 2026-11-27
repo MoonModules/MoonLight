@@ -744,6 +744,8 @@ private:
     /// A list leaf written a row at a time: the next row and what is written so far, so the walk stops between rows and a long list spreads over several ticks.
     struct ListCursor { uint16_t row = 0; uint32_t path = 0; JsonSink part; };   // `path` names the leaf the rows belong to
     ListCursor walkList_;
+    /// Every client viewing `mod` takes its whole state again, as when one of its values could not be held.
+    void flagResyncCovering(const MoonModule* mod);
     /// Write `c`'s rows from the cursor on, stopping between rows once `stop` says so; true once the list is whole and handed to `fn`.
     template <class Fn, class Stop> bool writeListLeaf(MoonModule* mod, const ControlDescriptor& c, const char* path, Fn& fn, Stop& stop, ListCursor& cur);
     /// A slice's share of the render task: a classic ESP32's 2.6 ms frame grows by at most this, where the whole walk in one frame took 16 to 45 ms.

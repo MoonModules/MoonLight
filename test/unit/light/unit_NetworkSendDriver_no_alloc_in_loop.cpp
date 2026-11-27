@@ -129,8 +129,8 @@ TEST_CASE("NetworkSendDriver keeps its send task running through a prepare that 
     driver.release();
 }
 
-// A render faster than `fps` ticks several times inside one due frame, and the send task missed that frame once.
-TEST_CASE("NetworkSendDriver counts a frame due while the send task holds the last one once, however often the render ticks inside it") {
+// A render faster than `fps` ticks several times inside one due frame; a send task held past whole intervals misses a frame per interval, each counted once.
+TEST_CASE("NetworkSendDriver counts a frame missed per whole interval the send task holds the last one, however often the render ticks inside it") {
     PacedSend rig(50);   // a frame is due every 20 ms
     mm::NetworkSendDriver& driver = rig.driver;
     driver.holdFrameForTest();

@@ -47,19 +47,19 @@ namespace mm {
 ///
 /// ## The memory bars
 ///
-/// **The memory bars.** One per memory type the board has, since internal RAM is scarce and PSRAM plentiful, each balancing on its own. Used is `platform::totalHeap() - platform::freeHeap()` per type.
+/// One per memory type the board has, since internal RAM is scarce and PSRAM plentiful, each balancing on its own. Used is each type's size less its free, both from one `platform::heapTypes` read.
 ///
 /// Its parts: the modules' `heapOf(this, classSize()) + heapBytes()`, the type table, MoonLight's other allocations (`platform::moonlightHeap` less the two before), the system tasks' stacks and control blocks, and the network (what its bring-ups took, `platform::networkHeap`).
 ///
 /// Then the system (what ran before MoonLight, `platform::systemHeap`), the heap's block headers, "unaccounted" (what ESP-IDF allocated after start-up, its network buffers above all, 0 at least) and "free".
 ///
-/// Beside free, the bar names its largest free block (`platform::maxInternalAllocBlock` and `maxPsramAllocBlock`), since the next large buffer needs one piece: 122 KB free in pieces of at most 76 KB refuses a 90 KB frame.
+/// Beside free, the bar names its largest free block (from the same `platform::heapTypes` read as free), since the next large buffer needs one piece: 122 KB free in pieces of at most 76 KB refuses a 90 KB frame.
 ///
 /// **On a computer**, which reports no heap, the one bar is "RAM": the process's resident memory, closing with what the machine has available (`platform::processMemory`). Elsewhere the bar is "heap", what MoonLight took through its own allocator (`platform::allocatedBytes()`), with no free part.
 ///
 /// ## The time bars
 ///
-/// **The time bars.** The frame's wall time (`Scheduler::frameUs`) per lane, each closing with its idle time so it adds up to the frame. The render loop: the modules' work, its waits for the workers and the encode task, the scheduler's work between modules. A render worker: the layers it ran, averaged over the workers (`WorkerPool::takeLoad`). The encode task: the drivers' ticks.
+/// The frame's wall time (`Scheduler::frameUs`) per lane, each closing with its idle time so it adds up to the frame. The render loop: the modules' work, its waits for the workers and the encode task, the scheduler's work between modules. A render worker: the layers it ran, averaged over the workers (`WorkerPool::takeLoad`). The encode task: the drivers' ticks.
 ///
 /// **The lanes.** A node's `time` gives its own time per lane: 0 the render loop, 1 the render workers, 2 the encode task, 3 a system task. A layer's nodes split by the share of the layer a worker ran (`Layer::workerUs`), a driver runs on the encode task while Drivers splits the frame, and Effects and Drivers leave out their waits, which the render bar shows as waiting.
 ///
@@ -125,7 +125,7 @@ public:
         /// @field fps An output's frames sent last second.
         /// @field dropped An output's frames dropped since it started, where it counts them.
         /// @field dma An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads.
-        /// @field headroom An output's slack before it falls behind over the last second, in percent, where it measures one.
+        /// @field headroom An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, a send's unused pacing budget, a panel's refresh over flicker.
         /// @field largest A memory bar's largest free block, which a fragmented heap holds far under its free part.
         controls_.addList("pipeline", *this);   // this module is the ListSource
     }
@@ -220,26 +220,27 @@ private:
 
     /// The type table, the used heap no module or task reports and the free heap, per type.
     static void closeMemory(Memory& mem) {
-        const size_t heapTotal = platform::totalHeap(), heapFree = platform::freeHeap();
-        const size_t internalTotal = platform::totalInternalHeap(), internalFree = platform::freeInternalHeap();
+        platform::HeapType in, ps;
+        platform::heapTypes(in, ps);   // one walk of each memory type
+        const size_t heapTotal = in.total + ps.total, heapFree = in.free + ps.free;
         mem.types = ModuleFactory::tableBytes();   // the one owner that is no module: the table every type registers in
         size_t net = 0, netPsram = 0;
         platform::networkHeap(net, netPsram);
         mem.network = {net, netPsram};
         platform::systemHeap(net, netPsram);
         mem.system = {net, netPsram};
-        platform::heapOverhead(net, netPsram);
-        mem.overhead = {net, netPsram};
+        mem.overhead = {in.overhead + ps.overhead, ps.overhead};
         // MoonLight's own allocations beyond what the modules and the type table report, which its count holds as well.
         platform::moonlightHeap(net, netPsram);
         HeapBytes own{net, netPsram};
         own -= mem.modules + mem.types;
         mem.moonlight = own;
         mem.totals = heapTotal > heapFree;
-        mem.psram = heapTotal > internalTotal && heapFree >= internalFree;
-        mem.free = mem.totals ? HeapBytes{heapFree, mem.psram ? heapFree - internalFree : 0} : HeapBytes{};
-        readLargest(mem);
-        HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, mem.psram ? overSize(heapTotal - internalTotal, mem.free.psram) : 0}
+        mem.psram = ps.total > 0;
+        mem.free = mem.totals ? HeapBytes{heapFree, ps.free} : HeapBytes{};
+        mem.largest[0] = in.largest;
+        mem.largest[1] = ps.largest;
+        HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, overSize(ps.total, ps.free)}
                                     : HeapBytes{platform::allocatedBytes(), 0};
         // A computer reports no heap, so its sheet is the process's resident memory against what the machine has available.
         size_t resident = 0, available = 0;
@@ -298,12 +299,6 @@ private:
     static void writeBar(JsonSink& sink, const View& v, ListRow row) {
         if (row < v.memoryBars()) writeMemoryBar(sink, v.mem, static_cast<uint8_t>(row));
         else writeTimeBar(sink, v.time, laneOfBar(v, row - v.memoryBars()));
-    }
-
-    /// The largest free block per bar: internal RAM's and PSRAM's on a board with both, the one heap's elsewhere.
-    static void readLargest(Memory& mem) {
-        mem.largest[0] = mem.psram ? platform::maxInternalAllocBlock() : platform::maxAllocBlock();
-        mem.largest[1] = mem.psram ? platform::maxPsramAllocBlock() : 0;
     }
 
     /// One memory type's bar: the modules, the type table, MoonLight's other allocations, the tasks, the network, the system, the heap's overhead, the unaccounted rest, free where the platform says, and its largest free block: @xref{the-memory-bars}.

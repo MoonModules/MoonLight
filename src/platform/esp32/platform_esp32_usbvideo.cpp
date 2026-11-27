@@ -9,6 +9,7 @@
 
 #include "driver/jpeg_decode.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // adoptCaps, freeCaps: the decode buffer counted as MoonLight's
 #include "esp_log.h"
 #include "usb/usb_host.h"
 #include "usb/uvc_host.h"
@@ -402,7 +403,7 @@ bool sizeBuffer(Capture& cap) {
     jpeg_decode_memory_alloc_cfg_t memCfg = {};
     memCfg.buffer_direction = JPEG_DEC_ALLOC_OUTPUT_BUFFER;
     cap.rgb = static_cast<uint8_t*>(
-        jpeg_alloc_decoder_mem(decodedBytes(cap.negW, cap.negH), &memCfg, &cap.rgbCap));
+        adoptCaps(jpeg_alloc_decoder_mem(decodedBytes(cap.negW, cap.negH), &memCfg, &cap.rgbCap)));   // counted, as freeCaps gives it back
     if (cap.rgb) return true;
     cap.rgbCap = 0;
     ESP_LOGE(kTag, "no memory for the %ux%u decode buffer", cap.negW, cap.negH);
@@ -502,7 +503,7 @@ void videoCaptureDeinit(VideoCaptureHandle& handle) {
     if (cap->stream) uvc_host_stream_close(cap->stream);
     if (cap->jpeg) jpeg_del_decoder_engine(cap->jpeg);
     if (cap->wake) vSemaphoreDelete(cap->wake);
-    free(cap->rgb);   // free(nullptr) is a no-op, so a failed open is fine
+    freeCaps(cap->rgb);   // null is ignored, so a failed open is fine
     delete cap;
     handle.impl = nullptr;
     claimed = false;   // the device is free for the next open

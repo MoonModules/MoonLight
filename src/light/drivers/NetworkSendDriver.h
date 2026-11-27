@@ -294,10 +294,9 @@ public:
         uint32_t now = platform::millis();
         uint32_t interval = 1000 / fps;
         if (now - lastSendTime_ < interval) return;
-        // A frame that is due while the task still sends the last one is dropped, since the task owns the corrected buffer: its slot goes, so the next frame waits a whole interval and the drop counts once.
+        // A frame due while the task still sends the last waits, since the task owns the corrected buffer, and goes out once it is idle; a whole interval with no send is a frame missed, counted once.
         if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) {
-            framesSkipped_.fetch_add(1, std::memory_order_relaxed);
-            lastSendTime_ = now;
+            if (now - lastSendTime_ >= 2 * interval && now - lastSkipTime_ >= interval) { framesSkipped_.fetch_add(1, std::memory_order_relaxed); lastSkipTime_ = now; }
             return;
         }
         lastSendTime_ = now;
@@ -335,7 +334,7 @@ public:
                                           : sourceBuffer_->channelsPerLight();
         // Paced from the task when it runs and the frame sits in the corrected buffer, which the task owns until it is done.
         if (sendTask_.impl && data == corrected_.data()) {
-            frame_ = {data, totalBytes, bytesPerLight};
+            frame_ = {data, totalBytes, bytesPerLight, effectiveGap(totalBytes)};   // the gap from this thread's settings, so the task reads none of them
             frameBytes_.store(static_cast<uint32_t>(totalBytes), std::memory_order_relaxed);   // read by tick1s on another thread
             frameState_.exchange(kFrameReady, std::memory_order_acq_rel);
             platform::notifyTask(sendTask_);
@@ -443,6 +442,7 @@ private:
     uint32_t framesAtSecond_ = 0, packetsAtSecond_ = 0;       ///< the counts at the last tick1s
     uint32_t framesLastSecond_ = 0, packetsLastSecond_ = 0;   ///< sent in the second before it
     std::atomic<uint32_t> framesSkipped_{0};   ///< frames the tick skipped while the task sent the last, which tick1s and the report read from their own tasks
+    uint32_t lastSkipTime_ = 0;   ///< millis() of the last missed frame counted, so one missed interval counts once
     std::atomic<uint32_t> frameBytes_{0};   ///< the bytes of the frame last handed to the task, for the headroom tick1s reads
     uint32_t skippedAtSecond_ = 0;   ///< framesSkipped_ at the last tick1s
     std::optional<uint8_t> headroom_;   ///< the last second's send headroom, none before the first second
@@ -462,8 +462,8 @@ private:
     std::atomic<bool> sendStop_{false};
     /// One packet being built, 1450 B covering all three protocols, a member so the send task's stack stays small; the tick and the task never send at once.
     uint8_t packet_[DDP_HEADER_SIZE + DDP_MAX_PAYLOAD] = {};
-    /// The frame the tick hands over: where its bytes are, how many, and their stride.
-    struct Frame { const uint8_t* data; size_t totalBytes; uint8_t bytesPerLight; } frame_ = {nullptr, 0, 0};
+    /// The frame the tick hands over: where its bytes are, how many, their stride, and the slot gap its settings gave.
+    struct Frame { const uint8_t* data; size_t totalBytes; uint8_t bytesPerLight; uint32_t gapUs; } frame_ = {nullptr, 0, 0, 0};
 
     static void sendTrampoline(void* self) { static_cast<NetworkSendDriver*>(self)->runSendLoop(); }
 
@@ -475,7 +475,7 @@ private:
                 platform::waitNotify(sendTask_, 100);
                 continue;
             }
-            sendFrame<true>(frame_.data, frame_.totalBytes, frame_.bytesPerLight, effectiveGap(frame_.totalBytes));
+            sendFrame<true>(frame_.data, frame_.totalBytes, frame_.bytesPerLight, frame_.gapUs);
             frameState_.exchange(kFrameIdle, std::memory_order_acq_rel);
         }
     }

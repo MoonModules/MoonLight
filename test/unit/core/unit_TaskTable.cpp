@@ -90,13 +90,17 @@ TEST_CASE("TaskTable: on a computer the table is the process's threads, the rend
     platform::recordSystemHeap();   // as mm_main does first: this thread is the render loop's
     platform::TaskInfo rows[64];
     REQUIRE(platform::taskSnapshot(rows, 64) >= 1);
-    const uint32_t t0 = platform::micros();
-    while (platform::micros() - t0 < 20000) {}   // this thread runs, so its share is above zero
-    const size_t n = platform::taskSnapshot(rows, 64);
+    // This thread runs, so its share rises above zero; a busy runner charges CPU time late, so the spin goes on until a share shows, bounded.
     bool render = false, measured = false;
-    for (size_t i = 0; i < n; i++) {
-        render = render || std::strcmp(rows[i].name, "render") == 0;
-        measured = measured || (rows[i].cpuPermille != platform::kTaskCpuUnmeasured && rows[i].cpuPermille > 0);
+    const uint32_t t0 = platform::micros();
+    while (!measured && platform::micros() - t0 < 500000) {
+        const uint32_t s0 = platform::micros();
+        while (platform::micros() - s0 < 20000) {}
+        const size_t n = platform::taskSnapshot(rows, 64);
+        for (size_t i = 0; i < n; i++) {
+            render = render || std::strcmp(rows[i].name, "render") == 0;
+            measured = measured || (rows[i].cpuPermille != platform::kTaskCpuUnmeasured && rows[i].cpuPermille > 0);
+        }
     }
     CHECK(render);
     CHECK(measured);

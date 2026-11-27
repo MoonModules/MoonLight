@@ -307,7 +307,7 @@
        "line": "An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads."
       },
       "headroom": {
-       "line": "An output's slack before it falls behind over the last second, in percent, where it measures one."
+       "line": "An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, a send's unused pacing budget, a panel's refresh over flicker."
       },
       "largest": {
        "line": "A memory bar's largest free block, which a fragmented heap holds far under its free part."

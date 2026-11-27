@@ -261,12 +261,6 @@ The tick is native-code speed: a `setRGB` is a bounds guard and three byte store
 | One loaded script's state | | a 116 B arena and ~48 B of engine; the arena holds 64 B of members and arrays, the system variables and the call arguments |
 | Compiling a script | | a few KB of staging and IR on the heap, freed once the code is placed |
 
-### MoonLive on a service and on the Teensy
-
-**A script a service runs** (`MoonLiveService`, 2026-09-02, QuinLED Dig-2-Go, 300 LEDs on `RmtLed`): `sweep.mls` compiles to 752 bytes of Xtensa. Its tick takes 966 µs on the classic ESP32 against 58 µs on the host, 17 times as long and about 12% of the LED driver's 6887 µs on the same frame; the frame rate holds at 67 to 85 fps with the script on and off.
-
-**Thumb-2 on the Teensy 4.1:** the six shipped effects plasma, octopus, fractal, ripples, noise and fluid compile to at most 3 KB of code each, and plasma costs 85 µs a frame on 64 lights.
-
 A function's local variables live in registers and on the render task's stack while it runs, so they cost no RAM at rest.
 
 **System variables cost a byte store each, per binding**: an effect writes three per tick, a modifier six per mapping build, a layout none. `t` is the argument register the host already passes, so it costs no arena byte.
@@ -312,6 +306,12 @@ A function's local variables live in registers and on the render task's stack wh
 **The compile path's deepest frame is `lowerWith`, at 1,120 bytes on the classic**; the nested chain takes 2,128 bytes, 17% of the 12 KB main task, once per compile.
 
 ---
+
+### MoonLive on a service and on the Teensy
+
+**A script a service runs** (`MoonLiveService`, 2026-09-02, QuinLED Dig-2-Go, 300 LEDs on `RmtLed`): `sweep.mls` compiles to 752 bytes of Xtensa. Its tick takes 966 µs on the classic ESP32 against 58 µs on the host, 17 times as long and about 12% of the LED driver's 6887 µs on the same frame; the frame rate holds at 67 to 85 fps with the script on and off.
+
+**Thumb-2 on the Teensy 4.1:** the six shipped effects plasma, octopus, fractal, ripples, noise and fluid compile to at most 3 KB of code each, and plasma costs 85 µs a frame on 64 lights.
 
 ## Internal RAM
 

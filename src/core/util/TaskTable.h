@@ -33,7 +33,7 @@ public:
     const platform::TaskInfo& task(uint8_t i) const { return rows_[i]; }
     /// Whether task `t` is the one its core ran when the snapshot was taken.
     bool runningNow(const platform::TaskInfo& t) const {
-        return t.core >= 0 && t.core < 2 && std::strcmp(t.name, running_[t.core]) == 0;
+        return std::strcmp(t.name, running_[0]) == 0 || std::strcmp(t.name, running_[1]) == 0;   // an unpinned task runs on either
     }
 
     /// The wire label for one task state.

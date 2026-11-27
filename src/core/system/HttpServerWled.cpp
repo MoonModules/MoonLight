@@ -60,7 +60,7 @@ bool intField(const JsonDoc& doc, const JsonNode* obj, const char* key, int lo, 
 bool switchField(const JsonDoc& doc, const JsonNode* obj, const char* key, int& out) {
     const JsonNode* n = json::member(doc, obj, key);
     if (!n) return false;
-    if (n->type == JsonType::String && n->str && n->str[0] == 't') { out = kToggle; return true; }
+    if (n->type == JsonType::String && n->str && std::strcmp(n->str, "t") == 0) { out = kToggle; return true; }   // "true" is a string, not the toggle
     if (n->type != JsonType::Bool && n->type != JsonType::Int) return false;
     out = n->intValue != 0 ? 1 : 0;
     return true;

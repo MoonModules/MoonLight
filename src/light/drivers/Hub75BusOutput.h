@@ -159,7 +159,7 @@ public:
     }
 
     /// Stop the scan and release the panel's peripheral.
-    void close() override { platform::hub75Deinit(hub_); dmaBytes_ = 0; }
+    void close() override { platform::hub75Deinit(hub_); dmaBytes_ = 0; lastRefresh_ = 0xFFFF; }   // a stopped panel measures no refresh
 
     /// The block the selected backend drives, as the select names it, since claiming the wrong one frees a live block and holds a free one.
     LedHwBlock hwBlock() const override {

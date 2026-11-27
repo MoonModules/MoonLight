@@ -504,8 +504,6 @@ size_t maxAllocBlock() {
     return testMaxBlock.load(std::memory_order_relaxed); // 0 = unlimited
 }
 
-size_t maxPsramAllocBlock() { return 0; }   // a computer has one memory
-
 size_t maxInternalAllocBlock() {
     return 0; // Not meaningful on host (0 = unlimited)
 }
@@ -525,7 +523,7 @@ void markRenderThread();                     // platform_host_threads.cpp: the t
 void nameCurrentThread(const char* name);   // platform_host_threads.cpp: the OS's name for the calling thread
 void recordSystemHeap() { markRenderThread(); }   // a computer reports no heap, so this records the thread mm_main starts on
 void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
-void heapOverhead(size_t& total, size_t& psram) { total = psram = 0; }
+void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // a computer has one memory
 void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
 void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }   // a computer's threads hold their stacks outside any heap this reports
 size_t hostThreads(TaskInfo* out, size_t maxTasks);   // platform_host_threads.cpp: the process's threads

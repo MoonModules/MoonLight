@@ -20,9 +20,9 @@
 ///
 /// ## The scratch buffer is lazy and internal
 ///
-/// Allocated once on the first snapshot rather than held from boot, and kept for the process, so every later tick is allocation-free, as the one-second tick's no-heap rule asks.
+/// Allocated once on its first use, when mm_main records the system's memory and walks the task table, and kept for the process, so every later tick is allocation-free, as the one-second tick's no-heap rule asks.
 ///
-/// As a plain static array it cost over a kilobyte of internal memory from boot on every board, for an opt-in diagnostic that appears in no device model.
+/// On the heap through callocCaps rather than a static array, so the memory sheet counts its 1.7 KB as MoonLight's own.
 ///
 /// The snapshot call wants room for every task or it returns nothing, so the ceiling is generous and exceeding it makes that tick empty rather than partial.
 ///
@@ -38,6 +38,7 @@
 #if defined(CONFIG_FREERTOS_USE_TRACE_FACILITY) && CONFIG_FREERTOS_USE_TRACE_FACILITY
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"   // the scratch's mutex
 #include "freertos/freertos_debug.h"   // vTaskGetSnapshot: a stack's high end
 #include "esp_heap_caps.h"   // MALLOC_CAP_*, the snapshot scratch's memory type
 #include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
@@ -82,20 +83,39 @@ void fillHeapBytes(TaskInfo* out, const TaskStatus_t* raw, size_t n) {
 
 /// The kernel's task table, read under its lock into a scratch taken once: @xref{the-scratch-buffer-is-lazy-and-internal|why not from boot, and why not external memory}. Null when the scratch is refused.
 constexpr size_t kScratch = 40;
+// One user of the shared scratch at a time: the render loop's snapshot and the network task's heap scope both read it. A bounded wait, so a reader that loses the race skips one read.
+class ScratchLock {
+public:
+    ScratchLock() : held_(xSemaphoreTake(mutex(), pdMS_TO_TICKS(10)) == pdTRUE) {}
+    ~ScratchLock() { if (held_) xSemaphoreGive(mutex()); }
+    ScratchLock(const ScratchLock&) = delete;
+    ScratchLock& operator=(const ScratchLock&) = delete;
+    explicit operator bool() const { return held_; }
+private:
+    static SemaphoreHandle_t mutex() {
+        static StaticSemaphore_t buffer;
+        static SemaphoreHandle_t m = xSemaphoreCreateMutexStatic(&buffer);   // a static local's first use is thread-safe
+        return m;
+    }
+    bool held_;
+};
 TaskStatus_t* systemState(UBaseType_t& got, uint32_t& totalRunTime) {
     static TaskStatus_t* raw = nullptr;
     if (!raw) raw = static_cast<TaskStatus_t*>(callocCaps(kScratch * sizeof(TaskStatus_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     got = raw ? uxTaskGetSystemState(raw, kScratch, &totalRunTime) : 0;
     return raw;
 }
+// The table, when `lock` holds the scratch; null when another reader does.
+TaskStatus_t* lockedState(const ScratchLock& lock, UBaseType_t& got, uint32_t& totalRunTime) { return lock ? systemState(got, totalRunTime) : nullptr; }
 }  // namespace
 
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0) return 0;
     uint32_t totalRunTime = 0;
     UBaseType_t got = 0;
-    TaskStatus_t* raw = systemState(got, totalRunTime);
-    if (!raw) return 0;   // no scratch, no snapshot: the table shows empty
+    const ScratchLock lock;
+    TaskStatus_t* raw = lockedState(lock, got, totalRunTime);
+    if (!raw) return 0;   // no scratch, or another reader holds it: the table shows empty this time
     const size_t n = got < maxTasks ? got : maxTasks;
 #if configGENERATE_RUN_TIME_STATS == 1   // on in every MoonLight build (sdkconfig.defaults); with it off MoonShine shows no CPU time for a task
     // Each task's counter at the previous snapshot, by task number, so a share covers only the interval since.
@@ -148,7 +168,8 @@ void tasksHeap(size_t& total, size_t& psram) {
     uint32_t totalRunTime = 0;
     UBaseType_t got = 0;
     // The kernel's table, taken under its lock, as both cores move tasks between lists: a list walk of our own would race the other core.
-    const TaskStatus_t* raw = systemState(got, totalRunTime);
+    const ScratchLock lock;
+    const TaskStatus_t* raw = lockedState(lock, got, totalRunTime);
     if (!raw) return;
     vTaskSuspendAll();   // as freertos_debug.h asks of a snapshot while the scheduler runs
     for (UBaseType_t i = 0; i < got; i++) {

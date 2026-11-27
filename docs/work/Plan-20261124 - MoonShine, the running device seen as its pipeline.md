@@ -101,7 +101,7 @@ Few, and in one place each.
 
 - **Timing** stays where it is, the parent's bracket around each child's tick. The same bracket writes a begin and an end event for the trace, so no module is instrumented by hand.
 - **A named section inside a module**, such as Drivers' blend apart from its wait, is a scoped zone, the textbook construct of Perfetto and Tracy: one line where a module wants it, costing one branch while recording is off, or compiled out, which step 6 decides.
-- **The task table is taken when someone reads it**, the Tasks card or MoonShine, at most once a second: walking it suspends the scheduler for about a millisecond on an S3, which a device nobody watches skips (product owner, 2026-11-27).
+- **The task table is taken when someone reads it**, MoonShine's System tasks band, at most once a second: walking it suspends the scheduler for about a millisecond on an S3, which a device nobody watches skips (product owner, 2026-11-27).
 - **MoonLight's own allocations are counted where they happen**, `alloc`, `allocInternal` and every `new`, measured at 1.6 µs more per allocation and free on a classic ESP32 and kept for the line it buys (product owner, 2026-11-27).
 - **Source links** need no hook: the device reports its build's commit and each module's type, and docgen writes the index from type to file that MoonDeck resolves.
 
@@ -133,6 +133,11 @@ The pipeline graph comes first, so there is something to look at from the start;
 
 - **A stopped worker's owner outlives the worker** (CodeRabbit on #276, the product owner's next round, 2026-11-27). `stopPinnedTask` detaches a worker still running after 300 ms, and a detached worker can still touch its owner, a use after free where the owner is destroyed: Drivers' encode task, NetworkSend, NetworkReceive, AudioService, PictureService, JsonFetch, FleetClock, the worker pool and the H.264 encoder. Per caller: a join with a longer bound where the worker's blocking call has a short timeout of its own, and shared ownership of the worker's state, freed by the worker on exit as `EspWorker` frees itself, for a worker in a slow call (HTTP, sockets, I2S). A host test per shape and a round on a board.
 
+- **The system view in core** (Reviewer on #276, 2026-11-27). Folding Tasks into MoonShine put the memory bars, the Modules band and the System tasks band in the light domain, so a core-only build has no task or memory view. A core list source owns those three, and MoonShine adds the pipeline band on top; `TaskTable` then has its core caller.
+- **The worker pool's join** (Reviewer on #276, 2026-11-27). `WorkerPool`'s join spins on `yield()` where `Drivers::quiesceEncode` waits on a `Signal`; one wake primitive for both, with the worker teardown item above.
+
+- **One writer of a list's wire format** (Reviewer on #276, 2026-11-27). HttpServer's walk writes a list row by row beside `writeControlValue`'s whole list, two writers a byte-equality test holds together; a row-range writer in `Control.cpp`, the detail on the same cursor, gives them one.
+
 ## What it removes
 
-The flat module list of `/api/system` and the Tasks card's line of module times, once the graph list carries the same figures; the memory and time sheets as tables, once the graph's chips and strip carry them; the backlog cards "Canvas or node-graph view", "Modifier chain visualization" and "Memory: the largest buffers, by name", which this plan builds.
+The Tasks card, its tasks now MoonShine's System tasks band (2026-11-27); the flat module list of `/api/system`, once the graph list carries the same figures; the memory and time sheets as tables, once the graph's chips and strip carry them; the backlog cards "Canvas or node-graph view", "Modifier chain visualization" and "Memory: the largest buffers, by name", which this plan builds.

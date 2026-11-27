@@ -187,7 +187,6 @@ size_t ocramMaxBlock() {
 }
 size_t maxAllocBlock() { return std::max(ocramMaxBlock(), dtcmMaxBlock()); }
 size_t maxInternalAllocBlock() { return maxAllocBlock(); }
-size_t maxPsramAllocBlock() { return 0; }   // alloc reaches no PSRAM here, as ptrIsPsram says
 size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start) + (g_dtcmEnd - g_dtcmStart); }
 size_t totalInternalHeap() { return totalHeap(); }
 
@@ -228,7 +227,7 @@ size_t maxExecAllocBlock() { return ocramMaxBlock(); }
 // One row, the loop, whose free stack is the painted words still untouched above the floor.
 void recordSystemHeap() {}   // no system below MoonLight holds heap here
 void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
-void heapOverhead(size_t& total, size_t& psram) { total = psram = 0; }
+void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // alloc reaches no PSRAM here, as ptrIsPsram says
 void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
 void processMemory(size_t& resident, size_t& available) { resident = available = 0; }   // a board's heap figures say it
 void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }   // no RTOS, so no task holds a stack of its own
