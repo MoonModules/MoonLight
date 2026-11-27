@@ -67,7 +67,7 @@ add_executable(mm_tests
     unit/core/unit_DeviceGroup.cpp
     unit/core/unit_DevicesModule_growth.cpp
     unit/core/unit_DevicesModule_hue.cpp
-    unit/core/unit_TasksModule.cpp
+    unit/core/unit_TaskTable.cpp
     unit/core/unit_PinsModule.cpp
     unit/core/unit_WledPacket.cpp
     unit/core/unit_FilesystemModule_persistence.cpp
@@ -81,6 +81,8 @@ add_executable(mm_tests
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
+    unit/core/unit_HttpServerModule_walk.cpp
+    unit/core/unit_HttpServerWled.cpp
     unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_HttpServerModule_head.cpp
     unit/core/unit_HttpServerModule_sdcard.cpp

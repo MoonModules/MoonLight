@@ -82,7 +82,6 @@
 #include "core/services/Services.h"
 #include "core/services/AudioService.h"
 #include "core/system/I2cBusModule.h"
-#include "core/system/TasksModule.h"
 #include "core/system/PinsModule.h"
 #include "core/system/FileManagerModule.h"
 #include "core/system/FirmwareUpdateModule.h"

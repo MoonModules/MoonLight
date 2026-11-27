@@ -69,7 +69,8 @@
 #include "freertos/task.h"
 #include "rom/ets_sys.h"   // ets_delay_us for the reset gap
 
-#include "esp_heap_caps.h"   // capture buffer alloc for the shared frame loopback
+#include "esp_heap_caps.h"   // MALLOC_CAP_*, the loopback capture buffer's memory type
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_timer.h"       // timed first transmit
 #include "esp_log.h"
 #include "esp_cpu.h"
@@ -479,8 +480,8 @@ bool loopbackJumperOk(uint8_t txGpio, uint8_t rxGpio) {
 // Which is why a caller may allocate it first and hand it in.
 uint32_t* allocLoopbackCapture(size_t dataBytes) {
     const size_t capMax = dataBytes / 3 + 16;
-    return static_cast<uint32_t*>(heap_caps_aligned_alloc(
-        64, capMax * sizeof(uint32_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    return static_cast<uint32_t*>(allocCaps(
+        capMax * sizeof(uint32_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, 64));
 }
 
 void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
@@ -508,7 +509,7 @@ void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
     };
     // HEAP, not stack: the rx task holds this pointer, and the wedged-task exit below returns while the task may still be running, a stack Cap would then be a use-after-return. Heap lets that path leak the context alongside rxSymbols (the deliberate failure mode) instead of dangling it.
     auto* cap = new (std::nothrow) Cap{static_cast<uint8_t>(rxGpio), rxSymbols, capMax, kBits, rideMode};
-    if (!cap) { heap_caps_free(rxSymbols); return; }
+    if (!cap) { freeCaps(rxSymbols); return; }
     // Re-arm until a whole frame lands: @xref{riding-a-live-pipeline-means-re-arming-until-a-whole-frame-lands|why one arm is not enough here}.
     auto rxTask = [](void* arg) {
         auto* c = static_cast<Cap*>(arg);
@@ -569,7 +570,7 @@ void captureAndVerifyFrame(uint16_t rxGpio, size_t frameBytes, size_t dataBytes,
         ESP_LOGE(tag, "loopback: rx task never finished — leaking the capture buffer instead of freeing under it");
         return;   // rxSymbols and cap both stay allocated, deliberately
     }
-    heap_caps_free(rxSymbols);
+    freeCaps(rxSymbols);
     delete cap;
 }
 
@@ -678,14 +679,14 @@ RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
 
     // One real frame's worth of WIRE BYTES, DMA-capable internal RAM (the same place the driver's own frame buffer lives). Off the hot path: a control-driven self-test.
     const size_t txBytes = static_cast<size_t>(lights) * channels;
-    auto* txWire = static_cast<uint8_t*>(heap_caps_malloc(
+    auto* txWire = static_cast<uint8_t*>(allocCaps(
         txBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
     const size_t capMax = kBits + 16;
-    auto* rxSymbols = static_cast<uint32_t*>(heap_caps_aligned_alloc(
-        64, capMax * sizeof(uint32_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    auto* rxSymbols = static_cast<uint32_t*>(allocCaps(
+        capMax * sizeof(uint32_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, 64));
     if (!txWire || !rxSymbols) {
-        heap_caps_free(txWire);
-        heap_caps_free(rxSymbols);
+        freeCaps(txWire);
+        freeCaps(rxSymbols);
         return r;
     }
     size_t s = 0;
@@ -695,8 +696,8 @@ RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
 
     RmtWs2812Handle tx;
     if (!rmtWs2812Init(tx, txGpio, kLoopbackResHz, /*invert=*/false)) {
-        heap_caps_free(txWire);
-        heap_caps_free(rxSymbols);
+        freeCaps(txWire);
+        freeCaps(rxSymbols);
         return r;
     }
     rmtWs2812SetBitTiming(tx, sym0, sym1);
@@ -746,8 +747,8 @@ RmtLoopbackResult rmtWs2812LoopbackFrame(uint8_t txGpio, uint8_t rxGpio,
             r.got[b / 8] = static_cast<uint8_t>((r.got[b / 8] << 1) | bit);
         }
     }
-    heap_caps_free(txWire);
-    heap_caps_free(rxSymbols);
+    freeCaps(txWire);
+    freeCaps(rxSymbols);
     return r;
 }
 

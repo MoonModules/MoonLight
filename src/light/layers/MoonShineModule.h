@@ -3,7 +3,7 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"      // topOfType: the containers this list reads
 #include "core/module/Control.h"        // ListSource
-#include "core/system/TasksModule.h"    // the system tasks' snapshot, refreshed when read
+#include "core/util/TaskTable.h"    // the system tasks' snapshot, taken when read
 #include "core/util/JsonSink.h"
 #include "core/util/HeapBytes.h"        // each node's bytes per memory type
 #include "core/util/ModuleFactory.h"    // tableBytes: the type table's part of the memory bars
@@ -53,6 +53,8 @@ namespace mm {
 ///
 /// Then the system (what ran before MoonLight, `platform::systemHeap`), the heap's block headers, "unaccounted" (what ESP-IDF allocated after start-up, its network buffers above all, 0 at least) and "free".
 ///
+/// Beside free, the bar names its largest free block (`platform::maxInternalAllocBlock` and `maxPsramAllocBlock`), since the next large buffer needs one piece: 122 KB free in pieces of at most 76 KB refuses a 90 KB frame.
+///
 /// **On a computer**, which reports no heap, the one bar is "RAM": the process's resident memory, closing with what the machine has available (`platform::processMemory`). Elsewhere the bar is "heap", what MoonLight took through its own allocator (`platform::allocatedBytes()`), with no free part.
 ///
 /// ## The time bars
@@ -63,7 +65,7 @@ namespace mm {
 ///
 /// **The bottleneck.** Of the render loop, the workers and the encode task, the one with the least idle sets the frame rate; its largest node is marked `bottleneck`.
 ///
-/// **System tasks.** From TasksModule's snapshot: each task's core, what it holds per memory type, its least free stack and its CPU time as a share of the frame. The page groups them per core.
+/// **System tasks.** From the task table (`TaskTable`): each task's core, state, priority, what it holds per memory type, its least free stack and its CPU time as a share of the frame. The page groups them per core and names the task each core runs.
 class MoonShineModule : public MoonModule, public ListSource {
 public:
     /// The rows drawn as a flow.
@@ -117,8 +119,14 @@ public:
         /// @field parent Its top-level module.
         /// @field core A task's core.
         /// @field stackFree A task's least free stack.
+        /// @field state A task's state when the snapshot was taken: running, ready, blocked, suspended or deleted.
+        /// @field prio A task's RTOS priority.
+        /// @field now The task its core ran when the snapshot was taken, on a dual-core chip.
         /// @field fps An output's frames sent last second.
         /// @field dropped An output's frames dropped since it started, where it counts them.
+        /// @field dma An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads.
+        /// @field headroom An output's slack before it falls behind over the last second, in percent, where it measures one.
+        /// @field largest A memory bar's largest free block, which a fragmented heap holds far under its free part.
         controls_.addList("pipeline", *this);   // this module is the ListSource
     }
 
@@ -131,6 +139,7 @@ private:
     /// The memory figures, each type balancing on its own.
     struct Memory {
         HeapBytes modules, types, moonlight, tasks, network, system, overhead, unaccounted, free;
+        size_t largest[2] = {};   ///< the largest free block per bar, which a fragmented heap holds far under its free total
         bool psram = false;    ///< the board has PSRAM: a bar per type
         bool totals = false;   ///< the platform reports its heap, so the bars close with free
         bool process = false;  ///< a computer: the bar is the process's RAM against the machine's available
@@ -151,7 +160,7 @@ private:
         const MoonModule* layouts = nullptr;
         const Effects* effects = nullptr;
         const Drivers* drivers = nullptr;
-        const TasksModule* tasks = nullptr;
+        const TaskTable* tasks = nullptr;
         Memory mem;
         Time time;
         const MoonModule* bottleneck = nullptr;
@@ -195,7 +204,7 @@ private:
         v.mem.modules = {};
         for (uint8_t i = 0; s && i < s->moduleCount(); i++) gatherModules(s->module(i), v.mem.modules);
         v.mem.tasks = {};
-        for (uint8_t i = 0; v.tasks && i < v.tasks->taskCount(); i++) v.mem.tasks += heapOfTask(v.tasks->task(i));
+        for (uint8_t i = 0; v.tasks && i < v.tasks->count(); i++) v.mem.tasks += heapOfTask(v.tasks->task(i));
         closeMemory(v.mem);
         if (s) gatherTime(*s, v);
     }
@@ -206,8 +215,8 @@ private:
         for (uint8_t i = 0; i < m->childCount(); i++) gatherModules(m->child(i), sum);
     }
 
-    /// What a system task holds on the heap, in the memory type its stack lives in.
-    static HeapBytes heapOfTask(const platform::TaskInfo& t) { return {t.heapBytes, t.stackPsram ? t.heapBytes : 0}; }
+    /// What a system task holds on the heap, per memory type.
+    static HeapBytes heapOfTask(const platform::TaskInfo& t) { return {t.heapBytes, t.psramBytes}; }
 
     /// The type table, the used heap no module or task reports and the free heap, per type.
     static void closeMemory(Memory& mem) {
@@ -229,6 +238,7 @@ private:
         mem.totals = heapTotal > heapFree;
         mem.psram = heapTotal > internalTotal && heapFree >= internalFree;
         mem.free = mem.totals ? HeapBytes{heapFree, mem.psram ? heapFree - internalFree : 0} : HeapBytes{};
+        readLargest(mem);
         HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, mem.psram ? overSize(heapTotal - internalTotal, mem.free.psram) : 0}
                                     : HeapBytes{platform::allocatedBytes(), 0};
         // A computer reports no heap, so its sheet is the process's resident memory against what the machine has available.
@@ -290,7 +300,13 @@ private:
         else writeTimeBar(sink, v.time, laneOfBar(v, row - v.memoryBars()));
     }
 
-    /// One memory type's bar: the modules, the type table, MoonLight's other allocations, the tasks, the network, the system, the heap's overhead, the unaccounted rest, and free where the platform says: @xref{the-memory-bars}.
+    /// The largest free block per bar: internal RAM's and PSRAM's on a board with both, the one heap's elsewhere.
+    static void readLargest(Memory& mem) {
+        mem.largest[0] = mem.psram ? platform::maxInternalAllocBlock() : platform::maxAllocBlock();
+        mem.largest[1] = mem.psram ? platform::maxPsramAllocBlock() : 0;
+    }
+
+    /// One memory type's bar: the modules, the type table, MoonLight's other allocations, the tasks, the network, the system, the heap's overhead, the unaccounted rest, free where the platform says, and its largest free block: @xref{the-memory-bars}.
     static void writeMemoryBar(JsonSink& sink, const Memory& mem, uint8_t type) {
         const auto part = [&](const HeapBytes& h) { return static_cast<unsigned>(!mem.psram ? h.total : type == 1 ? h.psram : h.internal()); };
         const char* name = mem.process ? "RAM" : !mem.totals ? "heap" : type == 1 ? "PSRAM" : "internal RAM";
@@ -298,7 +314,9 @@ private:
                      name, static_cast<unsigned>(type), part(mem.modules), part(mem.types), part(mem.moonlight), part(mem.tasks), part(mem.network), part(mem.system),
                      part(mem.overhead), part(mem.unaccounted));
         if (mem.totals) sink.appendf(",[\"free\",%u]", part(mem.free));
-        sink.append("]}");
+        sink.append("]");
+        if (mem.totals && type < 2 && mem.largest[type]) sink.appendf(",\"largest\":%u", static_cast<unsigned>(mem.largest[type]));
+        sink.append("}");
     }
 
     /// One lane's bar: its work, its waits and its idle, adding up to the frame: @xref{the-time-bars}.
@@ -377,6 +395,7 @@ private:
     };
     mutable Snapshot snap_;
     mutable ScratchBuffer<Node> nodes_{*this};   ///< the nodes in row order, grown as the tree grows
+    TaskTable tasks_{*this};                     ///< the system tasks, taken when a snapshot is
     mutable bool stale_ = true;                  ///< the figures moved since the snapshot
 
     /// The snapshot, taken again once the tree changes, and once the figures moved at the start of a document (`start`, its first row), so one document holds one snapshot's figures.
@@ -396,13 +415,10 @@ private:
         findContainers(v);
         snap_.version = treeVersion();
         stale_ = false;
+        tasks_.ensureFresh();   // the read takes the task table, so a device nobody watches walks none
+        v.tasks = &tasks_;
         ListRow n = 0;
         walk(v, [&](const Node& node) {
-            // The Modules band comes before the tasks band, so the task table is found before its rows.
-            if (node.m && !v.tasks && std::strcmp(node.m->typeName(), "TasksModule") == 0) {
-                v.tasks = static_cast<const TasksModule*>(node.m);
-                v.tasks->ensureFresh();   // the read takes the task table, so a device nobody watches walks none
-            }
             if (!nodes_.ensure(n + 1u)) return false;   // memory refused: the list holds the nodes that fit
             nodes_[n++] = node;
             return true;
@@ -466,7 +482,7 @@ private:
         return true;
     }
     template <typename F> static bool walkTasks(const View& v, F& f) {
-        for (uint8_t i = 0; v.tasks && i < v.tasks->taskCount(); i++)
+        for (uint8_t i = 0; v.tasks && i < v.tasks->count(); i++)
             if (!f(Node{nullptr, static_cast<uint8_t>(i % kStages), nullptr, Band::Tasks, &v.tasks->task(i)})) return false;
         return true;
     }
@@ -579,10 +595,11 @@ private:
         const HeapBytes held = heapOfTask(t);
         sink.append("{\"name\":");
         sink.writeJsonString(t.name);
-        sink.appendf(",\"type\":\"task\",\"stage\":%u,\"us\":%u,\"own\":%u,\"core\":%d,\"internal\":%u,\"psram\":%u,\"stackFree\":%u,\"enabled\":true",
+        sink.appendf(",\"type\":\"task\",\"stage\":%u,\"us\":%u,\"own\":%u,\"core\":%d,\"state\":\"%s\",\"prio\":%u,\"internal\":%u,\"psram\":%u,\"stackFree\":%u,\"enabled\":true",
                      static_cast<unsigned>(n.stage), static_cast<unsigned>(lanes.us[kTasks]), static_cast<unsigned>(lanes.us[kTasks]),
-                     static_cast<int>(t.core), static_cast<unsigned>(held.internal()), static_cast<unsigned>(held.psram),
-                     static_cast<unsigned>(t.stackFreeBytes));
+                     static_cast<int>(t.core), TaskTable::stateName(t.state), static_cast<unsigned>(t.priority),
+                     static_cast<unsigned>(held.internal()), static_cast<unsigned>(held.psram), static_cast<unsigned>(t.stackFreeBytes));
+        if (v.tasks && v.tasks->runningNow(t)) sink.append(",\"now\":true");
         writeTime(sink, lanes);
         sink.append(",\"group\":\"System tasks\",\"edges\":[]}");
     }
@@ -591,6 +608,8 @@ private:
     static void writePace(JsonSink& sink, const DriverBase& d) {
         sink.appendf(",\"fps\":%u", static_cast<unsigned>(d.paceFps()));
         if (const std::optional<uint32_t> dropped = d.framesDropped()) sink.appendf(",\"dropped\":%u", static_cast<unsigned>(*dropped));
+        if (const size_t dma = d.dmaBytes()) sink.appendf(",\"dma\":%u", static_cast<unsigned>(dma));
+        if (const std::optional<uint8_t> room = d.headroom()) sink.appendf(",\"headroom\":%u", static_cast<unsigned>(*room));
     }
 
     static void writeNode(JsonSink& sink, const View& v, const Node& n) {

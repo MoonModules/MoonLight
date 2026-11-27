@@ -31,6 +31,16 @@ def test_table_rows_are_each_counted_and_a_row_with_no_marker_is_not_started():
     assert counts(text) == (1, 0, 1, 1)
 
 
+def test_a_table_with_no_marker_ahead_of_marked_step_headings_leaves_the_headings_as_the_steps():
+    text = "## Steps\n\n| # | Area | Notes |\n|--|--|--|\n| 1 | core | |\n| 2 | light | |\n\n### Step 1: Implement ✅\n\n### Step 2: Verify 🧪\n"
+    assert counts(text) == (0, 1, 1, 0)
+
+
+def test_a_table_whose_rows_all_wait_counts_each_as_not_started():
+    text = "## Steps\n\n| # | Step | Status |\n|--|--|--|\n| 1 | one | |\n| 2 | two | |\n"
+    assert counts(text) == (0, 0, 0, 2)
+
+
 def test_only_the_first_marked_structure_counts_so_checks_under_a_phase_stay_out():
     text = "## Phases\n\n✅ **Phase 1: base**\n\n1. ✅ a check\n2. ✅ another check\n\n⏳ **Phase 2: rest**\n\n1. ⏳ a check\n"
     assert counts(text) == (0, 0, 1, 1)

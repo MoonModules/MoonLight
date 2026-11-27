@@ -62,6 +62,10 @@ public:
     virtual std::optional<uint32_t> framesPerSecond() const { return std::nullopt; }
     /// Frames it dropped since it started, where it counts them: an output whose queue or wire falls behind; none means every frame it takes goes out.
     virtual std::optional<uint32_t> framesDropped() const { return std::nullopt; }
+    /// The bytes its peripheral's DMA engine reads, a part of its heap shown on its own since that memory has to be DMA-capable and is scarce; 0 for an output with no DMA.
+    virtual size_t dmaBytes() const { return 0; }
+    /// The slack it had left over the last second before falling behind, in percent, 0 at the edge or behind; none where it measures none.
+    virtual std::optional<uint8_t> headroom() const { return std::nullopt; }
     /// Its pace: its own frame count where it keeps one, else the render rate, since it sends every rendered frame.
     uint32_t paceFps() const;
     /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.

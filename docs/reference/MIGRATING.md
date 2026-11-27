@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### The Tasks card is MoonShine's System tasks band
+
+**Action: *none*; a saved Tasks card is ignored.**
+
+MoonShine shows each task with its core, state, priority, least free stack, CPU time and what it holds, grouped per core with the task each core runs, so the System menu has no Tasks card. A script that read the card's `tasks` list reads MoonShine's `pipeline` rows of type `task`, whose `stackFree` was the card's `stack`.
+
 ### A snaking Cube carries its row snake across the planes
 
 **Action: *update a file*, for a cube with an odd row count whose strip jumps back between planes.**

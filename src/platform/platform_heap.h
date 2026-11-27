@@ -46,7 +46,7 @@ void recordSystemHeap();
 void systemHeap(size_t& total, size_t& psram);
 /// The heap's own block headers, used less allocated, read live: total and the PSRAM part, 0 where the platform cannot tell.
 void heapOverhead(size_t& total, size_t& psram);
-/// What MoonLight's own code holds, counted where it allocates (alloc, allocInternal, new): total and the PSRAM part, 0 where it is uncounted.
+/// What MoonLight's own code holds, counted where it allocates (alloc, allocInternal, new, and on an ESP32 allocCaps): total and the PSRAM part, 0 where it is uncounted.
 void moonlightHeap(size_t& total, size_t& psram);
 
 /// A computer's own memory sheet: the process's resident memory and the machine's available memory, 0 on a board, whose heap figures say it.
@@ -77,6 +77,8 @@ size_t freeInternalHeap();
 size_t maxAllocBlock();
 /// Largest contiguous block of internal RAM, the scarce one, so this is the memory-pressure KPI.
 size_t maxInternalAllocBlock();
+/// Largest contiguous block of PSRAM on a board with it, else 0.
+size_t maxPsramAllocBlock();
 
 /// Largest contiguous block of executable memory, which is what bounds a MoonLive script's size.
 size_t maxExecAllocBlock();

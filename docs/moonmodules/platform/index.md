@@ -44,7 +44,7 @@ Source: [platform_net.h](../../../src/platform/platform_net.h)
 
 ## Tasks and workers
 
-RTOS task introspection for TasksModule, and the pinned worker with wake notification that carries the render and encode split across cores. On the host these are threads; the contract is identical.
+RTOS task introspection for MoonShine's System tasks band, and the pinned worker with wake notification that carries the render and encode split across cores. On the host these are threads; the contract is identical.
 
 Source: [platform_tasks.h](../../../src/platform/platform_tasks.h)
 

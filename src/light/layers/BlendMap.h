@@ -15,7 +15,7 @@ namespace mm {
 ///
 /// `clearFirst` clears the destination first, as the bottom layer of a composite does, so physical cells with no source, such as a sparse layout's gaps, stay black.
 ///
-/// It applies on the mapped path only, since the identity path writes every byte it covers; later layers pass false and blend onto the frame below.
+/// It clears on every path but the identity overwrite at full opacity, a plain copy of the bytes both buffers share; later layers pass false and blend onto the frame below.
 ///
 /// A single layer passes `Overwrite` at full opacity with a clear, which takes the exact fast path this had before composition existed.
 ///
@@ -44,7 +44,7 @@ namespace mm {
 ///
 /// A reshape rebuilds the mapping and the driver's output buffer in separate steps of one `prepareTree` sweep (Layouts, then the Layer, then Drivers), and a render tick can land between them.
 ///
-/// Unbounded, the new mapping's indices write past the old, smaller buffer and corrupt the heap, which surfaces later in an unrelated allocation: what made resizing a layout look intermittently fatal.
+/// Inside that window the mapping and the output buffer describe different shapes, so each access is held to the size of the buffer it touches: a destination past the output's end is skipped, and the walk ends at the source's last light.
 ///
 /// This is a bound rather than a fix for the ordering: the frame drawn inside the window is briefly wrong, but it cannot corrupt memory, which is the property that matters.
 ///

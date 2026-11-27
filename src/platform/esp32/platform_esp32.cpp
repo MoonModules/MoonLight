@@ -82,6 +82,7 @@
 #include "esp_timer.h"
 #include "nvs.h"         // bootRecord: the count that survives a power cut
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, callocCaps, adoptCaps, freeCaps, defined here
 #include "esp_memory_utils.h"   // esp_ptr_external_ram: the ptrIsPsram residency probe
 #include "esp_cache.h"        // esp_cache_msync: I-cache sync after writing MoonLive code to IRAM
 #include "esp_system.h"
@@ -150,7 +151,7 @@ extern "C" uint8_t is_transport_tx_ready(void);
 #include <new>       // std::nothrow_t, the replaced allocation functions below
 
 namespace mm::platform {
-// MoonLight's own heap, counted where it allocates: alloc, allocInternal and new. The size is the block's own, read from its header, so taking and giving back agree.
+// MoonLight's own heap, counted where it allocates: alloc, allocInternal, new and allocCaps. The size is the block's own, read from its header, so taking and giving back agree.
 static std::atomic<size_t> ownBytes_{0}, ownPsram_{0};
 static void countTaken(void* p) {
     if (!p) return;
@@ -233,6 +234,18 @@ void free(void* ptr) {
     countGiven(ptr);
     heap_caps_free(ptr);
 }
+
+void* allocCaps(size_t bytes, uint32_t caps, size_t align) {
+    return counted(align ? heap_caps_aligned_alloc(align, bytes, caps) : heap_caps_malloc(bytes, caps));
+}
+
+void* callocCaps(size_t bytes, uint32_t caps, size_t align) {
+    return counted(align ? heap_caps_aligned_calloc(align, 1, bytes, caps) : heap_caps_calloc(1, bytes, caps));
+}
+
+void* adoptCaps(void* p) { return counted(p); }
+
+void freeCaps(void* p) { free(p); }
 
 // Executable memory for emitted code; null when exhausted, which a busy device hits, so the caller degrades. The request rounds up to a word, since the final store and the cache sync both round up.
 void* allocExec(size_t bytes) {
@@ -344,11 +357,16 @@ void heapOverhead(size_t& total, size_t& psram) {
 
 static size_t systemHeap_[2] = {};   // total, PSRAM
 
+// Free PSRAM, asked of the heap in one read: the difference of two free sizes read apart wraps when memory is freed between them.
+static size_t freePsramHeap() { return heap_caps_get_free_size(MALLOC_CAP_SPIRAM); }
+
 void recordSystemHeap() {
-    const size_t used = totalHeap() - freeHeap();
-    const size_t usedPsram = (totalHeap() - totalInternalHeap()) - (freeHeap() - freeInternalHeap());
+    // The task table first: its first read takes a counted scratch, which `used` then holds as `own` does.
     size_t tasks = 0, tasksPsram = 0, over = 0, overPsram = 0;
     tasksHeap(tasks, tasksPsram);
+    const size_t used = totalHeap() - freeHeap();
+    const size_t totalPsram = heap_caps_get_total_size(MALLOC_CAP_SPIRAM), freePsram = freePsramHeap();
+    const size_t usedPsram = totalPsram > freePsram ? totalPsram - freePsram : 0;
     heapOverhead(over, overPsram);
     // What MoonLight's counted allocations took before mm_main, such as the settings store and static constructors, is MoonLight's line, so the system's leaves it out.
     size_t own = 0, ownPsram = 0;
@@ -366,6 +384,8 @@ void systemHeap(size_t& total, size_t& psram) {
 // Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the host seam's cross-thread contract.
 static std::atomic<size_t> testMaxBlock{0};
 void setTestMaxAllocBlock(size_t bytes) { testMaxBlock.store(bytes, std::memory_order_relaxed); }
+
+size_t maxPsramAllocBlock() { return heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM); }
 
 size_t maxAllocBlock() {
     size_t real = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
@@ -827,7 +847,7 @@ private:
     struct Reading { size_t free = 0, freePsram = 0, tasks = 0, tasksPsram = 0; };
     static void read(Reading& r) {
         r.free = freeHeap();
-        r.freePsram = r.free - freeInternalHeap();
+        r.freePsram = freePsramHeap();
         tasksHeap(r.tasks, r.tasksPsram);
     }
     Reading before_;

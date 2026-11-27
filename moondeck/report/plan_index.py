@@ -10,7 +10,7 @@ drift from the steps. `--check` renders without writing and fails when the index
 
 A plan's steps are the first structure in its steps section that carries a marker: step headings, numbered items, phase lines
 (`✅ **Phase 1: ...**`), or the rows of a step table. Only that structure counts, so the numbered checks under a phase or a heading
-stay out of the total.
+stay out of the total. Before a plan's first marker is written, the rows of its step table count, each as not started.
 """
 import argparse
 import re
@@ -78,7 +78,9 @@ def count_steps(text: str) -> dict[str, int]:
     """In progress, testing, done and not started, over the plan's top-level steps."""
     lines = steps_section(text.split("\n"))
     candidates = [(kind_of(l), l) for l in lines if kind_of(l)]
-    marked = next((k for k, l in candidates if re.search("|".join(MARKERS + DROPPED), l) or k == "table"), None)
+    marked = next((k for k, l in candidates if re.search("|".join(MARKERS + DROPPED), l)), None)
+    if marked is None and any(k == "table" for k, _ in candidates):
+        marked = "table"   # a step table whose rows all wait: each blank status reads as not started
     counts = dict.fromkeys(MARKERS, 0)
     for kind, line in candidates:
         if kind != marked:

@@ -153,7 +153,7 @@ public:
     /// Frames it sent last second, which a peer's map shows beside its lights.
     std::optional<uint32_t> framesPerSecond() const override { return framesLastSecond_; }
     /// Frames that were due while the send task still held the last one.
-    std::optional<uint32_t> framesDropped() const override { return framesSkipped_; }
+    std::optional<uint32_t> framesDropped() const override { return framesSkipped_.load(std::memory_order_relaxed); }
 
     /// What went out last second, frames a second to each receiver, to the group, or to the broadcast address, as the addressing sends it.
     void reportNetworkUse(NetworkUse& use) const override {
@@ -175,8 +175,13 @@ public:
         packetsLastSecond_ = packets - packetsAtSecond_;
         framesAtSecond_ = frames;
         packetsAtSecond_ = packets;
+        const uint32_t skipped = framesSkipped_.load(std::memory_order_relaxed);
+        headroom_ = sendTask_.impl ? std::optional<uint8_t>(sendHeadroom(skipped - skippedAtSecond_)) : std::nullopt;   // the burst from the tick has no budget to measure against
+        skippedAtSecond_ = skipped;
         refreshReceivers();
     }
+    /// The pacing budget the configured gap leaves unused, in percent: 0 once the gap is squeezed to fit, or a frame was skipped this second.
+    std::optional<uint8_t> headroom() const override { return headroom_; }
 
 
     /// Derive the stable component id from the MAC, which needs no UUID machinery.
@@ -190,6 +195,8 @@ public:
 
     /// How many times the send task was started, so a test can tell a running stream from a restarted one.
     uint32_t taskStartsForTest() const { return taskStarts_; }
+    /// Mark the last frame as still being sent, so a test reaches the tick's skip at a time it chooses.
+    void holdFrameForTest() { frameState_.exchange(kFrameSending, std::memory_order_acq_rel); }
 
     /// Stop the send task and close the socket on release, then chain to the base, which clears the status.
     void release() override {
@@ -287,8 +294,12 @@ public:
         uint32_t now = platform::millis();
         uint32_t interval = 1000 / fps;
         if (now - lastSendTime_ < interval) return;
-        // A frame that is due while the task still sends the last one is dropped: the task owns the corrected buffer.
-        if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) { framesSkipped_++; return; }
+        // A frame that is due while the task still sends the last one is dropped, since the task owns the corrected buffer: its slot goes, so the next frame waits a whole interval and the drop counts once.
+        if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) {
+            framesSkipped_.fetch_add(1, std::memory_order_relaxed);
+            lastSendTime_ = now;
+            return;
+        }
         lastSendTime_ = now;
 
         // A pure reader: an unwired or mismatched correction falls back to passthrough.
@@ -325,6 +336,7 @@ public:
         // Paced from the task when it runs and the frame sits in the corrected buffer, which the task owns until it is done.
         if (sendTask_.impl && data == corrected_.data()) {
             frame_ = {data, totalBytes, bytesPerLight};
+            frameBytes_.store(static_cast<uint32_t>(totalBytes), std::memory_order_relaxed);   // read by tick1s on another thread
             frameState_.exchange(kFrameReady, std::memory_order_acq_rel);
             platform::notifyTask(sendTask_);
             return;
@@ -335,15 +347,28 @@ public:
     /// Test-only accessor for the corrected buffer, pinning the no-allocation contract.
     const Buffer& correctedBuffer() const { return corrected_; }
 
+    /// The share of the pacing budget a frame at the configured gap leaves unused, 0 when frames were skipped: the send task's slack, which its spread-out send time cannot tell.
+    uint8_t sendHeadroom(uint32_t skipped) const {
+        const uint32_t packets = packetsFor(frameBytes_.load(std::memory_order_relaxed));
+        const uint32_t budget = paceBudgetUs();
+        const uint64_t need = static_cast<uint64_t>(packets > 1 ? packets - 1 : 0) * packetGap;
+        if (skipped || budget == 0 || need >= budget) return 0;
+        return static_cast<uint8_t>((budget - need) * 100 / budget);
+    }
     /// The slot spacing: the gap, shortened so a frame's slots fit in 80% of its period, leaving room for the next.
     uint32_t effectiveGap(size_t totalBytes) const {
-        const size_t chunk = packetPayload();
-        // An upper bound: one partial packet per destination on top of the whole ones.
-        const uint32_t packets = static_cast<uint32_t>((totalBytes + chunk - 1) / chunk) + nDest_;
-        const uint32_t budget = pacingPeriodUs(fps, framePeriodUs_.load(std::memory_order_relaxed)) / 5 * 4;
+        const uint32_t packets = packetsFor(totalBytes);
+        const uint32_t budget = paceBudgetUs();
         const uint32_t fit = packets > 1 ? budget / (packets - 1) : budget;
         return packetGap < fit ? packetGap : fit;
     }
+    /// The packets a frame of `totalBytes` takes, an upper bound: one partial packet per destination on top of the whole ones.
+    uint32_t packetsFor(size_t totalBytes) const {
+        const size_t chunk = packetPayload();
+        return static_cast<uint32_t>((totalBytes + chunk - 1) / chunk) + nDest_;
+    }
+    /// The time a frame's slots may spread over: 80% of its period, leaving room for the next.
+    uint32_t paceBudgetUs() const { return pacingPeriodUs(fps, framePeriodUs_.load(std::memory_order_relaxed)) / 5 * 4; }
 
     /// The bytes one packet carries: a DDP packet's most, or a universe's channels, clamped to what a universe holds.
     size_t packetPayload() const {
@@ -417,7 +442,10 @@ private:
     std::atomic<uint32_t> packetsPerFrame_{0}, packetSpacing_{0};
     uint32_t framesAtSecond_ = 0, packetsAtSecond_ = 0;       ///< the counts at the last tick1s
     uint32_t framesLastSecond_ = 0, packetsLastSecond_ = 0;   ///< sent in the second before it
-    uint32_t framesSkipped_ = 0;   ///< frames the tick skipped while the task sent the last, on the tick's thread alone
+    std::atomic<uint32_t> framesSkipped_{0};   ///< frames the tick skipped while the task sent the last, which tick1s and the report read from their own tasks
+    std::atomic<uint32_t> frameBytes_{0};   ///< the bytes of the frame last handed to the task, for the headroom tick1s reads
+    uint32_t skippedAtSecond_ = 0;   ///< framesSkipped_ at the last tick1s
+    std::optional<uint8_t> headroom_;   ///< the last second's send headroom, none before the first second
     /// The light-count warning prepare found, restored once the names resolve.
     const char* prepareWarn_ = nullptr;
 

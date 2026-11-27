@@ -31,6 +31,11 @@ void JsonSink::appendStaged(const char* s, size_t len) {
 
 void JsonSink::appendFixed(const char* s, size_t len) {
     if (len == 0) return;
+    if (spills_ && !overflowed_ && fixedLen_ + len + 1 > fixedCap_) {
+        if (spill(len)) appendHeap(s, len);
+        else overflowed_ = true;
+        return;
+    }
     if (overflowed_ || fixedCap_ == 0) { overflowed_ = true; return; }
     // One byte reserved for the terminator; what fits is kept and the flag trips for the rest.
     const size_t room = fixedCap_ - 1 - fixedLen_;
@@ -39,6 +44,16 @@ void JsonSink::appendFixed(const char* s, size_t len) {
     fixedLen_ += n;
     fixed_[fixedLen_] = '\0';
     if (n < len) overflowed_ = true;
+}
+
+bool JsonSink::spill(size_t more) {
+    if (!ensureHeap(fixedLen_ + more)) return false;
+    std::memcpy(heap_, fixed_, fixedLen_);
+    heapLen_ = fixedLen_;
+    heap_[heapLen_] = '\0';
+    fixed_ = nullptr;   // buffer mode from here: data() and size() read the block
+    fixedLen_ = fixedCap_ = 0;
+    return true;
 }
 
 void JsonSink::appendHeap(const char* s, size_t len) {
@@ -66,7 +81,7 @@ void JsonSink::appendf(const char* fmt, ...) {
 
 void JsonSink::appendLong(const char* fmt, va_list ap, size_t n) {
     // The fixed mode stays within its buffer: an allocation here would hide the problem (JsonSink.h, "Overflow is a flag").
-    if (fixed_) { overflowed_ = true; return; }
+    if (fixed_ && !spills_) { overflowed_ = true; return; }
     // The growing modes format into an exactly-sized block, so a long fragment arrives whole.
     char* big = static_cast<char*>(platform::alloc(n + 1));
     if (!big) { overflowed_ = true; return; }

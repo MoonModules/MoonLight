@@ -260,7 +260,7 @@ void nameCurrentThread(const char* name) {
 #endif
 }
 
-/// The process's threads, the host's task table; TasksModule and MoonShine read it when someone looks.
+/// The process's threads, the host's task table; MoonShine reads it when someone looks.
 size_t hostThreads(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0) return 0;
     const uint64_t now = wallNs();

@@ -33,7 +33,7 @@ struct FakePinModule : MoonModule {
     }
 };
 
-// Reach the `pins` control's ListSource so the row/detail JSON is exercised directly (same access unit_TasksModule uses: descriptor.ptr → ListSource*).
+// Reach the `pins` control's ListSource so the row/detail JSON is exercised directly (descriptor.ptr → ListSource*).
 const ListSource* pinsSource(const MoonModule& m) {
     for (uint8_t i = 0; i < m.controls().count(); i++)
         if (std::strcmp(m.controls()[i].name, "pins") == 0)

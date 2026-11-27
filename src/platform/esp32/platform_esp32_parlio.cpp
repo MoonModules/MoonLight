@@ -39,6 +39,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"   // esp_timer_get_time — ISR-safe wire-time stamp
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -95,7 +96,7 @@ void destroyState(ParlioState* st) {
         parlio_tx_unit_disable(st->unit);
         parlio_del_tx_unit(st->unit);
     }
-    for (auto* b : st->buf) if (b) heap_caps_free(b);
+    for (auto* b : st->buf) if (b) freeCaps(b);
     for (auto* s : st->done) if (s) vSemaphoreDelete(s);
     delete st;
 }
@@ -144,7 +145,7 @@ ParlioState* createState(const uint16_t* dataPins, uint8_t laneCount,
     // Measured reality: on this chip the external request does not satisfy.
     // So the fallback governs and the largest internal block caps the wide bus well below what the sibling path reaches.
     // So this is allocate-and-degrade that currently degrades here, and lifting it to a real external frame is the backlogged chunked-transfer work.
-    st->buf[0] = static_cast<uint8_t*>(heap_caps_malloc(
+    st->buf[0] = static_cast<uint8_t*>(allocCaps(
         bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM | MALLOC_CAP_CACHE_ALIGNED));
     // The internal fallback under the same reserve rule the second buffer uses, which is the hole the init gate cannot see.
     // The gate admits the config because external memory reports room, that allocation then fails anyway.
@@ -152,8 +153,8 @@ ParlioState* createState(const uint16_t* dataPins, uint8_t laneCount,
     if (!st->buf[0]
         && heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)
                >= bufferBytes + HEAP_RESERVE) {
-        st->buf[0] = static_cast<uint8_t*>(heap_caps_aligned_alloc(
-            64, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+        st->buf[0] = static_cast<uint8_t*>(allocCaps(
+            bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, 64));
     }
     if (!st->buf[0]) { destroyState(st); return nullptr; }
     std::memset(st->buf[0], 0, bufferBytes);
@@ -164,13 +165,13 @@ ParlioState* createState(const uint16_t* dataPins, uint8_t laneCount,
         st->done[1] = xSemaphoreCreateBinaryStatic(&st->doneBuf[1]);
         if (st->done[1]) {
             // PSRAM first (no internal-heap impact). Internal fallback ONLY if it leaves HEAP_RESERVE intact, the second buffer is a nice-to-have, so it must never eat the WiFi/HTTP reserve (see the i80 driver). Degrade to single-buffer otherwise.
-            st->buf[1] = static_cast<uint8_t*>(heap_caps_malloc(
+            st->buf[1] = static_cast<uint8_t*>(allocCaps(
                 bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM | MALLOC_CAP_CACHE_ALIGNED));
             if (!st->buf[1]
                 && heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)
                        >= bufferBytes + HEAP_RESERVE) {
-                st->buf[1] = static_cast<uint8_t*>(heap_caps_aligned_alloc(
-                    64, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+                st->buf[1] = static_cast<uint8_t*>(allocCaps(
+                    bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL, 64));
             }
             if (st->buf[1]) {
                 std::memset(st->buf[1], 0, bufferBytes);

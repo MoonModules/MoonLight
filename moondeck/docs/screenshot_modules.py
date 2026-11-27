@@ -245,7 +245,6 @@ CORE_MODULES = [
     "MoonCloudModule",
     "MoonStatsModule",
     "MoonTalkModule",
-    "TasksModule",
     "PinsModule",
     # Present only in an ESP32 tree (services / provisioning): skipped on host
     # (not in state); capture these against a board when needed.
@@ -273,8 +272,7 @@ CORE_NAV_ROOT = {
     "EthernetModule": "NetworkModule",
     "WiFiModule": "NetworkModule",
     "AccessPointModule": "NetworkModule",
-    # Tasks and Pins are fixed System children (wired-by-code), so they have no nav entry.
-    "TasksModule": "SystemModule",
+    # Pins is a fixed System child (wired-by-code), so it has no nav entry.
     "PinsModule": "SystemModule",
     # Stats and Talk are MoonCloud children, each carrying its own consent.
     "MoonStatsModule": "MoonCloudModule",

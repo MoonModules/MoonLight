@@ -59,7 +59,7 @@ namespace mm {
 ///
 /// A state document, the one `PATCH /api/state` applies, so its top-level keys say which containers it sets. A save writes one container, so a look applies on any board and a driver preset, carrying pins, is specific.
 ///
-/// The surface's assignments persist with Control, so a look saved from Effects leaves the desk as it is, since a pad re-mapping the desk mid-set surprises a performer; a preset saved from the Control card carries them.
+/// Hand assignments persist with Control, so a look saved from Effects leaves them as they are, since a pad re-mapping them mid-set surprises a performer; an automapped slot follows the look's effect. A preset saved from the Control card holds them.
 ///
 /// ## Why files
 ///

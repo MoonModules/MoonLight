@@ -2,6 +2,7 @@
 
 /// The HUB75 driver's two seams: the settings an output reads from its driver, and the output that takes the corrected frame to the panel.
 
+#include <optional>   // headroom: a measured share, or none
 #include <cstddef>
 #include <cstdint>
 #include "core/module/Control.h"          // ControlList: an output appends its own controls into the driver's list
@@ -125,6 +126,10 @@ public:
     virtual void show(const uint8_t* rgb, uint8_t brightness) MM_NONBLOCKING = 0;
     /// Refresh the output's measured readouts, once a second while it runs.
     virtual void tick1s() MM_NONBLOCKING = 0;
+    /// The slack its refresh has over a flicker, in percent, where it measures its refresh; none elsewhere.
+    virtual std::optional<uint8_t> headroom() const { return std::nullopt; }
+    /// The bytes its DMA reads while it runs, where the output streams by DMA; 0 elsewhere.
+    virtual size_t dmaBytes() const { return 0; }
     /// Stop the panel and release its hardware; safe to call on a stopped panel.
     virtual void close() = 0;
 

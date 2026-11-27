@@ -6,7 +6,7 @@
 ///
 /// ## Two SDK options gate what it can answer
 ///
-/// The snapshot call is the textbook introspection one and needs the trace facility; with it off the snapshot reads empty and the module shows its own cost table alone.
+/// The snapshot call is the textbook introspection one and needs the trace facility; with it off the snapshot reads empty and MoonShine's System tasks band stays empty.
 ///
 /// The per-task CPU figure needs run-time stats, a clock read on every context switch, which measured no cost and is on in every build; with it off the figure reads unmeasured.
 ///
@@ -14,7 +14,9 @@
 ///
 /// ## A task's memory
 ///
-/// A task holds its stack and its control block on the heap: the stack's size comes from its two ends, `xTaskGetStackStart` and the snapshot's `pxEndOfStack`, read with the scheduler suspended.
+/// A task holds its stack and its control block on the heap: the stack's size comes from its two ends, the table's `pxStackBase` and the snapshot's `pxEndOfStack`, read with the scheduler suspended.
+///
+/// The base is read under the kernel's lock with the table, so the end, read through the handle afterwards, is checked against it; the control block is internal memory wherever the stack lives.
 ///
 /// ## The scratch buffer is lazy and internal
 ///
@@ -37,7 +39,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/freertos_debug.h"   // vTaskGetSnapshot: a stack's high end
-#include "esp_heap_caps.h"   // heap_caps_calloc — the one-time snapshot scratch
+#include "esp_heap_caps.h"   // MALLOC_CAP_*, the snapshot scratch's memory type
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_memory_utils.h"   // esp_ptr_external_ram: where a stack lives
 #endif
 
@@ -57,25 +60,23 @@ TaskState mapState(eTaskState s) {
         default:         return TaskState::Unknown;
     }
 }
-/// The bytes a task holds on the heap, its stack and its control block; 0 when the ends read as no stack, as for a task deleted since the table was read.
-uint32_t heapOfTask(TaskHandle_t h, bool& psram) {
+/// A task's heap bytes, stack and control block, `psram` the stack's there; a task the other core deletes meanwhile reads as 0 or one stale figure, accepted since locking that core out stalls the LED refill.
+uint32_t heapOfTask(const TaskStatus_t& task, uint32_t& psram) {
     static constexpr size_t kMaxStack = 64 * 1024;   // larger than any task MoonLight or ESP-IDF creates
-    const StackType_t* start = xTaskGetStackStart(h);
+    psram = 0;
+    const StackType_t* start = task.pxStackBase;
     TaskSnapshot_t snap{};
-    if (!start || vTaskGetSnapshot(h, &snap) != pdTRUE || snap.pxEndOfStack <= start) return 0;
+    if (!start || vTaskGetSnapshot(task.xHandle, &snap) != pdTRUE || snap.pxEndOfStack <= start) return 0;
     const size_t stack = static_cast<size_t>(snap.pxEndOfStack - start + 1) * sizeof(StackType_t);   // the stack grows down to start from its end
     if (stack > kMaxStack) return 0;
-    psram = esp_ptr_external_ram(start);
+    if (esp_ptr_external_ram(start)) psram = static_cast<uint32_t>(stack);
     return static_cast<uint32_t>(stack + sizeof(StaticTask_t));
 }
 
 /// Each task's heap bytes, read with the scheduler suspended, as freertos_debug.h asks of a snapshot while the scheduler runs.
 void fillHeapBytes(TaskInfo* out, const TaskStatus_t* raw, size_t n) {
     vTaskSuspendAll();
-    for (size_t i = 0; i < n; i++) {
-        out[i].stackPsram = false;
-        out[i].heapBytes = heapOfTask(raw[i].xHandle, out[i].stackPsram);
-    }
+    for (size_t i = 0; i < n; i++) out[i].heapBytes = heapOfTask(raw[i], out[i].psramBytes);
     xTaskResumeAll();
 }
 
@@ -83,7 +84,7 @@ void fillHeapBytes(TaskInfo* out, const TaskStatus_t* raw, size_t n) {
 constexpr size_t kScratch = 40;
 TaskStatus_t* systemState(UBaseType_t& got, uint32_t& totalRunTime) {
     static TaskStatus_t* raw = nullptr;
-    if (!raw) raw = static_cast<TaskStatus_t*>(heap_caps_calloc(kScratch, sizeof(TaskStatus_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    if (!raw) raw = static_cast<TaskStatus_t*>(callocCaps(kScratch * sizeof(TaskStatus_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     got = raw ? uxTaskGetSystemState(raw, kScratch, &totalRunTime) : 0;
     return raw;
 }
@@ -96,7 +97,7 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     TaskStatus_t* raw = systemState(got, totalRunTime);
     if (!raw) return 0;   // no scratch, no snapshot: the table shows empty
     const size_t n = got < maxTasks ? got : maxTasks;
-#if configGENERATE_RUN_TIME_STATS == 1   // on in every MoonLight build (sdkconfig.defaults); with it off the Tasks card shows no CPU column
+#if configGENERATE_RUN_TIME_STATS == 1   // on in every MoonLight build (sdkconfig.defaults); with it off MoonShine shows no CPU time for a task
     // Each task's counter at the previous snapshot, by task number, so a share covers only the interval since.
     static UBaseType_t prevNumber[kScratch] = {};
     static uint32_t prevRunTime[kScratch] = {};
@@ -151,10 +152,9 @@ void tasksHeap(size_t& total, size_t& psram) {
     if (!raw) return;
     vTaskSuspendAll();   // as freertos_debug.h asks of a snapshot while the scheduler runs
     for (UBaseType_t i = 0; i < got; i++) {
-        bool inPsram = false;
-        const uint32_t bytes = heapOfTask(raw[i].xHandle, inPsram);
-        total += bytes;
-        if (inPsram) psram += bytes;
+        uint32_t inPsram = 0;
+        total += heapOfTask(raw[i], inPsram);
+        psram += inPsram;
     }
     xTaskResumeAll();
 }
@@ -174,12 +174,12 @@ void currentTaskOnCore(int core, char* out, size_t cap) {
 // The name of the calling task, which is the render task while everything runs on the one task; a dedicated render task captures its name from inside the render loop.
 const char* renderTaskName() { return pcTaskGetName(nullptr); }
 
-#else  // trace facility off — inert stubs; the module falls back to its cost table only.
+#else  // trace facility off: inert stubs, and the task table reads empty.
 
 size_t taskSnapshot(TaskInfo*, size_t) { return 0; }
 void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }
 void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
-const char* renderTaskName() { return ""; }   // trace facility off — no task view, no nesting anchor
+const char* renderTaskName() { return ""; }   // trace facility off: no task view
 
 #endif
 

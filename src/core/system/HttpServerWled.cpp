@@ -109,10 +109,15 @@ void setFlag(HttpServerModule& http, const char* control, bool value) {
     http.applySetControl("Drivers", control, value ? "{\"value\":true}" : "{\"value\":false}");
 }
 
-// Power and brightness from `obj`, the body or its segment: `on` is master power, so toggling off keeps the brightness level.
+// Power from `obj`, the body or its segment: `on` is master power, so toggling off keeps the brightness level.
 void applyPower(HttpServerModule& http, const JsonDoc& doc, const JsonNode* obj, bool on) {
     int v;
     if (switchField(doc, obj, "on", v)) setFlag(http, "on", v == kToggle ? !on : v != 0);
+}
+
+// Brightness from the body's `bri`, the device's level; a segment's `bri` is the segment's own, which WLED multiplies with it, so Home Assistant's segment at 255 leaves the level as it is.
+void applyBrightness(HttpServerModule& http, const JsonDoc& doc, const JsonNode* obj) {
+    int v;
     if (intField(doc, obj, "bri", 0, 255, v)) setNumber(http, "brightness", v);
 }
 
@@ -127,16 +132,27 @@ void applyPalette(HttpServerModule& http, const JsonDoc& doc, const JsonNode* se
     else if (colorField(doc, seg, rgb)) setNumber(http, "palette", out->nearestPalette(RGB{rgb[0], rgb[1], rgb[2]}));
 }
 
-// The device's one segment, segment 0: an object, or the array element whose id is 0, or the first element when it names no id.
+// Whether `segment`, at place `i` of its array, is segment 0: by its id, or by its place when it names none.
+bool isMainSegment(const JsonDoc& doc, const JsonNode* segment, int i) {
+    int id;
+    return (intField(doc, segment, "id", 0, 255, id) ? id : i) == 0;
+}
+
+// The device's one segment, segment 0: an object or an array element whose id is 0, or the one in the first place when it names no id.
 const JsonNode* mainSegment(const JsonDoc& doc, const JsonNode* seg) {
-    if (!seg || seg->type == JsonType::Object) return seg;
+    if (!seg) return nullptr;
+    if (seg->type == JsonType::Object) return isMainSegment(doc, seg, 0) ? seg : nullptr;
     for (int i = 0; i < json::arraySize(doc, seg); i++) {
         const JsonNode* element = json::element(doc, seg, i);
-        if (!element || element->type != JsonType::Object) continue;
-        int id;
-        if ((intField(doc, element, "id", 0, 255, id) ? id : i) == 0) return element;
+        if (element && element->type == JsonType::Object && isMainSegment(doc, element, i)) return element;
     }
     return nullptr;
+}
+
+// Segment 0 sets the device's power and palette; its brightness is the segment's own, so the level comes from the body's bri alone.
+void applySegment(HttpServerModule& http, const JsonDoc& doc, const JsonNode* seg, bool on) {
+    applyPower(http, doc, seg, on);
+    applyPalette(http, doc, seg);
 }
 
 }  // namespace
@@ -322,10 +338,8 @@ void HttpServerModule::applyWledState(const char* body) {
         if (const char* name = control->presetName(static_cast<uint8_t>(slot - 1))) control->applyLookByName(name);
     const auto driversOn = [this] { const MoonModule* d = findModuleByName("Drivers"); return d && d->readBool("on", true); };
     applyPower(*this, doc, root, driversOn());
-    if (const JsonNode* seg = mainSegment(doc, json::member(doc, root, "seg"))) {
-        applyPower(*this, doc, seg, driversOn());
-        applyPalette(*this, doc, seg);
-    }
+    applyBrightness(*this, doc, root);
+    if (const JsonNode* seg = mainSegment(doc, json::member(doc, root, "seg"))) applySegment(*this, doc, seg, driversOn());
 }
 
 // POST /json/state: the WLED app's HTTP control channel; apply, then echo the resulting state, which the app expects.

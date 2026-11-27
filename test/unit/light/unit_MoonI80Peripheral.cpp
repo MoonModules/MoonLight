@@ -162,3 +162,13 @@ TEST_CASE("MoonI80Peripheral ringAuto stops at the internal floor and says the l
     CHECK(d.bufs == 6);
     CHECK(d.shortOfLead);
 }
+
+// The ring's headroom: its refill's least lead over the most a ring of that depth holds, so a healthy ring of any depth reads near 100, a late slice 0, and a ring before its first interrupt none.
+TEST_CASE("MoonI80Peripheral's ring headroom is the least lead over the most the ring holds, 0 on a late slice, none before a lead is measured") {
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(18, 21, false) == 100);   // 21 buffers: the refill gap and the draining slice leave 18
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(9, 21, false) == 50);
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(1, 4, false) == 100);     // a small ring at its most is healthy too
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(-1, 21, true) == 0);      // a late slice: behind, whatever the lead read
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(18, 21, true) == 0);
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(-1, 21, false) == -1);    // no interrupt yet
+}

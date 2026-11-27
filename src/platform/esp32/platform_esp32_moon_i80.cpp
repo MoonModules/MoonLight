@@ -229,6 +229,7 @@
 #include "esp_private/cache_utils.h"   // spi_flash_cache_enabled — the cache-safe ISR's defer guard
 #include "esp_clk_tree.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_log.h"
 #include "esp_memory_utils.h"
 #include "esp_rom_gpio.h"
@@ -333,6 +334,7 @@ struct MoonI80State : platform::InternalRamObject {
     // --- Ring mode. Null/zero on a whole-frame handle; populated only by moonI80Ws2812InitRing. ------
     bool isRing = false;
     uint8_t* ring[kRingBufsMax] = {};   // the internal-RAM slice buffers the DMA loops over (first `ringBufs` used)
+    size_t   ringStride = 0;             // one ring buffer's bytes as allocated, rounded to the DMA alignment
     uint8_t  ringBufs = 0;           // pool depth in use — the live count; kRingBufsMax is only the array bound
     uint32_t rowsPerBuf = 0;         // rows one ring buffer holds (the last SLICE may be shorter)
     uint32_t totalRows = 0;          // strand length in rows — the frame ends after this many
@@ -562,9 +564,9 @@ void destroyState(MoonI80State* st) {
             if (ref_count == 0) lcd_ll_enable_bus_clock(kBusId, false);
         }
     }
-    for (auto* b : st->buf) if (b) heap_caps_free(b);
-    for (auto* b : st->ring) if (b) heap_caps_free(b);   // ring buffers (null on a whole-frame handle)
-    if (st->zeroPad) heap_caps_free(st->zeroPad);        // the shared inter-buffer pad block
+    for (auto* b : st->buf) if (b) freeCaps(b);
+    for (auto* b : st->ring) if (b) freeCaps(b);   // ring buffers (null on a whole-frame handle)
+    if (st->zeroPad) freeCaps(st->zeroPad);        // the shared inter-buffer pad block
     for (auto* s : st->done) if (s) vSemaphoreDelete(s);
     if (st->wireFree) vSemaphoreDelete(st->wireFree);
     delete st;
@@ -706,6 +708,9 @@ bool initDma(MoonI80State* st, size_t bufferBytes) {
     return gdma_register_tx_event_callbacks(st->dma, &cbs, st) == ESP_OK;
 }
 
+// `bytes` rounded up to the DMA alignment, which the mount checks the length against as well as the address.
+size_t roundToDma(size_t bytes, size_t align) { return align > 1 ? ((bytes + align - 1) / align) * align : bytes; }
+
 // Allocate one DMA-capable frame buffer, honoring the GDMA's alignment constraints (both the address and the length must be a cache-line multiple on the P4 / on PSRAM, or the cache write-back before a transfer would touch neighboring allocations).
 uint8_t* allocFrame(MoonI80State* st, size_t bufferBytes, bool psram) {
 
@@ -715,8 +720,7 @@ uint8_t* allocFrame(MoonI80State* st, size_t bufferBytes, bool psram) {
     const uint32_t caps = MALLOC_CAP_8BIT | MALLOC_CAP_DMA
                         | (psram ? MALLOC_CAP_SPIRAM : MALLOC_CAP_INTERNAL);
     // Round the size up to the alignment too, gdma_link_mount_buffers checks the LENGTH against the same constraint, and a short tail would fail the mount. The pad is zeroed, so it just extends the frame's trailing latch gap (the lines already idle LOW there).
-    const size_t size = align > 1 ? ((bufferBytes + align - 1) / align) * align : bufferBytes;
-    return static_cast<uint8_t*>(heap_caps_aligned_calloc(align ? align : 4, 1, size, caps));
+    return static_cast<uint8_t*>(callocCaps(roundToDma(bufferBytes, align), caps, align ? align : 4));
 }
 
 // One peripheral + GDMA chain + frame buffer(s). `wantSecond` allocates the async double-buffer's second frame buffer (best-effort, null if it won't fit); false allocates buffer 0 only. Shared by the runtime init and the loopback (which passes false, one transfer).
@@ -984,7 +988,24 @@ bool initRingDma(MoonI80State* st) {
     return gdma_register_tx_event_callbacks(st->dma, &cbs, st) == ESP_OK;
 }
 
-// Bring up the peripheral + N internal ring buffers + the linear chain. The peripheral setup mirrors createState (same clock, GPIO routing, DC/WR handling), only the DMA + buffers differ. Returns null (and the caller falls back to the whole-frame path) if any internal buffer or the chain won't fit.
+// The ring's buffers as separate blocks, which fit the free space's holes: one block of all of them measured a 48 KB largest free block on an S3 against 76 KB.
+bool allocRing(MoonI80State* st, size_t bufBytes) {
+    size_t intAlign = 0, extAlign = 0;
+    dmaAlignment(st, intAlign, extAlign);
+    st->ringStride = roundToDma(bufBytes, intAlign);
+    for (uint8_t i = 0; i < st->ringBufs; i++) {
+        st->ring[i] = allocFrame(st, bufBytes, /*psram=*/false);
+        if (!st->ring[i]) {
+            ESP_LOGE(MOON_I80_TAG, "ring init failed: buffer %u/%u alloc (%u B, free DMA %u B)", (unsigned)i, (unsigned)st->ringBufs,
+                     (unsigned)bufBytes, (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+            return false;
+        }
+        st->bufNeedsPrefill[i] = true;   // fresh (zeroed) buffer: no constants laid yet
+    }
+    return true;
+}
+
+// Bring up the peripheral, the ring's internal buffers and the linear chain, as createState sets up the peripheral; null where a buffer or the chain does not fit, and the caller falls back to the whole frame.
 MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint16_t wrGpio,
                               size_t rowBytes, uint32_t totalRows,
                               uint32_t rowsPerBuf, uint8_t ringBufs, uint8_t padUs,
@@ -1056,16 +1077,9 @@ MoonI80State* createRingState(const uint16_t* dataPins, uint8_t laneCount, uint1
 
     // N internal ring buffers, each one slice + the latch pad (the LAST slice appends the pad; sizing every buffer to hold it keeps them uniform and lets any buffer be the last one).
     const size_t bufBytes = static_cast<size_t>(st->rowsPerBuf) * rowBytes;
-    for (uint8_t i = 0; i < st->ringBufs; i++) {
-        st->ring[i] = allocFrame(st, bufBytes, /*psram=*/false);
-        if (!st->ring[i]) {
-            ESP_LOGE(MOON_I80_TAG, "ring init failed: buffer %u/%u alloc (%u B, free DMA %u B)",
-                     (unsigned)i, (unsigned)st->ringBufs, (unsigned)bufBytes,
-                     (unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
-            destroyState(st);
-            return nullptr;
-        }
-        st->bufNeedsPrefill[i] = true;   // fresh (zeroed) buffer: no constants laid yet
+    if (!allocRing(st, bufBytes)) {
+        destroyState(st);
+        return nullptr;
     }
     // Cache-line size is a per-pool constant (all buffers come from the same internal-DMA heap), hoisted here so the refill never makes the (flash-resident) query inside the now cache-safe ISR.
     st->ringCacheLine = esp_cache_get_line_size_by_addr(st->ring[0]);
@@ -1239,6 +1253,13 @@ uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {
 size_t moonI80Ws2812BufferCapacity(const MoonI80Ws2812Handle& h) {
     auto* st = static_cast<MoonI80State*>(h.impl);
     return st ? st->cap : 0;
+}
+
+size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle& h) {
+    auto* st = static_cast<MoonI80State*>(h.impl);
+    if (!st) return 0;
+    if (st->isRing) return st->ringStride * st->ringBufs + st->zeroPadBytes;
+    return st->cap * ((st->buf[0] ? 1 : 0) + (st->buf[1] ? 1 : 0));
 }
 
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes) {
@@ -1433,7 +1454,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
         st = createState(dataPins, laneCount, wrGpio, frameBytes, /*wantSecond=*/false, clockMultiplier);
         if (!st) {
             ESP_LOGE(MOON_I80_TAG, "loopback: private peripheral setup failed");
-            heap_caps_free(rxSymbols);   // ownership never reached captureAndVerifyFrame
+            freeCaps(rxSymbols);   // ownership never reached captureAndVerifyFrame
             return r;
         }
         std::memcpy(st->buf[0], frame, frameBytes);   // loopback uses buffer 0 only (single transfer)
@@ -1492,6 +1513,7 @@ bool moonI80Ws2812IsRing(const MoonI80Ws2812Handle&) { return false; }
 bool moonI80Ws2812InternalFits(size_t) { return false; }
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle&, uint8_t) { return nullptr; }
 size_t moonI80Ws2812BufferCapacity(const MoonI80Ws2812Handle&) { return 0; }
+size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle&) { return 0; }
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle&, uint8_t, size_t) { return false; }
 bool moonI80Ws2812Wait(MoonI80Ws2812Handle&, uint8_t, uint32_t) { return true; }
 uint32_t moonI80Ws2812LastTransmitUs(const MoonI80Ws2812Handle&) { return 0; }

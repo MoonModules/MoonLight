@@ -54,7 +54,7 @@ A bulb runs on mains through a non-isolated supply: unscrew it from the socket, 
 - **Opening.** The diffuser dome is pressed and glued into the body. Warm the seam with a hair dryer for a minute, then twist and pull with a rubber grip, or work a plastic spudger around the seam.
 - **Inside.** A round aluminum LED board with the C3 module on it or on a small upright board in the neck, and no USB connector.
 - **Pads to look for.** 3V3, GND, TX (GPIO21) and RX (GPIO20); IO9, the boot strap, which held low at power-up starts the ROM's download mode; sometimes EN; sometimes GPIO18 and GPIO19, the C3's native USB D- and D+.
-- **Flashing through them.** A 3.3 V USB-serial adapter on TX, RX, GND and 3V3 with IO9 to GND at power-up, or a USB cable soldered to GPIO18 (D-), GPIO19 (D+) and GND with 3.3 V from a regulator. 5 V on 3V3 destroys the chip.
+- **Flashing through them.** A 3.3 V USB-serial adapter on TX, RX, GND and 3V3, or a USB cable soldered to GPIO18 (D-), GPIO19 (D+) and GND with 3.3 V from a regulator. Either way, IO9 to GND at power-up starts the download mode, and IO9 released with the power cycled after the write starts the new firmware. 5 V on 3V3 destroys the chip.
 - **Then install as over a cable**: the [web installer](https://moonmodules.org/MoonLight/install/) writes the bootloader, the partition table and MoonLight through the adapter.
 - **A photo of both sides of the board** settles which pads exist.
 

@@ -504,6 +504,8 @@ size_t maxAllocBlock() {
     return testMaxBlock.load(std::memory_order_relaxed); // 0 = unlimited
 }
 
+size_t maxPsramAllocBlock() { return 0; }   // a computer has one memory
+
 size_t maxInternalAllocBlock() {
     return 0; // Not meaningful on host (0 = unlimited)
 }
@@ -534,7 +536,13 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     for (size_t i = 0; i < n; i++) out[i] = g_testTasks[i];
     return n;
 }
-void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
+// A computer names no task per core; an injected snapshot names its running task on each.
+void currentTaskOnCore(int core, char* out, size_t cap) {
+    if (!out || !cap) return;
+    out[0] = '\0';
+    for (size_t i = 0; g_testTasks && i < g_testTaskCount; i++)
+        if (g_testTasks[i].core == core && g_testTasks[i].state == TaskState::Running) { std::snprintf(out, cap, "%s", g_testTasks[i].name); return; }
+}
 const char* renderTaskName() { return g_testTasks ? g_testRenderTask : "render"; }   // the thread mm_main runs on, named in the table
 
 // The worker seam is a thread and a condition variable, the core pin ignored. The wake is a single-slot latch, matching the device notification's one-pending-count semantics.
@@ -3024,6 +3032,9 @@ uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {
 }
 size_t moonI80Ws2812BufferCapacity(const MoonI80Ws2812Handle& h) {
     return h.impl ? static_cast<HostBus*>(h.impl)->capacity : 0;
+}
+size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle& h) {
+    return h.impl ? moonI80Ws2812BufferCapacity(h) * (moonI80Ws2812Buffer(h, 1) ? 2 : 1) : 0;
 }
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes) {
     return h.impl && static_cast<HostBus*>(h.impl)->transmit(buffer, bytes);

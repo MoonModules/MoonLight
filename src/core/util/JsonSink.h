@@ -32,6 +32,10 @@
 /// Once tripped, later appends do nothing, so a caller sees one consistent state. A caller that ships the buffer anyway sends a truncated document, indistinguishable from a whole one at the far end.
 ///
 /// The fixed mode never allocates, its capacity being the caller's slice on purpose, since an allocation there would succeed even when the slice is too small.
+///
+/// ## A small buffer spills into a block
+///
+/// The small-buffer optimization, as `std::string` keeps a short string inline: most documents fit the caller's slice and take no allocation, and one that outgrows it moves what it holds into a block and carries on there. A writer whose output is costly to produce, such as a list leaf, runs once instead of once into the slice and again into a block.
 namespace mm {
 
 class JsonSink {
@@ -47,6 +51,11 @@ public:
     JsonSink(char* buf, size_t cap) : fixed_(buf), fixedCap_(cap) {
         if (fixed_ && fixedCap_ > 0) fixed_[0] = '\0';
     }
+
+    /// The tag that picks the small-buffer mode.
+    struct Spill {};
+    /// Small-buffer mode: the caller's slice first, and a block of its own once the slice is full, so a writer runs once whatever the size: @xref{a-small-buffer-spills-into-a-block}.
+    JsonSink(char* buf, size_t cap, Spill) : JsonSink(buf, cap) { spills_ = true; }
 
 
     /// Frees the block, when one was taken and not detached, and the stage.
@@ -114,6 +123,8 @@ private:
     void appendStaged(const char* s, size_t len);
     /// Copy what fits of a run into the caller's slice, tripping the flag for the rest.
     void appendFixed(const char* s, size_t len);
+    /// Move the slice's bytes into a block holding `more` beside them and continue in buffer mode; false when memory refuses.
+    bool spill(size_t more);
     /// Copy a run into the block, grown to hold it first.
     void appendHeap(const char* s, size_t len);
     /// Format a fragment longer than the stack buffer into a block of its exact size.
@@ -135,6 +146,7 @@ private:
     size_t fixedLen_ = 0;
     size_t fixedCap_ = 0;
     bool overflowed_ = false;
+    bool spills_ = false;   // small-buffer mode: a full slice moves into a block rather than overflowing
     int  nameIndex_ = -1;   // >= 0: this sink is asking for that option's name (see requestName)
     int  optionIndex_ = -1; // >= 0: this sink is asking for that option object (see requestOption)
     size_t written_ = 0;    // every byte appended, whatever the mode

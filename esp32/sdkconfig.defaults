@@ -83,7 +83,7 @@ CONFIG_ESP_WIFI_ENABLED=y
 # board-neutral so a WiFi-only ESP32 build doesn't reserve RMII GPIOs or
 # allocate Ethernet DMA buffers it can't use.
 
-# FreeRTOS task introspection for TasksModule and MoonShine (uxTaskGetSystemState): each task's
+# FreeRTOS task introspection for MoonShine's System tasks band (uxTaskGetSystemState): each task's
 # stack mark, core and CPU share. The run-time counter reads a clock on every context switch, which
 # measured no cost (A/B 2026-11-25: a P4 at 30,191 µs a tick without it, 30,246 with it; a classic
 # ESP32 run CPU-bound at 887 without, 857 with esp_timer, 842 with the cycle counter, all inside the

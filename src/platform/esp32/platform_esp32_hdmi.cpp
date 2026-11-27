@@ -58,6 +58,7 @@
 #include "driver/ppa.h"
 #include "esp_cache.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_lcd_io_i2c.h"
 #include "esp_lcd_lt8912b.h"
 #include "esp_lcd_mipi_dsi.h"
@@ -356,9 +357,9 @@ void pollHotPlug(Poll& p) {
 void growFrame() {
     const size_t want = g.frameWant.load(std::memory_order_relaxed);
     if (want <= g.frameCap || !g.slot.claimIdle()) return;
-    heap_caps_free(g.frame);
+    freeCaps(g.frame);
     g.frameCap = (want + 127) & ~size_t(127);
-    g.frame = static_cast<uint8_t*>(heap_caps_aligned_alloc(128, g.frameCap, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA));
+    g.frame = static_cast<uint8_t*>(allocCaps(g.frameCap, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA, 128));
     if (!g.frame) g.frameCap = 0;   // the tick keeps asking; a smaller layer fits again
     g.slot.release();
 }
@@ -430,7 +431,7 @@ void hdmiClose() {
         g.task = nullptr;
     }
     while (!g.slot.claimUnlessWriting()) vTaskDelay(1);   // a write in flight is one memcpy; the slot then stays taken until the next open
-    heap_caps_free(g.frame);
+    freeCaps(g.frame);
     g.frame = nullptr;
     g.frameCap = 0;
     if (g.ppa) { ppa_unregister_client(g.ppa); g.ppa = nullptr; }

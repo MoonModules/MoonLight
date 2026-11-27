@@ -76,11 +76,11 @@ Each kind of message rides the protocol the textbook gives it, and only the rule
 | Kind | Loss | Protocol |
 |--|--|--|
 | Streams: light, audio, video | acceptable, the latest wins | Art-Net, DDP, E1.31, the MoonLight audio sync format, each its own |
-| Group state: preset, controls, clock, roles | repaired by the next send | OSC on one well-known multicast address |
+| Group state: preset, controls, clock, roles | repaired by the next send, a preset's missing chunks on request | OSC on one well-known multicast address |
 | Requests: summary, flows, identify, firmware | must arrive | REST over TCP, every peer answering cross-origin |
 | Discovery | acceptable | presence, ArtPoll, SSDP, mDNS |
 
-**State, not commands.** A group's state is published as absolute values on a change and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice leaves the state as it was, so a swarm needs no acknowledgements and costs one multicast send. REST serves what is no state: an update, identify, reading a peer.
+**State, not commands.** A group's state is published as absolute values on a change and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice leaves the state as it was, so a swarm needs no acknowledgements and a value costs one multicast send, a preset one per chunk. REST serves what is no state: an update, identify, reading a peer.
 
 **No forwarding, and coalescing.** A value received from the group is applied and stays there, so no loop forms; a device's repeats carry every value its group holds, whoever wrote it, which is how a member that joins later hears a value whose writer is offline. A slider drag publishes at most about 20 times a second, the latest value winning.
 

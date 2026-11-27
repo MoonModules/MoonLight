@@ -192,7 +192,6 @@
 #include "core/services/PictureService.h"
 #include "core/services/OscService.h"
 #include "core/system/I2cBusModule.h"
-#include "core/system/TasksModule.h"
 #include "core/system/PinsModule.h"
 #include "core/services/AnalogService.h"
 #include "core/services/ButtonService.h"
@@ -393,7 +392,6 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::PictureService>("PictureService", "core/services.md#picture");
     mm::ModuleFactory::registerType<mm::OscService>("OscService", "core/services.md#osc");
     mm::ModuleFactory::registerType<mm::I2cBusModule>("I2cBusModule", "core/system.md#i2c-bus");
-    mm::ModuleFactory::registerType<mm::TasksModule>("TasksModule", "core/system.md#tasks");
     mm::ModuleFactory::registerType<mm::PinsModule>("PinsModule", "core/system.md#pins");
     mm::ModuleFactory::registerType<mm::ButtonService>("ButtonService", "core/services.md#button");
     mm::ModuleFactory::registerType<mm::GamepadService>("GamepadService", "core/services.md#gamepad");
@@ -421,7 +419,7 @@ void mm::registerModuleTypes() {
     mm::ModuleFactory::registerType<mm::FilesystemModule>("FilesystemModule", "core/system.md#filesystem");
     // The cards a build carries as previews of hardware it lacks, to exercise their settings on a desk, show in developer mode alone; HUB75 and the panel cards drive real hardware from a Linux board, so they stay.
     if constexpr (mm::platform::previewsHardwareControls)
-        for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "TasksModule", "I2cBusModule", "PinsModule", "RmtLedDriver", "PwmLightDriver", "ParallelLedDriver"})
+        for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "I2cBusModule", "PinsModule", "RmtLedDriver", "PwmLightDriver", "ParallelLedDriver"})
             if (!mm::ModuleFactory::setTypeMinMode(type, mm::kModeDeveloper)) std::printf("module_types: preview type %s is not registered\n", type);
 }
 
@@ -441,7 +439,6 @@ constexpr bool kEthernetCard = mm::platform::hasEthernet || mm::platform::previe
 constexpr BootModule kBootModules[] = {
     {nullptr, "FileManagerModule", "File Manager", true},
     {nullptr, "FirmwareUpdateModule", "Firmware", true},
-    {"SystemModule", "TasksModule", nullptr, true},
     {"SystemModule", "MoonShineModule", "MoonShine", true},
     {"SystemModule", "I2cBusModule", nullptr, true},
     {"SystemModule", "PinsModule", nullptr, true},

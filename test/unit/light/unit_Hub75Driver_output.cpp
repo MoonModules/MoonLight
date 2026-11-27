@@ -268,6 +268,21 @@ TEST_CASE("Hub75Driver publishes the measured refresh on its one-second tick whi
     CHECK(std::string(refresh) == "60 Hz");
 }
 
+TEST_CASE("Hub75Driver's headroom is its refresh over the 100 Hz flicker line, none at an unmeasured 0 Hz") {
+    mm::PortGuard guard;
+    auto w = std::make_unique<WiredDriver>();
+    w->driver.prepare();
+    w->driver.tick1s();
+    CHECK_FALSE(w->driver.headroom().has_value());   // a host panel measures 0 Hz
+    CHECK(w->driver.dmaBytes() > 0);                 // the encoded frame the scan's DMA reads
+    mm::platform::setTestHub75RefreshHz(400);
+    w->driver.tick1s();
+    CHECK(w->driver.headroom() == 75);               // (400 - 100) / 400
+    mm::platform::setTestHub75RefreshHz(90);
+    w->driver.tick1s();
+    CHECK(w->driver.headroom() == 0);                // under the line, it flickers
+}
+
 TEST_CASE("Hub75Driver reads its output's lights once, in prepare(), and a frame costs the output's show() alone") {
     auto w = std::make_unique<CountedDriver>();
     w->driver.prepare();

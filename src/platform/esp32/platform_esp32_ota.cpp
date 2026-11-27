@@ -98,7 +98,8 @@
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_system.h"
-#include "esp_heap_caps.h"   // heap_caps_malloc/free — the upload chunk buffer
+#include "esp_heap_caps.h"   // MALLOC_CAP_*, the upload chunk buffer's memory type
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_log.h"
 #include "nvs.h"           // moonbaseStageInstallUrl: the URL handoff to MoonBase
 #if defined(CONFIG_IDF_TARGET_ESP32P4) && !defined(MM_NO_WIFI)
@@ -375,7 +376,7 @@ struct Image {
 
 void freeImage(OtaWrite& w, Image* img) {
     if (img->target == OtaTarget::App && img->handle) esp_ota_abort(img->handle);
-    heap_caps_free(img->buf);
+    freeCaps(img->buf);
     delete img;
     w.impl = nullptr;
 }
@@ -454,12 +455,12 @@ static bool coprocessorBegin(OtaWrite& w, size_t contentLen, char* statusBuf, si
     // The link must carry calls already: starting it waits on the chip, which only a task may do.
     if (!coprocessorLinkUp()) { statusf(statusBuf, statusBufLen, "error: the radio chip's link is not up, connect it first"); return false; }
     auto* img = new (std::nothrow) Image{OtaTarget::Coprocessor, nullptr, 0, nullptr, 0, 0, 0, contentLen, statusBuf, statusBufLen, bytesOut};
-    if (img) img->buf = static_cast<uint8_t*>(heap_caps_malloc(kOtaChunkBytes, MALLOC_CAP_8BIT));
+    if (img) img->buf = static_cast<uint8_t*>(allocCaps(kOtaChunkBytes, MALLOC_CAP_8BIT));
     esp_err_t err = (img && img->buf) ? esp_hosted_slave_ota_begin() : ESP_ERR_NO_MEM;
     if (err != ESP_OK) {
         if (err == ESP_ERR_NO_MEM) statusf(statusBuf, statusBufLen, "error: out of memory for the upload buffer");
         else statusf(statusBuf, statusBufLen, "error: the radio chip refused the update (%s)", esp_err_to_name(err));
-        if (img) heap_caps_free(img->buf);
+        if (img) freeCaps(img->buf);
         delete img;
         return false;
     }
@@ -494,7 +495,7 @@ bool otaBegin(OtaWrite& w, OtaTarget target, size_t contentLen, char* statusBuf,
         return false;
     }
     auto* img = new (std::nothrow) Image{target, part, 0, nullptr, 0, 0, 0, contentLen, statusBuf, statusBufLen, bytesOut};
-    if (img) img->buf = static_cast<uint8_t*>(heap_caps_malloc(kOtaChunkBytes, MALLOC_CAP_8BIT));
+    if (img) img->buf = static_cast<uint8_t*>(allocCaps(kOtaChunkBytes, MALLOC_CAP_8BIT));
     if (!img || !img->buf) {
         statusf(statusBuf, statusBufLen, "error: out of memory for the upload buffer");
         delete img;

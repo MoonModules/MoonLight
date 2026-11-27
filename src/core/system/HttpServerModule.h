@@ -741,6 +741,11 @@ private:
     struct ValueWalk { bool active = false; uint16_t module = 0; uint16_t leaf = 0; };
     ValueWalk walk_;
     PatchBuild walkPatch_;
+    /// A list leaf written a row at a time: the next row and what is written so far, so the walk stops between rows and a long list spreads over several ticks.
+    struct ListCursor { uint16_t row = 0; uint32_t path = 0; JsonSink part; };   // `path` names the leaf the rows belong to
+    ListCursor walkList_;
+    /// Write `c`'s rows from the cursor on, stopping between rows once `stop` says so; true once the list is whole and handed to `fn`.
+    template <class Fn, class Stop> bool writeListLeaf(MoonModule* mod, const ControlDescriptor& c, const char* path, Fn& fn, Stop& stop, ListCursor& cur);
     /// A slice's share of the render task: a classic ESP32's 2.6 ms frame grows by at most this, where the whole walk in one frame took 16 to 45 ms.
     static constexpr uint32_t kWalkSliceUs = 1000;
     /// Move the second's walk on by one slice, sending its patch once it has visited every value.
@@ -779,7 +784,7 @@ private:
     /// The four header leaves every module carries ahead of its controls.
     static constexpr uint16_t kHeaderLeaves = 4;
     /// One module's own leaves from leaf `next` on, `fn` taking the module first so the patch knows whose slice each belongs to. Returns false when `stop()` ends it early, with `next` naming the leaf to resume at.
-    template <class Fn, class Stop> bool visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, Stop&& stop);
+    template <class Fn, class Stop> bool visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, Stop&& stop, ListCursor* list = nullptr);
     /// A leaf's cached hashes, tried at `next` first and searched only when the tree moved since the baseline; `next` moves past the match.
     LeafHash* findLeaf(uint32_t pathHash, uint16_t& next);
     /// The next push must be a full state and a fresh baseline. @xref{when-a-patch-cannot-describe-the-change}

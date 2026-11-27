@@ -187,6 +187,7 @@ size_t ocramMaxBlock() {
 }
 size_t maxAllocBlock() { return std::max(ocramMaxBlock(), dtcmMaxBlock()); }
 size_t maxInternalAllocBlock() { return maxAllocBlock(); }
+size_t maxPsramAllocBlock() { return 0; }   // alloc reaches no PSRAM here, as ptrIsPsram says
 size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_cast<size_t>(&_heap_start) + (g_dtcmEnd - g_dtcmStart); }
 size_t totalInternalHeap() { return totalHeap(); }
 

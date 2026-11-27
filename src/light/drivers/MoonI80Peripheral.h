@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>   // std::min: the headroom capped at the whole
+
 #include "light/drivers/ParallelLedDriver.h"   // shared driver body + LedPeripheral
 #include "platform/platform_heap.h"   // InternalRamObject, kInternalFreeFloor, ptrIsPsram
 #include "platform/platform_leds.h"   // kRingNodeMaxBytes, kRingAutoRows, kRingLeadRows
@@ -31,6 +33,8 @@ public:
     /// The ring's live counters, once a second; `ab` counts lost frames, 0 on a healthy ring.
     char ringDbgStr_[192] = "—";
     bool shortOfLead_ = false;   ///< ringAuto stopped at the internal floor before the lead the ring needs
+    int16_t headroom_ = -1;      ///< the last second's refill lead over the ring's depth, in percent, -1 before a ring ran
+    uint32_t lastLate_ = 0;      ///< the late-slice count at the last read, so a new late slice reads as no headroom
 
     // --- LedPeripheral descriptors ---
 
@@ -95,7 +99,8 @@ public:
     /// Refresh the ringDbg diagnostic string once a second, leaving it alone off the ring.
     void refreshBusKpi() override {
         const platform::MoonI80RingStats s = platform::moonI80Ws2812RingStats(bus_);
-        if (!s.isRing) return;
+        if (!s.isRing) { headroom_ = -1; lastLate_ = 0; return; }   // a whole-frame bus measures no lead
+        noteHeadroom(s);
         // Read-and-clear each window: a free-running sum wraps in ~20 s and garbles the averages.
         const uint32_t segGather = ParallelLedDriver::dbgSegGatherCy;
         const uint32_t segEmit = ParallelLedDriver::dbgSegEmitCy;
@@ -174,6 +179,8 @@ public:
     uint8_t* busBuffer(uint8_t i) override { return platform::moonI80Ws2812Buffer(bus_, i); }
     /// How many bytes one DMA buffer holds.
     size_t busCapacity() const override { return platform::moonI80Ws2812BufferCapacity(bus_); }
+    /// Every DMA byte the bus holds, the ring and its pad included, which one buffer's capacity leaves out.
+    size_t busHeapBytes() override { return platform::moonI80Ws2812HeapBytes(bus_); }
     /// Start the DMA over buffer `i`, returning false when the bus refuses it.
     bool busTransmit(uint8_t i, size_t bytes) override { return platform::moonI80Ws2812Transmit(bus_, i, bytes); }
     /// Wait out buffer `i`'s transmission, returning false on timeout.
@@ -216,6 +223,20 @@ public:
     }
     /// Send one frame: prime the pool, fire the DMA, let the end-of-buffer ISR refill behind it. The prime runs on this core alone: a helper priming half on core 0 preempted the effects there and cost 12 fps.
     bool busTransmitRing() override { return platform::moonI80Ws2812TransmitRing(bus_); }
+    /// The headroom: how far the refill stayed ahead of the DMA as a share of the ring, and none once a slice went out stale.
+    void noteHeadroom(const platform::MoonI80RingStats& s) {
+        headroom_ = ringHeadroom(s.minLead, s.ringBufs, s.late != lastLate_);
+        lastLate_ = s.late;
+    }
+    /// The refill's least lead as a share of the most a ring holds, its depth less the refill gap and the slice draining; 0 once a slice went out stale, -1 before an interrupt measured a lead.
+    static int16_t ringHeadroom(int32_t minLead, uint32_t ringBufs, bool lateSlice) {
+        if (lateSlice) return 0;
+        if (minLead < 0) return -1;
+        const uint32_t most = ringBufs > platform::kRingRefillGap + 1 ? ringBufs - platform::kRingRefillGap - 1 : 1;
+        return static_cast<int16_t>(std::min<uint32_t>(100, static_cast<uint32_t>(minLead) * 100 / most));
+    }
+    /// The refill's lead over the DMA in the last second, as a share of the ring.
+    std::optional<uint8_t> busHeadroom() const override { return headroom_ < 0 ? std::nullopt : std::optional<uint8_t>(static_cast<uint8_t>(headroom_)); }
     /// The ring's regime for the status suffix: primed before arming, or lapping behind the DMA.
     const char* busRingMode() const override {
         const platform::MoonI80RingStats s = platform::moonI80Ws2812RingStats(bus_);

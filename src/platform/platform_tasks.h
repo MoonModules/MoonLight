@@ -27,7 +27,7 @@ void pauseLoop();
 enum class TaskState : uint8_t { Running, Ready, Blocked, Suspended, Deleted, Invalid, Unknown };
 /// Stands in for cpuPermille where run-time stats are compiled out, so the caller can omit the column.
 constexpr uint32_t kTaskCpuUnmeasured = 0xFFFFFFFFu;
-/// One RTOS task, as TasksModule reports it.
+/// One RTOS task, as the task table reports it.
 struct TaskInfo {
     char      name[16] = {};                     ///< the task's own name
     TaskState state = TaskState::Unknown;        ///< running, blocked, suspended
@@ -36,7 +36,7 @@ struct TaskInfo {
     uint32_t  stackFreeBytes = 0;                ///< high-water mark: the least free stack seen
     uint32_t  cpuPermille = kTaskCpuUnmeasured;  ///< 0..1000, or unmeasured when stats are off
     uint32_t  heapBytes = 0;                     ///< what the task holds on the heap, its stack and its control block; 0 where the platform cannot tell
-    bool      stackPsram = false;                ///< its stack lives in PSRAM
+    uint32_t  psramBytes = 0;                    ///< the part of heapBytes in PSRAM: its stack where that lives there, its control block being internal
 };
 /// Fill `out` with up to `maxTasks` rows, answering how many; 0 where there is no RTOS.
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks);

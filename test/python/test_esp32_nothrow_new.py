@@ -47,6 +47,7 @@ def test_a_failed_nothrow_allocation_returns_null_rather_than_aborting(tmp_path)
     if stock.returncode != 0:   # only the toolchain decides a skip: GNU ld alone wraps a symbol
         pytest.skip(f"this toolchain cannot link the board's way: {stock.stderr.strip()[:200]}")
     assert subprocess.run([str(stock_exe)], capture_output=True, timeout=20).returncode == -signal.SIGABRT   # the board before: abort
-    fixed, fixed_exe = build(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + "\n".join(replaced) + PROGRAM)
+    counted = "namespace mm::platform { inline void* counted(void* p) { return p; } }\n"   # the board's allocation count, a pass-through here
+    fixed, fixed_exe = build(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + counted + "\n".join(replaced) + PROGRAM)
     assert fixed.returncode == 0, fixed.stderr                                                    # the platform's code compiles
     assert subprocess.run([str(fixed_exe)], capture_output=True, timeout=20).returncode == 0     # after: null, both forms

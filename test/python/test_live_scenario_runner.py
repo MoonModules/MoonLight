@@ -240,16 +240,16 @@ def test_a_fixture_naming_a_container_the_run_does_not_restore_is_refused():
 
 
 def _tasks_state(*stacks):
-    tasks = [{"name": n, "stack": s} for n, s in stacks]
+    rows = [{"name": "Grid", "type": "GridLayout"}] + [{"name": n, "type": "task", "stackFree": s} for n, s in stacks]
     return {"modules": [{"type": "SystemModule", "children": [
-        {"type": "TasksModule", "controls": [{"name": "tasks", "value": tasks}], "children": []}]}]}
+        {"type": "MoonShineModule", "controls": [{"name": "pipeline", "value": rows}], "children": []}]}]}
 
 
 def test_the_tightest_stack_is_the_task_with_least_headroom_and_names_it():
     assert runner._min_stack_free(_tasks_state(("main", 6436), ("improv", 2616), ("wifi", 4260))) == (2616, "improv")
 
 
-def test_a_board_without_a_tasks_card_reports_no_stack():
+def test_a_board_without_moonshine_reports_no_stack():
     assert runner._min_stack_free({"modules": [{"type": "SystemModule", "children": []}]}) == (None, None)
 
 

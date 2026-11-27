@@ -78,6 +78,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"   // esp_timer_get_time — ISR-safe wire-time stamp
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -153,7 +154,7 @@ void destroyState(I80State* st) {
     if (!st) return;
     if (st->io) esp_lcd_panel_io_del(st->io);
     if (st->bus) esp_lcd_del_i80_bus(st->bus);
-    for (auto* b : st->buf) if (b) heap_caps_free(b);
+    for (auto* b : st->buf) if (b) freeCaps(b);
     for (auto* s : st->done) if (s) vSemaphoreDelete(s);
     delete st;
 }
@@ -230,19 +231,19 @@ I80State* createState(const uint16_t* dataPins, uint8_t laneCount,
     // Only the LCD_CAM backend can reach PSRAM at all, so the preference only exists here. (The classic ESP32's i80 is the I2S peripheral, whose DMA cannot address PSRAM, it takes the internal-only path below unconditionally, and never asks the question.)
     const bool pinExpanderMode = clockMultiplier > 1;
     if (!pinExpanderMode)
-        st->buf[0] = static_cast<uint8_t*>(esp_lcd_i80_alloc_draw_buffer(
-            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM));
+        st->buf[0] = static_cast<uint8_t*>(adoptCaps(esp_lcd_i80_alloc_draw_buffer(
+            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM)));
     if (!st->buf[0])
 #endif
-        st->buf[0] = static_cast<uint8_t*>(esp_lcd_i80_alloc_draw_buffer(
-            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+        st->buf[0] = static_cast<uint8_t*>(adoptCaps(esp_lcd_i80_alloc_draw_buffer(
+            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
 #if SOC_LCDCAM_I80_LCD_SUPPORTED
     // Shift mode wanted internal RAM and could not have it (a frame too big): take PSRAM rather than refuse to drive. Expect the flicker until the frame fits or the real fix lands.
     if (!st->buf[0] && pinExpanderMode) {
         ESP_LOGW(I80_TAG, "shift frame (%u B) does not fit internal DMA RAM — using PSRAM; "
                           "expect stalled transfers. Reduce lights per strand.", (unsigned)bufferBytes);
-        st->buf[0] = static_cast<uint8_t*>(esp_lcd_i80_alloc_draw_buffer(
-            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM));
+        st->buf[0] = static_cast<uint8_t*>(adoptCaps(esp_lcd_i80_alloc_draw_buffer(
+            st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM)));
     }
 #endif
     if (!st->buf[0]) {
@@ -259,15 +260,15 @@ I80State* createState(const uint16_t* dataPins, uint8_t laneCount,
             // The second buffer follows the first's policy exactly, so the back buffer never lands where the front one refused to. External memory does not touch the scarce internal heap, so that branch needs no reserve check.
 #if SOC_LCDCAM_I80_LCD_SUPPORTED
             if (!pinExpanderMode)
-                st->buf[1] = static_cast<uint8_t*>(esp_lcd_i80_alloc_draw_buffer(
-                    st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM));
+                st->buf[1] = static_cast<uint8_t*>(adoptCaps(esp_lcd_i80_alloc_draw_buffer(
+                    st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM)));
 #endif
             // The internal fallback only if it leaves the reserve intact, the second buffer being a nice-to-have that must never eat what the network stack needs. Without the guard a board whose frame lands internal would drop below the reserve and fail its allocations; degrading to one buffer instead is the honest answer.
             if (!st->buf[1]
                 && heap_caps_get_largest_free_block(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)
                        >= bufferBytes + HEAP_RESERVE) {
-                st->buf[1] = static_cast<uint8_t*>(esp_lcd_i80_alloc_draw_buffer(
-                    st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+                st->buf[1] = static_cast<uint8_t*>(adoptCaps(esp_lcd_i80_alloc_draw_buffer(
+                    st->io, bufferBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL)));
             }
             if (st->buf[1]) {
                 std::memset(st->buf[1], 0, bufferBytes);

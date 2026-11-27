@@ -121,11 +121,19 @@ public:
         std::snprintf(status_, sizeof(status_), "%ux%u, 1/%u scan, %u-bit (%s)",
                       geo_.width, geo_.height, geo_.scanRate, geo_.bitDepth,
                       platform::hub75Backend(hub_));
+        dmaBytes_ = geo_.frameBytes();   // the encoded frame the scan's DMA reads
         return nullptr;
     }
+    /// The encoded frame the scan's DMA reads while the panel runs.
+    size_t dmaBytes() const override { return dmaBytes_; }
 
     /// The geometry and the backend, as open() formatted them.
     const char* describe() const MM_NONBLOCKING override { return status_; }
+    /// The measured refresh over the 100 Hz below which a panel's PWM flickers visibly, as a share of the refresh: 0 at or under it.
+    std::optional<uint8_t> headroom() const override {
+        if (lastRefresh_ == 0xFFFF || lastRefresh_ == 0) return std::nullopt;
+        return static_cast<uint8_t>(lastRefresh_ <= kFlickerHz ? 0 : (lastRefresh_ - kFlickerHz) * 100u / lastRefresh_);
+    }
 
     /// The bus raises each refusal as an error at open, so a running bus has no warning to give.
     const char* warning() const MM_NONBLOCKING override { return nullptr; }
@@ -151,7 +159,7 @@ public:
     }
 
     /// Stop the scan and release the panel's peripheral.
-    void close() override { platform::hub75Deinit(hub_); }
+    void close() override { platform::hub75Deinit(hub_); dmaBytes_ = 0; }
 
     /// The block the selected backend drives, as the select names it, since claiming the wrong one frees a live block and holds a free one.
     LedHwBlock hwBlock() const override {
@@ -312,6 +320,8 @@ private:
 
     platform::Hub75Handle hub_{};
     Hub75Geometry geo_{};
+    size_t dmaBytes_ = 0;                          ///< the open frame's bytes, 0 while closed
+    static constexpr uint16_t kFlickerHz = 100;   ///< the refresh under which an LED's PWM reads as flicker to the eye
     uint16_t lastRefresh_ = 0xFFFF;      // 0xFFFF, so the first real 0 still publishes
     char status_[64] = {};
     char refreshStr_[16] = {};

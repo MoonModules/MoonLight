@@ -635,3 +635,14 @@ TEST_CASE("a new Network Send starts at the linear curve") {
     REQUIRE(i >= 0);
     CHECK(*static_cast<const uint8_t*>(d.controls()[static_cast<uint8_t>(i)].ptr) == static_cast<uint8_t>(mm::Correction::Curve::Linear));
 }
+
+// The send task spreads a frame over 80% of its period on purpose, so its headroom is the budget the configured gap leaves unused, not how long a send takes.
+TEST_CASE("NetworkSendDriver: its headroom is the pacing budget the gap leaves unused, and none once the gap no longer fits") {
+    PaceRig rig(300, 15000, 40, 4063);   // 900 bytes: one DDP packet per receiver, two slots, one gap
+    rig.driver.tick();
+    rig.driver.tick1s();
+    CHECK(rig.driver.headroom() == 25);   // 40 fps: a 20 ms budget, 15 ms of it the gap
+    rig.driver.packetGap = 30000;
+    rig.driver.tick1s();
+    CHECK(rig.driver.headroom() == 0);    // the gap would overrun the budget, so the task squeezes it
+}

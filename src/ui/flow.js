@@ -34,7 +34,7 @@ function foldCore(core, tasks) {
     const us = busy.reduce((s, t) => s + laneUs(t, 3), 0);
     return { name: coreName(core), type: "core", core, count: tasks.length, open: expanded.has(coreName(core)), enabled: true,
         us, own: us, idle: idle.reduce((s, t) => s + laneUs(t, 3), 0), time: us ? [[3, us]] : [], edges: [],
-        internal: sum(tasks, "internal"), psram: sum(tasks, "psram") };
+        internal: sum(tasks, "internal"), psram: sum(tasks, "psram"), running: (tasks.find(t => t.now) || {}).name };
 }
 
 // The bands as drawn: the Modules band holds the top-level modules folded, the System tasks band one node per core, and each opened
@@ -140,16 +140,20 @@ export function chipsOf(r, totals, rel = relative) {
     if (r.idle !== undefined) time.push({ cls: "flow-chip-idle", text: "idle " + (rel ? fmtShare(r.idle, totals.frame) : fmtUs(r.idle)) });
     // A spike: the second's longest tick, shown only when it is past a millisecond and twice the average, so the graph flags a stutter and stays quiet otherwise.
     if (r.worst >= 1000 && r.worst > 2 * (r.us || 0)) time.push({ cls: "flow-chip-spike", text: "▲" + fmtUs(r.worst) });
+    // An output near the edge: under a fifth of its headroom left, the margin where a ring or a send starts to glitch.
+    if (r.headroom !== undefined && r.headroom < 20) time.push({ cls: "flow-chip-spike", text: "headroom " + r.headroom + "%" });
     return { mem, time };
 }
 
 // A node's tooltip: what the module is (its header's one line, when the help is loaded), then its figures.
-export const flowTitle = (r, line) => r.type === "core" ? `${r.name}: ${r.count} tasks, ${fmtUs(r.us)} busy and ${fmtUs(r.idle)} idle per frame, holding ${fmtBytes(r.internal || 0)} internal and ${fmtBytes(r.psram || 0)} PSRAM` : `${r.name} (${r.type})${line ? "\n" + line.replace(/`/g, "") : ""}\n`
+export const flowTitle = (r, line) => r.type === "core" ? `${r.name}: ${r.count} tasks, ${fmtUs(r.us)} busy and ${fmtUs(r.idle)} idle per frame, holding ${fmtBytes(r.internal || 0)} internal and ${fmtBytes(r.psram || 0)} PSRAM${r.running ? `, running ${r.running} now` : ""}` : `${r.name} (${r.type})${line ? "\n" + line.replace(/`/g, "") : ""}\n`
     + (r.count ? `${fmtUs(r.us || 0)} per frame and its bytes with its ${r.count} modules'` : `${fmtUs(r.own ?? r.us ?? 0)} own, ${fmtUs(r.us || 0)} with children per frame`)
     + (r.worst ? `, longest tick ${fmtUs(r.worst)}` : "")
     + `, ${fmtBytes(r.internal || 0)} internal, ${fmtBytes(r.psram || 0)} PSRAM`
-    + (r.type === "task" ? `, ${fmtBytes(r.stackFree || 0)} stack free` : `, ${fmtBytes(r.size || 0)} object`)
+    + (r.type === "task" ? `, ${fmtBytes(r.stackFree || 0)} stack free${r.state ? `\n${r.state}, priority ${r.prio}` : ""}` : `, ${fmtBytes(r.size || 0)} object`)
     + (r.fps !== undefined ? `\nSends ${r.fps} frames a second${r.dropped ? `, ${r.dropped} dropped since start` : ""}` : "")
+    + (r.dma ? `\nDMA buffers ${fmtBytes(r.dma)}` : "")
+    + (r.headroom !== undefined ? `\nHeadroom ${r.headroom}%, its margin before it glitches` : "")
     + (r.bottleneck ? "\nThe bottleneck: the largest on the busiest thread" : "");
 
 function el(parent, tag, attrs = {}, text) {
@@ -186,6 +190,11 @@ function drawHead(box, bars, nodes, redraw) {
     if (nodes.some(n => n.bottleneck)) key("flow-key-bottleneck", "bottleneck");
 }
 
+// A bar's label: a memory bar's total with its largest free block, which fragmentation keeps under the free part; a time bar's busy time.
+export const barLabel = (b, t, idle) => b.bar === "memory"
+    ? `${b.name} ${fmtBytes(t)}${b.largest ? `, largest free block ${fmtBytes(b.largest)}` : ""}`
+    : `${b.name} ${fmtUs(t - idle)} busy`;
+
 // One bar per memory type and per thread, each part as wide as its share of the bar.
 function drawBars(box, bars) {
     const strip = html(box, "div", "flow-strip");
@@ -201,7 +210,7 @@ function drawBars(box, bars) {
         const row = html(strip, "div", "flow-bar");
         // A time bar's label is its busy time, which differs per thread; the idle part closes the bar.
         const idle = b.bar === "time" ? (b.parts.find(p => p[0] === "idle") || [0, 0])[1] : 0;
-        html(row, "span", "flow-bar-label", `${b.name} ${b.bar === "memory" ? fmtBytes(t) : fmtUs(t - idle) + " busy"}`);
+        html(row, "span", "flow-bar-label", barLabel(b, t, idle));
         const track = html(row, "div", "flow-bar-track");
         for (const [name, v] of b.parts) {
             if (!v) continue;
