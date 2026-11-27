@@ -370,10 +370,10 @@ def function_effects_enabled(build_dir) -> bool:
     return re.search(r"^MM_HAS_WFUNCTION_EFFECTS:.*=(1|ON|TRUE|YES)\s*$", cache, re.IGNORECASE | re.MULTILINE) is not None
 
 
-def saved_findings(build_dir):
+def saved_findings(build_dir, keep=None):
     """Each compiled file's saved compiler output, joined, or None when a file was compiled before the launcher kept them.
 
-    The objects come from compile_commands.json, so a source removed from the build leaves no stale findings behind.
+    The objects come from compile_commands.json, so a source removed from the build leaves no stale findings behind. `keep`, when given, picks the entries to read.
     """
     try:
         entries = json.loads((build_dir / "compile_commands.json").read_text(encoding="utf-8"))
@@ -381,6 +381,8 @@ def saved_findings(build_dir):
         return None
     parts = []
     for e in entries:
+        if keep and not keep(e):
+            continue
         diag = build_dir / (e["output"] + ".diag")   # CMake writes `output` relative to the top build dir, even for a subdirectory's targets
         if not diag.exists():
             return None

@@ -193,6 +193,8 @@ bool moonI80Ws2812InternalFits(size_t bytes);
 uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer);
 /// The capacity both buffers share; 0 before init.
 size_t moonI80Ws2812BufferCapacity(const MoonI80Ws2812Handle& h);
+/// Every byte of DMA memory the bus holds: its frame buffers, or its ring and pad; 0 before init.
+size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle& h);
 /// Start the autonomous transfer of one whole-frame buffer.
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes);
 /// Block until that buffer's transfer finishes; false on timeout, as i80Ws2812Wait describes.

@@ -20,7 +20,7 @@ Selected by `build_esp32.py --firmware <key>`, reported by `SystemModule.firmwar
 | `esp32p4rev1`, `esp32p4rev3` | P4 by revision line, an image each | Ethernet, and WiFi over the on-board ESP32-C6; a board lacking a C6 switches the radio off on its WiFi card |
 | `esp32s31` | S31 | WiFi 6 and gigabit Ethernet |
 
-**The naming rule**: the chip, then the revision line where builds differ by it (`p4rev1`, `p4rev3`, `-rev1`), the PSRAM interface where the chip has more than one (`qspi`, `opi`), `-oflash` for octal flash, the tier `-lite`, and `-ethonly`. A plain name carries everything its family can do.
+**The naming rule**: the chip, then the revision line where builds differ by it (`p4rev1`, `p4rev3`, `-rev1`), the PSRAM interface where the chip has more than one (`qspi`, `opi`), `-oflash` for octal flash, the tier `-lite`, and `-ethonly`. A plain name carries everything its family can do. `esp32-rev1-lite` carries the 4 MB tier on every layout because the workaround build with the SD card is 7 KB over the 4 MB slot and most revision 0 and 1 boards have 4 MB. `rev`, not Tasmota's `r3`, because R in Espressif's ordering codes is the PSRAM size (N8R2). `-ethonly`, not `_eth`, because WLED-MM's `_eth` means Ethernet added beside WiFi. New files are `moonlight-<name>-v<version>.bin`, since most installed classic devices are 4 MB boards asking for `firmware-esp32-...`, so the two name sets stay apart.
 
 **The installer picks** the firmware from what it measures when no device model is chosen: chip, revision, flash size and, on an S3, the PSRAM in the package. A chosen device model's firmware is checked against the same measurement. A running device suggests the firmware its own facts name on its Firmware card.
 
@@ -52,7 +52,7 @@ A device model that names one of these keeps working on `-lite`: a state documen
 |---|---|---|
 | ESP32 + OPI PSRAM | 2-8 MB | Many layers, 10K+ LEDs |
 | ESP32, no PSRAM | ~320 KB internal | Full pipeline: double buffering, mapping, blending, parallelism. Proven up to 16K lights (128x128 measured live on an Olimex Gateway) |
-| Teensy 4.x | 1 MB internal, no PSRAM | Comfortable headroom for several layers; DMA-based LED output (OctoWS2811). Ethernet built-in on 4.1 |
+| Teensy 4.x | 1 MB internal, no PSRAM | Comfortable headroom for several layers; DMA-driven parallel LED output from the GPIO port (`GPIO-DMA`). Ethernet built-in on 4.1 |
 | Host / RPi | Abundant | No constraints |
 
 ## Degradation cascade

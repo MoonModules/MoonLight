@@ -159,8 +159,16 @@ public:
         writeLinkStatus();
     }
 
-    /// Refresh the link status once a second, so a cable plugged in later is picked up.
+    /// Wall frames it sent last second, which its `fps` control holds below the render rate.
+    std::optional<uint32_t> framesPerSecond() const override { return wallFramesLastSecond_; }
+    /// Wall frames with a packet the wire refused, a sender outrunning the link: each counts once, however many of its packets were refused.
+    std::optional<uint32_t> framesDropped() const override { return wallFramesDropped_.load(std::memory_order_relaxed); }
+
+    /// Take the second's wall frames as the pace, and refresh the link status, so a cable plugged in later is picked up.
     void tick1s() MM_NONBLOCKING override {
+        const uint32_t frames = wallFramesSent_.load(std::memory_order_relaxed);
+        wallFramesLastSecond_ = frames - wallFramesAtSecond_;
+        wallFramesAtSecond_ = frames;
         writeLinkStatus();
         MoonModule::tick1s();
     }
@@ -222,13 +230,14 @@ public:
         // Sending two to a card that acts on the first is not harmless, hence a choice.
         const int frameCopies = (firmware == kFirmwareV13) ? 2 : 1;
 
+        bool refused = false;   // a packet of this wall frame the MAC turned down
         // Brightness first, the order the cards expect; advisory, and older firmware ignores it.
         {
             const size_t len = buildColorLightBrightnessPacket(packet_, kCardGain);
             // Counted like the rows, so the totals describe the same set of frames.
             for (int i = 0; i < frameCopies; i++) {
                 if (platform::ethSendRaw(packet_, len)) framesSent_++;
-                else framesDroppedTotal_++;
+                else { framesDroppedTotal_++; refused = true; }
             }
         }
 
@@ -249,7 +258,7 @@ public:
                                            static_cast<uint16_t>(n), data + first * stride, stride);
                 // Set on a frame that reached the WIRE: latching after a mid-frame drop blanks the wall.
                 if (platform::ethSendRaw(packet_, len)) { framesSent_++; anyRowSent = true; }
-                else framesDroppedTotal_++;
+                else { framesDroppedTotal_++; refused = true; }
             }
         }
 
@@ -259,9 +268,12 @@ public:
             // This is the one that matters: a second sync is a second LATCH, not a repeat.
             for (int i = 0; i < frameCopies; i++) {
                 if (platform::ethSendRaw(packet_, len)) framesSent_++;
-                else framesDroppedTotal_++;
+                else { framesDroppedTotal_++; refused = true; }
             }
         }
+        // A wall frame is sent when every packet of it reached the wire, and dropped once when any was refused, since the cards then show it in part or keep the last.
+        if (refused) wallFramesDropped_++;
+        else wallFramesSent_++;
         // The cards need the burst inside one inter-frame window rather than trickled.
         platform::ethFlushRaw();
     }
@@ -394,12 +406,15 @@ private:
     uint8_t packet_[COLORLIGHT_MAX_FRAME] = {};
     /// millis() of the last frame sent: the `fps` limiter's reference.
     uint32_t lastSendTime_ = 0;
-    /// Frames the MAC accepted since boot, counted on the encode task and read by tick1s; the difference per second is the rate shown.
+    /// Ethernet frames the MAC accepted since boot, counted on the encode task and read by tick1s; the difference per second is the packet rate shown.
     std::atomic<uint32_t> framesSent_{0};
     /// framesSent_ at the last status write: subtracting gives the rate without a timer.
     uint32_t framesReported_ = 0;
-    /// Frames the MAC refused since boot, cumulative, since a rate hides a slow trickle.
+    /// Ethernet frames the MAC refused since boot, cumulative, since a rate hides a slow trickle.
     std::atomic<uint32_t> framesDroppedTotal_{0};
+    /// Wall frames since boot, sent whole or with a packet refused, counted on the encode task: what framesPerSecond and framesDropped report.
+    std::atomic<uint32_t> wallFramesSent_{0}, wallFramesDropped_{0};
+    uint32_t wallFramesAtSecond_ = 0, wallFramesLastSecond_ = 0;   ///< the sent count at the last tick1s, and the wall frames of the second before it
     /// Backing store for the status line, sized for the longest one, the split-drop report.
     char statusBuf_[96] = {};
     /// Whether a restart was already attempted for the current wedge; one attempt per wedge.

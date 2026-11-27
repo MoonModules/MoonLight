@@ -1,5 +1,6 @@
-# Core's sources, the list every build reads.
+# Core's and the light domain's sources, the lists every build reads.
 include(${CMAKE_CURRENT_LIST_DIR}/../../src/core/sources.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../src/light/sources.cmake)
 
 idf_component_register(
     SRCS
@@ -9,7 +10,9 @@ idf_component_register(
         # host, so one list serves both: src/module_types.cpp carries the reason.
         "../../src/module_types.cpp"
         ${MM_CORE_SOURCES}
+        ${MM_LIGHT_SOURCES}
         "../../src/platform/esp32/platform_esp32.cpp"
+        "../../src/platform/esp32/platform_esp32_heap.cpp"
         "../../src/platform/esp32/moonlive_emit_xtensa.cpp"
         "../../src/platform/esp32/moonlive_emit_riscv.cpp"
         "../../src/platform/esp32/moonlive_asm_xtensa.cpp"

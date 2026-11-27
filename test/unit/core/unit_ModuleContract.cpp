@@ -238,7 +238,7 @@ TEST_CASE("the cards of hardware a build previews need developer mode, the ones 
         return -1;
     };
     const int preview = mm::platform::previewsHardwareControls ? mm::kModeDeveloper : mm::kModeUser;
-    for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "TasksModule", "I2cBusModule", "PinsModule", "PwmLightDriver", "ParallelLedDriver"}) {
+    for (const char* type : {"EthernetModule", "WiFiModule", "AccessPointModule", "I2cBusModule", "PinsModule", "PwmLightDriver", "ParallelLedDriver"}) {
         REQUIRE_MESSAGE(modeOf(type) >= 0, type);   // a name the registry lacks would fail nowhere else
         CHECK_MESSAGE(modeOf(type) == preview, type);
     }

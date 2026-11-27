@@ -32,11 +32,15 @@
 /// Once tripped, later appends do nothing, so a caller sees one consistent state. A caller that ships the buffer anyway sends a truncated document, indistinguishable from a whole one at the far end.
 ///
 /// The fixed mode never allocates, its capacity being the caller's slice on purpose, since an allocation there would succeed even when the slice is too small.
+///
+/// ## A small buffer spills into a block
+///
+/// The small-buffer optimization, as `std::string` keeps a short string inline: most documents fit the caller's slice and take no allocation, and one that outgrows it moves what it holds into a block and carries on there. A writer whose output is costly to produce, such as a list leaf, runs once instead of once into the slice and again into a block.
 namespace mm {
 
 class JsonSink {
 public:
-    /// Socket mode: a staging buffer flushes to the connection as it fills.
+    /// Socket mode: a staging buffer flushes to the connection as it fills, one of @xref{the-three-modes}.
     explicit JsonSink(platform::TcpConnection& conn)
         : conn_(&conn), stage_(static_cast<char*>(platform::alloc(STAGE_SIZE))) {}
 
@@ -48,12 +52,14 @@ public:
         if (fixed_ && fixedCap_ > 0) fixed_[0] = '\0';
     }
 
+    /// The tag that picks the small-buffer mode.
+    struct Spill {};
+    /// Small-buffer mode: the caller's slice first, and a block of its own once the slice is full, so a writer runs once whatever the size: @xref{a-small-buffer-spills-into-a-block}.
+    JsonSink(char* buf, size_t cap, Spill) : JsonSink(buf, cap) { spills_ = true; }
+
 
     /// Frees the block, when one was taken and not detached, and the stage.
-    ~JsonSink() {
-        if (heap_) platform::free(heap_);
-        if (stage_) platform::free(stage_);
-    }
+    ~JsonSink();
 
     /// Non-copyable: it owns a heap block and possibly a connection.
     JsonSink(const JsonSink&) = delete;
@@ -65,74 +71,15 @@ public:
         if (s) append(s, std::strlen(s));
     }
     /// Append `len` bytes, a slice of a larger document that carries no terminator of its own.
-    void append(const char* s, size_t len) {
-        if (!s) return;
-        written_ += len;
-        if (conn_ && !stage_) { conn_->write(reinterpret_cast<const uint8_t*>(s), len); return; }
-        for (const char* end = s + len; s < end; ) {
-            if (conn_) {
-                if (pos_ == STAGE_SIZE) flushStage();
-                stage_[pos_++] = *s++;
-            } else if (fixed_) {
-                // One byte reserved for the terminator; once overflow trips, later appends do nothing.
-                if (fixedLen_ + 1 >= fixedCap_) { overflowed_ = true; return; }
-                fixed_[fixedLen_++] = *s++;
-                fixed_[fixedLen_] = '\0';
-            } else {
-                // Out of memory, flagged as the fixed path does: @xref{overflow-is-a-flag-never-a-silent-truncation|why a truncated document is worse than none}.
-                if (!ensureHeap(heapLen_ + 1)) { overflowed_ = true; return; }
-                heap_[heapLen_++] = *s++;
-            }
-        }
-        // Terminated after every append, so the data stays a valid string even when a caller skips the length.
-        if (!conn_ && !fixed_ && heap_) heap_[heapLen_] = '\0';
-    }
+    void append(const char* s, size_t len);
 
     /// Append a formatted fragment; the common case fits a stack buffer and a longer one is re-formatted so nothing is silently truncated.
-    void appendf(const char* fmt, ...) MM_PRINTF_FORMAT(2, 3) {
-        char frag[FRAG_MAX];
-        va_list ap;
-        va_start(ap, fmt);
-        va_list ap2;
-        va_copy(ap2, ap);
-        int n = std::vsnprintf(frag, sizeof(frag), fmt, ap);
-        va_end(ap);
-        if (n < 0) { va_end(ap2); return; }
-        if (static_cast<size_t>(n) < sizeof(frag)) {
-            va_end(ap2);
-            append(frag);
-            return;
-        }
-        // Fragment longer than the stack buffer.
-        if (fixed_) {
-            // The fixed mode never allocates: @xref{overflow-is-a-flag-never-a-silent-truncation|why an allocation here would hide the problem}.
-            overflowed_ = true;
-            va_end(ap2);
-            return;
-        }
-        // The growing modes format into an exactly-sized block, so a long fragment is never truncated.
-        char* big = static_cast<char*>(platform::alloc(static_cast<size_t>(n) + 1));
-        if (big) {
-            std::vsnprintf(big, static_cast<size_t>(n) + 1, fmt, ap2);
-            append(big);
-            platform::free(big);
-        }
-        va_end(ap2);
-    }
+    void appendf(const char* fmt, ...) MM_PRINTF_FORMAT(2, 3);
 
     /// Write a boolean literal.
     void writeBool(bool v) { append(v ? "true" : "false"); }
     /// Write a string as a quoted literal, escaping what the standard requires.
-    void writeJsonString(const char* s) {
-        // A character at a time, so there is no truncation ceiling; the standard requires escaping the quote, the backslash and every control byte.
-        if (!s) s = "";
-        append("\"");
-        for (char esc[8]; *s; s++) {
-            esc[jsonEscapeByte(static_cast<unsigned char>(*s), esc)] = 0;
-            append(esc);
-        }
-        append("\"");
-    }
+    void writeJsonString(const char* s);
 
     /// Push whatever is staged to the connection, in socket mode; call it once at the end.
     void flush() { flushStage(); }
@@ -146,23 +93,10 @@ public:
     size_t size() const { return fixed_ ? fixedLen_ : heapLen_; }
 
     /// Hand the block to the caller and give up ownership, so a large built document is not copied out; nothing in the other modes.
-    char* detach() {
-        if (conn_ || fixed_) return nullptr;
-        char* out = heap_;
-        heap_ = nullptr;
-        heapCap_ = heapLen_ = 0;
-        return out;
-    }
+    char* detach();
 
     /// Empty a buffer-mode sink and give its block back, so a sink kept between uses holds no memory while empty.
-    void clear() {
-        if (conn_ || fixed_) return;
-        if (heap_) platform::free(heap_);
-        heap_ = nullptr;
-        heapCap_ = heapLen_ = 0;
-        written_ = 0;
-        overflowed_ = false;
-    }
+    void clear();
 
     /// Bytes appended so far in any mode, a socket's included, which `size()` cannot tell: whether a writer wrote anything.
     size_t written() const { return written_; }
@@ -183,34 +117,22 @@ private:
     static constexpr size_t STAGE_SIZE = 1024;
     static constexpr size_t FRAG_MAX = 256;
 
-    void flushStage() {
-        if (conn_ && pos_ > 0) {
-            conn_->write(reinterpret_cast<const uint8_t*>(stage_), pos_);
-            pos_ = 0;
-        }
-    }
-
+    /// Write the staged bytes to the connection.
+    void flushStage();
+    /// Copy a run into the stage, flushing it as it fills.
+    void appendStaged(const char* s, size_t len);
+    /// Copy what fits of a run into the caller's slice, tripping the flag for the rest.
+    void appendFixed(const char* s, size_t len);
+    /// Move the slice's bytes into a block holding `more` beside them and continue in buffer mode; false when memory refuses.
+    bool spill(size_t more);
+    /// Copy a run into the block, grown to hold it first.
+    void appendHeap(const char* s, size_t len);
+    /// Format a fragment longer than the stack buffer into a block of its exact size.
+    void appendLong(const char* fmt, va_list ap, size_t n);
+    /// The capacity a growth asks for first: double, until it holds what is needed and a terminator.
+    size_t growthTarget(size_t need) const;
     /// Grow to hold at least what is needed plus a terminator: @xref{growth-steps-down-when-doubling-is-refused|what a refused doubling does}.
-    bool ensureHeap(size_t need) {
-        if (need + 1 <= heapCap_) return true;
-        size_t want = heapCap_ == 0 ? 2048 : heapCap_ * 2;
-        while (want < need + 1) want *= 2;
-        // In quarters rather than to the bare minimum: @xref{growth-steps-down-when-doubling-is-refused|why a minimal step thrashes}.
-        const size_t step = heapCap_ / 4 > 4096 ? heapCap_ / 4 : 4096;
-        const size_t floorCap = need + 1 > step ? need + 1 : step;
-        for (;;) {
-            if (char* grown = static_cast<char*>(platform::alloc(want))) {
-                if (heap_) { std::memcpy(grown, heap_, heapLen_); platform::free(heap_); }
-                heap_ = grown;
-                heapCap_ = want;
-                heap_[heapLen_] = 0;
-                return true;
-            }
-            if (want <= floorCap) return false;   // even a useful minimum is refused: genuinely out
-            const size_t next = want - step;
-            want = next < floorCap ? floorCap : next;
-        }
-    }
+    bool ensureHeap(size_t need);
 
     platform::TcpConnection* conn_ = nullptr;  // socket mode when non-null
     char* stage_ = nullptr;                    // socket mode, from the heap
@@ -224,6 +146,7 @@ private:
     size_t fixedLen_ = 0;
     size_t fixedCap_ = 0;
     bool overflowed_ = false;
+    bool spills_ = false;   // small-buffer mode: a full slice moves into a block rather than overflowing
     int  nameIndex_ = -1;   // >= 0: this sink is asking for that option's name (see requestName)
     int  optionIndex_ = -1; // >= 0: this sink is asking for that option object (see requestOption)
     size_t written_ = 0;    // every byte appended, whatever the mode

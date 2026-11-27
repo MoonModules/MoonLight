@@ -77,78 +77,27 @@ Prior art: Tasmota's Partition Wizard moves a running device to a new layout ove
 
 ### 1. The ESP32-C3 firmware ✅
 
-**Done.** Built, shipped in the release (`ships: True`), flashed on the bench C3 and the bulb. MoonLive runs on the C3 with native code from SRAM. Fixes on the way: a task asking for a core the chip lacks runs unpinned, the FPU capability is guarded, the C3 takes the W5500 component, MoonBase compiles its Ethernet handler only where there is a MAC. An RMT strip on the C3 is untested.
-
-- An `esp32c3` variant in `build_esp32.py`, 4 MB with MoonBase, and `moonbase-esp32c3`.
-- The 4 MB MoonBase table is chip-neutral, so `esp32dev_moonbase.csv` becomes `4mb_moonbase.csv`, shared by the classic ESP32 and the C3. That rename is this plan's subtraction: one table, not a copy per chip.
-- The platform layer on the C3:
-  - one core;
-  - no PSRAM;
-  - two RMT TX channels;
-  - no I2S parallel or LCD bus;
-  - the console and Improv on USB Serial/JTAG (GPIO18 and GPIO19);
-  - 400 KB SRAM.
-- MoonLive on the C3: the RISC-V backend emits RV32IMC only (the P4 has more), and code runs from SRAM, which needs ESP-IDF's memory protection off (`CONFIG_ESP_SYSTEM_MEMPROT_FEATURE`). A C3 build without the JIT is the fallback when this resists.
-- The release workflow and `check_firmwares` learn the variant; the installer learns the `ESP32-C3` chip name.
+An `esp32c3` firmware, 4 MB with MoonBase, its table shared with the classic ESP32: [firmware variants](../reference/hardware/firmware-variants.md), [the RISC-V backend](../../src/platform/esp32/moonlive_asm_riscv.h), [GPIO usage](../reference/hardware/gpio-usage.md). An RMT strip on the C3 is untested.
 
 ### 2. Device models ✅
 
-**Done**, as `ESP32-C3 SuperMini` (its pin map as the image), `ESP32-C3 RGBWW PWM bulb` (the Athom 12W as its example), `QuinLED An-DecaPenta` and `QuinLED An-Penta-Plus` (WiFi supported, PWM outputs planned until their pins are known).
-
-- `ESP32-C3 SuperMini`: chip `ESP32-C3`, firmware `esp32c3`, `RmtLedDriver` on the board's LED pin.
-- `ESP32-C3 RGBWW PWM bulb`: chip `ESP32-C3`, firmware `esp32c3`, one light, the PWM driver on the five pins above at 9765 Hz under the `RGBCCT` fixture, the curve left at its default.
+[Device models](../reference/device-models.md) lists the ESP32-C3 SuperMini and the RGBWW PWM bulb.
 
 ### 3. A PWM light driver ✅
 
-**Done.** `PwmLightDriver` with its platform seam, six desktop tests and its card on the drivers page; runs the bulb's five channels, seen working. The white order follows WLED's config on the bulb: cold on GPIO3, warm on GPIO4.
-
-The bulb drives its five channels with PWM through the C3's LEDC peripheral, and MoonLight has no PWM driver yet.
-Every ESP32 has LEDC, so the driver serves any PWM light: a bulb, an analog RGB, RGBW or RGBCCT strip, a constant-current controller such as the QuinLED An-Penta boards.
-
-**The spec: PWM Light, a driver card under LED drivers.**
-
-- **One pin per output channel.**
-  `pins` lists GPIOs in channel order, and the shared `fixture` profile names what each channel carries, so the driver adds no channel vocabulary of its own.
-  The light count is the pin count divided by the profile's channel count: the bulb's 5 pins under `RGBCCT` are 1 light, the An-DecaPenta's 15 are 3.
-  Pins past the last whole light idle, and the status says how many.
-- **The shared correction applies as on every driver:** `localBrightness`, `curve`, `whiteMode`, `start` and `count`.
-- **`frequency`, in Hz**, default 19531, the rate QuinLED recommends.
-  The resolution follows from it rather than being a second control: the LEDC clock divided by the frequency bounds the duty steps, so the driver takes the most bits that fit, up to the chip's timer width.
-  At 19531 Hz that is 12 bits, and at the bulb's 9765 Hz 13.
-- **Duty:** the curve in 16 bits, scaled to the resolution, so the bottom of a fade keeps its steps.
-- **Phase:** each channel starts its pulse at an evenly spaced point of the period, so a light at full white does not switch every channel at the same instant, which spreads the current draw.
-- **Limits, from the SDK's capabilities:** one LEDC timer per driver, so one frequency per driver and up to four PWM drivers; the chip's channel count across its speed modes (16 on the classic ESP32, 6 on the C3). More pins than channels is an error naming the limit.
-- **The hot path** writes a channel's duty only when it changed, a register write that does not block.
-- **The platform seam:** `pwmStart(frequency)` returning the resolution, `pwmAttach(channel, pin, phase)`, `pwmWrite(channel, duty)` and `pwmStop()`, with a desktop stub that records the duties, so the mapping is tested on the desktop.
-- **Pins** are claimed through the pins registry, as the LED drivers claim theirs.
-- **Tests:** lights times channels to duties through the stub, the resolution from the frequency, a partial last light, more pins than channels, the phase spacing.
-- **Catalog:**
-  - The Athom bulb: `pins` "6,7,5,3,4" (red, green, blue, cold, warm, the order `RGBCCT` names), `fixture` `RGBCCT`, `frequency` 9765.
-  - The An-Penta boards get their pins once QuinLED's pinout guide gives them.
+[PwmLightDriver](../../src/light/drivers/PwmLightDriver.h) drives one pin per channel.
 
 ### 4. The bench C3, then the rehearsal ✅
 
-**Done.** The whole path over WiFi alone on the bench, a power cut at each of the five pauses and the move-aside path all came back without a cable; the network is written before the table, so a cut after the table still finds it. The image checks the board before writing anything and restarts WLED when it cannot finish, re-verified on the normal and move-aside paths; the refusals themselves are untested on hardware. The image is `moonbase/migrate/`, shipped as `shared-migrate-esp32c3.bin`, with the how-to `docs/how-to/migrating-over-the-air.md`.
-
-On `/dev/cu.usbmodem202134311`, after a repower (it was wedged on the last probe, MAC 08:92:72:85:B3:60):
-1. Identify the chip and flash size.
-2. Flash MoonLight `esp32c3` over USB; verify WiFi, the UI, MoonLive, and an RMT strip.
-3. Flash it back to the bulb's exact state: WLED 0.15.0's ESP32-C3 release, its v4.4.4 bootloader and the `WLED_ESP32_4MB_1MB_FS` table.
-4. Run the bulb's path over WiFi only: WLED `/update` with the migration image, then MoonBase on the carried-over WiFi, then MoonLight by URL.
-5. Cut the power at each step with a build that pauses between steps; every cut outside step 3's window has to come back.
+[Migrating over the air](../reference/migrating-over-the-air.md), rehearsed by [wled_migration_test](../../moondeck/MoonDeck.md#wled_migration_test). The refusals themselves are untested on hardware.
 
 ### 5. The bulb ✅, Glow ✅
 
-**Done** on 2026-10-08: WLED took the image, MoonBase came up on the WiFi in 6 seconds, MoonLight installed and runs the bulb's catalog entry. Glow, iterated on the bulb to follow the bass, lives in `moonlive/effects/audio/glow.mle`.
+The bulb runs MoonLight and Glow: [Migrating over the air](../reference/migrating-over-the-air.md).
 
-- Before anything is written: every file WLED's `/edit?list=/` lists, downloaded for reference into the appendix below. WLED hides `wsec.json` from the listing and from HTTP, so only the migration image reads it.
-- With step 4 green and your go-ahead: the same `/update` on 192.168.1.230.
-- MoonBase on the carried-over WiFi, MoonLight by URL, then the device model `Athom 12W RGBCCT bulb`.
-- An audio-reactive effect for the bulb: `glow.mle`, the whole rig as one light pumping with the bass, iterated on the bulb and copied into `moonlive/effects/` once settled.
+### 6. Apply a device model from the device's own UI ✅
 
-### 6. Apply a device model from the device's own UI ⏳
-
-**Next**, a commit of its own.
+Built: the System card's `deviceModel` offers Choose device model ([SystemModule](../../src/core/system/SystemModule.h), `attachCatalogField` in [devicepopup.js](../../src/ui/devicepopup.js)), and a node's popup on the Devices map offers Apply device defaults ([DevicesModule](../../src/core/system/DevicesModule.h)). Both send the model's state in one `PATCH /api/state` after a second press, and offline the picker stays out. The design below is the one planned.
 
 A catalog entry in `deviceModels.json` reaches a device two ways: the web installer sends it over USB at install time, and MoonDeck sends it over the network when a model is picked.
 A device that came to MoonLight over WiFi has neither, so the Athom bulb's PWM pins, fixture and grid were set through MoonDeck; the same holds for any device a user sets up later.
@@ -181,9 +130,7 @@ The bulb runs on mains through a non-isolated supply: unscrew it from the socket
 
 ## Verification
 
-- ✅ The bench C3 runs MoonLight from a USB flash.
-- ✅ The bench C3 makes the WLED-to-MoonLight move over WiFi alone, and survives a power cut at every step outside the table write.
-- ✅ The bulb runs MoonLight with its five channels driven, verified by your eyes.
+- ✅ Verified on the bench C3 and the bulb: MoonLight from a USB flash, the WLED move over WiFi alone with a power cut at every step outside the table write, the five channels driven.
 
 ## Appendix: the bulb's filesystem
 

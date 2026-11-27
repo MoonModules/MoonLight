@@ -1,6 +1,6 @@
 # Plan: tempo evaluation harness
 
-The desktop build runs real music through `AudioService` faster than real time, and a MoonDeck script scores the tempo it reads against labeled tracks: Acc1 and Acc2, per genre, with the 3:2 readings counted apart. The tracker itself is [the audio plan's step 6](Plan-20261028%20-%20Audio%20that%20answers%20the%20music%20(11%20of%2012).md); the harness lands first, so that step is measured while it is built, and any later tracker is judged on the same footing.
+The desktop build runs real music through `AudioService` faster than real time, and a MoonDeck script scores the tempo it reads against labeled tracks: Acc1 and Acc2, per genre, with the 3:2 readings counted apart. The tracker itself is the audio plan's step 6; the harness lands first, so that step is measured while it is built, and any later tracker is judged on the same footing.
 
 The yardstick is the field's own: Gouyon et al., *An experimental comparison of audio tempo induction algorithms* (2006), which defines Acc1 and Acc2 at 4%, as Schreiber and Müller (2018) use them, and `mir_eval` for beat and downbeat scores once the frame carries a phase.
 
@@ -32,17 +32,11 @@ The steps land as pull requests based on main, each as large as its topic needs 
 
 ### 1. The seam into the analysis ✅
 
-- `analyzeForTest(block)` runs a block through the analysis the input runs, on the stream's own clock, so a file fed faster than real time reads as it would live; it landed with the audio rewrite (#232). `mm_tempo` calls it after `resetAnalysisForTest()`, and this plan adds nothing to `AudioService`.
+`analyzeForTest` and `resetAnalysisForTest` on [AudioService](../../src/core/services/AudioService.h).
 
 ### 2. The harness on generated tracks ✅
 
-- **`mm_tempo`** (`test/bench/bench_tempo.cpp`): reads s32 mono samples on stdin, steps the clock by the block's length, and writes one tab-separated line per frame after a header naming the rate, the block and the columns: time, level, flux, onset and the sixteen bands, with `bpm`, `beatPhase` and `beat` as columns once the audio plan's step 6 adds them.
-- **`moondeck/check/bench_tempo.py`**: builds `mm_tempo` alone, decodes each file with FFmpeg, pipes it through, and writes a run file and a Markdown report.
-- **`--generate <dir>`** writes tracks with an exact tempo: click tracks from 60 to 200 BPM, swung and triplet patterns, silence and noise; `--generated` writes them once to `build/tempo/generated` and adds them to a run. A tempo step from 120 to 140 waits for per-section labels.
-- **The Tempo Report card** on MoonDeck's Host tab shows the latest report in the View pane, through `/api/tempo-view`, and starts nothing; Tempo History and Tempo Sets join it with their steps, as read-only cards too.
-- **A test of the whole path:** the generated set through FFmpeg, `mm_tempo` and the baseline, each track's verdict pinned.
-- **Comparing runs:** `tempo_compare.py` pairs two run files by the audio's hash, with an exact McNemar test on the tracks right in one run only and every track whose reading changed; `--last` takes the two newest runs on the same files. It answers whether a change to the analysis helped.
-- **The baseline:** Ellis's autocorrelation of the frame's flux under a log-normal prior at 120 BPM, which reads the generated clicks within 2% from 60 to 160 BPM and 174, 185 and 200 at half: the prior weighs a tempo and its half alike at 120 × √2, about 170 BPM, and the half wins above.
+[bench_tempo](../../moondeck/MoonDeck.md#bench_tempo) and [tempo_compare](../../moondeck/MoonDeck.md#tempo_compare). A tempo step from 120 to 140 waits for per-section labels, and Tempo History and Tempo Sets join the report with step 3.
 
 ### 3. Real music, with provenance 🚧 the open sets' own labels, rekordbox and Traktor exports
 

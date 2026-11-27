@@ -35,6 +35,7 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "driver/gpio.h"
 
 #include <atomic>
@@ -311,7 +312,7 @@ static bool mountCard(const SdPinConfig& pins, bool format) {
     }
 
     // DMA-capable, so the probe sector is read straight into it on every chip.
-    g_scratch = static_cast<SdScratch*>(heap_caps_calloc(1, sizeof(SdScratch), MALLOC_CAP_DMA));
+    g_scratch = static_cast<SdScratch*>(callocCaps(sizeof(SdScratch), MALLOC_CAP_DMA));
     if (!g_scratch) {
         ESP_LOGE(SD_TAG, "SD scratch allocation failed");
         esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
@@ -338,7 +339,7 @@ SdMountError sdMountError() { return g_mountError; }
 static void unmountCard() {
     esp_vfs_fat_sdcard_unmount(SD_MOUNT_POINT, g_card);
     powerDown();
-    heap_caps_free(g_scratch);
+    freeCaps(g_scratch);
     g_scratch = nullptr;
     g_card = nullptr;
     g_mounted = false;

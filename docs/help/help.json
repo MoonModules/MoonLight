@@ -126,7 +126,7 @@
     },
     "identify": {
      "line": "Blink the lights for five seconds, so this device is found by looking.",
-     "more": "Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details."
+     "more": "Dark and lit twice a second, at their own brightness at most. A peer's map presses it from a device's details."
     },
     "palette": {
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
@@ -258,6 +258,9 @@
       "own": {
        "line": "Time per frame, children left out."
       },
+      "worst": {
+       "line": "The longest tick, or on the render bar the longest frame, of the last second."
+      },
       "time": {
        "line": "Own time per thread."
       },
@@ -284,6 +287,30 @@
       },
       "stackFree": {
        "line": "A task's least free stack."
+      },
+      "state": {
+       "line": "A task's state when the snapshot was taken: running, ready, blocked, suspended or deleted."
+      },
+      "prio": {
+       "line": "A task's RTOS priority."
+      },
+      "now": {
+       "line": "The task its core ran when the snapshot was taken, on a dual-core chip."
+      },
+      "fps": {
+       "line": "An output's frames sent last second."
+      },
+      "dropped": {
+       "line": "An output's frames dropped since it started, where it counts them."
+      },
+      "dma": {
+       "line": "An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads."
+      },
+      "headroom": {
+       "line": "An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, a send's unused pacing budget, a panel's refresh over flicker."
+      },
+      "largest": {
+       "line": "A memory bar's largest free block, which a fragmented heap holds far under its free part."
       }
      }
     }
@@ -351,7 +378,8 @@
    "tags": "💫",
    "dim": 3,
    "doc": "light/layouts.md#cube",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CubeLayout.h"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CubeLayout.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#cubelayout"
   },
   "HumanSizedCubeLayout": {
    "line": "A walk-in cube of five LED curtains: front, back, top, left and right, open at the bottom.",
@@ -4668,7 +4696,7 @@
    "guide": [
     {
      "title": "The surface",
-     "text": "Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
+     "text": "Each switch, encoder and fader drives any control you assign: 🔗 in the card's header turns on assign mode, where a tap on one picks what it drives, since a double-click would also move the fader.\n\nFrom the second slot on, an unassigned slot follows the effect enabled last."
     },
     {
      "title": "Presets",
@@ -4986,38 +5014,6 @@
    "doc": "core/system.md#i2c-bus",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/I2cBusModule.h",
    "tests": "https://moonmodules.org/MoonLight/reference/tests.html#i2cbusmodule"
-  },
-  "TasksModule": {
-   "line": "A read-only diagnostic showing what runs where: the tasks, and the modules inside each.",
-   "summary": "You cannot optimize which module runs on which core until you can see it. Each task has its modules nested beneath it. The list is empty on the host.",
-   "guide": [
-    {
-     "title": "Reading a task row",
-     "text": "A row shows the task's name, state, core, priority and the minimum free stack seen, and expands to its modules.\n\nA `cpu` percentage shows each task's share of its core since the last refresh, where the board measures it: an ESP32 does, a computer and a Teensy do not."
-    }
-   ],
-   "image": "https://moonmodules.org/MoonLight/assets/core/TasksModule.png",
-   "controls": {
-    "tasks": {
-     "line": "A row per FreeRTOS task.",
-     "fields": {
-      "modules": {
-       "line": "The render task's modules, each as `Name · Nus · NB · Nheap`, and a closing `∑ modules` line that cross-checks them against the tick."
-      }
-     }
-    },
-    "core0": {
-     "line": "What executes on the first core."
-    },
-    "core1": {
-     "line": "What executes on the second core, empty on a single-core chip."
-    }
-   },
-   "role": "generic",
-   "dim": 0,
-   "doc": "core/system.md#tasks",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/core/system/TasksModule.h",
-   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#tasksmodule"
   },
   "PinsModule": {
    "line": "A read-only map of which module owns each GPIO, for what role, and whether the pin is safe for it.",

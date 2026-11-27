@@ -512,21 +512,36 @@ size_t maxExecAllocBlock() {
     return 0;   // no distinct executable pool: pages are mapped per allocation
 }
 
-// No task system here, so the module shows only its own cost table; a test can inject a canned snapshot to exercise its rows and nesting on the host.
+// The process's threads stand for the tasks; a test can inject a canned snapshot to exercise the rows and nesting with fixed figures.
 static const TaskInfo* g_testTasks = nullptr;
 static size_t g_testTaskCount = 0;
 static const char* g_testRenderTask = "";
 void setTestTaskSnapshot(const TaskInfo* tasks, size_t count, const char* renderTask) {
     g_testTasks = tasks; g_testTaskCount = count; g_testRenderTask = renderTask ? renderTask : "";
 }
+void markRenderThread();                     // platform_host_threads.cpp: the thread mm_main runs on
+void nameCurrentThread(const char* name);   // platform_host_threads.cpp: the OS's name for the calling thread
+void recordSystemHeap() { markRenderThread(); }   // a computer reports no heap, so this records the thread mm_main starts on
+void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
+void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // a computer has one memory
+void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
+bool tasksHeap(size_t& total, size_t& psram) { total = psram = 0; return true; }   // a computer's threads hold their stacks outside any heap this reports
+size_t hostThreads(TaskInfo* out, size_t maxTasks);   // platform_host_threads.cpp: the process's threads
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
-    if (!g_testTasks || !out) return 0;
+    if (!out) return 0;
+    if (!g_testTasks) return hostThreads(out, maxTasks);
     const size_t n = g_testTaskCount < maxTasks ? g_testTaskCount : maxTasks;
     for (size_t i = 0; i < n; i++) out[i] = g_testTasks[i];
     return n;
 }
-void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
-const char* renderTaskName() { return g_testRenderTask; }
+// A computer names no task per core; an injected snapshot names its running task on each.
+void currentTaskOnCore(int core, char* out, size_t cap) {
+    if (!out || !cap) return;
+    out[0] = '\0';
+    for (size_t i = 0; g_testTasks && i < g_testTaskCount; i++)
+        if (g_testTasks[i].core == core && g_testTasks[i].state == TaskState::Running) { std::snprintf(out, cap, "%s", g_testTasks[i].name); return; }
+}
+const char* renderTaskName() { return g_testTasks ? g_testRenderTask : "render"; }   // the thread mm_main runs on, named in the table
 
 // The worker seam is a thread and a condition variable, the core pin ignored. The wake is a single-slot latch, matching the device notification's one-pending-count semantics.
 namespace {
@@ -542,14 +557,14 @@ struct HostWorker {
 static std::atomic<bool> testSpawnFails{false};
 void setTestSpawnFails(bool fail) { testSpawnFails.store(fail, std::memory_order_relaxed); }
 
-bool spawnPinnedTask(WorkerTask& t, const char* /*name*/, WorkerFn fn, void* user,
+bool spawnPinnedTask(WorkerTask& t, const char* name, WorkerFn fn, void* user,
                      size_t /*stackBytes*/, uint8_t /*priority*/, int /*core*/) {
     if (testSpawnFails.load(std::memory_order_relaxed)) return false;
     auto* w = new (std::nothrow) HostWorker();
     if (!w) return false;
     t.impl = w;   // before the thread starts, which waits on it at once
     try {
-        w->thread = std::thread([fn, user] { fn(user); });   // the fn owns its loop until stop
+        w->thread = std::thread([fn, user, label = std::string(name ? name : "")] { nameCurrentThread(label.c_str()); fn(user); });   // the fn owns its loop until stop
     } catch (const std::system_error&) {   // the thread limit: the pool degrades on false
         t.impl = nullptr;
         delete w;
@@ -591,6 +606,41 @@ void stopPinnedTask(WorkerTask& t) {
     if (w->thread.joinable()) w->thread.join();
     delete w;
     t.impl = nullptr;
+}
+
+namespace {
+// A binary semaphore as the C++ standard builds one: a flag behind a mutex, and a condition variable to sleep on.
+struct HostSignal {
+    std::mutex mtx;
+    std::condition_variable cv;
+    bool given = false;
+};
+}  // namespace
+
+bool signalCreate(Signal& s) {
+    if (!s.impl) s.impl = new (std::nothrow) HostSignal();
+    return s.impl != nullptr;
+}
+
+void signalDestroy(Signal& s) {
+    delete static_cast<HostSignal*>(s.impl);
+    s.impl = nullptr;
+}
+
+void signalGive(Signal& s) {
+    auto* h = static_cast<HostSignal*>(s.impl);
+    if (!h) return;
+    { std::scoped_lock<std::mutex> lk(h->mtx); h->given = true; }
+    h->cv.notify_one();
+}
+
+bool signalTake(Signal& s, uint32_t timeoutMs) {
+    auto* h = static_cast<HostSignal*>(s.impl);
+    if (!h) return false;
+    std::unique_lock<std::mutex> lk(h->mtx);
+    if (!h->cv.wait_for(lk, std::chrono::milliseconds(timeoutMs), [h] { return h->given; })) return false;
+    h->given = false;
+    return true;
 }
 
 void taskWdtSubscribe() {}     // no watchdog on the host
@@ -2269,6 +2319,11 @@ bool mdnsInit(const char* deviceName) {
 }
 const char* mdnsError() { return testMdnsFailure_ ? testMdnsFailure_ : ""; }
 void mdnsStop() { if (hostMdns_.end) hostMdns_.end(); }
+
+// A computer reports no heap, so the network holds what a test says.
+static size_t testNetHeap_[2] = {};
+void networkHeap(size_t& total, size_t& psram) { total = testNetHeap_[0]; psram = testNetHeap_[1]; }
+void setTestNetworkHeap(size_t total, size_t psram) { testNetHeap_[0] = total; testNetHeap_[1] = psram; }
 static std::map<std::string, uint16_t> mdnsServices_;
 void mdnsAdvertise(const char* type, const char* proto, uint16_t port) {
     mdnsServices_[std::string(type) + "." + proto] = port;
@@ -2975,6 +3030,9 @@ uint8_t* moonI80Ws2812Buffer(const MoonI80Ws2812Handle& h, uint8_t buffer) {
 }
 size_t moonI80Ws2812BufferCapacity(const MoonI80Ws2812Handle& h) {
     return h.impl ? static_cast<HostBus*>(h.impl)->capacity : 0;
+}
+size_t moonI80Ws2812HeapBytes(const MoonI80Ws2812Handle& h) {
+    return h.impl ? moonI80Ws2812BufferCapacity(h) * (moonI80Ws2812Buffer(h, 1) ? 2 : 1) : 0;
 }
 bool moonI80Ws2812Transmit(MoonI80Ws2812Handle& h, uint8_t buffer, size_t bytes) {
     return h.impl && static_cast<HostBus*>(h.impl)->transmit(buffer, bytes);

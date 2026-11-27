@@ -416,3 +416,12 @@ def test_lizard_file_names_come_back_with_forward_slashes(tmp_path, monkeypatch)
     monkeypatch.setattr(check_code.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, stdout=row, stderr=""))
     assert check_code.measure()[0]["file"] == "src/core/New.cpp"
     assert check_code.findings(check_code.measure())[0][0] == "src/core/New.cpp"   # the `--files` filter keys on this spelling
+
+
+def test_a_test_object_is_recognized_whether_the_database_records_its_file_absolute_or_relative():
+    root = check_code.ROOT
+    build = root / "build" / "macos"
+    assert check_code._is_test_object({"directory": str(build), "file": str(root / "test" / "unit" / "a.cpp")})
+    assert check_code._is_test_object({"directory": str(build), "file": "../../test/unit/a.cpp"})
+    assert not check_code._is_test_object({"directory": str(build), "file": "../../src/core/a.cpp"})
+    assert not check_code._is_test_object({"directory": str(build), "file": str(root / "src" / "core" / "a.cpp")})

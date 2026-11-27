@@ -307,6 +307,12 @@ A function's local variables live in registers and on the render task's stack wh
 
 ---
 
+### MoonLive on a service and on the Teensy
+
+**A script a service runs** (`MoonLiveService`, 2026-09-02, QuinLED Dig-2-Go, 300 LEDs on `RmtLed`): `sweep.mls` compiles to 752 bytes of Xtensa. Its tick takes 966 µs on the classic ESP32 against 58 µs on the host, 17 times as long and about 12% of the LED driver's 6887 µs on the same frame; the frame rate holds at 67 to 85 fps with the script on and off.
+
+**Thumb-2 on the Teensy 4.1:** the six shipped effects plasma, octopus, fractal, ripples, noise and fluid compile to at most 3 KB of code each, and plasma costs 85 µs a frame on 64 lights.
+
 ## Internal RAM
 
 What the ESP32's scarce memory holds and what freed it, measured 2026-10-21 and 2026-10-22 with BouncingBalls held fixed. The rule behind it is in [MoonCore](../explanation/architecture/mooncore.md#internal-ram); `scenario_RAM_floor` measures it on any board.
@@ -379,7 +385,7 @@ Past the ceiling the lost count reads below what goes missing in Art-Net and E1.
 
 **The receiver takes about 3,000 packets a second whole**, in any protocol: 64×64 at 120 frames a second in all three, and 128×96 DDP at 90 losing under 1%. A sender's `fps` keeps a stream below it. Art-Net and E1.31 carry a third of DDP's lights a packet, so they reach it at a third of the grid. Past it frames break up, as a lost packet takes its frame's push or a universe with it. Mapped by the sender changes nothing here, since it saves the render's copy on core 0 and the limit is core 1.
 
-**Where a packet's time goes.** Ethernet's receive task and lwIP's take about 160 µs of core 1 per packet, and Network Receive's task more on top, most of it in lwIP's socket calls. Far past the ceiling those two network tasks fill core 1 and the receive task gets none, which is receive livelock: 128×96 Art-Net at 7,300 packets a second arrives as 200. A millisecond's wait after each drain, so one wake drains several packets, took Network Receive's task from 56% to 36% of core 1 at 3,000 packets a second. Ranking the Ethernet task below the receive task ends the livelock, but loses packets below the ceiling instead, so it keeps its default 15. lwIP's code in IRAM and its buffers in internal RAM changed little. The Tasks card shows each task's share.
+**Where a packet's time goes.** Ethernet's receive task and lwIP's take about 160 µs of core 1 per packet, and Network Receive's task more on top, most of it in lwIP's socket calls. Far past the ceiling those two network tasks fill core 1 and the receive task gets none, which is receive livelock: 128×96 Art-Net at 7,300 packets a second arrives as 200. A millisecond's wait after each drain, so one wake drains several packets, took Network Receive's task from 56% to 36% of core 1 at 3,000 packets a second. Ranking the Ethernet task below the receive task ends the livelock, but loses packets below the ceiling instead, so it keeps its default 15. lwIP's code in IRAM and its buffers in internal RAM changed little. MoonShine's System tasks band shows each task's share.
 
 ## Prepare only what a change reshapes
 
@@ -465,6 +471,24 @@ A `/ws` client receives the roots it views in full and an outline of the rest ([
 | Drivers, the largest root | 35,349 bytes | 392 bytes |
 
 Drivers' palette and fixture-profile lists are 25 KB of the tree. The largest block a document needs is one 2 KB fragment, or 15 KB for the fixture-profiles list, the largest single control. A `PATCH /api/state` document of up to 30 KB applies on an S3 (2026-10, [presets as state documents](https://github.com/MoonModules/MoonLight/issues/196)).
+
+## Memory and preview (`teensy41`)
+
+Both RAM banks are heap ([the Teensy page](hardware/teensy-4-1.md)): a fresh board shows 750 KB in total, and the loop's stack peaks near 4 KB of its 64 KB. On the W5500 board six 128×128 layers get every buffer whole with 174 KB free. The Ethernet driver that finds no hardware frees its frame buffers, 48 KB on a PHY board and 15 KB on a W5500 one.
+
+The preview at 128×128 carries 373 KB/s, mostly at stride 2 and about 20 fps with the render rate unchanged, once lwIP's send buffer is 16 segments; 32 segments measure the same.
+
+## Audio analysis on demand
+
+The analysis pauses while no effect, script or audio sync reads it ([Demand](../../src/core/module/Demand.h)). On an Olimex ESP32-P4-PC on line-in the card's `cpu` reads 14 to 15% of a core sending audio sync with SheetMusic on, 16% with audio sync off and SheetMusic on, and `paused` with SheetMusic off, the level and gate staying live.
+
+## HDMI output
+
+The HdmiDriver's tick is wall-clock time averaged over the render frames, so it compares one board before and after, and a busy board's figure includes waiting for a core. At 640×360 on 1920×1080 and 30 fps the display scales the frame ([Who scales](../moonmodules/light/drivers.md#hdmi)): a Pi 5 ticks in 289 to 299 µs at about 970 render fps, and an R3S in 2.8 to 3.2 ms at 74 render fps. A 900×600 frame onto a 3840×2160 screen scales on the Pi 5 as well.
+
+## Layers rendered side by side
+
+On a NanoPi R3S (four A55 cores), four layers at 640×360 render in parallel ([Parallelism](../explanation/architecture/moonmodule.md#parallelism)): the frame takes 13.0 ms and Effects 9.9 ms against a largest layer of 9 ms, where one thread took 25.5 and 21.9 ms.
 
 ## Multicore: the whole output stage on core 1 (`multicore`, Step 2)
 

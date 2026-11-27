@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "org.moonmodules.moonlight"
-        minSdk = 28        // Android 9, the plan's floor: old enough for a 2018 tablet
+        minSdk = 28        // Android 9, old enough for a 2018 tablet
         targetSdk = 35
         // The release's version, which build_android.py passes, so the app and the program name one version.
         versionName = (project.findProperty("mmVersion") as String?) ?: "0.0.0-dev"

@@ -82,6 +82,7 @@
 #include "esp_timer.h"
 #include "nvs.h"         // bootRecord: the count that survives a power cut
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, callocCaps, adoptCaps, freeCaps, defined here
 #include "esp_memory_utils.h"   // esp_ptr_external_ram: the ptrIsPsram residency probe
 #include "esp_cache.h"        // esp_cache_msync: I-cache sync after writing MoonLive code to IRAM
 #include "esp_system.h"
@@ -149,9 +150,6 @@ extern "C" uint8_t is_transport_tx_ready(void);
 #include <unistd.h>
 #include <new>       // std::nothrow_t, the replaced allocation functions below
 
-// A failed `new (std::nothrow)` returns null, not abort(): libstdc++'s form throws, which ESP-IDF aborts on; [new.delete.single] lets a program replace it (found by Funkelfetisch).
-void* operator new(std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
-void* operator new[](std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
 
 namespace mm::platform {
 
@@ -180,27 +178,6 @@ uint32_t micros() MM_NONBLOCKING {
 
 uint64_t uptimeUs() MM_NONBLOCKING { return static_cast<uint64_t>(esp_timer_get_time()); }
 
-void* alloc(size_t bytes) {
-#ifdef CONFIG_SPIRAM
-    // Try PSRAM first, fall back to internal RAM
-    void* ptr = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (ptr) return ptr;
-#endif
-    return heap_caps_malloc(bytes, MALLOC_CAP_8BIT);
-}
-
-void* allocInternal(size_t bytes) {
-    // Internal only, no PSRAM fallback: the caller chose this seam because PSRAM latency breaks it. Aligned as malloc promises, since InternalRamObject constructs objects here.
-    return heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-}
-
-bool ptrIsPsram(const void* p) {
-    return p != nullptr && esp_ptr_external_ram(p);
-}
-
-void free(void* ptr) {
-    heap_caps_free(ptr);
-}
 
 // Executable memory for emitted code; null when exhausted, which a busy device hits, so the caller degrades. The request rounds up to a word, since the final store and the cache sync both round up.
 void* allocExec(size_t bytes) {
@@ -264,59 +241,6 @@ void reboot() {
     esp_restart();
 }
 
-// The same three numbers the host counts by hand, from the allocator that already tracks them. USED rather than free, so the figure means the same on a 320 KB board and a laptop.
-size_t allocatedBytes() {
-    multi_heap_info_t info = {};
-    heap_caps_get_info(&info, MALLOC_CAP_8BIT);
-    return info.total_allocated_bytes;
-}
-size_t allocatedPeak() {
-    // The minimum-ever free, expressed as a peak used: IDF tracks the low-water mark of free heap, which is the same fact from the other side.
-    const size_t total = heap_caps_get_total_size(MALLOC_CAP_8BIT);
-    const size_t minFree = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
-    return total > minFree ? total - minFree : 0;
-}
-uint32_t allocatedCount() {
-    multi_heap_info_t info = {};
-    heap_caps_get_info(&info, MALLOC_CAP_8BIT);
-    return static_cast<uint32_t>(info.allocated_blocks);
-}
-
-size_t freeHeap() {
-    return heap_caps_get_free_size(MALLOC_CAP_8BIT);
-}
-
-size_t freeInternalHeap() {
-    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-}
-
-// Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the host seam's cross-thread contract.
-static std::atomic<size_t> testMaxBlock{0};
-void setTestMaxAllocBlock(size_t bytes) { testMaxBlock.store(bytes, std::memory_order_relaxed); }
-
-size_t maxAllocBlock() {
-    size_t real = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
-    size_t cap = testMaxBlock.load(std::memory_order_relaxed);
-    return (cap != 0 && cap < real) ? cap : real;
-}
-
-size_t maxInternalAllocBlock() {
-    // MALLOC_CAP_INTERNAL excludes PSRAM. The internal heap is the scarce resource (WiFi, TCP/IP, FreeRTOS stacks all draw from it); PSRAM is huge by construction so its largest-free-block tells you nothing about memory pressure.
-    return heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-}
-
-size_t maxExecAllocBlock() {
-    // The pool allocExec draws from: IRAM on a classic ESP32, tens of KB and invisible in freeInternalHeap. A script that did not fit reported "codegen failed" with 80 KB of DRAM free.
-    return heap_caps_get_largest_free_block(MALLOC_CAP_EXEC | MALLOC_CAP_32BIT);
-}
-
-size_t totalHeap() {
-    return heap_caps_get_total_size(MALLOC_CAP_8BIT);
-}
-
-size_t totalInternalHeap() {
-    return heap_caps_get_total_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-}
 
 void getMacAddress(uint8_t mac[6]) {
     esp_efuse_mac_get_default(mac);
@@ -556,7 +480,7 @@ bool coprocessorConnect() {
     return xTaskCreate(&coprocessorConnectTask, "c6Link", 4096, nullptr, 5, nullptr) == pdPASS;
 }
 void coprocessorShutdown() {
-    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort (Plan-20261121, step 2).
+    // Held back: esp_hosted_deinit() at the Network setup took an Olimex ESP32-P4-PC off the network at every boot, its error checks the likely abort.
 }
 bool wifiRadioReady() MM_NONBLOCKING { return is_transport_tx_ready() != 0; }
 #else
@@ -729,6 +653,7 @@ static void ethFitMulticastFilter() {
 #endif
 #endif
 static bool netifInitDone_ = false;
+
 
 // The hostname applied to each interface before its address client starts; empty leaves the default. A lock guards writer and reader on different tasks, and the reader snapshots first because stack calls inside it nest into the event loop.
 static char hostname_[32] = {};
@@ -1094,6 +1019,7 @@ static bool ethInitSpi() {
 
 // Tear a running driver down so a fresh init can bring it up with new config, the live-reconfigure path. Only the external driver uses it today, the internal one's release being fiddlier and backlogged; safe to call when nothing is running.
 void ethStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ethHandle_) return;
     esp_eth_stop(ethHandle_);
     esp_event_handler_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, &ethEventHandler);
@@ -1186,6 +1112,7 @@ static bool ethInitOpeneth() {
 #endif  // CONFIG_ETH_USE_OPENETH
 
 bool ethInit() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     ensureNetifInit();
     // Dispatch on the board's PHY type at run time. Each path returns false on any failure, including none present or a PHY whose driver is not in this firmware. The module then cascades to the radio without grabbing pins or hanging.
     switch (ethConfig_.phyType) {
@@ -1465,6 +1392,7 @@ static void wifiRadioDown() {
 }
 
 bool wifiStaInit(const char* ssid, const char* password) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ssid || ssid[0] == 0) return false;
     RadioLock lock(radioMutex_);
 
@@ -1533,6 +1461,7 @@ void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 }
 
 void wifiStaStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race the teardown below.
     wifiStaStopping_.store(true, std::memory_order_relaxed);
@@ -1613,6 +1542,7 @@ int wifiStaChannel() {
 }
 
 bool wifiApInit(const WifiApConfig& ap) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     const char* apName = ap.name;
     const char* ip = ap.ip;
@@ -1684,6 +1614,7 @@ bool wifiApConnected() {
 uint32_t wifiApClientCount() { return apClients_.load(std::memory_order_relaxed); }
 
 void wifiApStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     wifiApActive_ = false;
     apClients_.store(0, std::memory_order_relaxed);
@@ -1914,6 +1845,7 @@ uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
 }
 
 bool mdnsInit(const char* deviceName) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ensureMdnsStack()) return false;
     esp_err_t err = mdns_hostname_set(deviceName);
     ESP_LOGI(NET_TAG, "mDNS hostname set %s: %s", deviceName, esp_err_to_name(err));
@@ -1986,6 +1918,7 @@ bool mdnsInit(const char* deviceName) {
 }
 
 void mdnsStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     // Stop advertising but keep the stack up, so a re-init re-advertises cheaply; the release path frees it. Both services and the hostname go, matching the init, or a stale record survives an interface switch and confuses the next announcement.
     if (mdnsStackUp_) {
         esp_err_t httpRm = mdns_service_remove("_http", "_tcp");

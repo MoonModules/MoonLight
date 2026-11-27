@@ -79,6 +79,10 @@ public:
 
     /// Test-only: the output the driver calls through, which a test reads, or replaces with a counting double before the card is defined; a swap here skips selectOutput()'s quiesce and clamp, and defineControls() reverts it.
     Hub75Output*& outputForTest() { return output_; }
+    /// The panel's headroom, from its output.
+    std::optional<uint8_t> headroom() const override { return output_ ? output_->headroom() : std::nullopt; }
+    /// The panel's DMA frame, from its output.
+    size_t dmaBytes() const override { return output_ ? output_->dmaBytes() : 0; }
 
     /// The backend the `peripheral` select names, for the output that drives it.
     platform::Hub75Backend selectedBackend() const override {

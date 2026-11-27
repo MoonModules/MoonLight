@@ -95,16 +95,27 @@ TEST_CASE("NetworkSendDriver onCorrectionChanged is a no-op when outChannels unc
     CHECK(driver.correctedBuffer().channelsPerLight() == 3);
 }
 
+namespace {
+// A driver sending 64 lights to the loopback address, paced from its own task, at `fps`.
+struct PacedSend {
+    mm::Buffer source;
+    mm::NetworkSendDriver driver;
+    explicit PacedSend(uint8_t fps = 50) {
+        REQUIRE(source.allocate(64, 3));
+        driver.setSourceBuffer(&source);
+        std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.1");
+        driver.packetGap = 500;   // paced from its own task
+        driver.fps = fps;
+        driver.applyState();
+        REQUIRE(driver.taskStartsForTest() == 1);
+    }
+};
+}  // namespace
+
 // Every prepare restarted the send task, so a show re-preparing its layers kept an FPP from receiving a whole frame.
 TEST_CASE("NetworkSendDriver keeps its send task running through a prepare that changed nothing it sends") {
-    mm::Buffer source;
-    REQUIRE(source.allocate(64, 3));
-    mm::NetworkSendDriver driver;
-    driver.setSourceBuffer(&source);
-    std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.1");
-    driver.packetGap = 500;   // paced from its own task
-    driver.applyState();
-    REQUIRE(driver.taskStartsForTest() == 1);
+    PacedSend rig;
+    mm::NetworkSendDriver& driver = rig.driver;
     driver.applyState();
     CHECK(driver.taskStartsForTest() == 1);   // the stream runs on
     std::snprintf(driver.receivers, sizeof(driver.receivers), "%s", "127.0.0.2");
@@ -116,6 +127,34 @@ TEST_CASE("NetworkSendDriver keeps its send task running through a prepare that 
     driver.applyState();
     CHECK(driver.taskStartsForTest() == 3);
     driver.release();
+}
+
+// A render faster than `fps` ticks several times inside one due frame; a send task held past whole intervals misses a frame per interval, each counted once.
+TEST_CASE("NetworkSendDriver counts a frame missed per whole interval the send task holds the last one, however often the render ticks inside it") {
+    PacedSend rig(50);   // a frame is due every 20 ms
+    mm::NetworkSendDriver& driver = rig.driver;
+    driver.holdFrameForTest();
+    for (uint32_t ms = 1100; ms < 1200; ms += 5) {   // twenty render ticks across five due frames
+        mm::platform::setTestNowMs(ms);
+        driver.tick();
+    }
+    CHECK(driver.framesDropped().value_or(0) == 5);
+    driver.release();
+    mm::platform::setTestNowMs(0);
+}
+
+// A render tick off the interval grid kept every later count late, so a long hold read short.
+TEST_CASE("NetworkSendDriver counts missed frames on the send's interval grid when the render ticks off it") {
+    PacedSend rig(50);   // a frame is due every 20 ms
+    mm::NetworkSendDriver& driver = rig.driver;
+    driver.holdFrameForTest();
+    for (uint32_t ms = 1100; ms <= 1240; ms += 7) {   // 7 ms ticks across the boundaries 1100, 1120 ... 1240
+        mm::platform::setTestNowMs(ms);
+        driver.tick();
+    }
+    CHECK(driver.framesDropped().value_or(0) == 8);
+    driver.release();
+    mm::platform::setTestNowMs(0);
 }
 
 // A frame the driver keeps is corrected into, not rebuilt: a channel the new profile gives no role would keep the old profile's byte.

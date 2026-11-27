@@ -2,7 +2,7 @@
 
 Plan of 2026-11-23, a Feature, for approval. **Goal: a Raspberry Pi 3, 4 or 5 drives WS2812 strips from its own header, straight or through the 74HCT595 pin expander, with the parallel LED driver ESP32 and Teensy boards use; and HUB75 on every one of them.** The backlog card "LED output from a Raspberry Pi's own pins" (robwomp, 2026-10-11) asked for the strips.
 
-**Starts once [HUB75 on a Raspberry Pi](Plan-20261030%20-%20HUB75%20on%20a%20Raspberry%20Pi.md) is complete** (product owner, 2026-11-24): the Pi 5 route builds on its PIO engine, which opens `/dev/pio0` and issues the kernel's ioctls itself ([#258](https://github.com/MoonModules/MoonLight/pull/258)), and the Pi 3/4 route on its GPIO backend's `/dev/mem` mapping and Pi detection ([#267](https://github.com/MoonModules/MoonLight/pull/267)).
+**Builds on the HUB75 outputs for the Raspberry Pi** ([Driving a HUB75 panel](../reference/hardware/hub75-panels.md#raspberry-pi-5-rp1-pio); product owner, 2026-11-24): the Pi 5 route builds on its PIO engine, which opens `/dev/pio0` and issues the kernel's ioctls itself ([#258](https://github.com/MoonModules/MoonLight/pull/258)), and the Pi 3/4 route on its GPIO backend's `/dev/mem` mapping and Pi detection ([#267](https://github.com/MoonModules/MoonLight/pull/267)).
 
 ## What exists
 
@@ -10,7 +10,7 @@ Plan of 2026-11-23, a Feature, for approval. **Goal: a Raspberry Pi 3, 4 or 5 dr
 - **The pin expander is part of that encode.** With `pinExpander` on, each data line feeds a chain of '595 shift registers, eight strands per line; the slot stream gains the shift clocks, and `latchPin` is a data lane. Strands top out at 64, since the active-strand mask is a `uint64_t` (`kMaxStrands`).
 - **On an ESP32 the expander's frame is the limit:** above about 96 lights per strand it no longer fits internal RAM, which the S3's DMA needs at 20–26.67 MHz (`ParallelLedDriver.h`, "Expander limits").
 - **A Pi 5 drives HUB75 through the RP1 chip's PIO** (`src/platform/rpi/`): `Rp1Backend` loads a PIO program through the kernel's `/dev/pio0`, sets pins and clock, and feeds whole frames by DMA; `StubBackend` runs the same engine on a machine with no Pi. The card's prerequisite, a `src/platform/rpi/` backend, therefore exists.
-- **HUB75 on a Pi 3 or 4** is [Plan-20261030 - HUB75 on a Raspberry Pi](Plan-20261030%20-%20HUB75%20on%20a%20Raspberry%20Pi.md), step 7: a CPU bit-bang engine with a PWM-timed OE, credited to hzeller's design, in review as [#267](https://github.com/MoonModules/MoonLight/pull/267), read on the Pi 4 sign.
+- **[HUB75 on a Pi 3 or 4](../reference/hardware/hub75-panels.md#raspberry-pi-34-pi-gpio)** is a CPU bit-bang engine with a PWM-timed OE, credited to hzeller's design, merged as [#267](https://github.com/MoonModules/MoonLight/pull/267) and read on the Pi 4 sign.
 - **`LedHwBlock::PiHeader`** names the Pi's header as one peripheral block, so a strip driver and a HUB75 driver on one Pi refuse to share it.
 
 ## The routes
@@ -19,7 +19,7 @@ Plan of 2026-11-23, a Feature, for approval. **Goal: a Raspberry Pi 3, 4 or 5 dr
 |--|--|--|
 | Strips, straight | the RP1's PIO: an `out pins` program, one slot each 417 ns, 8 or 16 lanes | SMI, the Broadcom chip's parallel bus, fed by DMA: 8 or 16 lanes on its data lines (GPIO 8–23) |
 | Strips, expander | the same program with the shift clock as side-set, up to 64 strands | SMI with its write strobe (GPIO 7) as the shift clock, up to 64 strands |
-| HUB75 | the PIO output (exists) | the GPIO output, the HUB75 plan's step 7 |
+| HUB75 | the PIO output (exists) | the GPIO output (exists) |
 
 SMI (Secondary Memory Interface) is the Pi 1–4's counterpart of the ESP32's i80 bus: a DMA-fed byte or halfword stream on up to 18 data lines, paced by a strobe, so it carries the same slot stream the encode makes. iosoft's rpi_pixleds (Jeremy Bentham) drives 16 parallel WS2812 strands with it and is study material, credited; rpi_ws281x's route (DMA through the PWM or PCM peripheral, two or one lanes) is the narrower alternative.
 
@@ -41,7 +41,7 @@ SMI (Secondary Memory Interface) is the Pi 1–4's counterpart of the ESP32's i8
 
 3. ⏳ **Measure SMI.** A DMA-fed SMI stream on 8 pins of a Pi 4 and a Pi 3, by the access route this step chooses: the kernel's `bcm2835-smi` driver (`dtoverlay=smi`, `/dev/smi`) or SMI and DMA registers mapped through `/dev/mem`, as rpi_ws281x does. The textbook choice is the kernel driver where its rate holds; the sustained rate and the strobe timing are recorded here.
 4. ⏳ **`SmiPeripheral`, straight and expanded.** The same `LedPeripheral` contract on SMI, the write strobe as the expander's shift clock, the backend claiming `PiHeader`. The Pi 3 and 4 differ in the peripheral base address and the core clock, which the platform reads from the device tree. Tests as step 2, against an SMI stub.
-5. ⏳ **HUB75 on a Pi 3 or 4**, the HUB75 plan's step 7, with one addition here: its refresh thread keeps a core of its own, so while it runs the render workers number the cores less two (`Effects::setup`, the layers plan).
+5. ⏳ **HUB75 on a Pi 3 or 4**, whose GPIO output exists ([Driving a HUB75 panel](../reference/hardware/hub75-panels.md#raspberry-pi-34-pi-gpio)), with one addition here: its refresh thread keeps a core of its own, so while it runs the render workers number the cores less two (`Effects::setup`, [Parallelism](../explanation/architecture/moonmodule.md#parallelism)).
 
 **Every Pi**
 

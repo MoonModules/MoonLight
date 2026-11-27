@@ -24,6 +24,10 @@ namespace mm {
 /// @video 07-drivers-esp32.webm Drivers on a device: RMT and parallel LED pins, HUB75, panel cards, and the network senders.
 ///
 /// Each reads its own slice of the @ref Drivers container's buffer through the shared window controls. A physical output corrects it through the shared correction controls, while @ref PreviewDriver shows it as it is. A card's emoji are its [tags](https://moonmodules.org/MoonLight/explanation/architecture/index.html#tag-emoji-legend).
+///
+/// @technical
+///
+/// **Interface here, bodies in `DriverBase.cpp`.** About 48 drivers include this base, so its bodies with real logic live in the `.cpp` and an edit there rebuilds one object; the brightness and color-order helpers each driver calls per frame stay here (coding-standards.md, File shape).
 class DriverBase : public MoonModule {
 public:
     /// This module's role, which is what the container filters its children by.
@@ -56,6 +60,14 @@ public:
     virtual bool drivesLights() const { return true; }
     /// Frames it sent last second where it counts them itself, a network output whose sends can fall behind the render; none means it sends every rendered frame.
     virtual std::optional<uint32_t> framesPerSecond() const { return std::nullopt; }
+    /// Frames it dropped since it started, where it counts them: an output whose queue or wire falls behind; none means every frame it takes goes out.
+    virtual std::optional<uint32_t> framesDropped() const { return std::nullopt; }
+    /// The bytes its peripheral's DMA engine reads, a part of its heap shown on its own since that memory has to be DMA-capable and is scarce; 0 for an output with no DMA.
+    virtual size_t dmaBytes() const { return 0; }
+    /// The slack it had left over the last second before falling behind, in percent, 0 at the edge or behind; none where it measures none.
+    virtual std::optional<uint8_t> headroom() const { return std::nullopt; }
+    /// Its pace: its own frame count where it keeps one, else the render rate, since it sends every rendered frame.
+    uint32_t paceFps() const;
     /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.
     void setLayer(Layer* layer) { layer_ = layer; }
 
@@ -66,15 +78,7 @@ public:
     /// Set the window directly, which takes effect on the next parse as a control edit does.
     void setWindow(int32_t start, int32_t count) { start_ = start; count_ = count; }
     /// Place `picture` on `layer`'s physical front face, cropped to this driver's window of the `buffer`'s lights, else the whole face; false when its table finds no memory.
-    bool placeWindowed(LayoutPicture& picture, const Layer& layer, const Buffer* buffer) const {
-        const lengthType w = layer.physicalWidth() > 0 ? layer.physicalWidth() : 1;
-        const lengthType h = layer.physicalHeight() > 0 ? layer.physicalHeight() : 1;
-        const nrOfLightsType total = buffer ? buffer->count() : static_cast<nrOfLightsType>(static_cast<size_t>(w) * h);
-        nrOfLightsType from = 0, len = 0;
-        windowSlice(total, from, len);
-        const bool narrowed = from > 0 || len < total;
-        return picture.place(layer, w, h, narrowed ? from : 0, narrowed ? len : 0);
-    }
+    bool placeWindowed(LayoutPicture& picture, const Layer& layer, const Buffer* buffer) const;
     /// How many lights this driver sends from a buffer of `bufN`: its window, clamped to the buffer.
     nrOfLightsType windowLength(nrOfLightsType bufN) const {
         nrOfLightsType outStart = 0, outLen = 0;
@@ -85,48 +89,13 @@ public:
     Layer* layer() const { return layer_; }
 
     /// Rebuild this driver's correction, baking global times local brightness into one LUT, so the hot path stays one lookup per channel.
-    void rebuildCorrection(uint8_t globalBrightness) {
-        // Applied unconditionally, so brightness works even before the fixture-profile library is up.
-        const uint8_t tableBrightness = adoptBrightness(globalBrightness);
-        correction_.whiteMode = static_cast<WhiteMode>(whiteMode_);
-        correction_.curve = static_cast<Correction::Curve>(curveSel_);
-        // A missing id falls back to the default, so a driver degrades rather than crashing.
-        if (auto* lib = FixtureProfilesModule::active()) {
-            adoptLegacyName(*lib);   // an older config's name, whichever path applied it: boot, re-apply or restore
-            if (profileId_ == 0) profileId_ = lib->defaultId();
-            if (!lib->deriveCorrection(profileId_, tableBrightness, correction_)) {
-                profileId_ = lib->defaultId();                       // dangling → re-point to default
-                lib->deriveCorrection(profileId_, tableBrightness, correction_);
-            }
-        } else {
-            // No library yet, so apply brightness here, as deriveCorrection would have.
-            correction_.rebuildBrightness(tableBrightness);
-        }
-        // Allocated the first time the table is wanted and kept until release, since the encode task may be reading it while this rebuild runs.
-        const bool firstTable = correction_.wantsTable() && !lut16_;
-        if (firstTable) lut16_.resize(256);
-        correction_.lut16 = lut16_.data();
-        const bool firstGain = resolveGainTables();
-        if (firstTable || firstGain) correction_.rebuildBrightness(tableBrightness);   // a table that existed was filled by the rebuild above
-        showGainShortage();
-        onCorrectionChanged();      // let a driver resize its correction-applied buffer
-    }
+    void rebuildCorrection(uint8_t globalBrightness);
 
     /// Rebuild the correction when one of its own correction controls changed.
-    void onControlChanged(const char* name) override {
-        // The chosen row maps to a stable id, so the reference survives a later reorder.
-        if (std::strcmp(name, "fixture") == 0) {
-            if (auto* lib = FixtureProfilesModule::active()) profileId_ = lib->idAt(fixtureSel_);
-        }
-        if (isCorrectionControl(name)) rebuildCorrection(lastGlobalBrightness_);
-        MoonModule::onControlChanged(name);
-    }
+    void onControlChanged(const char* name) override;
 
     /// Re-resolve the fixture profile when the profile library's rows change, through the correction alone, since a prepare would reinitialize the output and blank it for a tick.
-    void onListChanged(const MoonModule& owner) override {
-        if (&owner == static_cast<const MoonModule*>(FixtureProfilesModule::active()))
-            rebuildCorrection(lastGlobalBrightness_);
-    }
+    void onListChanged(const MoonModule& owner) override;
 
     /// Notified when the output channel count may have changed without a structural rebuild.
     virtual void onCorrectionChanged() {}
@@ -146,17 +115,7 @@ public:
     void rampBrightness(uint8_t globalBrightness) MM_NONBLOCKING { correction_.rebuildBrightness(adoptBrightness(globalBrightness)); }
 
     /// Clear every shared status string, so a stopped driver leaves nothing behind; the owner calls it before destroying the driver, since a base destructor cannot prevent the vptr race.
-    void release() override {
-        freeWire();          // the shared correction scratch: owned here, so no driver re-frees it
-        correction_.lut16 = nullptr;   // the table goes with the module's scratch buffers below
-        correction_.gainLut = nullptr;
-        correction_.gainLut16 = nullptr;
-        correction_.resolveTables();   // back onto the curve, so no row points into a freed table
-        clearFailBuf();
-        clearConfigErr();
-        setConfigWarn(nullptr);
-        MoonModule::release();
-    }
+    void release() override;
 
     /// Test-only: the driver's own Correction, mutable so a test can set a wiring directly.
     Correction& correctionForTest() { return correction_; }
@@ -176,19 +135,7 @@ protected:
     Layer* layer_ = nullptr;
 
     /// Does an enabled sibling driver already claim `block`? RTTI-free: every driver answers hwBlock(), and one owning no block answers None.
-    bool siblingClaims(LedHwBlock block) const {
-        if (block == LedHwBlock::None) return false;
-        const MoonModule* p = parent();
-        if (!p) return false;
-        for (uint8_t i = 0; i < p->childCount(); i++) {
-            const MoonModule* sib = p->child(i);
-            if (sib == this || !sib || !sib->enabled()) continue;
-            // role() confirms it, so this static_cast needs no RTTI.
-            if (sib->role() != ModuleRole::Driver) continue;
-            if (static_cast<const DriverBase*>(sib)->hwBlock() == block) return true;
-        }
-        return false;
-    }
+    bool siblingClaims(LedHwBlock block) const;
     /// The status of a driver that stays idle because a sibling holds its block.
     static constexpr const char* kBlockInUse = "peripheral already in use by another driver: pick a different one";
 
@@ -201,11 +148,7 @@ protected:
         return correction_.outChannels > 3 && lightScratch_.bytes() < correction_.outChannels;
     }
     /// Size lightScratch_ to the wiring, saying so in the status when memory runs out; true when an RGB wiring needs none or the light fits.
-    bool sizeLightScratch() {
-        if (correction_.outChannels <= 3 || lightScratch_.resize(correction_.outChannels)) return true;
-        setStatus(kNoLightMemory, Severity::Error);
-        return false;
-    }
+    bool sizeLightScratch();
 
     /// Whether the wiring is plain RGB in the frame's own order, so a light corrects straight into an RGB frame; asked once per frame.
     bool rgbOrdered() const MM_NONBLOCKING {
@@ -238,28 +181,14 @@ protected:
     size_t   wireCap_ = 0;   // bytes the allocation returned (0 when it failed)
 
     /// Grow the correction scratch to at least `bytes`, keeping a big-enough existing block, in internal RAM first as the encoder's hottest data.
-    void ensureWire(size_t bytes) {
-        if (wire_ && wireCap_ >= bytes) return;
-        freeWire();
-        wire_ = static_cast<uint8_t*>(platform::allocInternal(bytes));
-        if (!wire_) wire_ = static_cast<uint8_t*>(platform::alloc(bytes));
-        wireCap_ = wire_ ? bytes : 0;
-        frameReplaced();
-        publishHeapBytes();   // the scratch grew: refresh the memory readout
-    }
+    void ensureWire(size_t bytes);
     /// Release the scratch (on the true teardown: release(), not a mid-life reinit).
-    void freeWire() {
-        if (wire_) { platform::free(wire_); wire_ = nullptr; wireCap_ = 0; publishHeapBytes(); }
-    }
+    void freeWire();
 
     /// The heap bytes this driver holds beside its ScratchBuffers, which count themselves; one hook rather than setDynamicBytes at every alloc site, where one omission drifts the readout.
     virtual HeapBytes driverHeapBytes() const { return heapOf(wire_, wireCap_); }
     /// Move the readout by the change in driverHeapBytes() since the last report, so every ScratchBuffer's own count stays in it. A driver reports through this alone, which keeps the total in step.
-    void publishHeapBytes() {
-        const HeapBytes now = driverHeapBytes();
-        setDynamicBytes(heapBytes() - reportedHeapBytes_ + now);
-        reportedHeapBytes_ = now;
-    }
+    void publishHeapBytes();
     HeapBytes reportedHeapBytes_;   ///< what driverHeapBytes() read at the last publish
 
     /// The resolved correction: the wiring comes from a named profile by stable id, and the render loop never reads the library.
@@ -301,21 +230,7 @@ protected:
     const char* defaultFixture_ = nullptr;   // the profile a new driver of this type starts on, by name
 
     /// Add the correction controls: brightness, the fixture selector, the curve and the white mode.
-    void defineCorrectionControls() {
-        controls_.addControl("localBrightness", localBrightness_, 0, 255);
-        // Per driver, not global: a fixture that corrects its own pixels needs Linear here.
-        controls_.addSelect("curve", curveSel_, kCurveOptions, kCurveCount);
-        buildFixtureOptions();                        // fill fixtureOptions_ from the library, sync id and row
-        controls_.addSelect("fixture", fixtureSel_, fixtureOptions_, fixtureOptionCount_);
-        controls_.setPersistLabel(controls_.count() - 1);   // saved by name, so a longer or reordered library never moves it
-        controls_.addSelect("whiteMode", whiteMode_, kWhiteModeOptions, kWhiteModeCount);
-        // Hidden unless the referenced profile carries a channel there is something to synthesize for.
-        auto* lib = FixtureProfilesModule::active();
-        controls_.setHidden(controls_.count() - 1, !(lib && lib->profileHasSynthChannel(profileId_)));
-        // Hidden, and only read: the name an older config saved.
-        controls_.addText("fixtureRef", fixtureRef_, sizeof(fixtureRef_));
-        controls_.setHidden(controls_.count() - 1, true);
-    }
+    void defineCorrectionControls();
 
     /// Set this driver's default referenced profile by name, from its constructor.
     void setDefaultFixtureName(const char* name) { defaultFixture_ = name; }
@@ -323,23 +238,10 @@ protected:
     void setDefaultCurve(Correction::Curve c) { curveSel_ = static_cast<uint8_t>(c); }
 
     /// Give the correction the gained tables its profile asks for, and take them back when it asks for none; true when one is new, which the rebuild before could not fill.
-    bool resolveGainTables() {
-        const bool wants = correction_.wantsGains();
-        const bool wide = wants && correction_.wantsTable();
-        const bool freshGain = fitGainTable(gainLut_, wants);
-        const bool freshWide = fitGainTable(gainLut16_, wide);
-        correction_.gainLut = wants ? gainLut_.data() : nullptr;
-        correction_.gainLut16 = gainLut16_ ? gainLut16_.data() : nullptr;
-        return freshGain || freshWide;
-    }
+    bool resolveGainTables();
 
     /// Warn while a gain the profile asks for has no table to live in, so the strip shows ungained light visibly rather than silently; the next rebuild retries the allocation.
-    void showGainShortage() {
-        const bool dropped = correction_.wantsGains() && (!gainLut_ || (correction_.wantsTable() && !gainLut16_));
-        if (dropped) setStatus(kNoGainMemory, Severity::Warning);
-        else if (gainsDropped_ && status() == kNoGainMemory) clearStatus();
-        gainsDropped_ = dropped;
-    }
+    void showGainShortage();
 
     /// Size one gained table to whether it is wanted, true when this call allocated it.
     template <typename T>
@@ -358,12 +260,7 @@ protected:
 
 private:
     /// Add the two window controls, which defineControls places after the correction block.
-    void addWindowControls() {
-        controls_.addControl("start", start_, 0);
-        controls_.setNumberField(controls_.count() - 1);   // typed: a light index is a number to read, not a position on a 2-billion slider
-        controls_.addControl("count", count_, 0);
-        controls_.setNumberField(controls_.count() - 1);
-    }
+    void addWindowControls();
 
     /// Take the global level, remembered for self-triggered rebuilds, and answer the level the table bakes.
     uint8_t adoptBrightness(uint8_t globalBrightness) MM_NONBLOCKING {
@@ -375,44 +272,16 @@ private:
     /// Borrowed pointers into the library's own name storage, which outlives the control list.
     const char* fixtureOptions_[FixtureProfilesModule::kMaxProfiles] = {};
     uint8_t fixtureOptionCount_ = 0;
-    void buildFixtureOptions() {
-        fixtureOptionCount_ = 0;
-        auto* lib = FixtureProfilesModule::active();
-        if (!lib) { fixtureOptions_[0] = "(none)"; fixtureOptionCount_ = 1; fixtureSel_ = 0; return; }
-        const uint8_t n = lib->profileCount();
-        for (uint8_t i = 0; i < n; i++) fixtureOptions_[i] = lib->nameAt(i);
-        fixtureOptionCount_ = n;
-        reconcileProfile(*lib, n);
-        fixtureSel_ = lib->indexOfId(profileId_);
-    }
+    void buildFixtureOptions();
 
     /// Settle which profile the driver references: an older config's saved name, else the row picked, else the type's default.
-    void reconcileProfile(const FixtureProfilesModule& lib, uint8_t n) {
-        if (fixtureRef_[0]) {
-            adoptLegacyName(lib);
-        } else if (fixtureSel_ < n && profileId_ != 0 && lib.idAt(fixtureSel_) != profileId_) {
-            profileId_ = lib.idAt(fixtureSel_);                 // a pick, by hand or by a saved name
-        }
-        if (profileId_ == 0 && defaultFixture_) profileId_ = profileNamed(lib, defaultFixture_);
-        if (profileId_ == 0) profileId_ = lib.defaultId();
-    }
+    void reconcileProfile(const FixtureProfilesModule& lib, uint8_t n);
 
     /// Adopt the profile an older config named in `fixtureRef`, select its row, and empty the field so a save writes only `fixture`. The name wins over the saved row, which a longer library moved.
-    void adoptLegacyName(const FixtureProfilesModule& lib) {
-        if (!fixtureRef_[0]) return;
-        if (const uint32_t id = profileNamed(lib, fixtureRef_)) {
-            profileId_ = id;
-            fixtureSel_ = lib.indexOfId(id);
-        }
-        fixtureRef_[0] = '\0';
-    }
+    void adoptLegacyName(const FixtureProfilesModule& lib);
 
     /// The id of the profile called `name`, or 0 when the library has none.
-    static uint32_t profileNamed(const FixtureProfilesModule& lib, const char* name) {
-        for (uint8_t i = 0; i < lib.profileCount(); i++)
-            if (std::strcmp(lib.nameAt(i), name) == 0) return lib.idAt(i);
-        return 0;
-    }
+    static uint32_t profileNamed(const FixtureProfilesModule& lib, const char* name);
 
 protected:
 
@@ -448,57 +317,19 @@ protected:
     static constexpr size_t kFailBufLen = 64;
 
     /// Show an error status and remember it, so clearConfigErr can later retract exactly this one.
-    void setConfigErr(const char* err) {
-        configErr_ = err;
-        setStatus(err, Severity::Error);
-    }
-    void clearConfigErr() {
-        if (configErr_) {
-            if (status() == configErr_) clearStatus();
-            configErr_ = nullptr;
-        }
-    }
+    void setConfigErr(const char* err);
+    void clearConfigErr();
 
     /// Show a warning, or retract the earlier one when null; called unconditionally each parse, so the warning tracks the live state.
-    void setConfigWarn(const char* warn) {
-        if (warn) {
-            configWarn_ = warn;
-            setStatus(warn, Severity::Warning);
-        } else if (configWarn_) {
-            if (status() == configWarn_) clearStatus();
-            configWarn_ = nullptr;
-        }
-    }
+    void setConfigWarn(const char* warn);
 
     /// The status buffer, allocated on first use; null on an allocation failure, where the caller falls back to a literal status.
-    char* failBufEnsure() {
-        if (!failBuf_) failBuf_ = static_cast<char*>(platform::alloc(kFailBufLen));
-        return failBuf_;
-    }
-    void clearFailBuf() {
-        if (failBuf_) {
-            if (status() == failBuf_) clearStatus();
-            platform::free(failBuf_);
-            failBuf_ = nullptr;
-        }
-    }
+    char* failBufEnsure();
+    void clearFailBuf();
 
     /// Show how many lights are driven, set last so an error or warning from earlier in the same parse still wins.
     void setDrivingInfo(unsigned driven, unsigned total, unsigned channels = 1,
-                        const char* mode = nullptr) {
-        if (gainsDropped_) { setStatus(kNoGainMemory, Severity::Warning); return; }
-        if (char* buf = failBufEnsure()) {
-            int n;
-            if (channels > 1)
-                n = std::snprintf(buf, kFailBufLen, "driving %u of %u lights (%u channels)",
-                                  driven, total, driven * channels);
-            else
-                n = std::snprintf(buf, kFailBufLen, "driving %u of %u lights", driven, total);
-            if (mode && mode[0] && n > 0 && static_cast<size_t>(n) < kFailBufLen)
-                std::snprintf(buf + n, kFailBufLen - static_cast<size_t>(n), ", %s", mode);
-            setStatus(buf, Severity::Status);
-        }
-    }
+                        const char* mode = nullptr);
 };
 
 } // namespace mm

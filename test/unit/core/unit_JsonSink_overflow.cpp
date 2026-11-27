@@ -7,6 +7,7 @@
 #include "doctest.h"
 #include "core/util/JsonSink.h"
 #include "platform/platform_base.h"   // the target's flags and MM_NONBLOCKING
+#include "platform/platform_heap.h"   // setTestAllocRefusedFrom
 
 #include <cstring>
 #include <string>
@@ -16,7 +17,7 @@ TEST_CASE("a heap sink that runs out of memory says so instead of truncating sil
     sink.append("{\"a\":1");
     CHECK_FALSE(sink.overflowed());          // healthy so far
 
-    // Grow until the allocator refuses. The append must then fail LOUDLY: a caller that ships the buffer regardless sends a document that is truncated but looks whole, which is exactly the failure this flag exists to make visible. Bounded so a 64-bit host with lots of RAM still finishes: if the allocator never refuses, the sink must simply stay healthy and complete.
+    // Grow until the allocator refuses, and the append then flags it, since a truncated document looks whole; bounded, so a host whose allocator always agrees finishes with a healthy sink.
     std::string chunk(64 * 1024, 'x');
     for (int i = 0; i < 4096 && !sink.overflowed(); i++) sink.append(chunk.c_str());
 
@@ -29,7 +30,7 @@ TEST_CASE("a heap sink that runs out of memory says so instead of truncating sil
 }
 
 TEST_CASE("a document larger than one doubling still serializes whole") {
-    // Growth doubles, and old + new are both live across the copy, so a doubling asks for ~3x the current size in CONTIGUOUS memory. The JSON built below crosses several doublings: it must come out byte-for-byte complete, whatever route the allocator took to get there.
+    // A doubling holds old and new across the copy, about 3x the size in contiguous memory; the JSON below crosses several doublings and comes out byte for byte complete.
     mm::JsonSink sink;
     std::string expect;
     sink.append("[");
@@ -47,4 +48,64 @@ TEST_CASE("a document larger than one doubling still serializes whole") {
     REQUIRE(sink.size() == expect.size());
     CHECK(std::memcmp(sink.data(), expect.data(), expect.size()) == 0);
     CHECK(sink.data()[sink.size()] == '\0');   // still a valid C string at the far end
+}
+
+TEST_CASE("a growth the allocator refuses leaves the document as it was, flags overflow until clear, and then writes again") {
+    struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } guard;
+    mm::JsonSink sink;
+    sink.append("{\"a\":1");
+    const size_t before = sink.size();
+
+    mm::platform::setTestAllocRefusedFrom(1024);                  // the first block of 2 KiB is refused, so the next growth fails
+    const std::string run(4096, 'x');
+    sink.append(run.c_str());
+    CHECK(sink.overflowed());
+    CHECK(sink.size() == before);                                 // none of the refused run is appended
+
+    mm::platform::setTestAllocRefusedFrom(0);
+    sink.append("}");
+    CHECK(sink.size() == before);                                 // the flag sticks: a later small append is ignored
+    CHECK(sink.overflowed());
+
+    sink.clear();
+    CHECK_FALSE(sink.overflowed());
+    sink.append("{}");
+    CHECK(std::strcmp(sink.data(), "{}") == 0);                   // clear recovers
+}
+
+TEST_CASE("a formatted fragment too long for the stack buffer flags overflow when its block is refused") {
+    struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } guard;
+    mm::JsonSink sink;
+    sink.append("[");
+    mm::platform::setTestAllocRefusedFrom(1);                     // every allocation is refused
+    const std::string longArg(4096, 'y');
+    sink.appendf("%s", longArg.c_str());
+    CHECK(sink.overflowed());
+    CHECK(sink.size() == 1);
+}
+
+TEST_CASE("a small-buffer sink keeps a short document in the caller's slice and moves a long one into a block whole") {
+    char slice[16];
+    mm::JsonSink small(slice, sizeof(slice), mm::JsonSink::Spill{});
+    small.append("[1,2]");
+    CHECK(small.data() == slice);                                  // fits: no allocation
+    mm::JsonSink big(slice, sizeof(slice), mm::JsonSink::Spill{});
+    big.append("[");
+    for (int i = 0; i < 100; i++) big.appendf("%d,", i);
+    big.appendf("%s", std::string(300, 'x').c_str());              // a fragment past the stack buffer spills too
+    big.append("]");
+    CHECK_FALSE(big.overflowed());
+    CHECK(big.data() != slice);                                    // moved into its own block
+    CHECK(std::strncmp(big.data(), "[0,1,2,", 7) == 0);            // the slice's bytes came along
+    CHECK(big.size() == std::strlen(big.data()));
+    CHECK(big.data()[big.size() - 1] == ']');
+}
+
+TEST_CASE("a small-buffer sink whose block is refused flags overflow") {
+    struct AllocGuard { ~AllocGuard() { mm::platform::setTestAllocRefusedFrom(0); } } guard;
+    char slice[8];
+    mm::JsonSink sink(slice, sizeof(slice), mm::JsonSink::Spill{});
+    mm::platform::setTestAllocRefusedFrom(1);                      // every allocation is refused
+    sink.append("0123456789");
+    CHECK(sink.overflowed());
 }

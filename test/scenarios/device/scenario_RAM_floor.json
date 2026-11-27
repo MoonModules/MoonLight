@@ -3,7 +3,7 @@
   "module": "SystemModule",
   "also": [
     "HttpServerModule",
-    "TasksModule",
+    "MoonShineModule",
     "BouncingBallsEffect",
     "Layer"
   ],

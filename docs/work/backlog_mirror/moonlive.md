@@ -252,7 +252,7 @@ The check itself is worth keeping. Frame distinctness plus cross-script comparis
 
 Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083636)
 
-- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per [the layer compositing plan](../Plan-20261011%20-%20Layer%20compositing%2C%20masks%20and%20transitions%20(2%20of%203).md). Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
+- **A scripted modifier that animates every frame** (2026-10-11): `MoonLiveModifier` compiles a `modifyLive()` entry, so a script moves lights per frame with `t` (scroll, wobble, sweep) as the compiled Rotate does. Geometry only: dimming is a blend mode or an effect's `mulRGB`, per the layer compositing plan. Built once a script needs it; the cost to measure is one compiled-script call per light per frame, on an S3 at its largest grid.
 
 ### A scripted modifier needs a way to drop a light
 
@@ -265,3 +265,11 @@ Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=iss
 Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=287083746)
 
 - **A scripted modifier that reshapes the grid** (2026-08-10). `ModifierBase::modifyLogicalSize` lets a modifier change the logical `width`/`height`/`depth` — a Multiply kaleidoscope grows the grid, a crop shrinks it — and a compiled modifier uses it. A SCRIPTED one cannot: system variables are read-only, so `MoonLiveModifier` writes the box in and never reads it back. Needs a writable system variable — the binding reads the slots after the script returns and reports the result through `modifyLogicalSize` — which is a new `SysVarKind` (or a mutable flag on `SysVar`) plus the read-back, not a new builtin. Until then a scripted modifier can fold coordinates but not resize the grid they live in.
+
+### MoonLive run() refuses a call with no light buffer, silently
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319210760)
+
+What: `MoonLive::run()` returns without running when the call has no light buffer, with no message, so a service script calls `runValue` instead (`MoonLiveService.h`).
+Why: two entries with an unnamed difference; the guard hides a script that never ran.
+What it takes: split the guard out of `run()`, or name the two entries after what each runs, and a test for the refusal.

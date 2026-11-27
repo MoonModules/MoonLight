@@ -54,6 +54,8 @@ There is no GPU: the chip's PXP is a fixed-function 2D engine for displays, whos
 
 From Chrome or Edge with the web installer, and over the network from its Firmware card: [Install MoonLight](../../moonwalk.md#install), with Teensy picked. Settings live in 1 MB of the program flash and survive both.
 
+An update stages the image in the free program flash above the running one and copies it over at the reboot: 1.2 MB stages in about 33 s and the board is back 8 to 12 s later.
+
 The board has no TLS, so the browser downloads a network update's `.bin` and uploads it. MoonCloud's usage report and Talk messages go out through the open page for the same reason.
 
 ## Ethernet: a W5500 on SPI

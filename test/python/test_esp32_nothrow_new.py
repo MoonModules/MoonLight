@@ -1,7 +1,7 @@
 """A failed `new (std::nothrow)` returns null on the ESP32 rather than aborting the board.
 
 ESP-IDF links libstdc++ statically, and with C++ exceptions off it makes a throw abort(); libstdc++'s nothrow new calls the
-throwing one, so a failed nothrow allocation aborted. platform_esp32.cpp replaces the two nothrow forms with malloc. This
+throwing one, so a failed nothrow allocation aborted. platform_esp32_heap.cpp replaces the two nothrow forms with malloc. This
 links a program the board's way on the host, the throw wrapped into abort(), and checks that the stock nothrow new aborts
 while the platform's two operators return null. GNU ld alone wraps a symbol, so the test runs where it links that way.
 """
@@ -40,13 +40,14 @@ def build(tmp_path: Path, name: str, source: str):
 
 @pytest.mark.skipif(CXX is None, reason="no C++ compiler")
 def test_a_failed_nothrow_allocation_returns_null_rather_than_aborting(tmp_path):
-    source = (ROOT / "src/platform/esp32/platform_esp32.cpp").read_text()
+    source = (ROOT / "src/platform/esp32/platform_esp32_heap.cpp").read_text()
     replaced = re.findall(r"^void\* operator new(?:\[\])?\(std::size_t size, const std::nothrow_t&\) noexcept \{.*\}$", source, re.M)
-    assert len(replaced) == 2, "platform_esp32.cpp replaces both nothrow forms"
+    assert len(replaced) == 2, "platform_esp32_heap.cpp replaces both nothrow forms"
     stock, stock_exe = build(tmp_path, "stock", PROGRAM)
     if stock.returncode != 0:   # only the toolchain decides a skip: GNU ld alone wraps a symbol
         pytest.skip(f"this toolchain cannot link the board's way: {stock.stderr.strip()[:200]}")
     assert subprocess.run([str(stock_exe)], capture_output=True, timeout=20).returncode == -signal.SIGABRT   # the board before: abort
-    fixed, fixed_exe = build(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + "\n".join(replaced) + PROGRAM)
+    counted = "namespace mm::platform { inline void* counted(void* p) { return p; } }\n"   # the board's allocation count, a pass-through here
+    fixed, fixed_exe = build(tmp_path, "replaced", "#include <cstdlib>\n#include <new>\n" + counted + "\n".join(replaced) + PROGRAM)
     assert fixed.returncode == 0, fixed.stderr                                                    # the platform's code compiles
     assert subprocess.run([str(fixed_exe)], capture_output=True, timeout=20).returncode == 0     # after: null, both forms

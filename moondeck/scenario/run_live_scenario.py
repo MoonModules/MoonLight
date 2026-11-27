@@ -145,16 +145,16 @@ def collect_metrics(client: Client, settle_s: float = 1.5) -> dict:
 
 
 def _min_stack_free(state: dict):
-    """The task with the least stack headroom on the Tasks card, as (bytes, name), or (None, None) where the card lists none."""
+    """The task with the least stack headroom in MoonShine's System tasks band, as (bytes, name), or (None, None) where it lists none."""
     least = (None, None)
     def walk(modules):
         nonlocal least
         for m in modules:
-            for c in m.get("controls", []) if m.get("type") == "TasksModule" else []:
-                if c.get("name") != "tasks" or not isinstance(c.get("value"), list):
+            for c in m.get("controls", []) if m.get("type") == "MoonShineModule" else []:
+                if c.get("name") != "pipeline" or not isinstance(c.get("value"), list):
                     continue
                 for t in c["value"]:
-                    free = t.get("stack")
+                    free = t.get("stackFree") if t.get("type") == "task" else None
                     if isinstance(free, int) and (least[0] is None or free < least[0]):
                         least = (free, t.get("name"))
             walk(m.get("children", []))

@@ -121,8 +121,10 @@ TEST_CASE("GpioDmaPeripheral counts its bus in the driver's memory readout") {
     drv.publishHeapBytesForTest();
     CHECK(drv.dynamicBytes() == before + peripheral.busHeapBytes());
     CHECK(peripheral.busHeapBytes() >= 4096);
+    CHECK(drv.dmaBytes() == peripheral.busHeapBytes());   // MoonShine names it as the driver's DMA buffers
     peripheral.busDeinit();
     CHECK(peripheral.busHeapBytes() == 0);
+    CHECK(drv.dmaBytes() == 0);
 }
 
 TEST_CASE("GpioDmaPeripheral setup/release is repeatable") {

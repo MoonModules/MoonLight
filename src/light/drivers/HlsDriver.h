@@ -197,6 +197,9 @@ public:
         else if (wrote < 0) encoderDied_ = true;
     }
 
+    /// Frames the encoder pipe was too full to take.
+    std::optional<uint32_t> framesDropped() const override { return droppedFrames_.load(std::memory_order_relaxed); }
+
     /// Restart a dead encoder with a doubling backoff, and report the stream's health.
     void tick1s() MM_NONBLOCKING override {
         if (!open_) return;

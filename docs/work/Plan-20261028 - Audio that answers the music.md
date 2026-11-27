@@ -65,23 +65,23 @@ For the StringsEffect, one solo per instrument, all on Spotify: guitar: Fernando
 
 ### 1. The bands by the book ✅
 
-The third-octave bank, its bands and the audio task: [FractionalOctaveBank.h](../../src/core/services/FractionalOctaveBank.h), [AudioBands.h](../../src/core/services/AudioBands.h), [AudioService.h](../../src/core/services/AudioService.h).
+[FractionalOctaveBank](../../src/core/services/FractionalOctaveBank.h) and [AudioBands](../../src/core/services/AudioBands.h): third octaves by IEC 61260.
 
 ### 2. One level path, no knobs ✅
 
-The level, the floor, the gate and the window's top: [AudioDynamics.h](../../src/core/services/AudioDynamics.h).
+[AudioDynamics](../../src/core/services/AudioDynamics.h): level, floor, gate, top.
 
 ### 3. The lights follow the harmony ✅
 
-The semitone bank, the pitch classes, the key and the tuning: [AudioHarmony.h](../../src/core/services/AudioHarmony.h); the showcase palette: [harmony.mlp](../../moonlive/palettes/harmony.mlp).
+[AudioHarmony](../../src/core/services/AudioHarmony.h) and the harmony palette.
 
 ### 4. The kick is found in any song ✅
 
-The ranges and the bass line's note: [AudioFrame.h](../../src/core/util/AudioFrame.h).
+[AudioFrame](../../src/core/util/AudioFrame.h): the ranges, `onsetLow`, the bass note.
 
 ### 5. A kick, a snare and each tom look different ✅
 
-The onsets per range, band and key: [AudioOnsets.h](../../src/core/services/AudioOnsets.h); the showcase: [DrumKitEffect.h](../../src/light/effects/DrumKitEffect.h).
+[AudioOnsets](../../src/core/services/AudioOnsets.h) and [DrumKitEffect](../../src/light/effects/DrumKitEffect.h).
 
 ### 6. The beat lands on the beat ⏳
 
@@ -96,77 +96,33 @@ The onsets per range, band and key: [AudioOnsets.h](../../src/core/services/Audi
 - **Showcase: `BeatRipplesEffect`** on `beat` instead of `onset`, the ripples on the pulse rather than on every hit, a **beat sweep**, a bar crossing the rig once per beat, its position from the phase, and a **palette per bar** turning on the downbeat.
 - **DrumKit's kick on the beat (product owner, 2026-11-09).** In a full mix DrumKit's kick follows `onsetLow`, of whose fires 38% are kicks on MDB Drums' mixes; on Billie Jean the synth bass's eighths fire it 41 times in 20 s against about 20 kicks, with gaps of three beats. Once the tracker locks, a low onset counts as a kick only near a beat position where kicks recurred in the last bars, the beat-synchronous fold above, so the kick keeps the song's pattern; unlocked, DrumKit falls back to the onsets. FastLED's `MusicalBeat` detector rejects onsets that do not fit the tempo the same way.
 - **Desktop tests:** a synthesized click track at 120 BPM reads 120 within 1 BPM and `beat` fires within a block of each click; a track that steps to 140 BPM follows within four beats; silence reads no tempo; a synthesized progression changing chord every four beats puts `downbeat` on the change.
-- **Corpus tests:** Anjin's labelled sets and [the tempo harness](Plan-20261103%20-%20Tempo%20evaluation%20harness%20(2%20of%205).md) through the desktop build, the Freesound loops with a 12 s warm-up each, known tempos across 40 to 190 BPM, scored as Gouyon et al. (2006) define it (accuracy 1 within 4%, accuracy 2 forgiving the double, half and triple) and reported per genre, with 3:2 as its own class rather than "wrong"; beside Troy's tracker's 97% on house, about 70% on mixed EDM and 47% on loops, and BpmDj's table.
+- **Corpus tests:** Anjin's labelled sets and the tempo harness through the desktop build, the Freesound loops with a 12 s warm-up each, known tempos across 40 to 190 BPM, scored as Gouyon et al. (2006) define it (accuracy 1 within 4%, accuracy 2 forgiving the double, half and triple) and reported per genre, with 3:2 as its own class rather than "wrong"; beside Troy's tracker's 97% on house, about 70% on mixed EDM and 47% on loops, and BpmDj's table.
 - **Chance and silence tests:** random onsets at 90 and 175 BPM lock at neither, after the chance correction; beatless music (ambient, implied beats) reads "no lock" rather than a tempo.
 - **Bench material:** drum and bass, hard techno with a 909 kick whose fast click must not read as a hat, Jeff Mills' unquantized swing, breakcore and sliced amen breaks, and a jam band for the non-dance end.
 
 ### 7. Every effect reads the new engine ✅
 
-The frame every audio effect reads, its onsets, `heard()`, `level` and `levelSmoothed`: [AudioFrame.h](../../src/core/util/AudioFrame.h); the level's window from the gate: [AudioDynamics.h](../../src/core/services/AudioDynamics.h); each effect's reading in its header, such as [PaintBrushEffect.h](../../src/light/effects/PaintBrushEffect.h) and [SpriteFountainEffect.h](../../src/light/effects/SpriteFountainEffect.h); the changes in [MIGRATING](../reference/MIGRATING.md).
+[AudioFrame](../../src/core/util/AudioFrame.h) `heard()` and `levelSmoothed`; [MIGRATING](../reference/MIGRATING.md).
 
 ### 8. Audio sync carries the new engine ✅
 
-The formats, sections and receive path: [Audio sync format](../reference/audio-sync.md); the sync itself: [AudioSync.h](../../src/core/services/AudioSync.h).
+[Audio sync](../reference/audio-sync.md) and [AudioSync](../../src/core/services/AudioSync.h).
 
 ### 9. The notes a player could play ✅
 
-The `notes` select's sieve and peak picking: [HarmonicSieve.h](../../src/core/util/HarmonicSieve.h); the hands, and why constraints rather than labels: [playerHands.h](../../src/light/powerfunctions/playerHands.h).
+[HarmonicSieve](../../src/core/util/HarmonicSieve.h) and [playerHands](../../src/light/powerfunctions/playerHands.h).
 
 ### 10. How a string was played ✅
 
-The strum, the sounding string and the bow, and what the sound does not carry: [StringsEffect.h](../../src/light/effects/StringsEffect.h), `StringPlay` in [playerHands.h](../../src/light/powerfunctions/playerHands.h).
+[StringsEffect](../../src/light/effects/StringsEffect.h) and [playerHands](../../src/light/powerfunctions/playerHands.h).
 
 ### 11. The notes are measured ✅
 
-**Closed at its plateau (product owner, 2026-11-08).** The hands reach 23 to 29% F on GuitarSet, 35 to 38% on URMP's violin and 15% on its cello, against the 50% below, and each step now buys 1 to 3 points: the errors left, flashes of two or three frames and long notes far from any played pitch, resist rules, and the field's 90% comes from neural transcribers a board cannot run. The notes stay what they serve, a look, the note effects answering the music convincingly, and the pitch classes, the chord and the key carry the harmony. The items below not built stay unbuilt; the drums in a mix are the main track, the first item below, and the beat, step 6, is Anjin's team's.
-
-The harness: [bench_notes](../../moondeck/MoonDeck.md#bench_notes) and [bench_drums](../../moondeck/MoonDeck.md#bench_drums). The rules it measured, each with its measured basis: NoteConfirm, the sieve and peak picking in [HarmonicSieve.h](../../src/core/util/HarmonicSieve.h); the strike on a sounding key, the drum named by its rise, the re-arm and the kick's click in [AudioOnsets.h](../../src/core/services/AudioOnsets.h); the hands in [playerHands.h](../../src/light/powerfunctions/playerHands.h); the block in [AudioFrame.h](../../src/core/util/AudioFrame.h).
-
-**What each change measured**, kept for the after action review; notes as precision / recall / F, recall alone where marked:
-
-- **The generated set, the first run (2026-11-07):** recall, the engine 87%, `no overtones` 87%, Keyboard's hands 62%, Strings' hand 56%; precision under 16% at every stage, the notes invented mostly attack flashes.
-- **GuitarSet, all 360 recordings (2026-11-07):** the engine finds 64% of a solo's notes and 38% of an accompaniment's; Strings' hand keeps 57% and 30% at 9% and 13% precision; about 14 flashes a played note in a solo.
-- **NoteConfirm, a minimum note duration (2026-11-07):** F 18% to 21% on Strings' hand, 11% to 16% at `no overtones`.
-- **The strike on a sounding key, rules A and B (2026-11-08):** the engine's recall GuitarSet 45% to 54%, MAESTRO 28% to 39%, URMP 64% to 77%, the hands' F equal on guitar and piano and one or two points lower on URMP.
-- **The fretting hand takes the nearest of equal positions (2026-11-08):** 19% to 24% of GuitarSet's notes on their labeled string, F unchanged.
-- **Piano and the bowed strings, first numbers (2026-11-08):** MAESTRO Keyboard hands 12/34/18; URMP Strings hands 27/63/36, the violin 25/63/36, the cello 5/23/8.
-- **The low notes' lateness, counted (2026-11-08):** every semitone band below A3 reports later than 50 ms, 89 ms at C3, 139 ms at the guitar's low E, 422 ms at A0; moved back by the band's delay, recall rises 9 to 11 points.
-- **Notes dated back by their band's delay, in the harness (2026-11-08):** GuitarSet `no overtones` 12/48/16 to 17/57/21, Strings hands 17/41/21 to 23/52/28; URMP 9/72/15 to 9/81/17 and 26/63/35 to 29/74/39; latency 20 ms at the engine, 29 to 35 ms after the stages on GuitarSet.
-- **A key far under the loudest counts from its third frame (2026-11-08):** flashes fell by a sixth to a quarter; GuitarSet `no overtones` 17/58/21 to 18/57/23, Strings hands 23/53/28 to 25/52/29; URMP violin 11/82/20 to 13/82/23 and 24/67/35 to 27/67/38.
-- **The drums, first run on MDB Drums' 23 tracks (2026-11-08)**, alone and inside the band: `onset` 93/94/93 and 78/80/79; `onsetLow` against the kick 34/97/51 and 40/63/49; `onsetMid` against snare and toms 46/91/61 and 43/59/50; `onsetHigh` against hi-hat and cymbals 64/89/74 and 59/78/67.
-- **One hit, one drum, on a drums input (2026-11-08):** alone, the kick 34/97/51 to 46/92/61 and the snare 45/91/60 to 63/61/62.
-- **The drum walk and the re-arm (2026-11-08):** under `mix` a kick kept apart up to 4 a second and a snare and hi-hat up to 8; re-arming at half the climb took the refractory from 100 to 40 ms, the hi-hat to 20 a second and a snare at 12 a second from 50% to 67%, MDB Drums unchanged.
-- **The walk's kick with a beater click (2026-11-08):** kept apart up to 20 a second under `mix`, 88, 92, 100 and 95% at 8 to 20.
-- **Where it closed (2026-11-08):** the hands at 23 to 29% F on GuitarSet, 35 to 38% on URMP's violin, 15% on its cello.
-- **The 5th and 6th harmonics sieved, and a hand centered on its chord (2026-11-09),** found on the generated triads, where Keyboard's hands scored 5%: a low chord's 5th and 6th harmonics stayed as notes, they lit before the chord's own low keys, and a hand at the chord's lowest window had the next chord out of reach for its 250 ms. Predicted before the run: triads at 30% or more and every set within 2 points. Measured on the same files before and after: triads 5% to 19%, the `no overtones` stage's own figure, short of the 30% by the attack flashes every stage shares; GuitarSet 40 files `no overtones` 23 to 24, Keyboard hands 23 to 25; URMP violin 30 files Strings hands 38 to 41, Keyboard hands 25 to 28; MAESTRO 10 files `no overtones` 25 to 27, Keyboard hands 25 to 26; none lower.
-- **The time a viewer sees, measured (2026-11-09):** the frame measure of MIREX multiple-F0 estimation every 10 ms, notes dated by their band's delay, beside onset F. Strings hands: GuitarSet (40 files) 50% of the lit time on a played note and 64% of the played time lit, against 29% F; URMP violin (30) 62% and 88%, against 41% F. Keyboard hands on MAESTRO (10) 24% and 56%, against 26% F. The generated set reads 85% and 68%, its tones plainer than any recording.
-
-- **The chord snap voiced nearest the hand (2026-11-09):** on Romance's E major part, played in seventh to ninth position, the first-position snap kept the melody at A4 and up in 78 frames of the 681 the engine hears and added B2, G2 and D3 nobody played. Predicted for the voicing nearest the hand: GuitarSet from 23% to about 27%, under no snap's 29%. Measured: GuitarSet 23% (40 files), the generated set 21% to 16%, Romance 229 frames against no snap's 515; under no snap on every measure, kept by the product owner with its help saying what it costs.
-- **The chord held and plain (2026-11-09):** on Let It Be (C, G, Am, F) the named chord had the right root about 60% of the time, preferred sevenths and sus chords, and changed 38 times in 30 s against about 15 real changes. Predicted: a hold under 300 ms brings the changes to 25 or fewer; the plain triad lifts the root 3 points. Measured on a generated C, G, Am, F with passing notes, and Let It Be: the hold alone cut the changes to 30 and 24 but kept stale chords, the root falling from 64% to 50%; a fitting chord taking over during a mismatch, 65% and 24 and 22 changes; the colored chords weighed at 0.95, 67% and 21 and 23 changes, Let It Be named C, Am, G and F, right root about 66%.
-
-**Tried and not kept:**
-
-- **Halving the block to 256 samples (2026-11-08),** which halves NoteConfirm's wait too: latency unchanged (GuitarSet 29 ms, URMP 19 to 24 ms), flashes 26,877 to 36,249, Strings hands F 28 to 24 on GuitarSet and 39 to 35 on URMP.
-- **Moving the hand at once to a struck note out of reach, the open rule (2026-11-08):** recall 41% against 39%, but 17% placed on their string against 24%; 500 ms and 1 s place the same as 250 ms.
-- **Counting a key at once only near the loudest, the first flash rule (2026-11-08):** 6% fewer flashes, against a sixth to a quarter for the third-frame rule kept.
-- **Firing a drum on its climb itself (2026-11-08):** caught a kick on a tail up to 20 a second, but found 21,393 hits for 6,125, every slow swell over many bands climbing 10 dB.
-- **Confirming the kick's click by the bass's climb since (2026-11-08):** 70% at speed and a broadband burst fired twice; reverted.
-- **The drum named by its rise, inside the band (2026-11-08):** the kick 40/63/49 to 29/53/37, a bass guitar filling 40 to 80 Hz under a snare, so the rule runs only under `instrument` at `drums`.
-- **A kick in a mix only where the low bands rise together (2026-11-09):** on MDB Drums' 23 full mixes a real kick raises 3.0 of the six 40 to 125 Hz bands at once and a false one 1.3, the bass guitar rising at its own pitch, so a kick fired only while two bands climbed. Predicted: the kick in the band from 48% to 53 to 55% F, the drums alone within a point. Measured at 1.5, 3 and 6 dB of climb: the kick in the band 50, 52 and 51% F, while the drum walk's fast kick fell from 20 hits a second to 16, 4 and 4, the low bands not yet risen at the reading the click decides; removed. Nothing tells a snare in a mix from the rest at a frame: its 1.25 to 5 kHz rise, 26 against 16, moves F from 50% to 52% at best.
-- **Removing the overtones a note outweighs, parked (2026-11-08):** on URMP's cello overtones are 8% of the notes invented, so removing all of them moves precision from 4.0% to about 4.3%.
-
-**Not built:**
-
-- **The drums in a mix, the main track.** The snare's wire noise, the 1 to 5 kHz noise a snare's wires make and a kick and a bass guitar do not, and the kick against the bass guitar, a bass note rising at its pitch and holding where a kick rises over 40 to 80 Hz at once and dies within 100 ms; both scored on MDB Drums' full mixes, `mix` gaining a rule once the full mix scores better with it. **Stopped at its rule (2026-11-09):** the one feature that told a kick, the low bands rising together, bought 2 to 4 points and cost the fast kick, and none told a snare (Tried and not kept, above); the baseline inside the band stays the kick at 48% F and the snare and toms at 50%. **Stop rule, set before the first run:** signal-processing drum transcription in a mix reaches about 0.8 F on the kick and 0.6 on the snare in published comparisons (Gillet and Richard 2008; the neural transcribers' 0.9 a board cannot run); the target is the kick at 0.60 F and the snare at 0.55 inside the band, a rule is kept when it buys 3 points of F on the mix and costs the drums alone none, and the work stops once a rule buys under 2.
-- **The `drums` rule on a repeated kick:** it measures the rise from the dip and misses the walk's kick at speed (12% at 8 a second).
-- **Played MIDI as labels,** on `MidiService` once the live-performance plan's step 1 builds it: a capture script records a MIDI instrument's notes and its sound together, and `bench_drums.py` learns General MIDI's drum notes (36 kick, 38 snare, 41 to 50 toms, 42 and 46 hi-hat, 49 and 51 cymbals); the product owner's MIDI keyboard plays keys and drum pads into the desktop, or over speakers into a board's microphone.
-- **Full mixes and other kits:** a Slakh2100 reader for the mix, the drum track and the bass, BabySlakh's 20 songs first and the full set, about 100 GB, when their numbers hold; ENST-Drums, its license requested by email; then the tuned values swept to their best score on every set at once.
-- **The walking bass,** once the low notes answer sooner: a light stepping along the floor to each bass note's pitch on its strike, scored on URMP's double bass and Slakh2100's bass tracks.
-- **`mm_tempo`'s timestamps:** a frame is stamped with its block's start, 21 ms before the frame exists, so every harness reads latencies early, the drums' at -4 to -12 ms; Anjin's binary, to raise with Anjin.
+Closed at its plateau (product owner, 2026-11-08): the hands reach 23 to 29% F on GuitarSet. The baseline scores are in [bench_notes](../../moondeck/MoonDeck.md#bench_notes) and [bench_drums](../../moondeck/MoonDeck.md#bench_drums), the rules with their measured basis in [HarmonicSieve](../../src/core/util/HarmonicSieve.h), [AudioOnsets](../../src/core/services/AudioOnsets.h) and [playerHands](../../src/light/powerfunctions/playerHands.h), the lessons in [lessons](../contributing/lessons.md). The unbuilt items are cards on the Project.
 
 ### 12. The chord is named ✅
 
-The naming, the hold and the triad preference: [AudioChords.h](../../src/core/services/AudioChords.h); the `chord` snap and what it costs: [AudioNotesBase.h](../../src/light/effects/AudioNotesBase.h); the shape voiced nearest the hand: [playerHands.h](../../src/light/powerfunctions/playerHands.h).
+[AudioChords](../../src/core/services/AudioChords.h).
 
 ## What an effect reads
 
@@ -209,7 +165,7 @@ On the topic and not a step. What remains here when the plan ships returns to th
 - **Sources beyond the I²S microphone**, each a variant behind the same platform read, the analysis untouched. The I²S peripheral already drives MCLK (`mclkPin`) for a line-in ADC, and `codecGain` sets an ES8311 or ES7210 between microphone and line level.
     - **PDM microphones**: the IDF `i2s_pdm` driver, a sub-mode of the same peripheral.
     - **Analog line-in**: DedeHai has it on the S3 and Troy in ParrotRadio, where he recorded and played back through it. An analog path is validated by listening to it, since one that only feeds a level meter "may not be as accurate as it looks" (Troy).
-    - **Multi-channel front-ends**: a TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or a DSP board giving one analyzed channel per instrument, the input [the live-performance plan](Plan-20261013%20-%20Audio%20reactive%20live%20performance%20(0%20of%207).md) needs for acoustic drums.
+    - **Multi-channel front-ends**: a TDM codec (the ES7210 on the Waveshare RGB-Matrix board) or a DSP board giving one analyzed channel per instrument, the input the live-performance plan needs for acoustic drums.
 - **A fast roll as separate hits (2026-11-05).** A band's onset keeps strokes apart up to about 10 a second; at 20 a second it fires 2 of 10, since the band falls only about 14 dB between strokes through the bank's 10 ms detector and the flux-against-its-mean decision raises its own threshold. A rise measured from the band's recent low point, rather than against its mean flux, would keep a snare roll's strokes; a desktop test pins 20 a second.
 - **An instrument tuner (2026-11-04).** The semitone bands say which note sounds, not how far off it is, and a tuner needs 1 to 2 cents, a hundredth of a semitone. The bank picks the note; a period detector on the waveform itself, YIN (de Cheveigné and Kawahara 2002) or McLeod's normalized square difference (2005), the textbook pitch detectors, measures it to a tenth of a cent, for one instrument through line-in, never a full mix. The note's power against its two neighbors, as `peakHz` reads the third octaves, gives a few cents at best: enough for flat or sharp. Shown on AudioSpectrum's `noteNames` line as the note and its cents, and readable by an effect, a strip lit green when in tune. Not step 3's tuning estimate, which measures how far a recording sits from A440 over many notes.
 - **Desktop audio capturing what the machine plays (2026-09-29).** `platform_host_audio.cpp` enumerates capture devices only (`ma_context_get_devices` with null playback lists) and opens `ma_device_type_capture`, so on a Windows bench the picker offers `default` and the microphone and the speakers are absent, with no Stereo Mix to fall back on. miniaudio has `ma_device_type_loopback`, WASAPI-only, taking a playback device: enumerate playback devices too, mark them in the picker so a microphone and "what is playing" tell apart, and open loopback when one is chosen. macOS has no equivalent and needs a virtual device such as BlackHole, so the picker offers what the platform can do rather than a row that fails. A disconnected microphone jack reports a plausible level (RMS 20 to 30 at mains hum), which the status of step 2 tells from a working input.

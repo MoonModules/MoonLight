@@ -88,7 +88,7 @@ def toolset_args():
 
 
 def generator_args():
-    """The CMake generator for this host: Ninja where it is installed, which schedules every compile of the app and the tests in one graph, against Unix Makefiles 35% off a cold build and up to 40% off a small rebuild (docs/work Plan-20261125, step 4).
+    """The CMake generator for this host: Ninja where it is installed, which schedules every compile of the app and the tests in one graph, against Unix Makefiles 35% off a cold build and up to 40% off a small rebuild.
 
     Windows keeps the Visual Studio generator its clang-cl toolset belongs to, and a `CMAKE_GENERATOR` the caller set wins."""
     if os.environ.get("CMAKE_GENERATOR") or platform.system() == "Windows" or not shutil.which("ninja"):
@@ -119,17 +119,40 @@ def drop_other_configuration(bdir):
     shutil.rmtree(ROOT / bdir)
 
 
+def drop_stale_precompiled_headers(bdir):
+    """Remove the precompiled headers when the compiler changed since they were built, which an in-place update (Xcode, a toolchain upgrade) does under the same path: clang refuses a header built by another version, and CMake rebuilds a missing one."""
+    cache = ROOT / bdir / "CMakeCache.txt"
+    if not cache.exists():
+        return
+    found = re.search(r"^CMAKE_CXX_COMPILER:\w+=(.*)$", cache.read_text(encoding="utf-8", errors="replace"), re.M)
+    if not found:
+        return
+    try:
+        version = subprocess.run([found.group(1), "--version"], capture_output=True, text=True, check=False).stdout.split("\n")[0].strip()
+    except OSError:
+        return
+    stamp = ROOT / bdir / "compiler-version.txt"
+    if stamp.exists() and stamp.read_text(encoding="utf-8").strip() != version:
+        stale = [f for pattern in ("*.pch", "*.gch") for f in (ROOT / bdir).rglob(pattern)]
+        for header in stale:
+            header.unlink()
+        if stale:
+            print(f"The compiler changed to {version}: removed {len(stale)} precompiled header(s), which the build makes again.")
+    stamp.write_text(version + "\n", encoding="utf-8")
+
+
 def build_target(name, quiet=False):
     """Configure this host's tree as Release and build the one target `name`, as the bench scripts do; the exit code of the step that failed, or 0."""
     bdir = str(ROOT / host_build_dir())
     drop_other_configuration(host_build_dir())
     out = subprocess.DEVNULL if quiet else None
-    for cmd in (["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *configure_args()],
-                ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])):
-        rc = subprocess.run(cmd, cwd=ROOT, stdout=out).returncode
-        if rc != 0:
-            return rc
-    return 0
+    configure = ["cmake", "-B", bdir, "-DCMAKE_BUILD_TYPE=Release", *configure_args()]
+    build = ["cmake", "--build", bdir, "--target", name, "--parallel", str(build_jobs())] + (["--config", "Release"] if platform.system() == "Windows" else [])
+    rc = subprocess.run(configure, cwd=ROOT, stdout=out).returncode
+    if rc != 0:
+        return rc
+    drop_stale_precompiled_headers(bdir)   # after the configure, which names the compiler the headers are checked against
+    return subprocess.run(build, cwd=ROOT, stdout=out).returncode
 
 
 def gcc_pair():
@@ -214,6 +237,7 @@ def main():
     )
     if r.returncode != 0:
         sys.exit(r.returncode)
+    drop_stale_precompiled_headers(bdir)
     if args.configure:
         sys.exit(subprocess.run([sys.executable, str(ROOT / "moondeck" / "build" / "generate_build_info.py")], cwd=ROOT).returncode)
 

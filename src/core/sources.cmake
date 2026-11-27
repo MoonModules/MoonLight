@@ -7,6 +7,7 @@ set(MM_CORE_SOURCES
     module/Demand.cpp
     module/Scheduler.cpp
     module/StateDocument.cpp
+    util/JsonSink.cpp
     util/JsonUtil.cpp
     util/build_info.cpp
     util/JsonFetch.cpp

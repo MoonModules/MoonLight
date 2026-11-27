@@ -12,19 +12,11 @@
 
 #include <cstring>
 
-// MoonI80Peripheral is the SAME LCD_CAM output as I80Peripheral, on our own DMA code instead of esp_lcd. It is a thin ParallelLedDriver subclass whose constructor wires a MoonI80Peripheral backend (a runtime LedPeripheral strategy, not compile-time CRTP), so the orchestrator's whole body, lane slicing, frame sizing, the fused encode, the async double-buffer, the shift-register expander, the dead-frame guard, is ALREADY covered by the Mock-driver suites (unit_ParallelLedDriver_doublebuffer / _shiftregister) and by unit_I80LedDriver. Re-testing it here through a second concrete driver would assert the same base twice.
-//
-// So these cases pin only what is genuinely MoonI80's own:
-//   - it satisfies the LedPeripheral contract (it instantiates and configures at all);
-//   - the constants that DIFFER from its sibling, chiefly that it is LCD_CAM-only;
-//   - its own bus-pin validation, and the fact that it needs FEWER pins than the sibling: no DC at
-//     all, and WR only under the expander (owning the GPIO matrix is what buys that).
-//
-// The hardware half (our GDMA descriptor chain) is inert on the host, host stubs return false/nullptr and `lanesAvailable()` is 0, and is proven on the S3 bench.
+// MoonI80Peripheral is the same LCD_CAM output as I80Peripheral on our own DMA code; the Mock-driver suites cover the orchestrator, so these cases pin its own parts: the LedPeripheral contract, LCD_CAM-only constants and bus-pin validation.
 
 namespace {
 
-// On the host `platform::lcdLanes` is 0, so the real MoonI80Peripheral reports supportsPinExpander() == false, which the orchestrator now honors by SILENTLY dropping pinExpander back to direct mode (a peripheral that can't host the '595 has its expander toggle hidden, so an unfixable error would be wrong, see parseConfig). That degradation is correct on hardware but hides the SHIFT-MODE validation (WR collision, latch-on-WR, clockPin required) these cases exist to pin. So the shift-mode cases use this tiny subclass that reports the expander as supported, exactly as the real backend does on an LCD_CAM chip, the validation then runs on the host.
+// On the host `platform::lcdLanes` is 0, so the real backend reports supportsPinExpander() == false and the orchestrator drops pinExpander to direct mode; the shift-mode cases use this subclass, which reports the expander as supported.
 struct ExpanderMoonI80 : mm::MoonI80Peripheral {
     bool supportsPinExpander() const override { return true; }
 };
@@ -36,28 +28,22 @@ void wire(mm::ParallelLedDriver& d, mm::MoonI80Peripheral& peripheral, mm::Buffe
 
 } // namespace
 
-// **The load-bearing difference from its sibling.** I80Peripheral runs on the i80 *bus*, LCD_CAM on
-// the S3/P4 AND the I2S peripheral on the classic ESP32 (IDF's esp_lcd picks the backend). MoonI80 programs LCD_CAM directly, so it must NOT claim the classic chip: `lanesAvailable()` reads `lcdLanes` alone, without the `+ i2sLanes` its sibling adds. Getting this wrong would offer the driver on a chip whose peripheral it cannot drive.
-//
-// lanesAvailable()/kSupportsPinExpander/kPowerOfTwoBus/kLoopbackFullWidth moved from static constexpr on the driver to virtuals on the MoonI80Peripheral backend, a bare instance reaches them without a live driver's peripheral_ (protected on ParallelLedDriver).
+// The load-bearing difference from its sibling: MoonI80 programs LCD_CAM directly and claims no classic chip, so lanesAvailable() reads lcdLanes alone; it and the other backend virtuals are reachable on a bare instance.
 TEST_CASE("MoonI80Peripheral is LCD_CAM-only — it does not claim the classic ESP32's I2S i80") {
     mm::MoonI80Peripheral peripheral;
     CHECK(peripheral.lanesAvailable() == mm::platform::lcdLanes);
-    // The expander needs LCD_CAM silicon, `hasLcdCam`, not `lcdLanes > 0`. The two used to be the same test, until the host set a non-zero lane count so the driver would RUN there against a memory bus; a lane count is "how wide", the capability is "which peripheral".
+    // The expander needs LCD_CAM silicon, `hasLcdCam`, rather than `lcdLanes > 0`: a lane count is how wide, the capability is which peripheral (the host sets a non-zero lane count so the driver runs against a memory bus).
     CHECK(peripheral.supportsPinExpander() == mm::platform::hasLcdCam);
 }
 
-// The i80 BUS is 8 or 16 bits wide whatever the pin count, so the base rounds it up (powerOfTwoBus()) and parks the lanes the board does not use. And the loopback cannot build a 1-lane private bus, so its test frame is encoded at the full operational width.
+// The i80 BUS is 8 or 16 bits wide whatever the pin count, so the base rounds it up (powerOfTwoBus()) and parks the unused lanes; the loopback cannot build a 1-lane private bus, so its test frame is encoded at the full operational width.
 TEST_CASE("MoonI80Peripheral keeps the i80 bus rules: power-of-two bus, full-width loopback") {
     mm::MoonI80Peripheral peripheral;
     CHECK(peripheral.powerOfTwoBus());
     CHECK(peripheral.loopbackFullWidth());
 }
 
-// **The bus control pins are a '595 cost, not an i80 cost, and owning the DMA is what proves it.**
-// DC exists so an LCD panel can separate command bytes from data bytes; a WS2812 strand has no such concept, and the peripheral holds DC at a constant level. WR is the pixel clock, which only a shift register consumes (as SRCLK), WS2812 is self-clocked, so a strand ignores it. esp_lcd mandates a valid GPIO for BOTH regardless (`wr_gpio_num >= 0 && dc_gpio_num >= 0`), which is why the sibling still spends two pins on them. This backend routes its own GPIO matrix, so it routes neither in direct mode: there is no dcPin at all, and clockPin reaches a pad only under the expander.
-//
-// The observable consequence, and what this case pins: in DIRECT mode `clockPin` may freely name a GPIO that a strand also uses, because the signal never leaves the peripheral. Rejecting that would forbid a working config to protect a signal nobody reads.
+// The bus control pins are a '595 cost, not an i80 cost: DC is held constant and WR only clocks a shift register, so in DIRECT mode `clockPin` may name a GPIO a strand also uses, since the signal stays inside the peripheral.
 TEST_CASE("MoonI80Peripheral direct mode: clockPin is unrouted, so it cannot collide") {
     mm::MoonI80Peripheral peripheral;
     mm::ParallelLedDriver d;
@@ -82,9 +68,7 @@ TEST_CASE("MoonI80Peripheral shift mode: a data pin on clockPin (WR) is caught")
     CHECK(d.severity() != mm::ParallelLedDriver::Severity::Status);   // it complains
 }
 
-// The '595 latch rides a DATA lane (the peripheral gives only one clock output, and WR is already the shift clock), so it must not land on WR, the latch would ride the shift clock itself and nothing would ever latch, which looks like a dead strip rather than a config error.
-//
-// clockPin is the driver's wiring, which the backend declares as a control, so it is read and set through the control API defineDriverControls() binds, the same mechanism the UI and persistence use.
+// The '595 latch rides a DATA lane (WR is already the shift clock), so it must stay off WR to latch at all (a clash looks like a dead strip); clockPin is read and set through the control API defineDriverControls() binds, like the UI and persistence.
 TEST_CASE("MoonI80Peripheral rejects a latchPin on WR") {
     ExpanderMoonI80 peripheral;
     mm::ParallelLedDriver d;
@@ -100,7 +84,7 @@ TEST_CASE("MoonI80Peripheral rejects a latchPin on WR") {
     CHECK(d.severity() == mm::ParallelLedDriver::Severity::Error);
 }
 
-// The '595's shift clock IS WR, so shift mode needs clockPin on a real GPIO. Unset (-1) would route the peripheral's WR signal to GPIO 65535, catch it as a config error, not a bad pad write. Direct mode does not care (WR is unrouted there), so the same unset pin is fine without the expander.
+// The '595's shift clock IS WR, so shift mode needs clockPin on a real GPIO: an unset (-1) pin is caught as a config error instead of routing WR to GPIO 65535. Direct mode leaves WR unrouted, so the unset pin is fine there.
 TEST_CASE("MoonI80Peripheral shift mode requires a clockPin; direct mode does not") {
     ExpanderMoonI80 peripheral;
     mm::ParallelLedDriver d;
@@ -126,7 +110,7 @@ TEST_CASE("MoonI80Peripheral shift mode requires a clockPin; direct mode does no
     CHECK(d2.severity() != mm::ParallelLedDriver::Severity::Error);
 }
 
-// Sanity: with a valid config the driver is a working CRTP sibling, it slices lanes and reports the lights it drives, exactly like its sibling. (The lane/frame ARITHMETIC itself is the base's, and is covered once, in unit_I80LedDriver and the Mock suites.)
+// Sanity: with a valid config the driver slices lanes and reports the lights it drives, like its sibling (the lane and frame arithmetic is the base's, covered in unit_I80LedDriver and the Mock suites).
 TEST_CASE("MoonI80Peripheral drives a valid config like its sibling") {
     mm::MoonI80Peripheral peripheral;
     mm::ParallelLedDriver d;
@@ -161,4 +145,14 @@ TEST_CASE("MoonI80Peripheral ringAuto stops at the internal floor and says the l
     const auto d = mm::MoonI80Peripheral::autoDepth(585, 259, freeInternal);
     CHECK(d.bufs == 6);
     CHECK(d.shortOfLead);
+}
+
+// The ring's headroom: its refill's least lead over the most a ring of that depth holds, so a healthy ring of any depth reads near 100, a late slice 0, and a ring before its first interrupt none.
+TEST_CASE("MoonI80Peripheral's ring headroom is the least lead over the most the ring holds, 0 on a late slice, none before a lead is measured") {
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(18, 21, false) == 100);   // 21 buffers: the refill gap and the draining slice leave 18
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(9, 21, false) == 50);
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(1, 4, false) == 100);     // a small ring at its most is healthy too
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(-1, 21, true) == 0);      // a late slice: behind, whatever the lead read
+    CHECK(mm::MoonI80Peripheral::ringHeadroom(18, 21, true) == 0);
+    CHECK_FALSE(mm::MoonI80Peripheral::ringHeadroom(-1, 21, false).has_value());   // no interrupt yet
 }

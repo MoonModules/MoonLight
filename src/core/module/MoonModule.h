@@ -341,8 +341,14 @@ public:
 
     /// Average microseconds per tick over the last second, which parents measure for children.
     uint32_t tickTimeUs() const { return tickTimeUs_; }
+    /// The longest single tick of the last second, which an average hides: one slow frame a second is a stutter at any average.
+    uint32_t worstTimeUs() const { return worstUs_; }
     /// Add one tick's time to the running total, from whichever core ticked it: the drivers tick on the encode task and on the main loop.
-    void addAccumUs(uint32_t us) MM_NONBLOCKING { accumUs_.fetch_add(us, std::memory_order_relaxed); }
+    void addAccumUs(uint32_t us) MM_NONBLOCKING {
+        accumUs_.fetch_add(us, std::memory_order_relaxed);
+        uint32_t peak = peakUs_.load(std::memory_order_relaxed);
+        while (us > peak && !peakUs_.compare_exchange_weak(peak, us, std::memory_order_relaxed)) {}
+    }
 
     /// The module's own time per frame: its total less the time its own thread spent inside its children's ticks, which a child on another thread leaves in.
     uint32_t ownTimeUs() const { return ownTimeUs_; }
@@ -353,6 +359,7 @@ public:
         const uint32_t kids = childAccumUs_.exchange(0, std::memory_order_relaxed);
         tickTimeUs_ = frameCount > 0 ? accum / frameCount : 0;
         ownTimeUs_ = frameCount > 0 && accum > kids ? (accum - kids) / frameCount : 0;
+        worstUs_ = peakUs_.exchange(0, std::memory_order_relaxed);
         for (uint8_t i = 0; i < childCount_; i++) {
             children_[i]->publishTiming(frameCount);
         }
@@ -405,6 +412,8 @@ private:
     const char* status_ = nullptr;  ///< the message `status()` reads
     uint32_t tickTimeUs_ = 0;
     uint32_t ownTimeUs_ = 0;
+    uint32_t worstUs_ = 0;
+    std::atomic<uint32_t> peakUs_{0};   ///< the longest tick in the current second, relaxed like accumUs_
     std::atomic<uint32_t> childAccumUs_{0};   ///< the children's time on this module's own thread
     std::atomic<uint32_t> accumUs_{0};   ///< a statistic, so relaxed: no other memory is ordered by it
 

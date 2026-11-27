@@ -62,6 +62,31 @@ struct RotatingGradient {
 
 } // namespace
 
+namespace {
+// A live modifier whose per-light remap takes a measurable while, so the pass it runs in has a time to book.
+struct SlowLive : mm::ModifierBase {
+    bool hasModifyLive() const MM_NONBLOCKING override { return true; }
+    void modifyLive(mm::Coord3D& /*pos*/, const mm::Coord3D& /*logical*/) const override {
+        const uint32_t t0 = mm::platform::micros();
+        while (mm::platform::micros() - t0 < 20) {}
+    }
+};
+}  // namespace
+
+// The live pass is the live modifiers' work, so its time is theirs and leaves the layer's own time.
+TEST_CASE("Layer live pass: its time is booked to the live modifier that ran it") {
+    mm::golden::LayerFixture fx(16, 16);
+    fx.add(fx.own<GradientEffect>());
+    SlowLive& live = fx.own<SlowLive>();
+    fx.add(live);
+    fx.tickAt(1000);
+    fx.layer.publishTiming(1);
+
+    CHECK(live.tickTimeUs() >= 4000u);                       // 256 lights at 20 us or more each
+    CHECK(fx.layer.ownTimeUs() < live.tickTimeUs() / 2);     // the layer keeps only its own share
+    mm::platform::setTestNowMs(0);
+}
+
 // With a Rotate present, the live pass rotates the gradient each frame as the angle advances, so two frames at different times differ. A static GradientEffect alone would produce identical frames, so any difference is the live remap.
 TEST_CASE("Layer live pass: Rotate remaps the buffer per frame") {
     RotatingGradient r(16, 16, 200);   // fast enough to cross several angle steps

@@ -6,6 +6,8 @@
 ///
 /// An ESP32 writes its update into a second app slot; the Teensy's program flash holds one image, so the upload goes into the erased space above it, idle until the reboot.
 ///
+/// The image is staged from the next 64 KB boundary up to the LittleFS area, so it fits while the two images together fit 6.75 MB; the core's flash routines are the primitives, since FlasherX's 16 KB reserve would let the copy erase LittleFS.
+///
 /// The copy over the program happens in `reboot()`, after the HTTP answer is out, in 64 KB blocks, the flash's largest erase, skipping every block the new image shares with the running one.
 ///
 /// A power loss during the upload leaves the running image untouched; one during the copy, a few seconds, leaves the board to PJRC's bootloader chip and its program button.

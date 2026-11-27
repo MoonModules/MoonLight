@@ -1,6 +1,6 @@
 # Streams: every frame from outside, one model
 
-Cameras, video, files, the network and the browser all deliver a stream of frames from outside the device. This study models them once, by the textbook, so each becomes a combination of a few parts rather than a feature of its own. What is built of it, the two families and how a sender-mapped frame lands in a layer, is in [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside); the picture sources still to come are planned in [Video in, LED walls out](../work/Plan-20261024%20-%20Video%20in%2C%20LED%20walls%20out%20(0%20of%2010).md).
+Cameras, video, files, the network and the browser all deliver a stream of frames from outside the device. This study models them once, by the textbook, so each becomes a combination of a few parts rather than a feature of its own. What is built of it, the two families and how a sender-mapped frame lands in a layer, is in [MoonLight, frames from outside](../explanation/architecture/moonlight.md#frames-from-outside); the picture sources still to come are planned in the plan "Video in, LED walls out".
 
 ## Three independent axes
 

@@ -84,7 +84,7 @@ FastLED-MM proves a second domain; a home-automation firmware is the larger one.
 
 **What it does not give, each its own plan after C**:
 - **Entities from modules.** Home Assistant discovery publishes a light today, through `LightOutput`. A switch, a sensor, a number or a select per control, declared by the module, is what an ESPHome device shows in Home Assistant.
-- **Peripheral breadth.** [Input mapping](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md) holds the sensors; relays and PWM outputs as modules join it.
+- **Peripheral breadth.** Input mapping holds the sensors; relays and PWM outputs as modules join it.
 - **Taking over a device.** MoonBase installs over a running Tasmota or ESPHome; the backlog names what each still needs (Tasmota's settings reader, ESPHome's compiled-in WiFi).
 - **A second consumer for it**: a relay and sensor app, on a board still to pick.
 
@@ -122,13 +122,13 @@ The relay app and the front end are the two directions of one integration: the f
 
 Phase 1, the library:
 
-1. ✅ Core's sources listed once in `src/core/sources.cmake`; the desktop, ESP32 and Teensy builds read it, and each builds unchanged (2026-10-25).
+1. ✅ Core's sources are listed once in [sources.cmake](../../src/core/sources.cmake).
 2. ⏳ The root CMakeLists builds as a subdirectory: `PROJECT_*` paths, the app and tests only at the top level, `MoonModules::core` and `MoonModules::platform`, and `MM_UI_DIR`, `MM_VERSION_FILE`, `MM_SCRIPT_DIR` with MoonLight's defaults.
 3. ⏳ `test/consumer/`, a core-only app, configured and built by a test; a light include added to it fails.
 
 Phase 2, the firmware components:
 
-4. ✅ `MpegTs.h` to `core/util`, and `Hub75Slots.h`'s bus contract (`Hub75Layout`, `Hub75Geometry`) to `platform/Hub75Bus.h`, the encoder staying in light (2026-10-25; the HUB75 plan's PR 1 moves the encoder to `platform/Hub75Encode.h` too, beside the contract it builds, since no platform file includes light). No platform file includes light; the desktop build holds it already, `mm_platform` compiling through the core root, and step 5 holds it on the ESP32 the same way, so no text rule counts it.
+4. ✅ `MpegTs.h` is in `core/util`, the HUB75 bus contract in [Hub75Bus.h](../../src/platform/Hub75Bus.h).
 5. ⏳ The `mooncore` IDF component with the core include root; `esp32/main` requires it; every shipped ESP32 variant builds, and the ESP32 consumer builds in CI. Flashed on a board only on the product owner's go.
 
 Phase 3, light behavior out of core:

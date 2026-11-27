@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>   // busHeadroom: a measured share, or none
 #include "core/module/Control.h"          // ControlList: a backend appends its own controls into the shared list
 #include "platform/platform_leds.h"   // RmtLoopbackResult
 
@@ -83,6 +84,8 @@ public:
     virtual void addRingControls(ControlList& /*controls*/) {}
     /// Refresh any peripheral-specific read-only KPIs (the ring diagnostic). Default: none.
     virtual void refreshBusKpi() {}
+    /// The slack its DMA has left over the last second, in percent, where the bus measures one: what DriverBase::headroom reports.
+    virtual std::optional<uint8_t> busHeadroom() const { return std::nullopt; }
 
     /// Append this peripheral's own bus-pin controls into the shared list.
     virtual void addBusControls(ControlList& /*controls*/) {}

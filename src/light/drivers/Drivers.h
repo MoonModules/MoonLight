@@ -35,6 +35,8 @@ namespace mm {
 ///
 /// @technical
 ///
+/// **Interface here, bodies in `Drivers.cpp`.** About 21 files include this container, so its cold-path bodies live in the `.cpp` and an edit there rebuilds one object; the ticks, `composite` and `anyLit` stay here, where the render path inlines them (coding-standards.md, File shape).
+///
 /// ## The shared output buffer
 ///
 /// Blend and map write to arbitrary physical positions through a LUT, so the output is readable only once whole. One enabled layer with a 1:1 unshuffled mapping is the exception: drivers read that layer's buffer directly, giving up parallelism.
@@ -59,62 +61,16 @@ public:
     /// Every palette name, in picker order.
     void writePaletteNames(JsonSink& sink) const override { mm::paletteNames(sink); }
     /// Each enabled driver that lights something, by type, with the lights its window sends from the frame the drivers read, its frames a second, and whether its fixtures are moving heads.
-    void writeOutputs(JsonSink& sink) const override {
-        const nrOfLightsType n = source_ ? source_->count() : 0;
-        bool first = true;
-        for (uint8_t i = 0; i < childCount(); i++) {
-            const MoonModule* c = child(i);
-            if (c->role() != ModuleRole::Driver || !c->enabled()) continue;
-            const auto* d = static_cast<const DriverBase*>(c);
-            if (!d->drivesLights()) continue;
-            sink.append(first ? "{\"driver\":" : ",{\"driver\":");
-            sink.writeJsonString(c->typeName());
-            // Frames a second: its own count where it keeps one, else every rendered frame, the device's rate.
-            const std::optional<uint32_t> own = d->framesPerSecond();
-            const uint32_t fps = own ? *own : (Scheduler::instance() ? Scheduler::instance()->fps() : 0);
-            sink.appendf(",\"lights\":%u,\"fps\":%u", static_cast<unsigned>(d->windowLength(n)), static_cast<unsigned>(fps));
-            sink.append(d->correction().hasMotion ? ",\"movingHeads\":true}" : "}");
-            first = false;
-        }
-    }
+    void writeOutputs(JsonSink& sink) const override;
     /// Each enabled effect on an enabled layer, by name, in stack order.
-    void writeEffects(JsonSink& sink) const override {
-        if (!effects_) return;
-        bool first = true;
-        for (uint8_t i = 0; i < effects_->childCount(); i++) {
-            const MoonModule* layer = effects_->child(i);
-            if (layer->role() != ModuleRole::Layer || !layer->enabled()) continue;
-            for (uint8_t j = 0; j < layer->childCount(); j++) {
-                const MoonModule* e = layer->child(j);
-                if (e->role() != ModuleRole::Effect || !e->enabled()) continue;
-                if (!first) sink.append(",");
-                sink.writeJsonString(e->name());
-                first = false;
-            }
-        }
-    }
+    void writeEffects(JsonSink& sink) const override;
     using LightOutput::nearestPalette;   // the RGB form, beside the override
 
     /// Release the children, then vacate every static seat this container published, since each seat references this object's members.
-    void release() override {
-        // BEFORE the children release: the worker ticks them, so it must stop before they free.
-        stopEncodeTask();
-        renderSplitActive_ = false;
-        seat_.vacate();
-        outputSeat_.vacate();
-        // Effects::tick runs this every frame, so a dead Drivers would keep executing its script.
-        MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
-        paletteScriptModule_.release();
-        MoonModule::release();
-    }
+    void release() override;
 
     /// Stop the worker and free the palette script, for a tree torn down without release(); a destructor runs where release() may not.
-    ~Drivers() override {
-        stopEncodeTask();
-        MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
-        // Free the script rather than detach: release() may never run, and the engine holds a block.
-        paletteScriptModule_.release();
-    }
+    ~Drivers() override;
 
     /// Stop the core-1 worker so a structural tree mutation can free nodes safely, since a driver walks the whole tree.
     void quiesceRenderSplit() {
@@ -125,39 +81,10 @@ public:
     static Drivers* active() { return ActiveInstance<Drivers>::active(); }
 
     /// Where this rig's fixtures keep their motion channels, as LAYER slots, callable before prepare so Effects sizes its buffer first.
-    void publishFixtureChannels() {
-        const FixtureChannels fc = fixtureChannels();
-        if (effects_) {
-            for (uint8_t i = 0; i < effects_->childCount(); i++)
-                if (effects_->child(i)->role() == ModuleRole::Layer)
-                    static_cast<Layer*>(effects_->child(i))->setFixtureChannels(fc);
-        } else if (layer_) {
-            layer_->setFixtureChannels(fc);
-        }
-    }
+    void publishFixtureChannels();
 
     /// Resolve every enabled driver's fixture profile and fold their motion channels into one map.
-    FixtureChannels fixtureChannels() {
-        FixtureChannels fc;   // every offset absent: a rig with no motion, the common case
-        for (uint8_t i = 0; i < childCount(); i++) {
-            if (child(i)->role() != ModuleRole::Driver || !child(i)->enabled()) continue;
-            auto* d = static_cast<DriverBase*>(child(i));
-            d->rebuildCorrection(brightness);        // resolve the profile if it has not been yet
-            const Correction& c = d->correction();
-            if (!c.hasMotion) continue;
-            // Layer slots, not channel numbers: packed after RGBW so a pan write cannot collide.
-            const bool present[5] = {c.offPan    != Correction::kAbsent,
-                                     c.offTilt   != Correction::kAbsent,
-                                     c.offZoom   != Correction::kAbsent,
-                                     c.offRotate != Correction::kAbsent,
-                                     c.offGobo   != Correction::kAbsent};
-            uint8_t* const dst[5] = {&fc.pan, &fc.tilt, &fc.zoom, &fc.rotate, &fc.gobo};
-            FixtureChannels::forEachMotionSlot(present,
-                [&](uint8_t role, uint8_t slot) { *dst[role] = slot; });
-            break;   // a chain is homogeneous (architecture.md), so one layout describes it
-        }
-        return fc;
-    }
+    FixtureChannels fixtureChannels();
 
     /// Global output brightness, multiplied with each driver's `localBrightness`.
     /// @guide It starts low, so a fresh device on USB 5 V never browns out at full white.
@@ -176,85 +103,25 @@ public:
     uint8_t palette = 0;
 
     /// Run the script `paletteScript_` names, compiling it, whose size or error the card shows.
-    void attachPaletteScript() {
-        MoonLivePalette::setActiveInstance(&paletteScriptModule_);
-        paletteScriptModule_.setScript(paletteScript_);
-        paletteScriptModule_.prepare(*this);
-        demandPaletteAudio();
-    }
+    void attachPaletteScript();
 
     /// Need what the palette script reads of the audio, the notes or the analysis, while it runs, as an effect script does.
-    void demandPaletteAudio() {
-        const uint8_t d = paletteScript_[0] ? paletteScriptModule_.demands() : 0;
-        paletteNotes_.set(d & AudioDemand::bitOf(AudioFeature::Notes));
-        paletteAnalysis_.set(d & AudioDemand::bitOf(AudioFeature::Bands));
-    }
+    void demandPaletteAudio();
 
     /// Stop and release the palette script, so neither the program nor its status outlives the choice. Otherwise it keeps overwriting the gradient every frame.
-    void detachPaletteScript() {
-        MoonLivePalette::setActiveInstance(nullptr);
-        paletteScriptModule_.release();
-        paletteScript_[0] = 0;
-        demandPaletteAudio();
-        // Only the script's own message: the card shares one status with the relay and encode warnings.
-        if (status() == paletteScriptModule_.statusText()) clearStatus();
-    }
+    void detachPaletteScript();
 
     /// List every factory palette at its place in the catalog, held or not, then the user's own `.mlp` files, and publish them to the picker. The names live in member arrays, as the seam holds pointers.
-    void refreshLivePalettes() {
-        live_.scanned = true;   // every scan counts, whichever caller ran it
-        live_.count = 0;
-        // The catalog first, in its own order, so a palette's number is the same on every device of one firmware and a slot or a desk can pick it.
-        for (size_t c = 0; c < moonlive::kPaletteCatalogCount && live_.count < LivePalettes::kMax; c++) {
-            char path[96];
-            live_.ptrs[live_.count] = moonlive::kPaletteCatalog[c];
-            live_.tags[live_.count] = moonlive::kPaletteCatalogTags[c];
-            live_.present[live_.count] = moonlive::resolveScript(moonlive::kPaletteCatalog[c], path, sizeof(path));
-            live_.count++;
-        }
-        const uint8_t own = live_.count;
-        // Then the user's own, from BOTH directories, user first, so an edited one appears once.
-        const auto scan = [](const char* dir, void* ctx) {
-            platform::fsList(dir, [](const char* name, bool isDir, uint32_t, void* c) {
-                auto* self = static_cast<Drivers*>(c);
-                if (isDir || self->live_.count >= LivePalettes::kMax) return;
-                const size_t n = std::strlen(name);
-                if (n < 5 || std::strcmp(name + n - 4, moonlive::kPaletteExt) != 0) return;
-                // A catalog palette, or one already listed, is not added twice.
-                for (uint8_t i = 0; i < self->live_.count; i++)
-                    if (std::strcmp(self->live_.ptrs[i], name) == 0) return;
-                // A bounded copy: a name longer than the slot truncates, which a picker wants.
-                char* slot = self->live_.names[self->live_.count];
-                const size_t cap = sizeof(self->live_.names[0]) - 1;
-                const size_t copy = n < cap ? n : cap;
-                std::memcpy(slot, name, copy);
-                slot[copy] = '\0';
-                self->live_.ptrs[self->live_.count] = slot;
-                self->live_.tags[self->live_.count] = "";   // a script the catalog does not know is the user's own: no chips
-                self->live_.present[self->live_.count] = true;
-                self->live_.count++;
-            }, ctx);
-        };
-        scan(moonlive::kScriptDir, this);
-        scan(moonlive::kFactoryScriptDir, this);
-        // The user's own alphabetical among themselves, after the catalog.
-        for (uint8_t i = static_cast<uint8_t>(own + 1); i < live_.count; i++)
-            for (uint8_t j = i; j > own && LivePalettes::cmpName(live_.ptrs[j], live_.ptrs[j - 1]) < 0; j--) {
-                std::swap(live_.ptrs[j], live_.ptrs[j - 1]);
-                std::swap(live_.tags[j], live_.tags[j - 1]);
-                std::swap(live_.present[j], live_.present[j - 1]);
-            }
-    }
+    void refreshLivePalettes();
+    /// Fill the picker's first entries with the factory catalog, in its own order.
+    void listCatalogPalettes();
+    /// Append one user `.mlp` file to the picker, unless the list is full, the name is not a palette or it is listed already; the caller skips directories.
+    void addUserPalette(const char* name);
+    /// Order the user's own palettes alphabetically, after the first `own` catalog entries.
+    void sortUserPalettes(uint8_t own);
 
     /// A palette script added, removed or restored joins the picker: any path in or above a script folder rescans them. The running one compiles again at once, an edit or a download landing with no control change.
-    void onFileChanged(const char* path) override {
-        if (!moonlive::touchesScripts(path)) return;
-        paletteScriptModule_.fileChanged(path);
-        if (paletteScript_[0]) { paletteScriptModule_.prepare(*this); demandPaletteAudio(); }
-        refreshLivePalettes();
-        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
-        rebuildControls();
-    }
+    void onFileChanged(const char* path) override;
 
     /// The device's scripted palettes, as the last scan found them; static storage starts them zeroed.
     struct LiveScan {
@@ -322,130 +189,23 @@ public:
     bool declaresControlsAtPrepare() const override { return true; }
 
     /// Bind the global controls: power, brightness, relays, palette and the multicore split.
-    void defineControls() override {
-        controls_.addControl("on", on);   // master power: first so it renders at the top of the card
-        // A deviceModel fills this in, the same way it fills in the LED pins.
-        controls_.addText("relayPins", relayPins, sizeof(relayPins));
-        controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
-        controls_.addControl("brightness", brightness, 0, 255);
-        /// Blink the lights for five seconds, so this device is found by looking.
-        /// @guide Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details.
-        controls_.addButton("identify");
-        // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, never a brightness change.
-        if (!live_.scanned) refreshLivePalettes();
-        // Published here too, so a saved palette name resolves when the file is applied, before setup.
-        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
-        // Sized from THIS instance's scan: defineControls also runs before prepare has published.
-        controls_.addPalette("palette", palette, mm::paletteOptions,
-                             static_cast<uint8_t>(live_.count + mm::palettes::kCount));
-        controls_.setPersistLabel(controls_.count() - 1);   // saved by name, which survives a script added before it
-        // An EDITOR, not a second selector: `palette` owns the choice, so the two cannot disagree.
-        controls_.addFilePath("paletteScript", paletteScript_, sizeof(paletteScript_),
-                              moonlive::kPalettePick);
-        controls_.setHidden(controls_.count() - 1, !LivePalettes::isLive(palette));
-        controls_.setReadOnly(controls_.count() - 1, true);   // the selector is `palette`, above
-        // And the script's own controls, which only exist while one is running.
-        if (LivePalettes::isLive(palette)) paletteScriptModule_.publishControls(controls_);
-        // Only where it can do something: a rig of LED strips has no aim to hold.
-        controls_.addControl("motionHold", motionHold, 0, 240);
-        controls_.setHidden(controls_.count() - 1, !fixtureChannels().movable());
-        controls_.addControl("multicore", multicore);   // render↔encode split on/off (see the member's doc)
-        controls_.setAdvanced(controls_.count() - 1);   // a tuning knob, not a user setting
-        // How long core 0 waited at the frame boundary; a large value means core 0 idles.
-        controls_.addReadOnly("renderWait", renderWaitStr_, sizeof(renderWaitStr_));
-        controls_.setHidden(controls_.count() - 1, !multicore);
-        controls_.setAdvanced(controls_.count() - 1);
-        MoonModule::defineControls();  // cascade to driver children (each owns its fixture/whiteMode)
-    }
+    void defineControls() override;
 
     /// React to a control change: re-bake the LUTs (no pipeline realloc, so the slider stays fluent), resolve a palette, drive the relay.
-    void onControlChanged(const char* controlName) override {
-        if (std::strcmp(controlName, "identify") == 0) {
-            identifying_ = true;
-            identifyAt_ = platform::millis();
-            return;   // tick20ms blinks it
-        }
-        if (std::strcmp(controlName, "palette") == 0) {
-            if (LivePalettes::isLive(palette)) {
-                // The script fills the entries every frame, so there is nothing to expand here.
-                mm::formatTo(paletteScript_, sizeof(paletteScript_), "%s",
-                              LivePalettes::nameAt(LivePalettes::sourceIndex(palette)));
-                attachPaletteScript();
-            } else {
-                detachPaletteScript();
-                Palettes::setActive(LivePalettes::sourceIndex(palette));
-            }
-            rebuildControls();   // the editor and the script's controls appear or disappear with it
-            return;
-        }
-        if (std::strcmp(controlName, "paletteScript") == 0) {
-            if (paletteScript_[0]) {
-                attachPaletteScript();
-            } else {
-                // Clearing the name hands the palette back to the built-in select.
-                detachPaletteScript();
-                Palettes::setActive(palette);
-            }
-            rebuildControls();              // the compile re-derives the script's own controls
-            return;
-        }
-        if (std::strcmp(controlName, "multicore") == 0) {
-            // Re-derive the schema, so the renderWait row appears and disappears with the switch.
-            rebuildControls();
-            return;
-        }
-        if (std::strcmp(controlName, "on") == 0 ||
-            std::strcmp(controlName, "brightness") == 0) {
-            rebuildAllCorrections();
-        }
-        // A state change, not a per-frame one: a mechanical relay would wear out at frame rate.
-        if (std::strcmp(controlName, "on") == 0 || std::strcmp(controlName, "brightness") == 0 ||
-            std::strcmp(controlName, "relayPins") == 0) {
-            applyRelay();
-        }
-    }
+    void onControlChanged(const char* controlName) override;
+    /// The `palette` select changed: start the chosen script or hand back to the built-in gradient.
+    void onPaletteChanged();
+    /// The `paletteScript` editor changed: compile the named script, or an empty name hands back to the select.
+    void onPaletteScriptChanged();
 
     /// Drive the power relay: closed while `on` and brightness is above zero, open otherwise, so a WLED-style slider at 0 reads as off.
-    void applyRelay() {
-        const bool closed = on && brightness > 0;
-        // Each call judges the list afresh, so a warning a mid-edit list left goes once the list is fixed or cleared.
-        if (showingRelayProblem_) { setStatus(""); showingRelayProblem_ = false; }
-        // Release a pin the user cleared, or it stays asserted on a GPIO nothing owns.
-        if (!relayPins[0]) {
-            for (uint8_t i = 0; i < lastRelayCount_; i++)
-                platform::gpioWrite(static_cast<uint8_t>(lastRelayPins_[i]), false);
-            lastRelayCount_ = 0;
-            return;
-        }
-        uint16_t pins[kMaxRelays] = {};
-        uint8_t n = 0;
-        // Reporting the parse error is the difference between a typo'd list and a working one.
-        if (const char* err = parsePinList(relayPins, pins, kMaxRelays, n)) {
-            setStatus(err, Severity::Warning);
-            showingRelayProblem_ = true;
-            // Release what the OLD list held, or a typo mid-edit leaves the relays asserted.
-            for (uint8_t i = 0; i < lastRelayCount_; i++)
-                platform::gpioWrite(lastRelayPins_[i], false);
-            lastRelayCount_ = 0;
-            return;
-        }
-        // Release the pins LEAVING the list: shrinking "12,13" to "12" must not strand 13.
-        for (uint8_t i = 0; i < lastRelayCount_; i++) {
-            bool stillListed = false;
-            for (uint8_t j = 0; j < n; j++)
-                if (lastRelayPins_[i] == static_cast<uint8_t>(pins[j])) { stillListed = true; break; }
-            if (!stillListed) platform::gpioWrite(lastRelayPins_[i], false);
-        }
-        for (uint8_t i = 0; i < n; i++) {
-            // An input-only pin refuses the write, and the seam says so rather than going quiet.
-            if (!platform::gpioWrite(static_cast<uint8_t>(pins[i]), closed)) {
-                setStatus("relay pin cannot drive an output", Severity::Warning);
-                showingRelayProblem_ = true;
-            }
-            lastRelayPins_[i] = static_cast<uint8_t>(pins[i]);
-        }
-        lastRelayCount_ = n;
-    }
+    void applyRelay();
+    /// Open every pin the last list held and forget the list.
+    void releaseRelays();
+    /// Open the pins of the last list that the new list `pins` drops.
+    void releaseLeavingRelays(std::span<const uint16_t> pins);
+    /// Write `closed` to each of `pins`, and remember them as the list in force.
+    void driveRelays(std::span<const uint16_t> pins, bool closed);
 
     /// Relays one device can carry; four is the most any board in the catalog wires.
     static constexpr uint8_t kMaxRelays = 8;
@@ -518,122 +278,22 @@ public:
     }
 
     /// Count the rig's time powered off, and park it once the hold expires; the hold changes what is transmitted, so it writes the flag rather than rebuilding.
-    void updateMotionHold() MM_NONBLOCKING {
-        // Read from each driver's ALREADY-RESOLVED correction: re-resolving costs a LUT per child.
-        bool movable = false;
-        for (uint8_t i = 0; i < childCount() && !movable; i++) {
-            if (child(i)->role() != ModuleRole::Driver || !child(i)->enabled()) continue;
-            const Correction& c = static_cast<DriverBase*>(child(i))->correction();
-            movable = c.offPan != Correction::kAbsent || c.offTilt != Correction::kAbsent;
-        }
-        if (movableNow_ != movable) {
-            movableNow_ = movable;
-            rebuildControls();
-        }
-        if (on) {
-            offSeconds_ = 0;
-        } else if (offSeconds_ < 0xFFFF) {
-            offSeconds_++;
-        }
-        // 0 means never park: keep tracking however long the power is off, as a desk does.
-        const bool held = !on && motionHold != kMotionHoldNever && offSeconds_ >= motionHold;
-        for (uint8_t i = 0; i < childCount(); i++) {
-            if (child(i)->role() != ModuleRole::Driver) continue;
-            static_cast<DriverBase*>(child(i))->setMotionHeld(held);
-        }
-    }
+    void updateMotionHold() MM_NONBLOCKING;
+    /// Whether any enabled driver's resolved correction has a pan or tilt offset.
+    bool anyMovableDriver() const MM_NONBLOCKING;
 
     /// Re-resolve every driver's correction without re-preparing the tree, since prepare() would tear down an RMT and blank the strip for a tick.
-    void rebuildAllCorrections() {
-        for (uint8_t i = 0; i < childCount(); i++) {
-            if (child(i)->role() != ModuleRole::Driver) continue;
-            static_cast<DriverBase*>(child(i))->rebuildCorrection(effectiveBrightness());
-        }
-    }
+    void rebuildAllCorrections();
 
     /// Start the saved palette, publish the fixture layout, and close the relay for `on`; the scripted palettes were listed when the controls were bound.
-    void setup() override {
-        // The saved choice starts as picking it does, a script palette compiled, since at boot nothing reacts to the value.
-        onControlChanged("palette");
-        dark_ = MoonModule::safeMode();
-        // Every lit device boot, and never a host process or a test, which start at the set level.
-        softStarting_ = platform::bootRecord().booted && !dark_;
-        softStartBegun_ = false;
-        MoonModule::setup();
-        passBufferToDrivers();           // seeds each driver's correction via rebuildCorrection()
-        // HERE rather than in prepare: every setup runs first, and a Layer sizes its buffer there.
-        publishFixtureChannels();
-        // Without this a relay board comes up dark until something toggles the control.
-        applyRelay();
-    }
+    void setup() override;
 
     /// Size the composition buffer, engage or drop the core-1 split, publish the summary.
-    void prepare() override {
-        // A rescan here picks up a script written since the last one.
-        const uint8_t hadLive = live_.count;
-        refreshLivePalettes();
-        LivePalettes::set(live_.ptrs, live_.tags, live_.count, live_.present);
-        // A CHANGED count needs the control rebuilt: `palette`'s maximum is baked at define time.
-        if (live_.count != hadLive) rebuildControls();
-        // The top-level Effects, found by type when nothing injected a source, so a tree built from a document needs no wiring.
-        if (!effects_ && !layer_)
-            if (Scheduler* s = Scheduler::instance()) effects_ = static_cast<Effects*>(s->topOfType("Effects"));
-        // Re-resolved from the bound container, so an API-rebuilt Layer is picked up here.
-        if (effects_) layer_ = effects_->activeLayer();
-        // A failed allocation leaves data_ null, which tick() checks before blending.
-        Layer* const out = effects_ ? effects_->firstEnabledLayer() : layer_;
-        const uint8_t enabled = effects_ ? effects_->enabledLayerCount() : (layer_ ? 1 : 0);
-        const bool needOutput = out && (enabled > 1 || out->lut().hasLUT());
-
-        // The split wants a buffer even in the identity case: core 1 reads it while core 0 renders.
-        publishFixtureChannels();
-
-        const bool haveLights = out && out->physicalLightCount() > 0;
-        const bool splitWanted = multicore && anyDriver() && haveLights;
-        const bool sameConfig = splitWanted == splitWanted_ && sourceShape() == preparedShape_;   // a retry of the configuration the last prepare saw
-        splitWanted_ = splitWanted;
-        const bool wantOutput = (needOutput && haveLights) || splitWanted;
-
-        // A wedged worker may still be READING the buffer, so tear the task down before freeing.
-        if (!quiesceEncode()) stopEncodeTask();
-        if (wantOutput) {
-            if (!outputBuffer_.allocate(out->physicalLightCount(), out->channelsPerLight())) {
-                std::printf("  DEGRADE  Drivers::outputBuffer_ allocate failed for %u lights\n",
-                            static_cast<unsigned>(out->physicalLightCount()));
-                outputBuffer_.free();   // leaves data_=nullptr, bytes()=0
-            }
-        } else {
-            outputBuffer_.free();
-        }
-        setDynamicBytes(outputBuffer_.heap());
-        wiredLast_ = false;   // a reallocated output holds no frame yet
-        // Read before a failed worker gives an identity layer's buffer back, which a retry claims again; a configuration whose buffer fit keeps fitting through one refusal, so a passing shortage leaves the retry running.
-        splitBufferFits_ = outputBuffer_.data() != nullptr || (sameConfig && splitBufferFits_);
-
-        // Decided from the alloc OUTCOME, so a board that cannot claim the buffer runs inline.
-        const bool shouldSplit = splitWanted && outputBuffer_.data();
-        if (shouldSplit && !renderSplitActive_) {
-            renderSplitActive_ = true;
-            startEncodeTask();                 // spawns the task (at boot it parks in waitNotify)
-            // An identity layer needs the shared buffer only for the split, so the inline path gives its memory and its copy back.
-            if (!renderSplitActive_ && !needOutput) {
-                outputBuffer_.free();
-                setDynamicBytes(outputBuffer_.heap());
-            }
-        } else if (!shouldSplit && renderSplitActive_) {
-            stopEncodeTask();                  // drains core 1 before we leave split mode
-            renderSplitActive_ = false;
-            // Turning multicore off is a choice: the old split's stall warning must not outlive it.
-            if (encodeStalled_) { encodeStalled_ = false; setStatus("", Severity::Status); }
-        }
-        // One POD, overwritten in place, pulled by the domain-neutral consumers.
-        summary_.lightCount = out ? static_cast<uint32_t>(out->physicalLightCount()) : 0;
-        summary_.channelsPerLight = out ? out->channelsPerLight() : 3;
-        seat_.claim();         // first live Drivers wins (claim-if-empty; one exists in practice)
-        outputSeat_.claim();   // and is the light output core reads
-        passBufferToDrivers();
-        preparedShape_ = sourceShape();
-    }
+    void prepare() override;
+    /// Rescan the palette scripts, publish them, and rebuild the controls when their count changed.
+    void rescanLivePalettes();
+    /// Find the Effects container when none was bound, and re-resolve the source Layer from it.
+    void bindSource();
 
     /// Prepare again when a rebuild of one layer changed what this container sized from; a rebuild of the tree already did.
     void onTreePrepared() override {
@@ -713,6 +373,7 @@ private:
 
     /// The core-1 encode worker; the boundary is one shared buffer, and core 0 waits on encodeDone_ before overwriting it.
     platform::WorkerTask encodeTask_{};
+    platform::Signal encodeDoneSignal_{};   // the encode task gives it with encodeDone_, so the render loop sleeps rather than spins
     std::atomic<bool> encodeDone_{true};   // core 1 sets true when its encode finishes; core 0 waits it
     std::atomic<bool> encodeStop_{false};  // stop flag the worker observes via a woken waitNotify; atomic, not volatile, which is no thread primitive
     bool renderSplitActive_ = false;   // the split is engaged (task spawned, boundary in effect)
@@ -732,70 +393,20 @@ private:
     char renderWaitStr_[32] = {};
 
     /// The core-1 body: wait for a notify, tick every driver, signal done. One rule with no per-driver opt-out: the whole output stage lives on core 1 while it is on.
-    void runEncodeLoop() {
-        // The subscription is per-task: feeding another task's is rejected and floods the log.
-        platform::taskWdtSubscribe();
-        while (!encodeStop_.load(std::memory_order_acquire)) {
-            if (!platform::waitNotify(encodeTask_, 100)) { platform::taskWdtReset(); continue; }
-            if (encodeStop_.load(std::memory_order_acquire)) break;
-            // Every Driver child, through core's one gate and timing loop, now on core 1.
-            tickChildren(&MoonModule::tick, RoleFilter::Only, ModuleRole::Driver, false);   // core 1: core 0's own time leaves this out
-            platform::taskWdtReset();
-            encodeDone_.store(true, std::memory_order_release);
-        }
-        platform::taskWdtUnsubscribe();   // leave the WDT clean before the task exits (no dangling entry)
-    }
+    void runEncodeLoop();
     static void encodeTrampoline(void* self) { static_cast<Drivers*>(self)->runEncodeLoop(); }
 
     /// The longest wait between two attempts to re-engage the split, and how long it stays engaged before the next stall retries after 1 s again.
     static constexpr uint8_t kSplitRetryCapS = 64;
     /// Re-engage a split that is off while its buffer fits, through Drivers' own prepare on a back-off, so one stall or one refused worker costs the second core only until the next attempt.
-    void retrySplit() MM_NONBLOCKING {
-        if (!splitWanted_ || !splitBufferFits_) { splitRetryDelayS_ = 1; splitRetryInS_ = 0; splitEngagedS_ = 0; return; }
-        if (renderSplitActive_) {
-            splitRetryInS_ = 0;
-            if (splitRetryDelayS_ > 1 && ++splitEngagedS_ >= kSplitRetryCapS) { splitRetryDelayS_ = 1; splitEngagedS_ = 0; }
-            return;
-        }
-        splitEngagedS_ = 0;
-        if (++splitRetryInS_ < splitRetryDelayS_) return;
-        splitRetryInS_ = 0;
-        if (splitRetryDelayS_ < kSplitRetryCapS) splitRetryDelayS_ *= 2;
-        if (Scheduler* s = Scheduler::instance()) s->requestPrepareSelf(this);   // prepare decides, at the frame boundary
-    }
+    void retrySplit() MM_NONBLOCKING;
 
     /// How long to wait for a wedged worker before disengaging the split, slower but lit; far above any real encode (~50 ms at 16K lights).
     static constexpr uint32_t kQuiesceTimeoutMs = 500;
-    bool quiesceEncode() {
-        if (!renderSplitActive_) return true;
-        const uint32_t deadline = platform::millis() + kQuiesceTimeoutMs;
-        while (!encodeDone_.load(std::memory_order_acquire)) {
-            if (platform::millis() > deadline) {
-                setStatus("encode worker stalled - running single-core", Severity::Warning);
-                encodeStalled_ = true;        // remember, so recovery can clear the warning
-                renderSplitActive_ = false;   // stop notifying it; drivers tick inline from here
-                return false;
-            }
-            platform::yield();
-        }
-        // Clear a previous stall warning: a status that cannot go away says nothing about now.
-        if (encodeStalled_) {
-            encodeStalled_ = false;
-            setStatus("", Severity::Status);
-        }
-        return true;
-    }
+    bool quiesceEncode();
 
     /// Whether any enabled driver child exists, which is what the split engages for; with none there is nothing for core 1 to do, so no task and no buffer.
-    bool anyDriver() const {
-        for (uint8_t i = 0; i < childCount(); i++) {
-            MoonModule* c = child(i);
-            if (c->role() != ModuleRole::Driver) continue;   // skips FixtureProfilesModule (Generic)
-            if (c->respectsEnabled() && !c->enabled()) continue;
-            return true;
-        }
-        return false;
-    }
+    bool anyDriver() const;
 
 public:
     /// True while the render and encode split is engaged, for diagnostics and tests.
@@ -817,20 +428,9 @@ public:
 
 private:
     /// Spawn the core-1 encode task, degrading to inline when it cannot be created; private, so the task never changes while renderSplitActive_ disagrees.
-    void startEncodeTask() {
-        if (!renderSplitActive_ || encodeTask_.impl) return;
-        encodeStop_.store(false, std::memory_order_release);
-        encodeDone_.store(true, std::memory_order_release);
-        // 5 KB: drivers own their DMA buffers and a network driver sends from its own task, so the encode loops stay light, measured at 1 to 1.4 KB.
-        if (!platform::spawnPinnedTask(encodeTask_, "mmEncode", &encodeTrampoline, this, 5120, 5, 1))
-            renderSplitActive_ = false;   // couldn't create the task → inline path
-    }
+    void startEncodeTask();
     /// Stop and join the core-1 task, draining its encode before any buffer it reads is freed.
-    void stopEncodeTask() {
-        if (!encodeTask_.impl) return;
-        encodeStop_.store(true, std::memory_order_release);
-        platform::stopPinnedTask(encodeTask_);   // signals + wakes + joins (worker exits its loop)
-    }
+    void stopEncodeTask();
 
     /// What prepare() decides the output buffer and the drivers' windows from: the first layer, how many layers composite, and that layer's size and mapping.
     struct SourceShape {
@@ -843,36 +443,15 @@ private:
         bool operator==(const SourceShape&) const = default;
     };
     SourceShape preparedShape_;
-    SourceShape sourceShape() const {
-        SourceShape s;
-        s.out = effects_ ? effects_->firstEnabledLayer() : layer_;
-        s.layers = effects_ ? effects_->enabledLayerCount() : (layer_ ? 1 : 0);
-        if (s.out) {
-            s.mapped = s.out->lut().hasLUT();
-            s.lights = s.out->physicalLightCount();
-            s.count = outputBuffer_.data() ? 0 : s.out->buffer().count();   // the drivers size from it only when they read it directly
-            s.channels = s.out->channelsPerLight();
-        }
-        return s;
-    }
+    SourceShape sourceShape() const;
+    /// Whether the composition needs its own output buffer: several layers composite, or the first one is mapped.
+    static bool needsOutput(const SourceShape& shape);
+    /// Size the output buffer for `shape` when `want`, free it otherwise, and degrade visibly when the allocation fails.
+    void allocateOutput(const SourceShape& shape, bool want);
+    /// Engage or drop the core-1 split to match `shouldSplit`, giving an identity layer's buffer back when the inline path needs none.
+    void settleSplit(bool shouldSplit, bool needOutput);
 
-    void passBufferToDrivers() {
-        // Keyed off the buffer prepare() allocated, so ONE decision rather than two that disagree.
-        Layer* const out = effects_ ? effects_->firstEnabledLayer() : layer_;
-        Buffer* buf = out ? (outputBuffer_.data() ? &outputBuffer_ : &out->buffer())
-                          : nullptr;
-        source_ = buf;
-        for (uint8_t i = 0; i < childCount(); i++) {
-            // The non-driver child has no source buffer or correction to wire.
-            if (child(i)->role() != ModuleRole::Driver) continue;
-            auto* drv = static_cast<DriverBase*>(child(i));
-            drv->setSourceBuffer(buf);
-            // Geometry uses the fallback layer, so a preview keeps its coordinates while disabled.
-            drv->setLayer(layer_);
-            // Each driver bakes global × its own brightness into its own LUT.
-            drv->rebuildCorrection(effectiveBrightness());
-        }
-    }
+    void passBufferToDrivers();
 };
 
 } // namespace mm

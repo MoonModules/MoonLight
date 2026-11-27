@@ -60,6 +60,10 @@ public:
 
     /// Recompute the heap total for the module readout; a test with no alloc site asks for it.
     void publishHeapBytesForTest() { publishHeapBytes(); }
+    /// The bus's DMA buffers: its frame buffers, or its ring and pad.
+    size_t dmaBytes() const override { return peripheral_ ? peripheral_->busHeapBytes() : 0; }
+    /// The bus's headroom, where its DMA measures one.
+    std::optional<uint8_t> headroom() const override { return peripheral_ ? peripheral_->busHeadroom() : std::nullopt; }
 
     /// Builds one backend: `#if`-gated per chip in main.cpp, so the select offers the linked-and-supported subset.
     using PeripheralFactory = LedPeripheral* (*)();

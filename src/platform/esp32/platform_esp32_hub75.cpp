@@ -65,6 +65,7 @@
 #endif
 #include "esp_rom_gpio.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "esp_timer.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -170,7 +171,7 @@ void destroyState(Hub75State* st) {
         parlio_del_tx_unit(st->parlio);
     }
 #endif
-    if (st->frame) heap_caps_free(st->frame);
+    if (st->frame) freeCaps(st->frame);
     delete st;
 }
 
@@ -371,7 +372,7 @@ bool hub75Init(Hub75Handle& h, Hub75Backend backend, const Hub75Pins& pins,
     }
 
     // Internal transfer-capable memory and only that: @xref{the-frame-must-be-internal-memory|why external fails at this clock}. A single panel at this depth is a few tens of kilobytes and four are a few times that, both internal-sized.
-    st->frame = static_cast<uint8_t*>(heap_caps_calloc(1, frameBytesPre, MALLOC_CAP_DMA));
+    st->frame = static_cast<uint8_t*>(callocCaps(frameBytesPre, MALLOC_CAP_DMA));
     if (!st->frame) {
         g_lastError = "the panel frame does not fit in memory: lower the bit depth";
         destroyState(st);

@@ -312,7 +312,7 @@ def test_the_commit_checks_fold_into_one_subprocess_per_trigger_group_each_withi
     # Every check keeps its id, so a run record and a link keyed on it still find it.
     ids = [s["id"] for pid in ["commit", *groups.values(), "host-tests"] for s in processes[pid]["steps"] if "run" in s["when"]]
     assert sorted(ids) == sorted(["hook", "specs", "prose", "commit", "help", "docs", "docgen", "taglines", "code", "build-host", "build-tests", "test", "scenarios",
-                                  "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv", "backlog"])
+                                  "esp32-fresh", "esp32-fresh-moonbase", "no-jit", "kpi", "js", "devices", "python", "firmwares", "improv", "backlog", "plans"])
     over = [w for w in gen_moonwalk.size_warnings(processes) if w[0] == "document-commit"]
     assert over == []   # the parent, each group and the stage within their caps
 

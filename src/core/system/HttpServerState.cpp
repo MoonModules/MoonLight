@@ -122,6 +122,11 @@ bool HttpServerModule::Subscription::operator==(const Subscription& o) const {
     return true;
 }
 
+void HttpServerModule::flagResyncCovering(const MoonModule* mod) {
+    for (int i = 0; i < kMaxWsClients; i++)
+        if (subs_[i].covers(mod)) resyncClient_[i] = true;
+}
+
 bool HttpServerModule::anyClientCovers(const MoonModule* mod) const {
     // Every slot's subscription, live or not: the uplink poll clears a slot's subscription once its client is gone.
     for (const auto& sub : subs_)
@@ -160,17 +165,45 @@ bool HttpServerModule::visitTree(MoonModule* mod, uint16_t& k, Fn& fn) {
     return true;
 }
 
+// One control's leaf value, as the full state shows it.
+static void writeLeafValue(JsonSink& s, const ControlDescriptor& c) {
+    if (c.type == ControlType::Password) writeObfuscatedPassword(s, static_cast<const char*>(c.ptr));
+    else writeControlValue(s, c);
+    // A list's detail rides beside its value, a sibling member of the patch entry, so the hash covers both and a changed detail is sent.
+    if (c.type == ControlType::List) writeListDetail(s, c);
+}
+
 template <class Fn, class Stop>
-bool HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, Stop&& stop) {
+bool HttpServerModule::writeListLeaf(MoonModule* mod, const ControlDescriptor& c, const char* path, Fn& fn, Stop& stop, ListCursor& cur) {
+    const auto* src = static_cast<const ListSource*>(c.ptr);
+    const uint32_t pathHash = fnv1a(path, std::strlen(path));
+    // A cursor left on another leaf, whose module the walk skipped since, starts this one afresh.
+    if (cur.row != 0 && cur.path != pathHash) { cur.row = 0; cur.part.clear(); }
+    cur.path = pathHash;
+    if (cur.row == 0) cur.part.append("[");
+    // At least one row per call, so every tick moves the list on.
+    bool wrote = false;
+    for (const ListRow n = src ? src->listRowCount() : 0; cur.row < n; cur.row++, wrote = true) {
+        if (wrote && stop()) return false;
+        if (cur.row > 0) cur.part.append(",");
+        src->writeListRow(cur.part, cur.row);
+    }
+    cur.part.append("]");
+    writeListDetail(cur.part, c);   // the detail rides beside the value, as the whole leaf writes it
+    fn(mod, pathHash, fnv1a(cur.part.data(), cur.part.size()), path, cur.part);
+    cur.row = 0;
+    cur.part.clear();
+    return true;
+}
+
+template <class Fn, class Stop>
+bool HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, Stop&& stop, ListCursor* list) {
     char path[80];
-    // The walk runs every second, so a value goes into the module's own small buffer. Only one that outgrows it, a list or a long text, goes into a heap sink. A heap block per leaf fragments a small heap.
+    // The walk runs every second, so a value goes into the module's own small buffer and spills into a block only when it outgrows it, a list or a long text, written once either way. A heap block per leaf fragments a small heap.
     auto leaf = [&](auto&& write) {
-        JsonSink vs(leafValue_, sizeof(leafValue_));
+        JsonSink vs(leafValue_, sizeof(leafValue_), JsonSink::Spill{});
         write(vs);
-        if (!vs.overflowed()) { fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs); return; }
-        JsonSink big;
-        write(big);
-        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(big.data(), big.size()), path, big);
+        fn(mod, fnv1a(path, std::strlen(path)), fnv1a(vs.data(), vs.size()), path, vs);
     };
     static const char* sevStr[] = {"status", "warning", "error"};
     auto& ctrls = mod->controls();
@@ -199,12 +232,10 @@ bool HttpServerModule::visitOwnLeaves(MoonModule* mod, Fn&& fn, uint16_t& next, 
             default: {   // each control's value
                 auto& c = ctrls[static_cast<uint8_t>(next - kHeaderLeaves)];
                 std::snprintf(path, sizeof(path), "%s/%s", mod->name(), c.name);
-                leaf([&](JsonSink& s) {
-                    if (c.type == ControlType::Password) writeObfuscatedPassword(s, static_cast<const char*>(c.ptr));   // as the full state shows it
-                    else writeControlValue(s, c);
-                    // A list's detail rides beside its value, a sibling member of the patch entry, so the hash covers both and a changed detail is sent.
-                    if (c.type == ControlType::List) writeListDetail(s, c);
-                });
+                // A list on the second's walk goes a row at a time, so a long one spreads over ticks: the walk resumes at this leaf.
+                const bool byRow = list && c.type == ControlType::List;
+                if (byRow && !writeListLeaf(mod, c, path, fn, stop, *list)) return false;
+                if (!byRow) leaf([&](JsonSink& s) { writeLeafValue(s, c); });
             }
         }
     }
@@ -286,6 +317,8 @@ void HttpServerModule::pushSoonPatch() {
 template <class Walk>
 void HttpServerModule::collectPatch(PatchBuild& b, Walk&& walk) {
     walk([&](const MoonModule* mod, uint32_t ph, uint32_t vh, const char* path, JsonSink& vs) {
+        // A value cut short by memory is not valid JSON: every client takes its whole state again rather than a patch that breaks it.
+        if (vs.overflowed()) { flagResyncCovering(mod); return; }
         LeafHash* h = findLeaf(ph, b.next);
         if (h && h->value == vh) return;              // unchanged: the common case, emit nothing
         const bool opens = !b.slices || patchSlices_[b.slices - 1].mod != mod;
@@ -359,10 +392,14 @@ void HttpServerModule::advanceValueWalk() {
 void HttpServerModule::startValueWalk() {
     walk_ = {true, 0, 0};
     walkPatch_.next = 0;
+    walkList_.row = 0;
+    walkList_.part.clear();
 }
 
 void HttpServerModule::endValueWalk() {
     walk_.active = false;
+    walkList_.row = 0;
+    walkList_.part.clear();
     walkPatch_.entries.clear();
     walkPatch_.slices = 0;
     walkPatch_.changed = 0;
@@ -381,7 +418,7 @@ bool HttpServerModule::stepValueWalk(Stop&& stop) {
         forEachStateModule([&](MoonModule* mod, uint16_t k) {
             if (k < walk_.module) return true;    // walked in an earlier tick
             walk_.module = k;
-            if (anyClientCovers(mod) && !visitOwnLeaves(mod, fn, walk_.leaf, halt)) { done = false; return false; }
+            if (anyClientCovers(mod) && !visitOwnLeaves(mod, fn, walk_.leaf, halt, &walkList_)) { done = false; return false; }
             walk_.leaf = 0;
             return true;
         });

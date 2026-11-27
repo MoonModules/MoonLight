@@ -38,7 +38,7 @@ namespace mm {
 ///
 /// `deviceName` is the one network identity, behind mDNS, the SoftAP SSID and DHCP. It is coerced to a valid hostname every tick, so a rename propagates within one tick.
 ///
-/// `deviceModel` is the physical board from the device-model catalog, pushed by tooling since a device cannot identify its own hardware; a validator on the control checks every write path.
+/// `deviceModel` is the physical board from the device-model catalog, set by the installer, by MoonDeck or from this card's Choose device model, since a device cannot identify its own hardware; the card's picker lists the models of the device's own firmware and applies one's defaults on a second press. A validator on the control checks every write path.
 class SystemModule : public MoonModule {
 public:
     /// Adopt the scheduler, whose timings the vitals read.

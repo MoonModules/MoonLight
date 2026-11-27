@@ -69,6 +69,25 @@ Four domain-neutral services let several controllers act as one installation. Th
 - **Shared controls**: a group's members follow each other's control surface by membership alone ([SharedControls.h](../../../src/core/system/SharedControls.h)): a slot's change travels as the parameter it drives, by name, value and stamp, the newest stamp winning on every member, and an effects preset travels whole, in chunks every member takes from the group's multicast and repairs on request, applying at the fleet time it carries. Only what an effects preset may set crosses. [OSC](../../moonmodules/core/services.md#osc) stays for a console or a show controller, which a group's name in its `receivers` reaches. Live.
 - **Fleet clock**: one time base for every device on the network, NTP's four-timestamp exchange with the lowest live device as the reference ([FleetClock.h](../../../src/core/system/FleetClock.h), [ClockSync.h](../../../src/core/util/ClockSync.h)), so boards with the same controls render the same moment and a group's changes apply together. Live.
 
+### Messages between devices
+
+Each kind of message rides the protocol the textbook gives it, and only the rules on top are designed:
+
+| Kind | Loss | Protocol |
+|--|--|--|
+| Streams: light, audio, video | acceptable, the latest wins | Art-Net, DDP, E1.31, the MoonLight audio sync format, each its own |
+| Group state: preset, controls, clock, roles | repaired by the next send, a preset's missing chunks on request | OSC on one well-known multicast address |
+| Requests: summary, flows, identify, firmware | must arrive | REST over TCP, every peer answering cross-origin |
+| Discovery | acceptable | presence, ArtPoll, SSDP, mDNS |
+
+**State, not commands.** A group's state is published as absolute values on a change and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice leaves the state as it was, so a swarm needs no acknowledgements and a value costs one multicast send, a preset one per chunk. REST serves what is no state: an update, identify, reading a peer.
+
+**No forwarding, and coalescing.** A value received from the group is applied and stays there, so no loop forms; a device's repeats carry every value its group holds, whoever wrote it, which is how a member that joins later hears a value whose writer is offline. A slider drag publishes at most about 20 times a second, the latest value winning.
+
+**Listen always, ask on demand.** Listening costs the packets that arrive anyway and stays on. Asking costs traffic: ArtPoll and SSDP probes and the REST reads of peers run only while something reads them, a Devices card open in a browser or a module that needs them, the pull model [Demand](../../../src/core/module/Demand.h) follows.
+
+**Each device reports only itself.** A board on a switched network sees broadcast, the multicast groups it joins and its own unicast, and traffic between two others stays out of its view, so every device reports its own flows and the page merges what its peers report. **Swarm scale:** hundreds of devices share one network, so every cost grows linearly at most: a device hears one presence packet per peer a period, a group change goes out once by multicast, and the page reads peers with a bounded number of requests in flight.
+
 What the synced clock is *for* is a domain question; the light domain's use of it (synced animation across a wall) is in [Multi-device sync](moonlight.md#multi-device-sync).
 
 ## Device name: one identity, every network name derives from it
@@ -124,9 +143,13 @@ Everything else asks for PSRAM first: a module through `MoonModule`'s `operator 
 
 **A board without PSRAM** runs the same calls, which fall back to internal RAM. Its network buffers then share that RAM, so it holds no floor, and the send back-pressure is what keeps an open UI on a weak link from exhausting it. The measurements are in [performance.md](../../reference/performance.md#internal-ram).
 
+### The platform boundary
+
 **Platform boundary (hard rule).** All `#ifdef`, `#if defined`, platform-specific `#include`s, and hardware API calls live exclusively in `src/platform/`. Everything outside `src/platform/` compiles on every target without modification. Compile-time platform branching uses `if constexpr` on `platform_config.h` flags, never a preprocessor `#ifdef`. **Domain boundary.** A file in `src/core` includes nothing from `src/light`: core declares an interface, and the light domain implements and registers it.
 
-The platform boundary is a rule of [the code check](../../reference/tests.md#check_code), at zero, and a crossing raises the count the ratchet refuses. The domain boundary is the build's: core compiles through an include root that holds no `light/`, every core header on its own. A crossing fails the test build on macOS, Linux and CI. An include path never steps through `..`, a rule of the code check, so that root is the only way in. `LightOutput` is the domain boundary's shape: the light domain's `Drivers` implements it, and the WLED shim, MQTT and MoonStats read the device shape and the palettes through it.
+The platform boundary is a rule of [the code check](../../reference/tests.md#check_code), at zero, and a crossing raises the count the ratchet refuses. The domain boundary is the build's: core compiles through an include root that holds no `light/`, every core header on its own. A crossing fails the test build on macOS, Linux and CI. The platform library compiles through the same root, so a platform file that includes light fails the host build too. An include path names its header from `src/` rather than through `..`, a rule of the code check, so that root is the only way in. `LightOutput` is the domain boundary's shape: the light domain's `Drivers` implements it, and the WLED shim, MQTT and MoonStats read the device shape and the palettes through it.
+
+### The host platform
 
 **One host platform, four operating systems.** macOS, Windows, Linux and Android build the same `src/platform/host/`, each a `host-<os>-<arch>` program. Android compiles it with the NDK and runs it inside a small Kotlin app (`android/`): a foreground service enters it through `main_android.cpp`, as `main_host.cpp` enters it elsewhere, and lends it Android's service discovery as its mDNS responder (`host_mdns.h`). Each difference Bionic forces is a guard on `__ANDROID__` beside the `__APPLE__` and `_WIN32` ones, carrying its reason; the steps are [Running MoonLight on Android](../../reference/installing-on-android.md).
 

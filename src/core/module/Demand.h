@@ -16,6 +16,8 @@ namespace mm {
 ///
 /// The module's release, which every removal and every disable runs, turns it off, as it frees its buffers, so no reader forgets to. A change marks the provider, and the Scheduler tells it through `onDemandChanged` at the next frame boundary, where allocating is allowed: a release and a prepare in one frame, an effect replaced, settle once, and nothing switches on the render path.
 ///
+/// A feature earns a demand when it costs real CPU or RAM and often runs unread. A cheap one, or one its own consumer already gates (connected clients, an open socket, a configured pin, a one-a-second readout), stays as it is.
+///
 /// The provider then asks the Scheduler what the tree demands of it, a reference count over the modules, walked only on a change and never per frame. It counts again rather than adding up changes, so a demand placed before the provider exists still counts.
 class Demand : public ModuleResource {
 public:

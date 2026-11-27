@@ -67,7 +67,7 @@ add_executable(mm_tests
     unit/core/unit_DeviceGroup.cpp
     unit/core/unit_DevicesModule_growth.cpp
     unit/core/unit_DevicesModule_hue.cpp
-    unit/core/unit_TasksModule.cpp
+    unit/core/unit_TaskTable.cpp
     unit/core/unit_PinsModule.cpp
     unit/core/unit_WledPacket.cpp
     unit/core/unit_FilesystemModule_persistence.cpp
@@ -81,6 +81,8 @@ add_executable(mm_tests
     unit/core/unit_H264Bitstream.cpp
     unit/core/unit_AllocTracking.cpp
     unit/core/unit_HttpServerModule_apply.cpp
+    unit/core/unit_HttpServerModule_walk.cpp
+    unit/core/unit_HttpServerWled.cpp
     unit/core/unit_HttpServerModule_connections.cpp
     unit/core/unit_HttpServerModule_head.cpp
     unit/core/unit_HttpServerModule_sdcard.cpp
@@ -143,6 +145,7 @@ add_executable(mm_tests
     unit/core/unit_Scheduler_prepareScope.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_Scheduler_capacity.cpp
+    unit/core/unit_Scheduler_timing.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
     unit/core/unit_InstallationId.cpp
@@ -261,6 +264,7 @@ add_executable(mm_tests
     unit/light/unit_Palette.cpp
     unit/light/unit_WaveEffect.cpp
     unit/light/unit_FireEffect.cpp
+    unit/light/unit_CubeLayout.cpp
     unit/light/unit_GridLayout.cpp
     unit/light/unit_Rings241Layout.cpp
     unit/light/unit_SingleColumnLayout.cpp
@@ -362,9 +366,9 @@ if(MM_HUB75_GPIO_ENGINE)
         unit/core/unit_platform_hub75gpio_dump.cpp)
 endif()
 target_include_directories(mm_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(mm_tests PRIVATE mm_module_types mm_core mm_platform)
+target_link_libraries(mm_tests PRIVATE mm_module_types mm_light mm_core mm_platform)
 
-# A precompiled header: doctest and the standard headers most tests include, parsed once for the target rather than by every test object. doctest.h alone measured 249 s of a cold build's 815 s of compiler time (docs/work Plan-20261125, step 2). The project's own headers stay out of it, so a core edit leaves it as it is.
+# A precompiled header: doctest and the standard headers most tests include, parsed once for the target rather than by every test object. doctest.h alone measured 249 s of a cold build's 815 s of compiler time. The project's own headers stay out of it, so a core edit leaves it as it is.
 target_precompile_headers(mm_tests PRIVATE
     <cstdint> <cstdio> <cstring> <string> <vector> <algorithm> <memory> <filesystem> <thread>
     "${CMAKE_CURRENT_SOURCE_DIR}/doctest.h")
@@ -416,7 +420,7 @@ set_tests_properties(unit_tests PROPERTIES
 # The same shared type registry the app links (mm_module_types), so a scenario can name any module the firmware has: src/module_types.cpp carries the reason.
 add_executable(mm_scenarios scenario_runner.cpp)
 target_include_directories(mm_scenarios PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})   # src/, and test/ for the helpers named from it
-target_link_libraries(mm_scenarios PRIVATE mm_module_types mm_core mm_platform)
+target_link_libraries(mm_scenarios PRIVATE mm_module_types mm_light mm_core mm_platform)
 # A write_file step's `from` names a file in the repository, such as a shipped script.
 target_compile_definitions(mm_scenarios PRIVATE MM_REPO_ROOT="${CMAKE_SOURCE_DIR}")
 

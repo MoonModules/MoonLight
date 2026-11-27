@@ -40,6 +40,20 @@ struct InternalRamObject {
     static void operator delete(void* ptr) noexcept { free(ptr); }
 };
 
+/// Record what the system holds before MoonLight starts, and on a computer the thread it starts on, once, at the top of mm_main.
+void recordSystemHeap();
+/// What the system took before MoonLight started, less the task stacks then running, which the task snapshot counts: total and the PSRAM part, 0 where the platform cannot tell.
+void systemHeap(size_t& total, size_t& psram);
+/// One memory type's heap read in one pass: its size, what is free, its largest free block, and its block headers (used less allocated).
+struct HeapType { size_t total = 0, free = 0, largest = 0, overhead = 0; };
+/// Internal RAM's and PSRAM's heap, one walk of each, so a sheet reads them together; PSRAM's zeros where the board has none, and zeros where the platform reports no heap.
+void heapTypes(HeapType& internal, HeapType& psram);
+/// What MoonLight's own code holds, counted where it allocates (alloc, allocInternal, new, and on an ESP32 allocCaps): total and the PSRAM part, 0 where it is uncounted.
+void moonlightHeap(size_t& total, size_t& psram);
+
+/// A computer's own memory sheet: the process's resident memory and the machine's available memory, 0 on a board, whose heap figures say it.
+void processMemory(size_t& resident, size_t& available);
+
 /// Bytes taken on purpose through alloc and allocInternal.
 size_t allocatedBytes();
 /// The high-water mark of allocatedBytes.

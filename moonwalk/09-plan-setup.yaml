@@ -36,7 +36,7 @@ processes:
         actor: agent
         when: { manual: "Save it as docs/work/Plan-YYYYMMDD - title.md." }
         detail: |
-          Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🧪 built and awaiting the test named beside it, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name counts them, `(3 of 7)` for three steps ✅ of seven, when the product owner asks, since a renamed file is a new file to git. Everything else on the topic sits in the plan's `Backlog` section. A step that tunes against a measurement names its stop rule before the first run: the ceiling the field reports, the target, and the gain a change must buy to keep going.
+          Written in plan mode, and edited as reality changes once approved. Each step carries its status: ✅ built and verified, 🧪 built and awaiting the test named beside it, 🚧 partly built with what is missing named beside it, ⏳ not started. The file name is the date and the topic; `moondeck/report/plan_index.py` counts the steps by their markers into `docs/work/index.md`. Everything else on the topic sits in the plan's `Backlog` section. A step that tunes against a measurement names its stop rule before the first run: the ceiling the field reports, the target, and the gain a change must buy to keep going.
       - id: approve
         say: Approve the plan.
         when: { manual: "Read it first: code starts after the approval." }
@@ -94,6 +94,8 @@ processes:
         when: { run: { command: "xcode-select --install; brew install cmake uv ccache ninja && ccache --max-size 20G" } }
         detail: |
           ccache's 5 GB default holds about one target; 20 GB holds the host, the tests and every ESP32 target, which share one cache.
+
+          Three settings keep a build fast on a Mac. Keep Spotlight out of the checkout's folder (System Settings, Spotlight, Search Privacy), since it indexes every object a build writes. List Terminal and Visual Studio Code under Privacy & Security, Developer Tools, since Gatekeeper otherwise assesses every freshly linked binary. Exclude `build/**` in VS Code's `C_Cpp.files.exclude` and `files.watcherExclude`, so generated files are not re-indexed. Gate builds run under `nice`, which keeps the laptop usable while four jobs compile; closing GitKraken and MoonLight's browser tabs during a gate run leaves the build more of the machine.
       - id: linux
         say: Install CMake, a compiler, ccache and uv.
         given: [{ input: platform, equals: Linux }]

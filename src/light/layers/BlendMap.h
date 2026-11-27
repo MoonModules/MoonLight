@@ -13,10 +13,10 @@ namespace mm {
 ///
 /// The pass runs once per enabled layer each frame, driven by the Drivers container, which reads each layer's own `blendMode` and `opacity` controls along with the stack order.
 ///
-/// `clearFirst` clears the destination before writing, which the first and bottom layer of a composite does.
-/// That is what keeps physical cells with no source, such as a sparse layout's lattice gaps, black.
-/// It applies on the mapped path only: the identity path writes every byte it covers, so it has no unwritten cell to clear.
-/// Later layers pass false and blend onto the frame accumulated below.
+/// `clearFirst` clears the destination first, as the bottom layer of a composite does, so physical cells with no source, such as a sparse layout's gaps, stay black.
+///
+/// It clears on every path but the identity overwrite at full opacity, a plain copy of the bytes both buffers share; later layers pass false and blend onto the frame below.
+///
 /// A single layer passes `Overwrite` at full opacity with a clear, which takes the exact fast path this had before composition existed.
 ///
 /// ## The combine math is integer-only
@@ -32,26 +32,27 @@ namespace mm {
 ///
 /// A non-overwriting LUT, one folding several logical lights onto a single physical cell, routes through the additive accumulate path so overlaps sum with clamping rather than last-writer-wins.
 ///
+/// A layer blends only where it has lights, in every mode: one narrowed by a region modifier blends inside its region alone. A layer whose mapping could not be allocated degrades to the whole box (`Layer::lutSkipped`), and blends there.
+///
 /// ## How a light finds its destination
 ///
-/// A dense-grid layer has no LUT, so its buffer blends one to one with the source index equal to the physical index and no lookup at all.
-/// A layer with a LUT maps each logical light to its physical destinations first.
-/// Physical indices come from the LUT, which is built in range from the shared Layouts, so they address the destination in bounds by construction.
+/// A dense-grid layer has no LUT, so its buffer blends one to one, the source index equal to the physical index, with no lookup.
+///
+/// A layer with a LUT maps each logical light to its physical destinations first; the LUT is built in range from the shared Layouts, so the indices are in bounds by construction.
 ///
 /// ## Why every mapped access is bounded
 ///
-/// A reshape rebuilds the mapping and the driver's output buffer in separate steps of one `prepareTree` sweep, Layouts first, then the Layer, then Drivers.
-/// A render tick can land between them, holding the new mapping's physical indices and the old, smaller buffer.
-/// Unbounded, that writes past the end and corrupts the heap, and the failure then surfaces in an unrelated allocation later, which is what made resizing a layout look intermittently fatal.
+/// A reshape rebuilds the mapping and the driver's output buffer in separate steps of one `prepareTree` sweep (Layouts, then the Layer, then Drivers), and a render tick can land between them.
 ///
-/// This is a bound rather than a fix for the ordering.
-/// The window is still there and the frame drawn inside it is briefly wrong, but it cannot corrupt memory, which is the property that matters.
+/// Inside that window the mapping and the output buffer describe different shapes, so each access is held to the size of the buffer it touches: a destination past the output's end is skipped, and the walk ends at the source's last light.
+///
+/// This is a bound rather than a fix for the ordering: the frame drawn inside the window is briefly wrong, but it cannot corrupt memory, which is the property that matters.
 ///
 /// ## What Overwrite defers to
 ///
-/// Overwrite is the default, for a single layer or the bottom of a composite, and it defers to the LUT's own overwrites flag.
-/// A mapping writing each physical cell once, a mirror, a shuffle or a sparse box, plain-copies.
-/// A mapping folding several logical lights onto one cell accumulates additively within the layer, with clamping, while cross-layer Additive and Alpha remain the explicit ops.
+/// Overwrite is the default, for a single layer or the bottom of a composite, and defers to the LUT's overwrites flag: a mapping writing each physical cell once (a mirror, a shuffle, a sparse box) plain-copies.
+///
+/// A mapping folding several logical lights onto one cell accumulates additively within the layer, with clamping; cross-layer Additive and Alpha stay the explicit ops.
 
 /// How a layer's pixels combine into the destination during composition.
 enum class BlendOp : uint8_t {

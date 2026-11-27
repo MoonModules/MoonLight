@@ -14,6 +14,7 @@
 #include <vector>
 #include "core/system/ControlModule.h"
 #include "core/system/FilesystemModule.h"
+#include "core/system/HttpServerModule.h"   // applyWledState: the WLED app picks a preset by its slot
 #include "core/util/ModuleFactory.h"
 #include "core/module/Scheduler.h"
 #include "light/effects/NoiseEffect.h"
@@ -172,6 +173,26 @@ TEST_CASE("ControlModule saves a look and puts it back") {
     REQUIRE(std::strcmp(d.effectType(), "RainbowEffect") == 0);
 
     d.control->applyListRow(d.firstRowId());
+    CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
+}
+
+// The WLED app and Home Assistant pick a preset by its 1-based slot, and a slot past the last names no preset, so it applies none, as WLED does.
+TEST_CASE("ControlModule: a WLED preset slot applies that preset, and a slot past the last applies none") {
+    Device d;
+    d.control->setName("Control");
+    auto* layer = d.add(d.layers, "Layer");
+    d.add(layer, "NoiseEffect");
+    d.setText("name", "sunset");
+    d.press("save");
+    REQUIRE(d.control->presetCount() == 1);
+    auto* old = layer->replaceChildAt(0, mm::ModuleFactory::create("RainbowEffect"));
+    if (old) { old->release(); mm::Scheduler::deleteTree(old); }
+
+    mm::HttpServerModule http;
+    http.setScheduler(&d.scheduler);
+    http.applyWledState("{\"ps\":5}");
+    CHECK(std::strcmp(d.effectType(), "RainbowEffect") == 0);   // slot 5 of 1: no preset
+    http.applyWledState("{\"ps\":1}");
     CHECK(std::strcmp(d.effectType(), "NoiseEffect") == 0);
 }
 

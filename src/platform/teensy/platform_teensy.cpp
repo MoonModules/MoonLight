@@ -191,7 +191,7 @@ size_t totalHeap() { return reinterpret_cast<size_t>(&_heap_end) - reinterpret_c
 size_t totalInternalHeap() { return totalHeap(); }
 
 namespace {
-// PJRC marks the OCRAM heap execute-never and the highest matching MPU region decides, so the last one re-maps it executable when MoonLive first asks.
+// PJRC marks the OCRAM heap data-only (XN) and the highest matching MPU region decides, so the last one re-maps it executable when MoonLive first asks; code runs from flash through the cache anyway, so OCRAM costs no speed, and ITCM has 9 KB.
 void allowExecInOcram() {
     static bool done = false;
     if (done) return;
@@ -225,6 +225,12 @@ size_t maxExecAllocBlock() { return ocramMaxBlock(); }
 // --- Tasks: none without an RTOS, so callers keep their work on the one loop -------------------
 
 // One row, the loop, whose free stack is the painted words still untouched above the floor.
+void recordSystemHeap() {}   // no system below MoonLight holds heap here
+void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
+void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // alloc reaches no PSRAM here, as ptrIsPsram says
+void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
+void processMemory(size_t& resident, size_t& available) { resident = available = 0; }   // a board's heap figures say it
+bool tasksHeap(size_t& total, size_t& psram) { total = psram = 0; return true; }   // no RTOS, so no task holds a stack of its own
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0 || !g_dtcmEnd) return 0;
     uintptr_t p = g_stackFloor;
@@ -243,6 +249,10 @@ void notifyTask(WorkerTask&) {}
 bool waitNotify(WorkerTask&, uint32_t) { return false; }
 void sleepUs(WorkerTask&, uint32_t) {}
 void stopPinnedTask(WorkerTask&) {}
+bool signalCreate(Signal&) { return false; }   // one loop, so no task waits on another
+void signalDestroy(Signal&) {}
+void signalGive(Signal&) {}
+bool signalTake(Signal&, uint32_t) { return false; }
 // --- Watchdog: WDOG1 on the one loop, which feeds it every tick --------------------------------
 
 namespace {
@@ -600,6 +610,7 @@ uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
 
 // The responder restarts cheaply here, so stopping and shutting down are one call.
 void mdnsStop() { MDNS.end(); }
+void networkHeap(size_t& total, size_t& psram) { total = psram = 0; }   // QNEthernet's lwIP keeps its memory in static pools (MEM_SIZE), outside the heap
 void mdnsShutdown() { MDNS.end(); }
 
 // Unicast DNS through lwIP; lwIP's responder answers for this device but does not query, so a .local name fails.

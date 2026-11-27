@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { flowLayout, flowHeat, flowClass, flowTime, flowTitle, splitRows, barTotals, chipsOf, bandView, toggleBand } from "../../src/ui/flow.js";
+import { flowLayout, flowHeat, flowClass, flowTime, flowTitle, splitRows, barTotals, chipsOf, bandView, toggleBand, barLabel } from "../../src/ui/flow.js";
 
 const row = (name, stage, group) => ({ name, stage, ...(group ? { group } : {}) });
 const rows = [row("Grid", 0), row("E1", 1, "A"), row("M1", 2, "A"), row("A", 3, "A"), row("E2", 1, "B"), row("B", 3, "B"), row("Drivers", 4), row("D1", 5)];
@@ -43,6 +43,34 @@ test("a node's tooltip names the module's one line when help is loaded, and both
     const r = { name: "Pulse1", type: "PulseEffect", us: 452, own: 12, internal: 100, psram: 0, size: 100 };
     assert.match(flowTitle(r, "A `pulse` of light."), /^Pulse1 \(PulseEffect\)\nA pulse of light\.\n12 µs own, 452 µs with children/);
     assert.doesNotMatch(flowTitle(r, ""), /\n\n/);
+});
+
+test("a spike chip shows a longest tick past a millisecond and twice the average, and a steady node shows none", () => {
+    const totals = { memory: [1, 1], frame: 10000 };
+    const spiky = chipsOf({ us: 400, worst: 5000, time: [[0, 400]] }, totals, false).time;
+    assert.ok(spiky.some(c => c.cls === "flow-chip-spike" && c.text === "▲5.0 ms"));
+    assert.ok(!chipsOf({ us: 400, worst: 700, time: [[0, 400]] }, totals, false).time.some(c => c.cls === "flow-chip-spike"));     // under a millisecond
+    assert.ok(!chipsOf({ us: 8000, worst: 10000, time: [[0, 8000]] }, totals, false).time.some(c => c.cls === "flow-chip-spike")); // within twice the average
+});
+
+test("a node's tooltip names its longest tick of the second, the stutter its average hides", () => {
+    const r = { name: "Pulse1", type: "PulseEffect", us: 452, own: 452, worst: 8000, internal: 0, psram: 0, size: 100 };
+    assert.match(flowTitle(r, ""), /452 µs own, 452 µs with children per frame, longest tick 8\.0 ms/);
+    assert.doesNotMatch(flowTitle({ ...r, worst: 0 }, ""), /longest/);
+});
+
+test("an output's tooltip names its DMA buffers, only when it holds some", () => {
+    const r = { name: "ParallelLed", type: "ParallelLedDriver", us: 1900, own: 1900, internal: 52000, psram: 0, size: 2068, fps: 18, dma: 36864 };
+    assert.match(flowTitle(r, ""), /\nDMA buffers 36KB/);
+    assert.doesNotMatch(flowTitle({ ...r, dma: 0 }, ""), /DMA/);
+});
+
+test("an output near the edge shows its headroom as a red chip, and one with room only in its tooltip", () => {
+    const totals = { frame: 10000 };
+    const near = chipsOf({ us: 100, fps: 30, headroom: 12, time: [[2, 100]] }, totals, false).time;
+    assert.ok(near.some(c => c.cls === "flow-chip-spike" && c.text === "headroom 12%"));
+    assert.ok(!chipsOf({ us: 100, fps: 30, headroom: 80, time: [[2, 100]] }, totals, false).time.some(c => c.text.startsWith("headroom")));
+    assert.match(flowTitle({ name: "Net", type: "NetworkSendDriver", us: 100, own: 100, fps: 30, headroom: 80 }, ""), /Headroom 80%, its margin before it glitches/);
 });
 
 const bars = [
@@ -85,8 +113,8 @@ const band = [
     { name: "Tasks", group: "Modules", parent: "System", us: 20, own: 20, internal: 10, psram: 200, time: [[0, 20]], bottleneck: true },
     { name: "Stats", group: "Modules", parent: "System", us: 10, own: 10, internal: 0, psram: 50, time: [[0, 10]] },
     { name: "Network", group: "Modules", us: 5, own: 5, internal: 0, psram: 80, time: [[0, 5]] },
-    { name: "main", group: "System tasks", type: "task", core: 0, time: [[3, 900]], stackFree: 4000 },
-    { name: "IDLE0", group: "System tasks", type: "task", core: 0, time: [[3, 100]], stackFree: 1000 },
+    { name: "main", group: "System tasks", type: "task", core: 0, time: [[3, 900]], internal: 4096, stackFree: 4000 },
+    { name: "IDLE0", group: "System tasks", type: "task", core: 0, time: [[3, 100]], internal: 1536, psram: 512, stackFree: 1000 },
     { name: "mmEncode", group: "System tasks", type: "task", core: 1, time: [[3, 300]], stackFree: 2000 },
     { name: "tcpip", group: "System tasks", type: "task", core: -1, time: [[3, 40]], stackFree: 2600 },
 ];
@@ -119,12 +147,15 @@ test("opening a top level adds a band of its own, its own figures first, and clo
     assert.equal(bandView(band).filter(r => r.group === "System").length, 0);
 });
 
-test("system tasks stand per core, the idle tasks' time shown apart as the time left", () => {
+test("system tasks stand per core, the idle tasks' time shown apart as the time left, with the bytes its tasks hold", () => {
     const cores = bandView(band).filter(r => r.group === "System tasks");
     assert.deepEqual(cores.map(r => r.name), ["Core 0", "Core 1", "Either core"]);
     assert.deepEqual(cores[0].time, [[3, 900]]);
     assert.equal(cores[0].idle, 100);
     assert.equal(cores[0].count, 2);
+    assert.equal(cores[0].internal, 5632);
+    assert.equal(cores[0].psram, 512);
+    assert.match(flowTitle(cores[0]), /holding 5\.5 ?KB internal/);
     assert.ok(chipsOf(cores[0], { memory: [], frame: 1000 }).time.some(c => c.cls === "flow-chip-idle" && c.text === "idle 100 µs"));
     toggleBand("Core 0");
     assert.deepEqual(bandView(band).filter(r => r.group === "Core 0").map(r => r.name), ["main", "IDLE0"]);
@@ -156,4 +187,16 @@ test("a band starts below every node its columns already hold, so four drivers a
         const meet = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
         assert.ok(!meet, `${a.n} and ${b.n} overlap`);
     }
+});
+
+test("a memory bar's label names its largest free block, which fragmentation keeps under the free total", () => {
+    const bar = { name: "internal RAM", bar: "memory", type: 0, parts: [["modules", 35000], ["free", 121000]], largest: 77824 };
+    assert.equal(barLabel(bar, 156000, 0), "internal RAM 152KB, largest free block 76KB");
+    assert.equal(barLabel({ ...bar, largest: undefined }, 156000, 0), "internal RAM 152KB");
+    assert.equal(barLabel({ name: "render loop", bar: "time", parts: [] }, 50000, 4000), "render loop 46.0 ms busy");
+});
+
+test("a task's tooltip names its state and priority, and its core names the task it runs now", () => {
+    assert.match(flowTitle({ name: "wifi", type: "task", us: 100, own: 100, internal: 6757, stackFree: 4420, state: "blocked", prio: 23 }, ""), /\nblocked, priority 23/);
+    assert.match(flowTitle({ name: "Core 0", type: "core", count: 9, us: 900, idle: 100, internal: 50000, psram: 0, running: "main" }, ""), /, running main now$/);
 });

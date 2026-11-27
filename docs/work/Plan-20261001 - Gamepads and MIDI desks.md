@@ -10,7 +10,7 @@ Everything this needs on the receiving side is built. The plan adds transports a
 
 - **ControlModule** is the surface: 8 switches, 8 encoders, 8 faders and a pad grid, each assignable to any `Module.control`, driven through `Scheduler::setControl` and following its target back.
 - **The input services** map a physical input onto the surface, or onto any control directly, with the shared `InputMapping` rows (Toggle, Set, Delta): `ButtonService` for GPIO buttons, `AnalogService` for potentiometers, `InfraredService` for remotes (with a `learn` field: the next code received binds to the row), `OscModule` for OSC.
-- **`ControlSurface`** is the two-way interface a desk attaches through (`sendValue`, `sendRing`, `sendColor`, `sendLabel`), and `setTouched` tells the surface a hand is on a control. It was written for MIDI hardware, and OSC is so far its only transport ([the Open Stage Control session's labels](Plan-20260901%20-%20Input%20mapping%20and%20scripted%20sensors%20(7%20of%2012).md#backlog)).
+- **`ControlSurface`** is the two-way interface a desk attaches through (`sendValue`, `sendRing`, `sendColor`, `sendLabel`), and `setTouched` tells the surface a hand is on a control. It was written for MIDI hardware, and OSC is so far its only transport (the Open Stage Control session's labels).
 - **[Control surfaces](../reference/hardware/control-surfaces.md)** records the bench desks: the X-Touch and the QCon both speak Mackie Control (MCU) over MIDI, neither speaks OSC, the X-Touch adds RTP-MIDI on its Ethernet port, and the QCon is USB only.
 - **`setControl` calls `onControlChanged`** on every write, from any of those writers, and `ControlDescriptor::live` marks a control as state that is never written to flash.
 
@@ -171,26 +171,11 @@ Checked against the tools a lighting or VJ operator already knows. The shape mat
 
 ### 2b. MidiService, the Akai APC40 mkII profile ✅
 
-The APC40 mkII is on the bench, so the Akai profile the Decided section waited for is next. Every number comes from [the reference](../reference/hardware/control-surfaces.md#akai-apc40-mkii).
-
-- ✅ A `profile` select on `MidiService`: Mackie Control (as now) or Akai APC40 mkII. The browser bridge already passes bytes both ways unchanged, so only the service's decoding and its desk state differ per profile.
-- ✅ **Alternate Ableton Live mode**, set by SysEx whenever the desk connects: every press only reports and every light is the host's, so the board owns each value and the desk shows it. The service offers the SysEx in a hidden control the bridge sends on connect; Web MIDI asks the user once for SysEx permission.
-- ✅ Inbound:
-  - track faders 1-8 (CC 7, channels 0-7) onto `fader1`-`fader8`;
-  - track knobs 1-8 (CC 48-55, absolute) onto `encoder1`-`encoder8`;
-  - activator buttons 1-8 (note 50, channels 0-7) toggle `switch1`-`switch8` on a press;
-  - clip pads (notes 0-39, counted from the bottom-left) apply presets 1-40, the rows flipped so the top-left pad is preset 1 as on the Control card.
-- ✅ Outbound: each knob's ring shows its encoder (set to the volume style once), each activator lights when its switch is on, and each pad shows its preset slot: off when empty, dim when stored, bright when active.
-- ✅ The Control module lets a surface press a preset pad and tells surfaces each pad's state, through the existing `SurfaceControl::Pad`.
-- ✅ Tests: decoding each message kind, the desk state per kind, the row flip, the mode SysEx and the pad states.
-- ✅ Docs: the MIDI section on the services page and [Connecting a control surface](../reference/control-surface.md).
-- ✅ Verify on the desktop app with the APC40 on the product owner's Mac in Chrome on `localhost`, then on the StadBeest, where the eyes follow over OSC.
-- Left for later: the master fader and crossfader, the device knobs, the scene pads, transport and tap tempo.
+The profile (modes, on the wire): [Control surfaces](../reference/hardware/control-surfaces.md#akai-apc40-mkii), [MidiService](../../src/core/services/MidiService.h), [the control surface](../reference/control-surface.md). Left for later: the master fader and crossfader, the device knobs, the scene pads, transport and tap tempo.
 
 ### 3. Surface-only input targets ✅
 
-- `ButtonService`, `AnalogService`, `InfraredService`, `GamepadService` and OSC's `/mm/control/<Module>/<control>` path lose their direct `Module.control` targets; every input reaches a control through the surface.
-- A persisted row with a direct target is reported rather than silently dropped, and MIGRATING records the change.
+Direct `Module.control` targets are gone: [MIGRATING](../reference/MIGRATING.md), [InputMapping](../../src/core/util/InputMapping.h).
 
 ### 4. USB host on S3 and P4 🚧 (hub support, HID gamepads, the S31)
 

@@ -43,7 +43,7 @@ ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 # Firmware catalogue. Each entry describes one firmware: a firmware per thing the silicon forces (the chip, the
 # P4's revision line, the S3's PSRAM interface and octal flash, the classic cache workaround), a `-lite` tier
 # for 4 MB where a family's full build does not fit (CONFIG_MM_LITE), and `-ethonly`, the user's choice.
-# The naming rule and why: docs/work/Plan-20261121 - One firmware per chip and PSRAM mode.md.
+# The naming rule and why: docs/reference/hardware/firmware-variants.md.
 # The Ethernet driver is compiled into each chip's firmware (RMII EMAC for
 # classic/P4 via sdkconfig.defaults.eth, W5500 SPI for S3 via .eth-spi);
 # which PHY/pins a given board uses is runtime config (deviceModels.json →
@@ -62,7 +62,7 @@ ETH_ONLY_EXCLUDE = ["esp_wifi", "wpa_supplicant", "esp_coex"]
 # mooninstaller/firmwares.json, which the CI matrix, the ESP Web Tools manifest
 # loops, and MoonDeck all read (check_firmwares.py guards the projection).
 FIRMWARES: dict[str, dict] = {
-    # The classic ESP32 (docs/work/Plan-20261121): one image per tier for every revision and module. PSRAM is found at boot on
+    # The classic ESP32 (docs/reference/hardware/firmware-variants.md): one image per tier for every revision and module. PSRAM is found at boot on
     # every board and joins the heap where psramHeapSafe allows (revision 3 and up, or a build with the cache workaround).
     # WiFi and Ethernet in one binary: the RMII driver compiles in (the .eth fragment), and whether Ethernet comes up, on which
     # pins and PHY, is runtime config (deviceModels.json -> NetworkModule -> ethInit); a board with no PHY falls to the WiFi cascade.
@@ -189,7 +189,7 @@ FIRMWARES: dict[str, dict] = {
     },
     # The P4 by revision line, since each revision line's image boots on its own line alone: Ethernet (IP101/RMII, per-board pins
     # from deviceModels.json) and WiFi over the on-board ESP32-C6 when it answers. A board with no C6 switches the radio off on its
-    # WiFi card, which keeps the network cascade off WiFi (docs/work/Plan-20261121, step 2).
+    # WiFi card, which keeps the network cascade off WiFi.
     "esp32p4rev1": {
         "chip": "esp32p4",
         "fragments": ["sdkconfig.defaults", "sdkconfig.defaults.esp32p4", "sdkconfig.defaults.esp32p4-wifi",

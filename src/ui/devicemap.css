@@ -53,6 +53,7 @@ body[data-theme="light"] .list-flow-box { --flow-bottleneck: #c0179e; }
 .flow-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .flow-key .flow-key-bottleneck { border: 2px solid var(--flow-bottleneck); }
 .flow-strip { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.flow-frame { font-size: 0.7rem; color: var(--fg-muted); }
 .flow-bar { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; }
 .flow-bar-label { flex: 0 0 9.5rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .flow-bar-track { flex: 1; display: flex; height: 14px; border-radius: 3px; overflow: hidden; background: var(--flow-free); }
@@ -60,6 +61,9 @@ body[data-theme="light"] .list-flow-box { --flow-bottleneck: #c0179e; }
 .flow-seg-free { background: var(--flow-free); color: var(--fg-muted); }
 .flow-seg-unaccounted { background: var(--flow-unaccounted); }
 .flow-seg-wait { background: var(--yellow); }
+.flow-seg-net { background: var(--teal); }
+.flow-seg-sys { background: var(--orange); }
+.flow-seg-overhead { background: color-mix(in srgb, var(--fg-subtle) 35%, transparent); }
 .flow-seg.flow-seg-types { opacity: 0.6; }
 span.flow-chip-mem0, i.flow-chip-mem0 { background: var(--flow-mem0); }
 span.flow-chip-mem1, i.flow-chip-mem1 { background: var(--flow-mem1); }
@@ -86,6 +90,7 @@ span.flow-chip-lane3, i.flow-chip-lane3 { background: var(--flow-lane3); }
 .list-flow .flow-chip-text { fill: var(--bg-0); font-size: 8px; text-anchor: middle; }
 .list-flow .flow-chip-stack + .flow-chip-text { fill: var(--fg-muted); }
 .list-flow .flow-chip-idle { fill: var(--fg-subtle); }
+.list-flow .flow-chip-spike { fill: var(--red); }
 .list-flow .flow-badge { cursor: pointer; }
 .list-flow .flow-badge rect { fill: var(--card-bg-2); stroke: var(--fg-subtle); }
 .list-flow .flow-badge text { fill: var(--fg-muted); font-size: 8px; text-anchor: middle; }

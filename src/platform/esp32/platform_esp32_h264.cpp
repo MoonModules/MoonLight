@@ -69,6 +69,7 @@
 
 #include "esp_h264_enc_single_hw.h"
 #include "esp_heap_caps.h"
+#include "platform/esp32/platform_esp32_heap.h"   // allocCaps, freeCaps: MoonLight's blocks, counted
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -290,17 +291,17 @@ void workerFn(void* arg) {
 
 void freeAll() {
     if (enc_) { esp_h264_enc_close(enc_); esp_h264_enc_del(enc_); enc_ = nullptr; }
-    for (auto& s : slots_)    { heap_caps_free(s.data); s.data = nullptr; s.len = 0; }
-    for (auto& s : segments_) { heap_caps_free(s.data); s.data = nullptr; s.len = 0; s.seq = 0; s.frames = 0; }
-    heap_caps_free(yuv_); yuv_ = nullptr;
-    heap_caps_free(nal_); nal_ = nullptr;
+    for (auto& s : slots_)    { freeCaps(s.data); s.data = nullptr; s.len = 0; }
+    for (auto& s : segments_) { freeCaps(s.data); s.data = nullptr; s.len = 0; s.seq = 0; s.frames = 0; }
+    freeCaps(yuv_); yuv_ = nullptr;
+    freeCaps(nal_); nal_ = nullptr;
     // The BUSY flag goes with the buffer it guards: a reader that never released would leave every later encode unable to fill a fresh take_.
-    heap_caps_free(take_); take_ = nullptr;
+    freeCaps(take_); take_ = nullptr;
     takeLen_ = 0; takeSeq_ = 0; takeBusy_ = false; lastTakenSeq_ = 0;
 }
 
 void* psram(size_t bytes) {
-    return heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return allocCaps(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, 64);
 }
 
 }  // namespace

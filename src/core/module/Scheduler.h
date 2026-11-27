@@ -109,6 +109,8 @@ public:
     uint32_t tickTimeUs() const { return tickTimeUs_; }
     /// Wall-clock microseconds per frame over the last second: the tick and the loop's pause after it, the total the tick time balance sheet splits.
     uint32_t frameUs() const { return frameUs_; }
+    /// The longest wall-clock frame of the last second, which the average above hides: one long frame a second is a visible stutter.
+    uint32_t worstFrameUs() const { return worstFrameUs_; }
     /// The tree's modification count, moved by every structural change: a reader keeping pointers into the tree rebuilds them once it moves, as a textbook iterator checks its collection's count.
     uint32_t structureVersion() const { return structureVersion_; }
     /// Move the count, which MoonModule::quiesceForMutation does for every structural change.
@@ -199,6 +201,11 @@ private:
     uint32_t lastLoop1s_ = 0;
     uint32_t tickTimeUs_ = 0;
     uint32_t frameUs_ = 0;
+    uint32_t worstFrameUs_ = 0;
+    /// Keep the longest frame of the window, the one ending at `tickEnd` included.
+    void notePeakFrame(uint32_t tickEnd) MM_NONBLOCKING;
+    uint32_t peakFrameUs_ = 0;       ///< the longest frame in the current window
+    uint32_t lastTickEndUs_ = 0;     ///< where the previous frame ended, 0 before the first
     uint32_t structureVersion_ = 0;  ///< see structureVersion()
     uint32_t tickAccumUs_ = 0;
     uint32_t frameCount_ = 0;        ///< frames in the current window, which the average divides by
