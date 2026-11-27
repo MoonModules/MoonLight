@@ -225,6 +225,12 @@ size_t maxExecAllocBlock() { return ocramMaxBlock(); }
 // --- Tasks: none without an RTOS, so callers keep their work on the one loop -------------------
 
 // One row, the loop, whose free stack is the painted words still untouched above the floor.
+void recordSystemHeap() {}   // no system below MoonLight holds heap here
+void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
+void heapOverhead(size_t& total, size_t& psram) { total = psram = 0; }
+void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
+void processMemory(size_t& resident, size_t& available) { resident = available = 0; }   // a board's heap figures say it
+void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }   // no RTOS, so no task holds a stack of its own
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0 || !g_dtcmEnd) return 0;
     uintptr_t p = g_stackFloor;
@@ -243,6 +249,10 @@ void notifyTask(WorkerTask&) {}
 bool waitNotify(WorkerTask&, uint32_t) { return false; }
 void sleepUs(WorkerTask&, uint32_t) {}
 void stopPinnedTask(WorkerTask&) {}
+bool signalCreate(Signal&) { return false; }   // one loop, so no task waits on another
+void signalDestroy(Signal&) {}
+void signalGive(Signal&) {}
+bool signalTake(Signal&, uint32_t) { return false; }
 // --- Watchdog: WDOG1 on the one loop, which feeds it every tick --------------------------------
 
 namespace {
@@ -600,6 +610,7 @@ uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
 
 // The responder restarts cheaply here, so stopping and shutting down are one call.
 void mdnsStop() { MDNS.end(); }
+void networkHeap(size_t& total, size_t& psram) { total = psram = 0; }   // QNEthernet's lwIP keeps its memory in static pools (MEM_SIZE), outside the heap
 void mdnsShutdown() { MDNS.end(); }
 
 // Unicast DNS through lwIP; lwIP's responder answers for this device but does not query, so a .local name fails.

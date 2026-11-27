@@ -159,6 +159,9 @@ public:
         writeLinkStatus();
     }
 
+    /// Frames the wire refused, a sender outrunning the link.
+    std::optional<uint32_t> framesDropped() const override { return framesDroppedTotal_.load(std::memory_order_relaxed); }
+
     /// Refresh the link status once a second, so a cable plugged in later is picked up.
     void tick1s() MM_NONBLOCKING override {
         writeLinkStatus();

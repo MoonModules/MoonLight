@@ -377,11 +377,16 @@ def _repo_relative(path: str) -> str:
     return (p.relative_to(ROOT) if p.is_absolute() and p.is_relative_to(ROOT) else p).as_posix()
 
 
+def _is_test_object(entry: dict) -> bool:
+    """Whether a compilation database entry compiles a file under test/; `file` may be relative to `directory`, and normpath folds its `..` lexically, keeping a symlinked checkout's path."""
+    return _repo_relative(os.path.normpath(os.path.join(entry.get("directory", ""), entry["file"]))).startswith("test/")
+
+
 def release_warnings(out: str) -> str:
     """The saved warnings of the objects the release builds, leaving out the test objects: a test object compiles its own copy of an inline function, whose frame no device runs."""
     import check_nonblocking as nb
     build_dir = nb.check_clang_tidy._host_build_dir()
-    release = nb.saved_findings(build_dir, keep=lambda e: not _repo_relative(e["file"]).startswith("test/"))
+    release = nb.saved_findings(build_dir, keep=lambda e: not _is_test_object(e))
     return release if release is not None else out
 
 

@@ -202,10 +202,10 @@ public:
     void applyRelay();
     /// Open every pin the last list held and forget the list.
     void releaseRelays();
-    /// Open the pins of the last list that the new list of `n` pins drops.
-    void releaseLeavingRelays(const uint16_t* pins, uint8_t n);
-    /// Write `closed` to each of the `n` pins, and remember them as the list in force.
-    void driveRelays(const uint16_t* pins, uint8_t n, bool closed);
+    /// Open the pins of the last list that the new list `pins` drops.
+    void releaseLeavingRelays(std::span<const uint16_t> pins);
+    /// Write `closed` to each of `pins`, and remember them as the list in force.
+    void driveRelays(std::span<const uint16_t> pins, bool closed);
 
     /// Relays one device can carry; four is the most any board in the catalog wires.
     static constexpr uint8_t kMaxRelays = 8;
@@ -373,6 +373,7 @@ private:
 
     /// The core-1 encode worker; the boundary is one shared buffer, and core 0 waits on encodeDone_ before overwriting it.
     platform::WorkerTask encodeTask_{};
+    platform::Signal encodeDoneSignal_{};   // the encode task gives it with encodeDone_, so the render loop sleeps rather than spins
     std::atomic<bool> encodeDone_{true};   // core 1 sets true when its encode finishes; core 0 waits it
     std::atomic<bool> encodeStop_{false};  // stop flag the worker observes via a woken waitNotify; atomic, not volatile, which is no thread primitive
     bool renderSplitActive_ = false;   // the split is engaged (task spawned, boundary in effect)

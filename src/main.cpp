@@ -135,6 +135,7 @@ static void printModuleMetrics(mm::MoonModule* mod, int depth) {
 }
 
 void mm_main(const std::atomic<bool>& keepRunning, uint16_t httpPort) {
+    mm::platform::recordSystemHeap();   // first, so the system's line holds what ran before MoonLight
     mm::registerModuleTypes();
     mm::ModuleFactory::shrinkToFit();   // every type is in: the table keeps no spare room
     mm::Scheduler scheduler;

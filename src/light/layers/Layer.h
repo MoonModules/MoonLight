@@ -162,7 +162,12 @@ public:
         if (rebuild) { rebuildPending_ = true; return; }
 
         // Skipped when nothing is live, so a static-only chain pays nothing for this.
-        if (hasGrid && hasLive_) { applyLivePass(); bufferGen_++; }
+        if (hasGrid && hasLive_) {
+            const uint32_t start = platform::micros();
+            applyLivePass();
+            chargeLivePass(platform::micros() - start);
+            bufferGen_++;
+        }
     }
 
     /// The structural work last frame's tick decided on, applied before this frame renders: a modifier's rebuild, then each effect's own. Effects calls it on the render loop, one layer at a time.
@@ -173,8 +178,8 @@ public:
 
     /// Remap the buffer through the live modifiers, once per frame, by a backward gather so no destination tears.
     void applyLivePass();
-    /// Cell `cell` of the buffer gathers its source through the live modifiers from the snapshot, dark when the source lies off the box.
-    void gatherLiveCell(uint8_t* buf, const Coord3D& cell, const Coord3D& logical);
+    /// Book the live pass's time to the live modifiers that ran it, in equal shares, since the pass steps through all of them per light.
+    void chargeLivePass(uint32_t us) MM_NONBLOCKING;
 
     /// Warp the frame through the live modifiers' composed affine map, stepping the source along each row; false when one of them is not affine, or a source lies past 16.16 steps in int32, so the per-light pass runs.
     bool warpAffine(const Coord3D& logical);
@@ -189,7 +194,12 @@ public:
     void warpRow(const LiveAffine& t, lengthType y, const uint8_t* src, uint8_t* slice) const;
 
     /// Copy the effect's written slice across the axes it does not iterate; real work only when the effect declares fewer axes than the layout has.
-    void extrude(Dim effectDim) MM_NONBLOCKING;
+    void extrude(Dim effectDim) MM_NONBLOCKING {
+        if (effectDim == Dim::D3 || !buffer_.data()) return;
+        if ((effectDim == Dim::D1 && width_ > 1) || depth_ > 1) extrudeCopy(effectDim);
+    }
+    /// The copy itself, run only when the effect declares fewer axes than the layout has.
+    void extrudeCopy(Dim effectDim) MM_NONBLOCKING;
 
     /// The logical light data every effect writes into.
     Buffer& buffer() { return buffer_; }
@@ -242,10 +252,26 @@ public:
     }
 
     /// The one enabled effect, or null when there is none, there are two sharing the buffer, or a modifier transforms the frame.
-    EffectBase* soleEffect() const MM_NONBLOCKING;
+    EffectBase* soleEffect() const MM_NONBLOCKING {
+        EffectBase* source = nullptr;
+        for (uint8_t i = 0; i < childCount(); i++) {
+            MoonModule* c = child(i);
+            if (!c->enabled() || (c->role() != ModuleRole::Modifier && c->role() != ModuleRole::Effect)) continue;
+            if (c->role() == ModuleRole::Modifier || source) return nullptr;
+            source = static_cast<EffectBase*>(c);
+        }
+        return source;
+    }
 
     /// Whether this is the only enabled layer, since a stack blends logical buffers.
-    bool soleLayer() const MM_NONBLOCKING;
+    bool soleLayer() const MM_NONBLOCKING {
+        const MoonModule* p = parent();
+        if (!p) return true;
+        uint8_t layers = 0;
+        for (uint8_t i = 0; i < p->childCount(); i++)
+            if (p->child(i)->role() == ModuleRole::Layer && p->child(i)->enabled()) layers++;
+        return layers == 1;
+    }
 
     /// Each of the first `cells` cells of `box` gets the light the layout puts there, the first where several share it, `kNoDriver` where none: a layer's logical box, or a screen's face.
     void placeByLayout(nrOfLightsType* out, size_t cells, Coord3D box) const;
@@ -287,6 +313,9 @@ public:
     }
 
 private:
+    /// Cell `cell` of the buffer gathers its source through the live modifiers from the snapshot, dark when the source lies off the box; defined inline in Layer.cpp, where applyLivePass calls it per light.
+    void gatherLiveCell(uint8_t* buf, const Coord3D& cell, const Coord3D& logical);
+
     Layouts* layouts_ = nullptr;
     Buffer buffer_;
     MappingLUT lut_;

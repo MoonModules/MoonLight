@@ -9,6 +9,7 @@
 #include "platform/platform_clock.h"   // setTestNowMs
 #include "audio_effect_test.h"   // EffectOnGrid, seat, play
 
+#include <algorithm>
 #include <cstdlib>
 
 // Lines oscillate with a length scaled by their band, so silence draws nothing; a frozen clock makes the frame and the oscillators deterministic.
@@ -203,6 +204,27 @@ TEST_CASE("PaintBrushEffect: without glide, a bass step ten minutes in throws th
     play(p, audio, bass, 615001);
     const int after = p.e.endpointForTest(0, 0, 64);
     CHECK(std::abs(after - before) > 16);   // 10.25 turns at 10.25 minutes: a quarter turn on, from the middle to an edge
+    audio.release();
+}
+
+// An endpoint sweeps the whole axis, the far edge as often as the near one, so a cube's far faces and corners take strokes too.
+TEST_CASE("PaintBrushEffect: an endpoint reaches both edges of an axis") {
+    golden::ScopedTestClock clock(0);
+    AudioService& audio = seat();
+    EffectOnGrid<PaintBrushEffect> p(8, 8);
+    AudioFrame quiet;
+    int lo = 7, hi = 0, atLo = 0, atHi = 0;
+    for (uint32_t ms = 0; ms < 6000; ms += 20) {   // one turn of the first oscillator, 10 cycles a minute
+        play(p, audio, quiet, ms);
+        const int v = p.e.endpointForTest(0, 0, 7);
+        lo = std::min(lo, v);
+        hi = std::max(hi, v);
+        atLo += v == 0;
+        atHi += v == 6;
+    }
+    CHECK(lo == 0);
+    CHECK(hi == 6);
+    CHECK(std::abs(atLo - atHi) <= 2);   // a sine dwells alike at both ends
     audio.release();
 }
 

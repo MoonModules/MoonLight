@@ -166,8 +166,8 @@ TEST_CASE("MoonShineModule: the bars come first, a memory bar per type and a tim
     REQUIRE(bars.size() >= 2);
     for (size_t i = 0; i < bars.size(); i++) CHECK(t.row(static_cast<ListRow>(i)) == bars[i]);
     CHECK(has(bars[0], "\"bar\":\"memory\""));
-    CHECK(has(bars[0], "\"name\":\"heap\""));          // a computer reports no heap: one bar of what MoonLight took
-    CHECK_FALSE(has(bars[0], "\"free\""));
+    CHECK(has(bars[0], "\"name\":\"RAM\""));           // a computer: one bar, the process's RAM
+    CHECK(has(bars[0], "\"free\""));                     // closing with what the machine has available
     CHECK(has(bars[1], "\"name\":\"render loop\""));
     CHECK(has(t.row(static_cast<ListRow>(bars.size())), "\"name\":\"Grid\""));
 }
@@ -205,10 +205,36 @@ TEST_CASE("MoonShineModule: the memory bar's modules part is what the nodes hold
     long held = 0;
     for (const auto& r : rowsWhere(t, "\"internal\":")) held += field(r, "internal") + field(r, "psram");
     const auto parts = partsOf(rowsWhere(t, "\"bar\":\"memory\"")[0]);
-    REQUIRE(parts.size() == 3);   // modules, module types, unaccounted; a computer has no free part
+    REQUIRE(parts.size() == 9);   // modules, module types, MoonLight, tasks, network, system, heap overhead, unaccounted, and the machine's available as free
     CHECK(parts[0] == held);
     CHECK(parts[1] == static_cast<long>(ModuleFactory::tableBytes().total));
     CHECK(field(t.named("Grid"), "internal") >= field(t.named("Grid"), "size"));   // the object itself counts
+}
+
+TEST_CASE("MoonShineModule: the memory bar's network part is what the network's bring-ups took, and it is out of unaccounted") {
+    PipelineTree t;
+    const auto before = partsOf(rowsWhere(t, "\"bar\":\"memory\"")[0]);
+    struct Restore { ~Restore() { platform::setTestNetworkHeap(0, 0); } } restore;
+    platform::setTestNetworkHeap(1000, 0);
+    // The figures are a snapshot per timing window, so tick into the next window.
+    std::vector<long> after;
+    for (const uint32_t start = platform::millis(); platform::millis() - start < 1500;) {
+        t.s.tick();
+        after = partsOf(rowsWhere(t, "\"bar\":\"memory\"")[0]);
+        if (after.size() == 9 && after[4] == 1000) break;
+    }
+    REQUIRE(after.size() == 9);
+    CHECK(before[4] == 0);
+    CHECK(after[4] == 1000);
+}
+
+TEST_CASE("MoonShineModule: an output carries its pace, a node its longest tick, and a module that sends nothing no pace") {
+    PipelineTree t;
+    const std::string d1 = t.named("D1");
+    CHECK(field(d1, "fps") >= 0);                   // the preview keeps no count, so its pace is the render rate
+    CHECK_FALSE(has(d1, "\"dropped\""));           // and it counts no drops
+    CHECK(field(d1, "worst") >= 0);
+    CHECK_FALSE(has(t.named("A"), "\"fps\""));     // a layer is no output
 }
 
 TEST_CASE("MoonShineModule: each time bar adds up to the frame") {
@@ -256,14 +282,16 @@ TEST_CASE("MoonShineModule: a layer averages the time a worker ran it over the f
     CHECK(a->workerUs() == 0);   // the window starts again
 }
 
-TEST_CASE("MoonShineModule: the system tasks are nodes with their core, their stack, and their CPU time where the board measures it") {
+TEST_CASE("MoonShineModule: the system tasks are nodes with their core, their stack, what they hold, and their CPU time where the board measures it") {
     platform::TaskInfo tasks[2];
     std::strncpy(tasks[0].name, "wifi", sizeof(tasks[0].name));
     tasks[0].stackFreeBytes = 1200;
+    tasks[0].heapBytes = 4096;
     tasks[0].cpuPermille = 250;
     tasks[0].core = 1;
     std::strncpy(tasks[1].name, "ipc0", sizeof(tasks[1].name));
     tasks[1].stackFreeBytes = 600;
+    tasks[1].heapBytes = 2048;
     struct Restore { ~Restore() { platform::setTestTaskSnapshot(nullptr, 0, ""); } } restore;
     platform::setTestTaskSnapshot(tasks, 2, "");
     PipelineTree t;
@@ -271,7 +299,6 @@ TEST_CASE("MoonShineModule: the system tasks are nodes with their core, their st
     tm->setName("Tasks");
     t.s.addModule(tm);
     timed(t);
-    tm->tick1s();   // the snapshot refreshes once a second
     const std::string wifi = t.named("wifi"), ipc = t.named("ipc0");
     CHECK(has(wifi, "\"group\":\"System tasks\""));
     CHECK(has(wifi, "\"type\":\"task\""));
@@ -281,5 +308,8 @@ TEST_CASE("MoonShineModule: the system tasks are nodes with their core, their st
     CHECK(chip(wifi, 3) == static_cast<long>(250u * t.s.frameUs() / 1000));
     CHECK(has(ipc, "\"time\":[]"));   // unmeasured: no chip rather than a zero
     CHECK(field(ipc, "stackFree") == 600);
+    CHECK(field(wifi, "internal") == 4096);
+    CHECK(field(ipc, "internal") == 2048);
+    CHECK(partsOf(rowsWhere(t, "\"bar\":\"memory\"")[0])[3] == 4096 + 2048);   // the memory bar's tasks part
     CHECK_FALSE(has(wifi, "\"bottleneck\""));
 }

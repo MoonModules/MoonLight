@@ -149,9 +149,40 @@ extern "C" uint8_t is_transport_tx_ready(void);
 #include <unistd.h>
 #include <new>       // std::nothrow_t, the replaced allocation functions below
 
-// A failed `new (std::nothrow)` returns null, not abort(): libstdc++'s form throws, which ESP-IDF aborts on; [new.delete.single] lets a program replace it (found by Funkelfetisch).
-void* operator new(std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
-void* operator new[](std::size_t size, const std::nothrow_t&) noexcept { return std::malloc(size ? size : 1); }
+namespace mm::platform {
+// MoonLight's own heap, counted where it allocates: alloc, allocInternal and new. The size is the block's own, read from its header, so taking and giving back agree.
+static std::atomic<size_t> ownBytes_{0}, ownPsram_{0};
+static void countTaken(void* p) {
+    if (!p) return;
+    const size_t n = heap_caps_get_allocated_size(p);
+    ownBytes_.fetch_add(n, std::memory_order_relaxed);
+    if (esp_ptr_external_ram(p)) ownPsram_.fetch_add(n, std::memory_order_relaxed);
+}
+static void countGiven(void* p) {
+    if (!p) return;
+    const size_t n = heap_caps_get_allocated_size(p);
+    ownBytes_.fetch_sub(n, std::memory_order_relaxed);
+    if (esp_ptr_external_ram(p)) ownPsram_.fetch_sub(n, std::memory_order_relaxed);
+}
+static void* counted(void* p) { countTaken(p); return p; }
+}  // namespace mm::platform
+
+// Every form of new and delete is replaced ([new.delete.single]), so the count covers each module, vector and string MoonLight creates.
+
+// A failed `new (std::nothrow)` returns null, not abort(): libstdc++'s form throws, which ESP-IDF aborts on (found by Funkelfetisch).
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept { return mm::platform::counted(std::malloc(size ? size : 1)); }
+void* operator new[](std::size_t size, const std::nothrow_t&) noexcept { return mm::platform::counted(std::malloc(size ? size : 1)); }
+// The throwing forms abort on a refusal, as libstdc++'s do in a build with exceptions off.
+void* operator new(std::size_t size) {
+    void* p = mm::platform::counted(std::malloc(size ? size : 1));
+    if (!p) std::abort();
+    return p;
+}
+void* operator new[](std::size_t size) { return ::operator new(size); }
+void operator delete(void* p) noexcept { mm::platform::countGiven(p); std::free(p); }
+void operator delete[](void* p) noexcept { ::operator delete(p); }
+void operator delete(void* p, std::size_t) noexcept { ::operator delete(p); }
+void operator delete[](void* p, std::size_t) noexcept { ::operator delete(p); }
 
 namespace mm::platform {
 
@@ -184,14 +215,14 @@ void* alloc(size_t bytes) {
 #ifdef CONFIG_SPIRAM
     // Try PSRAM first, fall back to internal RAM
     void* ptr = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (ptr) return ptr;
+    if (ptr) return counted(ptr);
 #endif
-    return heap_caps_malloc(bytes, MALLOC_CAP_8BIT);
+    return counted(heap_caps_malloc(bytes, MALLOC_CAP_8BIT));
 }
 
 void* allocInternal(size_t bytes) {
     // Internal only, no PSRAM fallback: the caller chose this seam because PSRAM latency breaks it. Aligned as malloc promises, since InternalRamObject constructs objects here.
-    return heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    return counted(heap_caps_aligned_alloc(alignof(std::max_align_t), bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 }
 
 bool ptrIsPsram(const void* p) {
@@ -199,6 +230,7 @@ bool ptrIsPsram(const void* p) {
 }
 
 void free(void* ptr) {
+    countGiven(ptr);
     heap_caps_free(ptr);
 }
 
@@ -288,6 +320,47 @@ size_t freeHeap() {
 
 size_t freeInternalHeap() {
     return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+
+// One memory type's block headers: what is used but allocated to no one, as ESP-IDF's heap info reports both.
+static size_t overheadOf(uint32_t caps) {
+    multi_heap_info_t info = {};
+    heap_caps_get_info(&info, caps);
+    const size_t used = heap_caps_get_total_size(caps) - info.total_free_bytes;
+    return used > info.total_allocated_bytes ? used - info.total_allocated_bytes : 0;
+}
+
+void processMemory(size_t& resident, size_t& available) { resident = available = 0; }   // the heap figures say it
+
+void moonlightHeap(size_t& total, size_t& psram) {
+    total = ownBytes_.load(std::memory_order_relaxed);
+    psram = std::min(total, ownPsram_.load(std::memory_order_relaxed));
+}
+
+void heapOverhead(size_t& total, size_t& psram) {
+    psram = overheadOf(MALLOC_CAP_SPIRAM);
+    total = overheadOf(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) + psram;
+}
+
+static size_t systemHeap_[2] = {};   // total, PSRAM
+
+void recordSystemHeap() {
+    const size_t used = totalHeap() - freeHeap();
+    const size_t usedPsram = (totalHeap() - totalInternalHeap()) - (freeHeap() - freeInternalHeap());
+    size_t tasks = 0, tasksPsram = 0, over = 0, overPsram = 0;
+    tasksHeap(tasks, tasksPsram);
+    heapOverhead(over, overPsram);
+    // What MoonLight's counted allocations took before mm_main, such as the settings store and static constructors, is MoonLight's line, so the system's leaves it out.
+    size_t own = 0, ownPsram = 0;
+    moonlightHeap(own, ownPsram);
+    const size_t owned = tasks + over + own, ownedPsram = tasksPsram + overPsram + ownPsram;
+    systemHeap_[0] = used > owned ? used - owned : 0;
+    systemHeap_[1] = std::min(systemHeap_[0], usedPsram > ownedPsram ? usedPsram - ownedPsram : 0);
+}
+
+void systemHeap(size_t& total, size_t& psram) {
+    total = systemHeap_[0];
+    psram = systemHeap_[1];
 }
 
 // Test-only cap on the largest-free block, 0 = none. It only lowers the reported value (min with the real block), so a forced-paging test stays honest. Atomic to match the host seam's cross-thread contract.
@@ -730,6 +803,41 @@ static void ethFitMulticastFilter() {
 #endif
 static bool netifInitDone_ = false;
 
+// What the network's bring-ups took and its shutdowns gave back, apart from the task stacks they started or stopped, which the task snapshot counts. Its calls run on the one task NetworkModule ticks on.
+static size_t netHeapTotal_ = 0, netHeapPsram_ = 0;
+static uint8_t netScopeDepth_ = 0;
+
+// Measures one network call, the outermost of nested ones, as the free heap it took less the task heap it started; a shutdown gives back.
+class NetHeapScope {
+public:
+    NetHeapScope() { if (netScopeDepth_++ == 0) read(before_); }
+    ~NetHeapScope() {
+        if (--netScopeDepth_ != 0) return;
+        Reading after;
+        read(after);
+        const long long took = static_cast<long long>(before_.free) - after.free - (static_cast<long long>(after.tasks) - before_.tasks);
+        const long long tookPsram = static_cast<long long>(before_.freePsram) - after.freePsram - (static_cast<long long>(after.tasksPsram) - before_.tasksPsram);
+        netHeapTotal_ = static_cast<size_t>(std::max(0LL, static_cast<long long>(netHeapTotal_) + took));
+        netHeapPsram_ = std::min(netHeapTotal_, static_cast<size_t>(std::max(0LL, static_cast<long long>(netHeapPsram_) + tookPsram)));
+    }
+    NetHeapScope(const NetHeapScope&) = delete;
+    NetHeapScope& operator=(const NetHeapScope&) = delete;
+
+private:
+    struct Reading { size_t free = 0, freePsram = 0, tasks = 0, tasksPsram = 0; };
+    static void read(Reading& r) {
+        r.free = freeHeap();
+        r.freePsram = r.free - freeInternalHeap();
+        tasksHeap(r.tasks, r.tasksPsram);
+    }
+    Reading before_;
+};
+
+void networkHeap(size_t& total, size_t& psram) {
+    total = netHeapTotal_;
+    psram = netHeapPsram_;
+}
+
 // The hostname applied to each interface before its address client starts; empty leaves the default. A lock guards writer and reader on different tasks, and the reader snapshots first because stack calls inside it nest into the event loop.
 static char hostname_[32] = {};
 static std::mutex hostnameMutex_;
@@ -1094,6 +1202,7 @@ static bool ethInitSpi() {
 
 // Tear a running driver down so a fresh init can bring it up with new config, the live-reconfigure path. Only the external driver uses it today, the internal one's release being fiddlier and backlogged; safe to call when nothing is running.
 void ethStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ethHandle_) return;
     esp_eth_stop(ethHandle_);
     esp_event_handler_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, &ethEventHandler);
@@ -1186,6 +1295,7 @@ static bool ethInitOpeneth() {
 #endif  // CONFIG_ETH_USE_OPENETH
 
 bool ethInit() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     ensureNetifInit();
     // Dispatch on the board's PHY type at run time. Each path returns false on any failure, including none present or a PHY whose driver is not in this firmware. The module then cascades to the radio without grabbing pins or hanging.
     switch (ethConfig_.phyType) {
@@ -1465,6 +1575,7 @@ static void wifiRadioDown() {
 }
 
 bool wifiStaInit(const char* ssid, const char* password) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ssid || ssid[0] == 0) return false;
     RadioLock lock(radioMutex_);
 
@@ -1533,6 +1644,7 @@ void wifiStaGetIPv4(uint8_t out[4]) MM_NONBLOCKING {
 }
 
 void wifiStaStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     // Tell the event handler this disconnect is deliberate, so it does not answer with a reconnect that would then race the teardown below.
     wifiStaStopping_.store(true, std::memory_order_relaxed);
@@ -1613,6 +1725,7 @@ int wifiStaChannel() {
 }
 
 bool wifiApInit(const WifiApConfig& ap) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     const char* apName = ap.name;
     const char* ip = ap.ip;
@@ -1684,6 +1797,7 @@ bool wifiApConnected() {
 uint32_t wifiApClientCount() { return apClients_.load(std::memory_order_relaxed); }
 
 void wifiApStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     RadioLock lock(radioMutex_);
     wifiApActive_ = false;
     apClients_.store(0, std::memory_order_relaxed);
@@ -1914,6 +2028,7 @@ uint16_t mdnsAdvertisedPort(const char* type, const char* proto) {
 }
 
 bool mdnsInit(const char* deviceName) {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     if (!ensureMdnsStack()) return false;
     esp_err_t err = mdns_hostname_set(deviceName);
     ESP_LOGI(NET_TAG, "mDNS hostname set %s: %s", deviceName, esp_err_to_name(err));
@@ -1986,6 +2101,7 @@ bool mdnsInit(const char* deviceName) {
 }
 
 void mdnsStop() {
+    NetHeapScope measured;   // what this call takes or gives back counts as the network's
     // Stop advertising but keep the stack up, so a re-init re-advertises cheaply; the release path frees it. Both services and the hostname go, matching the init, or a stale record survives an interface switch and confuses the next announcement.
     if (mdnsStackUp_) {
         esp_err_t httpRm = mdns_service_remove("_http", "_tcp");

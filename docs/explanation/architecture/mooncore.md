@@ -82,7 +82,7 @@ Each kind of message rides the protocol the textbook gives it, and only the rule
 
 **State, not commands.** A group's state is published as absolute values on a change and then repeated, so a lost packet is repaired by the next repeat and a member that joins or reboots catches up. Applying a value twice leaves the state as it was, so a swarm needs no acknowledgements and costs one multicast send. REST serves what is no state: an update, identify, reading a peer.
 
-**No forwarding, and coalescing.** A device re-sends only what it wrote itself, so no loop forms. A slider drag publishes at most about 20 times a second, the latest value winning.
+**No forwarding, and coalescing.** A value received from the group is applied and stays there, so no loop forms; a device's repeats carry every value its group holds, whoever wrote it, which is how a member that joins later hears a value whose writer is offline. A slider drag publishes at most about 20 times a second, the latest value winning.
 
 **Listen always, ask on demand.** Listening costs the packets that arrive anyway and stays on. Asking costs traffic: ArtPoll and SSDP probes and the REST reads of peers run only while something reads them, a Devices card open in a browser or a module that needs them, the pull model [Demand](../../../src/core/module/Demand.h) follows.
 

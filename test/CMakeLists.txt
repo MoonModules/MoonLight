@@ -142,6 +142,7 @@ add_executable(mm_tests
     unit/core/unit_Scheduler_prepareScope.cpp
     unit/core/unit_Scheduler_unique_names.cpp
     unit/core/unit_Scheduler_capacity.cpp
+    unit/core/unit_Scheduler_timing.cpp
     unit/core/unit_MoonStatsModule.cpp
     unit/core/unit_MoonTalkModule.cpp
     unit/core/unit_InstallationId.cpp
@@ -260,6 +261,7 @@ add_executable(mm_tests
     unit/light/unit_Palette.cpp
     unit/light/unit_WaveEffect.cpp
     unit/light/unit_FireEffect.cpp
+    unit/light/unit_CubeLayout.cpp
     unit/light/unit_GridLayout.cpp
     unit/light/unit_Rings241Layout.cpp
     unit/light/unit_SingleColumnLayout.cpp

@@ -3,7 +3,7 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"      // topOfType: the containers this list reads
 #include "core/module/Control.h"        // ListSource
-#include "core/system/TasksModule.h"    // the system tasks' snapshot, refreshed once a second
+#include "core/system/TasksModule.h"    // the system tasks' snapshot, refreshed when read
 #include "core/util/JsonSink.h"
 #include "core/util/HeapBytes.h"        // each node's bytes per memory type
 #include "core/util/ModuleFactory.h"    // tableBytes: the type table's part of the memory bars
@@ -15,6 +15,7 @@
 
 #include "platform/platform_heap.h"   // totalHeap, freeHeap, allocatedBytes
 #include "platform/platform_tasks.h"   // TaskInfo, kTaskCpuUnmeasured
+#include "platform/platform_net.h"     // networkHeap: the network's line of the memory bars
 
 #include <algorithm>
 #include <cstdint>
@@ -34,11 +35,27 @@ namespace mm {
 ///
 /// @technical
 ///
+/// ## The rows
+///
 /// **A derived list.** Every row is read from the tree when the page asks, and not saved: the bars first, then the pipeline's nodes, then every other module in a band named "Modules", then the system tasks in a band named "System tasks". A parent's time includes its children's, and its own time leaves out the children it ticks itself.
 ///
-/// **The memory bars.** One per memory type the board has, since internal RAM is scarce and PSRAM plentiful, each balancing on its own: the modules' `heapOf(this, classSize()) + heapBytes()`, the type table, "unaccounted" (the used heap no module reports, 0 at least) and "free". Used is `platform::totalHeap() - platform::freeHeap()` per type.
+/// **Stages.** Layouts 0, effects 1, modifiers 2, layers 3, the Drivers blend 4, drivers 5. The edges name the next stage's nodes, and a wire is drawn as wide as the bytes it carries each frame. A node of the two bands takes the columns in turn, six to a row.
 ///
-/// **On a computer**, which reports no heap, the one bar is "heap": what MoonLight took through its own allocator (`platform::allocatedBytes()`), with no free part.
+/// **Folding.** A module of the Modules band below the top level names its top-level module in `parent`; the page sums a folded top level's subtree from those rows, so the device writes each module once.
+///
+/// **One snapshot per second.** The figures and the rows in order are taken when the timing is published, at the next document's first row, or when the tree changes (`Scheduler::structureVersion`), into a buffer held from the first read until `release()`: one walk of the tree per snapshot. The rows carry no detail, and the page subscribes to MoonShine only while System is shown.
+///
+/// ## The memory bars
+///
+/// **The memory bars.** One per memory type the board has, since internal RAM is scarce and PSRAM plentiful, each balancing on its own. Used is `platform::totalHeap() - platform::freeHeap()` per type.
+///
+/// Its parts: the modules' `heapOf(this, classSize()) + heapBytes()`, the type table, MoonLight's other allocations (`platform::moonlightHeap` less the two before), the system tasks' stacks and control blocks, and the network (what its bring-ups took, `platform::networkHeap`).
+///
+/// Then the system (what ran before MoonLight, `platform::systemHeap`), the heap's block headers, "unaccounted" (what ESP-IDF allocated after start-up, its network buffers above all, 0 at least) and "free".
+///
+/// **On a computer**, which reports no heap, the one bar is "RAM": the process's resident memory, closing with what the machine has available (`platform::processMemory`). Elsewhere the bar is "heap", what MoonLight took through its own allocator (`platform::allocatedBytes()`), with no free part.
+///
+/// ## The time bars
 ///
 /// **The time bars.** The frame's wall time (`Scheduler::frameUs`) per lane, each closing with its idle time so it adds up to the frame. The render loop: the modules' work, its waits for the workers and the encode task, the scheduler's work between modules. A render worker: the layers it ran, averaged over the workers (`WorkerPool::takeLoad`). The encode task: the drivers' ticks.
 ///
@@ -46,13 +63,7 @@ namespace mm {
 ///
 /// **The bottleneck.** Of the render loop, the workers and the encode task, the one with the least idle sets the frame rate; its largest node is marked `bottleneck`.
 ///
-/// **System tasks.** From TasksModule's snapshot: each task's core, least free stack and CPU time, as its share of the frame. The page groups them per core.
-///
-/// **Folding.** A module of the Modules band below the top level names its top-level module in `parent`; the page sums a folded top level's subtree from those rows, so the device writes each module once.
-///
-/// **One snapshot per second.** The figures and the rows in order are taken when the timing is published, at the next document's first row, or when the tree changes (`Scheduler::structureVersion`), into a buffer held from the first read until `release()`: one walk of the tree per snapshot. The rows carry no detail, and the page subscribes to MoonShine only while System is shown.
-///
-/// **Stages.** Layouts 0, effects 1, modifiers 2, layers 3, the Drivers blend 4, drivers 5. The edges name the next stage's nodes, and a wire is drawn as wide as the bytes it carries each frame. A node of the two bands takes the columns in turn, six to a row.
+/// **System tasks.** From TasksModule's snapshot: each task's core, what it holds per memory type, its least free stack and its CPU time as a share of the frame. The page groups them per core.
 class MoonShineModule : public MoonModule, public ListSource {
 public:
     /// The rows drawn as a flow.
@@ -66,7 +77,7 @@ public:
         return static_cast<ListRow>(s.v.barCount() + s.count);
     }
 
-    /// Append one row: a bar, or a node with its figures, its stage and its wires.
+    /// Append one row: a bar, or a node with its figures, its stage and its wires: @xref{the-rows}.
     void writeListRow(JsonSink& sink, ListRow row) const override {
         const Snapshot& s = snapshot(row == 0);
         if (row < s.v.barCount()) { writeBar(sink, s.v, row); return; }
@@ -96,6 +107,7 @@ public:
         /// @field stage A node's column.
         /// @field us Time per frame, children included.
         /// @field own Time per frame, children left out.
+        /// @field worst The longest tick, or on the render bar the longest frame, of the last second.
         /// @field time Own time per thread.
         /// @field internal Bytes in internal RAM.
         /// @field psram Bytes in PSRAM.
@@ -105,6 +117,8 @@ public:
         /// @field parent Its top-level module.
         /// @field core A task's core.
         /// @field stackFree A task's least free stack.
+        /// @field fps An output's frames sent last second.
+        /// @field dropped An output's frames dropped since it started, where it counts them.
         controls_.addList("pipeline", *this);   // this module is the ListSource
     }
 
@@ -116,9 +130,10 @@ private:
 
     /// The memory figures, each type balancing on its own.
     struct Memory {
-        HeapBytes modules, types, unaccounted, free;
+        HeapBytes modules, types, moonlight, tasks, network, system, overhead, unaccounted, free;
         bool psram = false;    ///< the board has PSRAM: a bar per type
         bool totals = false;   ///< the platform reports its heap, so the bars close with free
+        bool process = false;  ///< a computer: the bar is the process's RAM against the machine's available
     };
     /// The frame's figures, the last second's averages.
     struct Time {
@@ -127,6 +142,7 @@ private:
         uint32_t roots = 0, others = 0;      ///< every top-level tick, and those of the modules besides the two
         uint32_t encode = 0, wait = 0;       ///< the drivers' ticks on the encode task, and the render loop's wait for it
         uint32_t tick = 0, frame = 0;        ///< the scheduler's tick and the frame period
+        uint32_t worstFrame = 0;             ///< the longest frame of the second
         bool workers = false;                ///< render workers run beside the render loop
         bool encodeTask = false;             ///< the drivers run on the encode task
     };
@@ -178,6 +194,8 @@ private:
         const Scheduler* s = Scheduler::instance();
         v.mem.modules = {};
         for (uint8_t i = 0; s && i < s->moduleCount(); i++) gatherModules(s->module(i), v.mem.modules);
+        v.mem.tasks = {};
+        for (uint8_t i = 0; v.tasks && i < v.tasks->taskCount(); i++) v.mem.tasks += heapOfTask(v.tasks->task(i));
         closeMemory(v.mem);
         if (s) gatherTime(*s, v);
     }
@@ -188,18 +206,38 @@ private:
         for (uint8_t i = 0; i < m->childCount(); i++) gatherModules(m->child(i), sum);
     }
 
-    /// The type table, the used heap no module reports and the free heap, per type.
+    /// What a system task holds on the heap, in the memory type its stack lives in.
+    static HeapBytes heapOfTask(const platform::TaskInfo& t) { return {t.heapBytes, t.stackPsram ? t.heapBytes : 0}; }
+
+    /// The type table, the used heap no module or task reports and the free heap, per type.
     static void closeMemory(Memory& mem) {
         const size_t heapTotal = platform::totalHeap(), heapFree = platform::freeHeap();
         const size_t internalTotal = platform::totalInternalHeap(), internalFree = platform::freeInternalHeap();
         mem.types = ModuleFactory::tableBytes();   // the one owner that is no module: the table every type registers in
+        size_t net = 0, netPsram = 0;
+        platform::networkHeap(net, netPsram);
+        mem.network = {net, netPsram};
+        platform::systemHeap(net, netPsram);
+        mem.system = {net, netPsram};
+        platform::heapOverhead(net, netPsram);
+        mem.overhead = {net, netPsram};
+        // MoonLight's own allocations beyond what the modules and the type table report, which its count holds as well.
+        platform::moonlightHeap(net, netPsram);
+        HeapBytes own{net, netPsram};
+        own -= mem.modules + mem.types;
+        mem.moonlight = own;
         mem.totals = heapTotal > heapFree;
         mem.psram = heapTotal > internalTotal && heapFree >= internalFree;
         mem.free = mem.totals ? HeapBytes{heapFree, mem.psram ? heapFree - internalFree : 0} : HeapBytes{};
-        // A computer reports no heap, so there used is what MoonLight took itself.
-        const HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, mem.psram ? overSize(heapTotal - internalTotal, mem.free.psram) : 0}
-                                          : HeapBytes{platform::allocatedBytes(), 0};
-        const HeapBytes held = mem.modules + mem.types;
+        HeapBytes used = mem.totals ? HeapBytes{heapTotal - heapFree, mem.psram ? overSize(heapTotal - internalTotal, mem.free.psram) : 0}
+                                    : HeapBytes{platform::allocatedBytes(), 0};
+        // A computer reports no heap, so its sheet is the process's resident memory against what the machine has available.
+        size_t resident = 0, available = 0;
+        if (!mem.totals) platform::processMemory(resident, available);
+        constexpr size_t kCap = 0xFFFFFFFFu;   // the sheet's figures are 32-bit, so a computer's memory past 4 GB reads 4 GB
+        mem.process = resident > 0;
+        if (mem.process) { used = {resident < kCap ? resident : kCap, 0}; mem.free = {available < kCap ? available : kCap, 0}; mem.totals = true; }
+        const HeapBytes held = mem.modules + mem.types + mem.moonlight + mem.tasks + mem.network + mem.system + mem.overhead;
         const size_t unPsram = overSize(used.psram, held.psram);
         mem.unaccounted = {overSize(used.internal(), held.internal()) + unPsram, unPsram};
     }
@@ -208,6 +246,7 @@ private:
     static void gatherTime(const Scheduler& sched, View& v) {
         Time& t = v.time;
         t.frame = sched.frameUs();
+        t.worstFrame = sched.worstFrameUs();
         t.tick = sched.tickTimeUs();
         if (v.effects) {
             t.load = v.effects->layerLoad();
@@ -251,20 +290,23 @@ private:
         else writeTimeBar(sink, v.time, laneOfBar(v, row - v.memoryBars()));
     }
 
-    /// One memory type's bar: the modules, the type table, the unaccounted rest, and free where the platform says.
+    /// One memory type's bar: the modules, the type table, MoonLight's other allocations, the tasks, the network, the system, the heap's overhead, the unaccounted rest, and free where the platform says: @xref{the-memory-bars}.
     static void writeMemoryBar(JsonSink& sink, const Memory& mem, uint8_t type) {
         const auto part = [&](const HeapBytes& h) { return static_cast<unsigned>(!mem.psram ? h.total : type == 1 ? h.psram : h.internal()); };
-        const char* name = !mem.totals ? "heap" : type == 1 ? "PSRAM" : "internal RAM";
-        sink.appendf("{\"name\":\"%s\",\"bar\":\"memory\",\"type\":%u,\"parts\":[[\"modules\",%u],[\"module types\",%u],[\"unaccounted\",%u]",
-                     name, static_cast<unsigned>(type), part(mem.modules), part(mem.types), part(mem.unaccounted));
+        const char* name = mem.process ? "RAM" : !mem.totals ? "heap" : type == 1 ? "PSRAM" : "internal RAM";
+        sink.appendf("{\"name\":\"%s\",\"bar\":\"memory\",\"type\":%u,\"parts\":[[\"modules\",%u],[\"module types\",%u],[\"MoonLight\",%u],[\"tasks\",%u],[\"network\",%u],[\"system\",%u],[\"heap overhead\",%u],[\"unaccounted\",%u]",
+                     name, static_cast<unsigned>(type), part(mem.modules), part(mem.types), part(mem.moonlight), part(mem.tasks), part(mem.network), part(mem.system),
+                     part(mem.overhead), part(mem.unaccounted));
         if (mem.totals) sink.appendf(",[\"free\",%u]", part(mem.free));
         sink.append("]}");
     }
 
-    /// One lane's bar: its work, its waits and its idle, adding up to the frame.
+    /// One lane's bar: its work, its waits and its idle, adding up to the frame: @xref{the-time-bars}.
     static void writeTimeBar(JsonSink& sink, const Time& t, Lane lane) {
         static constexpr const char* kLaneNames[] = {"render loop", "layer workers", "encode task"};
-        sink.appendf("{\"name\":\"%s\",\"bar\":\"time\",\"lane\":%u,\"parts\":[", kLaneNames[lane], static_cast<unsigned>(lane));
+        sink.appendf("{\"name\":\"%s\",\"bar\":\"time\",\"lane\":%u,", kLaneNames[lane], static_cast<unsigned>(lane));
+        if (lane == kRender) sink.appendf("\"worst\":%u,", static_cast<unsigned>(t.worstFrame));
+        sink.append("\"parts\":[");
         if (lane == kRender) {
             const uint32_t work = over(t.effects, t.load.hereUs + t.load.joinUs) + t.load.hereUs + over(t.drivers, t.wait) + t.others;
             sink.appendf("[\"modules\",%u],[\"waiting\",%u],[\"between modules\",%u],[\"idle\",%u]", static_cast<unsigned>(work),
@@ -357,7 +399,10 @@ private:
         ListRow n = 0;
         walk(v, [&](const Node& node) {
             // The Modules band comes before the tasks band, so the task table is found before its rows.
-            if (node.m && !v.tasks && std::strcmp(node.m->typeName(), "TasksModule") == 0) v.tasks = static_cast<const TasksModule*>(node.m);
+            if (node.m && !v.tasks && std::strcmp(node.m->typeName(), "TasksModule") == 0) {
+                v.tasks = static_cast<const TasksModule*>(node.m);
+                v.tasks->ensureFresh();   // the read takes the task table, so a device nobody watches walks none
+            }
             if (!nodes_.ensure(n + 1u)) return false;   // memory refused: the list holds the nodes that fit
             nodes_[n++] = node;
             return true;
@@ -527,17 +572,25 @@ private:
         } else if (n.layer) { sink.append(",\"group\":"); sink.writeJsonString(n.layer->name()); }
     }
 
-    /// A system task: its CPU time where measured, its core and its least free stack.
+    /// A system task: its CPU time where measured, its core, what it holds per memory type and its least free stack.
     static void writeTask(JsonSink& sink, const View& v, const Node& n) {
         const platform::TaskInfo& t = *n.task;
         const LaneUs lanes = laneTimes(v, n);
+        const HeapBytes held = heapOfTask(t);
         sink.append("{\"name\":");
         sink.writeJsonString(t.name);
-        sink.appendf(",\"type\":\"task\",\"stage\":%u,\"us\":%u,\"own\":%u,\"core\":%d,\"stackFree\":%u,\"enabled\":true",
+        sink.appendf(",\"type\":\"task\",\"stage\":%u,\"us\":%u,\"own\":%u,\"core\":%d,\"internal\":%u,\"psram\":%u,\"stackFree\":%u,\"enabled\":true",
                      static_cast<unsigned>(n.stage), static_cast<unsigned>(lanes.us[kTasks]), static_cast<unsigned>(lanes.us[kTasks]),
-                     static_cast<int>(t.core), static_cast<unsigned>(t.stackFreeBytes));
+                     static_cast<int>(t.core), static_cast<unsigned>(held.internal()), static_cast<unsigned>(held.psram),
+                     static_cast<unsigned>(t.stackFreeBytes));
         writeTime(sink, lanes);
         sink.append(",\"group\":\"System tasks\",\"edges\":[]}");
+    }
+
+    /// An output's pace: the frames it sent last second, and the frames it dropped where it counts them.
+    static void writePace(JsonSink& sink, const DriverBase& d) {
+        sink.appendf(",\"fps\":%u", static_cast<unsigned>(d.paceFps()));
+        if (const std::optional<uint32_t> dropped = d.framesDropped()) sink.appendf(",\"dropped\":%u", static_cast<unsigned>(*dropped));
     }
 
     static void writeNode(JsonSink& sink, const View& v, const Node& n) {
@@ -548,11 +601,13 @@ private:
         sink.writeJsonString(n.m->name());
         sink.append(",\"type\":");
         sink.writeJsonString(n.m->typeName());
-        sink.appendf(",\"stage\":%u,\"us\":%u,\"own\":%u,\"size\":%u,\"internal\":%u,\"psram\":%u,\"enabled\":%s",
+        sink.appendf(",\"stage\":%u,\"us\":%u,\"own\":%u,\"worst\":%u,\"size\":%u,\"internal\":%u,\"psram\":%u,\"enabled\":%s",
                      static_cast<unsigned>(n.stage), static_cast<unsigned>(n.m->tickTimeUs()), static_cast<unsigned>(n.m->ownTimeUs()),
+                     static_cast<unsigned>(n.m->worstTimeUs()),
                      static_cast<unsigned>(n.m->classSize()), static_cast<unsigned>(held.internal()), static_cast<unsigned>(held.psram),
                      n.m->enabled() ? "true" : "false");
         writeTime(sink, laneTimes(v, n));
+        if (n.m->role() == ModuleRole::Driver) writePace(sink, *static_cast<const DriverBase*>(n.m));
         if (n.m == v.bottleneck) sink.append(",\"bottleneck\":true");
         if (n.m->status() && n.m->severity() != Severity::Status)
             sink.appendf(",\"severity\":\"%s\"", kSeverities[static_cast<int>(n.m->severity())]);

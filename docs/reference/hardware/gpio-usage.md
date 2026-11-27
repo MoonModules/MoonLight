@@ -1,6 +1,6 @@
 # GPIO usage per MCU — hardware reference
 
-Which GPIOs are safe to wire a mic, an LED strand, or an Ethernet PHY to on each MCU MoonLight supports, so a bench build picks a pin from here instead of re-scraping the datasheet. This is **chip**-level (which GPIOs the silicon reserves or role-assigns); a specific product's *board* wiring is its catalog entry in [`mooninstaller/deviceModels.json`](../../mooninstaller/deviceModels.json), and the one fully-mapped board is the [ESP32-S31 coreboard](esp32-s31-coreboard.md).
+Which GPIOs are safe to wire a mic, an LED strand, or an Ethernet PHY to on each MCU MoonLight supports, so a bench build picks a pin from here instead of re-scraping the datasheet. This is **chip**-level (which GPIOs the silicon reserves or role-assigns); a specific product's *board* wiring is its catalog entry in [`mooninstaller/deviceModels.json`](../../../mooninstaller/deviceModels.json), and the one fully-mapped board is the [ESP32-S31 coreboard](esp32-s31-coreboard.md).
 
 Each chip lists two kinds of pin to avoid:
 
@@ -20,7 +20,7 @@ For **LED output** specifically — the pins a WS2812-class strand data line can
 | **ESP32 (classic)** | 4, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33 | 13 | +16, 17 on **non-PSRAM** WROOM (they're PSRAM bus on WROVER). Input-only 34-39 are mic-input only, not LED. |
 | **ESP32-S3 (N16R8 / octal-PSRAM)** | 1-18, 21, 47, 48 → the clean 16 for LED lanes: **4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,21** | 16 | Excludes octal-PSRAM (33-37), USB (19,20), UART0 (43,44), onboard RGB LED (38 on rev v1.0 / 48 on rev v1.1 — avoid whichever your board uses), straps (0,3,45,46). Quad-PSRAM (N8R2) / no-PSRAM parts free 33-37 too. |
 | **ESP32-P4 (P4-NANO)** | 20, 21, 22, 23, 24, 25, 26, 27, 32, 33, 39-48 | 20 | Board-specific: the NANO commits eth-RMII (28-31/49-52), C6-SDIO (14-19/54), I2C (7-8), UART0 (37-38). A carrier board changes the exposed set — the MHC-WLED shield routes through transceivers (no bare GPIO). |
-| **ESP32-C3** | take from the device model in `deviceModels.json` | see model | GPIO18 and GPIO19 are the native USB (the console and Improv on USB Serial/JTAG), GPIO20 and GPIO21 the UART, GPIO9 the boot strap. |
+| **ESP32-C3** | 0, 1, 3, 4, 5, 6, 7, 10 | 8 | Excludes the SPI flash (12-17, in the package on the C3FH4), the native USB (18, 19: the console and Improv on USB Serial/JTAG), UART0 (20, 21) and the straps (2, 8, 9). GPIO0 and GPIO1 carry the 32 kHz crystal on a board that fits one. |
 | **ESP32-S31 (coreboard)** | take from the [coreboard reference](esp32-s31-coreboard.md) free set | — | Most of the header is committed to on-board RGMII eth + ES8311 codec + SD + USB-host; don't guess. |
 
 **Mapping these to actual device-model defaults** (which of a board's usable pins to pre-fill in `deviceModels.json`) is a separate, per-board step: the catalog defaults one strip for a bare dev board (the user wires the rest), or the exact wired set for a purpose-built board (QuinLED Dig-Octa: `0,1,2,3,4,5,12,13`). That per-model work is tracked in [backlog/core § LED output pins](https://github.com/MoonModules/MoonLight/issues/220).

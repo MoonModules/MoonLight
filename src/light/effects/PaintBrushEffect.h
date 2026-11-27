@@ -155,8 +155,8 @@ private:
     lengthType axis(uint8_t k, uint8_t band, lengthType len) const MM_NONBLOCKING {
         const uint32_t lead = static_cast<uint32_t>(band) * leadRate_[k] * 65536u / 60000u;
         const angle16 theta = static_cast<angle16>(phase_[k] - lead + (static_cast<uint32_t>(aux1Chaos) << 8));
-        const uint32_t u = static_cast<uint32_t>(sin16(theta) + 32768);   // 0..65535
-        return static_cast<lengthType>(u * static_cast<uint32_t>(len > 0 ? len - 1 : 0) / 65535u);
+        const uint32_t u = static_cast<uint32_t>(sin16(theta) + 32768);   // 1..65535
+        return static_cast<lengthType>((u * static_cast<uint32_t>(len)) >> 16);   // `len` bins of equal width, so both edges are reached alike
     }
 
     /// Kept local so the loop above reads like the MoonLight source it follows.

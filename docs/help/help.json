@@ -126,7 +126,7 @@
     },
     "identify": {
      "line": "Blink the lights for five seconds, so this device is found by looking.",
-     "more": "Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details."
+     "more": "Dark and lit twice a second, at their own brightness at most. A peer's map presses it from a device's details."
     },
     "palette": {
      "line": "What effects sample from: a built-in palette or a scripted `.mlp` one.",
@@ -258,6 +258,9 @@
       "own": {
        "line": "Time per frame, children left out."
       },
+      "worst": {
+       "line": "The longest tick, or on the render bar the longest frame, of the last second."
+      },
       "time": {
        "line": "Own time per thread."
       },
@@ -284,6 +287,12 @@
       },
       "stackFree": {
        "line": "A task's least free stack."
+      },
+      "fps": {
+       "line": "An output's frames sent last second."
+      },
+      "dropped": {
+       "line": "An output's frames dropped since it started, where it counts them."
       }
      }
     }
@@ -351,7 +360,8 @@
    "tags": "💫",
    "dim": 3,
    "doc": "light/layouts.md#cube",
-   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CubeLayout.h"
+   "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/layouts/CubeLayout.h",
+   "tests": "https://moonmodules.org/MoonLight/reference/tests.html#cubelayout"
   },
   "HumanSizedCubeLayout": {
    "line": "A walk-in cube of five LED curtains: front, back, top, left and right, open at the bottom.",

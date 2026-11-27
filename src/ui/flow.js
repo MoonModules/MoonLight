@@ -28,12 +28,13 @@ function foldModule(top, kids) {
         own: top.us, time: top.us ? [[(top.time && top.time[0] && top.time[0][0]) || 0, top.us]] : [], bottleneck: all.some(r => r.bottleneck) || undefined };
 }
 
-// A core: its tasks' CPU time apart from the idle tasks', which is the time left on it.
+// A core: its tasks' CPU time apart from the idle tasks', which is the time left on it, and the bytes its tasks hold.
 function foldCore(core, tasks) {
     const idle = tasks.filter(t => /^IDLE/.test(t.name)), busy = tasks.filter(t => !/^IDLE/.test(t.name));
     const us = busy.reduce((s, t) => s + laneUs(t, 3), 0);
     return { name: coreName(core), type: "core", core, count: tasks.length, open: expanded.has(coreName(core)), enabled: true,
-        us, own: us, idle: idle.reduce((s, t) => s + laneUs(t, 3), 0), time: us ? [[3, us]] : [], edges: [] };
+        us, own: us, idle: idle.reduce((s, t) => s + laneUs(t, 3), 0), time: us ? [[3, us]] : [], edges: [],
+        internal: sum(tasks, "internal"), psram: sum(tasks, "psram") };
 }
 
 // The bands as drawn: the Modules band holds the top-level modules folded, the System tasks band one node per core, and each opened
@@ -137,13 +138,18 @@ export function chipsOf(r, totals, rel = relative) {
     if (r.stackFree !== undefined) mem.push({ cls: "flow-chip-stack", text: "stack " + fmtBytes(r.stackFree) });
     for (const [lane, us] of r.time || []) time.push({ cls: "flow-chip-lane" + lane, text: rel ? fmtShare(us, totals.frame) : fmtUs(us) });
     if (r.idle !== undefined) time.push({ cls: "flow-chip-idle", text: "idle " + (rel ? fmtShare(r.idle, totals.frame) : fmtUs(r.idle)) });
+    // A spike: the second's longest tick, shown only when it is past a millisecond and twice the average, so the graph flags a stutter and stays quiet otherwise.
+    if (r.worst >= 1000 && r.worst > 2 * (r.us || 0)) time.push({ cls: "flow-chip-spike", text: "▲" + fmtUs(r.worst) });
     return { mem, time };
 }
 
 // A node's tooltip: what the module is (its header's one line, when the help is loaded), then its figures.
-export const flowTitle = (r, line) => r.type === "core" ? `${r.name}: ${r.count} tasks, ${fmtUs(r.us)} busy and ${fmtUs(r.idle)} idle per frame` : `${r.name} (${r.type})${line ? "\n" + line.replace(/`/g, "") : ""}\n`
+export const flowTitle = (r, line) => r.type === "core" ? `${r.name}: ${r.count} tasks, ${fmtUs(r.us)} busy and ${fmtUs(r.idle)} idle per frame, holding ${fmtBytes(r.internal || 0)} internal and ${fmtBytes(r.psram || 0)} PSRAM` : `${r.name} (${r.type})${line ? "\n" + line.replace(/`/g, "") : ""}\n`
     + (r.count ? `${fmtUs(r.us || 0)} per frame and its bytes with its ${r.count} modules'` : `${fmtUs(r.own ?? r.us ?? 0)} own, ${fmtUs(r.us || 0)} with children per frame`)
-    + (r.type === "task" ? `, ${fmtBytes(r.stackFree || 0)} stack free` : `, ${fmtBytes(r.internal || 0)} internal, ${fmtBytes(r.psram || 0)} PSRAM, ${fmtBytes(r.size || 0)} object`)
+    + (r.worst ? `, longest tick ${fmtUs(r.worst)}` : "")
+    + `, ${fmtBytes(r.internal || 0)} internal, ${fmtBytes(r.psram || 0)} PSRAM`
+    + (r.type === "task" ? `, ${fmtBytes(r.stackFree || 0)} stack free` : `, ${fmtBytes(r.size || 0)} object`)
+    + (r.fps !== undefined ? `\nSends ${r.fps} frames a second${r.dropped ? `, ${r.dropped} dropped since start` : ""}` : "")
     + (r.bottleneck ? "\nThe bottleneck: the largest on the busiest thread" : "");
 
 function el(parent, tag, attrs = {}, text) {
@@ -159,9 +165,9 @@ function html(parent, tag, cls, text) {
     return parent.appendChild(e);
 }
 
-// A part's class: the bar's own color for what modules hold or do, grays for what no module holds, a wait's color for a wait.
+// A part's class: the bar's own color for what modules hold or do, the system tasks' color for their stacks, the network's own, grays for what no owner holds, a wait's color for a wait.
 const partClass = (bar, name) => ({ free: "flow-seg-free", idle: "flow-seg-free", unaccounted: "flow-seg-unaccounted", "between modules": "flow-seg-unaccounted",
-    waiting: "flow-seg-wait", "module types": "flow-seg-types " + barColor(bar) }[name] || barColor(bar));
+    waiting: "flow-seg-wait", "module types": "flow-seg-types " + barColor(bar), tasks: "flow-chip-lane3", MoonLight: "flow-seg-types " + barColor(bar), network: "flow-seg-net", system: "flow-seg-sys", "heap overhead": "flow-seg-overhead" }[name] || barColor(bar));
 const barColor = (bar) => bar.bar === "memory" ? "flow-chip-mem" + bar.type : "flow-chip-lane" + bar.lane;
 
 // The selector and the legend above the bars.
@@ -183,10 +189,19 @@ function drawHead(box, bars, nodes, redraw) {
 // One bar per memory type and per thread, each part as wide as its share of the bar.
 function drawBars(box, bars) {
     const strip = html(box, "div", "flow-strip");
+    let framed = false;
     for (const b of bars) {
         const t = total(b);
+        // Every time bar adds up to the frame, so the frame is named once, with the second's longest frame beside it, the stutter an average hides.
+        if (b.bar === "time" && !framed) {
+            framed = true;
+            const worst = (bars.find(x => x.worst) || {}).worst;
+            html(strip, "div", "flow-frame", `frame ${fmtUs(t)}${worst ? `, longest ${fmtUs(worst)}` : ""}`);
+        }
         const row = html(strip, "div", "flow-bar");
-        html(row, "span", "flow-bar-label", `${b.name} ${b.bar === "memory" ? fmtBytes(t) : fmtUs(t)}`);
+        // A time bar's label is its busy time, which differs per thread; the idle part closes the bar.
+        const idle = b.bar === "time" ? (b.parts.find(p => p[0] === "idle") || [0, 0])[1] : 0;
+        html(row, "span", "flow-bar-label", `${b.name} ${b.bar === "memory" ? fmtBytes(t) : fmtUs(t - idle) + " busy"}`);
         const track = html(row, "div", "flow-bar-track");
         for (const [name, v] of b.parts) {
             if (!v) continue;

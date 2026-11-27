@@ -8,6 +8,7 @@
 #include "light/layouts/PanelsLayout.h"
 #include "light/layouts/Rings241Layout.h"
 #include "light/layouts/TubesLayout.h"
+#include "layout_lights.h"   // Light, lightsOf
 
 #include <tuple>
 #include <vector>
@@ -16,16 +17,8 @@
 
 namespace {
 
-struct Light { mm::lengthType x, y, z; bool operator==(const Light&) const = default; };
-void collect(void* ctx, mm::nrOfLightsType, mm::lengthType x, mm::lengthType y, mm::lengthType z) {
-    static_cast<std::vector<Light>*>(ctx)->push_back({x, y, z});
-}
-template <typename L>
-std::vector<Light> lightsOf(const L& layout) {
-    std::vector<Light> v;
-    layout.placeLights(mm::CoordSink{collect, nullptr, &v});
-    return v;
-}
+using mm::test::Light;
+using mm::test::lightsOf;
 std::vector<Light> ring(mm::lengthType cx, mm::lengthType cy, uint8_t n, uint16_t angleFirst, uint16_t rotation, bool clockwise, uint8_t scale) {
     mm::RingLayout r;
     r.centerX = cx;

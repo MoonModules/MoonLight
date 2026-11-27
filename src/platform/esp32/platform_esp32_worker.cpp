@@ -1,40 +1,36 @@
 /// The one seam behind the multicore split, so no task-system type escapes this layer.
 ///
-/// A pinned task with a direct notification is the textbook lock-free wake for one producer and one consumer, and the documented lightweight replacement for a binary semaphore.
-/// The render split is the first user and the asynchronous send wants the identical primitive, which is why it lives here rather than in either.
+/// A pinned task woken by a direct notification is the textbook lock-free wake for one producer and one consumer; the render split and the asynchronous send both use it.
 ///
 /// @technical
 ///
 /// ## The watchdog subscription is per task
 ///
-/// Subscribing and feeding act on the current task, so the flag recording whether the caller subscribed is thread-local rather than global.
-/// The render loop and the encode worker each feed the watchdog, and a single global would let one call the feed on a task the other subscribed.
-/// The system rejects that as an unknown task, flooding the log every tick and starving the network stack.
-/// Each task reads and writes its own copy on its own task, so nothing needs synchronizing.
+/// Subscribing and feeding act on the current task, so the flag recording whether the caller subscribed is thread-local, each task reading its own copy.
 ///
-/// The configuration runs the watchdog with idle-task checking off, a saturated core being healthy, so nothing is watched unless a task subscribes.
-/// If either stops feeding it, a genuine wedge rather than a busy frame, it panics and reboots with a backtrace instead of hanging silently.
+/// The render loop and the encode worker each feed the watchdog; a global flag would let one feed a task the other subscribed, which the system rejects every tick, flooding the log.
 ///
-/// ## Stopping is bounded, never infinite
+/// The watchdog runs with idle-task checking off, a saturated core being healthy, so only a subscribed task is watched; one that stops feeding it panics and reboots with a backtrace.
 ///
-/// Normally one wake suffices, the worker returning once it sees the stop flag.
-/// But if the stop runs on the same core the worker is pinned to while the worker is mid-job, it cannot be scheduled until this caller yields.
-/// And an unbounded spin would deadlock the device.
-/// Yielding lets it drain within a few milliseconds, and the deadline is the robustness floor for a lost wake or a wedged job.
-/// On timeout the worker is detached rather than freed, a bounded leak being better than a use-after-free.
-/// And its stop flag stays set so it self-deletes cleanly if it ever wakes.
+/// ## Stopping is bounded
+///
+/// One wake normally suffices: the worker returns once it sees the stop flag.
+///
+/// A stop on the worker's own core while it is mid-job leaves it unscheduled until the caller yields, so the caller yields and waits up to a deadline rather than spinning.
+///
+/// On the deadline the worker is detached rather than freed, a bounded leak being better than a use-after-free, and its stop flag stays set so it deletes itself if it wakes.
 ///
 /// ## The handle is assigned before the task is created
 ///
-/// A task pinned to the spawner's own core preempts inside the create call, and its function may wait immediately.
-/// With the handle still unset that wait returns at once without blocking.
-/// And a retry loop becomes a hot spin that starves this caller from ever assigning it, which measured as a board offline at boot.
-/// Assigning first closes that window, and a failed create resets it before anyone can be woken.
+/// A task pinned to the spawner's core preempts inside the create call and may wait at once; with its handle unset that wait returns at once, and a retry becomes a hot spin.
+///
+/// That spin starved the spawner from ever assigning the handle, measured as a board offline at boot, so the handle is assigned first and a failed create resets it.
 
 #include "platform/platform.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"   // Signal: the binary semaphore a finished job gives
 #include "esp_task_wdt.h"   // the render loop and the encode worker each subscribe themselves so a wedge self-heals (reboot) not hangs
 #include "esp_log.h"         // sleepUs says once when it falls back to a scheduler tick
 #include "esp_timer.h"       // sleepUs: a one-shot timer wakes the task, finer than the scheduler tick
@@ -50,7 +46,7 @@
 namespace mm::platform {
 
 namespace {
-// stopPinnedTask's join deadline. A worker normally drains within a few ms of the stop-notify; this is the robustness floor for the pathological case (a same-core worker that can't be scheduled, a lost notify). ≫ any real per-frame job, ≪ a user-perceptible hang.
+// stopPinnedTask's join deadline: far above any per-frame job, far below a hang a user notices, the floor for a same-core worker left unscheduled or a lost wake.
 constexpr uint32_t kStopJoinTimeoutMs = 300;
 
 // The opaque WorkerTask::impl. Holds the RTOS handle, the caller's fn/user, and a stop flag the spawned trampoline checks.
@@ -60,14 +56,14 @@ struct EspWorker {
     void* user = nullptr;
     std::atomic<bool> stop{false};
     std::atomic<bool> finished{false};
-    // Ownership handshake for the timeout path: normally stopPinnedTask waits for `finished` and frees `w`. If it TIMES OUT (the worker couldn't be scheduled, a same-core teardown), it hands ownership to the trampoline by setting `detached`, and whichever of the two runs last frees `w`. The atomic-exchange below makes exactly one side win, so `w` is freed once and never used-after-free.
+    // Ownership on a timeout: stopPinnedTask sets `detached` and whichever of it and the trampoline runs last frees `w`, the exchange letting exactly one side win.
     std::atomic<bool> detached{false};
     /// The one-shot timer sleepUs arms, created on the task's first sleep and deleted as the task ends.
     esp_timer_handle_t sleepTimer = nullptr;
     bool sleepFellBack = false;   ///< a timer failed once and the task slept a whole tick, logged that first time
 };
 
-// The trampoline: run the caller's function, which owns its own loop and returns once it sees the stop flag, then delete the task. The function manages its own watchdog membership, subscribing at loop start and unsubscribing before returning; one that never subscribes leaves the feed a no-op, so this stays generic.
+// Run the caller's function, which owns its loop and its watchdog membership and returns on the stop flag, then delete the task.
 void workerTrampoline(void* arg) {
     auto* w = static_cast<EspWorker*>(arg);
     w->fn(w->user);                     // runs until stopPinnedTask flips w->stop and wakes it
@@ -161,20 +157,38 @@ void stopPinnedTask(WorkerTask& t) {
     if (!w) return;
     w->stop.store(true, std::memory_order_release);   // the fn re-checks this after its next wake
     if (w->handle) xTaskNotifyGive(w->handle);         // wake it so it observes the stop
-    // Wait for the trampoline to run out and delete itself, bounded rather than infinite: @xref{stopping-is-bounded-never-infinite|the deadlock an unbounded spin caused}.
+    // Wait for the trampoline to run out and delete itself, bounded rather than infinite: @xref{stopping-is-bounded|the deadlock an unbounded spin caused}.
     const TickType_t start = xTaskGetTickCount();
     while (!w->finished.load(std::memory_order_acquire)) {
         if (xTaskGetTickCount() - start >= pdMS_TO_TICKS(kStopJoinTimeoutMs)) {   // elapsed, which holds across the counter's wrap
-            // DETACH, hand `w` to the trampoline. The exchange makes exactly one side free it: if the trampoline already ran (raced us to `detached`), WE free `w` here; otherwise the trampoline frees it when it finally exits. Either way `w` is freed once, never used-after-free, and this caller returns instead of deadlocking (see the timeout rationale above).
+            // Detach: the exchange frees `w` here when the trampoline already ran, else the trampoline frees it on exit, so `w` is freed once and this caller returns.
             if (w->detached.exchange(true, std::memory_order_acq_rel)) delete w;
             t.impl = nullptr;
             return;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
-    // NORMAL path frees through the SAME exchange as the timeout path, not a bare delete. The trampoline touches `w->detached` AFTER storing `finished` (see workerTrampoline), so once we observe finished the trampoline may still be mid-exchange on `w`; a bare delete here would free it under that access. The exchange makes exactly one side win the free, whichever runs the store last.
+    // The normal path frees through the same exchange: the trampoline touches `w->detached` after storing `finished`, so a bare delete could free `w` under that access.
     if (w->detached.exchange(true, std::memory_order_acq_rel)) delete w;
     t.impl = nullptr;
+}
+
+bool signalCreate(Signal& s) {
+    if (!s.impl) s.impl = xSemaphoreCreateBinary();
+    return s.impl != nullptr;
+}
+
+void signalDestroy(Signal& s) {
+    if (s.impl) vSemaphoreDelete(static_cast<SemaphoreHandle_t>(s.impl));
+    s.impl = nullptr;
+}
+
+void signalGive(Signal& s) {
+    if (s.impl) xSemaphoreGive(static_cast<SemaphoreHandle_t>(s.impl));
+}
+
+bool signalTake(Signal& s, uint32_t timeoutMs) {
+    return s.impl && xSemaphoreTake(static_cast<SemaphoreHandle_t>(s.impl), pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
 }
 
 // Whether the CALLING task subscribed, so the feed only ever feeds a real subscription: @xref{the-watchdog-subscription-is-per-task|why this is thread-local rather than global}.

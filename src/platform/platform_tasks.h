@@ -35,9 +35,13 @@ struct TaskInfo {
     uint8_t   priority = 0;                      ///< its RTOS priority
     uint32_t  stackFreeBytes = 0;                ///< high-water mark: the least free stack seen
     uint32_t  cpuPermille = kTaskCpuUnmeasured;  ///< 0..1000, or unmeasured when stats are off
+    uint32_t  heapBytes = 0;                     ///< what the task holds on the heap, its stack and its control block; 0 where the platform cannot tell
+    bool      stackPsram = false;                ///< its stack lives in PSRAM
 };
 /// Fill `out` with up to `maxTasks` rows, answering how many; 0 where there is no RTOS.
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks);
+/// What every task holds on the heap, stacks and control blocks: total bytes and the part in PSRAM, 0 where there is no RTOS.
+void tasksHeap(size_t& total, size_t& psram);
 /// The task running on a core, or empty on a single-core target.
 void currentTaskOnCore(int core, char* out, size_t cap);
 /// The task the render loop runs in, empty where no distinct one exists.
@@ -66,6 +70,17 @@ bool waitNotify(WorkerTask& t, uint32_t timeoutMs);
 void sleepUs(WorkerTask& t, uint32_t us);
 /// Signal stop and wake, then block until the worker fn has returned and the task is torn down.
 void stopPinnedTask(WorkerTask& t);
+
+/// A binary semaphore: one task gives it when its work is done, another sleeps on it rather than spinning, keeping FreeRTOS types out of the header.
+struct Signal { void* impl = nullptr; };
+/// Create it, unset; false when memory refuses, and a take on it then returns at once.
+bool signalCreate(Signal& s);
+/// Free it; safe on an empty one.
+void signalDestroy(Signal& s);
+/// Set it, from any task; a second give before a take is the same one give.
+void signalGive(Signal& s);
+/// Sleep until it is given or `timeoutMs` passes, and clear it; false on a timeout or on an empty one.
+bool signalTake(Signal& s, uint32_t timeoutMs);
 /// Subscribe THIS task to the watchdog, so a wedge reboots instead of hanging silently.
 void taskWdtSubscribe();
 /// Unsubscribe THIS task before it exits, so a torn-down worker leaves no dangling entry.

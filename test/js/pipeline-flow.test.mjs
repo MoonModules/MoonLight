@@ -45,6 +45,20 @@ test("a node's tooltip names the module's one line when help is loaded, and both
     assert.doesNotMatch(flowTitle(r, ""), /\n\n/);
 });
 
+test("a spike chip shows a longest tick past a millisecond and twice the average, and nothing for a steady node", () => {
+    const totals = { memory: [1, 1], frame: 10000 };
+    const spiky = chipsOf({ us: 400, worst: 5000, time: [[0, 400]] }, totals, false).time;
+    assert.ok(spiky.some(c => c.cls === "flow-chip-spike" && c.text === "▲5.0 ms"));
+    assert.ok(!chipsOf({ us: 400, worst: 700, time: [[0, 400]] }, totals, false).time.some(c => c.cls === "flow-chip-spike"));     // under a millisecond
+    assert.ok(!chipsOf({ us: 8000, worst: 10000, time: [[0, 8000]] }, totals, false).time.some(c => c.cls === "flow-chip-spike")); // within twice the average
+});
+
+test("a node's tooltip names its longest tick of the second, the stutter its average hides", () => {
+    const r = { name: "Pulse1", type: "PulseEffect", us: 452, own: 452, worst: 8000, internal: 0, psram: 0, size: 100 };
+    assert.match(flowTitle(r, ""), /452 µs own, 452 µs with children per frame, longest tick 8\.0 ms/);
+    assert.doesNotMatch(flowTitle({ ...r, worst: 0 }, ""), /longest/);
+});
+
 const bars = [
     { name: "internal RAM", bar: "memory", type: 0, parts: [["modules", 100], ["module types", 0], ["unaccounted", 100], ["free", 200]] },
     { name: "PSRAM", bar: "memory", type: 1, parts: [["modules", 1000], ["module types", 0], ["unaccounted", 0], ["free", 9000]] },
@@ -85,8 +99,8 @@ const band = [
     { name: "Tasks", group: "Modules", parent: "System", us: 20, own: 20, internal: 10, psram: 200, time: [[0, 20]], bottleneck: true },
     { name: "Stats", group: "Modules", parent: "System", us: 10, own: 10, internal: 0, psram: 50, time: [[0, 10]] },
     { name: "Network", group: "Modules", us: 5, own: 5, internal: 0, psram: 80, time: [[0, 5]] },
-    { name: "main", group: "System tasks", type: "task", core: 0, time: [[3, 900]], stackFree: 4000 },
-    { name: "IDLE0", group: "System tasks", type: "task", core: 0, time: [[3, 100]], stackFree: 1000 },
+    { name: "main", group: "System tasks", type: "task", core: 0, time: [[3, 900]], internal: 4096, stackFree: 4000 },
+    { name: "IDLE0", group: "System tasks", type: "task", core: 0, time: [[3, 100]], internal: 1536, psram: 512, stackFree: 1000 },
     { name: "mmEncode", group: "System tasks", type: "task", core: 1, time: [[3, 300]], stackFree: 2000 },
     { name: "tcpip", group: "System tasks", type: "task", core: -1, time: [[3, 40]], stackFree: 2600 },
 ];
@@ -119,12 +133,15 @@ test("opening a top level adds a band of its own, its own figures first, and clo
     assert.equal(bandView(band).filter(r => r.group === "System").length, 0);
 });
 
-test("system tasks stand per core, the idle tasks' time shown apart as the time left", () => {
+test("system tasks stand per core, the idle tasks' time shown apart as the time left, with the bytes its tasks hold", () => {
     const cores = bandView(band).filter(r => r.group === "System tasks");
     assert.deepEqual(cores.map(r => r.name), ["Core 0", "Core 1", "Either core"]);
     assert.deepEqual(cores[0].time, [[3, 900]]);
     assert.equal(cores[0].idle, 100);
     assert.equal(cores[0].count, 2);
+    assert.equal(cores[0].internal, 5632);
+    assert.equal(cores[0].psram, 512);
+    assert.match(flowTitle(cores[0]), /holding 5\.5 ?KB internal/);
     assert.ok(chipsOf(cores[0], { memory: [], frame: 1000 }).time.some(c => c.cls === "flow-chip-idle" && c.text === "idle 100 µs"));
     toggleBand("Core 0");
     assert.deepEqual(bandView(band).filter(r => r.group === "Core 0").map(r => r.name), ["main", "IDLE0"]);

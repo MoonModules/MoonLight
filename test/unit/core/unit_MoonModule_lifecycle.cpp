@@ -139,6 +139,19 @@ TEST_CASE("per-child timing accumulates on the child, not the parent") {
     CHECK(a.tickTimeUs() >= 20u);
 }
 
+// The longest tick of the second shows beside its average, and the next second starts over.
+TEST_CASE("a module's longest tick of the second shows beside its average") {
+    Counting m;
+    m.addAccumUs(5);
+    m.addAccumUs(40);
+    m.addAccumUs(15);
+    m.publishTiming(3);
+    CHECK(m.tickTimeUs() == 20u);
+    CHECK(m.worstTimeUs() == 40u);
+    m.publishTiming(1);
+    CHECK(m.worstTimeUs() == 0u);
+}
+
 namespace {
 // A child whose tick takes a measurable while.
 class Slow : public Counting {

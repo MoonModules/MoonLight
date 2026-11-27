@@ -65,9 +65,9 @@ void JsonSink::appendf(const char* fmt, ...) {
 }
 
 void JsonSink::appendLong(const char* fmt, va_list ap, size_t n) {
-    // The fixed mode never allocates: an allocation here would hide the problem (JsonSink.h, "Overflow is a flag").
+    // The fixed mode stays within its buffer: an allocation here would hide the problem (JsonSink.h, "Overflow is a flag").
     if (fixed_) { overflowed_ = true; return; }
-    // The growing modes format into an exactly-sized block, so a long fragment is never truncated.
+    // The growing modes format into an exactly-sized block, so a long fragment arrives whole.
     char* big = static_cast<char*>(platform::alloc(n + 1));
     if (!big) { overflowed_ = true; return; }
     std::vsnprintf(big, n + 1, fmt, ap);

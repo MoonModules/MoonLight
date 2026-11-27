@@ -134,6 +134,8 @@ Kind: Feature · Platform: Android · [Card](https://github.com/users/MoonModule
 
 **What.** The device's whole audio as the Audio card's input: the microphone, or Android's playback capture (`AudioPlaybackCaptureConfiguration`, Android 10 and later) of every app that plays. The app asks for the MediaProjection consent in Kotlin, hands the capture to the program, and the card offers the sources side by side. Android hears only apps that allow capture (most music apps do; some video apps do not), and asks for the consent again after each restart. No iOS equivalent.
 
+**First check.** A phone's microphone sent as audio sync to the boards, which the Quest has shown and no phone has run yet.
+
 ### Audio: drums in a mix, the snare and the kick against the band
 
 [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319209827)

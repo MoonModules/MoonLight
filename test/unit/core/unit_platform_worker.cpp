@@ -75,7 +75,7 @@ TEST_CASE("worker seam: waitNotify times out and returns false when not notified
 }
 
 TEST_CASE("worker seam: stopPinnedTask joins: the fn has returned before it returns") {
-    // The stop must be a real join: after stopPinnedTask returns, the worker body is guaranteed done (so its buffers are safe to free, the render-split drain contract). A flag the body sets last proves it ran to completion before stop returned.
+    // A real join: once stopPinnedTask returns the body is done, so its buffers are safe to free; a flag the body sets last proves it.
     struct Joiner {
         mm::platform::WorkerTask task;
         std::atomic<bool> exited{false};
@@ -93,8 +93,27 @@ TEST_CASE("worker seam: stopPinnedTask joins: the fn has returned before it retu
 }
 
 // --- TryLock: the cross-core sender latch ---------------------------------------------------------
-// The WS sender has two producers on two cores under the split, core 0's drain and core 1's PreviewDriver, and TryLock excludes them; try-only by design, so the loser skips its slot.
-// That constraint is what lets it be an atomic exchange on a flag rather than an OS mutex.
+// The WS sender has two producers on two cores under the split, core 0's drain and core 1's PreviewDriver; TryLock excludes them, the loser skipping its slot.
+
+// Try-only is what lets it be an atomic exchange on a flag rather than an OS mutex.
+
+TEST_CASE("worker seam: a signal sleeps its taker until another thread gives it, a give before the take is kept once, and an empty one times out") {
+    mm::platform::Signal s;
+    CHECK_FALSE(mm::platform::signalTake(s, 5));   // an empty one returns at once
+    REQUIRE(mm::platform::signalCreate(s));
+    CHECK_FALSE(mm::platform::signalTake(s, 10));  // unset: the timeout
+    mm::platform::signalGive(s);
+    mm::platform::signalGive(s);                   // a second give before a take is the same one give
+    CHECK(mm::platform::signalTake(s, 10));
+    CHECK_FALSE(mm::platform::signalTake(s, 10));
+    const auto start = std::chrono::steady_clock::now();
+    std::thread giver([&s] { std::this_thread::sleep_for(20ms); mm::platform::signalGive(s); });
+    CHECK(mm::platform::signalTake(s, 2000));
+    CHECK(std::chrono::steady_clock::now() - start < 1500ms);   // woken by the give, well before the timeout
+    giver.join();
+    mm::platform::signalDestroy(s);
+    mm::platform::signalDestroy(s);                // a second destroy is safe
+}
 
 TEST_CASE("TryLock: acquiring excludes a second acquirer, release re-opens it") {
     mm::TryLock lk;

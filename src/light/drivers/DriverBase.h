@@ -60,6 +60,10 @@ public:
     virtual bool drivesLights() const { return true; }
     /// Frames it sent last second where it counts them itself, a network output whose sends can fall behind the render; none means it sends every rendered frame.
     virtual std::optional<uint32_t> framesPerSecond() const { return std::nullopt; }
+    /// Frames it dropped since it started, where it counts them: an output whose queue or wire falls behind; none means every frame it takes goes out.
+    virtual std::optional<uint32_t> framesDropped() const { return std::nullopt; }
+    /// Its pace: its own frame count where it keeps one, else the render rate, since it sends every rendered frame.
+    uint32_t paceFps() const;
     /// Set the Layer this driver reads its dimensions from: the active one, not a wiring constraint on how many layers feed it.
     void setLayer(Layer* layer) { layer_ = layer; }
 

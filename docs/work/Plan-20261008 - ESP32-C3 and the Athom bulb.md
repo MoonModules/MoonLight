@@ -95,9 +95,9 @@ An `esp32c3` firmware, 4 MB with MoonBase, its table shared with the classic ESP
 
 The bulb runs MoonLight and Glow: [Migrating over the air](../reference/migrating-over-the-air.md).
 
-### 6. Apply a device model from the device's own UI ⏳
+### 6. Apply a device model from the device's own UI ✅
 
-**Next**, a commit of its own.
+Built: the System card's `deviceModel` offers Choose device model ([SystemModule](../../src/core/system/SystemModule.h), `attachCatalogField` in [devicepopup.js](../../src/ui/devicepopup.js)), and a node's popup on the Devices map offers Apply device defaults ([DevicesModule](../../src/core/system/DevicesModule.h)). Both send the model's state in one `PATCH /api/state` after a second press, and offline the picker stays out. The design below is the one planned.
 
 A catalog entry in `deviceModels.json` reaches a device two ways: the web installer sends it over USB at install time, and MoonDeck sends it over the network when a model is picked.
 A device that came to MoonLight over WiFi has neither, so the Athom bulb's PWM pins, fixture and grid were set through MoonDeck; the same holds for any device a user sets up later.

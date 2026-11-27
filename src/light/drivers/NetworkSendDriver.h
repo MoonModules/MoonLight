@@ -152,6 +152,8 @@ public:
 
     /// Frames it sent last second, which a peer's map shows beside its lights.
     std::optional<uint32_t> framesPerSecond() const override { return framesLastSecond_; }
+    /// Frames that were due while the send task still held the last one.
+    std::optional<uint32_t> framesDropped() const override { return framesSkipped_; }
 
     /// What went out last second, frames a second to each receiver, to the group, or to the broadcast address, as the addressing sends it.
     void reportNetworkUse(NetworkUse& use) const override {
@@ -280,14 +282,13 @@ public:
 
         // No destination means idle: it never falls back to broadcasting the whole LAN.
         if (nDest_ == 0) return;
-        // The task still sending the last frame owns the corrected buffer, so this frame is skipped.
-        if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) return;
-
         // FPS limiting
         if (fps == 0) return;
         uint32_t now = platform::millis();
         uint32_t interval = 1000 / fps;
         if (now - lastSendTime_ < interval) return;
+        // A frame that is due while the task still sends the last one is dropped: the task owns the corrected buffer.
+        if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) { framesSkipped_++; return; }
         lastSendTime_ = now;
 
         // A pure reader: an unwired or mismatched correction falls back to passthrough.
@@ -416,6 +417,7 @@ private:
     std::atomic<uint32_t> packetsPerFrame_{0}, packetSpacing_{0};
     uint32_t framesAtSecond_ = 0, packetsAtSecond_ = 0;       ///< the counts at the last tick1s
     uint32_t framesLastSecond_ = 0, packetsLastSecond_ = 0;   ///< sent in the second before it
+    uint32_t framesSkipped_ = 0;   ///< frames the tick skipped while the task sent the last, on the tick's thread alone
     /// The light-count warning prepare found, restored once the names resolve.
     const char* prepareWarn_ = nullptr;
 

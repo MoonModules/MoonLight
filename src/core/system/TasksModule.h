@@ -4,6 +4,7 @@
 #include "core/module/MoonModule.h"
 #include "core/module/Scheduler.h"   // instance()->moduleCount()/module(i): the modules to profile
 #include "core/util/JsonSink.h"    // writeListRow emits its row as JSON into the sink
+#include "platform/platform_clock.h"   // millis: how old the snapshot is
 #include "platform/platform_tasks.h"   // currentTaskOnCore, TaskInfo, taskSnapshot
 
 #include <algorithm>  // std::sort: stable row order so the list doesn't jump each refresh
@@ -46,14 +47,15 @@ public:
         controls_.addReadOnly("core1", core1_, sizeof(core1_));
     }
 
-    /// Re-snapshot the tasks once a second, the module costs being read live on each serialize.
+    /// Name the task on each core once a second; the task table itself is taken when someone reads it.
     void tick1s() MM_NONBLOCKING override {
         MoonModule::tick1s();
-        tasks_.refresh();
         platform::currentTaskOnCore(0, core0_, sizeof(core0_));
         platform::currentTaskOnCore(1, core1_, sizeof(core1_));
     }
 
+    /// Take a new snapshot when the last is a second old: a read does it, so a device nobody watches walks no task table.
+    void ensureFresh() const { tasks_.ensureFresh(); }
     /// How many tasks the last snapshot holds.
     uint8_t taskCount() const { return tasks_.count_; }
     /// One task of the last snapshot, for a reader that shows the tasks elsewhere, such as MoonShine.
@@ -64,11 +66,20 @@ private:
     struct TaskListSource : ListSource {
         static constexpr uint8_t kMaxTasks = 32;   ///< a generous ceiling for one device
         bool persistsList() const override { return false; }   // a snapshot of the running tasks
-        platform::TaskInfo rows_[kMaxTasks];       ///< the snapshot itself
-        uint8_t count_ = 0;                        ///< how many rows it holds
+        mutable platform::TaskInfo rows_[kMaxTasks];   ///< the snapshot itself, a cache a read refreshes
+        mutable uint8_t count_ = 0;                    ///< how many rows it holds
+        mutable uint32_t takenMs_ = 0;                 ///< when it was taken, 0 before the first
+
+        /// Take the snapshot on the first read, and again once it is a second old.
+        void ensureFresh() const {
+            const uint32_t now = platform::millis();
+            if (takenMs_ != 0 && now - takenMs_ < 1000) return;
+            takenMs_ = now ? now : 1;
+            refresh();
+        }
 
         /// Re-snapshot the tasks, then order them so a row stays put between refreshes.
-        void refresh() {
+        void refresh() const {
             count_ = static_cast<uint8_t>(platform::taskSnapshot(rows_, kMaxTasks));
             // A task's row would otherwise shift with its state, so sort: ours first, then by name.
             std::sort(rows_, rows_ + count_, [](const platform::TaskInfo& a, const platform::TaskInfo& b) {
@@ -84,7 +95,7 @@ private:
             return (render[0] && std::strcmp(name, render) == 0) || std::strncmp(name, "mm", 2) == 0;
         }
         /// How many tasks the snapshot holds.
-        ListRow listRowCount() const override { return count_; }
+        ListRow listRowCount() const override { ensureFresh(); return count_; }   // a reader asks the count first, so one document reads one snapshot
         /// Append one task's summary: its name, state, core, priority and stack, then its CPU share where the build measures it.
         void writeListRow(JsonSink& sink, ListRow row) const override {
             if (row >= count_) { sink.append("{}"); return; }

@@ -112,6 +112,22 @@ struct PatchTree {
     ~PatchTree() { http.release(); s.deleteTree(root); }
 };
 
+/// A light output beside the HTTP server, the tree the WLED state route reaches; `seated` claims the output, as a running driver does.
+struct WledRig {
+    mm::Scheduler s;
+    FakeDrivers* drivers = new FakeDrivers();
+    mm::HttpServerModule http;
+    explicit WledRig(bool seated = true) {
+        registerTestTypes();
+        drivers->setName("Drivers");
+        drivers->defineControls();   // on, brightness and palette, which applyWledState finds
+        s.addModule(drivers);
+        http.setScheduler(&s);
+        if (seated) drivers->outputSeat_.claim();
+    }
+    ~WledRig() { s.deleteTree(drivers); }
+};
+
 } // namespace
 
 // A parent's declared child roles are a RULE the device enforces, not advice to the UI: an effect nested inside a layout ticks in the wrong pass and, since the UI resolves a card by module name, renders its controls onto the parent's card.
@@ -378,17 +394,8 @@ TEST_CASE("apply-core: a control validator rejects bad input on the set path") {
 
 // The WLED shim's `{on,bri}` apply drives the real `on` + `brightness` controls independently: turning off must NOT clobber the brightness value. Home Assistant and the WLED app both post through this path.
 TEST_CASE("apply-core: applyWledState sets on + bri independently (no brightness clobber)") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* root = new Box();
-    root->setName("Root");
-    s.addModule(root);
-    auto* drivers = new FakeDrivers();
-    drivers->setName("Drivers");
-    drivers->defineControls();       // register on + brightness so applyWledState can find them
-    s.addModule(drivers);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
+    WledRig rig(false);
+    FakeDrivers* drivers = rig.drivers;  mm::HttpServerModule& http = rig.http;
 
     // Set a real brightness first.
     http.applyWledState("{\"bri\":200}");
@@ -409,21 +416,12 @@ TEST_CASE("apply-core: applyWledState sets on + bri independently (no brightness
     http.applyWledState("{\"on\":true,\"bri\":50}");
     CHECK(drivers->on == true);
     CHECK(drivers->brightness == 50);
-
-    s.deleteTree(root);
-    s.deleteTree(drivers);
 }
 
 // The WLED app and Home Assistant pick a palette by index or by color, and both reach the palette through the light output.
 TEST_CASE("apply-core: applyWledState picks a palette by index and by color through the light output") {
-    registerTestTypes();
-    mm::Scheduler s;
-    auto* drivers = new FakeDrivers();
-    drivers->setName("Drivers");
-    drivers->defineControls();
-    s.addModule(drivers);
-    mm::HttpServerModule http;
-    http.setScheduler(&s);
+    WledRig rig(false);
+    FakeDrivers* drivers = rig.drivers;  mm::HttpServerModule& http = rig.http;
 
     // No light output running: neither form moves the palette.
     http.applyWledState("{\"seg\":[{\"pal\":3,\"col\":[[0,0,255]]}]}");
@@ -436,8 +434,51 @@ TEST_CASE("apply-core: applyWledState picks a palette by index and by color thro
     CHECK(drivers->palette == 11);   // clamped to the last palette the output offers
     http.applyWledState("{\"seg\":[{\"col\":[[0,0,255]]}]}");
     CHECK(drivers->palette == 8);    // pure blue is 240 degrees, the fake's palette 8
+}
 
-    s.deleteTree(drivers);
+// The body is read as JSON (the parser of howels's PR #273), so a key inside a segment stays the segment's, a value of the wrong kind or a malformed body leaves the device as it was, and segment 0, the device's one segment, sets the device.
+TEST_CASE("apply-core: applyWledState reads the body as JSON: a segment's key stays the segment's, and a malformed body or a value of the wrong kind leaves the device as it was") {
+    WledRig rig;
+    FakeDrivers* drivers = rig.drivers;  mm::HttpServerModule& http = rig.http;
+    http.applyWledState("{\"on\":true,\"bri\":200}");
+
+    http.applyWledState("{\"seg\":[{\"id\":1,\"on\":false,\"bri\":1,\"pal\":3}]}");   // a segment past the device's one
+    http.applyWledState("{\"bri\":\"~-10\",\"on\":{}}");   // WLED's relative step and an object are no values here
+    http.applyWledState("{\"bri\":-5}");
+    http.applyWledState("{\"bri\":");
+    http.applyWledState("not json");
+    http.applyWledState("");
+    http.applyWledState(nullptr);
+    CHECK(drivers->on == true);
+    CHECK(drivers->brightness == 200);
+    CHECK(drivers->palette == 0);
+
+    http.applyWledState("{\"bri\":999}");
+    CHECK(drivers->brightness == 255);   // held to the range's top
+    http.applyWledState("{\"seg\":{\"bri\":30}}");   // one object is the main segment
+    CHECK(drivers->brightness == 30);
+    http.applyWledState("{\"seg\":[{\"bri\":40}]}");   // the first element, naming no id, is segment 0
+    CHECK(drivers->brightness == 40);
+    http.applyWledState("{\"seg\":[{\"id\":0,\"on\":false}]}");   // Home Assistant's segment light switching off
+    CHECK(drivers->on == false);
+    CHECK(drivers->brightness == 40);   // master power keeps the level
+}
+
+TEST_CASE("apply-core: applyWledState toggles power on \"t\" and reads a color as hex as well as an array") {
+    WledRig rig;
+    FakeDrivers* drivers = rig.drivers;  mm::HttpServerModule& http = rig.http;
+
+    http.applyWledState("{\"on\":\"t\"}");
+    CHECK(drivers->on == false);
+    http.applyWledState("{\"seg\":[{\"id\":0,\"on\":\"t\"}]}");
+    CHECK(drivers->on == true);
+
+    http.applyWledState("{\"seg\":[{\"col\":[\"00FF00\"]}]}");
+    CHECK(drivers->palette == 4);    // pure green, the fake's palette 4
+    http.applyWledState("{\"seg\":[{\"col\":[\"00FF0000\"]}]}");   // WWRRGGBB: the white byte is dropped
+    CHECK(drivers->palette == 0);
+    http.applyWledState("{\"seg\":[{\"col\":[\"zzzzzz\"]}]}");   // not hex: unchanged
+    CHECK(drivers->palette == 0);
 }
 
 // Diff-on-the-wire: the periodic WS push sends only CHANGED control values. buildStatePatch value-hashes each leaf against a baseline: an unchanged tree gives an EMPTY patch, a single change a one-entry patch addressed by "<module>/<control>".

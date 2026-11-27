@@ -1,11 +1,17 @@
 /// The bodies of DriverBase.h with logic beyond a line: the correction rebuild, the fixture profile resolution, the scratch lifecycle and the status verdicts, so a change to any of them rebuilds one object.
 
 #include "light/drivers/DriverBase.h"
+#include "core/module/Scheduler.h"   // the render rate, the pace of an output that keeps no count
 
 #include <cstdio>
 #include <cstring>
 
 namespace mm {
+
+uint32_t DriverBase::paceFps() const {
+    const std::optional<uint32_t> own = framesPerSecond();
+    return own ? *own : (Scheduler::instance() ? Scheduler::instance()->fps() : 0);
+}
 
 bool DriverBase::placeWindowed(LayoutPicture& picture, const Layer& layer, const Buffer* buffer) const {
     const lengthType w = layer.physicalWidth() > 0 ? layer.physicalWidth() : 1;

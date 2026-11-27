@@ -478,17 +478,19 @@ Test with a USB grabber on the NanoPi R3S-LTS; an RK3588 board with HDMI in is i
 
 **Size.** About half a day, with the tick matrix before and after.
 
-### MoonLight on iPhone and iPad: an interpreter backend for MoonLive, then the iOS app
+### MoonLight on iPhone and iPad: a receiver app, then an interpreter backend for MoonLive and the full app
 
 Kind: Investigation · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=307951024)
 
-MoonLight on iPhone and iPad, after the Android app (Plan-20261113, MoonLight on a phone or tablet) has been used on a trip.
+MoonLight on iPhone and iPad, picked once the Android app has been used on a trip.
 
-Two iOS rules bind:
+**First, a receiver app** (Anjin, 2026-11-13; an important use case, the product owner): DDP and Art-Net in, the frame full screen out, and the phone's microphone out as audio sync. A small native app that runs no script, so the rule on executing memory leaves it free, and the `audio` background mode keeps it running with the mic open. On Android the app does all three already (Network Receive, the preview, the Audio card's sync).
+
+**Then the full app.** Two iOS rules bind:
 - **No executing memory the app wrote.** MoonLive compiles to machine code, which iOS forbids to every app but Safari. Two ways: an interpreter over MoonLive's IR, kept alive instead of discarded, as a backend file beside the others; or no MoonLive on iOS, which empties the use. An interpreter on an A-series chip outruns compiled code on an ESP32 at preview-sized layouts, so speed does not bind; the architecture does, since it is a second execution engine.
 - **Suspension.** iOS suspends an app about 30 s after a switch away. The `audio` background mode keeps an app with the mic open running, so an audio-reactive session survives a switch and a plain effect does not (Anjin, Discord, 2026-11-13).
 
-First step: a design study on the interpreter backend. Costs: an Apple developer account, TestFlight for every tester, the multicast entitlement. The Vision Pro waits on the same decision.
+First step of the full app: a design study on the interpreter backend. Costs, for both apps: an Apple developer account, TestFlight for every tester, the multicast entitlement. The Vision Pro waits on the same decision.
 
 ### Waveshare ESP32-P4 Knob Touch AMOLED 1.75: WiFi through esp-extconn, the ES8389 codec, a device model
 
@@ -505,3 +507,17 @@ First step: a design study on the interpreter backend. Costs: an Apple developer
 2. **ES8389 (small).** `esp_codec_dev` already carries it (`device/es8389`): one more `CodecType` in `platform_esp32_es8311.cpp` and one more option on the Audio card.
 3. **Device model (small).** The pins above; SD card power through LDO 4 rather than a GPIO.
 4. **Not in this card:** the display and the knob as an input, a topic of their own once the board is on the bench.
+
+### Android beyond sideloading: a verified developer and the Play Store, starting at boot, the room view in a headset
+
+Kind: Feature · Platform: Android · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319419294)
+
+**Why.** The Android app installs from the release by sideloading, which reaches every phone, tablet and headset today. Three things grow it into an everyday app; each is picked when a user asks for it.
+
+**1. A verified developer, then a Play Store listing.** From 30 September 2026, a Google-certified Android phone or tablet in Brazil, Indonesia, Singapore and Thailand installs an app outside `adb` only from a verified developer, and every country follows in 2027. Meta's Horizon OS is outside Google's certification, so a Quest keeps sideloading. A verified developer is an account in the Android Developer Console: a one-time US$25 fee and the owner's identity checked, then the package name `org.moonmodules.moonlight` and the release certificate (SHA-256 `5258d66568cbece7568a17dc4d595da9914c3061ce12fee00713a7f8a007ad6b`, `CN=MoonModules MoonLight`) registered to it. The free limited-distribution account reaches 20 devices, too few for a release. **Decided (product owner, 2026-11-17):** registration waits until a user on a certified phone or tablet asks for it; the product owner then registers MoonModules, since the identity and the fee are theirs, and the tree stays as it is, the same key signing on. The same account carries a Play Store listing: its review, and a store update channel beside the self-update.
+
+**2. Android TV and a docked tablet as a permanent controller.** The service starting at boot (a `BOOT_COMPLETED` receiver) and, for a TV, a launcher entry.
+
+**3. The 3D preview in a headset**, on a WebXR page, so a Quest shows the lights in the room before they are built. The page is the UI's (Area UI); a Quest's browser and the app's WebView both reach it.
+
+**Size.** 1 and 2 are about a day each once picked, plus the account; 3 is a design step first.

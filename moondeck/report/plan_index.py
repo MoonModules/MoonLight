@@ -16,6 +16,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WORK = ROOT / "docs" / "work"
@@ -24,7 +25,8 @@ INDEX = WORK / "index.md"
 MARKERS = ("🚧", "🧪", "✅", "⏳")
 DROPPED = ("❌", "⏸")
 SECTION = re.compile(r"^## (Steps|The steps|Phases)\b")
-HEADING = re.compile(r"^#{2,4} (?:Step |Phase )?\d+[a-z]?[.:]\s")
+HEADING = re.compile(r"^(#{2,4}) (?:Step |Phase )?\d+[a-z]?[.:]\s")
+FENCE = re.compile(r"^\s*(```|~~~)")
 NUMBERED = re.compile(r"^\d+\. ")
 PHASE = re.compile(r"^(?:✅|🚧|🧪|⏳|❌|⏸) \*\*(?:Phase|Step) ")
 TABLE_ROW = re.compile(r"^\| *\d+[a-z]? *\|")
@@ -36,8 +38,22 @@ def marker_of(text: str) -> str:
     return hit.group(0) if hit else "⏳"
 
 
+def outside_fences(lines: list[str]) -> list[str]:
+    """The lines outside fenced code blocks, so an example inside one counts as no step."""
+    kept, fence = [], None
+    for line in lines:
+        m = FENCE.match(line)
+        if m and (fence is None or m.group(1) == fence):
+            fence = None if fence else m.group(1)
+            continue
+        if fence is None:
+            kept.append(line)
+    return kept
+
+
 def steps_section(lines: list[str]) -> list[str]:
-    """The lines from the steps heading to the next level-2 heading, or the whole plan when it has no such heading."""
+    """The lines from the steps heading to the next level-2 heading, or the whole plan when it has no such heading, outside fenced code."""
+    lines = outside_fences(lines)
     start = next((i for i, l in enumerate(lines) if SECTION.match(l)), None)
     if start is None:
         return lines
@@ -49,8 +65,8 @@ def kind_of(line: str) -> str | None:
     """Which step structure a line is, if any."""
     if PHASE.match(line):
         return "phase"
-    if HEADING.match(line):
-        return "heading"
+    if m := HEADING.match(line):
+        return f"heading{len(m.group(1))}"   # by depth, so a nested heading under a step is no peer of it
     if TABLE_ROW.match(line):
         return "table"
     if NUMBERED.match(line):
@@ -79,7 +95,7 @@ def render() -> str:
         c = count_steps(plan.read_text(encoding="utf-8"))
         total = sum(c.values())
         title = plan.stem.split(" - ", 1)[1] if " - " in plan.stem else plan.stem
-        link = plan.name.replace(" ", "%20").replace(",", "%2C").replace("'", "%27")
+        link = quote(plan.name, safe="")
         rows.append(f"| [{title}]({link}) | {plan.stem[5:13]} | {c['🚧']} | {c['🧪']} | {c['✅']} | {c['⏳']} | {total} |")
     head = ("# Plans\n\n"
             "The plans being built, each counted from its own step markers by `moondeck/report/plan_index.py`: 🚧 in progress, "

@@ -6,21 +6,25 @@
 ///
 /// ## Two SDK options gate what it can answer
 ///
-/// The snapshot call is the textbook introspection one and needs the trace facility: without it the snapshot is empty and the module shows only its own cost table.
-/// The per-task CPU figure needs run-time stats, a clock read on every context switch, which measured no cost and is on in every build; an image built with it off reports the figure as unmeasured.
+/// The snapshot call is the textbook introspection one and needs the trace facility; with it off the snapshot reads empty and the module shows its own cost table alone.
+///
+/// The per-task CPU figure needs run-time stats, a clock read on every context switch, which measured no cost and is on in every build; with it off the figure reads unmeasured.
+///
 /// A share covers the interval since the last snapshot, as top reports it.
+///
+/// ## A task's memory
+///
+/// A task holds its stack and its control block on the heap: the stack's size comes from its two ends, `xTaskGetStackStart` and the snapshot's `pxEndOfStack`, read with the scheduler suspended.
 ///
 /// ## The scratch buffer is lazy and internal
 ///
-/// Allocated once on the first snapshot rather than held from boot, and never re-allocated per tick.
-/// The no-heap rule applies because this runs from the one-second tick, and one lazy allocation satisfies it: every later tick is allocation-free.
+/// Allocated once on the first snapshot rather than held from boot, and kept for the process, so every later tick is allocation-free, as the one-second tick's no-heap rule asks.
+///
 /// As a plain static array it cost over a kilobyte of internal memory from boot on every board, for an opt-in diagnostic that appears in no device model.
 ///
-/// It is kept for the process rather than freed per call, since freeing would put the allocation back on every tick.
 /// The snapshot call wants room for every task or it returns nothing, so the ceiling is generous and exceeding it makes that tick empty rather than partial.
 ///
-/// Internal rather than external memory, though the size would fit comfortably: the call fills this buffer with the kernel lock held, so every write lands inside a critical section.
-/// A cache miss there stretches that section, which is the one place on this chip where a stall is most expensive.
+/// Internal rather than external memory: the call fills this buffer with the kernel lock held, so every write lands inside a critical section, where a cache miss stalls the most.
 
 #include "platform/platform.h"
 
@@ -32,7 +36,9 @@
 #if defined(CONFIG_FREERTOS_USE_TRACE_FACILITY) && CONFIG_FREERTOS_USE_TRACE_FACILITY
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/freertos_debug.h"   // vTaskGetSnapshot: a stack's high end
 #include "esp_heap_caps.h"   // heap_caps_calloc — the one-time snapshot scratch
+#include "esp_memory_utils.h"   // esp_ptr_external_ram: where a stack lives
 #endif
 
 namespace mm::platform {
@@ -51,20 +57,44 @@ TaskState mapState(eTaskState s) {
         default:         return TaskState::Unknown;
     }
 }
+/// The bytes a task holds on the heap, its stack and its control block; 0 when the ends read as no stack, as for a task deleted since the table was read.
+uint32_t heapOfTask(TaskHandle_t h, bool& psram) {
+    static constexpr size_t kMaxStack = 64 * 1024;   // larger than any task MoonLight or ESP-IDF creates
+    const StackType_t* start = xTaskGetStackStart(h);
+    TaskSnapshot_t snap{};
+    if (!start || vTaskGetSnapshot(h, &snap) != pdTRUE || snap.pxEndOfStack <= start) return 0;
+    const size_t stack = static_cast<size_t>(snap.pxEndOfStack - start + 1) * sizeof(StackType_t);   // the stack grows down to start from its end
+    if (stack > kMaxStack) return 0;
+    psram = esp_ptr_external_ram(start);
+    return static_cast<uint32_t>(stack + sizeof(StaticTask_t));
+}
+
+/// Each task's heap bytes, read with the scheduler suspended, as freertos_debug.h asks of a snapshot while the scheduler runs.
+void fillHeapBytes(TaskInfo* out, const TaskStatus_t* raw, size_t n) {
+    vTaskSuspendAll();
+    for (size_t i = 0; i < n; i++) {
+        out[i].stackPsram = false;
+        out[i].heapBytes = heapOfTask(raw[i].xHandle, out[i].stackPsram);
+    }
+    xTaskResumeAll();
+}
+
+/// The kernel's task table, read under its lock into a scratch taken once: @xref{the-scratch-buffer-is-lazy-and-internal|why not from boot, and why not external memory}. Null when the scratch is refused.
+constexpr size_t kScratch = 40;
+TaskStatus_t* systemState(UBaseType_t& got, uint32_t& totalRunTime) {
+    static TaskStatus_t* raw = nullptr;
+    if (!raw) raw = static_cast<TaskStatus_t*>(heap_caps_calloc(kScratch, sizeof(TaskStatus_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    got = raw ? uxTaskGetSystemState(raw, kScratch, &totalRunTime) : 0;
+    return raw;
+}
 }  // namespace
 
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0) return 0;
-    // Allocated once on the first snapshot: @xref{the-scratch-buffer-is-lazy-and-internal|why not from boot, and why not external memory}.
-    static constexpr size_t kScratch = 40;
-    static TaskStatus_t* raw = nullptr;
-    if (!raw) {
-        raw = static_cast<TaskStatus_t*>(
-            heap_caps_calloc(kScratch, sizeof(TaskStatus_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
-        if (!raw) return 0;   // no scratch, no snapshot: the table shows empty, nothing crashes
-    }
     uint32_t totalRunTime = 0;
-    const UBaseType_t got = uxTaskGetSystemState(raw, kScratch, &totalRunTime);
+    UBaseType_t got = 0;
+    TaskStatus_t* raw = systemState(got, totalRunTime);
+    if (!raw) return 0;   // no scratch, no snapshot: the table shows empty
     const size_t n = got < maxTasks ? got : maxTasks;
 #if configGENERATE_RUN_TIME_STATS == 1   // on in every MoonLight build (sdkconfig.defaults); with it off the Tasks card shows no CPU column
     // Each task's counter at the previous snapshot, by task number, so a share covers only the interval since.
@@ -92,12 +122,15 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
         uint32_t before = 0;
         for (UBaseType_t k = 0; k < prevCount; k++)
             if (prevNumber[k] == t.xTaskNumber) { before = prevRunTime[k]; break; }
-        o.cpuPermille = interval ? static_cast<uint32_t>(1000ULL * (t.ulRunTimeCounter - before) / interval) : 0;
+        // A share past the whole is a span across the counter's wrap, after a long unread stretch, so it reads unmeasured until the next read.
+        const uint64_t share = interval ? 1000ULL * (t.ulRunTimeCounter - before) / interval : 0;
+        o.cpuPermille = share > 1000 ? kTaskCpuUnmeasured : static_cast<uint32_t>(share);
     #else
         o.cpuPermille = kTaskCpuUnmeasured;
         (void)totalRunTime;
     #endif
     }
+    fillHeapBytes(out, raw, n);
 #if configGENERATE_RUN_TIME_STATS == 1
     for (UBaseType_t i = 0; i < got && i < kScratch; i++) {
         prevNumber[i] = raw[i].xTaskNumber;
@@ -107,6 +140,23 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     prevTotal = totalRunTime;
 #endif
     return n;
+}
+
+void tasksHeap(size_t& total, size_t& psram) {
+    total = psram = 0;
+    uint32_t totalRunTime = 0;
+    UBaseType_t got = 0;
+    // The kernel's table, taken under its lock, as both cores move tasks between lists: a list walk of our own would race the other core.
+    const TaskStatus_t* raw = systemState(got, totalRunTime);
+    if (!raw) return;
+    vTaskSuspendAll();   // as freertos_debug.h asks of a snapshot while the scheduler runs
+    for (UBaseType_t i = 0; i < got; i++) {
+        bool inPsram = false;
+        const uint32_t bytes = heapOfTask(raw[i].xHandle, inPsram);
+        total += bytes;
+        if (inPsram) psram += bytes;
+    }
+    xTaskResumeAll();
 }
 
 void currentTaskOnCore(int core, char* out, size_t cap) {
@@ -121,12 +171,13 @@ void currentTaskOnCore(int core, char* out, size_t cap) {
 #endif
 }
 
-// The name of the calling task, which today IS the render task, everything running on the one task, so the nesting is correct. True only while single-tasked: once a dedicated render task lands, the serialization would still run elsewhere and this seam must capture the name from inside the render loop instead.
+// The name of the calling task, which is the render task while everything runs on the one task; a dedicated render task captures its name from inside the render loop.
 const char* renderTaskName() { return pcTaskGetName(nullptr); }
 
 #else  // trace facility off — inert stubs; the module falls back to its cost table only.
 
 size_t taskSnapshot(TaskInfo*, size_t) { return 0; }
+void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }
 void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
 const char* renderTaskName() { return ""; }   // trace facility off — no task view, no nesting anchor
 

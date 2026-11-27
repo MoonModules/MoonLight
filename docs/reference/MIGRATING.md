@@ -31,6 +31,12 @@ For a device still on old firmware (no Backup button yet), the [installer page](
 
 ## v7.1.0
 
+### A snaking Cube carries its row snake across the planes
+
+**Action: *update a file*, for a cube with an odd row count whose strip jumps back between planes.**
+
+A Cube layout that snakes its two inner axes runs one continuous strip: with an odd number of rows, each plane starts where the previous one ended, as a plane turned 180 degrees wires, where the first row of every second plane ran the other way. An even row count wires as before, and so does a cube whose middle axis runs straight, every plane starting at the same corner. A cube wired with a jump between planes is described as a MoonLive layout, which places each light where it is.
+
 ### A HUB75 driver's fixture profile sets the panel's color order
 
 **Action: *re-set a control*, on a HUB75 driver whose `fixture` is not RGB.**

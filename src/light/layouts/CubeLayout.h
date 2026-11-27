@@ -13,7 +13,7 @@ namespace mm {
 ///
 /// @technical
 ///
-/// A per-axis snake reverses that axis on odd passes of its enclosing loop, keyed on the loop's counter, the physical pass number.
+/// A per-axis snake reverses that axis on odd passes. With the middle axis snaking too, the inner axis keys on its row's number from the first light, so with an odd row count each plane continues where the last ended, as a plane turned 180 degrees wires. With the middle axis straight, every plane starts at the same corner, as a cube with a return wire per plane wires.
 class CubeLayout : public LayoutBase {
 public:
     /// The cube's extent on x.
@@ -86,8 +86,10 @@ public:
             const lengthType v0 = axisValue(i, n0, inc[a0], snake[a0], 0);
             for (lengthType j = 0; j < n1 && idx < limit; j++) {
                 const lengthType v1 = axisValue(j, n1, inc[a1], snake[a1], i);
+                // A snaking middle axis makes one strip through the volume, so the row counts from the first light; otherwise each plane starts over.
+                const uint32_t row = snake[a1] ? static_cast<uint32_t>(i) * n1 + j : j;
                 for (lengthType k = 0; k < n2 && idx < limit; k++) {
-                    const lengthType v2 = axisValue(k, n2, inc[a2], snake[a2], j);
+                    const lengthType v2 = axisValue(k, n2, inc[a2], snake[a2], row);
 
                     // Scatter the three loop values onto their real axes, then emit.
                     lengthType coords[3] = {0, 0, 0};
@@ -118,7 +120,7 @@ private:
 
     /// One pass's value: the base direction, flipped when the enclosing counter is odd.
     static lengthType axisValue(lengthType step, lengthType count,
-                                bool inc, bool snake, lengthType prev) {
+                                bool inc, bool snake, uint32_t prev) {
         bool ascending = inc;
         if (snake && (prev & 1)) ascending = !ascending;
         return ascending ? step : static_cast<lengthType>(count - 1 - step);

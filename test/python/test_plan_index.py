@@ -41,6 +41,21 @@ def test_dropped_steps_leave_the_total():
     assert counts(text) == (0, 0, 1, 0)
 
 
+
+def test_a_heading_nested_under_a_step_heading_is_no_step_of_its_own():
+    text = "## Steps\n\n### Step 1: implement ✅\n\n#### 1. verification ✅\n\n### Step 2: integrate ⏳\n"
+    assert counts(text) == (0, 0, 1, 1)
+
+
+def test_an_example_inside_a_fenced_block_is_no_step():
+    text = "## Steps\n\n1. ✅ one\n\n```md\n1. ✅ example\n```\n\n2. ⏳ two\n"
+    assert counts(text) == (0, 0, 1, 1)
+
+
+def test_a_link_encodes_every_character_a_url_reserves(work):
+    (work / "Plan-20260101 - C# support.md").write_text("## Steps\n\n1. ✅ one\n", encoding="utf-8")
+    assert "(Plan-20260101%20-%20C%23%20support.md)" in plan_index.render()
+
 @pytest.fixture
 def work(tmp_path, monkeypatch):
     monkeypatch.setattr(plan_index, "ROOT", tmp_path)

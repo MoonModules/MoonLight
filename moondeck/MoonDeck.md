@@ -47,7 +47,7 @@ uv run moondeck/build/build_android.py --tests  # mm_tests, which test_android r
 uv run moondeck/build/build_android.py --apk    # the app: build/android-arm64/MoonLight.apk
 ```
 
-Configures `build/android-arm64/` with the NDK's CMake toolchain for Android 9 and later (API 28). `--apk` builds `libmoonlight.so`, the same program entered through `main_android.cpp`, makes the launcher icon from the installer's favicon, and has the Gradle wrapper in `android/` pack them with the Kotlin shell, debug-signed. It needs the NDK, found through `ANDROID_NDK_HOME`, `ANDROID_HOME` or Android Studio's default SDK folder, and a JDK 17. What the app does: [Running MoonLight on Android](../docs/reference/installing-on-android.md).
+Configures `build/android-arm64/` with the NDK's CMake toolchain for Android 9 and later (API 28). `--apk` builds `libmoonlight.so`, the same program entered through `main_android.cpp`, makes the launcher icon from the installer's favicon, and has the Gradle wrapper in `android/` pack them with the Kotlin shell, debug-signed. The release key signs in CI from four `ANDROID_*` repository secrets, so every `latest` build installs over the one before it; the keystore's home copy is the product owner's, its password in their Keychain. It needs the NDK, found through `ANDROID_NDK_HOME`, `ANDROID_HOME` or Android Studio's default SDK folder, and a JDK 17. What the app does: [Running MoonLight on Android](../docs/reference/installing-on-android.md).
 
 ### run_android
 

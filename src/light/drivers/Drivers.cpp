@@ -15,6 +15,7 @@ Drivers::~Drivers() {
     MoonLivePalette::clearActiveInstance(&paletteScriptModule_);
     // Free the script rather than detach: release() may be skipped, and the engine holds a block.
     paletteScriptModule_.release();
+    platform::signalDestroy(encodeDoneSignal_);
 }
 
 void Drivers::release() {
@@ -39,10 +40,7 @@ void Drivers::writeOutputs(JsonSink& sink) const {
         if (!d->drivesLights()) continue;
         sink.append(first ? "{\"driver\":" : ",{\"driver\":");
         sink.writeJsonString(c->typeName());
-        // Frames a second: its own count where it keeps one, else every rendered frame, the device's rate.
-        const std::optional<uint32_t> own = d->framesPerSecond();
-        const uint32_t fps = own ? *own : (Scheduler::instance() ? Scheduler::instance()->fps() : 0);
-        sink.appendf(",\"lights\":%u,\"fps\":%u", static_cast<unsigned>(d->windowLength(n)), static_cast<unsigned>(fps));
+        sink.appendf(",\"lights\":%u,\"fps\":%u", static_cast<unsigned>(d->windowLength(n)), static_cast<unsigned>(d->paceFps()));
         sink.append(d->correction().hasMotion ? ",\"movingHeads\":true}" : "}");
         first = false;
     }
@@ -191,7 +189,7 @@ void Drivers::defineControls() {
     controls_.setAdvanced(controls_.count() - 1);   // wiring an installer sets once
     controls_.addControl("brightness", brightness, 0, 255);
     /// Blink the lights for five seconds, so this device is found by looking.
-    /// @guide Dark and lit twice a second at their own brightness, never brighter. A peer's map presses it from a device's details.
+    /// @guide Dark and lit twice a second, at their own brightness at most. A peer's map presses it from a device's details.
     controls_.addButton("identify");
     // ONE picker for both kinds, so a `.mlp` is chosen exactly like a built-in; setup scans the folders and a file change rescans, and a brightness change leaves the list as it is.
     if (!live_.scanned) refreshLivePalettes();
@@ -278,8 +276,9 @@ void Drivers::applyRelay() {
         releaseRelays();   // what the OLD list held, or a typo mid-edit leaves the relays asserted
         return;
     }
-    releaseLeavingRelays(pins, n);
-    driveRelays(pins, n, on && brightness > 0);
+    const std::span<const uint16_t> listed(pins, n);
+    releaseLeavingRelays(listed);
+    driveRelays(listed, on && brightness > 0);
 }
 
 void Drivers::releaseRelays() {
@@ -288,18 +287,18 @@ void Drivers::releaseRelays() {
     lastRelayCount_ = 0;
 }
 
-void Drivers::releaseLeavingRelays(const uint16_t* pins, uint8_t n) {
+void Drivers::releaseLeavingRelays(std::span<const uint16_t> pins) {
     // The pins LEAVING the list: shrinking "12,13" to "12" must not strand 13.
     for (uint8_t i = 0; i < lastRelayCount_; i++) {
         bool stillListed = false;
-        for (uint8_t j = 0; j < n; j++)
-            if (lastRelayPins_[i] == static_cast<uint8_t>(pins[j])) { stillListed = true; break; }
+        for (uint16_t pin : pins)
+            if (lastRelayPins_[i] == static_cast<uint8_t>(pin)) { stillListed = true; break; }
         if (!stillListed) platform::gpioWrite(lastRelayPins_[i], false);
     }
 }
 
-void Drivers::driveRelays(const uint16_t* pins, uint8_t n, bool closed) {
-    for (uint8_t i = 0; i < n; i++) {
+void Drivers::driveRelays(std::span<const uint16_t> pins, bool closed) {
+    for (uint8_t i = 0; i < pins.size(); i++) {
         // An input-only pin refuses the write, and the seam says so rather than going quiet.
         if (!platform::gpioWrite(static_cast<uint8_t>(pins[i]), closed)) {
             setStatus("relay pin cannot drive an output", Severity::Warning);
@@ -307,7 +306,7 @@ void Drivers::driveRelays(const uint16_t* pins, uint8_t n, bool closed) {
         }
         lastRelayPins_[i] = static_cast<uint8_t>(pins[i]);
     }
-    lastRelayCount_ = n;
+    lastRelayCount_ = static_cast<uint8_t>(pins.size());
 }
 
 void Drivers::updateMotionHold() MM_NONBLOCKING {
@@ -357,7 +356,7 @@ void Drivers::setup() {
     passBufferToDrivers();           // seeds each driver's correction via rebuildCorrection()
     // HERE rather than in prepare: every setup runs first, and a Layer sizes its buffer there.
     publishFixtureChannels();
-    // Without this a relay board comes up dark until something toggles the control.
+    // A relay board comes up in its set state here, rather than dark until something toggles the control.
     applyRelay();
 }
 
@@ -451,6 +450,7 @@ void Drivers::runEncodeLoop() {
         tickChildren(&MoonModule::tick, RoleFilter::Only, ModuleRole::Driver, false);   // core 1: core 0's own time leaves this out
         platform::taskWdtReset();
         encodeDone_.store(true, std::memory_order_release);
+        platform::signalGive(encodeDoneSignal_);   // wakes the render loop sleeping in quiesceEncode
     }
     platform::taskWdtUnsubscribe();   // leave the WDT clean before the task exits (no dangling entry)
 }
@@ -471,15 +471,18 @@ void Drivers::retrySplit() MM_NONBLOCKING {
 
 bool Drivers::quiesceEncode() {
     if (!renderSplitActive_) return true;
-    const uint32_t deadline = platform::millis() + kQuiesceTimeoutMs;
+    const uint32_t start = platform::millis();
     while (!encodeDone_.load(std::memory_order_acquire)) {
-        if (platform::millis() > deadline) {
+        // Elapsed time, so the bound holds across the millisecond counter's wrap.
+        const uint32_t waited = platform::millis() - start;
+        if (waited >= kQuiesceTimeoutMs) {
             setStatus("encode worker stalled - running single-core", Severity::Warning);
             encodeStalled_ = true;        // remember, so recovery can clear the warning
             renderSplitActive_ = false;   // stop notifying it; drivers tick inline from here
             return false;
         }
-        platform::yield();
+        // Sleep until the encode task gives the signal, so core 0's other tasks run meanwhile; a missing signal leaves the yield.
+        if (!platform::signalTake(encodeDoneSignal_, kQuiesceTimeoutMs - waited)) platform::yield();
     }
     // Clear a previous stall warning: a status that stays forever describes the past.
     if (encodeStalled_) {
@@ -503,6 +506,7 @@ void Drivers::startEncodeTask() {
     if (!renderSplitActive_ || encodeTask_.impl) return;
     encodeStop_.store(false, std::memory_order_release);
     encodeDone_.store(true, std::memory_order_release);
+    platform::signalCreate(encodeDoneSignal_);   // kept until Drivers goes, as a worker detached on a stop timeout may still give it; refused, the render loop yields
     // 5 KB: drivers own their DMA buffers and a network driver sends from its own task, so the encode loops stay light, measured at 1 to 1.4 KB.
     if (!platform::spawnPinnedTask(encodeTask_, "mmEncode", &encodeTrampoline, this, 5120, 5, 1))
         renderSplitActive_ = false;   // couldn't create the task → inline path

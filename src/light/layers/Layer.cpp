@@ -11,13 +11,12 @@ namespace mm {
 Layer::~Layer() { if (liveScratch_) platform::free(liveScratch_); }
 
 void Layer::defineControls() {
+    MoonModule::defineControls();   // the children's controls, first, as every override chains
     static constexpr const char* kBlendModeOptions[] = {"alpha", "additive", "multiply", "screen", "darken", "lighten",
                                                         "difference", "exclusion"};
     static_assert(sizeof(kBlendModeOptions) / sizeof(kBlendModeOptions[0]) == kBlendModeCount, "one option per mode");
     controls_.addSelect("blendMode", blendMode, kBlendModeOptions, kBlendModeCount);
     controls_.addControl("opacity", opacity, 0, 255);
-    // Cascade to the children, preserving the base behavior this overrode.
-    MoonModule::defineControls();
 }
 
 void Layer::prepare() {
@@ -112,12 +111,22 @@ inline __attribute__((always_inline)) void Layer::gatherLiveCell(uint8_t* buf, c
     }
 }
 
+void Layer::chargeLivePass(uint32_t us) MM_NONBLOCKING {
+    uint8_t live = 0;
+    for (uint8_t i = 0; i < childCount(); i++)
+        if (child(i)->role() == ModuleRole::Modifier && child(i)->enabled() && static_cast<ModifierBase*>(child(i))->hasModifyLive()) live++;
+    if (live == 0) return;
+    for (uint8_t i = 0; i < childCount(); i++)
+        if (child(i)->role() == ModuleRole::Modifier && child(i)->enabled() && static_cast<ModifierBase*>(child(i))->hasModifyLive())
+            addChildTimeUs(child(i), us / live);
+}
+
 void Layer::applyLivePass() {
     uint8_t* buf = buffer_.data();
     if (!buf || !liveScratch_) return;   // scratch is sized on the cold path (ensureLiveScratch)
     const size_t cpl = channelsPerLight_;
     const size_t bytes = static_cast<size_t>(width_) * height_ * depth_ * cpl;
-    if (bytes == 0 || bytes > liveScratchBytes_) return;   // hot path NEVER allocates
+    if (bytes == 0 || bytes > liveScratchBytes_) return;   // the hot path only copies, into the snapshot ensureLiveScratch sized
     std::memcpy(liveScratch_, buf, bytes);   // snapshot the source frame
 
     const Coord3D logical{width_, height_, depth_};
@@ -172,10 +181,8 @@ void Layer::warpRow(const LiveAffine& t, lengthType y, const uint8_t* src, uint8
     }
 }
 
-void Layer::extrude(Dim effectDim) MM_NONBLOCKING {
-    if (effectDim == Dim::D3) return;
+void Layer::extrudeCopy(Dim effectDim) MM_NONBLOCKING {
     uint8_t* buf = buffer_.data();
-    if (!buf) return;
     const size_t cpl = channelsPerLight_;
     const size_t rowBytes = static_cast<size_t>(width_) * cpl;
     const size_t sliceBytes = rowBytes * height_;
@@ -196,26 +203,6 @@ void Layer::extrude(Dim effectDim) MM_NONBLOCKING {
             std::memcpy(buf + z * sliceBytes, buf, sliceBytes);
         }
     }
-}
-
-EffectBase* Layer::soleEffect() const MM_NONBLOCKING {
-    EffectBase* source = nullptr;
-    for (uint8_t i = 0; i < childCount(); i++) {
-        MoonModule* c = child(i);
-        if (!c->enabled() || (c->role() != ModuleRole::Modifier && c->role() != ModuleRole::Effect)) continue;
-        if (c->role() == ModuleRole::Modifier || source) return nullptr;
-        source = static_cast<EffectBase*>(c);
-    }
-    return source;
-}
-
-bool Layer::soleLayer() const MM_NONBLOCKING {
-    const MoonModule* p = parent();
-    if (!p) return true;
-    uint8_t layers = 0;
-    for (uint8_t i = 0; i < p->childCount(); i++)
-        if (p->child(i)->role() == ModuleRole::Layer && p->child(i)->enabled()) layers++;
-    return layers == 1;
 }
 
 void Layer::placeByLayout(nrOfLightsType* out, size_t cells, Coord3D box) const {
@@ -300,7 +287,7 @@ bool Layer::isNaturalOrder() const {
 
 namespace {
 
-/// One callback does both passes through the placeLights ctx, so it captures nothing.
+/// One callback does both passes through the placeLights ctx, so it stays a plain function pointer.
 struct FoldCtx {
     Layer* self;   // for the dynamic child list (the modifier chain)
     MappingLUT* lut;

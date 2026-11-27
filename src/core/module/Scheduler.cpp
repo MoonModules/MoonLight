@@ -102,6 +102,7 @@ void Scheduler::tick() MM_NONBLOCKING {
     const uint32_t tickEnd = platform::micros();
     tickAccumUs_ += tickEnd - tickStart;
     frameCount_++;
+    notePeakFrame(tickEnd);
 
     // Every 1 second: compute averages, recurse into children
     if (now - lastTimingUpdate_ >= 1000) {
@@ -109,6 +110,8 @@ void Scheduler::tick() MM_NONBLOCKING {
         // The window closes where the tick sum does, in microseconds, so every tick counted lies inside it.
         frameUs_ = frameCount_ > 0 ? (tickEnd - windowStartUs_) / frameCount_ : 0;
         windowStartUs_ = tickEnd;
+        worstFrameUs_ = peakFrameUs_;
+        peakFrameUs_ = 0;
 
         for (uint8_t i = 0; i < moduleCount_; i++) {
             modules_[i]->publishTiming(frameCount_);
@@ -118,6 +121,12 @@ void Scheduler::tick() MM_NONBLOCKING {
         frameCount_ = 0;
         lastTimingUpdate_ = now;
     }
+}
+
+void Scheduler::notePeakFrame(uint32_t tickEnd) MM_NONBLOCKING {
+    // A frame runs from one tick's end to the next, the loop's pause included, which is the interval a viewer sees.
+    if (lastTickEndUs_ != 0 && tickEnd - lastTickEndUs_ > peakFrameUs_) peakFrameUs_ = tickEnd - lastTickEndUs_;
+    lastTickEndUs_ = tickEnd;
 }
 
 void Scheduler::release() {

@@ -75,7 +75,7 @@ The test build compiles a precompiled header that holds `doctest.h` and the stan
 
 A widely included, often edited header is `.h` + `.cpp` ([File shape](../contributing/coding-standards.md#file-shape-header-only-vs-h-cpp)), so a body edit rebuilds one object; the platform interface splits by concern (`platform_*.h` under `platform.h`); the grid sweep tests split by test case into three files that compile in parallel.
 
-No target uses link-time optimization: every edit would pay a longer link, ESP-IDF leaves it unsupported and its IRAM section placement can break under it, and `-ffunction-sections`, `-fdata-sections` and `--gc-sections` already remove most of what it would. A header body is emitted once whichever file holds it, so moving a body to a `.cpp` leaves the ESP32 image size alone; a per-frame one-liner stays inline.
+No target uses link-time optimization: every edit would pay a longer link, ESP-IDF leaves it unsupported and its IRAM section placement can break under it, and `-ffunction-sections`, `-fdata-sections` and `--gc-sections` already remove most of what it would. A header body the compiler keeps out of line is emitted once whichever file holds it; a move to a `.cpp` changes the image only by what the compiler had inlined into its callers, which the KPI report's image sizes show per commit, and a per-light one-liner stays inline. The tests compile at the release's `-O3`, so they exercise the header-only light domain as the boards build it; an `-O2` test build saves about 5 s an edit, at the price of a second CI configuration.
 
 ## Where the host keeps its settings
 

@@ -218,3 +218,26 @@ Measure before deciding: build the C3 with the guard lifted, run each effect on 
 What: a light stepping along the floor to each bass note's pitch on its strike, scored on URMP's double bass and Slakh2100's bass tracks.
 Why: the low notes answer later than the high ones (a band's delay, 139 ms at the guitar's low E), so a walking bass waits for the low notes to answer sooner.
 What it takes: faster low-band notes in the bank, then an effect reading the bass note of the audio frame.
+
+### Transitions: an opacity ramp, a dissolve between effects, a soft-edged wipe
+
+Kind: Feature · [Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=319425875)
+
+**Why.** Effects need transitions, the old one fading out while the new one fades in, and a layer fading in or out. The compositing stage ([BlendMap](../../../src/light/layers/BlendMap.h)) already blends layers by the W3C modes with an opacity, so a transition is compositing with a parameter that moves per frame: a dissolve (one opacity moving over time) or a wipe (a matte whose edge moves over time).
+
+**What.**
+- **A per-layer opacity ramp:** a target and a duration, applied live, interpolated per frame. A layer fading in or out is the ramp on its opacity. The boot soft start and this ramp share one small ramp type, a value moving to a target over a duration; the soft start itself stays in the correction tables, since it protects the power supply over the whole output whatever the layers do.
+- **A dissolve between effects:** on an effect change, the old effect keeps running in a temporary layer under the new one while the new layer's opacity ramps up; the temporary layer goes when the ramp ends.
+- **A wipe:** the same, with a mask layer whose edge moves instead of a uniform opacity, so every wipe is soft-edged for free.
+- **The UI** (recommended 2026-10-25): one duration and one style on the Effects container, as a lighting console has one fade time per playback; per layer once someone asks for it.
+- **Motion bytes** (recommended 2026-10-25): latest takes precedence (LTP), the console rule for position channels: the top layer's aim wins, and in a dissolve the heads move from the old aim to the new over the fade. A position is no color, so it is not blended like one. Today an upper layer's motion bytes blend like color.
+
+**Cost, only while a transition runs:** one more layer buffer (36 KB at 12,288 RGB lights) and the old effect's own state, one more effect tick and blend pass per frame; the single-layer fast path (the driver reading the layer buffer directly) pauses while two layers exist, so the memory degradation rules decide what a classic ESP32 without PSRAM does. Nothing once it ends.
+
+**Also open on the compositing stage:**
+- overlay, hard-light and soft-light, each added once its flash is measured on a classic ESP32;
+- the additive mode renamed `plus`, the specification's own operator (recommended 2026-10-25), with a MIGRATING entry.
+
+**Out, decided:** color access in modifiers (a modifier stays geometry: where a color comes from, never how bright it is), and a mask slot per layer (the multiply mode and a script's `mulRGB` already mask; it returns only if a mask must apply to one layer mid-stack and layer order cannot express it).
+
+**Size.** About two days for the ramp and the dissolve, the wipe a day after.

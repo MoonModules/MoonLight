@@ -244,6 +244,13 @@ uint32_t wifiApClientCount();
 /// True when a socket is safe to open: the stack is initialized and an interface holds an IP.
 bool networkReady();
 
+/// What the network stack holds on the heap, as its bring-ups took and its shutdowns gave back, less the stacks of the tasks they started, which the task snapshot counts: total bytes and the part in PSRAM, 0 where the platform cannot tell.
+void networkHeap(size_t& total, size_t& psram);
+#ifndef ESP_PLATFORM   // host-test seams, which no ESP32 code calls
+/// Report this much network heap, as a board's measured bring-up does.
+void setTestNetworkHeap(size_t total, size_t psram);
+#endif
+
 /// Current WiFi transmit power in dBm, 0 when WiFi is not initialized.
 int wifiTxPower();
 

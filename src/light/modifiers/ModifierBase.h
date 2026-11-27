@@ -73,7 +73,7 @@ public:
     virtual void modifyLive(Coord3D& /*pos*/, const Coord3D& /*logical*/) const {}
 
     /// Whether this modifier does per-frame work, which gates the live pass.
-    virtual bool hasModifyLive() const { return false; }
+    virtual bool hasModifyLive() const MM_NONBLOCKING { return false; }
 
     /// This frame's live map as one affine transform over a `logical` box, false for a map that is none; when every live modifier answers, the Layer warps the frame incrementally rather than per light through modifyLive.
     virtual bool liveAffine(LiveAffine& /*out*/, const Coord3D& /*logical*/) const { return false; }

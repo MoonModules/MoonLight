@@ -6,6 +6,8 @@
 #include "core/system/TasksModule.h"
 #include "core/module/Scheduler.h"
 #include "core/util/JsonSink.h"
+#include "platform/platform_clock.h"   // setTestNowMs: how old the snapshot is
+#include "platform/platform_heap.h"    // processMemory
 #include "platform/platform_tasks.h"   // taskSnapshot, setTestTaskSnapshot, TaskInfo
 
 #include <cstring>
@@ -59,7 +61,7 @@ TEST_CASE("TasksModule: a fixed System module (Generic role, no delete affordanc
 }
 
 TEST_CASE("TasksModule: the empty host snapshot is safe (no RTOS on host)") {
-    // tick1s refreshes the (empty on host) task snapshot + fills core0/core1 (empty strings). This just confirms the refresh path doesn't crash and the tasks list serializes to an empty array.
+    // tick1s fills core0/core1 (empty strings on host), and the read takes the empty snapshot: the list serializes to an empty array.
     platform::setTestTaskSnapshot(nullptr, 0, "");
     Scheduler scheduler;
     TasksModule tasks;
@@ -67,6 +69,55 @@ TEST_CASE("TasksModule: the empty host snapshot is safe (no RTOS on host)") {
     scheduler.setup();
     tasks.tick1s();   // platform::taskSnapshot returns 0 on host → 0 rows, no crash
     CHECK(true);      // reaching here without a crash is the assertion
+}
+
+#ifndef ESP_PLATFORM
+// A computer has no RTOS, so its task table is the process's threads: the one mm_main runs on reads render, each with a CPU share once a second snapshot has an earlier one to compare.
+TEST_CASE("TasksModule: on a computer the task table is the process's threads, the render loop's named render, with CPU shares from the second snapshot on") {
+    platform::setTestTaskSnapshot(nullptr, 0, "");
+    platform::recordSystemHeap();   // as mm_main does first: this thread is the render loop's
+    platform::TaskInfo rows[64];
+    REQUIRE(platform::taskSnapshot(rows, 64) >= 1);
+    const uint32_t t0 = platform::micros();
+    while (platform::micros() - t0 < 20000) {}   // this thread runs, so its share is above zero
+    const size_t n = platform::taskSnapshot(rows, 64);
+    bool render = false, measured = false;
+    for (size_t i = 0; i < n; i++) {
+        render = render || std::strcmp(rows[i].name, "render") == 0;
+        measured = measured || (rows[i].cpuPermille != platform::kTaskCpuUnmeasured && rows[i].cpuPermille > 0);
+    }
+    CHECK(render);
+    CHECK(measured);
+    CHECK(std::strcmp(platform::renderTaskName(), "render") == 0);   // the thread mm_main started on, named in the table
+}
+
+// A computer's memory sheet: the process's resident memory and what the machine has available.
+TEST_CASE("platform: a computer reports its process's resident memory and the machine's available memory") {
+    size_t resident = 0, available = 0;
+    platform::processMemory(resident, available);
+    CHECK(resident > 0);
+    CHECK(available > 0);
+}
+#endif
+
+// The task table is taken when someone reads it, at most once a second, so a device nobody watches walks no task table.
+TEST_CASE("TasksModule: a read takes the task table, and reads within a second share it") {
+    struct Restore { ~Restore() { platform::setTestTaskSnapshot(nullptr, 0, ""); platform::setTestNowMs(0); } } restore;
+    const platform::TaskInfo one[] = {{"main", platform::TaskState::Running, 0, 1, 2340, platform::kTaskCpuUnmeasured}};
+    const platform::TaskInfo two[] = {{"main", platform::TaskState::Running, 0, 1, 2340, platform::kTaskCpuUnmeasured},
+                                      {"wifi", platform::TaskState::Ready, 0, 1, 1200, platform::kTaskCpuUnmeasured}};
+    platform::setTestNowMs(5000);
+    platform::setTestTaskSnapshot(one, 1, "main");
+    TasksModule tasks;
+    tasks.defineControls();
+    const ListSource* src = tasksSource(tasks);
+    REQUIRE(src != nullptr);
+    CHECK(src->listRowCount() == 1);
+    platform::setTestTaskSnapshot(two, 2, "main");
+    platform::setTestNowMs(5500);
+    CHECK(src->listRowCount() == 1);   // half a second on, the same snapshot
+    platform::setTestNowMs(6000);
+    CHECK(src->listRowCount() == 2);   // a second on, a new one
 }
 
 TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with their fields") {
@@ -81,7 +132,7 @@ TEST_CASE("TasksModule: the tasks list renders the injected RTOS tasks with thei
     TasksModule tasks;
     scheduler.addModule(&tasks);
     scheduler.setup();
-    tasks.tick1s();   // pulls the injected snapshot into the ListSource
+    // The first read takes the injected snapshot, as a page opening the card does.
 
     const ListSource* src = tasksSource(tasks);
     REQUIRE(src != nullptr);
@@ -165,6 +216,7 @@ TEST_CASE("TasksModule: the render task's detail nests the modules + the ∑/tic
 
     const ListSource* src = tasksSource(tasks);
     REQUIRE(src != nullptr);
+    REQUIRE(src->listRowCount() == 2);   // a reader asks the count first, which takes the snapshot
 
     // MoonLight's tasks float to the top: the render task "main" (ours) is row 0, "IDLE1" (system) is row 1. Row 0 ("main") = the render task → its detail nests the modules + the cross-check line.
     JsonSink d0; src->writeListRowDetail(d0, 0);

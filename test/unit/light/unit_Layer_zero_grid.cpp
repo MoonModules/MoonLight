@@ -20,7 +20,7 @@
 #include "light/effects/PaintBrushEffect.h"
 #include "light/modifiers/ModifierBase.h"
 
-// Pin the "Effects must work at every grid size" rule. A 0-light layout is a real configuration, a modifier can shrink the logical grid to 0,0,0 or every layout child can be disabled. Effects' tick() must be a clean no-op in that case (no div-by-zero, no OOB writes, no crash).
+// Effects work at every grid size: a modifier can shrink the grid to 0,0,0, or every layout can be off, and tick() is then a clean no-op, free of division by zero and of writes out of bounds.
 
 namespace {
 
@@ -48,12 +48,11 @@ public:
     uint32_t ticks = 0;
 };
 
-/// A modifier that declares per-frame work, so the Layer's live REMAP pass is actually reached.
-/// CountingModifier leaves hasModifyLive() false, which means it never exercises that gate at all.
+/// A modifier that declares per-frame work, so the Layer's live remap pass is reached, a gate CountingModifier, whose hasModifyLive() is false, leaves closed.
 class LiveCountingModifier : public mm::ModifierBase {
 public:
     void tick() MM_NONBLOCKING override { ticks++; }
-    bool hasModifyLive() const override { return true; }
+    bool hasModifyLive() const MM_NONBLOCKING override { return true; }
     void modifyLive(mm::Coord3D& pos, const mm::Coord3D& /*logical*/) const override { remaps++; (void)pos; }
     uint32_t ticks = 0;
     mutable uint32_t remaps = 0;
@@ -89,7 +88,7 @@ TEST_CASE("GameOfLifeEffect on 0,0,0 grid")  { run_with_empty_layout<mm::GameOfL
 TEST_CASE("GEQ3DEffect on 0,0,0 grid")       { run_with_empty_layout<mm::GEQ3DEffect>(); }
 TEST_CASE("PaintBrushEffect on 0,0,0 grid")  { run_with_empty_layout<mm::PaintBrushEffect>(); }
 
-// A modifier keeps its per-frame state moving while the grid is empty. A beat-driven modifier that stalled here would come back in the wrong phase once the layout returns, so the empty interval has to pass THROUGH the modifier chain rather than around it. This is the half of the rule the per-effect cases above cannot see: they assert nothing runs, this asserts something still does.
+// A modifier's per-frame state keeps moving while the grid is empty, so a beat-driven modifier comes back in phase when the layout returns: the empty interval passes through the chain.
 TEST_CASE("modifiers keep ticking while the grid is empty") {
     mm::Layouts layouts;              // no children → 0 lights, so the effect pass is skipped
     mm::Layer layer;
@@ -105,7 +104,7 @@ TEST_CASE("modifiers keep ticking while the grid is empty") {
     CHECK(mod.ticks == 5);            // every frame reached the modifier
 }
 
-// A zero channel count is rejected at the setter rather than defended against downstream: it would allocate a zero-byte buffer and make every effect's per-light stride 0. Enforcing it at the one entry point is what lets effects and draw primitives assume `cpl >= 1`.
+// A zero channel count is refused at the setter, the one entry point, so effects and draw primitives assume `cpl >= 1` rather than meeting a zero-byte buffer and a per-light stride of 0.
 TEST_CASE("a layer refuses a zero channel count") {
     mm::Layouts layouts;
     mm::Layer layer;

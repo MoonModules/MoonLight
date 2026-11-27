@@ -175,6 +175,7 @@ add_library(mm_platform
     src/platform/host/platform_host_hdmi_linux.cpp
     src/platform/host/platform_host_update.cpp
     src/platform/host/platform_host_machine.cpp
+    src/platform/host/platform_host_threads.cpp
     src/platform/host/platform_host_pio.cpp
     src/platform/host/platform_host_gpio.cpp
     src/platform/rpi/hub75_pio_options.cpp

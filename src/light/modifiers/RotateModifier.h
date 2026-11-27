@@ -25,7 +25,7 @@ public:
     /// A rotation in the plane, so 2D, advisory for the UI chip.
     Dim dimensions() const override { return Dim::D2; }
     /// It animates, so it also transforms every frame.
-    bool hasModifyLive() const override { return true; }
+    bool hasModifyLive() const MM_NONBLOCKING override { return true; }
 
     /// What drives the turn, in option order.
     enum Sync : uint8_t { kFree, kBeat, kSyncCount };
