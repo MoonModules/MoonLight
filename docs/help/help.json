@@ -3356,27 +3356,47 @@
   },
   "TextEffect": {
    "line": "Renders a multi-line string in a bitmap font, static by default or as a wrapping marquee.",
-   "summary": "Static text is laid out top-left, each newline dropping one font height, and clipped where it runs off the grid. Turn on `scroll` to march the whole block leftward as a marquee. Text color comes from the active palette.",
+   "summary": "Static text sits at the top left, and a newline drops one font height. `scroll` marches a line wider than the grid, and a shorter line stays centered. A `#` token reads the clock. The 4x6 face is built in, and every other face is a `.wbf` file in `/fonts`. Letters take the active palette at `hue`.",
+   "attribution": "[raster-fonts](https://moonmodules.org/MoonLight/reference/attributions.html#raster-fonts), [WLED](https://moonmodules.org/MoonLight/reference/attributions.html#wled), [PixelFonts](https://moonmodules.org/MoonLight/reference/attributions.html#pixelfonts)",
    "image": "https://moonmodules.org/MoonLight/assets/light/effects/TextEffect.gif",
    "controls": {
     "text": {
-     "line": "The string to show; each line renders on its own row."
+     "line": "The string to show. A # token reads the clock, so #HH:#MM is the time.",
+     "more": "`#HH` `#MM` `#SS` are the hour, minute and second, always two digits. `#DD` is the day, `#MO` the month number, `#YY` and `#YYYY` the year. `#MON` and `#MONL` are the short and full month, `#DAY` and `#DDDD` the weekday. `#TIME` is `HH:MM:SS`, `#HHMM` is `HH:MM`, `#DATE` is `DD.MM.YYYY`, `#DDMM` and `#MMDD` the short dates. A `0` after a token is accepted. With `ampm` on, `#HH` runs from 01 to 12 and `#TIME` ends in AM or PM. `#MM` is the minute, not the month."
+    },
+    "ampm": {
+     "line": "12-hour clock, and AM or PM on #TIME."
     },
     "scroll": {
      "line": "Off is static, on a horizontal marquee."
     },
     "font": {
-     "line": "Glyph size: 4x6 compact, 6x8 larger."
+     "line": "The 4x6 face, or a .wbf file in /fonts."
     },
     "speed": {
-     "line": "Marquee speed, used when `scroll` is on."
+     "line": "How fast a scrolling line travels, in pixels a second."
+    },
+    "offset": {
+     "line": "Vertical shift. The middle leaves the line centered."
+    },
+    "scale": {
+     "line": "Each font pixel covers this many lights on a side."
     },
     "hue": {
-     "line": "Palette index for the text color."
+     "line": "Palette index of the letter color. A one-color palette sets it."
+    },
+    "trail": {
+     "line": "How long the letters linger. 0 redraws them clean."
+    },
+    "reverse": {
+     "line": "On sends the line toward the right."
+    },
+    "gradient": {
+     "line": "Color the letters from the palette along their width."
     }
    },
    "role": "effect",
-   "tags": "💫",
+   "tags": "💫🐙",
    "dim": 2,
    "doc": "light/effects.md#text",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/TextEffect.h",

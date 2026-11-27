@@ -87,6 +87,7 @@ add_executable(mm_tests
     unit/core/unit_HttpServerModule_subscribe.cpp
     unit/core/unit_HttpServerModule_upload.cpp
     unit/core/unit_HttpServerModule_routes.cpp
+    unit/core/unit_HttpServerModule_wled.cpp
     unit/core/unit_StateDocument.cpp
     unit/core/unit_ImprovFrame.cpp
     unit/core/unit_ImprovOpReassembler.cpp

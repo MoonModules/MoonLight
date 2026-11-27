@@ -24,6 +24,7 @@ DEVICE_DIR = "/data/local/tmp/moonlight-tests"
 # Built firmware images stay on the computer: their tests return early on a device, as on a tree that has built none.
 SOURCE_FILES = {
     "moonlive": "script sweeps, catalog, motion and particle examples, Xtensa codegen",
+    "fonts/6x8.wbf": "unit_TextEffect.cpp, the 6x8 golden",
     "esp32/partitions": "unit_PartitionTables.cpp",
     "moonbase/main/moonbase_main.cpp": "unit_MoonBaseContract.cpp",
     "src/core/system/HttpServerModule.cpp": "unit_MoonBaseContract.cpp",

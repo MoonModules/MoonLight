@@ -1628,6 +1628,10 @@ body.help-hidden .control-row.has-help { margin-bottom: 6px; }
     transform: none;
 }
 .switch:hover .switch-track { border-color: var(--accent); }
+.switch:has(input:disabled) { opacity: 0.45; cursor: default; }
+.switch:has(input:disabled) input,
+.switch:has(input:disabled) .switch-track { cursor: default; }
+.switch:has(input:disabled):hover .switch-track { border-color: var(--border); }
 .control-row progress {
     flex: 1;
     height: 8px;

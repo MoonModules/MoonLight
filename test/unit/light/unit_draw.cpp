@@ -183,7 +183,7 @@ TEST_CASE("draw: blur spreads in 2D and 3D and is safe at degenerate sizes") {
 // A glyph blits upright and unmirrored, so 'L' has its bar on the LEFT and its foot on the BOTTOM row: the column-bit and row-direction reads the DemoReel name overlay stands on.
 TEST_CASE("draw: glyph renders upright and un-mirrored (the 'L' probe)") {
     Buffer buf;
-    const auto& f = fonts::kFont6x8;                 // 6x8: 'L' bar at col 1, foot on row 6
+    const auto& f = fonts::kFont4x6;                 // 4x6: 'L' bar at col 1, foot on row 4
     Coord3D dims{static_cast<lengthType>(f.width), static_cast<lengthType>(f.height), 1};
     REQUIRE(buf.allocate(f.width * f.height, 3));
     draw::glyph(buf, dims, f, 'L', 0, 0, {255, 255, 255});
@@ -194,14 +194,14 @@ TEST_CASE("draw: glyph renders upright and un-mirrored (the 'L' probe)") {
         if (!isBlack(at(buf, dims, 1, y, 0))) litLeft++;                       // left bar column
         if (!isBlack(at(buf, dims, static_cast<lengthType>(f.width - 1), y, 0))) litRight++;  // right edge
     }
-    CHECK(litLeft >= 6);    // the bar runs down most of the glyph on the left
+    CHECK(litLeft >= 5);    // the bar runs down the glyph on the left
     CHECK(litRight <= 1);   // the right edge only carries the foot's last pixel (not a mirrored bar)
 
     // The foot is on the BOTTOM row (highest y), and the top row is just the bar (not the foot).
     int bottomLit = 0;
     for (lengthType x = 0; x < f.width; x++)
-        if (!isBlack(at(buf, dims, x, static_cast<lengthType>(f.height - 2), 0))) bottomLit++;  // row 6 (row 7 is blank)
-    CHECK(bottomLit >= 4);  // the foot spans several columns near the bottom
+        if (!isBlack(at(buf, dims, x, static_cast<lengthType>(f.height - 2), 0))) bottomLit++;  // row 4 (row 5 is blank)
+    CHECK(bottomLit >= 3);  // the foot spans several columns near the bottom
     // The top row has only the single bar pixel, not the foot: so top != bottom (Y not flipped).
     int topLit = 0;
     for (lengthType x = 0; x < f.width; x++)

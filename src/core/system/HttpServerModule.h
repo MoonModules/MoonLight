@@ -141,7 +141,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// WLED-shaped messages make a MoonLight device appear in the WLED apps and Home Assistant's WLED integration, and be controlled from them. Discovery is over mDNS.
 ///
-/// `GET /json/info` carries a name, a MAC, LED and WiFi objects and the brand and product fields. The app keys on the brand: we interoperate rather than impersonate.
+/// `/json`, `/json/info` and `/json/si` carry one `info` object: name, MAC, address, LED, WiFi and filesystem objects, and the brand and product fields. The app keys on the brand: we interoperate rather than impersonate.
 ///
 /// Live state goes over `/ws` as a state-and-info frame: Drivers brightness, and the active palette's color from `LightOutput::paletteRgb()`, or black without a light output.
 ///
@@ -221,7 +221,7 @@ namespace ui { struct EmbeddedFile; }   // one served UI file, from the generate
 ///
 /// The `JsonSink` helpers are members because each reads this module's state. The sink, the SHA-1 of RFC 3174 and the base64 encoder live in headers of their own.
 ///
-/// The WLED shim's field requirements come from the WLED-Android client, so it is the minimal object that app accepts rather than a guessed full emulation.
+/// The WLED shim's fields come from what the WLED-Android app and python-wled require, which Home Assistant uses, rather than a guessed full emulation.
 class HttpServerModule : public MoonModule, public BinaryBroadcaster {
 public:
     /// The port the server listens on.
@@ -886,7 +886,7 @@ private:
     void pollControlClient(int client);
     /// What a text frame from a control client asks for.
     void onTextFrame(int client, const char* body);
-    void writeWledInfoBody(JsonSink& sink, const char* name, const uint8_t mac[6]);
+    void writeWledInfoBody(JsonSink& sink);
     void writeWledName(JsonSink& sink, const char* name);   // 💫-prefixed WLED name (HA marker)
     void writeWledStateBody(JsonSink& sink);
     /// The combined {state, info} object /json/si answers and the WebSocket pushes.
