@@ -40,8 +40,8 @@ struct TaskInfo {
 };
 /// Fill `out` with up to `maxTasks` rows, answering how many; 0 where there is no RTOS.
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks);
-/// What every task holds on the heap, stacks and control blocks: total bytes and the part in PSRAM, 0 where there is no RTOS.
-void tasksHeap(size_t& total, size_t& psram);
+/// What every task holds on the heap, stacks and control blocks: total bytes and the part in PSRAM, 0 where there is no RTOS. False when the task table was busy, both left at 0.
+bool tasksHeap(size_t& total, size_t& psram);
 /// The task running on a core, or empty on a single-core target.
 void currentTaskOnCore(int core, char* out, size_t cap);
 /// The task the render loop runs in, empty where no distinct one exists.

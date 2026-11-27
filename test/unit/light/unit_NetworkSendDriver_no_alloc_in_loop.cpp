@@ -143,6 +143,20 @@ TEST_CASE("NetworkSendDriver counts a frame missed per whole interval the send t
     mm::platform::setTestNowMs(0);
 }
 
+// A render tick off the interval grid kept every later count late, so a long hold read short.
+TEST_CASE("NetworkSendDriver counts missed frames on the send's interval grid when the render ticks off it") {
+    PacedSend rig(50);   // a frame is due every 20 ms
+    mm::NetworkSendDriver& driver = rig.driver;
+    driver.holdFrameForTest();
+    for (uint32_t ms = 1100; ms <= 1240; ms += 7) {   // 7 ms ticks across the boundaries 1100, 1120 ... 1240
+        mm::platform::setTestNowMs(ms);
+        driver.tick();
+    }
+    CHECK(driver.framesDropped().value_or(0) == 8);
+    driver.release();
+    mm::platform::setTestNowMs(0);
+}
+
 // A frame the driver keeps is corrected into, not rebuilt: a channel the new profile gives no role would keep the old profile's byte.
 TEST_CASE("NetworkSendDriver sends 0 on a channel the profile gives no role, whatever the profile before it sent there") {
     mm::Buffer source;

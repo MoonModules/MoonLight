@@ -296,7 +296,7 @@ public:
         if (now - lastSendTime_ < interval) return;
         // A frame due while the task still sends the last waits, since the task owns the corrected buffer, and goes out once it is idle; a whole interval with no send is a frame missed, counted once.
         if (sendTask_.impl && frameState_.load(std::memory_order_acquire) != kFrameIdle) {
-            if (now - lastSendTime_ >= 2 * interval && now - lastSkipTime_ >= interval) { framesSkipped_.fetch_add(1, std::memory_order_relaxed); lastSkipTime_ = now; }
+            if (now - lastSendTime_ >= 2 * interval && now - lastSkipTime_ >= interval) { framesSkipped_.fetch_add(1, std::memory_order_relaxed); lastSkipTime_ = now - (now - lastSendTime_) % interval; }
             return;
         }
         lastSendTime_ = now;
@@ -442,7 +442,7 @@ private:
     uint32_t framesAtSecond_ = 0, packetsAtSecond_ = 0;       ///< the counts at the last tick1s
     uint32_t framesLastSecond_ = 0, packetsLastSecond_ = 0;   ///< sent in the second before it
     std::atomic<uint32_t> framesSkipped_{0};   ///< frames the tick skipped while the task sent the last, which tick1s and the report read from their own tasks
-    uint32_t lastSkipTime_ = 0;   ///< millis() of the last missed frame counted, so one missed interval counts once
+    uint32_t lastSkipTime_ = 0;   ///< the interval boundary of the last missed frame counted, on the grid of the last send, so one missed interval counts once
     std::atomic<uint32_t> frameBytes_{0};   ///< the bytes of the frame last handed to the task, for the headroom tick1s reads
     uint32_t skippedAtSecond_ = 0;   ///< framesSkipped_ at the last tick1s
     std::optional<uint8_t> headroom_;   ///< the last second's send headroom, none before the first second

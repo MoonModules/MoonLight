@@ -230,7 +230,7 @@ void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
 void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // alloc reaches no PSRAM here, as ptrIsPsram says
 void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
 void processMemory(size_t& resident, size_t& available) { resident = available = 0; }   // a board's heap figures say it
-void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }   // no RTOS, so no task holds a stack of its own
+bool tasksHeap(size_t& total, size_t& psram) { total = psram = 0; return true; }   // no RTOS, so no task holds a stack of its own
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out || maxTasks == 0 || !g_dtcmEnd) return 0;
     uintptr_t p = g_stackFloor;

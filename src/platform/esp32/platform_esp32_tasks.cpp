@@ -163,14 +163,14 @@ size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     return n;
 }
 
-void tasksHeap(size_t& total, size_t& psram) {
+bool tasksHeap(size_t& total, size_t& psram) {
     total = psram = 0;
     uint32_t totalRunTime = 0;
     UBaseType_t got = 0;
     // The kernel's table, taken under its lock, as both cores move tasks between lists: a list walk of our own would race the other core.
     const ScratchLock lock;
     const TaskStatus_t* raw = lockedState(lock, got, totalRunTime);
-    if (!raw) return;
+    if (!raw) return false;
     vTaskSuspendAll();   // as freertos_debug.h asks of a snapshot while the scheduler runs
     for (UBaseType_t i = 0; i < got; i++) {
         uint32_t inPsram = 0;
@@ -178,6 +178,7 @@ void tasksHeap(size_t& total, size_t& psram) {
         psram += inPsram;
     }
     xTaskResumeAll();
+    return true;
 }
 
 void currentTaskOnCore(int core, char* out, size_t cap) {
@@ -198,7 +199,7 @@ const char* renderTaskName() { return pcTaskGetName(nullptr); }
 #else  // trace facility off: inert stubs, and the task table reads empty.
 
 size_t taskSnapshot(TaskInfo*, size_t) { return 0; }
-void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }
+bool tasksHeap(size_t& total, size_t& psram) { total = psram = 0; return true; }
 void currentTaskOnCore(int, char* out, size_t cap) { if (out && cap) out[0] = '\0'; }
 const char* renderTaskName() { return ""; }   // trace facility off: no task view
 

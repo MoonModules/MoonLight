@@ -525,7 +525,7 @@ void recordSystemHeap() { markRenderThread(); }   // a computer reports no heap,
 void systemHeap(size_t& total, size_t& psram) { total = psram = 0; }
 void heapTypes(HeapType& internal, HeapType& psram) { internal = {totalHeap(), freeHeap(), maxAllocBlock(), 0}; psram = {}; }   // a computer has one memory
 void moonlightHeap(size_t& total, size_t& psram) { total = psram = 0; }   // counted only where the heap reports a total
-void tasksHeap(size_t& total, size_t& psram) { total = psram = 0; }   // a computer's threads hold their stacks outside any heap this reports
+bool tasksHeap(size_t& total, size_t& psram) { total = psram = 0; return true; }   // a computer's threads hold their stacks outside any heap this reports
 size_t hostThreads(TaskInfo* out, size_t maxTasks);   // platform_host_threads.cpp: the process's threads
 size_t taskSnapshot(TaskInfo* out, size_t maxTasks) {
     if (!out) return 0;

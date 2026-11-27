@@ -68,7 +68,7 @@ TEST_CASE("apply-core: applyWledState picks a palette by index and by color thro
     WledRig rig(false);
     FakeDrivers* drivers = rig.drivers;  mm::HttpServerModule& http = rig.http;
 
-    // No light output running: neither form moves the palette.
+    // No light output running: the palette stays put, by index and by color alike.
     http.applyWledState("{\"seg\":[{\"pal\":3,\"col\":[[0,0,255]]}]}");
     CHECK(drivers->palette == 0);
 

@@ -47,14 +47,6 @@
 ///
 /// The lasting lesson is that lacking the owner check there is no handshake, so a torn or short read raises no error at all. Timings look healthy and the error count stays zero, so a correct geometry drawn in scattered dots reads as a latch fault rather than a data fault. Do not trust a ring counter for that class: the wall, or the loopback bit-verify, is the instrument.
 ///
-/// ## Where the frame lives is decided by the pixel clock
-///
-/// Measured on one board with one variable changed: in direct mode a frame in external memory streams fine; in expander mode it stalls at any size. The transfer engine cannot sustain an external read at the expander's clock: each slot shifts out over eight bus words, so the bus runs ten times faster, a rate that memory cannot feed.
-///
-/// This backend proved it. The sibling failed here with thousands of descriptor-mount errors that pointed at its own descriptor handling; this one owns the chain and mounts it once, the errors vanish, and the transfer still stalls. The mount storm was a symptom, killed by a controlled experiment with a working control condition.
-///
-/// Hence internal memory first in expander mode and external first otherwise, which is what the measurement says rather than a workaround inherited from the sibling. External stays the fallback there, so a frame too big to fit still drives badly rather than refusing to start.
-///
 /// ## The interrupt does the encode, from instruction memory alone
 ///
 /// The handler runs in the transfer interrupt and its ring branch calls the domain encode, so the whole chain is resident in instruction memory. The channel is registered cache-safe because a cache miss at the wire rate blows the refill deadline.
@@ -1291,7 +1283,7 @@ RmtLoopbackResult moonI80Ws2812Loopback(const uint16_t* dataPins, uint8_t laneCo
         st = createState(dataPins, laneCount, wrGpio, frameBytes, /*wantSecond=*/false, clockMultiplier);
         if (!st) {
             ESP_LOGE(MOON_I80_TAG, "loopback: private peripheral setup failed");
-            freeCaps(rxSymbols);   // ownership never reached captureAndVerifyFrame
+            freeCaps(rxSymbols);   // still ours: captureAndVerifyFrame takes ownership only once it runs
             return r;
         }
         std::memcpy(st->buf[0], frame, frameBytes);   // loopback uses buffer 0 only (single transfer)

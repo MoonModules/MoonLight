@@ -45,7 +45,7 @@ test("a node's tooltip names the module's one line when help is loaded, and both
     assert.doesNotMatch(flowTitle(r, ""), /\n\n/);
 });
 
-test("a spike chip shows a longest tick past a millisecond and twice the average, and nothing for a steady node", () => {
+test("a spike chip shows a longest tick past a millisecond and twice the average, and a steady node shows none", () => {
     const totals = { memory: [1, 1], frame: 10000 };
     const spiky = chipsOf({ us: 400, worst: 5000, time: [[0, 400]] }, totals, false).time;
     assert.ok(spiky.some(c => c.cls === "flow-chip-spike" && c.text === "▲5.0 ms"));
@@ -59,7 +59,7 @@ test("a node's tooltip names its longest tick of the second, the stutter its ave
     assert.doesNotMatch(flowTitle({ ...r, worst: 0 }, ""), /longest/);
 });
 
-test("an output's tooltip names its DMA buffers, and one with none says nothing of them", () => {
+test("an output's tooltip names its DMA buffers, only when it holds some", () => {
     const r = { name: "ParallelLed", type: "ParallelLedDriver", us: 1900, own: 1900, internal: 52000, psram: 0, size: 2068, fps: 18, dma: 36864 };
     assert.match(flowTitle(r, ""), /\nDMA buffers 36KB/);
     assert.doesNotMatch(flowTitle({ ...r, dma: 0 }, ""), /DMA/);

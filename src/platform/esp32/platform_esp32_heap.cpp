@@ -203,7 +203,9 @@ static void readNet(NetHeapScope::Reading& r) {
     r.free = freeHeap();
     r.freePsram = freePsramHeap();
     const UBaseType_t count = uxTaskGetNumberOfTasks();
-    if (count != netTaskCount_) { tasksHeap(netTasks_, netTasksPsram_); netTaskCount_ = count; }
+    // A busy table keeps the last walk and leaves the count stale, so the next reading walks again.
+    size_t tasks = 0, tasksPsram = 0;
+    if (count != netTaskCount_ && tasksHeap(tasks, tasksPsram)) { netTasks_ = tasks; netTasksPsram_ = tasksPsram; netTaskCount_ = count; }
     r.tasks = netTasks_;
     r.tasksPsram = netTasksPsram_;
     moonlightHeap(r.own, r.ownPsram);
