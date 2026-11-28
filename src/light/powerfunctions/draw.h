@@ -156,7 +156,8 @@ inline Coord3D shortenedEnd(Coord3D a, Coord3D b, uint8_t shorten) {
     const int bx = ((2 * int(b.x) - 2 * int(a.x)) * int(shorten)) / 255 + 2 * int(a.x);
     const int by = ((2 * int(b.y) - 2 * int(a.y)) * int(shorten)) / 255 + 2 * int(a.y);
     const int bz = ((2 * int(b.z) - 2 * int(a.z)) * int(shorten)) / 255 + 2 * int(a.z);
-    return {static_cast<lengthType>((bx + 1) / 2), static_cast<lengthType>((by + 1) / 2), static_cast<lengthType>((bz + 1) / 2)};
+    // Halved by floor, an arithmetic shift in C++20, so an end left of the grid rounds as it would further right: a wall's devices agree.
+    return {static_cast<lengthType>((bx + 1) >> 1), static_cast<lengthType>((by + 1) >> 1), static_cast<lengthType>((bz + 1) >> 1)};
 }
 
 /// Walk the pixels of a 3D Bresenham line from a to b, calling `plot` for each.

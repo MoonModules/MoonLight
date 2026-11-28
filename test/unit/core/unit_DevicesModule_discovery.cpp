@@ -565,9 +565,10 @@ TEST_CASE("DevicesModule: the presence port takes a second listener beside the f
     mm::platform::UdpSocket first, second;
     REQUIRE(first.open());
     REQUIRE(second.open());
-    uint16_t port = 65431;   // ports of the test's own, so a desktop running beside the suite keeps its presence port
-    while (port < 65441 && !first.bindShared(port)) port++;   // the first one no other process holds alone
-    REQUIRE(port < 65441);
+    // Port 0 lets the OS pick a free one, so a desktop running beside the suite keeps its presence port, and a port Windows reserves stays out of reach.
+    REQUIRE(first.bindShared(0));
+    const uint16_t port = first.localPort();
+    REQUIRE(port != 0);
     CHECK(second.bindShared(port));
     first.close();
     second.close();

@@ -754,6 +754,8 @@ bool UdpSocket::bind(uint16_t port, const uint8_t[4]) {
 
 bool UdpSocket::bindShared(uint16_t port) { return bind(port, nullptr); }   // one process on the board, so nothing to share with
 
+uint16_t UdpSocket::localPort() const { return fd_ < 0 ? 0 : g_udp[fd_].localPort(); }
+
 // One loop and no tasks: the receive side polls recvFrom from the render loop, so there is nothing to wait in.
 int UdpSocket::waitReadable(UdpSocket* const*, int, uint32_t) { return -1; }
 

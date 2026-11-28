@@ -123,6 +123,15 @@ constexpr uint8_t lcdLanes = 0;
 /// Separate from the lane count because the host reports lanes while having no such silicon.
 constexpr bool hasLcdCam = (lcdLanes > 0);
 
+// Lanes over a general-purpose SPI host: its data lines, eight where the host runs octal, else four.
+#if !CONFIG_SOC_GPSPI_SUPPORTED
+constexpr uint8_t spiLanes = 0;
+#elif CONFIG_SOC_SPI_SUPPORT_OCT
+constexpr uint8_t spiLanes = 8;
+#else
+constexpr uint8_t spiLanes = 4;
+#endif
+
 // Lanes over Parlio, which takes the GPIOs directly and runs any count from 1 to 16.
 #ifdef CONFIG_SOC_PARLIO_SUPPORTED
 constexpr uint8_t parlioLanes = 16;

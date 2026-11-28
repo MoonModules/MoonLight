@@ -307,7 +307,7 @@
        "line": "An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads."
       },
       "headroom": {
-       "line": "An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, a send's unused pacing budget, a panel's refresh over flicker."
+       "line": "An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, an RMT strand's refill deadline, a send's unused pacing budget, a panel's refresh over flicker."
       },
       "largest": {
        "line": "A memory bar's largest free block, which a fragmented heap holds far under its free part."
@@ -1935,7 +1935,7 @@
     }
    },
    "role": "effect",
-   "tags": "🌙🎶",
+   "tags": "🌙🎶🧩",
    "dim": 3,
    "doc": "light/effects.md#paintbrush",
    "source": "https://github.com/MoonModules/MoonLight/blob/main/src/light/effects/PaintBrushEffect.h",
@@ -4455,7 +4455,7 @@
    "guide": [
     {
      "title": "Which peripheral",
-     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring."
+     "text": "Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1, `SPI` for a few strands with RAM to spare. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring."
     }
    ],
    "image": "https://moonmodules.org/MoonLight/assets/light/drivers/ParallelLedDriver.png",

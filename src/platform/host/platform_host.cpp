@@ -2554,6 +2554,8 @@ bool UdpSocket::bind(uint16_t port, const uint8_t localIp[4]) {
     return bindAddress(sock(fd_), port, localIp);
 }
 
+uint16_t UdpSocket::localPort() const { return detail::boundPort(fd_, [](int fd) { return sock(fd); }); }
+
 bool UdpSocket::bindShared(uint16_t port) {
     if (fd_ < 0) return false;
     if (testBindFails.load(std::memory_order_relaxed)) return false;
@@ -2898,7 +2900,7 @@ HostRmt* hostRmt(void*& impl) {
 }  // namespace
 
 bool rmtWs2812Init(RmtWs2812Handle& h, uint8_t /*gpio*/, uint32_t resolutionHz,
-                   bool /*invert*/) {
+                   bool /*invert*/, uint8_t /*memBlocks*/) {
     // A zero resolution would make the driver divide by zero, so refuse it rather than hand back an unusable channel.
     if (resolutionHz == 0) return false;
     hostRmt(h.impl)->resolutionHz = resolutionHz;
@@ -2920,6 +2922,7 @@ void rmtWs2812Deinit(RmtWs2812Handle& h) {
     delete static_cast<HostRmt*>(h.impl);
     h.impl = nullptr;
 }
+RmtRefillStats rmtWs2812RefillStats(RmtWs2812Handle&) MM_NONBLOCKING { return {}; }   // no peripheral refills off-target
 size_t rmtWs2812RxCapture(uint8_t /*gpio*/, uint32_t /*resolutionHz*/,
                           uint32_t* /*outSymbols*/, size_t /*maxSymbols*/,
                           uint32_t /*timeoutMs*/) {
@@ -3077,6 +3080,26 @@ bool parlioWs2812Transmit(ParlioWs2812Handle& h, uint8_t buffer, size_t bytes) {
 bool parlioWs2812Wait(ParlioWs2812Handle& /*h*/, uint8_t /*buffer*/, uint32_t /*timeoutMs*/) { return true; }
 uint32_t parlioWs2812LastTransmitUs(const ParlioWs2812Handle& /*h*/) { return 0; }
 void parlioWs2812Deinit(ParlioWs2812Handle& h) { freeHostBus(h.impl); }
+
+// The SPI bus on the same memory-backed bus: no silicon, but the driver runs and its sizing is pinned by tests.
+bool spiWs2812Init(SpiWs2812Handle& h, const uint16_t* /*dataPins*/, uint8_t laneCount, uint32_t /*clockHz*/,
+                   size_t bufferBytes, bool wantSecondBuffer) {
+    if (bufferBytes == 0 || laneCount == 0 || laneCount > spiLanes) return false;
+    return hostBus(h.impl)->init(bufferBytes, wantSecondBuffer);
+}
+uint8_t* spiWs2812Buffer(const SpiWs2812Handle& h, uint8_t buffer) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->buffer(buffer) : nullptr;
+}
+size_t spiWs2812BufferCapacity(const SpiWs2812Handle& h) {
+    return h.impl ? static_cast<HostBus*>(h.impl)->capacity : 0;
+}
+size_t spiMaxTransferBytes() { return 0; }   // ordinary memory: no ceiling
+bool spiWs2812Transmit(SpiWs2812Handle& h, uint8_t buffer, size_t bytes) {
+    return h.impl && static_cast<HostBus*>(h.impl)->transmit(buffer, bytes);
+}
+bool spiWs2812Wait(SpiWs2812Handle& /*h*/, uint8_t /*buffer*/, uint32_t /*timeoutMs*/) { return true; }
+uint32_t spiWs2812LastTransmitUs(const SpiWs2812Handle& /*h*/) { return 0; }
+void spiWs2812Deinit(SpiWs2812Handle& h) { freeHostBus(h.impl); }
 
 // The GPIO-DMA bus on the same memory-backed bus: one buffer, as the Teensy's.
 bool gpioDmaWs2812Init(GpioDmaWs2812Handle& h, const uint16_t* /*dataPins*/, uint8_t /*laneCount*/,

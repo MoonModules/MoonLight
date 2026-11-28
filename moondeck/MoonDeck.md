@@ -1065,6 +1065,8 @@ Each ESP32-S3 PSRAM interface has its own firmware key because the sdkconfig fra
 
 A variant marked `migrate` (the C3) also builds the migration image into `build/migrate-<chip>/MoonLight-migrate.bin`. A board running WLED installs it through WLED's own update page and moves to MoonLight without a cable (`moonbase/migrate/`). `--migrate-pause 10` adds a rehearsal image that pauses ten seconds after each step, in `build/migrate-<chip>-pause/`, so a power cut can be tested at each point on a bench board.
 
+`--app` builds `MoonLight.bin` alone, the image an update over the air installs, and stops: a tuning round on a running board skips the layouts, the size summary, MoonBase, the coprocessor and the migration image, which a release and a serial flash need.
+
 ### flash_esp32
 
 Flash firmware to an ESP32 device. Reads the app image in `build/esp32-<firmware>/`, which ESP-IDF names `MoonLight.bin` after the project. Scripts read that name from `APP_BIN` in `build_esp32.py`. Each firmware lives in its own directory, so several coexist on disk and switching between them is free.

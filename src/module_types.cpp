@@ -175,6 +175,11 @@
 #if defined(MM_GPIO_DMA_LEDS) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/GpioDmaPeripheral.h"       // timer-paced GPIO DMA backend (GpioDmaPeripheral)
 #endif
+// SPI rides only where the parallel driver links already: on a chip with none, the C3, the driver alone costs 54 KB of flash for an output RMT covers.
+#if (defined(CONFIG_SOC_GPSPI_SUPPORTED) && (defined(CONFIG_SOC_LCD_I80_SUPPORTED) || defined(CONFIG_SOC_LCDCAM_I80_LCD_SUPPORTED) || \
+     defined(CONFIG_SOC_PARLIO_SUPPORTED) || defined(MM_GPIO_DMA_LEDS))) || MM_LINKS_ALL_LED_DRIVERS
+#include "light/drivers/SpiPeripheral.h"           // SPI host backend, its data lines the lanes (SpiPeripheral)
+#endif
 // Panel receiver cards are opt-in per firmware rather than per chip: @xref{why-panel-cards-are-per-firmware-and-hub75-is-per-chip}.
 #if defined(MM_PANEL_CARDS) || MM_LINKS_ALL_LED_DRIVERS
 #include "light/drivers/PanelCardDriver.h"

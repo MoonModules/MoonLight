@@ -331,6 +331,7 @@ add_executable(mm_tests
     unit/light/unit_ParallelLedDriver_pinexpander.cpp
     unit/light/unit_ParallelLedDriver_ring.cpp
     unit/light/unit_ParallelLedDriver_swap.cpp
+    unit/light/unit_SpiPeripheral.cpp
     unit/light/unit_RmtLedEncoder.cpp
     unit/light/unit_RmtLedDriver_lifecycle.cpp
     unit/light/unit_RmtLedDriver_pins.cpp

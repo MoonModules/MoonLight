@@ -54,8 +54,8 @@ uint32_t pwmPhaseForTest(int channel);
 /// One configured RMT TX channel; the driver never inspects `impl`.
 struct RmtWs2812Handle { void* impl = nullptr; };
 
-/// Configure one RMT TX channel on `gpio`, where `invert` suits an inverting level-shifter.
-bool rmtWs2812Init(RmtWs2812Handle& h, uint8_t gpio, uint32_t resolutionHz, bool invert);
+/// Configure one RMT TX channel on `gpio`, where `invert` suits an inverting level-shifter, holding `memBlocks` of the peripheral's memory blocks: more blocks give each refill a longer deadline.
+bool rmtWs2812Init(RmtWs2812Handle& h, uint8_t gpio, uint32_t resolutionHz, bool invert, uint8_t memBlocks = 1);
 
 /// The tick resolution granted, which the driver converts its timings against; 0 before init.
 uint32_t rmtWs2812Resolution(const RmtWs2812Handle& h) MM_NONBLOCKING;
@@ -71,6 +71,15 @@ bool rmtWs2812Wait(RmtWs2812Handle& h, uint32_t timeoutMs);
 
 /// Release the channel.
 void rmtWs2812Deinit(RmtWs2812Handle& h);
+
+/// A channel's refills since the last read: the longest gap between two, and the time half its memory takes on the wire, the deadline each refill has; both in CPU cycles, 0 before a refill ran.
+struct RmtRefillStats {
+    uint32_t worstGap = 0;   ///< the longest time between two refills of one frame
+    uint32_t period = 0;     ///< the wire time of the half-block a refill writes
+};
+
+/// Read the channel's refill timing and start a new window.
+RmtRefillStats rmtWs2812RefillStats(RmtWs2812Handle& h) MM_NONBLOCKING;
 
 /// Capture up to `maxSymbols` pulse durations on `gpio`, for the loopback self-test alone.
 size_t rmtWs2812RxCapture(uint8_t gpio, uint32_t resolutionHz,
@@ -281,6 +290,45 @@ RmtLoopbackResult parlioWs2812Loopback(const uint16_t* dataPins, uint8_t laneCou
                                        uint16_t rxGpio, const uint8_t* frame,
                                        size_t frameBytes, size_t dataBytes,
                                        uint8_t rowBits);
+
+// SPI WS2812 output: a general-purpose SPI host's data lines are the lanes, one, two, four or eight per clock, and its DMA streams the whole frame, so no refill has a deadline to miss.
+
+/// One configured SPI host with its one or two DMA frame buffers.
+struct SpiWs2812Handle { void* impl = nullptr; };
+
+/// The data lines a transfer drives for `lanes` strands: the SPI widths, 1, 2, 4 and 8.
+constexpr uint8_t spiLinesFor(uint8_t lanes) { return lanes <= 1 ? 1 : lanes <= 2 ? 2 : lanes <= 4 ? 4 : 8; }
+
+/// Pack the driver's byte slots, bit L for lane L, into what `lines` data lines shift out MSB first; answers the packed length. In place: each packed byte lands at or before the slots it reads.
+inline size_t spiPackSlots(uint8_t* buf, size_t slots, uint8_t lines) {
+    if (lines >= 8) return slots;   // a byte a clock: the slots are the wire
+    const uint8_t per = static_cast<uint8_t>(8 / lines), mask = static_cast<uint8_t>((1u << lines) - 1);
+    size_t out = 0;
+    for (size_t i = 0; i < slots; i += per) {
+        uint8_t b = 0;   // the first slot in the highest bits, which leave first; lane L on data line L
+        for (uint8_t k = 0; k < per; k++) b = static_cast<uint8_t>((b << lines) | ((i + k < slots ? buf[i + k] : 0) & mask));
+        buf[out++] = b;
+    }
+    return out;
+}
+
+/// Open a free SPI host on `dataPins` at the WS2812 slot rate.
+bool spiWs2812Init(SpiWs2812Handle& h, const uint16_t* dataPins, uint8_t laneCount, uint32_t clockHz,
+                   size_t bufferBytes, bool wantSecondBuffer);
+/// The DMA frame buffer the driver encodes into; buffer 1 is null where it did not fit.
+uint8_t* spiWs2812Buffer(const SpiWs2812Handle& h, uint8_t buffer);
+/// The capacity both buffers share; 0 before init.
+size_t spiWs2812BufferCapacity(const SpiWs2812Handle& h);
+/// The most bytes one SPI transfer sends: a hardware ceiling, 0 where it sets none.
+size_t spiMaxTransferBytes();
+/// Pack one buffer's slots for the host's line width and start its transfer; pair it with a wait on that same buffer.
+bool spiWs2812Transmit(SpiWs2812Handle& h, uint8_t buffer, size_t bytes);
+/// Block until that buffer's transfer finishes; false on timeout.
+bool spiWs2812Wait(SpiWs2812Handle& h, uint8_t buffer, uint32_t timeoutMs);
+/// The last transfer's wire time; 0 before the first.
+uint32_t spiWs2812LastTransmitUs(const SpiWs2812Handle& h);
+/// Release the host and its buffers.
+void spiWs2812Deinit(SpiWs2812Handle& h);
 
 // GPIO-DMA WS2812 output: one DMA channel writes each slot into a GPIO port's data register, paced by a timer, so any pins of that port are lanes.
 

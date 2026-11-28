@@ -10,7 +10,7 @@
 
 #include <cstring>  // std::strcpy (writing the pins text control directly)
 
-// These tests pin the symbol-buffer LIFECYCLE, the exact class of bug that reached hardware: a review fix made deinit() free symbols_, and because reinit() calls deinit(), every rebuild freed the buffer tick() needs, so the driver silently stopped transmitting. None of that touches the RMT peripheral (ESP32-only); it's pure host-testable buffer ownership, which is why a unit test is the right guard. The frameBuffer()/frameCapacity() accessors are test-only (mirror ArtNet's correctedBuffer()).
+// These pin the frame buffer's lifecycle, which once reached hardware: deinit() freed it, reinit() calls deinit(), so every rebuild left tick() no buffer and the strip went dark; buffer ownership is host-testable.
 
 namespace {
 
@@ -38,7 +38,7 @@ TEST_CASE("RmtLedDriver sizes the symbol buffer in prepare") {
     CHECK(d.frameCapacity() >= static_cast<size_t>(64) * 3);
 }
 
-// The resting status is "driving N of M lights" after a build, shown by DEFAULT (the way MoonLed does), not only after the user touches a control. prepare() re-asserts it after the full build (pins + buffer + counts settled), so a driver that built cleanly always advertises its consumption. This also overwrites any stale transient (e.g. a prior loopback verdict), which must NOT linger as the resting status once the driver is driving lights.
+// After a build the status rests on "driving N of M lights", since prepare() re-asserts it once pins, buffer and counts settle, replacing a stale transient such as a loopback verdict.
 TEST_CASE("RmtLedDriver shows 'driving N of M' as the resting status after a build") {
     mm::RmtLedDriver d;
     mm::Buffer src;
@@ -57,7 +57,7 @@ TEST_CASE("RmtLedDriver shows 'driving N of M' as the resting status after a bui
     CHECK(std::strstr(d.status(), "driving 64 of 256") != nullptr);
 }
 
-// The symbol buffer sizes to what the pins CLOCK OUT (txLightCount_), NOT the window. A small strip on one pin (ledsPerPin 64) inside a huge grid (window = all 5740 lights) must reserve symbols for 64, not 5740, else it tries to alloc ~550 KB it never encodes, the alloc fails on a small-heap board, and the strip goes dark even though only 64 lights were wanted (the bug this pins; ParallelLedDriver already sizes its frame to the driven count, RmtLed did not). ledsPerPin caps the pin; tick() only encodes 64.
+// The buffer sizes to the lights the pins clock out, not the window: one 64-light pin in a 5,740-light grid reserves 64, where sizing to the window asked ~550 KB and darkened a small-heap board.
 TEST_CASE("RmtLedDriver sizes symbols to the driven lights, not the whole window") {
     mm::RmtLedDriver d;
     mm::Buffer src;
@@ -73,7 +73,7 @@ TEST_CASE("RmtLedDriver sizes symbols to the driven lights, not the whole window
 }
 
 TEST_CASE("RmtLedDriver keeps the symbol buffer across a rebuild (reinit must not free it)") {
-    // The regression: prepare() does resizeSymbols() THEN reinit(), and a bad reinit()->deinit() freed symbols_ right after it was allocated, so the buffer was null by the time tick() ran. A second prepare (what a pins change / topology rebuild triggers) must leave the buffer present.
+    // The regression: prepare() resizes then calls reinit(), whose deinit() freed the fresh buffer; a second prepare, as a pins change triggers, keeps the buffer.
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
@@ -129,14 +129,14 @@ TEST_CASE("RmtLedDriver releases the symbol buffer on release") {
 }
 
 TEST_CASE("RmtLedDriver: disabling releases the resource, re-enabling re-acquires (applyState)") {
-    // Core's applyState() routes an effectively-enabled module to prepare() (acquire) and a disabled one to release() (release), so setEnabled(false) + the post-toggle prepareTree() sweep frees the peripheral + buffer (pins reusable). Observable via the symbol buffer: present when enabled, gone after the disabled sweep, rebuilt on the re-enabled sweep.
+    // applyState() prepares an enabled module and releases a disabled one, so disabling frees the peripheral and the buffer and re-enabling rebuilds them, the buffer showing which.
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
     wire(d, src, corr, 64);
     REQUIRE(d.frameBuffer() != nullptr);   // enabled by default → resource held
 
-    // The Scheduler runs a whole-tree prepareTree() AFTER the enabled-toggle (Scheduler::setControl), which calls applyState() on every module. A just-disabled one routes to release → released, and must STAY released on subsequent sweeps (else a disabled RMT driver re-grabs a GPIO an enabled Parlio driver now owns).
+    // The Scheduler sweeps prepareTree() after the toggle, and a disabled driver stays released through every later sweep, so it leaves a GPIO free for an enabled Parlio driver.
     d.setEnabled(false);
     d.applyState();                         // disabled → release
     CHECK(d.frameBuffer() == nullptr);     // buffer freed (RAM back; pins released)
@@ -151,7 +151,7 @@ TEST_CASE("RmtLedDriver: disabling releases the resource, re-enabling re-acquire
 }
 
 TEST_CASE("RmtLedDriver: a DISABLED driver does not acquire through the boot sweep") {
-    // Core's applyState() (the boot Phase-4 sweep + every prepareTree) calls prepare() only when effectively-enabled, else release(). A driver persisted DISABLED but sharing a GPIO with an enabled sibling must not grab the peripheral/pins, else it steals the pin and the enabled sibling's output stays dead. This reproduces the hardware symptom: a disabled RmtLed on GPIO 20 blanking an enabled ParlioLed on the same pin.
+    // A driver saved disabled and sharing a GPIO with an enabled sibling leaves the pin alone: on hardware a disabled RmtLed on GPIO 20 blanked an enabled ParlioLed there.
     mm::RmtLedDriver d;
     mm::Buffer src;
     mm::Correction corr;
@@ -171,7 +171,7 @@ TEST_CASE("RmtLedDriver: a DISABLED driver does not acquire through the boot swe
     CHECK(d.frameBuffer() != nullptr);
 }
 
-// MoonModule contract: release reverses setup, so setup→release→setup→release cycles leave no residue, no leaked heap (ASAN in the test runner catches that), no stuck state. After each release the driver must look untouched: no symbol buffer, no status. Run several cycles to surface any accumulation.
+// release reverses setup, so repeated setup and release cycles leave no buffer, no status and no leaked heap, which ASan in the test runner catches.
 TEST_CASE("RmtLedDriver setup/release is repeatable with no residual state") {
     mm::RmtLedDriver d;
     mm::Buffer src;
@@ -194,7 +194,7 @@ TEST_CASE("RmtLedDriver setup/release is repeatable with no residual state") {
     }
 }
 
-// Conditional control: loopbackRxPin is visible only while loopbackTest is on, hidden otherwise, but always bound (so a saved rxPin loads regardless). Same add-then-setHidden pattern as NetworkModule (architecture.md § Conditional controls). This pins the exact behavior that, with the old UI, showed the pin at the wrong times; a regression in the C++ flag now fails here.
+// loopbackRxPin shows only while loopbackTest is on and stays bound throughout, so a saved pin loads: the add-then-setHidden pattern of a conditional control.
 TEST_CASE("RmtLedDriver loopbackRxPin tracks the loopbackTest toggle") {
     mm::RmtLedDriver d;
     d.defineControls();
@@ -204,7 +204,7 @@ TEST_CASE("RmtLedDriver loopbackRxPin tracks the loopbackTest toggle") {
     mm::checkConditionalControl(d, "loopbackRxPin", setTest, /*visibleWhenTrue=*/true);
 }
 
-// loopbackTxPin is the optional TX override (transmit on it instead of pins[0] during the self-test). Like loopbackRxPin it's a conditional control: always bound (so a saved override loads), shown only while loopbackTest is on. The override's effect on the transmitted pin is hardware-only (rmtTxChannels==0 on host), but the conditional-visibility contract is host-testable here.
+// loopbackTxPin, the self-test's optional transmit pin, is a conditional control like loopbackRxPin: bound always, shown while loopbackTest is on; its effect on the wire is hardware's.
 TEST_CASE("RmtLedDriver loopbackTxPin tracks the loopbackTest toggle") {
     mm::RmtLedDriver d;
     d.defineControls();
@@ -214,7 +214,7 @@ TEST_CASE("RmtLedDriver loopbackTxPin tracks the loopbackTest toggle") {
     mm::checkConditionalControl(d, "loopbackTxPin", setTest, /*visibleWhenTrue=*/true);
 }
 
-// Editing `pins` while the loopback test is ON must refresh the parsed config before the self-test runs, onControlChanged fires before the prepareTree sweep re-parses, so without the in-branch parseConfig() the test would transmit on the OLD pin and show a verdict for it. Mirrors the fix in ParallelLedDriver; this pins the RMT sibling that the dedup left behind. Host-observable via pinCount(): the refresh re-parses to the new pin set even though the platform loopback itself is inert.
+// Editing `pins` with the loopback test on re-parses before the self-test runs, so the test transmits on the new pins, the fix ParallelLedDriver carries; pinCount() shows it on the host.
 TEST_CASE("RmtLedDriver loopback re-parses pins before testing (no stale-pin verdict)") {
     mm::RmtLedDriver d;
     mm::Buffer src;
@@ -233,4 +233,28 @@ TEST_CASE("RmtLedDriver loopback re-parses pins before testing (no stale-pin ver
     std::strcpy(d.pins, "18,17,16");
     d.onControlChanged("pins");
     CHECK(d.pinCount() == 3);   // refreshed before the test, not the stale 1
+}
+
+// A refill has one half-block's wire time before the peripheral replays the half it was due to write: the C3 lit its cube partly and out of order.
+TEST_CASE("RmtLedDriver's headroom is how early its slowest refill came against the half-block deadline") {
+    using D = mm::RmtLedDriver;
+    CHECK_FALSE(D::refillHeadroom(0, 4800).has_value());     // no refill ran yet
+    CHECK_FALSE(D::refillHeadroom(4800, 0).has_value());     // no period known
+    CHECK(D::refillHeadroom(4800, 4800) == 100);             // every refill on its beat
+    CHECK(D::refillHeadroom(3000, 4800) == 100);             // an early one is no more than on time
+    CHECK(D::refillHeadroom(7200, 4800) == 50);              // half the deadline spent waiting
+    CHECK(D::refillHeadroom(9600, 4800) == 0);               // a whole half late: it replayed stale symbols
+    CHECK(D::refillHeadroom(48000, 4800) == 0);              // and far beyond
+}
+
+// Off-target no refill runs, so the driver claims no headroom rather than a full one.
+TEST_CASE("RmtLedDriver reports no headroom where no refill ran") {
+    mm::RmtLedDriver d;
+    mm::Buffer src;
+    mm::Correction corr;
+    wire(d, src, corr);
+    d.tick();
+    d.tick1s();
+    CHECK_FALSE(d.headroom().has_value());
+    d.release();
 }

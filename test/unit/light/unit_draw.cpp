@@ -917,3 +917,17 @@ TEST_CASE("on a device alone local changes nothing, its origin being zero") {
     const draw::Canvas cv = draw::Canvas::of(buf, 2, 2, 1);
     CHECK(cv.local({1, 1, 0}) == Coord3D{1, 1, 0});
 }
+
+// A wall's device draws a stroke whose ends sit left of its grid, so a shortened end rounds the same at any offset: devices meeting at a seam agree on every light.
+TEST_CASE("draw: a shortened line ends on the same light wherever the line sits, left of the grid included") {
+    for (int s = 1; s < 255; s += 17)
+        for (lengthType ax = -9; ax <= 9; ax += 3)
+            for (lengthType bx = -9; bx <= 9; bx += 4) {
+                const lengthType offset = 32;
+                const Coord3D near = draw::detail::shortenedEnd({ax, 0, 0}, {bx, 0, 0}, static_cast<uint8_t>(s));
+                const Coord3D far = draw::detail::shortenedEnd({static_cast<lengthType>(ax + offset), 0, 0},
+                                                               {static_cast<lengthType>(bx + offset), 0, 0}, static_cast<uint8_t>(s));
+                CAPTURE(s); CAPTURE(ax); CAPTURE(bx);
+                CHECK(near.x + offset == far.x);
+            }
+}

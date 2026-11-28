@@ -348,6 +348,8 @@ public:
     bool bind(uint16_t port, const uint8_t localIp[4] = nullptr);
     /// Listen on a discovery port on any interface beside the other listeners of that port, each hearing every broadcast and multicast datagram, as mDNS responders share theirs; a board runs one process, so there it is bind.
     bool bindShared(uint16_t port);
+    /// The port the socket listens on, the one the OS picked after a bind to port 0; 0 when unbound.
+    uint16_t localPort() const;
     /// Receive one datagram, non-blocking: bytes copied, or -1 when none is pending; a datagram longer than `maxLen` is truncated, and `srcIp` and `srcPort` answer who sent it.
     int recvFrom(uint8_t* buf, size_t maxLen, uint8_t srcIp[4] = nullptr, uint16_t* srcPort = nullptr);
     /// The most sockets one wait watches.
