@@ -26,11 +26,11 @@ namespace mm {
 ///
 /// ## Which peripheral
 ///
-/// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring.
+/// Start with `i80`. Choose `MoonI80` for frames too big for memory or a pin expander, `Parlio` on a P4, `GPIO-DMA` on a Teensy 4.1, `SPI` for a few strands with RAM to spare. [LED drivers](https://moonmodules.org/MoonLight/reference/hardware/led-drivers.html#which-one) has the chips, limits and wiring.
 ///
 /// @technical
 ///
-/// **Peripherals.** The peripherals are I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h and GpioDmaPeripheral.h, each behind LedPeripheral.h. A slot is one WS2812 bit on the wire, and a row is one light across every strand.
+/// **Peripherals.** The peripherals are I80Peripheral.h, MoonI80Peripheral.h, ParlioPeripheral.h, GpioDmaPeripheral.h and SpiPeripheral.h, each behind LedPeripheral.h. A slot is one WS2812 bit on the wire, and a row is one light across every strand.
 ///
 /// **Single-shot.** Encoding the whole frame first removes the deadline a refilling driver must beat every time. MoonI80Peripheral's ring gives that up for frames too big for memory, and its longest strands have a known last-row sparkle.
 ///
@@ -69,7 +69,7 @@ public:
     using PeripheralFactory = LedPeripheral* (*)();
     struct PeripheralEntry { const char* label; PeripheralFactory make; };
     /// How many backends can register, sized to the most any one chip links in.
-    static constexpr uint8_t kMaxPeripherals = 4;
+    static constexpr uint8_t kMaxPeripherals = 5;
     static inline PeripheralEntry peripheralRegistry_[kMaxPeripherals] = {};
     /// How many of the registry's slots are filled, so registration stops at the cap.
     static inline uint8_t peripheralRegistryCount_ = 0;

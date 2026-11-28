@@ -1,5 +1,5 @@
 /// @module Layouts
-/// @also Layer, LinesEffect, TruchetEffect, RaymarchEffect, PlasmaEffect, SphereMoveEffect, LissajousEffect, RipplesEffect, BouncingBallsEffect
+/// @also Layer, LinesEffect, TruchetEffect, RaymarchEffect, PlasmaEffect, SphereMoveEffect, LissajousEffect, RipplesEffect, BouncingBallsEffect, PaintBrushEffect
 
 /// A device placed in a wall of several, its position and the wall's size on its Layouts: a region effect's tiles rendered apart, each only its own lights, equal the whole wall rendered at once, and a mirrored effect draws as it always has.
 
@@ -8,12 +8,14 @@
 #include "golden_frame.h"
 #include "light/effects/LinesEffect.h"
 #include "light/effects/LissajousEffect.h"
+#include "light/effects/PaintBrushEffect.h"
 #include "light/effects/PlasmaEffect.h"
 #include "light/effects/RainbowEffect.h"
 #include "light/effects/RaymarchEffect.h"
 #include "light/effects/RipplesEffect.h"
 #include "light/effects/SphereMoveEffect.h"
 #include "light/effects/TruchetEffect.h"
+#include "core/services/AudioService.h"
 #include "core/util/ModuleFactory.h"
 #include "module_types.h"
 
@@ -227,4 +229,27 @@ TEST_CASE("A mirrored effect's surface carries no place in the wall, a region ef
     CHECK(part.extent() == Coord3D{kWall, kWall, 1});
     fx.layer.removeChild(&mirrored);
     fx.layer.removeChild(&region);
+}
+
+// The strokes follow the bands, so one music frame, frozen, feeds every board alike.
+struct FrozenMusic {
+    AudioService mic;
+    FrozenMusic() {
+        mic.defineControls();
+        mic.simulate = AudioService::kSimMusic;   // every band carries a magnitude
+        platform::setTestNowMs(500);
+        mic.setup();
+        for (int i = 0; i < 8; i++) mic.tick();   // the frame filled, then left as it is
+    }
+    ~FrozenMusic() { mic.release(); platform::setTestNowMs(0); }
+};
+
+TEST_CASE("PaintBrush on each of nine boards draws its part of one painting, a stroke crossing from one board to the next") {
+    FrozenMusic music;
+    checkSplitEqualsWhole<PaintBrushEffect>([](PaintBrushEffect& e) { e.antiAlias = false; }, 60);
+}
+
+TEST_CASE("PaintBrush's smoothed strokes and its jitter draw alike on each of nine boards") {
+    FrozenMusic music;
+    checkSplitEqualsWhole<PaintBrushEffect>([](PaintBrushEffect& e) { e.phase_chaos = true; }, 60);
 }

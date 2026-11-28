@@ -125,7 +125,7 @@ public:
         /// @field fps An output's frames sent last second.
         /// @field dropped An output's frames dropped since it started, where it counts them.
         /// @field dma An output's bytes in DMA-capable memory, the buffers its peripheral's DMA engine reads.
-        /// @field headroom An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, a send's unused pacing budget, a panel's refresh over flicker.
+        /// @field headroom An output's margin before it glitches over the last second, in percent, where it measures one: a ring's refill lead, an RMT strand's refill deadline, a send's unused pacing budget, a panel's refresh over flicker.
         /// @field largest A memory bar's largest free block, which a fragmented heap holds far under its free part.
         controls_.addList("pipeline", *this);   // this module is the ListSource
     }

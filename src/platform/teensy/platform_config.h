@@ -42,6 +42,8 @@ constexpr uint8_t lcdLanes = 0;
 constexpr bool hasLcdCam = false;
 /// No Parlio peripheral.
 constexpr uint8_t parlioLanes = 0;
+/// SPI data lines for LEDs: none, since the Teensy drives its strands over GPIO DMA.
+constexpr uint8_t spiLanes = 0;
 /// No I2S parallel output.
 constexpr uint8_t i2sLanes = 0;
 /// One DMA channel writes all sixteen lanes, any pins of GPIO1/GPIO6.

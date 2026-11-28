@@ -538,6 +538,9 @@ def main():
                              "(see compute_version.py): core for a stable tag, "
                              "'<next>-dev.<N>' for latest. Omit for local builds "
                              "(library.json applies).")
+    parser.add_argument("--app", action="store_true",
+                        help="Build the app image alone, MoonLight.bin, for an update over the air: no layouts, "
+                             "size summary, MoonBase, coprocessor or migration image, which a release and a serial flash need.")
     parser.add_argument("--migrate-pause", type=int, default=0, metavar="SECONDS",
                         help="Also build a rehearsal migration image that pauses this long after each step, "
                              "into build/migrate-<family>-pause, so a power cut can be tested at each point.")
@@ -581,6 +584,8 @@ def main():
 
     idf_build(firmware, cmd, env, args)
     build_dir = build_dir_for(firmware)
+    if args.app:
+        return   # the image an update over the air installs; the rest is a release's and a serial flash's
 
     # A bootloader and a table per flash size the firmware installs into, which the release carries and the installer picks by the flash it measures.
     for size in FIRMWARES[firmware]["layouts"]:

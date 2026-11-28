@@ -1490,6 +1490,16 @@
   "number": null
  },
  {
+  "title": "An IR receiver beside RMT LEDs on the classic ESP32 and the C3",
+  "area": "Platform",
+  "module": "",
+  "kind": "",
+  "status": "Backlog",
+  "process": "",
+  "card": "https://github.com/users/MoonModules/projects/5?pane=issue&itemId=321184587",
+  "number": null
+ },
+ {
   "title": "An update's connection that would not open until a reset (2026-10-22, from the internal RAM plan)",
   "area": "Platform",
   "module": "",

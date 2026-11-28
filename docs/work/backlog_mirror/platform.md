@@ -521,3 +521,11 @@ Kind: Feature · Platform: Android · [Card](https://github.com/users/MoonModule
 **3. The 3D preview in a headset**, on a WebXR page, so a Quest shows the lights in the room before they are built. The page is the UI's (Area UI); a Quest's browser and the app's WebView both reach it.
 
 **Size.** 1 and 2 are about a day each once picked, plus the account; 3 is a design step first.
+
+### An IR receiver beside RMT LEDs on the classic ESP32 and the C3
+
+[Card](https://github.com/users/MoonModules/projects/5?pane=issue&itemId=321184587)
+
+What: IR receive and RMT LED output together on the two chips whose RMT refill runs in the high-priority handler (`platform_esp32_rmt.cpp`). All RMT channels share one interrupt source, and the handler clears only the transmit bits: a receive channel created after the LEDs takes the line back, so the refill drops to the SDK's level and the flicker returns; LEDs created after the receiver leave its receive-done bit uncleared on a level-triggered line (a hypothesis, not reproduced).
+Why: an IR remote on a C3 or classic cube with RMT LEDs is a plain setup, and the refill's headroom (90 to 92% on a C3 cube) is what keeps it flicker-free.
+What it takes: the IR receive polled on these two chips: the SDK allocates the channel, the receiver arms through the low-level calls with its interrupts off, and `irRead`, ticked by InfraredService, reads the raw receive-done bit, copies the symbols and re-arms (an NEC frame stays in channel memory until then). The RMT file exports its re-route, run on the LEDs' core after any receive channel is created, as its re-routing rule says. About 100 to 150 lines, then a bench with an IR module and an NEC remote on a C3 cube.

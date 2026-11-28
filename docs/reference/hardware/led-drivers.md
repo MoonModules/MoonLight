@@ -11,6 +11,7 @@ Addressable LEDs (WS2812B, SK6812, WS2811) go out through one of two drivers: [R
 | Up to 16 strands on a **P4** | Parallel LED on **`Parlio`**, which needs no clock pin |
 | More lights than one DMA buffer holds, or more strands than you have GPIOs | Parallel LED on **`MoonI80`** |
 | Up to 16 strands on a **Teensy 4.1** | Parallel LED on **`GPIO-DMA`**, the one peripheral there |
+| A few strands with RAM to spare, immune to interrupt delays | Parallel LED on **`SPI`**, 72 bytes of internal RAM per light row across the strands, where RMT takes 3 a light |
 
 Start with `i80`. Choose `MoonI80` only when you hit one of those two limits. It drives the same pins the same way, streams the frame instead of holding it whole, and drives a 74HCT595 pin expander.
 
@@ -23,6 +24,7 @@ Start with `i80`. Choose `MoonI80` only when you hit one of those two limits. It
 | **`MoonI80`** | S3, P4, S31 | 1 to 16, or 8 per pin through an expander |
 | **`Parlio`** | P4 | 1 to 16 |
 | **`GPIO-DMA`** | Teensy 4.1 | 1 to 16, on pins 0, 1, 14 to 27 and 38 to 41, in any order |
+| **`SPI`** | the classic ESP32, S3, P4 | 1 to 4 per SPI host, or 8 on an S3 or P4; the C3 keeps RMT, since the parallel driver alone would take 54 KB of its flash |
 
 RMT LED cannot drive an expander: each channel emits its own self-timed stream with no clock line, and a '595 needs a shift clock.
 

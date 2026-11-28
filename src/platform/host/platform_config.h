@@ -52,6 +52,8 @@ constexpr uint8_t lcdLanes = 16;
 constexpr bool hasLcdCam = true;
 /// Parlio lanes the host reports, on the same reasoning as lcdLanes.
 constexpr uint8_t parlioLanes = 16;
+/// SPI data lines, the octal width, so the host exercises every packing.
+constexpr uint8_t spiLanes = 8;
 
 /// Zero, because the i80 backend sums this with lcdLanes and would otherwise claim 32 lanes.
 constexpr uint8_t i2sLanes = 0;

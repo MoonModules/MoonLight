@@ -217,6 +217,30 @@ public:
         if (cfg_.reset_us) platform::delayUs(cfg_.reset_us);
     }
 
+    /// The worst pin's refill headroom over the last second: how early its slowest refill came against the half-block deadline.
+    void tick1s() MM_NONBLOCKING override {
+        DriverBase::tick1s();
+        std::optional<uint8_t> worst;
+        for (uint8_t i = 0; i < pinCount_; i++) {
+            if (!rmt_[i].impl) continue;
+            const platform::RmtRefillStats s = platform::rmtWs2812RefillStats(rmt_[i]);
+            const std::optional<uint8_t> h = refillHeadroom(s.worstGap, s.period);
+            if (h && (!worst || *h < *worst)) worst = h;
+        }
+        headroom_ = worst;
+    }
+
+    /// The refill's slack in percent: a gap of one half-block's wire time is all of it, a gap of two is none, the half replayed stale; none before a refill ran.
+    static std::optional<uint8_t> refillHeadroom(uint32_t worstGap, uint32_t period) {
+        if (worstGap == 0 || period == 0) return std::nullopt;
+        if (worstGap <= period) return 100;
+        if (worstGap >= 2 * static_cast<uint64_t>(period)) return 0;
+        return static_cast<uint8_t>((2 * static_cast<uint64_t>(period) - worstGap) * 100 / period);
+    }
+
+    /// How close the slowest refill of the last second came to its deadline.
+    std::optional<uint8_t> headroom() const override { return headroom_; }
+
     /// Wait on every pin that started, and report whether they all finished.
     bool waitForPins() MM_NONBLOCKING {
         bool allDone = true;
@@ -251,6 +275,7 @@ public:
 
 private:
     platform::RmtWs2812Handle rmt_[kMaxPins];
+    std::optional<uint8_t> headroom_;          ///< the last second's refill headroom, the worst pin's, none before a refill ran
     uint16_t       pinList_[kMaxPins] = {};    ///< parsed pins, list order
     nrOfLightsType pinCounts_[kMaxPins] = {};  ///< lights per pin, the slice lengths
     size_t         pinOffsets_[kMaxPins] = {}; ///< slice start in frame_, in bytes
@@ -470,8 +495,13 @@ private:
         deinitAll();
         if (pinCount_ == 0) return;   // parse error: already in the status slot
         for (uint8_t i = 0; i < pinCount_; i++) {
-            if (platform::rmtWs2812Init(rmt_[i], static_cast<uint8_t>(pinList_[i]),
-                                        kResolutionHz, cfg_.invert)
+            // Each strand takes its share of the channels' memory, so a lone strand's refill gets the longest deadline.
+            const uint8_t share = static_cast<uint8_t>(platform::rmtTxChannels / pinCount_);
+            const auto initWith = [&](uint8_t blocks) {
+                return platform::rmtWs2812Init(rmt_[i], static_cast<uint8_t>(pinList_[i]), kResolutionHz, cfg_.invert, blocks);
+            };
+            // Another RMT user, an IR receiver or a second driver, can hold the channels the share needs: one block is the floor.
+            if ((initWith(share) || (share > 1 && initWith(1)))
                 && pushBitTiming(i)) {   // the expander needs the bit shapes before the first frame
                 continue;
             }

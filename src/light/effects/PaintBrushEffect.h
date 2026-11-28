@@ -26,12 +26,20 @@ namespace mm {
 /// The original fades, drifts its hue and jitters once a frame, at the 30 frames a second troyhacks's board runs it at. Here the fade is a rate per 60 Hz reference frame, which the Layer scales by elapsed time, so `fadeRate` 25 is the original's 80; the hue and the jitter step 30 times a second.
 ///
 /// The strokes draw every frame, so a faster render sharpens them and changes nothing else.
+///
+/// ## One painting across a wall
+///
+/// The endpoints sweep the whole picture and each converts once to this device's grid, so every device of a wall draws its part of the same strokes, the off-device part clipped; alone, the picture is its own grid.
+///
+/// The jitter is a hash of the original's frame number, so devices agree on it however many frames each renders. `glide` accumulates its phase per device, so its strokes drift apart across a wall where the default scatter stays one painting.
 class PaintBrushEffect : public AudioEffectBase {
 public:
     /// Catalog tags: MoonModules origin, audio-reactive.
-    const char* tags() const override { return "🌙🎶"; }
+    const char* tags() const override { return "🌙🎶🧩"; }
     /// Volumetric: the endpoints oscillate on all three axes.
     Dim dimensions() const override { return Dim::D3; }
+    /// The endpoints sweep the whole picture, so each device of a wall draws its part of one painting: @xref{one-painting-across-a-wall}.
+    Footprint footprint() const MM_NONBLOCKING override { return Footprint::Region; }
 
     /// The base sweep in cycles a minute, multiplied per endpoint.
     uint8_t oscillatorOffset = 10;
@@ -67,9 +75,9 @@ public:
 
     /// Fade the field, then draw each line between its two oscillating endpoints: @xref{the-scatter-or-the-glide}.
     void tick() MM_NONBLOCKING override {
-        const lengthType cols = width(), rows = height(), depth = this->depth();
-
         const draw::Canvas cv = canvas();
+        const Coord3D whole = cv.extent();
+        const lengthType cols = whole.x, rows = whole.y, depth = whole.z;
         const AudioFrame* f = AudioService::latestFrame();
         const uint32_t ms = elapsed();
         // The bass added to every endpoint's rate; the angle from elapsed time, the original's scatter, or from the bank's accumulated phase.
@@ -92,7 +100,8 @@ public:
         layer()->fadeToBlackBy(fadeRate);
         const uint32_t frame30 = static_cast<uint32_t>(static_cast<uint64_t>(ms) * kOriginalHz / 1000u);
         aux0Hue = static_cast<uint16_t>(frame30);
-        if (frame30 != jitterFrame_) { jitterFrame_ = frame30; aux1Chaos = phase_chaos ? rng_.next8() : 0; }   // one jitter value a frame of the original, shared by every endpoint
+        // One jitter value a frame of the original, shared by every endpoint: a multiplicative hash of the frame number (Knuth), so a wall's devices agree.
+        if (frame30 != jitterFrame_) { jitterFrame_ = frame30; aux1Chaos = phase_chaos ? static_cast<uint8_t>((frame30 * 2654435761u) >> 24) : 0; }
 
         // The loop stops below `numLines`, so the map's input high is one less or the top is never reached.
         const int lineHi = numLines - 1;
@@ -121,8 +130,9 @@ public:
                 ? static_cast<uint8_t>(i * 255 / numLines + (aux0Hue & 0xFF))
                 : static_cast<uint8_t>(map(static_cast<int>(i), 0, lineHi, 0, 255));
             const RGB color = colorFromPalette(*Palettes::active(), index, 255);
-            if (antiAlias && depth <= 1) draw::lineAA(cv, {x1, y1, 0}, {x2, y2, 0}, color, length);
-            else draw::line(cv, {x1, y1, z1}, {x2, y2, z2}, color, length);
+            // The whole picture's endpoints in this device's grid, the rest of the stroke clipped.
+            if (antiAlias && depth <= 1) draw::lineAA(cv, cv.local(x1, y1), cv.local(x2, y2), color, length);
+            else draw::line(cv, cv.local({x1, y1, z1}), cv.local({x2, y2, z2}), color, length);
         }
     }
 
@@ -140,7 +150,6 @@ private:
 
     uint16_t aux0Hue = 0;    ///< the running hue, 30 steps a second
     uint8_t  aux1Chaos = 0;  ///< this frame's phase jitter, 0 unless `phase_chaos`
-    Random8  rng_{0xB17EB00Bu};   ///< fixed-seed, so the goldens reproduce
     OscillatorBank<kAxes> osc_;   ///< the endpoints' phases, accumulated so a rate change glides
     angle16  phase_[kAxes] = {};  ///< this frame's endpoint angles, from time or from the bank
     uint32_t leadRate_[kAxes] = {};   ///< the rate a band's milliseconds lead its endpoint at
